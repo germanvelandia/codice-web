@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "./lib/supabaseClient";
+import { VistaGrados, VistaReinos, VistaEstudiantes } from "./screens/Estudiantes";
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -96,81 +97,34 @@ function LoginScreen() {
 }
 
 function Panel({ session }) {
-  const [estudiantes, setEstudiantes] = useState([]);
-  const [cargando, setCargando] = useState(true);
-  const [nuevoNombre, setNuevoNombre] = useState("");
-  const [nuevoGrado, setNuevoGrado] = useState("801");
-
-  const cargarEstudiantes = async () => {
-    setCargando(true);
-    const { data, error } = await supabase
-      .from("estudiantes")
-      .select("*")
-      .eq("activo", true)
-      .order("nombre");
-    if (!error) setEstudiantes(data || []);
-    setCargando(false);
-  };
-
-  useEffect(() => { cargarEstudiantes(); }, []);
-
-  const agregarEstudiante = async () => {
-    if (!nuevoNombre.trim()) return;
-    await supabase.from("grados").upsert({ id: nuevoGrado }, { onConflict: "id" });
-    await supabase.from("estudiantes").insert({ nombre: nuevoNombre.trim(), grado_id: nuevoGrado, reino_original: "Sin grupo" });
-    setNuevoNombre("");
-    cargarEstudiantes();
-  };
-
-  const darPunto = async (estudianteId) => {
-    await supabase.from("historial_gamificacion").insert({
-      estudiante_id: estudianteId, etiqueta: "Participación en clase", xp: 10, vida: 2, categoria: "academico",
-    });
-    const { data: actual } = await supabase.from("progreso").select("*").eq("estudiante_id", estudianteId).maybeSingle();
-    await supabase.from("progreso").upsert({
-      estudiante_id: estudianteId,
-      xp: (actual?.xp || 0) + 10,
-      vida: Math.min(100, (actual?.vida ?? 100) + 2),
-      monedas: (actual?.monedas || 0) + 1,
-    });
-    alert("¡+10 XP registrado en Supabase!");
-  };
+  const [grado, setGrado] = useState(null);
+  const [reino, setReino] = useState(null);
+  const [modoLista, setModoLista] = useState(false);
 
   return (
-    <div className="min-h-screen bg-violet-50 p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-bold text-violet-700">CÓDICE — conectado a Supabase</h1>
+    <div className="min-h-screen bg-violet-50">
+      <div className="bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+        <h1 className="text-lg font-bold text-violet-700 cursor-pointer" onClick={() => { setGrado(null); setReino(null); setModoLista(false); }}>CÓDICE</h1>
         <button onClick={() => supabase.auth.signOut()} className="text-sm text-slate-500">Cerrar sesión ({session.user.email})</button>
       </div>
-
-      <div className="bg-white rounded-2xl shadow p-4 mb-6 flex flex-wrap gap-2 items-center">
-        <input value={nuevoNombre} onChange={(e) => setNuevoNombre(e.target.value)} placeholder="Nombre del estudiante"
-          className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none flex-1 min-w-[200px]" />
-        <input value={nuevoGrado} onChange={(e) => setNuevoGrado(e.target.value)} placeholder="Grado (ej: 801)"
-          className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none w-28" />
-        <button onClick={agregarEstudiante} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white">Agregar</button>
-      </div>
-
-      <div className="bg-white rounded-2xl shadow divide-y divide-slate-100">
-        {cargando && <div className="p-4 text-sm text-slate-400">Cargando estudiantes…</div>}
-        {!cargando && estudiantes.length === 0 && (
-          <div className="p-4 text-sm text-slate-400">Aún no hay estudiantes en la base de datos. Agrega el primero arriba.</div>
+      <div className="p-6 max-w-6xl mx-auto">
+        {!grado && <VistaGrados onElegirGrado={(g) => { setGrado(g); setReino(null); setModoLista(false); }} />}
+        {grado && !modoLista && !reino && (
+          <VistaReinos
+            gradoId={grado}
+            onElegirReino={(r) => setReino(r)}
+            onVerTodos={() => setModoLista(true)}
+            onVolver={() => setGrado(null)}
+          />
         )}
-        {estudiantes.map((s) => (
-          <div key={s.id} className="flex items-center justify-between px-4 py-3">
-            <div>
-              <div className="text-sm font-medium text-slate-800">{s.nombre}</div>
-              <div className="text-xs text-slate-400">Grado {s.grado_id} · {s.reino_actual || s.reino_original}</div>
-            </div>
-            <button onClick={() => darPunto(s.id)} className="text-xs px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-700">+10 XP</button>
-          </div>
-        ))}
+        {grado && (modoLista || reino) && (
+          <VistaEstudiantes
+            gradoId={grado}
+            reinoFiltro={modoLista ? null : reino}
+            onVolver={() => { setReino(null); setModoLista(false); }}
+          />
+        )}
       </div>
-
-      <p className="text-xs text-slate-400 mt-6">
-        Esto ya vive en una base de datos real y compartida. El siguiente paso es traer el resto de las pantallas
-        del prototipo de Claude a este mismo patrón.
-      </p>
     </div>
   );
 }
