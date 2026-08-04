@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabaseClient";
-import { ACCIONES_RAPIDAS, initials, nextLevel, reinoColor } from "../lib/gamification";
+import { ACCIONES_RAPIDAS, ACADEMICO_POS, ACADEMICO_NEG, PILARES, CONVIVENCIAL_POS_EXTRA, CONVIVENCIAL_NEG, initials, nextLevel, reinoColor } from "../lib/gamification";
 import * as api from "../lib/api";
 
 function LevelBar({ xp }) {
@@ -29,6 +29,7 @@ function VidaBar({ vida }) {
 
 function QuickGamify({ estudiante, onAplicado }) {
   const [abierto, setAbierto] = useState(false);
+  const [tab, setTab] = useState("rapido");
   const [cargando, setCargando] = useState(false);
 
   const aplicar = async (accion) => {
@@ -36,42 +37,64 @@ function QuickGamify({ estudiante, onAplicado }) {
     try {
       const nuevo = await api.registrarAccion(estudiante.id, accion);
       onAplicado(estudiante.id, nuevo);
+      setAbierto(false);
     } catch (e) {
       alert("No se pudo registrar: " + e.message);
     }
     setCargando(false);
-    setAbierto(false);
+  };
+
+  const TABS = [
+    { key: "rapido", label: "Rápido" },
+    { key: "academico_pos", label: "Académico +" },
+    { key: "academico_neg", label: "Académico −" },
+    { key: "pilares", label: "Pilares" },
+    { key: "conviv_pos", label: "Convivencial +" },
+    { key: "conviv_neg", label: "Convivencial −" },
+  ];
+
+  const listaActual = () => {
+    if (tab === "rapido") return ACCIONES_RAPIDAS.map((a) => ({ label: a.label, xp: a.xp, vida: a.vida, categoria: a.categoria }));
+    if (tab === "academico_pos") return ACADEMICO_POS.map((a) => ({ ...a, categoria: "academico" }));
+    if (tab === "academico_neg") return ACADEMICO_NEG.map((a) => ({ ...a, categoria: "academico" }));
+    if (tab === "pilares") return PILARES.map((a) => ({ ...a, categoria: a.key }));
+    if (tab === "conviv_pos") return CONVIVENCIAL_POS_EXTRA.map((a) => ({ ...a, categoria: "convivencial" }));
+    if (tab === "conviv_neg") return CONVIVENCIAL_NEG.map((a) => ({ ...a, categoria: "convivencial" }));
+    return [];
   };
 
   return (
-    <div className="relative">
-      <button onClick={() => setAbierto((v) => !v)} className="text-xs px-3 py-1.5 rounded-full bg-violet-500 text-white font-semibold">
+    <>
+      <button onClick={() => setAbierto(true)} className="text-xs px-3 py-1.5 rounded-full bg-violet-500 text-white font-semibold">
         ⚡ Puntos
       </button>
       {abierto && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setAbierto(false)} />
-          <div className="absolute right-0 mt-2 z-20 w-72 bg-white rounded-2xl shadow-xl p-3 border border-slate-100">
-            <div className="text-[10px] uppercase tracking-wide text-slate-400 mb-2">Reconocer</div>
-            <div className="grid grid-cols-2 gap-2 mb-3">
-              {ACCIONES_RAPIDAS.filter((a) => a.tipo === "positiva").map((a) => (
-                <button key={a.key} disabled={cargando} onClick={() => aplicar(a)} className="text-xs text-left px-2.5 py-2 rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100">
-                  {a.label}<div className="text-[10px] opacity-70">+{a.xp} XP</div>
+        <div className="fixed inset-0 z-30 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.4)" }} onClick={() => setAbierto(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl shadow-xl p-4 w-full max-w-lg max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-bold text-slate-800">Gamificación — {estudiante.nombre}</h3>
+              <button onClick={() => setAbierto(false)} className="text-slate-400">✕</button>
+            </div>
+            <div className="flex gap-1 mb-3 flex-wrap">
+              {TABS.map((t) => (
+                <button key={t.key} onClick={() => setTab(t.key)}
+                  className={`text-xs px-2.5 py-1.5 rounded-full ${tab === t.key ? "bg-violet-500 text-white" : "bg-violet-50 text-violet-600"}`}>
+                  {t.label}
                 </button>
               ))}
             </div>
-            <div className="text-[10px] uppercase tracking-wide text-slate-400 mb-2">Llamar la atención</div>
             <div className="grid grid-cols-2 gap-2">
-              {ACCIONES_RAPIDAS.filter((a) => a.tipo === "negativa").map((a) => (
-                <button key={a.key} disabled={cargando} onClick={() => aplicar(a)} className="text-xs text-left px-2.5 py-2 rounded-xl bg-rose-50 text-rose-700 hover:bg-rose-100">
-                  {a.label}<div className="text-[10px] opacity-70">{a.xp} XP</div>
+              {listaActual().map((a, i) => (
+                <button key={i} disabled={cargando} onClick={() => aplicar(a)}
+                  className={`text-xs text-left px-2.5 py-2 rounded-xl ${a.xp >= 0 ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "bg-rose-50 text-rose-700 hover:bg-rose-100"}`}>
+                  {a.label}<div className="text-[10px] opacity-70">{a.xp > 0 ? "+" : ""}{a.xp} XP</div>
                 </button>
               ))}
             </div>
           </div>
-        </>
+        </div>
       )}
-    </div>
+    </>
   );
 }
 
