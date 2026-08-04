@@ -47,7 +47,6 @@ export async function crearEstudiantesMasivo(filas) {
   const { error } = await supabase.from("estudiantes").insert(filas);
   if (error) throw error;
 }
-
 export async function quitarEstudiante(id) {
   const { error } = await supabase.from("estudiantes").update({ activo: false }).eq("id", id);
   if (error) throw error;
@@ -56,6 +55,49 @@ export async function quitarEstudiante(id) {
 export async function cambiarReino(id, reino_actual) {
   const { error } = await supabase.from("estudiantes").update({ reino_actual }).eq("id", id);
   if (error) throw error;
+}
+
+/* ---------------- Asistencia ---------------- */
+export async function fetchAsistenciaFecha(estudianteIds, fecha) {
+  if (estudianteIds.length === 0) return {};
+  const { data, error } = await supabase
+    .from("asistencia")
+    .select("*")
+    .eq("fecha", fecha)
+    .in("estudiante_id", estudianteIds);
+  if (error) throw error;
+  const mapa = {};
+  (data || []).forEach((f) => { mapa[f.estudiante_id] = f; });
+  return mapa;
+}
+
+export async function marcarAsistencia(estudianteId, fecha, codigo, observacion) {
+  const { error } = await supabase.from("asistencia").upsert(
+    { estudiante_id: estudianteId, fecha, codigo, observacion: observacion || null },
+    { onConflict: "estudiante_id,fecha" }
+  );
+  if (error) throw error;
+}
+
+export async function quitarAsistencia(estudianteId, fecha) {
+  const { error } = await supabase.from("asistencia").delete().eq("estudiante_id", estudianteId).eq("fecha", fecha);
+  if (error) throw error;
+}
+
+export async function marcarTodosPresentes(estudianteIds, fecha) {
+  const filas = estudianteIds.map((id) => ({ estudiante_id: id, fecha, codigo: "P" }));
+  const { error } = await supabase.from("asistencia").upsert(filas, { onConflict: "estudiante_id,fecha" });
+  if (error) throw error;
+}
+
+export async function fetchEstadisticasAsistencia(estudianteId) {
+  const { data, error } = await supabase.from("asistencia").select("codigo").eq("estudiante_id", estudianteId);
+  if (error) throw error;
+  const total = (data || []).length;
+  const conteo = { P: 0, R: 0, FI: 0, FJ: 0 };
+  (data || []).forEach((f) => { conteo[f.codigo] = (conteo[f.codigo] || 0) + 1; });
+  const pct = total > 0 ? Math.round((conteo.P / total) * 100) : null;
+  return { ...conteo, total, pct };
 }
 
 export async function registrarAccion(estudianteId, accion) {
