@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "./lib/supabaseClient";
+import * as api from "./lib/api";
 import { VistaGrados, VistaReinos, VistaEstudiantes } from "./screens/Estudiantes";
+import { VistaAsistencia } from "./screens/Asistencia";
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -97,33 +99,50 @@ function LoginScreen() {
 }
 
 function Panel({ session }) {
+  const [tab, setTab] = useState("estudiantes");
   const [grado, setGrado] = useState(null);
   const [reino, setReino] = useState(null);
   const [modoLista, setModoLista] = useState(false);
+  const [grados, setGrados] = useState([]);
+
+  useEffect(() => {
+    api.asegurarGradosBase().then(() => api.fetchGrados()).then(setGrados);
+  }, []);
+
+  const irAEstudiantes = () => { setTab("estudiantes"); setGrado(null); setReino(null); setModoLista(false); };
 
   return (
     <div className="min-h-screen bg-violet-50">
-      <div className="bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between">
-        <h1 className="text-lg font-bold text-violet-700 cursor-pointer" onClick={() => { setGrado(null); setReino(null); setModoLista(false); }}>CÓDICE</h1>
+      <div className="bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between flex-wrap gap-2">
+        <h1 className="text-lg font-bold text-violet-700 cursor-pointer" onClick={irAEstudiantes}>CÓDICE</h1>
+        <div className="flex gap-1 rounded-full bg-violet-50 p-1">
+          <button onClick={irAEstudiantes} className={`text-xs px-3 py-1.5 rounded-full ${tab === "estudiantes" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Estudiantes</button>
+          <button onClick={() => setTab("asistencia")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "asistencia" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Asistencia</button>
+        </div>
         <button onClick={() => supabase.auth.signOut()} className="text-sm text-slate-500">Cerrar sesión ({session.user.email})</button>
       </div>
       <div className="p-6 max-w-6xl mx-auto">
-        {!grado && <VistaGrados onElegirGrado={(g) => { setGrado(g); setReino(null); setModoLista(false); }} />}
-        {grado && !modoLista && !reino && (
-          <VistaReinos
-            gradoId={grado}
-            onElegirReino={(r) => setReino(r)}
-            onVerTodos={() => setModoLista(true)}
-            onVolver={() => setGrado(null)}
-          />
+        {tab === "estudiantes" && (
+          <>
+            {!grado && <VistaGrados onElegirGrado={(g) => { setGrado(g); setReino(null); setModoLista(false); }} />}
+            {grado && !modoLista && !reino && (
+              <VistaReinos
+                gradoId={grado}
+                onElegirReino={(r) => setReino(r)}
+                onVerTodos={() => setModoLista(true)}
+                onVolver={() => setGrado(null)}
+              />
+            )}
+            {grado && (modoLista || reino) && (
+              <VistaEstudiantes
+                gradoId={grado}
+                reinoFiltro={modoLista ? null : reino}
+                onVolver={() => { setReino(null); setModoLista(false); }}
+              />
+            )}
+          </>
         )}
-        {grado && (modoLista || reino) && (
-          <VistaEstudiantes
-            gradoId={grado}
-            reinoFiltro={modoLista ? null : reino}
-            onVolver={() => { setReino(null); setModoLista(false); }}
-          />
-        )}
+        {tab === "asistencia" && grados.length > 0 && <VistaAsistencia grados={grados} />}
       </div>
     </div>
   );
