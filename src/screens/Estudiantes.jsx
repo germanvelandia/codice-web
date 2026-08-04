@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabaseClient";
 import { ACCIONES_RAPIDAS, initials, nextLevel, reinoColor } from "../lib/gamification";
 import * as api from "../lib/api";
@@ -104,12 +105,80 @@ function TarjetaEstudiante({ estudiante, onQuitar, onAplicado, reinos, onCambiar
   );
 }
 
+function ImportarEstudiantesModal({ gradoId, reinoDefault, onClose, onImportado }) {
+  const [texto, setTexto] = useState("");
+  const [cargando, setCargando] = useState(false);
+  const fileRef = useRef(null);
+
+  const procesarFilas = async (filas) => {
+    const limpias = filas.filter((f) => f.nombre && f.nombre.trim()).map((f) => ({
+      nombre: f.nombre.trim(), grado_id: gradoId, reino_original: (f.reino && f.reino.trim()) || reinoDefault,
+    }));
+    if (limpias.length === 0) { alert("No se encontraron nombres para importar."); return; }
+    setCargando(true);
+    try {
+      await api.crearEstudiantesMasivo(limpias);
+      onImportado(limpias.length);
+      onClose();
+    } catch (e) {
+      alert("Error al importar: " + e.message);
+    }
+    setCargando(false);
+  };
+
+  const procesarPegado = () => {
+    const filas = texto.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).map((l) => {
+      const partes = l.split(/\t|;|,/).map((x) => x.trim());
+      return { nombre: partes[0], reino: partes[1] };
+    });
+    procesarFilas(filas);
+  };
+
+  const procesarArchivo = (file) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: "binary" });
+        const hoja = wb.Sheets[wb.SheetNames[0]];
+        const arr = XLSX.utils.sheet_to_json(hoja, { header: 1 });
+        const filas = arr.filter((r) => r.length && r[0]).map((r) => ({ nombre: String(r[0]), reino: r[1] ? String(r[1]) : undefined }));
+        procesarFilas(filas);
+      } catch (err) {
+        alert("No se pudo leer el archivo. Verifica que sea un .xlsx o .csv válido.");
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.4)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-md shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">Importar estudiantes — Grado {gradoId}</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <div className="text-xs uppercase tracking-wide text-slate-400 mb-1.5">Opción 1 — Pegar lista</div>
+        <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={6}
+          placeholder={"Un estudiante por línea.\nOpcional: 'Nombre, Grupo' por línea.\nEj:\nJuan Pérez, Reino Dorado\nMaría Gómez"}
+          className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none font-mono" />
+        <button disabled={cargando} onClick={procesarPegado} className="w-full text-sm font-semibold py-2 rounded-lg bg-violet-500 text-white mb-4 disabled:opacity-60">
+          {cargando ? "Importando…" : "Importar lo pegado"}
+        </button>
+        <div className="text-xs uppercase tracking-wide text-slate-400 mb-1.5">Opción 2 — Subir archivo (.xlsx / .csv)</div>
+        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={(e) => { if (e.target.files[0]) procesarArchivo(e.target.files[0]); }} className="text-sm" />
+        <p className="text-xs text-slate-400 mt-3">Primera columna: nombre. Segunda columna (opcional): grupo/reino.</p>
+      </div>
+    </div>
+  );
+}
+
 export function VistaEstudiantes({ gradoId, reinoFiltro, onVolver }) {
   const [estudiantes, setEstudiantes] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [query, setQuery] = useState("");
   const [nuevoNombre, setNuevoNombre] = useState("");
   const [nuevoReino, setNuevoReino] = useState("Sin grupo");
+  const [importarAbierto, setImportarAbierto] = useState(false);
 
   const cargar = async () => {
     setCargando(true);
@@ -158,14 +227,28 @@ export function VistaEstudiantes({ gradoId, reinoFiltro, onVolver }) {
         {reinoFiltro ? reinoFiltro : `Grado ${gradoId} — todos los estudiantes`}
       </h2>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 mb-4 flex flex-wrap gap-2">
-        <input value={nuevoNombre} onChange={(e) => setNuevoNombre(e.target.value)} placeholder="Nombre del estudiante"
-          className="flex-1 min-w-[180px] text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" />
-        <select value={nuevoReino} onChange={(e) => setNuevoReino(e.target.value)} className="text-sm rounded-lg px-2 py-2 border border-slate-200 outline-none">
-          {reinos.map((r) => <option key={r} value={r}>{r}</option>)}
-        </select>
-        <button onClick={agregar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white">Agregar</button>
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 mb-4">
+        <div className="flex flex-wrap gap-2 items-center justify-between mb-2">
+          <div className="text-xs uppercase tracking-wide text-slate-400">Agregar estudiante</div>
+          <button onClick={() => setImportarAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700">📥 Importar varios</button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <input value={nuevoNombre} onChange={(e) => setNuevoNombre(e.target.value)} placeholder="Nombre del estudiante"
+            className="flex-1 min-w-[180px] text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" />
+          <select value={nuevoReino} onChange={(e) => setNuevoReino(e.target.value)} className="text-sm rounded-lg px-2 py-2 border border-slate-200 outline-none">
+            {reinos.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+          <button onClick={agregar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white">Agregar</button>
+        </div>
       </div>
+      {importarAbierto && (
+        <ImportarEstudiantesModal
+          gradoId={gradoId}
+          reinoDefault={reinoFiltro || "Sin grupo"}
+          onClose={() => setImportarAbierto(false)}
+          onImportado={(n) => { cargar(); alert(`Se importaron ${n} estudiantes.`); }}
+        />
+      )}
 
       <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar estudiante…"
         className="w-full max-w-sm text-sm rounded-full px-4 py-2 border border-slate-200 outline-none mb-4" />
