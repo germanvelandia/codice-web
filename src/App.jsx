@@ -3,6 +3,7 @@ import { supabase } from "./lib/supabaseClient";
 import * as api from "./lib/api";
 import { VistaGrados, VistaReinos, VistaEstudiantes } from "./screens/Estudiantes";
 import { VistaAsistencia } from "./screens/Asistencia";
+import { VistaRuleta, VistaTemporizador, VistaHerramientas } from "./screens/Herramientas";
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -100,6 +101,7 @@ function LoginScreen() {
 
 function Panel({ session }) {
   const [tab, setTab] = useState("estudiantes");
+  const [subTabHerramientas, setSubTabHerramientas] = useState("ruleta");
   const [grado, setGrado] = useState(null);
   const [reino, setReino] = useState(null);
   const [modoLista, setModoLista] = useState(false);
@@ -115,9 +117,10 @@ function Panel({ session }) {
     <div className="min-h-screen bg-violet-50">
       <div className="bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-lg font-bold text-violet-700 cursor-pointer" onClick={irAEstudiantes}>CÓDICE</h1>
-        <div className="flex gap-1 rounded-full bg-violet-50 p-1">
+        <div className="flex gap-1 rounded-full bg-violet-50 p-1 flex-wrap">
           <button onClick={irAEstudiantes} className={`text-xs px-3 py-1.5 rounded-full ${tab === "estudiantes" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Estudiantes</button>
           <button onClick={() => setTab("asistencia")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "asistencia" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Asistencia</button>
+          <button onClick={() => setTab("herramientas")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "herramientas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Herramientas</button>
         </div>
         <button onClick={() => supabase.auth.signOut()} className="text-sm text-slate-500">Cerrar sesión ({session.user.email})</button>
       </div>
@@ -143,6 +146,18 @@ function Panel({ session }) {
           </>
         )}
         {tab === "asistencia" && grados.length > 0 && <VistaAsistencia grados={grados} />}
+        {tab === "herramientas" && grados.length > 0 && (
+          <>
+            <div className="flex gap-1 mb-6 rounded-full bg-white p-1 w-fit border border-slate-100 shadow-sm">
+              <button onClick={() => setSubTabHerramientas("ruleta")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "ruleta" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Ruleta</button>
+              <button onClick={() => setSubTabHerramientas("temporizador")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "temporizador" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Temporizador</button>
+              <button onClick={() => setSubTabHerramientas("otras")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "otras" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Otras herramientas</button>
+            </div>
+            {subTabHerramientas === "ruleta" && <VistaRuleta grados={grados} />}
+            {subTabHerramientas === "temporizador" && <VistaTemporizador />}
+            {subTabHerramientas === "otras" && <VistaHerramientas grados={grados} />}
+          </>
+        )}
       </div>
     </div>
   );
