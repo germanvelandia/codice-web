@@ -361,6 +361,65 @@ function ImportarMoodleModal({ materiaId, gradoId, periodo, categorias, estudian
   );
 }
 
+function NotaMasivaModal({ actividades, estudiantesVisibles, reinoFiltro, onClose, onAplicado }) {
+  const manuales = actividades.filter((a) => !a.es_automatica);
+  const [actividadId, setActividadId] = useState(manuales[0]?.id || "");
+  const [valor, setValor] = useState("");
+  const [aplicando, setAplicando] = useState(false);
+
+  if (manuales.length === 0) {
+    return (
+      <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+        <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 max-w-sm text-center shadow-xl">
+          <p className="text-sm text-slate-700 mb-3">No hay actividades manuales en este periodo todavía (las automáticas se calculan solas, no se pueden fijar).</p>
+          <button onClick={onClose} className="text-sm px-4 py-2 rounded-lg bg-violet-500 text-white">Entendido</button>
+        </div>
+      </div>
+    );
+  }
+
+  const aplicar = async () => {
+    const v = parseFloat(String(valor).replace(",", "."));
+    if (isNaN(v)) { alert("Escribe una nota válida."); return; }
+    setAplicando(true);
+    try {
+      for (const s of estudiantesVisibles) { await api.setValor(actividadId, s.id, v); }
+      onAplicado(actividadId, estudiantesVisibles.map((s) => s.id), v);
+      onClose();
+    } catch (e) {
+      alert("Error al aplicar: " + e.message);
+    }
+    setAplicando(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">Aplicar nota masiva</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-500 mb-3">
+          Se aplicará a los <b>{estudiantesVisibles.length}</b> estudiantes visibles ({reinoFiltro === "Todos" ? "todo el grado" : reinoFiltro}).
+        </p>
+        <label className="text-xs text-slate-500 block mb-1">Actividad</label>
+        <select value={actividadId} onChange={(e) => setActividadId(parseInt(e.target.value, 10))} className="w-full text-sm rounded-lg px-2 py-2 mb-3 border border-slate-200 outline-none">
+          {manuales.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+        </select>
+        <label className="text-xs text-slate-500 block mb-1">Nota para todos</label>
+        <input type="number" step="0.1" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="Ej: 4.5"
+          className="w-full text-sm rounded-lg px-3 py-2 mb-4 border border-slate-200 outline-none" />
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
+          <button disabled={aplicando} onClick={aplicar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+            {aplicando ? "Aplicando…" : "Aplicar a todos"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo, onCambioCategorias }) {
   const [actividades, setActividades] = useState([]);
   const [valores, setValores] = useState({});
@@ -369,6 +428,8 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
   const [modalAbierto, setModalAbierto] = useState(false);
   const [actividadEditar, setActividadEditar] = useState(null);
   const [importarMoodleAbierto, setImportarMoodleAbierto] = useState(false);
+  const [notaMasivaAbierta, setNotaMasivaAbierta] = useState(false);
+  const [reinoFiltro, setReinoFiltro] = useState("Todos");
 
   const cargar = async () => {
     setCargando(true);
@@ -388,6 +449,14 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
     setCargando(false);
   };
   useEffect(() => { cargar(); }, [materiaId, gradoId, periodo, estudiantes.length]);
+  useEffect(() => { setReinoFiltro("Todos"); }, [gradoId]);
+
+  const reinos = useMemo(() => {
+    const set = new Set(estudiantes.map((s) => s.reino_actual || s.reino_original || "Sin grupo"));
+    return ["Todos", ...Array.from(set)];
+  }, [estudiantes]);
+
+  const estudiantesVisibles = estudiantes.filter((s) => reinoFiltro === "Todos" || (s.reino_actual || s.reino_original) === reinoFiltro);
 
   const valorDeActividad = (actividad, estudianteId) => {
     if (actividad.es_automatica) {
@@ -401,6 +470,14 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
     const v = valorTexto === "" ? null : Math.max(config.escala_min, Math.min(config.nota_maxima, parseFloat(valorTexto)));
     await api.setValor(actividadId, estudianteId, v);
     setValores((prev) => ({ ...prev, [actividadId]: { ...(prev[actividadId] || {}), [estudianteId]: v } }));
+  };
+
+  const aplicarNotaMasiva = (actividadId, estudianteIds, valor) => {
+    setValores((prev) => {
+      const nuevo = { ...(prev[actividadId] || {}) };
+      estudianteIds.forEach((id) => { nuevo[id] = valor; });
+      return { ...prev, [actividadId]: nuevo };
+    });
   };
 
   const notaFinal = (estudianteId) => {
@@ -419,8 +496,12 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
   return (
     <div>
       <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
-        <div className="text-sm text-slate-500">{actividades.length} actividad{actividades.length === 1 ? "" : "es"} en este periodo</div>
-        <div className="flex gap-2">
+        <select value={reinoFiltro} onChange={(e) => setReinoFiltro(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
+          {reinos.map((r) => <option key={r} value={r}>{r === "Todos" ? "Todos los grupos" : r}</option>)}
+        </select>
+        <div className="text-sm text-slate-500">{actividades.length} actividad{actividades.length === 1 ? "" : "es"} · {estudiantesVisibles.length} estudiante{estudiantesVisibles.length === 1 ? "" : "s"}</div>
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={() => setNotaMasivaAbierta(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🖊 Nota masiva</button>
           <button onClick={() => setImportarMoodleAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700">📥 Importar de Moodle/Excel</button>
           <button onClick={() => { setActividadEditar(null); setModalAbierto(true); }} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">+ Nueva actividad</button>
         </div>
@@ -447,7 +528,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
               </tr>
             </thead>
             <tbody>
-              {estudiantes.map((s) => {
+              {estudiantesVisibles.map((s) => {
                 const final = notaFinal(s.id);
                 const banda = bandaDesempeno(final, config);
                 return (
@@ -455,13 +536,14 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
                     <td className="sticky left-0 bg-inherit text-left px-3 py-2 font-medium text-slate-700">{s.nombre}</td>
                     {actividades.map((a) => {
                       const v = valorDeActividad(a, s.id);
+                      const b = bandaDesempeno(v, config);
                       if (a.es_automatica) {
-                        const b = bandaDesempeno(v, config);
                         return <td key={a.id} className="text-center px-3 py-2" style={{ color: b.color, fontWeight: 600 }}>{v}</td>;
                       }
                       return (
                         <td key={a.id} className="text-center px-3 py-2">
                           <input type="number" step="0.1" defaultValue={v ?? ""} onBlur={(e) => guardarValorManual(a.id, s.id, e.target.value)}
+                            style={v !== null && v !== undefined ? { color: b.color, borderColor: b.color, background: `${b.color}11`, fontWeight: 700 } : {}}
                             className="w-14 text-center text-xs rounded px-1 py-1 border border-slate-200 outline-none" />
                         </td>
                       );
@@ -481,6 +563,10 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
       {importarMoodleAbierto && (
         <ImportarMoodleModal materiaId={materiaId} gradoId={gradoId} periodo={periodo} categorias={categorias} estudiantes={estudiantes}
           onClose={() => setImportarMoodleAbierto(false)} onImportado={cargar} />
+      )}
+      {notaMasivaAbierta && (
+        <NotaMasivaModal actividades={actividades} estudiantesVisibles={estudiantesVisibles} reinoFiltro={reinoFiltro}
+          onClose={() => setNotaMasivaAbierta(false)} onAplicado={aplicarNotaMasiva} />
       )}
     </div>
   );
