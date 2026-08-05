@@ -101,9 +101,23 @@ function QuickGamify({ estudiante, onAplicado }) {
 
 function TarjetaEstudiante({ estudiante, onQuitar, onAplicado, reinos, onCambiarReino, roles, onCambiarRol }) {
   const [actasAbiertas, setActasAbiertas] = useState(false);
+  const [codigo, setCodigo] = useState(estudiante.codigo_acceso || null);
+  const [generando, setGenerando] = useState(false);
   const progreso = estudiante.progreso?.[0] || estudiante.progreso || { xp: 0, vida: 100, monedas: 0 };
   const reino = estudiante.reino_actual || estudiante.reino_original || "Sin grupo";
   const rolActualId = estudiante.roles_asignados?.[0]?.rol_id || estudiante.roles_asignados?.rol_id || "";
+
+  const generarCodigo = async () => {
+    setGenerando(true);
+    try {
+      const nuevo = await api.generarCodigoAcceso(estudiante.id);
+      setCodigo(nuevo);
+    } catch (e) {
+      alert("No se pudo generar el código: " + e.message);
+    }
+    setGenerando(false);
+  };
+
   return (
     <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
       <div className="flex items-start gap-3 mb-2">
@@ -130,7 +144,16 @@ function TarjetaEstudiante({ estudiante, onQuitar, onAplicado, reinos, onCambiar
       </div>
       <LevelBar xp={progreso.xp || 0} />
       <VidaBar vida={progreso.vida ?? 100} />
-      <div className="flex justify-between items-center mt-3">
+      <div className="flex items-center justify-between mt-2">
+        {codigo ? (
+          <div className="text-[11px] text-slate-500">🔑 Código: <span className="font-mono font-bold text-violet-600">{codigo}</span></div>
+        ) : (
+          <button disabled={generando} onClick={generarCodigo} className="text-[11px] text-violet-500 underline">
+            {generando ? "Generando…" : "🔑 Generar código de acceso"}
+          </button>
+        )}
+      </div>
+      <div className="flex justify-between items-center mt-2">
         <button onClick={() => onQuitar(estudiante.id)} className="text-xs text-slate-400 hover:text-rose-500">Quitar</button>
         <div className="flex gap-1.5">
           <button onClick={() => setActasAbiertas(true)} className="text-xs px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">📋 Actas</button>
