@@ -269,6 +269,110 @@ function ActaPrintView({ estudiante, acta, institucion, actasRelacionadas }) {
   return createPortal(contenido, document.body);
 }
 
+// Convierte los 3 comportamientos predefinidos (leve/grave/gravísima) al mismo
+// formato que los que el docente cree en el catálogo, para poder mezclarlos en una sola lista.
+const CONVIVENCIALES_BASE = Object.entries(FALTAS_MANUAL).map(([key, f]) => ({
+  id: `base-${key}`, nombre: f.tipo, articulo: f.articulo, plazo_dias: f.plazoDias,
+  implicaciones_legales: f.implicaciones, esBase: true,
+}));
+
+const ACADEMICOS_BASE = [
+  { id: "base-nivelacion", nombre: "Recuperación estándar", plantilla: NIVELACION_COMPROMISOS_DEFAULT, esBase: true },
+];
+
+function SelectorComportamiento({ categoria, valorId, onSeleccionar, onUsarPlantilla }) {
+  const base = categoria === "convivencial" ? CONVIVENCIALES_BASE : ACADEMICOS_BASE;
+  const [personalizados, setPersonalizados] = useState([]);
+  const [creando, setCreando] = useState(false);
+  const [nombre, setNombre] = useState("");
+  const [articulo, setArticulo] = useState("");
+  const [plazoDias, setPlazoDias] = useState("");
+  const [texto, setTexto] = useState("");
+  const [guardando, setGuardando] = useState(false);
+
+  const cargar = () => api.fetchComportamientos(categoria).then((data) => setPersonalizados(data));
+  useEffect(() => { cargar(); }, [categoria]);
+
+  const opciones = [...base, ...personalizados];
+
+  const crear = async () => {
+    if (!nombre.trim()) return;
+    setGuardando(true);
+    try {
+      const campos = categoria === "convivencial"
+        ? { categoria, nombre: nombre.trim(), articulo: articulo.trim() || null, plazo_dias: plazoDias ? parseInt(plazoDias, 10) : null, implicaciones_legales: texto.trim() || null }
+        : { categoria, nombre: nombre.trim(), plantilla: texto.trim() || null };
+      const nuevo = await api.crearComportamiento(campos);
+      await cargar();
+      onSeleccionar(nuevo);
+      setCreando(false);
+      setNombre(""); setArticulo(""); setPlazoDias(""); setTexto("");
+    } catch (e) {
+      alert("Error al crear: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  const eliminar = async (id) => {
+    if (!confirm("¿Eliminar este comportamiento del catálogo? No afecta las actas ya creadas con él.")) return;
+    await api.eliminarComportamiento(id);
+    cargar();
+  };
+
+  return (
+    <div className="mb-2">
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {opciones.map((o) => (
+          <div key={o.id} className="relative group">
+            <button onClick={() => onSeleccionar(o)}
+              className={`text-xs px-3 py-1.5 rounded-full ${valorId === o.id ? "bg-violet-500 text-white" : "bg-white text-slate-600 border border-slate-200"}`}>
+              {o.nombre}{o.articulo ? ` (${o.articulo})` : ""}
+            </button>
+            {!o.esBase && (
+              <button onClick={() => eliminar(o.id)} title="Eliminar del catálogo"
+                className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-slate-400 text-white text-[9px] leading-4 opacity-0 group-hover:opacity-100">✕</button>
+            )}
+          </div>
+        ))}
+        <button onClick={() => setCreando((v) => !v)} className="text-xs px-3 py-1.5 rounded-full border border-dashed border-violet-300 text-violet-600">
+          + Nuevo
+        </button>
+      </div>
+
+      {creando && (
+        <div className="bg-white border border-violet-200 rounded-lg p-3 mb-2 space-y-2">
+          <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder={categoria === "convivencial" ? "Nombre del comportamiento (ej: Uso de celular en clase)" : "Nombre de la plantilla (ej: Plan de lectura crítica)"}
+            className="w-full text-xs rounded-lg px-3 py-2 border border-slate-200 outline-none" />
+          {categoria === "convivencial" && (
+            <div className="flex gap-2">
+              <input value={articulo} onChange={(e) => setArticulo(e.target.value)} placeholder="Artículo (opcional, ej: Art. 71)"
+                className="flex-1 text-xs rounded-lg px-3 py-2 border border-slate-200 outline-none" />
+              <input value={plazoDias} onChange={(e) => setPlazoDias(e.target.value)} type="number" placeholder="Plazo (días)"
+                className="w-28 text-xs rounded-lg px-3 py-2 border border-slate-200 outline-none" />
+            </div>
+          )}
+          <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={3}
+            placeholder={categoria === "convivencial" ? "Implicaciones legales de este comportamiento…" : "Plan / compromisos de esta plantilla académica…"}
+            className="w-full text-xs rounded-lg px-3 py-2 border border-slate-200 outline-none" />
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setCreando(false)} className="text-xs text-slate-500 px-2 py-1.5">Cancelar</button>
+            <button disabled={guardando} onClick={crear} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+              {guardando ? "Guardando…" : "Agregar al catálogo y usar"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {categoria === "academico" && valorId && (
+        <button onClick={() => onUsarPlantilla(opciones.find((o) => o.id === valorId)?.plantilla || "")}
+          className="text-xs px-3 py-1.5 rounded-lg bg-violet-100 text-violet-700 mb-2">
+          ⤵️ Insertar esta plantilla en el texto de abajo
+        </button>
+      )}
+    </div>
+  );
+}
+
 function NuevaActaForm({ estudianteId, onCancelar, onGuardada }) {
   const [tipo, setTipo] = useState("Convivencial");
   const [fecha, setFecha] = useState(hoyISO());
@@ -276,26 +380,19 @@ function NuevaActaForm({ estudianteId, onCancelar, onGuardada }) {
   const [descripcion, setDescripcion] = useState("");
   const [compromisosAcademicos, setCompromisosAcademicos] = useState("");
   const [compromisosConvivenciales, setCompromisosConvivenciales] = useState("");
-  const [categoriaFalta, setCategoriaFalta] = useState("leve");
-  const [implicaciones, setImplicaciones] = useState(FALTAS_MANUAL.leve.implicaciones);
+  const [comportamientoConv, setComportamientoConv] = useState(null);
+  const [comportamientoAcad, setComportamientoAcad] = useState(null);
+  const [implicaciones, setImplicaciones] = useState("");
   const [reincidente, setReincidente] = useState(false);
   const [incluirAsistencia, setIncluirAsistencia] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
-  // Precarga las implicaciones legales según la falta elegida (queda editable)
-  useEffect(() => {
-    if (tipo === "Convivencial") setImplicaciones(FALTAS_MANUAL[categoriaFalta].implicaciones);
-  }, [tipo, categoriaFalta]);
-
-  // Precarga el plan de compromisos académicos al entrar en modo Nivelación (solo si está vacío, para no pisar lo que ya escribió el docente)
-  useEffect(() => {
-    if (tipo === "Nivelación" && !compromisosAcademicos.trim()) {
-      setCompromisosAcademicos(NIVELACION_COMPROMISOS_DEFAULT);
-    }
-  }, [tipo]);
+  const seleccionarConv = (o) => { setComportamientoConv(o); setImplicaciones(o.implicaciones_legales || ""); };
+  const seleccionarAcad = (o) => { setComportamientoAcad(o); if (!compromisosAcademicos.trim()) setCompromisosAcademicos(o.plantilla || ""); };
 
   const guardar = async () => {
     if (!motivo.trim()) { alert("Escribe al menos el motivo."); return; }
+    if (tipo === "Convivencial" && !comportamientoConv) { alert("Elige o crea un comportamiento del catálogo."); return; }
     setGuardando(true);
     try {
       const campos = {
@@ -304,12 +401,11 @@ function NuevaActaForm({ estudianteId, onCancelar, onGuardada }) {
         compromisos_convivenciales: compromisosConvivenciales.trim() || null,
       };
       if (tipo === "Convivencial") {
-        const f = FALTAS_MANUAL[categoriaFalta];
-        campos.categoria_falta = categoriaFalta;
-        campos.tipo_falta = (reincidente ? "Reincidente / " : "") + f.tipo;
-        campos.articulo = f.articulo;
-        campos.plazo_dias = f.plazoDias;
-        campos.implicaciones_legales = implicaciones.trim() || f.implicaciones;
+        campos.categoria_falta = comportamientoConv.id;
+        campos.tipo_falta = (reincidente ? "Reincidente / " : "") + comportamientoConv.nombre;
+        campos.articulo = comportamientoConv.articulo || null;
+        campos.plazo_dias = comportamientoConv.plazo_dias || null;
+        campos.implicaciones_legales = implicaciones.trim() || comportamientoConv.implicaciones_legales || null;
       }
       if (incluirAsistencia) {
         campos.asistencia_resumen = await api.fetchEstadisticasAsistencia(estudianteId);
@@ -338,24 +434,19 @@ function NuevaActaForm({ estudianteId, onCancelar, onGuardada }) {
 
       {tipo === "Convivencial" && (
         <div className="mb-3">
-          <label className="text-xs text-slate-500 block mb-1">Categoría de la falta (Manual de Convivencia)</label>
-          <div className="flex gap-1 mb-2">
-            {Object.entries(FALTAS_MANUAL).map(([key, f]) => (
-              <button key={key} onClick={() => setCategoriaFalta(key)}
-                className={`text-xs px-3 py-1.5 rounded-full ${categoriaFalta === key ? "bg-violet-500 text-white" : "bg-white text-slate-600"}`}>
-                {f.tipo} ({f.articulo})
-              </button>
-            ))}
-          </div>
-          <label className="flex items-center gap-2 text-xs text-slate-600">
+          <label className="text-xs text-slate-500 block mb-1">Comportamiento (catálogo del Manual de Convivencia — puedes agregar los que necesites)</label>
+          <SelectorComportamiento categoria="convivencial" valorId={comportamientoConv?.id} onSeleccionar={seleccionarConv} />
+          <label className="flex items-center gap-2 text-xs text-slate-600 mt-1">
             <input type="checkbox" checked={reincidente} onChange={(e) => setReincidente(e.target.checked)} />
-            Es una falta constante / reincidente (incumplimiento repetido del manual de convivencia)
+            Es un comportamiento constante / reincidente
           </label>
-          <div className="mt-3">
-            <label className="text-xs text-slate-500 block mb-1">Implicaciones legales (precargadas según la falta — puedes ajustarlas)</label>
-            <textarea value={implicaciones} onChange={(e) => setImplicaciones(e.target.value)} rows={3}
-              className="w-full text-xs rounded-lg px-3 py-2 border border-amber-200 bg-amber-50 outline-none" />
-          </div>
+          {comportamientoConv && (
+            <div className="mt-3">
+              <label className="text-xs text-slate-500 block mb-1">Implicaciones legales (precargadas según el comportamiento elegido — puedes ajustarlas)</label>
+              <textarea value={implicaciones} onChange={(e) => setImplicaciones(e.target.value)} rows={3}
+                className="w-full text-xs rounded-lg px-3 py-2 border border-amber-200 bg-amber-50 outline-none" />
+            </div>
+          )}
         </div>
       )}
 
@@ -369,8 +460,11 @@ function NuevaActaForm({ estudianteId, onCancelar, onGuardada }) {
 
       {(tipo === "Nivelación" || tipo === "Académico") && (
         <div className="mb-2">
-          <label className="text-xs text-slate-500 block mb-1">Compromisos académicos {tipo === "Nivelación" && "(para superar la pérdida de la materia)"}</label>
-          <textarea value={compromisosAcademicos} onChange={(e) => setCompromisosAcademicos(e.target.value)} rows={2}
+          <label className="text-xs text-slate-500 block mb-1">Plantilla académica (catálogo — puedes agregar las que necesites)</label>
+          <SelectorComportamiento categoria="academico" valorId={comportamientoAcad?.id} onSeleccionar={seleccionarAcad}
+            onUsarPlantilla={(texto) => setCompromisosAcademicos(texto)} />
+          <label className="text-xs text-slate-500 block mb-1 mt-1">Compromisos académicos {tipo === "Nivelación" && "(para superar la pérdida de la materia)"}</label>
+          <textarea value={compromisosAcademicos} onChange={(e) => setCompromisosAcademicos(e.target.value)} rows={3}
             placeholder="Ej: Entregar plan de recuperación semanal, sustentar los temas pendientes..."
             className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
         </div>
@@ -378,7 +472,7 @@ function NuevaActaForm({ estudianteId, onCancelar, onGuardada }) {
 
       {tipo === "Convivencial" && (
         <div className="mb-2">
-          <label className="text-xs text-slate-500 block mb-1">Compromisos convivenciales {reincidente && "(dado el incumplimiento constante del manual)"}</label>
+          <label className="text-xs text-slate-500 block mb-1">Compromisos convivenciales {reincidente && "(dado el incumplimiento constante)"}</label>
           <textarea value={compromisosConvivenciales} onChange={(e) => setCompromisosConvivenciales(e.target.value)} rows={2}
             placeholder="Ej: Presentarse puntualmente, respetar el conducto regular, evitar conflictos con compañeros..."
             className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
