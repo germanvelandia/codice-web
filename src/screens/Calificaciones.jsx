@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
+import * as XLSX from "xlsx";
 import * as api from "../lib/api";
 import {
   CONFIG_DEFAULT, periodosDe, bandaDesempeno, notaAutomatica, notaFinalPonderada,
   calcularEstadisticas, GAM_CATEGORIAS_OPCIONES,
 } from "../lib/calificaciones";
+import { buscarEstudiantePorNombre } from "../lib/gamification";
 
 function BarraMateria({ materias, materiaActualId, setMateriaActualId, onCambio }) {
   const [creando, setCreando] = useState(false);
@@ -192,6 +194,173 @@ function ActividadModal({ materiaId, gradoId, periodo, categorias, editar, onClo
   );
 }
 
+function ImportarMoodleModal({ materiaId, gradoId, periodo, categorias, estudiantes, onClose, onImportado }) {
+  const [paso, setPaso] = useState(1);
+  const [texto, setTexto] = useState("");
+  const [filas, setFilas] = useState([]);
+  const [encabezados, setEncabezados] = useState([]);
+  const [colNombre, setColNombre] = useState("");
+  const [colsSeleccionadas, setColsSeleccionadas] = useState({});
+  const [categoriaId, setCategoriaId] = useState(categorias[0]?.id || "");
+  const [importando, setImportando] = useState(false);
+  const [resultado, setResultado] = useState(null);
+
+  const procesarDesdeArray = (arr) => {
+    if (arr.length < 2) { alert("No se encontraron suficientes filas."); return; }
+    const heads = arr[0].map((h) => String(h || "").trim()).filter(Boolean);
+    const datos = arr.slice(1).filter((r) => r.length > 0 && r.some((c) => c !== "" && c !== undefined));
+    setEncabezados(heads);
+    setColNombre(heads[0]);
+    const sel = {};
+    heads.slice(1).forEach((h) => { sel[h] = true; });
+    setColsSeleccionadas(sel);
+    setFilas(datos.map((r) => {
+      const obj = {};
+      heads.forEach((h, i) => { obj[h] = r[i]; });
+      return obj;
+    }));
+    setPaso(2);
+  };
+
+  const procesarPegado = () => {
+    const lineas = texto.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const arr = lineas.map((l) => l.split(/\t|;|,/).map((x) => x.trim()));
+    procesarDesdeArray(arr);
+  };
+
+  const procesarArchivo = (file) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: "binary" });
+        const hoja = wb.Sheets[wb.SheetNames[0]];
+        const arr = XLSX.utils.sheet_to_json(hoja, { header: 1 });
+        procesarDesdeArray(arr);
+      } catch (err) {
+        alert("No se pudo leer el archivo.");
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const columnasDeNotas = encabezados.filter((h) => h !== colNombre && colsSeleccionadas[h]);
+
+  if (categorias.length === 0) {
+    return (
+      <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+        <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 max-w-sm text-center shadow-xl">
+          <p className="text-sm text-slate-700 mb-3">Primero crea al menos una categoría de evaluación.</p>
+          <button onClick={onClose} className="text-sm px-4 py-2 rounded-lg bg-violet-500 text-white">Entendido</button>
+        </div>
+      </div>
+    );
+  }
+
+  const importar = async () => {
+    if (!categoriaId) { alert("Elige una categoría para las actividades importadas."); return; }
+    if (columnasDeNotas.length === 0) { alert("Selecciona al menos una columna de notas."); return; }
+    setImportando(true);
+    const encontrados = new Set();
+    const noEncontrados = new Set();
+    try {
+      for (const col of columnasDeNotas) {
+        await api.crearActividad({
+          nombre: col, categoria_id: categoriaId, materia_id: materiaId, grado_id: gradoId, periodo, es_automatica: false,
+        });
+      }
+      const actividadesActuales = await api.fetchActividades(materiaId, gradoId, periodo);
+      for (const fila of filas) {
+        const nombreMoodle = fila[colNombre];
+        if (!nombreMoodle) continue;
+        const estudiante = buscarEstudiantePorNombre(String(nombreMoodle), estudiantes);
+        if (!estudiante) { noEncontrados.add(String(nombreMoodle)); continue; }
+        encontrados.add(estudiante.id);
+        for (const col of columnasDeNotas) {
+          const valorCrudo = fila[col];
+          const valor = parseFloat(String(valorCrudo).replace(",", "."));
+          if (isNaN(valor)) continue;
+          const actividad = actividadesActuales.find((a) => a.nombre === col);
+          if (actividad) await api.setValor(actividad.id, estudiante.id, valor);
+        }
+      }
+      setResultado({ importados: encontrados.size, noEncontrados: Array.from(noEncontrados) });
+    } catch (e) {
+      alert("Error al importar: " + e.message);
+    }
+    setImportando(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">Importar notas de Moodle / Excel</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+
+        {resultado ? (
+          <div>
+            <p className="text-sm text-emerald-600 mb-2">✔️ Se importaron notas para {resultado.importados} estudiante{resultado.importados === 1 ? "" : "s"}.</p>
+            {resultado.noEncontrados.length > 0 && (
+              <div className="bg-amber-50 rounded-lg p-3 mb-3">
+                <p className="text-xs text-amber-700 font-semibold mb-1">No se encontraron en el grado (verifica el nombre o agrégalos manualmente):</p>
+                <ul className="text-xs text-amber-700 list-disc list-inside">
+                  {resultado.noEncontrados.map((n) => <li key={n}>{n}</li>)}
+                </ul>
+              </div>
+            )}
+            <button onClick={() => { onImportado(); onClose(); }} className="w-full text-sm font-semibold py-2 rounded-lg bg-violet-500 text-white">Listo</button>
+          </div>
+        ) : paso === 1 ? (
+          <div>
+            <div className="text-xs uppercase tracking-wide text-slate-400 mb-1.5">Opción 1 — Pegar tabla (incluye encabezados en la primera fila)</div>
+            <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={6}
+              placeholder={"Nombre\tTaller 1\tTaller 2\nJuan Pérez García\t4.5\t3.8\nMaría Gómez\t5.0\t4.2"}
+              className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none font-mono" />
+            <button onClick={procesarPegado} className="w-full text-sm font-semibold py-2 rounded-lg bg-violet-500 text-white mb-4">Continuar</button>
+            <div className="text-xs uppercase tracking-wide text-slate-400 mb-1.5">Opción 2 — Subir archivo exportado de Moodle (.xlsx / .csv)</div>
+            <input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => { if (e.target.files[0]) procesarArchivo(e.target.files[0]); }} className="text-sm" />
+            <p className="text-xs text-slate-400 mt-3">La primera fila debe tener los nombres de las columnas (Nombre, y una por cada actividad/calificación).</p>
+          </div>
+        ) : (
+          <div>
+            <p className="text-sm text-slate-600 mb-3">Se encontraron {filas.length} filas con {encabezados.length} columnas.</p>
+            <div className="mb-3">
+              <label className="text-xs text-slate-500 block mb-1">¿Cuál columna tiene el nombre del estudiante?</label>
+              <select value={colNombre} onChange={(e) => setColNombre(e.target.value)} className="w-full text-sm rounded-lg px-2 py-2 border border-slate-200 outline-none">
+                {encabezados.map((h) => <option key={h} value={h}>{h}</option>)}
+              </select>
+            </div>
+            <div className="mb-3">
+              <label className="text-xs text-slate-500 block mb-1">¿En qué categoría van estas actividades?</label>
+              <select value={categoriaId} onChange={(e) => setCategoriaId(parseInt(e.target.value, 10))} className="w-full text-sm rounded-lg px-2 py-2 border border-slate-200 outline-none">
+                {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre} ({c.porcentaje}%)</option>)}
+              </select>
+            </div>
+            <div className="mb-3">
+              <label className="text-xs text-slate-500 block mb-1.5">Columnas de notas a importar (cada una crea una actividad nueva)</label>
+              <div className="flex flex-wrap gap-2">
+                {encabezados.filter((h) => h !== colNombre).map((h) => (
+                  <label key={h} className="flex items-center gap-1.5 text-xs bg-slate-50 rounded-full px-3 py-1.5">
+                    <input type="checkbox" checked={!!colsSeleccionadas[h]} onChange={(e) => setColsSeleccionadas((prev) => ({ ...prev, [h]: e.target.checked }))} />
+                    {h}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setPaso(1)} className="text-xs text-slate-500 px-3 py-2">← Volver</button>
+              <button disabled={importando} onClick={importar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+                {importando ? "Importando…" : `Importar ${columnasDeNotas.length} columna(s)`}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo, onCambioCategorias }) {
   const [actividades, setActividades] = useState([]);
   const [valores, setValores] = useState({});
@@ -199,6 +368,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
   const [cargando, setCargando] = useState(true);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [actividadEditar, setActividadEditar] = useState(null);
+  const [importarMoodleAbierto, setImportarMoodleAbierto] = useState(false);
 
   const cargar = async () => {
     setCargando(true);
@@ -248,9 +418,12 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-3">
+      <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
         <div className="text-sm text-slate-500">{actividades.length} actividad{actividades.length === 1 ? "" : "es"} en este periodo</div>
-        <button onClick={() => { setActividadEditar(null); setModalAbierto(true); }} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">+ Nueva actividad</button>
+        <div className="flex gap-2">
+          <button onClick={() => setImportarMoodleAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700">📥 Importar de Moodle/Excel</button>
+          <button onClick={() => { setActividadEditar(null); setModalAbierto(true); }} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">+ Nueva actividad</button>
+        </div>
       </div>
       {cargando ? (
         <div className="text-sm text-slate-400">Cargando…</div>
@@ -304,6 +477,10 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
       {modalAbierto && (
         <ActividadModal materiaId={materiaId} gradoId={gradoId} periodo={periodo} categorias={categorias} editar={actividadEditar}
           onClose={() => setModalAbierto(false)} onGuardada={() => { setModalAbierto(false); cargar(); }} />
+      )}
+      {importarMoodleAbierto && (
+        <ImportarMoodleModal materiaId={materiaId} gradoId={gradoId} periodo={periodo} categorias={categorias} estudiantes={estudiantes}
+          onClose={() => setImportarMoodleAbierto(false)} onImportado={cargar} />
       )}
     </div>
   );
