@@ -1,5 +1,5 @@
 import { supabase } from "./supabaseClient";
-import { GRADOS_BASE } from "./gamification";
+import { GRADOS_BASE, ordenarPorApellido } from "./gamification";
 import { notaAutomatica, notaFinalPonderada } from "./calificaciones";
 
 export async function asegurarGradosBase() {
@@ -33,20 +33,18 @@ export async function fetchEstudiantesPorGrado(gradoId) {
     .from("estudiantes")
     .select("*, progreso(*), roles_asignados(rol_id)")
     .eq("grado_id", gradoId)
-    .eq("activo", true)
-    .order("nombre");
+    .eq("activo", true);
   if (error) throw error;
-  return data || [];
+  return ordenarPorApellido(data || []);
 }
 
 export async function fetchTodosEstudiantes() {
   const { data, error } = await supabase
     .from("estudiantes")
     .select("*, progreso(*)")
-    .eq("activo", true)
-    .order("nombre");
+    .eq("activo", true);
   if (error) throw error;
-  return data || [];
+  return ordenarPorApellido(data || []);
 }
 
 export async function crearEstudiante({ nombre, grado_id, reino_original }) {
