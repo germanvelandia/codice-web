@@ -194,15 +194,15 @@ function ActividadModal({ materiaId, gradoId, periodo, categorias, editar, onClo
   );
 }
 
-function ImportarMoodleModal({ materiaId, gradoId, periodo, categorias, estudiantes, onClose, onImportado }) {
+function ImportarMoodleModal({ materiaId, gradoId, periodo, categorias, periodos, estudiantes, onClose, onImportado }) {
   const [paso, setPaso] = useState(1);
   const [texto, setTexto] = useState("");
   const [filas, setFilas] = useState([]);
   const [encabezados, setEncabezados] = useState([]);
   const [colNombre, setColNombre] = useState("");
-  const [colsSeleccionadas, setColsSeleccionadas] = useState({});
-  const [categoriaId, setCategoriaId] = useState(categorias[0]?.id || "");
+  const [config, setConfig] = useState({});
   const [importando, setImportando] = useState(false);
+  const [progresoTexto, setProgresoTexto] = useState("");
   const [resultado, setResultado] = useState(null);
 
   const procesarDesdeArray = (arr) => {
@@ -211,9 +211,9 @@ function ImportarMoodleModal({ materiaId, gradoId, periodo, categorias, estudian
     const datos = arr.slice(1).filter((r) => r.length > 0 && r.some((c) => c !== "" && c !== undefined));
     setEncabezados(heads);
     setColNombre(heads[0]);
-    const sel = {};
-    heads.slice(1).forEach((h) => { sel[h] = true; });
-    setColsSeleccionadas(sel);
+    const cfg = {};
+    heads.slice(1).forEach((h) => { cfg[h] = { incluir: true, categoriaId: categorias[0]?.id || "", periodo: periodo || periodos[0] }; });
+    setConfig(cfg);
     setFilas(datos.map((r) => {
       const obj = {};
       heads.forEach((h, i) => { obj[h] = r[i]; });
@@ -243,7 +243,7 @@ function ImportarMoodleModal({ materiaId, gradoId, periodo, categorias, estudian
     reader.readAsBinaryString(file);
   };
 
-  const columnasDeNotas = encabezados.filter((h) => h !== colNombre && colsSeleccionadas[h]);
+  const columnasIncluidas = encabezados.filter((h) => h !== colNombre && config[h]?.incluir);
 
   if (categorias.length === 0) {
     return (
@@ -256,43 +256,57 @@ function ImportarMoodleModal({ materiaId, gradoId, periodo, categorias, estudian
     );
   }
 
+  const marcarTodasComo = (periodoElegido) => {
+    setConfig((prev) => {
+      const nuevo = { ...prev };
+      columnasIncluidas.forEach((h) => { nuevo[h] = { ...nuevo[h], periodo: periodoElegido }; });
+      return nuevo;
+    });
+  };
+
   const importar = async () => {
-    if (!categoriaId) { alert("Elige una categoría para las actividades importadas."); return; }
-    if (columnasDeNotas.length === 0) { alert("Selecciona al menos una columna de notas."); return; }
+    if (columnasIncluidas.length === 0) { alert("Selecciona al menos una columna de notas."); return; }
     setImportando(true);
     const encontrados = new Set();
     const noEncontrados = new Set();
     try {
-      for (const col of columnasDeNotas) {
-        await api.crearActividad({
-          nombre: col, categoria_id: categoriaId, materia_id: materiaId, grado_id: gradoId, periodo, es_automatica: false,
+      const actividadPorColumna = {};
+      for (const col of columnasIncluidas) {
+        setProgresoTexto(`Creando actividad "${col}"…`);
+        const cfg = config[col];
+        const act = await api.crearActividad({
+          nombre: col, categoria_id: cfg.categoriaId, materia_id: materiaId, grado_id: gradoId,
+          periodo: cfg.periodo, es_automatica: false,
         });
+        actividadPorColumna[col] = act.id;
       }
-      const actividadesActuales = await api.fetchActividades(materiaId, gradoId, periodo);
+      let i = 0;
       for (const fila of filas) {
+        i++;
+        setProgresoTexto(`Importando notas… (${i} / ${filas.length})`);
         const nombreMoodle = fila[colNombre];
         if (!nombreMoodle) continue;
         const estudiante = buscarEstudiantePorNombre(String(nombreMoodle), estudiantes);
         if (!estudiante) { noEncontrados.add(String(nombreMoodle)); continue; }
         encontrados.add(estudiante.id);
-        for (const col of columnasDeNotas) {
+        for (const col of columnasIncluidas) {
           const valorCrudo = fila[col];
           const valor = parseFloat(String(valorCrudo).replace(",", "."));
           if (isNaN(valor)) continue;
-          const actividad = actividadesActuales.find((a) => a.nombre === col);
-          if (actividad) await api.setValor(actividad.id, estudiante.id, valor);
+          await api.setValor(actividadPorColumna[col], estudiante.id, valor);
         }
       }
-      setResultado({ importados: encontrados.size, noEncontrados: Array.from(noEncontrados) });
+      setResultado({ importados: encontrados.size, columnas: columnasIncluidas.length, noEncontrados: Array.from(noEncontrados) });
     } catch (e) {
       alert("Error al importar: " + e.message);
     }
     setImportando(false);
+    setProgresoTexto("");
   };
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-xl">
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-3xl max-h-[85vh] overflow-y-auto shadow-xl">
         <div className="flex justify-between items-center mb-3">
           <h3 className="font-bold text-slate-800">Importar notas de Moodle / Excel</h3>
           <button onClick={onClose} className="text-slate-400">✕</button>
@@ -300,7 +314,9 @@ function ImportarMoodleModal({ materiaId, gradoId, periodo, categorias, estudian
 
         {resultado ? (
           <div>
-            <p className="text-sm text-emerald-600 mb-2">✔️ Se importaron notas para {resultado.importados} estudiante{resultado.importados === 1 ? "" : "s"}.</p>
+            <p className="text-sm text-emerald-600 mb-2">
+              ✔️ Se importaron {resultado.columnas} actividad{resultado.columnas === 1 ? "" : "es"} con notas para {resultado.importados} estudiante{resultado.importados === 1 ? "" : "s"}.
+            </p>
             {resultado.noEncontrados.length > 0 && (
               <div className="bg-amber-50 rounded-lg p-3 mb-3">
                 <p className="text-xs text-amber-700 font-semibold mb-1">No se encontraron en el grado (verifica el nombre o agrégalos manualmente):</p>
@@ -313,9 +329,12 @@ function ImportarMoodleModal({ materiaId, gradoId, periodo, categorias, estudian
           </div>
         ) : paso === 1 ? (
           <div>
+            <p className="text-xs text-slate-500 mb-3">
+              Puedes pegar o subir <b>un archivo grande con notas de varios periodos a la vez</b> (por ejemplo, columnas del Trimestre I y del Trimestre II juntas) — en el siguiente paso eliges a qué periodo va cada columna.
+            </p>
             <div className="text-xs uppercase tracking-wide text-slate-400 mb-1.5">Opción 1 — Pegar tabla (incluye encabezados en la primera fila)</div>
             <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={6}
-              placeholder={"Nombre\tTaller 1\tTaller 2\nJuan Pérez García\t4.5\t3.8\nMaría Gómez\t5.0\t4.2"}
+              placeholder={"Nombre\tTaller1_T1\tQuiz1_T1\tTaller1_T2\nJuan Pérez García\t4.5\t3.8\t4.0\nMaría Gómez\t5.0\t4.2\t4.8"}
               className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none font-mono" />
             <button onClick={procesarPegado} className="w-full text-sm font-semibold py-2 rounded-lg bg-violet-500 text-white mb-4">Continuar</button>
             <div className="text-xs uppercase tracking-wide text-slate-400 mb-1.5">Opción 2 — Subir archivo exportado de Moodle (.xlsx / .csv)</div>
@@ -331,27 +350,58 @@ function ImportarMoodleModal({ materiaId, gradoId, periodo, categorias, estudian
                 {encabezados.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
             </div>
-            <div className="mb-3">
-              <label className="text-xs text-slate-500 block mb-1">¿En qué categoría van estas actividades?</label>
-              <select value={categoriaId} onChange={(e) => setCategoriaId(parseInt(e.target.value, 10))} className="w-full text-sm rounded-lg px-2 py-2 border border-slate-200 outline-none">
-                {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre} ({c.porcentaje}%)</option>)}
-              </select>
+
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <span className="text-xs text-slate-500">Marcar todas las columnas incluidas como periodo:</span>
+              {periodos.map((p) => (
+                <button key={p} onClick={() => marcarTodasComo(p)} className="text-xs px-2.5 py-1 rounded-full bg-violet-50 text-violet-600">Periodo {p}</button>
+              ))}
             </div>
-            <div className="mb-3">
-              <label className="text-xs text-slate-500 block mb-1.5">Columnas de notas a importar (cada una crea una actividad nueva)</label>
-              <div className="flex flex-wrap gap-2">
-                {encabezados.filter((h) => h !== colNombre).map((h) => (
-                  <label key={h} className="flex items-center gap-1.5 text-xs bg-slate-50 rounded-full px-3 py-1.5">
-                    <input type="checkbox" checked={!!colsSeleccionadas[h]} onChange={(e) => setColsSeleccionadas((prev) => ({ ...prev, [h]: e.target.checked }))} />
-                    {h}
-                  </label>
-                ))}
-              </div>
+
+            <div className="border border-slate-100 rounded-xl overflow-hidden mb-3">
+              <table className="w-full text-xs">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="text-left px-3 py-2">Incluir</th>
+                    <th className="text-left px-3 py-2">Columna</th>
+                    <th className="text-left px-3 py-2">Categoría</th>
+                    <th className="text-left px-3 py-2">Periodo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {encabezados.filter((h) => h !== colNombre).map((h) => (
+                    <tr key={h} className="border-t border-slate-100">
+                      <td className="px-3 py-2">
+                        <input type="checkbox" checked={!!config[h]?.incluir}
+                          onChange={(e) => setConfig((prev) => ({ ...prev, [h]: { ...prev[h], incluir: e.target.checked } }))} />
+                      </td>
+                      <td className="px-3 py-2 font-medium text-slate-700">{h}</td>
+                      <td className="px-3 py-2">
+                        <select value={config[h]?.categoriaId || ""} disabled={!config[h]?.incluir}
+                          onChange={(e) => setConfig((prev) => ({ ...prev, [h]: { ...prev[h], categoriaId: parseInt(e.target.value, 10) } }))}
+                          className="text-xs rounded-lg px-2 py-1 border border-slate-200 outline-none disabled:opacity-40">
+                          {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-3 py-2">
+                        <select value={config[h]?.periodo || ""} disabled={!config[h]?.incluir}
+                          onChange={(e) => setConfig((prev) => ({ ...prev, [h]: { ...prev[h], periodo: e.target.value } }))}
+                          className="text-xs rounded-lg px-2 py-1 border border-slate-200 outline-none disabled:opacity-40">
+                          {periodos.map((p) => <option key={p} value={p}>Periodo {p}</option>)}
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
+
+            {importando && <p className="text-xs text-violet-600 mb-2">{progresoTexto}</p>}
+
             <div className="flex justify-end gap-2">
               <button onClick={() => setPaso(1)} className="text-xs text-slate-500 px-3 py-2">← Volver</button>
               <button disabled={importando} onClick={importar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
-                {importando ? "Importando…" : `Importar ${columnasDeNotas.length} columna(s)`}
+                {importando ? "Importando…" : `Importar ${columnasIncluidas.length} columna(s)`}
               </button>
             </div>
           </div>
@@ -561,7 +611,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
           onClose={() => setModalAbierto(false)} onGuardada={() => { setModalAbierto(false); cargar(); }} />
       )}
       {importarMoodleAbierto && (
-        <ImportarMoodleModal materiaId={materiaId} gradoId={gradoId} periodo={periodo} categorias={categorias} estudiantes={estudiantes}
+        <ImportarMoodleModal materiaId={materiaId} gradoId={gradoId} periodo={periodo} categorias={categorias} periodos={periodosDe(config)} estudiantes={estudiantes}
           onClose={() => setImportarMoodleAbierto(false)} onImportado={cargar} />
       )}
       {notaMasivaAbierta && (
