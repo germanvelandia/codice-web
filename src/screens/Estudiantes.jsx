@@ -593,4 +593,4 @@ export function VistaGrados({ onElegirGrado }) {
       )}
     </div>
   );
-}
+} 
