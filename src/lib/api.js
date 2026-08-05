@@ -1,14 +1,12 @@
 import { supabase } from "./supabaseClient";
 import { GRADOS_BASE } from "./gamification";
+import { notaAutomatica, notaFinalPonderada } from "./calificaciones";
 
 export async function asegurarGradosBase() {
   const filas = GRADOS_BASE.map((id) => ({ id }));
   await supabase.from("grados").upsert(filas, { onConflict: "id", ignoreDuplicates: true });
 }
 
-// Se asegura de que exista una fila en `profesores` para el usuario ya autenticado.
-// Es necesario porque la inserción hecha justo al crear la cuenta puede fallar
-// silenciosamente si el correo todavía no estaba confirmado en ese momento.
 export async function asegurarProfesor() {
   const { data: userData } = await supabase.auth.getUser();
   if (!userData?.user) return;
@@ -309,6 +307,31 @@ export async function setNivelacion(materiaId, estudianteId, periodo, estado) {
     { onConflict: "materia_id,estudiante_id,periodo" }
   );
   if (error) throw error;
+}
+
+export async function calcularNotasFinalesPeriodo(materiaId, gradoId, periodo, estudiantes, categorias, config) {
+  const acts = await fetchActividades(materiaId, gradoId, periodo);
+  const valoresRows = await fetchValores(acts.map((a) => a.id));
+  const categoriasGam = [...new Set(acts.filter((a) => a.es_automatica).map((a) => a.gam_categoria))];
+  const xpMapa = categoriasGam.length > 0 ? await fetchXpPorCategoria(estudiantes.map((s) => s.id), categoriasGam) : {};
+  const resultado = {};
+  for (const s of estudiantes) {
+    const porCategoria = {};
+    acts.forEach((a) => {
+      let v;
+      if (a.es_automatica) {
+        const xp = xpMapa[s.id]?.[a.gam_categoria] || 0;
+        v = notaAutomatica(xp, a.xp_meta, config);
+      } else {
+        v = valoresRows.find((r) => r.actividad_id === a.id && r.estudiante_id === s.id)?.valor ?? null;
+      }
+      if (v === null || v === undefined) return;
+      porCategoria[a.categoria_id] = porCategoria[a.categoria_id] || [];
+      porCategoria[a.categoria_id].push(v);
+    });
+    resultado[s.id] = notaFinalPonderada(porCategoria, categorias);
+  }
+  return resultado;
 }
 
 /* ---------------- Asistencia ---------------- */
