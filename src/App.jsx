@@ -6,6 +6,7 @@ import { VistaAsistencia } from "./screens/Asistencia";
 import { VistaRuleta, VistaTemporizador, VistaHerramientas } from "./screens/Herramientas";
 import { VistaRoles } from "./screens/Roles";
 import { VistaCalificaciones } from "./screens/Calificaciones";
+import { VistaReportes } from "./screens/Reportes";
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -125,6 +126,7 @@ function Panel({ session }) {
           <button onClick={() => setTab("herramientas")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "herramientas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Herramientas</button>
           <button onClick={() => setTab("roles")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "roles" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Roles</button>
           <button onClick={() => setTab("calificaciones")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "calificaciones" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Calificaciones</button>
+          <button onClick={() => setTab("reportes")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "reportes" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Reportes</button>
         </div>
         <button onClick={() => supabase.auth.signOut()} className="text-sm text-slate-500">Cerrar sesión ({session.user.email})</button>
       </div>
@@ -164,6 +166,7 @@ function Panel({ session }) {
         )}
         {tab === "roles" && <VistaRoles />}
         {tab === "calificaciones" && grados.length > 0 && <VistaCalificaciones grados={grados} />}
+        {tab === "reportes" && grados.length > 0 && <VistaReportes grados={grados} />}
       </div>
     </div>
   );
