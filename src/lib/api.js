@@ -88,6 +88,32 @@ export async function asignarRol(estudianteId, rolId) {
   if (error) throw error;
 }
 
+/* ---------------- Actas de seguimiento ---------------- */
+export async function fetchActasPorEstudiante(estudianteId) {
+  const { data, error } = await supabase
+    .from("actas")
+    .select("*, profesores(nombre)")
+    .eq("estudiante_id", estudianteId)
+    .order("fecha", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearActa(estudianteId, campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("actas").insert({
+    estudiante_id: estudianteId,
+    registrado_por: userData?.user?.id || null,
+    ...campos,
+  });
+  if (error) throw error;
+}
+
+export async function eliminarActa(id) {
+  const { error } = await supabase.from("actas").delete().eq("id", id);
+  if (error) throw error;
+}
+
 /* ---------------- Asistencia ---------------- */
 export async function fetchAsistenciaFecha(estudianteIds, fecha) {
   if (estudianteIds.length === 0) return {};
