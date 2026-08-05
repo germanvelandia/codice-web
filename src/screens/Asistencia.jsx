@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import * as api from "../lib/api";
+import { ActasModal } from "./Actas";
 
 const CODIGOS = [
   { code: "P", label: "Presente", color: "bg-emerald-500", light: "bg-emerald-50 text-emerald-700" },
@@ -22,19 +23,29 @@ export function VistaAsistencia({ grados }) {
   const [cargando, setCargando] = useState(true);
   const [notaAbiertaId, setNotaAbiertaId] = useState(null);
   const [notaTexto, setNotaTexto] = useState("");
+  const [materias, setMaterias] = useState([]);
+  const [materiaId, setMateriaId] = useState(""); // "" = General (sin materia)
+  const [usuarioId, setUsuarioId] = useState(null);
+  const [consolidadoEstudiante, setConsolidadoEstudiante] = useState(null);
 
   useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
+  useEffect(() => { api.fetchMaterias().then(setMaterias); api.fetchUsuarioActualId().then(setUsuarioId); }, []);
+
+  const materiaActual = materias.find((m) => m.id === parseInt(materiaId, 10));
+  const esMateriaPropia = materiaId === "" || (materiaActual && materiaActual.docente_id === usuarioId);
+  const soloLectura = materiaId !== "" && !esMateriaPropia;
 
   const cargar = async () => {
     if (!gradoId) return;
     setCargando(true);
     const est = await api.fetchEstudiantesPorGrado(gradoId);
     setEstudiantes(est);
-    const mapa = await api.fetchAsistenciaFecha(est.map((s) => s.id), fecha);
+    const mIdNum = materiaId === "" ? null : parseInt(materiaId, 10);
+    const mapa = await api.fetchAsistenciaFecha(est.map((s) => s.id), fecha, mIdNum);
     setAsistencia(mapa);
     setCargando(false);
   };
-  useEffect(() => { cargar(); }, [gradoId, fecha]);
+  useEffect(() => { cargar(); }, [gradoId, fecha, materiaId]);
 
   const reinos = useMemo(() => {
     const set = new Set(estudiantes.map((s) => s.reino_actual || s.reino_original || "Sin grupo"));
@@ -44,26 +55,32 @@ export function VistaAsistencia({ grados }) {
   const visibles = estudiantes.filter((s) => reinoFiltro === "Todos" || (s.reino_actual || s.reino_original) === reinoFiltro);
 
   const marcar = async (estudianteId, codigo) => {
+    if (soloLectura) return;
+    const mIdNum = materiaId === "" ? null : parseInt(materiaId, 10);
     const actual = asistencia[estudianteId];
     if (actual && actual.codigo === codigo) {
-      await api.quitarAsistencia(estudianteId, fecha);
+      await api.quitarAsistencia(estudianteId, fecha, mIdNum);
       setAsistencia((prev) => { const n = { ...prev }; delete n[estudianteId]; return n; });
     } else {
-      await api.marcarAsistencia(estudianteId, fecha, codigo, actual?.observacion);
+      await api.marcarAsistencia(estudianteId, fecha, codigo, actual?.observacion, mIdNum);
       setAsistencia((prev) => ({ ...prev, [estudianteId]: { ...(prev[estudianteId] || {}), codigo, estudiante_id: estudianteId, fecha } }));
     }
   };
 
   const guardarNota = async (estudianteId) => {
+    if (soloLectura) return;
+    const mIdNum = materiaId === "" ? null : parseInt(materiaId, 10);
     const actual = asistencia[estudianteId];
-    await api.marcarAsistencia(estudianteId, fecha, actual?.codigo || "P", notaTexto);
+    await api.marcarAsistencia(estudianteId, fecha, actual?.codigo || "P", notaTexto, mIdNum);
     setAsistencia((prev) => ({ ...prev, [estudianteId]: { ...(prev[estudianteId] || {}), codigo: actual?.codigo || "P", observacion: notaTexto } }));
     setNotaAbiertaId(null);
     setNotaTexto("");
   };
 
   const marcarTodos = async () => {
-    await api.marcarTodosPresentes(visibles.map((s) => s.id), fecha);
+    if (soloLectura) return;
+    const mIdNum = materiaId === "" ? null : parseInt(materiaId, 10);
+    await api.marcarTodosPresentes(visibles.map((s) => s.id), fecha, mIdNum);
     cargar();
   };
 
@@ -75,7 +92,7 @@ export function VistaAsistencia({ grados }) {
       <h2 className="text-xl font-bold text-slate-800 mb-1">Control de Asistencia</h2>
       <p className="text-xs text-slate-400 mb-4">P = Presente · R = Retardo · FI = Falta injustificada · FJ = Falta justificada. Un segundo clic sobre el mismo código lo quita.</p>
 
-      <div className="flex flex-wrap gap-2 mb-4 items-center">
+      <div className="flex flex-wrap gap-2 mb-3 items-center">
         <select value={gradoId} onChange={(e) => { setGradoId(e.target.value); setReinoFiltro("Todos"); }} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
           {grados.map((g) => <option key={g.id} value={g.id}>Grado {g.id}</option>)}
         </select>
@@ -83,7 +100,26 @@ export function VistaAsistencia({ grados }) {
           {reinos.map((r) => <option key={r} value={r}>{r === "Todos" ? "Todos los grupos" : r}</option>)}
         </select>
         <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white" />
-        <button onClick={marcarTodos} className="text-xs font-semibold px-3 py-2 rounded-full bg-violet-500 text-white">Marcar todos Presentes</button>
+        {!soloLectura && (
+          <button onClick={marcarTodos} className="text-xs font-semibold px-3 py-2 rounded-full bg-violet-500 text-white">Marcar todos Presentes</button>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-4 items-center">
+        <span className="text-xs uppercase tracking-wide text-slate-400">Materia:</span>
+        <select value={materiaId} onChange={(e) => setMateriaId(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
+          <option value="">General (sin materia asociada)</option>
+          {materias.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.nombre}{m.docente_id !== usuarioId ? ` — ${m.profesores?.nombre || "otro docente"}` : " (mía)"}
+            </option>
+          ))}
+        </select>
+        {soloLectura && (
+          <span className="text-xs px-3 py-1.5 rounded-full bg-amber-50 text-amber-700">
+            👁️ Solo lectura — esta materia es de {materiaActual?.profesores?.nombre || "otro docente"}
+          </span>
+        )}
       </div>
 
       <div className="flex gap-2 mb-4 flex-wrap">
@@ -109,14 +145,18 @@ export function VistaAsistencia({ grados }) {
                     {CODIGOS.map((c) => {
                       const activo = registro?.codigo === c.code;
                       return (
-                        <button key={c.code} onClick={() => marcar(s.id, c.code)}
-                          className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border ${activo ? c.color + " text-white border-transparent" : "bg-white text-slate-500 border-slate-200"}`}>
+                        <button key={c.code} disabled={soloLectura} onClick={() => marcar(s.id, c.code)}
+                          className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border disabled:opacity-50 disabled:cursor-not-allowed ${activo ? c.color + " text-white border-transparent" : "bg-white text-slate-500 border-slate-200"}`}>
                           {c.code}
                         </button>
                       );
                     })}
-                    <button onClick={() => { setNotaAbiertaId(notaAbiertaId === s.id ? null : s.id); setNotaTexto(registro?.observacion || ""); }}
-                      className="text-xs px-2 py-1.5 rounded-lg border border-slate-200 text-slate-500">📝</button>
+                    {!soloLectura && (
+                      <button onClick={() => { setNotaAbiertaId(notaAbiertaId === s.id ? null : s.id); setNotaTexto(registro?.observacion || ""); }}
+                        className="text-xs px-2 py-1.5 rounded-lg border border-slate-200 text-slate-500">📝</button>
+                    )}
+                    <button onClick={() => setConsolidadoEstudiante(s)} title="Ver asistencia en todas las materias / procesos convivenciales"
+                      className="text-xs px-2 py-1.5 rounded-lg bg-violet-100 text-violet-700">📊</button>
                   </div>
                 </div>
                 {notaAbiertaId === s.id && (
@@ -132,6 +172,78 @@ export function VistaAsistencia({ grados }) {
           {visibles.length === 0 && <div className="px-4 py-6 text-sm text-slate-400">No hay estudiantes en esta selección.</div>}
         </div>
       )}
+
+      {consolidadoEstudiante && (
+        <ConsolidadoAsistenciaModal estudiante={consolidadoEstudiante} onClose={() => setConsolidadoEstudiante(null)} />
+      )}
+    </div>
+  );
+}
+
+// Vista de solo lectura con la asistencia de un estudiante en TODAS sus materias
+// (de todos los docentes), pensada para sustentar la apertura de un acta convivencial
+// por inasistencia reiterada.
+function ConsolidadoAsistenciaModal({ estudiante, onClose }) {
+  const [datos, setDatos] = useState(null);
+  const [cargando, setCargando] = useState(true);
+  const [actasAbiertas, setActasAbiertas] = useState(false);
+
+  useEffect(() => {
+    setCargando(true);
+    api.fetchAsistenciaConsolidadaEstudiante(estudiante.id).then((d) => { setDatos(d); setCargando(false); });
+  }, [estudiante.id]);
+
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">Asistencia consolidada — {estudiante.nombre}</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-500 mb-3">Incluye la asistencia registrada por todos los docentes en todas las materias de este estudiante.</p>
+
+        {cargando ? (
+          <div className="text-sm text-slate-400">Cargando…</div>
+        ) : (
+          <>
+            <div className="grid grid-cols-4 gap-2 mb-4">
+              {CODIGOS.map((c) => (
+                <div key={c.code} className={`rounded-xl p-2 text-center ${c.light}`}>
+                  <div className="text-lg font-bold">{datos.general[c.code] || 0}</div>
+                  <div className="text-[10px] uppercase tracking-wide">{c.code}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="text-xs font-semibold text-slate-600 mb-2">Por materia</div>
+            <div className="space-y-2 mb-4">
+              {Object.entries(datos.porMateria).length === 0 && (
+                <div className="text-xs text-slate-400">Sin registros de asistencia todavía.</div>
+              )}
+              {Object.entries(datos.porMateria).map(([nombreMateria, m]) => (
+                <div key={nombreMateria} className="border border-slate-100 rounded-lg p-2">
+                  <div className="text-xs font-semibold text-slate-700">{nombreMateria}{m.docente ? ` — ${m.docente}` : ""}</div>
+                  <div className="text-[11px] text-slate-500 mt-0.5">
+                    P:{m.P || 0} · R:{m.R || 0} · FI:{m.FI || 0} · FJ:{m.FJ || 0} · Total: {m.total}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {datos.general.FI >= 3 && (
+              <div className="text-xs text-amber-700 bg-amber-50 rounded-lg p-2 mb-3">
+                ⚠️ Este estudiante acumula {datos.general.FI} faltas injustificadas entre todas sus materias — puede ameritar un acta convivencial por inasistencia reiterada.
+              </div>
+            )}
+
+            <button onClick={() => setActasAbiertas(true)} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white">
+              📋 Ver / crear acta de seguimiento
+            </button>
+          </>
+        )}
+      </div>
+
+      {actasAbiertas && <ActasModal estudiante={estudiante} onClose={() => setActasAbiertas(false)} />}
     </div>
   );
 }
