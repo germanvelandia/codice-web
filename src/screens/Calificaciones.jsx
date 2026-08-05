@@ -393,17 +393,54 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
   );
 }
 
-function Estadisticas({ config, estudiantes, notas }) {
+function Estadisticas({ materiaId, config, categorias, estudiantes, gradoId, periodo }) {
+  const [notas, setNotas] = useState({});
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    if (!materiaId || !gradoId || estudiantes.length === 0) { setCargando(false); return; }
+    setCargando(true);
+    api.calcularNotasFinalesPeriodo(materiaId, gradoId, periodo, estudiantes, categorias, config).then((n) => { setNotas(n); setCargando(false); });
+  }, [materiaId, gradoId, periodo, estudiantes.length, categorias.length]);
+
   const valores = estudiantes.map((s) => notas[s.id]).filter((n) => n !== null && n !== undefined);
   const stats = calcularEstadisticas(valores);
+
+  if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
+
   return (
-    <div className="grid gap-2 mb-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))" }}>
-      {[["Promedio", stats.media], ["Desv. estándar", stats.desviacion], ["Mediana", stats.mediana], ["Mínimo", stats.min], ["Máximo", stats.max]].map(([label, val]) => (
-        <div key={label} className="bg-white rounded-xl p-3 text-center shadow-sm border border-slate-100">
-          <div className="text-xl font-bold text-violet-600">{val ?? "—"}</div>
-          <div className="text-[10px] uppercase tracking-wide text-slate-400 mt-1">{label}</div>
-        </div>
-      ))}
+    <div>
+      <div className="grid gap-2 mb-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))" }}>
+        {[["Promedio", stats.media], ["Desv. estándar", stats.desviacion], ["Mediana", stats.mediana], ["Mínimo", stats.min], ["Máximo", stats.max]].map(([label, val]) => (
+          <div key={label} className="bg-white rounded-xl p-3 text-center shadow-sm border border-slate-100">
+            <div className="text-xl font-bold text-violet-600">{val ?? "—"}</div>
+            <div className="text-[10px] uppercase tracking-wide text-slate-400 mt-1">{label}</div>
+          </div>
+        ))}
+      </div>
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+        <div className="text-sm font-semibold text-slate-700 mb-3">Notas por estudiante — Periodo {periodo}</div>
+        {estudiantes.length === 0 ? (
+          <div className="text-sm text-slate-400">No hay estudiantes en este grado.</div>
+        ) : (
+          <div className="space-y-2">
+            {estudiantes.map((s) => {
+              const n = notas[s.id];
+              const banda = bandaDesempeno(n, config);
+              const pct = n !== null && n !== undefined ? Math.max(2, Math.min(100, (n / config.nota_maxima) * 100)) : 0;
+              return (
+                <div key={s.id} className="flex items-center gap-2">
+                  <div className="w-36 text-xs text-slate-600 truncate shrink-0">{s.nombre}</div>
+                  <div className="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full" style={{ width: `${pct}%`, background: banda.color }} />
+                  </div>
+                  <div className="w-10 text-xs text-right font-bold shrink-0" style={{ color: banda.color }}>{n ?? "—"}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -443,26 +480,10 @@ export function VistaCalificaciones({ grados }) {
   }, [gradoId]);
 
   const guardarNotasFinalesActual = async () => {
-    const acts = await api.fetchActividades(materiaActualId, gradoId, periodo);
-    const valoresRows = await api.fetchValores(acts.map((a) => a.id));
-    const categoriasGam = [...new Set(acts.filter((a) => a.es_automatica).map((a) => a.gam_categoria))];
-    const xpMapa = categoriasGam.length > 0 ? await api.fetchXpPorCategoria(estudiantes.map((s) => s.id), categoriasGam) : {};
+    const notas = await api.calcularNotasFinalesPeriodo(materiaActualId, gradoId, periodo, estudiantes, categorias, config);
     for (const s of estudiantes) {
-      const porCategoria = {};
-      acts.forEach((a) => {
-        let v;
-        if (a.es_automatica) {
-          const xp = xpMapa[s.id]?.[a.gam_categoria] || 0;
-          v = notaAutomatica(xp, a.xp_meta, config);
-        } else {
-          v = valoresRows.find((r) => r.actividad_id === a.id && r.estudiante_id === s.id)?.valor ?? null;
-        }
-        if (v === null || v === undefined) return;
-        porCategoria[a.categoria_id] = porCategoria[a.categoria_id] || [];
-        porCategoria[a.categoria_id].push(v);
-      });
-      const final = notaFinalPonderada(porCategoria, categorias);
-      if (final !== null) await api.guardarNotaFinal(materiaActualId, s.id, periodo, final);
+      const final = notas[s.id];
+      if (final !== null && final !== undefined) await api.guardarNotaFinal(materiaActualId, s.id, periodo, final);
     }
     alert("Notas finales del periodo guardadas en el boletín.");
   };
@@ -494,6 +515,7 @@ export function VistaCalificaciones({ grados }) {
             <div className="flex gap-1 rounded-full bg-violet-50 p-1">
               <button onClick={() => setSubVista("planilla")} className={`text-xs px-3 py-1.5 rounded-full ${subVista === "planilla" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Planilla</button>
               <button onClick={() => setSubVista("boletin")} className={`text-xs px-3 py-1.5 rounded-full ${subVista === "boletin" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Boletín / Nivelación</button>
+              <button onClick={() => setSubVista("estadisticas")} className={`text-xs px-3 py-1.5 rounded-full ${subVista === "estadisticas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Estadísticas</button>
               <button onClick={() => setSubVista("config")} className={`text-xs px-3 py-1.5 rounded-full ${subVista === "config" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Escala y periodos</button>
             </div>
           </div>
@@ -503,6 +525,9 @@ export function VistaCalificaciones({ grados }) {
           )}
           {subVista === "boletin" && (
             <Boletin materiaId={materiaActualId} config={config} categorias={categorias} estudiantes={estudiantes} gradoId={gradoId} guardarActual={guardarNotasFinalesActual} />
+          )}
+          {subVista === "estadisticas" && (
+            <Estadisticas materiaId={materiaActualId} config={config} categorias={categorias} estudiantes={estudiantes} gradoId={gradoId} periodo={periodo} />
           )}
           {subVista === "config" && (
             <ConfigEscala materiaId={materiaActualId} config={config} onGuardado={cargarConfigYCategorias} />
