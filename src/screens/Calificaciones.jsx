@@ -6,6 +6,7 @@ import {
   calcularEstadisticas, GAM_CATEGORIAS_OPCIONES,
 } from "../lib/calificaciones";
 import { buscarEstudiantePorNombre } from "../lib/gamification";
+import { ActasModal } from "./Actas";
 
 function BarraMateria({ materias, materiaActualId, setMateriaActualId, onCambio }) {
   const [creando, setCreando] = useState(false);
@@ -627,6 +628,7 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
   const [finales, setFinales] = useState([]);
   const [nivelacion, setNivelacion] = useState([]);
   const [cargando, setCargando] = useState(true);
+  const [actaEstudiante, setActaEstudiante] = useState(null);
 
   const cargar = async () => {
     setCargando(true);
@@ -685,12 +687,15 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
                         <td key={p} className="text-center px-3 py-2">
                           <div style={{ color: n !== null ? b.color : "#94A3B8", fontWeight: n !== null ? 700 : 400 }}>{n ?? "—"}</div>
                           {necesitaNiv && (
-                            <select value={estadoNiv(s.id, p)} onChange={(e) => cambiarNivelacion(s.id, p, e.target.value)} className="text-[10px] rounded px-1 py-0.5 mt-1 border border-slate-200">
-                              <option value="">Sin marcar</option>
-                              <option value="pendiente">Pendiente</option>
-                              <option value="en_proceso">En proceso</option>
-                              <option value="superado">Superado</option>
-                            </select>
+                            <div className="flex items-center gap-1 mt-1">
+                              <select value={estadoNiv(s.id, p)} onChange={(e) => cambiarNivelacion(s.id, p, e.target.value)} className="text-[10px] rounded px-1 py-0.5 border border-slate-200">
+                                <option value="">Sin marcar</option>
+                                <option value="pendiente">Pendiente</option>
+                                <option value="en_proceso">En proceso</option>
+                                <option value="superado">Superado</option>
+                              </select>
+                              <button onClick={() => setActaEstudiante(s)} title="Ver / editar acta de nivelación" className="text-[10px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">📋</button>
+                            </div>
                           )}
                         </td>
                       );
@@ -703,6 +708,7 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
           </table>
         </div>
       )}
+      {actaEstudiante && <ActasModal estudiante={actaEstudiante} onClose={() => setActaEstudiante(null)} />}
     </div>
   );
 }
