@@ -8,6 +8,7 @@ import { VistaRuleta, VistaTemporizador, VistaHerramientas } from "./screens/Her
 import { VistaRoles } from "./screens/Roles";
 import { VistaCalificaciones } from "./screens/Calificaciones";
 import { VistaReportes } from "./screens/Reportes";
+import { InstitucionModal } from "./screens/Institucion";
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -197,6 +198,7 @@ function Panel({ session }) {
   const [reino, setReino] = useState(null);
   const [modoLista, setModoLista] = useState(false);
   const [grados, setGrados] = useState([]);
+  const [institucionAbierta, setInstitucionAbierta] = useState(false);
 
   useEffect(() => {
     api.asegurarProfesor().then(() => api.asegurarGradosBase()).then(() => api.fetchGrados()).then(setGrados);
@@ -216,8 +218,12 @@ function Panel({ session }) {
           <button onClick={() => setTab("calificaciones")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "calificaciones" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Calificaciones</button>
           <button onClick={() => setTab("reportes")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "reportes" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Reportes</button>
         </div>
-        <button onClick={() => supabase.auth.signOut()} className="text-sm text-slate-500">Cerrar sesión ({session.user.email})</button>
+        <div className="flex items-center gap-3">
+          <button onClick={() => setInstitucionAbierta(true)} className="text-lg" title="Datos de la institución">⚙️</button>
+          <button onClick={() => supabase.auth.signOut()} className="text-sm text-slate-500">Cerrar sesión ({session.user.email})</button>
+        </div>
       </div>
+      {institucionAbierta && <InstitucionModal onClose={() => setInstitucionAbierta(false)} />}
       <div className="p-6 max-w-6xl mx-auto">
         {tab === "estudiantes" && (
           <>
