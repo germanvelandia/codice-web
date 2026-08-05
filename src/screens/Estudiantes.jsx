@@ -1,231 +1,197 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
+import { supabase } from "../lib/supabaseClient";
+import { ACCIONES_RAPIDAS, ACADEMICO_POS, ACADEMICO_NEG, PILARES, CONVIVENCIAL_POS_EXTRA, CONVIVENCIAL_NEG, initials, nextLevel, reinoColor } from "../lib/gamification";
 import * as api from "../lib/api";
-import {
-  CONFIG_DEFAULT, periodosDe, bandaDesempeno, notaAutomatica, notaFinalPonderada,
-  calcularEstadisticas, GAM_CATEGORIAS_OPCIONES,
-} from "../lib/calificaciones";
-import { buscarEstudiantePorNombre } from "../lib/gamification";
+import { ActasModal } from "./Actas";
 
-function BarraMateria({ materias, materiaActualId, setMateriaActualId, onCambio }) {
-  const [creando, setCreando] = useState(false);
-  const [nombre, setNombre] = useState("");
-  const [duplicando, setDuplicando] = useState(false);
-  const [copiarDesdeId, setCopiarDesdeId] = useState("");
-
-  const crear = async () => {
-    if (!nombre.trim()) return;
-    const nueva = await api.crearMateria(nombre.trim());
-    setNombre(""); setCreando(false);
-    onCambio();
-    setMateriaActualId(nueva.id);
-  };
-
-  const duplicar = async () => {
-    if (!nombre.trim()) return;
-    const nueva = await api.duplicarMateria(materiaActualId, nombre.trim());
-    setNombre(""); setDuplicando(false);
-    onCambio();
-    setMateriaActualId(nueva.id);
-  };
-
-  const eliminar = async () => {
-    if (materias.length <= 1) { alert("Debes tener al menos una materia."); return; }
-    if (!confirm("¿Eliminar esta materia? Se borran también sus categorías, actividades y notas.")) return;
-    await api.eliminarMateria(materiaActualId);
-    onCambio();
-    setMateriaActualId(materias.find((m) => m.id !== materiaActualId)?.id || null);
-  };
-
-  const copiar = async () => {
-    const origen = materias.find((m) => m.id === parseInt(copiarDesdeId, 10));
-    if (!origen) return;
-    if (!confirm(`¿Copiar todas las categorías, actividades y notas de "${origen.nombre}" a esta materia? Esto reemplaza lo que ya tengas aquí.`)) return;
-    await api.copiarNotasDesdeMateria(origen.id, materiaActualId);
-    onCambio();
-  };
-
+function LevelBar({ xp }) {
+  const { level, next, pct } = nextLevel(xp);
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 mb-4 flex flex-wrap items-center gap-2">
-      <span className="text-xs uppercase tracking-wide text-slate-400">Materia:</span>
-      {materias.length > 0 && (
-        <select value={materiaActualId || ""} onChange={(e) => setMateriaActualId(parseInt(e.target.value, 10))} className="text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none">
-          {materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
-        </select>
-      )}
-      {!creando ? (
-        <button onClick={() => setCreando(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700">+ Nueva materia</button>
-      ) : (
-        <div className="flex gap-1">
-          <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre (ej: Ética)" className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-          <button onClick={crear} className="text-xs px-2 py-1.5 rounded-lg bg-violet-500 text-white">Crear</button>
-          <button onClick={() => setCreando(false)} className="text-xs px-2 py-1.5 text-slate-400">✕</button>
-        </div>
-      )}
-      {materiaActualId && !duplicando && (
-        <button onClick={() => setDuplicando(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">⧉ Duplicar como nueva</button>
-      )}
-      {duplicando && (
-        <div className="flex gap-1">
-          <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre de la copia" className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-          <button onClick={duplicar} className="text-xs px-2 py-1.5 rounded-lg bg-violet-500 text-white">Duplicar</button>
-          <button onClick={() => setDuplicando(false)} className="text-xs px-2 py-1.5 text-slate-400">✕</button>
-        </div>
-      )}
-      {materiaActualId && <button onClick={eliminar} className="text-xs text-slate-400 hover:text-rose-500">🗑</button>}
-      {materiaActualId && materias.length > 1 && (
-        <div className="flex items-center gap-1.5 ml-auto">
-          <span className="text-xs text-slate-400">Copiar notas desde:</span>
-          <select value={copiarDesdeId} onChange={(e) => setCopiarDesdeId(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none">
-            <option value="">Elige…</option>
-            {materias.filter((m) => m.id !== materiaActualId).map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
-          </select>
-          <button disabled={!copiarDesdeId} onClick={copiar} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white disabled:opacity-40">Copiar con un clic</button>
-        </div>
-      )}
+    <div className="mb-1">
+      <div className="flex justify-between text-[11px] text-slate-500 mb-0.5">
+        <span className="font-semibold text-violet-600">{level.name}</span>
+        <span>{xp}{next ? ` / ${next.min} XP` : " XP · nivel máximo"}</span>
+      </div>
+      <div className="h-2 rounded-full bg-violet-100 overflow-hidden">
+        <div className="h-full rounded-full bg-gradient-to-r from-violet-400 to-violet-600" style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+function VidaBar({ vida }) {
+  const color = vida > 50 ? "from-emerald-400 to-emerald-500" : vida > 20 ? "from-amber-400 to-amber-500" : "from-rose-500 to-rose-600";
+  return (
+    <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+      <div className={`h-full rounded-full bg-gradient-to-r ${color}`} style={{ width: `${vida}%` }} />
     </div>
   );
 }
 
-function PanelCategorias({ materiaId, categorias, onCambio }) {
+function QuickGamify({ estudiante, onAplicado }) {
   const [abierto, setAbierto] = useState(false);
-  const [nombre, setNombre] = useState("");
-  const [porcentaje, setPorcentaje] = useState(25);
-  const sumaTotal = categorias.reduce((a, c) => a + c.porcentaje, 0);
+  const [tab, setTab] = useState("rapido");
+  const [cargando, setCargando] = useState(false);
 
-  const crear = async () => {
-    if (!nombre.trim()) return;
-    await api.crearCategoria(materiaId, nombre.trim(), porcentaje);
-    setNombre("");
-    onCambio();
+  const aplicar = async (accion) => {
+    setCargando(true);
+    try {
+      const nuevo = await api.registrarAccion(estudiante.id, accion);
+      onAplicado(estudiante.id, nuevo);
+      setAbierto(false);
+    } catch (e) {
+      alert("No se pudo registrar: " + e.message);
+    }
+    setCargando(false);
   };
-  const eliminar = async (id) => { await api.eliminarCategoria(id); onCambio(); };
+
+  const TABS = [
+    { key: "rapido", label: "Rápido" },
+    { key: "academico_pos", label: "Académico +" },
+    { key: "academico_neg", label: "Académico −" },
+    { key: "pilares", label: "Pilares" },
+    { key: "conviv_pos", label: "Convivencial +" },
+    { key: "conviv_neg", label: "Convivencial −" },
+  ];
+
+  const listaActual = () => {
+    if (tab === "rapido") return ACCIONES_RAPIDAS.map((a) => ({ label: a.label, xp: a.xp, vida: a.vida, categoria: a.categoria }));
+    if (tab === "academico_pos") return ACADEMICO_POS.map((a) => ({ ...a, categoria: "academico" }));
+    if (tab === "academico_neg") return ACADEMICO_NEG.map((a) => ({ ...a, categoria: "academico" }));
+    if (tab === "pilares") return PILARES.map((a) => ({ ...a, categoria: a.key }));
+    if (tab === "conviv_pos") return CONVIVENCIAL_POS_EXTRA.map((a) => ({ ...a, categoria: "convivencial" }));
+    if (tab === "conviv_neg") return CONVIVENCIAL_NEG.map((a) => ({ ...a, categoria: "convivencial" }));
+    return [];
+  };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 mb-4">
-      <button onClick={() => setAbierto((v) => !v)} className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-        {abierto ? "▾" : "▸"} Categorías de evaluación {sumaTotal !== 100 && <span className="text-xs text-amber-600">(suman {sumaTotal}%, deberían sumar 100%)</span>}
+    <>
+      <button onClick={() => setAbierto(true)} className="text-xs px-3 py-1.5 rounded-full bg-violet-500 text-white font-semibold">
+        ⚡ Puntos
       </button>
       {abierto && (
-        <div className="mt-3">
-          <div className="flex flex-wrap gap-2 mb-3">
-            {categorias.map((c) => (
-              <div key={c.id} className="flex items-center gap-2 bg-violet-50 rounded-full px-3 py-1.5 text-xs">
-                <span>{c.nombre} ({c.porcentaje}%)</span>
-                <button onClick={() => eliminar(c.id)} className="text-slate-400 hover:text-rose-500">✕</button>
-              </div>
-            ))}
-            {categorias.length === 0 && <span className="text-xs text-slate-400">Sin categorías todavía.</span>}
-          </div>
-          <div className="flex gap-2">
-            <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre (ej: Talleres)" className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none flex-1" />
-            <input type="number" value={porcentaje} onChange={(e) => setPorcentaje(parseInt(e.target.value || "0", 10))} className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none w-20" />
-            <button onClick={crear} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white">Crear</button>
+        <div className="fixed inset-0 z-30 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.4)" }} onClick={() => setAbierto(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl shadow-xl p-4 w-full max-w-lg max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-bold text-slate-800">Gamificación — {estudiante.nombre}</h3>
+              <button onClick={() => setAbierto(false)} className="text-slate-400">✕</button>
+            </div>
+            <div className="flex gap-1 mb-3 flex-wrap">
+              {TABS.map((t) => (
+                <button key={t.key} onClick={() => setTab(t.key)}
+                  className={`text-xs px-2.5 py-1.5 rounded-full ${tab === t.key ? "bg-violet-500 text-white" : "bg-violet-50 text-violet-600"}`}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {listaActual().map((a, i) => (
+                <button key={i} disabled={cargando} onClick={() => aplicar(a)}
+                  className={`text-xs text-left px-2.5 py-2 rounded-xl ${a.xp >= 0 ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "bg-rose-50 text-rose-700 hover:bg-rose-100"}`}>
+                  {a.label}<div className="text-[10px] opacity-70">{a.xp > 0 ? "+" : ""}{a.xp} XP</div>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
-function ActividadModal({ materiaId, gradoId, periodo, categorias, editar, onClose, onGuardada }) {
-  const [nombre, setNombre] = useState(editar?.nombre || "");
-  const [categoriaId, setCategoriaId] = useState(editar?.categoria_id || categorias[0]?.id || "");
-  const [tipo, setTipo] = useState(editar?.es_automatica ? "auto" : "manual");
-  const [gamCategoria, setGamCategoria] = useState(editar?.gam_categoria || "academico");
-  const [xpMeta, setXpMeta] = useState(editar?.xp_meta || 50);
+function TarjetaEstudiante({ estudiante, onQuitar, onAplicado, reinos, onCambiarReino, roles, onCambiarRol, onCodigoGenerado }) {
+  const [actasAbiertas, setActasAbiertas] = useState(false);
+  const [generando, setGenerando] = useState(false);
+  const codigo = estudiante.codigo_acceso || null;
+  const progreso = estudiante.progreso?.[0] || estudiante.progreso || { xp: 0, vida: 100, monedas: 0 };
+  const reino = estudiante.reino_actual || estudiante.reino_original || "Sin grupo";
+  const rolActualId = estudiante.roles_asignados?.[0]?.rol_id || estudiante.roles_asignados?.rol_id || "";
 
-  const guardar = async () => {
-    if (!nombre.trim() || !categoriaId) return;
-    const campos = {
-      nombre: nombre.trim(), categoria_id: categoriaId, materia_id: materiaId, grado_id: gradoId, periodo,
-      es_automatica: tipo === "auto", gam_categoria: tipo === "auto" ? gamCategoria : null, xp_meta: tipo === "auto" ? xpMeta : null,
-    };
-    if (editar) await api.editarActividad(editar.id, campos);
-    else await api.crearActividad(campos);
-    onGuardada();
+  const generarCodigo = async () => {
+    setGenerando(true);
+    try {
+      const nuevo = await api.generarCodigoAcceso(estudiante.id);
+      onCodigoGenerado(estudiante.id, nuevo);
+    } catch (e) {
+      alert("No se pudo generar el código: " + e.message);
+    }
+    setGenerando(false);
   };
 
-  if (categorias.length === 0) {
-    return (
-      <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
-        <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 max-w-sm text-center shadow-xl">
-          <p className="text-sm text-slate-700 mb-3">Primero crea al menos una categoría de evaluación.</p>
-          <button onClick={onClose} className="text-sm px-4 py-2 rounded-lg bg-violet-500 text-white">Entendido</button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-md shadow-xl">
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="font-bold text-slate-800">{editar ? "Editar actividad" : "Nueva actividad"}</h3>
-          <button onClick={onClose} className="text-slate-400">✕</button>
+    <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
+      <div className="flex items-start gap-3 mb-2">
+        <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
+          style={{ background: `${reinoColor(reino)}22`, color: reinoColor(reino) }}>
+          {initials(estudiante.nombre)}
         </div>
-        <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre (ej: Taller 1)"
-          className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none" />
-        <select value={categoriaId} onChange={(e) => setCategoriaId(parseInt(e.target.value, 10))} className="w-full text-sm rounded-lg px-2 py-2 mb-2 border border-slate-200 outline-none">
-          {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre} ({c.porcentaje}%)</option>)}
-        </select>
-        <div className="flex gap-1 mb-2 rounded-full bg-slate-100 p-1">
-          <button onClick={() => setTipo("manual")} className={`flex-1 text-xs py-1.5 rounded-full ${tipo === "manual" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Manual</button>
-          <button onClick={() => setTipo("auto")} className={`flex-1 text-xs py-1.5 rounded-full ${tipo === "auto" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Automática (gamificación)</button>
-        </div>
-        {tipo === "auto" && (
-          <div className="bg-slate-50 rounded-lg p-2 mb-2">
-            <p className="text-xs text-slate-500 mb-1.5">La nota se calcula con todo el XP acumulado del estudiante en esta categoría de gamificación.</p>
-            <select value={gamCategoria} onChange={(e) => setGamCategoria(e.target.value)} className="w-full text-sm rounded-lg px-2 py-1.5 mb-1.5 border border-slate-200 outline-none">
-              {GAM_CATEGORIAS_OPCIONES.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold text-slate-800 truncate">{estudiante.nombre}</div>
+          <div className="flex items-center gap-1 text-xs text-slate-400">
+            <select value={reino} onChange={(e) => onCambiarReino(estudiante.id, e.target.value)} className="text-xs bg-transparent outline-none">
+              {reinos.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-slate-500">XP para nota máxima:</label>
-              <input type="number" value={xpMeta} onChange={(e) => setXpMeta(parseInt(e.target.value || "1", 10))} className="w-20 text-sm rounded-lg px-2 py-1 border border-slate-200 outline-none" />
-            </div>
           </div>
+          {roles && roles.length > 0 && (
+            <select value={rolActualId} onChange={(e) => onCambiarRol(estudiante.id, e.target.value ? parseInt(e.target.value, 10) : null)}
+              className="text-xs bg-violet-50 text-violet-600 rounded-full px-2 py-0.5 mt-1 outline-none">
+              <option value="">Sin rol</option>
+              {roles.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
+            </select>
+          )}
+        </div>
+        <div className="text-xs text-amber-500 font-semibold shrink-0">🪙 {progreso.monedas || 0}</div>
+      </div>
+      <LevelBar xp={progreso.xp || 0} />
+      <VidaBar vida={progreso.vida ?? 100} />
+      <div className="flex items-center justify-between mt-2">
+        {codigo ? (
+          <div className="text-[11px] text-slate-500">🔑 Código: <span className="font-mono font-bold text-violet-600">{codigo}</span></div>
+        ) : (
+          <button disabled={generando} onClick={generarCodigo} className="text-[11px] text-violet-500 underline">
+            {generando ? "Generando…" : "🔑 Generar código de acceso"}
+          </button>
         )}
-        <div className="flex justify-end gap-2 mt-2">
-          <button onClick={onClose} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
-          <button onClick={guardar} className="text-xs font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white">{editar ? "Guardar cambios" : "Crear actividad"}</button>
+      </div>
+      <div className="flex justify-between items-center mt-2">
+        <button onClick={() => onQuitar(estudiante.id)} className="text-xs text-slate-400 hover:text-rose-500">Quitar</button>
+        <div className="flex gap-1.5">
+          <button onClick={() => setActasAbiertas(true)} className="text-xs px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">📋 Actas</button>
+          <QuickGamify estudiante={estudiante} onAplicado={onAplicado} />
         </div>
       </div>
+      {actasAbiertas && <ActasModal estudiante={estudiante} onClose={() => setActasAbiertas(false)} />}
     </div>
   );
 }
 
-function ImportarMoodleModal({ materiaId, gradoId, periodo, categorias, estudiantes, onClose, onImportado }) {
-  const [paso, setPaso] = useState(1);
+function ImportarEstudiantesModal({ gradoId, reinoDefault, onClose, onImportado }) {
   const [texto, setTexto] = useState("");
-  const [filas, setFilas] = useState([]);
-  const [encabezados, setEncabezados] = useState([]);
-  const [colNombre, setColNombre] = useState("");
-  const [colsSeleccionadas, setColsSeleccionadas] = useState({});
-  const [categoriaId, setCategoriaId] = useState(categorias[0]?.id || "");
-  const [importando, setImportando] = useState(false);
-  const [resultado, setResultado] = useState(null);
+  const [cargando, setCargando] = useState(false);
+  const fileRef = useRef(null);
 
-  const procesarDesdeArray = (arr) => {
-    if (arr.length < 2) { alert("No se encontraron suficientes filas."); return; }
-    const heads = arr[0].map((h) => String(h || "").trim()).filter(Boolean);
-    const datos = arr.slice(1).filter((r) => r.length > 0 && r.some((c) => c !== "" && c !== undefined));
-    setEncabezados(heads);
-    setColNombre(heads[0]);
-    const sel = {};
-    heads.slice(1).forEach((h) => { sel[h] = true; });
-    setColsSeleccionadas(sel);
-    setFilas(datos.map((r) => {
-      const obj = {};
-      heads.forEach((h, i) => { obj[h] = r[i]; });
-      return obj;
+  const procesarFilas = async (filas) => {
+    const limpias = filas.filter((f) => f.nombre && f.nombre.trim()).map((f) => ({
+      nombre: f.nombre.trim(), grado_id: gradoId, reino_original: (f.reino && f.reino.trim()) || reinoDefault,
     }));
-    setPaso(2);
+    if (limpias.length === 0) { alert("No se encontraron nombres para importar."); return; }
+    setCargando(true);
+    try {
+      await api.crearEstudiantesMasivo(limpias);
+      onImportado(limpias.length);
+      onClose();
+    } catch (e) {
+      alert("Error al importar: " + e.message);
+    }
+    setCargando(false);
   };
 
   const procesarPegado = () => {
-    const lineas = texto.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-    const arr = lineas.map((l) => l.split(/\t|;|,/).map((x) => x.trim()));
-    procesarDesdeArray(arr);
+    const filas = texto.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).map((l) => {
+      const partes = l.split(/\t|;|,/).map((x) => x.trim());
+      return { nombre: partes[0], reino: partes[1] };
+    });
+    procesarFilas(filas);
   };
 
   const procesarArchivo = (file) => {
@@ -235,426 +201,294 @@ function ImportarMoodleModal({ materiaId, gradoId, periodo, categorias, estudian
         const wb = XLSX.read(e.target.result, { type: "binary" });
         const hoja = wb.Sheets[wb.SheetNames[0]];
         const arr = XLSX.utils.sheet_to_json(hoja, { header: 1 });
-        procesarDesdeArray(arr);
+        const filas = arr.filter((r) => r.length && r[0]).map((r) => ({ nombre: String(r[0]), reino: r[1] ? String(r[1]) : undefined }));
+        procesarFilas(filas);
       } catch (err) {
-        alert("No se pudo leer el archivo.");
+        alert("No se pudo leer el archivo. Verifica que sea un .xlsx o .csv válido.");
       }
     };
     reader.readAsBinaryString(file);
   };
 
-  const columnasDeNotas = encabezados.filter((h) => h !== colNombre && colsSeleccionadas[h]);
-
-  if (categorias.length === 0) {
-    return (
-      <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
-        <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 max-w-sm text-center shadow-xl">
-          <p className="text-sm text-slate-700 mb-3">Primero crea al menos una categoría de evaluación.</p>
-          <button onClick={onClose} className="text-sm px-4 py-2 rounded-lg bg-violet-500 text-white">Entendido</button>
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.4)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-md shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">Importar estudiantes — Grado {gradoId}</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
         </div>
+        <div className="text-xs uppercase tracking-wide text-slate-400 mb-1.5">Opción 1 — Pegar lista</div>
+        <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={6}
+          placeholder={"Un estudiante por línea.\nOpcional: 'Nombre, Grupo' por línea.\nEj:\nJuan Pérez, Reino Dorado\nMaría Gómez"}
+          className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none font-mono" />
+        <button disabled={cargando} onClick={procesarPegado} className="w-full text-sm font-semibold py-2 rounded-lg bg-violet-500 text-white mb-4 disabled:opacity-60">
+          {cargando ? "Importando…" : "Importar lo pegado"}
+        </button>
+        <div className="text-xs uppercase tracking-wide text-slate-400 mb-1.5">Opción 2 — Subir archivo (.xlsx / .csv)</div>
+        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={(e) => { if (e.target.files[0]) procesarArchivo(e.target.files[0]); }} className="text-sm" />
+        <p className="text-xs text-slate-400 mt-3">Primera columna: nombre. Segunda columna (opcional): grupo/reino.</p>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
-  const importar = async () => {
-    if (!categoriaId) { alert("Elige una categoría para las actividades importadas."); return; }
-    if (columnasDeNotas.length === 0) { alert("Selecciona al menos una columna de notas."); return; }
-    setImportando(true);
-    const encontrados = new Set();
-    const noEncontrados = new Set();
+function CodigosModal({ estudiantes, onClose, onActualizado }) {
+  const [lista, setLista] = useState(estudiantes);
+  const [generando, setGenerando] = useState(false);
+
+  const generarUno = async (id) => {
     try {
-      for (const col of columnasDeNotas) {
-        await api.crearActividad({
-          nombre: col, categoria_id: categoriaId, materia_id: materiaId, grado_id: gradoId, periodo, es_automatica: false,
-        });
-      }
-      const actividadesActuales = await api.fetchActividades(materiaId, gradoId, periodo);
-      for (const fila of filas) {
-        const nombreMoodle = fila[colNombre];
-        if (!nombreMoodle) continue;
-        const estudiante = buscarEstudiantePorNombre(String(nombreMoodle), estudiantes);
-        if (!estudiante) { noEncontrados.add(String(nombreMoodle)); continue; }
-        encontrados.add(estudiante.id);
-        for (const col of columnasDeNotas) {
-          const valorCrudo = fila[col];
-          const valor = parseFloat(String(valorCrudo).replace(",", "."));
-          if (isNaN(valor)) continue;
-          const actividad = actividadesActuales.find((a) => a.nombre === col);
-          if (actividad) await api.setValor(actividad.id, estudiante.id, valor);
-        }
-      }
-      setResultado({ importados: encontrados.size, noEncontrados: Array.from(noEncontrados) });
+      const codigo = await api.generarCodigoAcceso(id);
+      setLista((prev) => prev.map((s) => (s.id === id ? { ...s, codigo_acceso: codigo } : s)));
+      onActualizado(id, codigo);
     } catch (e) {
-      alert("Error al importar: " + e.message);
+      alert("No se pudo generar: " + e.message);
     }
-    setImportando(false);
+  };
+
+  const generarTodos = async () => {
+    setGenerando(true);
+    try {
+      const faltantes = lista.filter((s) => !s.codigo_acceso);
+      for (const s of faltantes) { await generarUno(s.id); }
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setGenerando(false);
   };
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-xl">
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-md max-h-[85vh] overflow-y-auto shadow-xl">
         <div className="flex justify-between items-center mb-3">
-          <h3 className="font-bold text-slate-800">Importar notas de Moodle / Excel</h3>
+          <h3 className="font-bold text-slate-800">Códigos de acceso</h3>
           <button onClick={onClose} className="text-slate-400">✕</button>
         </div>
-
-        {resultado ? (
-          <div>
-            <p className="text-sm text-emerald-600 mb-2">✔️ Se importaron notas para {resultado.importados} estudiante{resultado.importados === 1 ? "" : "s"}.</p>
-            {resultado.noEncontrados.length > 0 && (
-              <div className="bg-amber-50 rounded-lg p-3 mb-3">
-                <p className="text-xs text-amber-700 font-semibold mb-1">No se encontraron en el grado (verifica el nombre o agrégalos manualmente):</p>
-                <ul className="text-xs text-amber-700 list-disc list-inside">
-                  {resultado.noEncontrados.map((n) => <li key={n}>{n}</li>)}
-                </ul>
-              </div>
-            )}
-            <button onClick={() => { onImportado(); onClose(); }} className="w-full text-sm font-semibold py-2 rounded-lg bg-violet-500 text-white">Listo</button>
-          </div>
-        ) : paso === 1 ? (
-          <div>
-            <div className="text-xs uppercase tracking-wide text-slate-400 mb-1.5">Opción 1 — Pegar tabla (incluye encabezados en la primera fila)</div>
-            <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={6}
-              placeholder={"Nombre\tTaller 1\tTaller 2\nJuan Pérez García\t4.5\t3.8\nMaría Gómez\t5.0\t4.2"}
-              className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none font-mono" />
-            <button onClick={procesarPegado} className="w-full text-sm font-semibold py-2 rounded-lg bg-violet-500 text-white mb-4">Continuar</button>
-            <div className="text-xs uppercase tracking-wide text-slate-400 mb-1.5">Opción 2 — Subir archivo exportado de Moodle (.xlsx / .csv)</div>
-            <input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => { if (e.target.files[0]) procesarArchivo(e.target.files[0]); }} className="text-sm" />
-            <p className="text-xs text-slate-400 mt-3">La primera fila debe tener los nombres de las columnas (Nombre, y una por cada actividad/calificación).</p>
-          </div>
-        ) : (
-          <div>
-            <p className="text-sm text-slate-600 mb-3">Se encontraron {filas.length} filas con {encabezados.length} columnas.</p>
-            <div className="mb-3">
-              <label className="text-xs text-slate-500 block mb-1">¿Cuál columna tiene el nombre del estudiante?</label>
-              <select value={colNombre} onChange={(e) => setColNombre(e.target.value)} className="w-full text-sm rounded-lg px-2 py-2 border border-slate-200 outline-none">
-                {encabezados.map((h) => <option key={h} value={h}>{h}</option>)}
-              </select>
+        <button disabled={generando} onClick={generarTodos} className="w-full text-sm font-semibold py-2 rounded-lg bg-violet-500 text-white mb-4 disabled:opacity-60">
+          {generando ? "Generando…" : "🔑 Generar los que falten"}
+        </button>
+        <div className="divide-y divide-slate-100">
+          {lista.map((s) => (
+            <div key={s.id} className="flex items-center justify-between py-2">
+              <span className="text-sm text-slate-700 truncate">{s.nombre}</span>
+              {s.codigo_acceso ? (
+                <span className="font-mono font-bold text-violet-600 text-sm shrink-0">{s.codigo_acceso}</span>
+              ) : (
+                <button onClick={() => generarUno(s.id)} className="text-xs text-violet-500 underline shrink-0">Generar</button>
+              )}
             </div>
-            <div className="mb-3">
-              <label className="text-xs text-slate-500 block mb-1">¿En qué categoría van estas actividades?</label>
-              <select value={categoriaId} onChange={(e) => setCategoriaId(parseInt(e.target.value, 10))} className="w-full text-sm rounded-lg px-2 py-2 border border-slate-200 outline-none">
-                {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre} ({c.porcentaje}%)</option>)}
-              </select>
-            </div>
-            <div className="mb-3">
-              <label className="text-xs text-slate-500 block mb-1.5">Columnas de notas a importar (cada una crea una actividad nueva)</label>
-              <div className="flex flex-wrap gap-2">
-                {encabezados.filter((h) => h !== colNombre).map((h) => (
-                  <label key={h} className="flex items-center gap-1.5 text-xs bg-slate-50 rounded-full px-3 py-1.5">
-                    <input type="checkbox" checked={!!colsSeleccionadas[h]} onChange={(e) => setColsSeleccionadas((prev) => ({ ...prev, [h]: e.target.checked }))} />
-                    {h}
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setPaso(1)} className="text-xs text-slate-500 px-3 py-2">← Volver</button>
-              <button disabled={importando} onClick={importar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
-                {importando ? "Importando…" : `Importar ${columnasDeNotas.length} columna(s)`}
-              </button>
-            </div>
-          </div>
-        )}
+          ))}
+        </div>
+        <p className="text-xs text-slate-400 mt-4">Comparte cada código con el estudiante o acudiente correspondiente — con él pueden entrar desde "Soy estudiante" en la pantalla de inicio.</p>
       </div>
     </div>
   );
 }
 
-function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo, onCambioCategorias }) {
-  const [actividades, setActividades] = useState([]);
-  const [valores, setValores] = useState({});
-  const [xpMapa, setXpMapa] = useState({});
+export function VistaEstudiantes({ gradoId, reinoFiltro, onVolver }) {
+  const [estudiantes, setEstudiantes] = useState([]);
+  const [roles, setRoles] = useState([]);
   const [cargando, setCargando] = useState(true);
-  const [modalAbierto, setModalAbierto] = useState(false);
-  const [actividadEditar, setActividadEditar] = useState(null);
-  const [importarMoodleAbierto, setImportarMoodleAbierto] = useState(false);
+  const [query, setQuery] = useState("");
+  const [nuevoNombre, setNuevoNombre] = useState("");
+  const [nuevoReino, setNuevoReino] = useState("Sin grupo");
+  const [importarAbierto, setImportarAbierto] = useState(false);
+  const [codigosAbierto, setCodigosAbierto] = useState(false);
 
   const cargar = async () => {
     setCargando(true);
-    const acts = await api.fetchActividades(materiaId, gradoId, periodo);
-    setActividades(acts);
-    const valoresRows = await api.fetchValores(acts.map((a) => a.id));
-    const valMap = {};
-    valoresRows.forEach((v) => { valMap[v.actividad_id] = valMap[v.actividad_id] || {}; valMap[v.actividad_id][v.estudiante_id] = v.valor; });
-    setValores(valMap);
-    const categoriasGam = [...new Set(acts.filter((a) => a.es_automatica).map((a) => a.gam_categoria))];
-    if (categoriasGam.length > 0) {
-      const xp = await api.fetchXpPorCategoria(estudiantes.map((s) => s.id), categoriasGam);
-      setXpMapa(xp);
-    } else {
-      setXpMapa({});
-    }
+    const [data, rolesData] = await Promise.all([api.fetchEstudiantesPorGrado(gradoId), api.fetchRoles()]);
+    setEstudiantes(data);
+    setRoles(rolesData);
     setCargando(false);
   };
-  useEffect(() => { cargar(); }, [materiaId, gradoId, periodo, estudiantes.length]);
+  useEffect(() => { cargar(); }, [gradoId]);
 
-  const valorDeActividad = (actividad, estudianteId) => {
-    if (actividad.es_automatica) {
-      const xp = xpMapa[estudianteId]?.[actividad.gam_categoria] || 0;
-      return notaAutomatica(xp, actividad.xp_meta, config);
-    }
-    return valores[actividad.id]?.[estudianteId] ?? null;
+  const reinos = useMemo(() => {
+    const set = new Set(estudiantes.map((s) => s.reino_actual || s.reino_original || "Sin grupo"));
+    set.add("Sin grupo");
+    return Array.from(set);
+  }, [estudiantes]);
+
+  const visibles = estudiantes
+    .filter((s) => !reinoFiltro || (s.reino_actual || s.reino_original) === reinoFiltro)
+    .filter((s) => s.nombre.toLowerCase().includes(query.toLowerCase()));
+
+  const actualizarProgresoLocal = (id, nuevo) => {
+    setEstudiantes((prev) => prev.map((s) => (s.id === id ? { ...s, progreso: [nuevo] } : s)));
   };
 
-  const guardarValorManual = async (actividadId, estudianteId, valorTexto) => {
-    const v = valorTexto === "" ? null : Math.max(config.escala_min, Math.min(config.nota_maxima, parseFloat(valorTexto)));
-    await api.setValor(actividadId, estudianteId, v);
-    setValores((prev) => ({ ...prev, [actividadId]: { ...(prev[actividadId] || {}), [estudianteId]: v } }));
+  const actualizarCodigoLocal = (id, codigo) => {
+    setEstudiantes((prev) => prev.map((s) => (s.id === id ? { ...s, codigo_acceso: codigo } : s)));
   };
 
-  const notaFinal = (estudianteId) => {
-    const porCategoria = {};
-    actividades.forEach((a) => {
-      const v = valorDeActividad(a, estudianteId);
-      if (v === null || v === undefined) return;
-      porCategoria[a.categoria_id] = porCategoria[a.categoria_id] || [];
-      porCategoria[a.categoria_id].push(v);
-    });
-    return notaFinalPonderada(porCategoria, categorias);
-  };
-
-  const eliminarAct = async (id) => { if (!confirm("¿Eliminar esta actividad?")) return; await api.eliminarActividad(id); cargar(); };
-
-  return (
-    <div>
-      <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
-        <div className="text-sm text-slate-500">{actividades.length} actividad{actividades.length === 1 ? "" : "es"} en este periodo</div>
-        <div className="flex gap-2">
-          <button onClick={() => setImportarMoodleAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700">📥 Importar de Moodle/Excel</button>
-          <button onClick={() => { setActividadEditar(null); setModalAbierto(true); }} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">+ Nueva actividad</button>
-        </div>
-      </div>
-      {cargando ? (
-        <div className="text-sm text-slate-400">Cargando…</div>
-      ) : (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-x-auto">
-          <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                <th className="sticky left-0 bg-slate-50 text-left px-3 py-2 border-b border-slate-100">Estudiante</th>
-                {actividades.map((a) => (
-                  <th key={a.id} className="px-3 py-2 border-b border-slate-100 bg-slate-50 min-w-[110px]">
-                    <div className="flex items-center justify-center gap-1">
-                      {a.es_automatica && <span title="Automática">⚡</span>}
-                      <span>{a.nombre}</span>
-                      <button onClick={() => { setActividadEditar(a); setModalAbierto(true); }} className="text-slate-400">✎</button>
-                      <button onClick={() => eliminarAct(a.id)} className="text-slate-400">✕</button>
-                    </div>
-                  </th>
-                ))}
-                <th className="px-3 py-2 border-b border-slate-100 bg-slate-50">Nota Final</th>
-              </tr>
-            </thead>
-            <tbody>
-              {estudiantes.map((s) => {
-                const final = notaFinal(s.id);
-                const banda = bandaDesempeno(final, config);
-                return (
-                  <tr key={s.id} className="odd:bg-white even:bg-slate-50">
-                    <td className="sticky left-0 bg-inherit text-left px-3 py-2 font-medium text-slate-700">{s.nombre}</td>
-                    {actividades.map((a) => {
-                      const v = valorDeActividad(a, s.id);
-                      if (a.es_automatica) {
-                        const b = bandaDesempeno(v, config);
-                        return <td key={a.id} className="text-center px-3 py-2" style={{ color: b.color, fontWeight: 600 }}>{v}</td>;
-                      }
-                      return (
-                        <td key={a.id} className="text-center px-3 py-2">
-                          <input type="number" step="0.1" defaultValue={v ?? ""} onBlur={(e) => guardarValorManual(a.id, s.id, e.target.value)}
-                            className="w-14 text-center text-xs rounded px-1 py-1 border border-slate-200 outline-none" />
-                        </td>
-                      );
-                    })}
-                    <td className="text-center px-3 py-2 font-bold" style={{ color: banda.color }}>{final ?? "—"}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-      {modalAbierto && (
-        <ActividadModal materiaId={materiaId} gradoId={gradoId} periodo={periodo} categorias={categorias} editar={actividadEditar}
-          onClose={() => setModalAbierto(false)} onGuardada={() => { setModalAbierto(false); cargar(); }} />
-      )}
-      {importarMoodleAbierto && (
-        <ImportarMoodleModal materiaId={materiaId} gradoId={gradoId} periodo={periodo} categorias={categorias} estudiantes={estudiantes}
-          onClose={() => setImportarMoodleAbierto(false)} onImportado={cargar} />
-      )}
-    </div>
-  );
-}
-
-function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarActual }) {
-  const periodos = periodosDe(config);
-  const [finales, setFinales] = useState([]);
-  const [nivelacion, setNivelacion] = useState([]);
-  const [cargando, setCargando] = useState(true);
-
-  const cargar = async () => {
-    setCargando(true);
-    const [f, n] = await Promise.all([api.fetchNotasFinales(materiaId), api.fetchNivelacion(materiaId)]);
-    setFinales(f); setNivelacion(n);
-    setCargando(false);
-  };
-  useEffect(() => { cargar(); }, [materiaId]);
-
-  const notaGuardada = (estudianteId, periodo) => finales.find((f) => f.estudiante_id === estudianteId && f.periodo === periodo)?.nota ?? null;
-  const estadoNiv = (estudianteId, periodo) => nivelacion.find((n) => n.estudiante_id === estudianteId && n.periodo === periodo)?.estado || "";
-
-  const cambiarNivelacion = async (estudianteId, periodo, estado) => {
-    await api.setNivelacion(materiaId, estudianteId, periodo, estado || null);
+  const agregar = async () => {
+    if (!nuevoNombre.trim()) return;
+    await api.crearEstudiante({ nombre: nuevoNombre.trim(), grado_id: gradoId, reino_original: nuevoReino });
+    setNuevoNombre("");
     cargar();
   };
 
-  const promedioAnual = (estudianteId) => {
-    const notas = periodos.map((p) => notaGuardada(estudianteId, p)).filter((n) => n !== null);
-    if (notas.length === 0) return null;
-    return Math.round((notas.reduce((a, b) => a + b, 0) / notas.length) * 10) / 10;
+  const quitar = async (id) => {
+    if (!confirm("¿Quitar este estudiante de la lista?")) return;
+    await api.quitarEstudiante(id);
+    cargar();
+  };
+
+  const cambiarReino = async (id, reino) => {
+    await api.cambiarReino(id, reino);
+    setEstudiantes((prev) => prev.map((s) => (s.id === id ? { ...s, reino_actual: reino } : s)));
+  };
+
+  const cambiarRol = async (id, rolId) => {
+    await api.asignarRol(id, rolId);
+    setEstudiantes((prev) => prev.map((s) => (s.id === id ? { ...s, roles_asignados: rolId ? [{ rol_id: rolId }] : [] } : s)));
   };
 
   return (
     <div>
-      <div className="flex justify-end mb-3">
-        <button onClick={async () => { await guardarActual(); cargar(); }} className="text-xs font-semibold px-4 py-2 rounded-full bg-violet-500 text-white">
-          💾 Guardar notas finales del periodo actual
-        </button>
+      <button onClick={onVolver} className="text-sm text-violet-500 mb-3">← Grado {gradoId}</button>
+      <h2 className="text-xl font-bold text-slate-800 mb-4">
+        {reinoFiltro ? reinoFiltro : `Grado ${gradoId} — todos los estudiantes`}
+      </h2>
+
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 mb-4">
+        <div className="flex flex-wrap gap-2 items-center justify-between mb-2">
+          <div className="text-xs uppercase tracking-wide text-slate-400">Agregar estudiante</div>
+          <div className="flex gap-2">
+            <button onClick={() => setCodigosAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🔑 Ver códigos de acceso</button>
+            <button onClick={() => setImportarAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700">📥 Importar varios</button>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <input value={nuevoNombre} onChange={(e) => setNuevoNombre(e.target.value)} placeholder="Nombre del estudiante"
+            className="flex-1 min-w-[180px] text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" />
+          <select value={nuevoReino} onChange={(e) => setNuevoReino(e.target.value)} className="text-sm rounded-lg px-2 py-2 border border-slate-200 outline-none">
+            {reinos.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+          <button onClick={agregar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white">Agregar</button>
+        </div>
       </div>
+      {importarAbierto && (
+        <ImportarEstudiantesModal
+          gradoId={gradoId}
+          reinoDefault={reinoFiltro || "Sin grupo"}
+          onClose={() => setImportarAbierto(false)}
+          onImportado={(n) => { cargar(); alert(`Se importaron ${n} estudiantes.`); }}
+        />
+      )}
+      {codigosAbierto && (
+        <CodigosModal
+          estudiantes={visibles}
+          onClose={() => setCodigosAbierto(false)}
+          onActualizado={actualizarCodigoLocal}
+        />
+      )}
+
+      <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar estudiante…"
+        className="w-full max-w-sm text-sm rounded-full px-4 py-2 border border-slate-200 outline-none mb-4" />
+
       {cargando ? (
         <div className="text-sm text-slate-400">Cargando…</div>
+      ) : visibles.length === 0 ? (
+        <div className="text-sm text-slate-400">No hay estudiantes todavía. Agrega el primero arriba.</div>
       ) : (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-x-auto">
-          <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                <th className="text-left px-3 py-2 border-b border-slate-100 bg-slate-50">Estudiante</th>
-                {periodos.map((p) => <th key={p} className="px-3 py-2 border-b border-slate-100 bg-slate-50">Periodo {p}</th>)}
-                <th className="px-3 py-2 border-b border-slate-100 bg-slate-50">Promedio</th>
-              </tr>
-            </thead>
-            <tbody>
-              {estudiantes.map((s, i) => {
-                const prom = promedioAnual(s.id);
-                const bandaProm = bandaDesempeno(prom, config);
-                return (
-                  <tr key={s.id} className="odd:bg-white even:bg-slate-50">
-                    <td className="text-left px-3 py-2 font-medium text-slate-700">{s.nombre}</td>
-                    {periodos.map((p) => {
-                      const n = notaGuardada(s.id, p);
-                      const b = bandaDesempeno(n, config);
-                      const necesitaNiv = n !== null && n < config.nota_minima;
-                      return (
-                        <td key={p} className="text-center px-3 py-2">
-                          <div style={{ color: n !== null ? b.color : "#94A3B8", fontWeight: n !== null ? 700 : 400 }}>{n ?? "—"}</div>
-                          {necesitaNiv && (
-                            <select value={estadoNiv(s.id, p)} onChange={(e) => cambiarNivelacion(s.id, p, e.target.value)} className="text-[10px] rounded px-1 py-0.5 mt-1 border border-slate-200">
-                              <option value="">Sin marcar</option>
-                              <option value="pendiente">Pendiente</option>
-                              <option value="en_proceso">En proceso</option>
-                              <option value="superado">Superado</option>
-                            </select>
-                          )}
-                        </td>
-                      );
-                    })}
-                    <td className="text-center px-3 py-2 font-bold" style={{ color: bandaProm.color }}>{prom ?? "—"}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
+          {visibles.map((s) => (
+            <TarjetaEstudiante key={s.id} estudiante={s} reinos={reinos} onQuitar={quitar} onCambiarReino={cambiarReino} onAplicado={actualizarProgresoLocal} roles={roles} onCambiarRol={cambiarRol} onCodigoGenerado={actualizarCodigoLocal} />
+          ))}
         </div>
       )}
     </div>
   );
 }
 
-function Estadisticas({ materiaId, config, categorias, estudiantes, gradoId, periodo }) {
-  const [notas, setNotas] = useState({});
+export function VistaReinos({ gradoId, onElegirReino, onVerTodos, onVolver }) {
+  const [estudiantes, setEstudiantes] = useState([]);
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
-    if (!materiaId || !gradoId || estudiantes.length === 0) { setCargando(false); return; }
-    setCargando(true);
-    api.calcularNotasFinalesPeriodo(materiaId, gradoId, periodo, estudiantes, categorias, config).then((n) => { setNotas(n); setCargando(false); });
-  }, [materiaId, gradoId, periodo, estudiantes.length, categorias.length]);
+    api.fetchEstudiantesPorGrado(gradoId).then((data) => { setEstudiantes(data); setCargando(false); });
+  }, [gradoId]);
 
-  const valores = estudiantes.map((s) => notas[s.id]).filter((n) => n !== null && n !== undefined);
-  const stats = calcularEstadisticas(valores);
-
-  if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
+  const reinos = useMemo(() => {
+    const mapa = {};
+    estudiantes.forEach((s) => {
+      const r = s.reino_actual || s.reino_original || "Sin grupo";
+      mapa[r] = (mapa[r] || 0) + 1;
+    });
+    return Object.entries(mapa);
+  }, [estudiantes]);
 
   return (
     <div>
-      <div className="grid gap-2 mb-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))" }}>
-        {[["Promedio", stats.media], ["Desv. estándar", stats.desviacion], ["Mediana", stats.mediana], ["Mínimo", stats.min], ["Máximo", stats.max]].map(([label, val]) => (
-          <div key={label} className="bg-white rounded-xl p-3 text-center shadow-sm border border-slate-100">
-            <div className="text-xl font-bold text-violet-600">{val ?? "—"}</div>
-            <div className="text-[10px] uppercase tracking-wide text-slate-400 mt-1">{label}</div>
-          </div>
-        ))}
+      <button onClick={onVolver} className="text-sm text-violet-500 mb-3">← Grados</button>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-bold text-slate-800">Grado {gradoId} — Reinos</h2>
+        <button onClick={onVerTodos} className="text-sm text-violet-500 font-semibold">Ver listado completo →</button>
       </div>
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
-        <div className="text-sm font-semibold text-slate-700 mb-3">Notas por estudiante — Periodo {periodo}</div>
-        {estudiantes.length === 0 ? (
-          <div className="text-sm text-slate-400">No hay estudiantes en este grado.</div>
-        ) : (
-          <div className="space-y-2">
-            {estudiantes.map((s) => {
-              const n = notas[s.id];
-              const banda = bandaDesempeno(n, config);
-              const pct = n !== null && n !== undefined ? Math.max(2, Math.min(100, (n / config.nota_maxima) * 100)) : 0;
-              return (
-                <div key={s.id} className="flex items-center gap-2">
-                  <div className="w-36 text-xs text-slate-600 truncate shrink-0">{s.nombre}</div>
-                  <div className="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full" style={{ width: `${pct}%`, background: banda.color }} />
-                  </div>
-                  <div className="w-10 text-xs text-right font-bold shrink-0" style={{ color: banda.color }}>{n ?? "—"}</div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      {cargando ? (
+        <div className="text-sm text-slate-400">Cargando…</div>
+      ) : reinos.length === 0 ? (
+        <div className="text-sm text-slate-400">Este grado no tiene estudiantes todavía.</div>
+      ) : (
+        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
+          {reinos.map(([nombre, n]) => (
+            <button key={nombre} onClick={() => onElegirReino(nombre)} className="text-left bg-white rounded-2xl p-4 shadow-sm border-t-4"
+              style={{ borderTopColor: reinoColor(nombre) }}>
+              <div className="font-semibold text-slate-800">{nombre}</div>
+              <div className="text-xs text-slate-400 mt-1">{n} estudiante{n === 1 ? "" : "s"}</div>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-export function VistaCalificaciones({ grados }) {
-  const [materias, setMaterias] = useState([]);
-  const [materiaActualId, setMateriaActualId] = useState(null);
-  const [config, setConfig] = useState(CONFIG_DEFAULT);
-  const [categorias, setCategorias] = useState([]);
-  const [gradoId, setGradoId] = useState(grados[0]?.id || "");
-  const [periodo, setPeriodo] = useState("1");
-  const [subVista, setSubVista] = useState("planilla");
-  const [estudiantes, setEstudiantes] = useState([]);
+export function VistaGrados({ onElegirGrado }) {
+  const [grados, setGrados] = useState([]);
   const [cargando, setCargando] = useState(true);
+  const [nuevoGrado, setNuevoGrado] = useState("");
 
-  const cargarMaterias = async () => {
-    const m = await api.fetchMaterias();
-    setMaterias(m);
-    if (!materiaActualId && m.length > 0) setMateriaActualId(m[0].id);
-    return m;
+  const cargar = async () => {
+    setCargando(true);
+    await api.asegurarGradosBase();
+    const data = await api.fetchGrados();
+    setGrados(data);
+    setCargando(false);
+  };
+  useEffect(() => { cargar(); }, []);
+
+  const crear = async () => {
+    if (!nuevoGrado.trim()) return;
+    await api.crearGrado(nuevoGrado.trim());
+    setNuevoGrado("");
+    cargar();
   };
 
-  useEffect(() => { cargarMaterias().then(() => setCargando(false)); }, []);
-  useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
-
-  const cargarConfigYCategorias = async () => {
-    if (!materiaActualId) return;
-    const [cfg, cats] = await Promise.all([api.fetchNotasConfig(materiaActualId), api.fetchCategorias(materiaActualId)]);
-    setConfig(cfg);
-    setCategorias(cats);
-  };
-  useEffect(() => { cargarConfigYCategorias(); }, [materiaActualId]);
-
-  useEffect(() => {
-    if (!gradoId) return;
-    api.fetchEstudiantesPorGrado(gradoId).then(setEstudiantes);
-  }, [gradoId]);
-
-  const guardarNotasFinalesActual = async () => {
-    const notas = await api.calcularNotasFinalesPeriodo(materiaActualId, gradoId, periodo, estudiantes,
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <h2 className="text-xl font-bold text-slate-800">Grados</h2>
+        <div className="flex gap-2">
+          <input value={nuevoGrado} onChange={(e) => setNuevoGrado(e.target.value)} placeholder="Nuevo grado (ej: 1004)"
+            className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none w-40" />
+          <button onClick={crear} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white">Crear</button>
+        </div>
+      </div>
+      {cargando ? (
+        <div className="text-sm text-slate-400">Cargando…</div>
+      ) : (
+        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))" }}>
+          {grados.map((g) => (
+            <button key={g.id} onClick={() => onElegirGrado(g.id)} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 text-center hover:shadow-md">
+              <div className="text-2xl font-bold text-violet-600">{g.id}</div>
+              <div className="text-xs text-slate-400 mt-1">Grado</div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
