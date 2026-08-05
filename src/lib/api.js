@@ -66,6 +66,28 @@ export async function cambiarReino(id, reino_actual) {
   if (error) throw error;
 }
 
+/* ---------------- Acceso de estudiantes (código, sin cuenta) ---------------- */
+function generarCodigo() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sin O/0/I/1 para evitar confusiones
+  return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+}
+
+export async function generarCodigoAcceso(estudianteId) {
+  for (let intento = 0; intento < 5; intento++) {
+    const codigo = generarCodigo();
+    const { error } = await supabase.from("estudiantes").update({ codigo_acceso: codigo }).eq("id", estudianteId);
+    if (!error) return codigo;
+    if (error.code !== "23505") throw error;
+  }
+  throw new Error("No se pudo generar un código único, intenta de nuevo.");
+}
+
+export async function consultarPortalEstudiante(codigo) {
+  const { data, error } = await supabase.rpc("estudiante_portal", { p_codigo: codigo.trim().toUpperCase() });
+  if (error) throw error;
+  return data && data.length > 0 ? data[0] : null;
+}
+
 /* ---------------- Roles de clase ---------------- */
 export async function fetchRoles() {
   const { data, error } = await supabase.from("roles_clase").select("*").order("nombre");
