@@ -114,6 +114,190 @@ export async function eliminarActa(id) {
   if (error) throw error;
 }
 
+/* ==================== CALIFICACIONES ==================== */
+
+export async function fetchMaterias() {
+  const { data, error } = await supabase.from("materias").select("*").order("nombre");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearMateria(nombre) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("materias").insert({ nombre, docente_id: userData.user.id }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function eliminarMateria(id) {
+  const { error } = await supabase.from("materias").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function duplicarMateria(materiaOrigenId, nombreNuevo) {
+  const nueva = await crearMateria(nombreNuevo);
+  const cfg = await fetchNotasConfig(materiaOrigenId);
+  await guardarNotasConfig(nueva.id, cfg);
+  const cats = await fetchCategorias(materiaOrigenId);
+  for (const c of cats) { await crearCategoria(nueva.id, c.nombre, c.porcentaje); }
+  return nueva;
+}
+
+export async function copiarNotasDesdeMateria(materiaOrigenId, materiaDestinoId) {
+  const catsOrigen = await fetchCategorias(materiaOrigenId);
+  const catIdMap = {};
+  for (const c of catsOrigen) {
+    const { data, error } = await supabase.from("notas_categorias").insert({ materia_id: materiaDestinoId, nombre: c.nombre, porcentaje: c.porcentaje }).select().single();
+    if (error) throw error;
+    catIdMap[c.id] = data.id;
+  }
+  const { data: actsOrigen, error: eAct } = await supabase.from("notas_actividades").select("*").eq("materia_id", materiaOrigenId);
+  if (eAct) throw eAct;
+  const actIdMap = {};
+  for (const a of (actsOrigen || [])) {
+    const { data, error } = await supabase.from("notas_actividades").insert({
+      materia_id: materiaDestinoId, categoria_id: catIdMap[a.categoria_id], nombre: a.nombre,
+      grado_id: a.grado_id, periodo: a.periodo, es_automatica: a.es_automatica, gam_categoria: a.gam_categoria, xp_meta: a.xp_meta,
+    }).select().single();
+    if (error) throw error;
+    actIdMap[a.id] = data.id;
+  }
+  const origenActIds = (actsOrigen || []).map((a) => a.id);
+  if (origenActIds.length > 0) {
+    const { data: valoresOrigen, error: eVal } = await supabase.from("notas_valores").select("*").in("actividad_id", origenActIds);
+    if (eVal) throw eVal;
+    const nuevosValores = (valoresOrigen || []).map((v) => ({ actividad_id: actIdMap[v.actividad_id], estudiante_id: v.estudiante_id, valor: v.valor }));
+    if (nuevosValores.length > 0) {
+      const { error } = await supabase.from("notas_valores").insert(nuevosValores);
+      if (error) throw error;
+    }
+  }
+}
+
+export async function fetchNotasConfig(materiaId) {
+  const { data, error } = await supabase.from("notas_config").select("*").eq("materia_id", materiaId).maybeSingle();
+  if (error) throw error;
+  if (!data) return { escala_min: 1.0, nota_minima: 3.0, nota_maxima: 5.0, sistema_periodos: "bimestre", cantidad_periodos: 4 };
+  return data;
+}
+
+export async function guardarNotasConfig(materiaId, config) {
+  const { error } = await supabase.from("notas_config").upsert({ materia_id: materiaId, ...config }, { onConflict: "materia_id" });
+  if (error) throw error;
+}
+
+export async function fetchCategorias(materiaId) {
+  const { data, error } = await supabase.from("notas_categorias").select("*").eq("materia_id", materiaId).order("id");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearCategoria(materiaId, nombre, porcentaje) {
+  const { error } = await supabase.from("notas_categorias").insert({ materia_id: materiaId, nombre, porcentaje });
+  if (error) throw error;
+}
+
+export async function eliminarCategoria(id) {
+  const { error } = await supabase.from("notas_categorias").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function fetchActividades(materiaId, gradoId, periodo) {
+  const { data, error } = await supabase
+    .from("notas_actividades")
+    .select("*")
+    .eq("materia_id", materiaId)
+    .eq("grado_id", gradoId)
+    .eq("periodo", periodo)
+    .order("id");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearActividad(campos) {
+  const { error } = await supabase.from("notas_actividades").insert(campos);
+  if (error) throw error;
+}
+
+export async function editarActividad(id, cambios) {
+  const { error } = await supabase.from("notas_actividades").update(cambios).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarActividad(id) {
+  const { error } = await supabase.from("notas_actividades").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function fetchValores(actividadIds) {
+  if (actividadIds.length === 0) return [];
+  const { data, error } = await supabase.from("notas_valores").select("*").in("actividad_id", actividadIds);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function setValor(actividadId, estudianteId, valor) {
+  if (valor === null || valor === "" || isNaN(valor)) {
+    const { error } = await supabase.from("notas_valores").delete().eq("actividad_id", actividadId).eq("estudiante_id", estudianteId);
+    if (error) throw error;
+    return;
+  }
+  const { error } = await supabase.from("notas_valores").upsert(
+    { actividad_id: actividadId, estudiante_id: estudianteId, valor },
+    { onConflict: "actividad_id,estudiante_id" }
+  );
+  if (error) throw error;
+}
+
+export async function fetchXpPorCategoria(estudianteIds, categorias) {
+  if (estudianteIds.length === 0 || categorias.length === 0) return {};
+  const { data, error } = await supabase
+    .from("historial_gamificacion")
+    .select("estudiante_id, categoria, xp")
+    .in("estudiante_id", estudianteIds)
+    .in("categoria", categorias);
+  if (error) throw error;
+  const mapa = {};
+  (data || []).forEach((r) => {
+    mapa[r.estudiante_id] = mapa[r.estudiante_id] || {};
+    mapa[r.estudiante_id][r.categoria] = (mapa[r.estudiante_id][r.categoria] || 0) + r.xp;
+  });
+  return mapa;
+}
+
+export async function fetchNotasFinales(materiaId) {
+  const { data, error } = await supabase.from("notas_finales_periodo").select("*").eq("materia_id", materiaId);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function guardarNotaFinal(materiaId, estudianteId, periodo, nota) {
+  const { error } = await supabase.from("notas_finales_periodo").upsert(
+    { materia_id: materiaId, estudiante_id: estudianteId, periodo, nota },
+    { onConflict: "materia_id,estudiante_id,periodo" }
+  );
+  if (error) throw error;
+}
+
+export async function fetchNivelacion(materiaId) {
+  const { data, error } = await supabase.from("nivelacion").select("*").eq("materia_id", materiaId);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function setNivelacion(materiaId, estudianteId, periodo, estado) {
+  if (!estado) {
+    const { error } = await supabase.from("nivelacion").delete().eq("materia_id", materiaId).eq("estudiante_id", estudianteId).eq("periodo", periodo);
+    if (error) throw error;
+    return;
+  }
+  const { error } = await supabase.from("nivelacion").upsert(
+    { materia_id: materiaId, estudiante_id: estudianteId, periodo, estado },
+    { onConflict: "materia_id,estudiante_id,periodo" }
+  );
+  if (error) throw error;
+}
+
 /* ---------------- Asistencia ---------------- */
 export async function fetchAsistenciaFecha(estudianteIds, fecha) {
   if (estudianteIds.length === 0) return {};
