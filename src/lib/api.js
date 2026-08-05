@@ -1,6 +1,7 @@
 import { supabase } from "./supabaseClient";
 import { GRADOS_BASE, ordenarPorApellido } from "./gamification";
 import { notaAutomatica, notaFinalPonderada } from "./calificaciones";
+import { NIVELACION_COMPROMISOS_DEFAULT } from "./actasTemplates";
 
 export async function asegurarGradosBase() {
   const filas = GRADOS_BASE.map((id) => ({ id }));
@@ -196,7 +197,7 @@ export async function crearActaNivelacionSiReprobado(materiaId, materiaNombre, e
     estado: "pendiente",
     motivo: `Pérdida de ${materiaNombre} en el periodo ${periodo} (nota final ${notaFinal}, mínima aprobatoria ${config.nota_minima}).`,
     descripcion: "Acta generada automáticamente al guardar las notas finales del periodo.",
-    compromisos_academicos: "Pendiente por definir con el docente y el estudiante.",
+    compromisos_academicos: NIVELACION_COMPROMISOS_DEFAULT,
   });
   return null;
 }
