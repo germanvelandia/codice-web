@@ -67,7 +67,17 @@ export function ActasModal({ estudiante, onClose }) {
               <div key={a.id} className="border border-slate-100 rounded-xl p-3">
                 <div className="flex justify-between items-start">
                   <div>
-                    <div className="text-sm font-semibold text-slate-800">{a.tipo} · {a.fecha}</div>
+                    <div className="text-sm font-semibold text-slate-800">
+                      {a.tipo} · {a.fecha}
+                      {a.estado && a.tipo === "Nivelación" && (
+                        <span className={`ml-2 text-[10px] px-2 py-0.5 rounded-full ${
+                          a.estado === "superado" ? "bg-emerald-100 text-emerald-700" :
+                          a.estado === "en_proceso" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600"
+                        }`}>
+                          {a.estado === "superado" ? "Superado" : a.estado === "en_proceso" ? "En proceso" : "Pendiente"}
+                        </span>
+                      )}
+                    </div>
                     <div className="text-xs text-slate-500 mt-0.5">{a.motivo}</div>
                   </div>
                   <div className="flex gap-2 shrink-0">
