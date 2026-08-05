@@ -641,6 +641,7 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
 
   const cambiarNivelacion = async (estudianteId, periodo, estado) => {
     await api.setNivelacion(materiaId, estudianteId, periodo, estado || null);
+    await api.sincronizarEstadoActaNivelacion(estudianteId, materiaId, periodo, estado);
     cargar();
   };
 
@@ -794,9 +795,13 @@ export function VistaCalificaciones({ grados }) {
 
   const guardarNotasFinalesActual = async () => {
     const notas = await api.calcularNotasFinalesPeriodo(materiaActualId, gradoId, periodo, estudiantes, categorias, config);
+    const materiaActual = materias.find((m) => m.id === materiaActualId);
     for (const s of estudiantes) {
       const final = notas[s.id];
-      if (final !== null && final !== undefined) await api.guardarNotaFinal(materiaActualId, s.id, periodo, final);
+      if (final !== null && final !== undefined) {
+        await api.guardarNotaFinal(materiaActualId, s.id, periodo, final);
+        await api.crearActaNivelacionSiReprobado(materiaActualId, materiaActual?.nombre || "la materia", s.id, periodo, final, config);
+      }
     }
     alert("Notas finales del periodo guardadas en el boletín.");
   };
