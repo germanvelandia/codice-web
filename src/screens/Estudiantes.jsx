@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabaseClient";
 import { ACCIONES_RAPIDAS, ACADEMICO_POS, ACADEMICO_NEG, PILARES, CONVIVENCIAL_POS_EXTRA, CONVIVENCIAL_NEG, initials, nextLevel, reinoColor } from "../lib/gamification";
 import * as api from "../lib/api";
+import { ActasModal } from "./Actas";
 
 function LevelBar({ xp }) {
   const { level, next, pct } = nextLevel(xp);
@@ -99,6 +100,7 @@ function QuickGamify({ estudiante, onAplicado }) {
 }
 
 function TarjetaEstudiante({ estudiante, onQuitar, onAplicado, reinos, onCambiarReino, roles, onCambiarRol }) {
+  const [actasAbiertas, setActasAbiertas] = useState(false);
   const progreso = estudiante.progreso?.[0] || estudiante.progreso || { xp: 0, vida: 100, monedas: 0 };
   const reino = estudiante.reino_actual || estudiante.reino_original || "Sin grupo";
   const rolActualId = estudiante.roles_asignados?.[0]?.rol_id || estudiante.roles_asignados?.rol_id || "";
@@ -130,8 +132,12 @@ function TarjetaEstudiante({ estudiante, onQuitar, onAplicado, reinos, onCambiar
       <VidaBar vida={progreso.vida ?? 100} />
       <div className="flex justify-between items-center mt-3">
         <button onClick={() => onQuitar(estudiante.id)} className="text-xs text-slate-400 hover:text-rose-500">Quitar</button>
-        <QuickGamify estudiante={estudiante} onAplicado={onAplicado} />
+        <div className="flex gap-1.5">
+          <button onClick={() => setActasAbiertas(true)} className="text-xs px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">📋 Actas</button>
+          <QuickGamify estudiante={estudiante} onAplicado={onAplicado} />
+        </div>
       </div>
+      {actasAbiertas && <ActasModal estudiante={estudiante} onClose={() => setActasAbiertas(false)} />}
     </div>
   );
 }
