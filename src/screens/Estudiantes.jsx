@@ -512,13 +512,14 @@ export function VistaEstudiantes({ gradoId, reinoFiltro, onVolver }) {
   );
 }
 
-function ReinoEditorModal({ reino, onClose, onGuardado }) {
+function ReinoEditorModal({ reino, gradoId, otrosReinos, onClose, onGuardado }) {
   // reino puede ser un registro existente del catálogo, o { nombre, esNuevo: true }
   // para uno que todavía no está registrado (solo existe como texto en estudiantes).
   const [nombre, setNombre] = useState(reino.nombre || "");
   const [color, setColor] = useState(reino.color || reinoColor(reino.nombre || ""));
   const [logoUrl, setLogoUrl] = useState(reino.logo_url || null);
   const [guardando, setGuardando] = useState(false);
+  const [destinoRetiro, setDestinoRetiro] = useState("Sin grupo");
 
   const subirLogo = (file) => {
     if (file.size > 500 * 1024) {
@@ -556,8 +557,8 @@ function ReinoEditorModal({ reino, onClose, onGuardado }) {
     setGuardando(false);
   };
 
-  const eliminar = async () => {
-    if (!confirm(`¿Eliminar "${reino.nombre}" del catálogo? Los estudiantes que lo tengan asignado lo conservan como nombre de grupo, pero perderá su color y logo personalizados.`)) return;
+  const eliminarDelCatalogo = async () => {
+    if (!confirm(`¿Quitar "${reino.nombre}" del catálogo? Solo pierde su color y logo personalizados — sigue apareciendo en el listado si hay estudiantes con este grupo.`)) return;
     setGuardando(true);
     try {
       await api.eliminarReino(reino.id);
@@ -565,6 +566,20 @@ function ReinoEditorModal({ reino, onClose, onGuardado }) {
       onClose();
     } catch (e) {
       alert("Error al eliminar: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  const retirarGrupo = async () => {
+    if (!confirm(`¿Retirar el grupo "${reino.nombre}" por completo? Todos sus estudiantes pasarán a "${destinoRetiro}", y el grupo dejará de aparecer en cualquier listado.`)) return;
+    setGuardando(true);
+    try {
+      await api.moverEstudiantesReino(gradoId, reino.nombre, destinoRetiro);
+      if (reino.id) await api.eliminarReino(reino.id);
+      onGuardado();
+      onClose();
+    } catch (e) {
+      alert("Error al retirar el grupo: " + e.message);
     }
     setGuardando(false);
   };
@@ -610,11 +625,23 @@ function ReinoEditorModal({ reino, onClose, onGuardado }) {
         <button disabled={guardando} onClick={guardar} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
           {guardando ? "Guardando…" : "Guardar"}
         </button>
-        {reino.id && (
-          <button disabled={guardando} onClick={eliminar} className="w-full text-xs text-rose-500 py-2 mt-2 disabled:opacity-60">
-            🗑 Eliminar reino del catálogo
+
+        <div className="border-t border-slate-100 mt-4 pt-4">
+          <div className="text-xs font-semibold text-rose-600 mb-2">Retirar este grupo (ya no continúa)</div>
+          <label className="text-xs text-slate-500 block mb-1">Mover a sus estudiantes a:</label>
+          <select value={destinoRetiro} onChange={(e) => setDestinoRetiro(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none">
+            <option value="Sin grupo">Sin grupo</option>
+            {(otrosReinos || []).filter((r) => r !== reino.nombre).map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+          <button disabled={guardando} onClick={retirarGrupo} className="w-full text-xs font-semibold py-2 rounded-lg bg-rose-50 text-rose-600 disabled:opacity-60">
+            🗑 Retirar grupo y mover estudiantes
           </button>
-        )}
+          {reino.id && (
+            <button disabled={guardando} onClick={eliminarDelCatalogo} className="w-full text-[11px] text-slate-400 py-2 mt-1">
+              Solo quitar del catálogo (mantener estudiantes en este grupo)
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -686,7 +713,7 @@ export function VistaReinos({ gradoId, onElegirReino, onVerTodos, onVolver }) {
       )}
 
       {editando && (
-        <ReinoEditorModal reino={editando} onClose={() => setEditando(null)} onGuardado={cargar} />
+        <ReinoEditorModal reino={editando} gradoId={gradoId} otrosReinos={reinos.map(([nombre]) => nombre)} onClose={() => setEditando(null)} onGuardado={cargar} />
       )}
     </div>
   );
