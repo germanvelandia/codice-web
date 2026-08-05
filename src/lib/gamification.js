@@ -25,6 +25,25 @@ export function initials(nombre) {
   return nombre.split(" ").filter(Boolean).slice(0, 2).map((p) => p[0]).join("").toUpperCase();
 }
 
+// Ordena estudiantes por Apellidos y Nombres (alfabético), aunque el nombre esté
+// guardado como un solo texto. Asume que las últimas 2 palabras son los apellidos
+// (el patrón más común en Colombia: Nombre1 [Nombre2] Apellido1 Apellido2).
+// Con nombres de 2 palabras, asume Nombre Apellido.
+export function claveApellidoNombre(nombreCompleto) {
+  const partes = (nombreCompleto || "").trim().split(/\s+/).filter(Boolean);
+  if (partes.length <= 1) return nombreCompleto || "";
+  if (partes.length === 2) return `${partes[1]} ${partes[0]}`;
+  const apellidos = partes.slice(-2).join(" ");
+  const nombres = partes.slice(0, -2).join(" ");
+  return `${apellidos} ${nombres}`;
+}
+
+export function ordenarPorApellido(estudiantes) {
+  return [...estudiantes].sort((a, b) =>
+    claveApellidoNombre(a.nombre).localeCompare(claveApellidoNombre(b.nombre), "es", { sensitivity: "base" })
+  );
+}
+
 // Acciones rápidas de gamificación (positivas y negativas), con su categoría.
 // Set reducido usado como botones de acceso directo (⚡ Puntos rápidos).
 export const ACCIONES_RAPIDAS = [
