@@ -6,6 +6,19 @@ export async function asegurarGradosBase() {
   await supabase.from("grados").upsert(filas, { onConflict: "id", ignoreDuplicates: true });
 }
 
+// Se asegura de que exista una fila en `profesores` para el usuario ya autenticado.
+// Es necesario porque la inserción hecha justo al crear la cuenta puede fallar
+// silenciosamente si el correo todavía no estaba confirmado en ese momento.
+export async function asegurarProfesor() {
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData?.user) return;
+  const { error } = await supabase.from("profesores").upsert(
+    { id: userData.user.id, nombre: userData.user.email, email: userData.user.email },
+    { onConflict: "id", ignoreDuplicates: true }
+  );
+  if (error) console.error("No se pudo asegurar el perfil de docente:", error.message);
+}
+
 export async function fetchGrados() {
   const { data, error } = await supabase.from("grados").select("*").order("id");
   if (error) throw error;
