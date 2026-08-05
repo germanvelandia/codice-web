@@ -11,17 +11,44 @@ html, body, #root {
 }
 
 @media print {
+  @page {
+    size: letter portrait;
+    margin: 18mm 16mm 22mm 16mm;
+  }
+
+  html, body {
+    height: auto;
+  }
+
   body * {
     visibility: hidden;
   }
+
   .print-only, .print-only * {
     visibility: visible;
   }
+
   .print-only {
     display: block;
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
+    position: static;
+    width: auto;
+    margin: 0;
+  }
+
+  /* Pie de página repetido en cada hoja impresa, alineado abajo a la izquierda */
+  .print-footer {
+    display: block !important;
+    visibility: visible;
+    position: fixed;
+    left: 16mm;
+    bottom: 8mm;
+    font-size: 9px;
+    color: #64748b;
+    font-family: Georgia, "Times New Roman", serif;
+  }
+
+  .print-avoid-break {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 }
