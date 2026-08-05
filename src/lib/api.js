@@ -125,6 +125,12 @@ export async function eliminarActa(id) {
   if (error) throw error;
 }
 
+export async function fetchInstitucion() {
+  const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
+  if (error) throw error;
+  return data?.nombre || "Institución Educativa";
+}
+
 /* ==================== CALIFICACIONES ==================== */
 
 export async function fetchMaterias() {
