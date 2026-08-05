@@ -285,6 +285,103 @@ function CodigosModal({ estudiantes, onClose, onActualizado }) {
   );
 }
 
+function PlanillaBlancoModal({ estudiantes, gradoId, onClose }) {
+  const [institucion, setInstitucion] = useState({ nombre: "Institución Educativa", ciclo: "", anio: "", logo_url: null });
+  const [docente, setDocente] = useState("");
+  const [materia, setMateria] = useState("");
+  const [periodo, setPeriodo] = useState("");
+  const [numColumnas, setNumColumnas] = useState(5);
+  const [imprimiendo, setImprimiendo] = useState(false);
+
+  useEffect(() => {
+    api.fetchInstitucion().then(setInstitucion);
+    supabase.auth.getUser().then(({ data }) => setDocente(data?.user?.email || ""));
+  }, []);
+
+  useEffect(() => {
+    if (!imprimiendo) return;
+    const id = setTimeout(() => window.print(), 150);
+    const onAfter = () => setImprimiendo(false);
+    window.addEventListener("afterprint", onAfter);
+    return () => { clearTimeout(id); window.removeEventListener("afterprint", onAfter); };
+  }, [imprimiendo]);
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4 no-print" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-md shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">Imprimir planilla en blanco — Grado {gradoId}</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <label className="text-xs text-slate-500 block mb-1">Materia (opcional)</label>
+        <input value={materia} onChange={(e) => setMateria(e.target.value)} placeholder="Ej: Ética"
+          className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none" />
+        <label className="text-xs text-slate-500 block mb-1">Periodo (opcional)</label>
+        <input value={periodo} onChange={(e) => setPeriodo(e.target.value)} placeholder="Ej: Periodo 1"
+          className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none" />
+        <label className="text-xs text-slate-500 block mb-1">Columnas en blanco para notas</label>
+        <input type="number" min={1} max={10} value={numColumnas} onChange={(e) => setNumColumnas(parseInt(e.target.value || "1", 10))}
+          className="w-full text-sm rounded-lg px-3 py-2 mb-4 border border-slate-200 outline-none" />
+        <button onClick={() => setImprimiendo(true)} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white">
+          🖨️ Imprimir / PDF
+        </button>
+      </div>
+
+      {imprimiendo && (
+        <div className="print-only" style={{ maxWidth: 900, margin: "0 auto", padding: 28, fontFamily: "Georgia, serif", color: "#1e293b" }}>
+          <div style={{ textAlign: "center", marginBottom: 16, borderBottom: "2px solid #8B5CF6", paddingBottom: 10 }}>
+            {institucion.logo_url && (
+              <img src={institucion.logo_url} alt="Logo" style={{ maxHeight: 60, marginBottom: 6, display: "block", marginLeft: "auto", marginRight: "auto" }} />
+            )}
+            <div style={{ fontSize: 18, fontWeight: "bold" }}>{institucion.nombre}</div>
+            {(institucion.ciclo || institucion.anio) && (
+              <div style={{ fontSize: 11, color: "#64748b" }}>{institucion.ciclo}{institucion.ciclo && institucion.anio ? " — " : ""}{institucion.anio}</div>
+            )}
+            <div style={{ fontSize: 14, marginTop: 4 }}>Planilla de Calificaciones</div>
+          </div>
+          <table style={{ width: "100%", fontSize: 11, marginBottom: 14, borderCollapse: "collapse" }}>
+            <tbody>
+              <tr>
+                <td style={{ padding: 3, fontWeight: "bold" }}>Grado:</td><td style={{ padding: 3 }}>{gradoId}</td>
+                <td style={{ padding: 3, fontWeight: "bold" }}>Materia:</td><td style={{ padding: 3 }}>{materia || "—"}</td>
+              </tr>
+              <tr>
+                <td style={{ padding: 3, fontWeight: "bold" }}>Docente:</td><td style={{ padding: 3 }}>{docente || "—"}</td>
+                <td style={{ padding: 3, fontWeight: "bold" }}>Periodo:</td><td style={{ padding: 3 }}>{periodo || "—"}</td>
+              </tr>
+            </tbody>
+          </table>
+          <table style={{ width: "100%", fontSize: 11, borderCollapse: "collapse", border: "1px solid #cbd5e1" }}>
+            <thead>
+              <tr>
+                <th style={{ border: "1px solid #cbd5e1", padding: 6, width: 28 }}>#</th>
+                <th style={{ border: "1px solid #cbd5e1", padding: 6, textAlign: "left" }}>Estudiante</th>
+                {Array.from({ length: numColumnas }).map((_, i) => (
+                  <th key={i} style={{ border: "1px solid #cbd5e1", padding: 6, width: 60 }}>&nbsp;</th>
+                ))}
+                <th style={{ border: "1px solid #cbd5e1", padding: 6, width: 70 }}>Nota Final</th>
+              </tr>
+            </thead>
+            <tbody>
+              {estudiantes.map((s, i) => (
+                <tr key={s.id}>
+                  <td style={{ border: "1px solid #cbd5e1", padding: 6, textAlign: "center" }}>{i + 1}</td>
+                  <td style={{ border: "1px solid #cbd5e1", padding: 6 }}>{s.nombre}</td>
+                  {Array.from({ length: numColumnas }).map((_, j) => (
+                    <td key={j} style={{ border: "1px solid #cbd5e1", padding: 6 }}>&nbsp;</td>
+                  ))}
+                  <td style={{ border: "1px solid #cbd5e1", padding: 6 }}>&nbsp;</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div style={{ marginTop: 16, fontSize: 10, color: "#64748b" }}>Generado el {new Date().toLocaleDateString("es-CO")}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function VistaEstudiantes({ gradoId, reinoFiltro, onVolver }) {
   const [estudiantes, setEstudiantes] = useState([]);
   const [roles, setRoles] = useState([]);
@@ -294,6 +391,7 @@ export function VistaEstudiantes({ gradoId, reinoFiltro, onVolver }) {
   const [nuevoReino, setNuevoReino] = useState("Sin grupo");
   const [importarAbierto, setImportarAbierto] = useState(false);
   const [codigosAbierto, setCodigosAbierto] = useState(false);
+  const [planillaBlancoAbierta, setPlanillaBlancoAbierta] = useState(false);
 
   const cargar = async () => {
     setCargando(true);
@@ -357,6 +455,7 @@ export function VistaEstudiantes({ gradoId, reinoFiltro, onVolver }) {
           <div className="text-xs uppercase tracking-wide text-slate-400">Agregar estudiante</div>
           <div className="flex gap-2">
             <button onClick={() => setCodigosAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🔑 Ver códigos de acceso</button>
+            <button onClick={() => setPlanillaBlancoAbierta(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🖨️ Planilla en blanco</button>
             <button onClick={() => setImportarAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700">📥 Importar varios</button>
           </div>
         </div>
@@ -383,6 +482,9 @@ export function VistaEstudiantes({ gradoId, reinoFiltro, onVolver }) {
           onClose={() => setCodigosAbierto(false)}
           onActualizado={actualizarCodigoLocal}
         />
+      )}
+      {planillaBlancoAbierta && (
+        <PlanillaBlancoModal estudiantes={visibles} gradoId={gradoId} onClose={() => setPlanillaBlancoAbierta(false)} />
       )}
 
       <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar estudiante…"
