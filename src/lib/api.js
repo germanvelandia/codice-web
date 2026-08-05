@@ -18,6 +18,11 @@ export async function asegurarProfesor() {
   if (error) console.error("No se pudo asegurar el perfil de docente:", error.message);
 }
 
+export async function fetchUsuarioActualId() {
+  const { data } = await supabase.auth.getUser();
+  return data?.user?.id || null;
+}
+
 export async function fetchGrados() {
   const { data, error } = await supabase.from("grados").select("*").order("id");
   if (error) throw error;
@@ -239,7 +244,7 @@ export async function guardarInstitucion(campos) {
 /* ==================== CALIFICACIONES ==================== */
 
 export async function fetchMaterias() {
-  const { data, error } = await supabase.from("materias").select("*").order("nombre");
+  const { data, error } = await supabase.from("materias").select("*, profesores(nombre)").order("nombre");
   if (error) throw error;
   return data || [];
 }
@@ -447,35 +452,39 @@ export async function calcularNotasFinalesPeriodo(materiaId, gradoId, periodo, e
 }
 
 /* ---------------- Asistencia ---------------- */
-export async function fetchAsistenciaFecha(estudianteIds, fecha) {
+// materiaId: la materia/clase en la que se toma la asistencia. Usa null para
+// asistencia "general" (no asociada a una materia puntual).
+export async function fetchAsistenciaFecha(estudianteIds, fecha, materiaId = null) {
   if (estudianteIds.length === 0) return {};
-  const { data, error } = await supabase
-    .from("asistencia")
-    .select("*")
-    .eq("fecha", fecha)
-    .in("estudiante_id", estudianteIds);
+  let query = supabase.from("asistencia").select("*").eq("fecha", fecha).in("estudiante_id", estudianteIds);
+  query = materiaId ? query.eq("materia_id", materiaId) : query.is("materia_id", null);
+  const { data, error } = await query;
   if (error) throw error;
   const mapa = {};
   (data || []).forEach((f) => { mapa[f.estudiante_id] = f; });
   return mapa;
 }
 
-export async function marcarAsistencia(estudianteId, fecha, codigo, observacion) {
+export async function marcarAsistencia(estudianteId, fecha, codigo, observacion, materiaId = null) {
+  const { data: userData } = await supabase.auth.getUser();
   const { error } = await supabase.from("asistencia").upsert(
-    { estudiante_id: estudianteId, fecha, codigo, observacion: observacion || null },
-    { onConflict: "estudiante_id,fecha" }
+    { estudiante_id: estudianteId, fecha, codigo, observacion: observacion || null, materia_id: materiaId, docente_id: userData?.user?.id || null },
+    { onConflict: "estudiante_id,fecha,materia_id" }
   );
   if (error) throw error;
 }
 
-export async function quitarAsistencia(estudianteId, fecha) {
-  const { error } = await supabase.from("asistencia").delete().eq("estudiante_id", estudianteId).eq("fecha", fecha);
+export async function quitarAsistencia(estudianteId, fecha, materiaId = null) {
+  let query = supabase.from("asistencia").delete().eq("estudiante_id", estudianteId).eq("fecha", fecha);
+  query = materiaId ? query.eq("materia_id", materiaId) : query.is("materia_id", null);
+  const { error } = await query;
   if (error) throw error;
 }
 
-export async function marcarTodosPresentes(estudianteIds, fecha) {
-  const filas = estudianteIds.map((id) => ({ estudiante_id: id, fecha, codigo: "P" }));
-  const { error } = await supabase.from("asistencia").upsert(filas, { onConflict: "estudiante_id,fecha" });
+export async function marcarTodosPresentes(estudianteIds, fecha, materiaId = null) {
+  const { data: userData } = await supabase.auth.getUser();
+  const filas = estudianteIds.map((id) => ({ estudiante_id: id, fecha, codigo: "P", materia_id: materiaId, docente_id: userData?.user?.id || null }));
+  const { error } = await supabase.from("asistencia").upsert(filas, { onConflict: "estudiante_id,fecha,materia_id" });
   if (error) throw error;
 }
 
@@ -487,6 +496,29 @@ export async function fetchEstadisticasAsistencia(estudianteId) {
   (data || []).forEach((f) => { conteo[f.codigo] = (conteo[f.codigo] || 0) + 1; });
   const pct = total > 0 ? Math.round((conteo.P / total) * 100) : null;
   return { ...conteo, total, pct };
+}
+
+// Vista consolidada de la asistencia de un estudiante en TODAS sus materias
+// (de todos los docentes), para sustentar procesos convivenciales.
+export async function fetchAsistenciaConsolidadaEstudiante(estudianteId) {
+  const { data, error } = await supabase
+    .from("asistencia")
+    .select("*, materias(nombre, profesores(nombre))")
+    .eq("estudiante_id", estudianteId)
+    .order("fecha", { ascending: false });
+  if (error) throw error;
+
+  const porMateria = {};
+  const general = { P: 0, R: 0, FI: 0, FJ: 0, total: 0 };
+  (data || []).forEach((f) => {
+    const key = f.materia_id ? (f.materias?.nombre || `Materia ${f.materia_id}`) : "General (sin materia asociada)";
+    if (!porMateria[key]) porMateria[key] = { P: 0, R: 0, FI: 0, FJ: 0, total: 0, docente: f.materias?.profesores?.nombre || null };
+    porMateria[key][f.codigo] = (porMateria[key][f.codigo] || 0) + 1;
+    porMateria[key].total++;
+    general[f.codigo] = (general[f.codigo] || 0) + 1;
+    general.total++;
+  });
+  return { general, porMateria, registros: data || [] };
 }
 
 export async function registrarAccion(estudianteId, accion) {
