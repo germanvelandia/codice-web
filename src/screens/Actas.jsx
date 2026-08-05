@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import * as api from "../lib/api";
 import { FALTAS_MANUAL, NIVELACION_COMPROMISOS_DEFAULT } from "../lib/actasTemplates";
 
@@ -108,103 +109,164 @@ export function ActasModal({ estudiante, onClose }) {
         )}
       </div>
 
-      {actaImprimir && <ActaPrintView estudiante={estudiante} acta={actaImprimir} institucion={institucion} />}
+      {actaImprimir && <ActaPrintView estudiante={estudiante} acta={actaImprimir} institucion={institucion} actasRelacionadas={actas} />}
     </div>
   );
 }
 
-function ActaPrintView({ estudiante, acta, institucion }) {
-  const a = acta;
+function seccion(titulo, contenido, opts = {}) {
   return (
-    <div className="print-only" style={{ maxWidth: 800, margin: "0 auto", padding: 32, fontFamily: "Georgia, serif", color: "#1e293b" }}>
-      <div style={{ textAlign: "center", marginBottom: 20, borderBottom: "2px solid #8B5CF6", paddingBottom: 12 }}>
+    <div className="print-avoid-break" style={{ marginBottom: 16, background: opts.bg || "transparent", padding: opts.bg ? 12 : 0, borderRadius: opts.bg ? 6 : 0, borderLeft: opts.accent ? `3px solid ${opts.accent}` : "none" }}>
+      <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.6, color: opts.accent || "#1e293b" }}>{titulo}</div>
+      <div style={{ fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-line" }}>{contenido}</div>
+    </div>
+  );
+}
+
+function ActaPrintView({ estudiante, acta, institucion, actasRelacionadas }) {
+  const a = acta;
+  const [asistenciaLive, setAsistenciaLive] = useState(null);
+
+  // Si el acta no guardó un sustento de asistencia propio, se trae un consolidado
+  // actual (todas las materias, todos los docentes) para dejarlo por escrito igual.
+  useEffect(() => {
+    if (!a.asistencia_resumen) {
+      api.fetchAsistenciaConsolidadaEstudiante(estudiante.id).then(setAsistenciaLive).catch(() => {});
+    }
+  }, [estudiante.id, a.id]);
+
+  const seguimientos = (actasRelacionadas || [])
+    .filter((r) => r.id !== a.id)
+    .sort((x, y) => (x.fecha < y.fecha ? 1 : -1))
+    .slice(0, 4);
+
+  const folio = `CD-${String(a.id).padStart(5, "0")}`;
+
+  const contenido = (
+    <div
+      className="print-only"
+      style={{
+        maxWidth: "180mm",
+        margin: "0 auto",
+        padding: "0 0 14mm 0",
+        fontFamily: "'Georgia', 'Times New Roman', serif",
+        color: "#1e293b",
+      }}
+    >
+      {/* Encabezado institucional */}
+      <div className="print-avoid-break" style={{ textAlign: "center", marginBottom: 18, borderBottom: "2px solid #8B5CF6", paddingBottom: 10 }}>
         {institucion.logo_url && (
-          <img src={institucion.logo_url} alt="Logo" style={{ maxHeight: 70, marginBottom: 8, display: "block", marginLeft: "auto", marginRight: "auto" }} />
+          <img src={institucion.logo_url} alt="Logo" style={{ maxHeight: 64, marginBottom: 8, display: "block", marginLeft: "auto", marginRight: "auto" }} />
         )}
-        <div style={{ fontSize: 20, fontWeight: "bold" }}>{institucion.nombre}</div>
+        <div style={{ fontSize: 19, fontWeight: 700, letterSpacing: 0.3 }}>{institucion.nombre}</div>
         {(institucion.ciclo || institucion.anio) && (
-          <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
+          <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>
             {institucion.ciclo}{institucion.ciclo && institucion.anio ? " — " : ""}{institucion.anio}
           </div>
         )}
-        <div style={{ fontSize: 16, marginTop: 6 }}>Acta de Seguimiento — {a.tipo}</div>
+        <div style={{ fontSize: 15, marginTop: 8, fontStyle: "italic" }}>Acta de Seguimiento — {a.tipo}</div>
+        <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 3 }}>Folio {folio}</div>
       </div>
 
-      <table style={{ width: "100%", fontSize: 13, marginBottom: 16, borderCollapse: "collapse" }}>
+      {/* Datos generales */}
+      <table className="print-avoid-break" style={{ width: "100%", fontSize: 12.5, marginBottom: 18, borderCollapse: "collapse" }}>
         <tbody>
-          <tr><td style={{ padding: 4, fontWeight: "bold", width: 160 }}>Estudiante:</td><td style={{ padding: 4 }}>{estudiante.nombre}</td></tr>
-          <tr><td style={{ padding: 4, fontWeight: "bold" }}>Grado:</td><td style={{ padding: 4 }}>{estudiante.grado_id}</td></tr>
-          <tr><td style={{ padding: 4, fontWeight: "bold" }}>Grupo:</td><td style={{ padding: 4 }}>{estudiante.reino_actual || estudiante.reino_original}</td></tr>
-          <tr><td style={{ padding: 4, fontWeight: "bold" }}>Fecha:</td><td style={{ padding: 4 }}>{a.fecha}</td></tr>
-          {a.tipo_falta && (
-            <tr><td style={{ padding: 4, fontWeight: "bold" }}>Tipo de falta:</td><td style={{ padding: 4 }}>{a.tipo_falta} ({a.articulo}) — Plazo de respuesta: {a.plazo_dias} días hábiles</td></tr>
+          <tr>
+            <td style={{ padding: "3px 6px 3px 0", fontWeight: 700, width: 110 }}>Estudiante:</td><td style={{ padding: "3px 0" }}>{estudiante.nombre}</td>
+            <td style={{ padding: "3px 6px 3px 24px", fontWeight: 700, width: 70 }}>Grado:</td><td style={{ padding: "3px 0" }}>{estudiante.grado_id}</td>
+          </tr>
+          <tr>
+            <td style={{ padding: "3px 6px 3px 0", fontWeight: 700 }}>Grupo:</td><td style={{ padding: "3px 0" }}>{estudiante.reino_actual || estudiante.reino_original || "—"}</td>
+            <td style={{ padding: "3px 6px 3px 24px", fontWeight: 700 }}>Fecha:</td><td style={{ padding: "3px 0" }}>{a.fecha}</td>
+          </tr>
+          {a.estado && a.tipo === "Nivelación" && (
+            <tr>
+              <td style={{ padding: "3px 6px 3px 0", fontWeight: 700 }}>Estado:</td>
+              <td colSpan={3} style={{ padding: "3px 0" }}>
+                {a.estado === "superado" ? "Superado" : a.estado === "en_proceso" ? "En proceso" : "Pendiente"}
+              </td>
+            </tr>
           )}
         </tbody>
       </table>
 
-      <div style={{ marginBottom: 14 }}>
-        <div style={{ fontWeight: "bold", fontSize: 13, marginBottom: 4 }}>Motivo</div>
-        <div style={{ fontSize: 13 }}>{a.motivo}</div>
-      </div>
+      {seccion("Motivo", a.motivo)}
+      {a.descripcion && seccion("Observaciones / descripción de la situación", a.descripcion)}
 
-      {a.descripcion && (
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontWeight: "bold", fontSize: 13, marginBottom: 4 }}>Descripción de la situación</div>
-          <div style={{ fontSize: 13 }}>{a.descripcion}</div>
+      {/* Proceso convivencial */}
+      {a.tipo_falta && seccion(
+        `Proceso convivencial — Falta ${a.tipo_falta} (${a.articulo})`,
+        `Plazo de respuesta: ${a.plazo_dias} días hábiles.` + (a.compromisos_convivenciales ? `\n\nCompromisos convivenciales:\n${a.compromisos_convivenciales}` : ""),
+        { bg: "#FFF3F8", accent: "#DB2777" }
+      )}
+      {a.implicaciones_legales && seccion("Implicaciones legales", a.implicaciones_legales, { bg: "#FEF3C7", accent: "#B45309" })}
+
+      {/* Proceso académico */}
+      {a.compromisos_academicos && seccion(
+        a.tipo === "Nivelación" ? "Proceso académico — plan de nivelación" : "Compromisos académicos",
+        a.compromisos_academicos,
+        { bg: "#F5F3FF", accent: "#7C3AED" }
+      )}
+
+      {a.compromisos && seccion("Compromisos", a.compromisos)}
+
+      {/* Asistencia */}
+      {a.asistencia_resumen ? (
+        seccion(
+          "Asistencia (sustento registrado con el acta)",
+          `Presentes: ${a.asistencia_resumen.P} · Retardos: ${a.asistencia_resumen.R} · Faltas injustificadas: ${a.asistencia_resumen.FI} · Faltas justificadas: ${a.asistencia_resumen.FJ} · % Asistencia: ${a.asistencia_resumen.pct ?? "—"}%`,
+          { bg: "#EFF6FF", accent: "#2563EB" }
+        )
+      ) : asistenciaLive ? (
+        seccion(
+          "Asistencia (consolidado actual, todas las materias)",
+          `Presentes: ${asistenciaLive.general.P} · Retardos: ${asistenciaLive.general.R} · Faltas injustificadas: ${asistenciaLive.general.FI} · Faltas justificadas: ${asistenciaLive.general.FJ}`,
+          { bg: "#EFF6FF", accent: "#2563EB" }
+        )
+      ) : null}
+
+      {/* Seguimientos relacionados */}
+      {seguimientos.length > 0 && (
+        <div className="print-avoid-break" style={{ marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.6 }}>Seguimientos anteriores del estudiante</div>
+          <table style={{ width: "100%", fontSize: 11.5, borderCollapse: "collapse" }}>
+            <tbody>
+              {seguimientos.map((s) => (
+                <tr key={s.id} style={{ borderTop: "1px solid #E2E8F0" }}>
+                  <td style={{ padding: "4px 6px 4px 0", whiteSpace: "nowrap" }}>{s.fecha}</td>
+                  <td style={{ padding: "4px 6px", whiteSpace: "nowrap", fontWeight: 700 }}>{s.tipo}</td>
+                  <td style={{ padding: "4px 0", color: "#475569" }}>{s.motivo}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
-      {a.implicaciones_legales && (
-        <div style={{ marginBottom: 14, background: "#FEF3C7", padding: 10, borderRadius: 6 }}>
-          <div style={{ fontWeight: "bold", fontSize: 13, marginBottom: 4 }}>Implicaciones legales</div>
-          <div style={{ fontSize: 13 }}>{a.implicaciones_legales}</div>
-        </div>
-      )}
-
-      {a.compromisos_academicos && (
-        <div style={{ marginBottom: 14, background: "#F5F3FF", padding: 10, borderRadius: 6 }}>
-          <div style={{ fontWeight: "bold", fontSize: 13, marginBottom: 4 }}>Compromisos académicos</div>
-          <div style={{ fontSize: 13 }}>{a.compromisos_academicos}</div>
-        </div>
-      )}
-
-      {a.compromisos_convivenciales && (
-        <div style={{ marginBottom: 14, background: "#FFF3F8", padding: 10, borderRadius: 6 }}>
-          <div style={{ fontWeight: "bold", fontSize: 13, marginBottom: 4 }}>Compromisos convivenciales</div>
-          <div style={{ fontSize: 13 }}>{a.compromisos_convivenciales}</div>
-        </div>
-      )}
-
-      {a.compromisos && (
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontWeight: "bold", fontSize: 13, marginBottom: 4 }}>Compromisos</div>
-          <div style={{ fontSize: 13 }}>{a.compromisos}</div>
-        </div>
-      )}
-
-      {a.asistencia_resumen && (
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontWeight: "bold", fontSize: 13, marginBottom: 4 }}>Sustento de asistencia</div>
-          <div style={{ fontSize: 13 }}>
-            Presentes: {a.asistencia_resumen.P} · Retardos: {a.asistencia_resumen.R} · Faltas injustificadas: {a.asistencia_resumen.FI} · Faltas justificadas: {a.asistencia_resumen.FJ} · % Asistencia: {a.asistencia_resumen.pct}%
-          </div>
-        </div>
-      )}
-
-      <div style={{ marginTop: 50, display: "flex", justifyContent: "space-between" }}>
+      {/* Firmas */}
+      <div className="print-avoid-break" style={{ marginTop: 46, display: "flex", justifyContent: "space-between" }}>
         {["Docente", "Estudiante", "Acudiente"].map((f) => (
           <div key={f} style={{ textAlign: "center", width: "30%" }}>
             <div style={{ borderTop: "1px solid #1e293b", marginBottom: 4 }} />
-            <div style={{ fontSize: 12 }}>{f}</div>
+            <div style={{ fontSize: 11 }}>{f}</div>
           </div>
         ))}
       </div>
 
-      <div style={{ marginTop: 24, fontSize: 10, color: "#64748b", textAlign: "right" }}>
+      <div style={{ marginTop: 20, fontSize: 9.5, color: "#64748b", textAlign: "right" }}>
         Registrado por: {a.profesores?.nombre || "—"} · Generado el {new Date().toLocaleDateString("es-CO")}
+      </div>
+
+      {/* Pie de página repetido en cada hoja (abajo a la izquierda) */}
+      <div className="print-footer">
+        {institucion.nombre} · Folio {folio} · {estudiante.nombre} · Generado {new Date().toLocaleDateString("es-CO")}
       </div>
     </div>
   );
+
+  // Se renderiza directamente sobre <body> (fuera del modal) para que la
+  // impresión no herede el centrado/flex del overlay y la hoja quede completa.
+  return createPortal(contenido, document.body);
 }
 
 function NuevaActaForm({ estudianteId, onCancelar, onGuardada }) {
