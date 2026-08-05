@@ -68,7 +68,7 @@ export async function cambiarReino(id, reino_actual) {
 
 /* ---------------- Acceso de estudiantes (código, sin cuenta) ---------------- */
 function generarCodigo() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sin O/0/I/1 para evitar confusiones
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
 }
 
@@ -80,6 +80,15 @@ export async function generarCodigoAcceso(estudianteId) {
     if (error.code !== "23505") throw error;
   }
   throw new Error("No se pudo generar un código único, intenta de nuevo.");
+}
+
+export async function generarCodigosMasivo(estudiantes) {
+  const resultados = {};
+  for (const s of estudiantes) {
+    if (s.codigo_acceso) { resultados[s.id] = s.codigo_acceso; continue; }
+    resultados[s.id] = await generarCodigoAcceso(s.id);
+  }
+  return resultados;
 }
 
 export async function consultarPortalEstudiante(codigo) {
@@ -148,7 +157,12 @@ export async function eliminarActa(id) {
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
-  return data?.nombre || "Institución Educativa";
+  return data || { id: 1, nombre: "Institución Educativa", ciclo: "", anio: "", logo_url: null };
+}
+
+export async function guardarInstitucion(campos) {
+  const { error } = await supabase.from("institucion").upsert({ id: 1, ...campos }, { onConflict: "id" });
+  if (error) throw error;
 }
 
 /* ==================== CALIFICACIONES ==================== */
