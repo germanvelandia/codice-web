@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "./lib/supabaseClient";
 import * as api from "./lib/api";
+import { nextLevel } from "./lib/gamification";
 import { VistaGrados, VistaReinos, VistaEstudiantes } from "./screens/Estudiantes";
 import { VistaAsistencia } from "./screens/Asistencia";
 import { VistaRuleta, VistaTemporizador, VistaHerramientas } from "./screens/Herramientas";
@@ -22,13 +23,103 @@ export default function App() {
   }, []);
 
   if (loading) return <Centered>Cargando…</Centered>;
-  return session ? <Panel session={session} /> : <LoginScreen />;
+  return session ? <Panel session={session} /> : <AccessGate />;
 }
 
 function Centered({ children }) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-violet-50 text-slate-700">
       {children}
+    </div>
+  );
+}
+
+function AccessGate() {
+  const [modo, setModo] = useState("docente");
+  return (
+    <Centered>
+      <div className="w-full max-w-sm">
+        <h1 className="text-2xl font-bold text-violet-600 text-center mb-1">CÓDICE</h1>
+        <div className="flex gap-1 mb-4 rounded-full bg-white p-1 shadow-sm">
+          <button onClick={() => setModo("docente")} className={`flex-1 text-xs py-1.5 rounded-full ${modo === "docente" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Soy docente</button>
+          <button onClick={() => setModo("estudiante")} className={`flex-1 text-xs py-1.5 rounded-full ${modo === "estudiante" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Soy estudiante</button>
+        </div>
+        {modo === "docente" ? <LoginScreen /> : <PortalEstudiante />}
+      </div>
+    </Centered>
+  );
+}
+
+function PortalEstudiante() {
+  const [codigo, setCodigo] = useState("");
+  const [datos, setDatos] = useState(null);
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState("");
+
+  const consultar = async () => {
+    if (!codigo.trim()) return;
+    setCargando(true);
+    setError("");
+    try {
+      const res = await api.consultarPortalEstudiante(codigo);
+      if (!res) { setError("Código no encontrado. Verifica con tu docente."); setDatos(null); }
+      else setDatos(res);
+    } catch (e) {
+      setError("Ocurrió un error: " + e.message);
+    }
+    setCargando(false);
+  };
+
+  if (datos) {
+    const { level, next, pct } = nextLevel(datos.xp || 0);
+    const totalAsis = Number(datos.total_asistencia) || 0;
+    const pctAsis = totalAsis > 0 ? Math.round((Number(datos.presentes) / totalAsis) * 100) : null;
+    return (
+      <div className="bg-white rounded-2xl shadow-lg p-6">
+        <div className="text-center mb-4">
+          <div className="text-lg font-bold text-slate-800">{datos.nombre}</div>
+          <div className="text-xs text-slate-400">Grado {datos.grado_id} · {datos.grupo}</div>
+        </div>
+        <div className="mb-3">
+          <div className="flex justify-between text-xs text-slate-500 mb-1">
+            <span className="font-semibold text-violet-600">{level.name}</span>
+            <span>{datos.xp}{next ? ` / ${next.min} XP` : " XP · nivel máximo"}</span>
+          </div>
+          <div className="h-2.5 rounded-full bg-violet-100 overflow-hidden">
+            <div className="h-full rounded-full bg-gradient-to-r from-violet-400 to-violet-600" style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-2 mb-4">
+          <div className="bg-emerald-50 rounded-xl p-2 text-center">
+            <div className="text-sm font-bold text-emerald-600">{datos.vida}</div>
+            <div className="text-[10px] text-slate-400">Vida</div>
+          </div>
+          <div className="bg-amber-50 rounded-xl p-2 text-center">
+            <div className="text-sm font-bold text-amber-600">{datos.monedas}</div>
+            <div className="text-[10px] text-slate-400">Monedas</div>
+          </div>
+          <div className="bg-blue-50 rounded-xl p-2 text-center">
+            <div className="text-sm font-bold text-blue-600">{pctAsis ?? "—"}{pctAsis !== null && "%"}</div>
+            <div className="text-[10px] text-slate-400">Asistencia</div>
+          </div>
+        </div>
+        <div className="text-xs text-slate-500 mb-4">
+          Presentes: {datos.presentes} · Retardos: {datos.retardos} · Faltas injustificadas: {datos.faltas_injustificadas} · Faltas justificadas: {datos.faltas_justificadas}
+        </div>
+        <button onClick={() => { setDatos(null); setCodigo(""); }} className="w-full text-xs text-violet-500">← Consultar otro código</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-2xl shadow-lg p-6">
+      <p className="text-sm text-slate-500 text-center mb-4">Ingresa el código de acceso que te dio tu docente para ver tu progreso.</p>
+      <input value={codigo} onChange={(e) => setCodigo(e.target.value.toUpperCase())} placeholder="Ej: AB3D9K" maxLength={6}
+        className="w-full text-center text-lg font-mono font-bold tracking-widest rounded-lg px-3 py-3 mb-3 border border-slate-200 outline-none" />
+      {error && <p className="text-xs text-rose-500 mb-2 text-center">{error}</p>}
+      <button disabled={cargando} onClick={consultar} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+        {cargando ? "Consultando…" : "Ver mi progreso"}
+      </button>
     </div>
   );
 }
@@ -68,37 +159,34 @@ function LoginScreen() {
   };
 
   return (
-    <Centered>
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-lg p-6">
-        <h1 className="text-2xl font-bold text-violet-600 text-center mb-1">CÓDICE</h1>
-        <p className="text-sm text-slate-500 text-center mb-5">Acceso de docentes</p>
+    <div className="bg-white rounded-2xl shadow-lg p-6">
+      <p className="text-sm text-slate-500 text-center mb-5">Acceso de docentes</p>
 
-        <div className="flex gap-1 mb-4 rounded-full bg-violet-50 p-1">
-          <button onClick={() => setModo("entrar")} className={`flex-1 text-xs py-1.5 rounded-full ${modo === "entrar" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Iniciar sesión</button>
-          <button onClick={() => setModo("crear")} className={`flex-1 text-xs py-1.5 rounded-full ${modo === "crear" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Crear cuenta</button>
-        </div>
-
-        {modo === "crear" && (
-          <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Tu nombre completo"
-            className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none" />
-        )}
-        <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Correo" type="email"
-          className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none" />
-        <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Contraseña" type="password"
-          className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
-
-        {mensaje && <p className="text-xs text-rose-500 mb-2">{mensaje}</p>}
-
-        <button disabled={cargando} onClick={modo === "entrar" ? entrar : crearCuenta}
-          className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
-          {cargando ? "Un momento…" : modo === "entrar" ? "Entrar" : "Crear cuenta"}
-        </button>
-
-        {modo === "entrar" && (
-          <button onClick={recuperar} className="w-full text-xs text-violet-500 mt-3">¿Olvidaste tu contraseña?</button>
-        )}
+      <div className="flex gap-1 mb-4 rounded-full bg-violet-50 p-1">
+        <button onClick={() => setModo("entrar")} className={`flex-1 text-xs py-1.5 rounded-full ${modo === "entrar" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Iniciar sesión</button>
+        <button onClick={() => setModo("crear")} className={`flex-1 text-xs py-1.5 rounded-full ${modo === "crear" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Crear cuenta</button>
       </div>
-    </Centered>
+
+      {modo === "crear" && (
+        <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Tu nombre completo"
+          className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none" />
+      )}
+      <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Correo" type="email"
+        className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none" />
+      <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Contraseña" type="password"
+        className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
+
+      {mensaje && <p className="text-xs text-rose-500 mb-2">{mensaje}</p>}
+
+      <button disabled={cargando} onClick={modo === "entrar" ? entrar : crearCuenta}
+        className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+        {cargando ? "Un momento…" : modo === "entrar" ? "Entrar" : "Crear cuenta"}
+      </button>
+
+      {modo === "entrar" && (
+        <button onClick={recuperar} className="w-full text-xs text-violet-500 mt-3">¿Olvidaste tu contraseña?</button>
+      )}
+    </div>
   );
 }
 
