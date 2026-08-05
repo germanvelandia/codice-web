@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabaseClient";
-import { ACCIONES_RAPIDAS, ACADEMICO_POS, ACADEMICO_NEG, PILARES, CONVIVENCIAL_POS_EXTRA, CONVIVENCIAL_NEG, initials, nextLevel, reinoColor } from "../lib/gamification";
+import { ACCIONES_RAPIDAS, ACADEMICO_POS, ACADEMICO_NEG, PILARES, CONVIVENCIAL_POS_EXTRA, CONVIVENCIAL_NEG, initials, nextLevel, reinoColor, reinoInfo, REINO_COLORS } from "../lib/gamification";
 import * as api from "../lib/api";
 import { ActasModal } from "./Actas";
 
@@ -99,12 +99,13 @@ function QuickGamify({ estudiante, onAplicado }) {
   );
 }
 
-function TarjetaEstudiante({ estudiante, onQuitar, onAplicado, reinos, onCambiarReino, roles, onCambiarRol, onCodigoGenerado }) {
+function TarjetaEstudiante({ estudiante, onQuitar, onAplicado, reinos, catalogoReinos, onCambiarReino, roles, onCambiarRol, onCodigoGenerado }) {
   const [actasAbiertas, setActasAbiertas] = useState(false);
   const [generando, setGenerando] = useState(false);
   const codigo = estudiante.codigo_acceso || null;
   const progreso = estudiante.progreso?.[0] || estudiante.progreso || { xp: 0, vida: 100, monedas: 0 };
   const reino = estudiante.reino_actual || estudiante.reino_original || "Sin grupo";
+  const infoReino = reinoInfo(reino, catalogoReinos);
   const rolActualId = estudiante.roles_asignados?.[0]?.rol_id || estudiante.roles_asignados?.rol_id || "";
 
   const generarCodigo = async () => {
@@ -121,10 +122,14 @@ function TarjetaEstudiante({ estudiante, onQuitar, onAplicado, reinos, onCambiar
   return (
     <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
       <div className="flex items-start gap-3 mb-2">
-        <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
-          style={{ background: `${reinoColor(reino)}22`, color: reinoColor(reino) }}>
-          {initials(estudiante.nombre)}
-        </div>
+        {infoReino.logo_url ? (
+          <img src={infoReino.logo_url} alt="" className="w-10 h-10 object-contain rounded-full shrink-0 border border-slate-100" />
+        ) : (
+          <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
+            style={{ background: `${infoReino.color}22`, color: infoReino.color }}>
+            {initials(estudiante.nombre)}
+          </div>
+        )}
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold text-slate-800 truncate">{estudiante.nombre}</div>
           <div className="flex items-center gap-1 text-xs text-slate-400">
@@ -385,6 +390,7 @@ function PlanillaBlancoModal({ estudiantes, gradoId, onClose }) {
 export function VistaEstudiantes({ gradoId, reinoFiltro, onVolver }) {
   const [estudiantes, setEstudiantes] = useState([]);
   const [roles, setRoles] = useState([]);
+  const [catalogoReinos, setCatalogoReinos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [query, setQuery] = useState("");
   const [nuevoNombre, setNuevoNombre] = useState("");
@@ -395,9 +401,10 @@ export function VistaEstudiantes({ gradoId, reinoFiltro, onVolver }) {
 
   const cargar = async () => {
     setCargando(true);
-    const [data, rolesData] = await Promise.all([api.fetchEstudiantesPorGrado(gradoId), api.fetchRoles()]);
+    const [data, rolesData, reinosData] = await Promise.all([api.fetchEstudiantesPorGrado(gradoId), api.fetchRoles(), api.fetchReinos()]);
     setEstudiantes(data);
     setRoles(rolesData);
+    setCatalogoReinos(reinosData);
     setCargando(false);
   };
   useEffect(() => { cargar(); }, [gradoId]);
@@ -497,7 +504,7 @@ export function VistaEstudiantes({ gradoId, reinoFiltro, onVolver }) {
       ) : (
         <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
           {visibles.map((s) => (
-            <TarjetaEstudiante key={s.id} estudiante={s} reinos={reinos} onQuitar={quitar} onCambiarReino={cambiarReino} onAplicado={actualizarProgresoLocal} roles={roles} onCambiarRol={cambiarRol} onCodigoGenerado={actualizarCodigoLocal} />
+            <TarjetaEstudiante key={s.id} estudiante={s} reinos={reinos} catalogoReinos={catalogoReinos} onQuitar={quitar} onCambiarReino={cambiarReino} onAplicado={actualizarProgresoLocal} roles={roles} onCambiarRol={cambiarRol} onCodigoGenerado={actualizarCodigoLocal} />
           ))}
         </div>
       )}
@@ -505,13 +512,111 @@ export function VistaEstudiantes({ gradoId, reinoFiltro, onVolver }) {
   );
 }
 
+function ReinoEditorModal({ reino, onClose, onGuardado }) {
+  // reino puede ser un registro existente del catálogo, o { nombre, esNuevo: true }
+  // para uno que todavía no está registrado (solo existe como texto en estudiantes).
+  const [nombre, setNombre] = useState(reino.nombre || "");
+  const [color, setColor] = useState(reino.color || reinoColor(reino.nombre || ""));
+  const [logoUrl, setLogoUrl] = useState(reino.logo_url || null);
+  const [guardando, setGuardando] = useState(false);
+
+  const subirLogo = (file) => {
+    if (file.size > 500 * 1024) {
+      alert("La imagen es muy grande. Usa un logo pequeño (menos de 500 KB).");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => setLogoUrl(e.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  const guardar = async () => {
+    if (!nombre.trim()) { alert("Escribe un nombre para el reino."); return; }
+    setGuardando(true);
+    try {
+      if (reino.id) {
+        // Ya existe en el catálogo: renombrar (en cascada) si cambió, y guardar color/logo
+        if (nombre.trim() !== reino.nombre) {
+          await api.renombrarReino(reino.id, reino.nombre, nombre.trim());
+        }
+        await api.guardarReino(reino.id, { color, logo_url: logoUrl });
+      } else {
+        // Todavía no está en el catálogo (era solo texto en estudiantes)
+        const nuevo = await api.crearReino(nombre.trim(), color);
+        await api.guardarReino(nuevo.id, { logo_url: logoUrl });
+        if (nombre.trim() !== reino.nombre) {
+          await api.renombrarReino(nuevo.id, reino.nombre, nombre.trim());
+        }
+      }
+      onGuardado();
+      onClose();
+    } catch (e) {
+      alert("Error al guardar: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">{reino.id ? "Editar reino" : "Registrar reino"}</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+
+        <label className="text-xs text-slate-500 block mb-1">Nombre del reino</label>
+        <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej: Reino del Fuego"
+          className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
+        {reino.id && nombre.trim() !== reino.nombre && (
+          <p className="text-[11px] text-amber-600 -mt-2 mb-3">Al guardar, se renombrará en todos los estudiantes que pertenezcan a este reino.</p>
+        )}
+
+        <label className="text-xs text-slate-500 block mb-1">Color</label>
+        <div className="flex flex-wrap gap-2 mb-2">
+          {REINO_COLORS.map((c) => (
+            <button key={c} onClick={() => setColor(c)}
+              className="w-7 h-7 rounded-full border-2"
+              style={{ background: c, borderColor: color === c ? "#1e293b" : "transparent" }} />
+          ))}
+        </div>
+        <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="w-full h-9 rounded-lg border border-slate-200 mb-4" />
+
+        <label className="text-xs text-slate-500 block mb-1">Logo (opcional)</label>
+        <div className="flex items-center gap-3 mb-4">
+          {logoUrl ? (
+            <img src={logoUrl} alt="Logo" className="h-14 w-14 object-contain rounded-lg border border-slate-200" />
+          ) : (
+            <div className="h-14 w-14 rounded-lg border border-dashed border-slate-200 flex items-center justify-center text-xs text-slate-400">Sin logo</div>
+          )}
+          <div className="flex flex-col gap-1">
+            <input type="file" accept="image/*" onChange={(e) => { if (e.target.files[0]) subirLogo(e.target.files[0]); }} className="text-xs" />
+            {logoUrl && <button onClick={() => setLogoUrl(null)} className="text-xs text-rose-500 text-left">Quitar logo</button>}
+          </div>
+        </div>
+
+        <button disabled={guardando} onClick={guardar} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+          {guardando ? "Guardando…" : "Guardar"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function VistaReinos({ gradoId, onElegirReino, onVerTodos, onVolver }) {
   const [estudiantes, setEstudiantes] = useState([]);
+  const [catalogo, setCatalogo] = useState([]);
   const [cargando, setCargando] = useState(true);
+  const [editando, setEditando] = useState(null); // reino (del catálogo o { nombre, esNuevo }) que se está editando
 
-  useEffect(() => {
-    api.fetchEstudiantesPorGrado(gradoId).then((data) => { setEstudiantes(data); setCargando(false); });
-  }, [gradoId]);
+  const cargar = () => {
+    setCargando(true);
+    Promise.all([api.fetchEstudiantesPorGrado(gradoId), api.fetchReinos()]).then(([est, cat]) => {
+      setEstudiantes(est);
+      setCatalogo(cat);
+      setCargando(false);
+    });
+  };
+  useEffect(() => { cargar(); }, [gradoId]);
 
   const reinos = useMemo(() => {
     const mapa = {};
@@ -522,12 +627,20 @@ export function VistaReinos({ gradoId, onElegirReino, onVerTodos, onVolver }) {
     return Object.entries(mapa);
   }, [estudiantes]);
 
+  const abrirEditor = (nombre) => {
+    const existente = catalogo.find((r) => r.nombre === nombre);
+    setEditando(existente || { nombre });
+  };
+
   return (
     <div>
       <button onClick={onVolver} className="text-sm text-violet-500 mb-3">← Grados</button>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <h2 className="text-xl font-bold text-slate-800">Grado {gradoId} — Reinos</h2>
-        <button onClick={onVerTodos} className="text-sm text-violet-500 font-semibold">Ver listado completo →</button>
+        <div className="flex gap-2">
+          <button onClick={() => setEditando({ nombre: "" })} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700">+ Nuevo reino</button>
+          <button onClick={onVerTodos} className="text-sm text-violet-500 font-semibold">Ver listado completo →</button>
+        </div>
       </div>
       {cargando ? (
         <div className="text-sm text-slate-400">Cargando…</div>
@@ -535,14 +648,27 @@ export function VistaReinos({ gradoId, onElegirReino, onVerTodos, onVolver }) {
         <div className="text-sm text-slate-400">Este grado no tiene estudiantes todavía.</div>
       ) : (
         <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
-          {reinos.map(([nombre, n]) => (
-            <button key={nombre} onClick={() => onElegirReino(nombre)} className="text-left bg-white rounded-2xl p-4 shadow-sm border-t-4"
-              style={{ borderTopColor: reinoColor(nombre) }}>
-              <div className="font-semibold text-slate-800">{nombre}</div>
-              <div className="text-xs text-slate-400 mt-1">{n} estudiante{n === 1 ? "" : "s"}</div>
-            </button>
-          ))}
+          {reinos.map(([nombre, n]) => {
+            const info = reinoInfo(nombre, catalogo);
+            return (
+              <div key={nombre} className="relative bg-white rounded-2xl p-4 shadow-sm border-t-4" style={{ borderTopColor: info.color }}>
+                <button onClick={() => abrirEditor(nombre)} title="Editar reino"
+                  className="absolute top-2 right-2 text-xs w-6 h-6 rounded-full bg-slate-50 text-slate-400 hover:text-violet-600">✏️</button>
+                <button onClick={() => onElegirReino(nombre)} className="text-left w-full">
+                  <div className="flex items-center gap-2">
+                    {info.logo_url && <img src={info.logo_url} alt="" className="w-8 h-8 object-contain rounded" />}
+                    <div className="font-semibold text-slate-800">{nombre}</div>
+                  </div>
+                  <div className="text-xs text-slate-400 mt-1">{n} estudiante{n === 1 ? "" : "s"}</div>
+                </button>
+              </div>
+            );
+          })}
         </div>
+      )}
+
+      {editando && (
+        <ReinoEditorModal reino={editando} onClose={() => setEditando(null)} onGuardado={cargar} />
       )}
     </div>
   );
@@ -593,4 +719,4 @@ export function VistaGrados({ onElegirGrado }) {
       )}
     </div>
   );
-} 
+}
