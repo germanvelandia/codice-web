@@ -2,7 +2,7 @@
 
 export const CONFIG_DEFAULT = {
   escala_min: 1.0,
-  nota_minima: 3.0,
+  nota_minima: 3.5,
   nota_maxima: 5.0,
   sistema_periodos: "bimestre",
   cantidad_periodos: 4,
@@ -15,12 +15,12 @@ export function periodosDe(config) {
 
 export function bandaDesempeno(nota, config) {
   if (nota === null || nota === undefined || isNaN(nota)) return { key: "sinnota", label: "Sin nota", color: "#94A3B8" };
-  const { nota_minima, nota_maxima } = config;
-  if (nota < nota_minima) return { key: "bajo", label: "Bajo", color: "#EF4444" };
-  const rango = nota_maxima - nota_minima;
-  if (nota < nota_minima + rango * 0.33) return { key: "basico", label: "Básico", color: "#F59E0B" };
-  if (nota < nota_minima + rango * 0.66) return { key: "alto", label: "Alto", color: "#22C55E" };
-  return { key: "superior", label: "Superior", color: "#16A34A" };
+  // Escala fija 1.0–5.0 (colores según el desempeño, independiente de la configuración de la materia):
+  // 1 – 3.4 rojo (Bajo) · 3.5 – 3.9 amarillo (Básico) · 4.0 – 4.4 azul (Alto) · 4.5 – 5.0 verde (Superior)
+  if (nota < 3.5) return { key: "bajo", label: "Bajo", color: "#EF4444" };
+  if (nota < 4.0) return { key: "basico", label: "Básico", color: "#F59E0B" };
+  if (nota < 4.5) return { key: "alto", label: "Alto", color: "#3B82F6" };
+  return { key: "superior", label: "Superior", color: "#22C55E" };
 }
 
 export function round1(n) { return Math.round(n * 10) / 10; }
