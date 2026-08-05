@@ -154,6 +154,76 @@ export async function eliminarActa(id) {
   if (error) throw error;
 }
 
+export async function editarActa(id, cambios) {
+  const { error } = await supabase.from("actas").update(cambios).eq("id", id);
+  if (error) throw error;
+}
+
+/* ---------------- Acta automática por pérdida de materia ---------------- */
+export async function crearActaNivelacionSiReprobado(materiaId, materiaNombre, estudianteId, periodo, notaFinal, config) {
+  if (notaFinal === null || notaFinal === undefined) return null;
+  const reprobado = notaFinal < config.nota_minima;
+
+  const { data: existente, error: eBusqueda } = await supabase
+    .from("actas")
+    .select("id, estado")
+    .eq("estudiante_id", estudianteId)
+    .eq("materia_id", materiaId)
+    .eq("periodo", periodo)
+    .eq("tipo", "Nivelación")
+    .maybeSingle();
+  if (eBusqueda) throw eBusqueda;
+
+  if (!reprobado) return null; // aprobó: no se crea acta, nada que tocar aquí
+
+  if (existente) {
+    // Ya existía el acta (quizás de una nota anterior) — se actualiza con la nota vigente,
+    // salvo que ya esté marcada como superada por el docente
+    if (existente.estado !== "superado") {
+      await editarActa(existente.id, {
+        motivo: `Pérdida de ${materiaNombre} en el periodo ${periodo} (nota final ${notaFinal}, mínima aprobatoria ${config.nota_minima}).`,
+        fecha: new Date().toISOString().slice(0, 10),
+      });
+    }
+    return existente;
+  }
+
+  await crearActa(estudianteId, {
+    tipo: "Nivelación",
+    fecha: new Date().toISOString().slice(0, 10),
+    materia_id: materiaId,
+    periodo,
+    estado: "pendiente",
+    motivo: `Pérdida de ${materiaNombre} en el periodo ${periodo} (nota final ${notaFinal}, mínima aprobatoria ${config.nota_minima}).`,
+    descripcion: "Acta generada automáticamente al guardar las notas finales del periodo.",
+    compromisos_academicos: "Pendiente por definir con el docente y el estudiante.",
+  });
+  return null;
+}
+
+/* Mantiene el acta de Nivelación sincronizada con el estado que el docente
+   marca manualmente en el Boletín (Pendiente / En proceso / Superado) */
+export async function sincronizarEstadoActaNivelacion(estudianteId, materiaId, periodo, estadoNivelacion) {
+  const { data: acta, error } = await supabase
+    .from("actas")
+    .select("id, estado")
+    .eq("estudiante_id", estudianteId)
+    .eq("materia_id", materiaId)
+    .eq("periodo", periodo)
+    .eq("tipo", "Nivelación")
+    .maybeSingle();
+  if (error) throw error;
+  if (!acta) return;
+
+  const nuevoEstado = estadoNivelacion || "pendiente";
+  if (acta.estado === nuevoEstado) return;
+
+  await editarActa(acta.id, {
+    estado: nuevoEstado,
+    ...(nuevoEstado === "superado" ? { descripcion: "Nivelación superada — compromiso cumplido." } : {}),
+  });
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
