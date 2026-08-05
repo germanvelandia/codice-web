@@ -110,7 +110,7 @@ function Panel({ session }) {
   const [grados, setGrados] = useState([]);
 
   useEffect(() => {
-    api.asegurarGradosBase().then(() => api.fetchGrados()).then(setGrados);
+    api.asegurarProfesor().then(() => api.asegurarGradosBase()).then(() => api.fetchGrados()).then(setGrados);
   }, []);
 
   const irAEstudiantes = () => { setTab("estudiantes"); setGrado(null); setReino(null); setModoLista(false); };
