@@ -16,7 +16,7 @@ export function ActasModal({ estudiante, onClose }) {
   const [cargando, setCargando] = useState(true);
   const [formAbierto, setFormAbierto] = useState(false);
   const [actaImprimir, setActaImprimir] = useState(null);
-  const [institucion, setInstitucion] = useState("Institución Educativa");
+  const [institucion, setInstitucion] = useState({ nombre: "Institución Educativa", ciclo: "", anio: "", logo_url: null });
 
   const cargar = async () => {
     setCargando(true);
@@ -110,8 +110,16 @@ function ActaPrintView({ estudiante, acta, institucion }) {
   return (
     <div className="print-only" style={{ maxWidth: 800, margin: "0 auto", padding: 32, fontFamily: "Georgia, serif", color: "#1e293b" }}>
       <div style={{ textAlign: "center", marginBottom: 20, borderBottom: "2px solid #8B5CF6", paddingBottom: 12 }}>
-        <div style={{ fontSize: 20, fontWeight: "bold" }}>{institucion}</div>
-        <div style={{ fontSize: 16, marginTop: 4 }}>Acta de Seguimiento — {a.tipo}</div>
+        {institucion.logo_url && (
+          <img src={institucion.logo_url} alt="Logo" style={{ maxHeight: 70, marginBottom: 8, display: "block", marginLeft: "auto", marginRight: "auto" }} />
+        )}
+        <div style={{ fontSize: 20, fontWeight: "bold" }}>{institucion.nombre}</div>
+        {(institucion.ciclo || institucion.anio) && (
+          <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
+            {institucion.ciclo}{institucion.ciclo && institucion.anio ? " — " : ""}{institucion.anio}
+          </div>
+        )}
+        <div style={{ fontSize: 16, marginTop: 6 }}>Acta de Seguimiento — {a.tipo}</div>
       </div>
 
       <table style={{ width: "100%", fontSize: 13, marginBottom: 16, borderCollapse: "collapse" }}>
