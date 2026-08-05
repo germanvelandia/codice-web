@@ -556,6 +556,19 @@ function ReinoEditorModal({ reino, onClose, onGuardado }) {
     setGuardando(false);
   };
 
+  const eliminar = async () => {
+    if (!confirm(`¿Eliminar "${reino.nombre}" del catálogo? Los estudiantes que lo tengan asignado lo conservan como nombre de grupo, pero perderá su color y logo personalizados.`)) return;
+    setGuardando(true);
+    try {
+      await api.eliminarReino(reino.id);
+      onGuardado();
+      onClose();
+    } catch (e) {
+      alert("Error al eliminar: " + e.message);
+    }
+    setGuardando(false);
+  };
+
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl">
@@ -597,6 +610,11 @@ function ReinoEditorModal({ reino, onClose, onGuardado }) {
         <button disabled={guardando} onClick={guardar} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
           {guardando ? "Guardando…" : "Guardar"}
         </button>
+        {reino.id && (
+          <button disabled={guardando} onClick={eliminar} className="w-full text-xs text-rose-500 py-2 mt-2 disabled:opacity-60">
+            🗑 Eliminar reino del catálogo
+          </button>
+        )}
       </div>
     </div>
   );
