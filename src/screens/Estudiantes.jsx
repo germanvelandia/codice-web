@@ -98,9 +98,10 @@ function QuickGamify({ estudiante, onAplicado }) {
   );
 }
 
-function TarjetaEstudiante({ estudiante, onQuitar, onAplicado, reinos, onCambiarReino }) {
+function TarjetaEstudiante({ estudiante, onQuitar, onAplicado, reinos, onCambiarReino, roles, onCambiarRol }) {
   const progreso = estudiante.progreso?.[0] || estudiante.progreso || { xp: 0, vida: 100, monedas: 0 };
   const reino = estudiante.reino_actual || estudiante.reino_original || "Sin grupo";
+  const rolActualId = estudiante.roles_asignados?.[0]?.rol_id || estudiante.roles_asignados?.rol_id || "";
   return (
     <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
       <div className="flex items-start gap-3 mb-2">
@@ -115,6 +116,13 @@ function TarjetaEstudiante({ estudiante, onQuitar, onAplicado, reinos, onCambiar
               {reinos.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           </div>
+          {roles && roles.length > 0 && (
+            <select value={rolActualId} onChange={(e) => onCambiarRol(estudiante.id, e.target.value ? parseInt(e.target.value, 10) : null)}
+              className="text-xs bg-violet-50 text-violet-600 rounded-full px-2 py-0.5 mt-1 outline-none">
+              <option value="">Sin rol</option>
+              {roles.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
+            </select>
+          )}
         </div>
         <div className="text-xs text-amber-500 font-semibold shrink-0">🪙 {progreso.monedas || 0}</div>
       </div>
@@ -197,6 +205,7 @@ function ImportarEstudiantesModal({ gradoId, reinoDefault, onClose, onImportado 
 
 export function VistaEstudiantes({ gradoId, reinoFiltro, onVolver }) {
   const [estudiantes, setEstudiantes] = useState([]);
+  const [roles, setRoles] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [query, setQuery] = useState("");
   const [nuevoNombre, setNuevoNombre] = useState("");
@@ -205,8 +214,9 @@ export function VistaEstudiantes({ gradoId, reinoFiltro, onVolver }) {
 
   const cargar = async () => {
     setCargando(true);
-    const data = await api.fetchEstudiantesPorGrado(gradoId);
+    const [data, rolesData] = await Promise.all([api.fetchEstudiantesPorGrado(gradoId), api.fetchRoles()]);
     setEstudiantes(data);
+    setRoles(rolesData);
     setCargando(false);
   };
   useEffect(() => { cargar(); }, [gradoId]);
@@ -241,6 +251,11 @@ export function VistaEstudiantes({ gradoId, reinoFiltro, onVolver }) {
   const cambiarReino = async (id, reino) => {
     await api.cambiarReino(id, reino);
     setEstudiantes((prev) => prev.map((s) => (s.id === id ? { ...s, reino_actual: reino } : s)));
+  };
+
+  const cambiarRol = async (id, rolId) => {
+    await api.asignarRol(id, rolId);
+    setEstudiantes((prev) => prev.map((s) => (s.id === id ? { ...s, roles_asignados: rolId ? [{ rol_id: rolId }] : [] } : s)));
   };
 
   return (
@@ -283,7 +298,7 @@ export function VistaEstudiantes({ gradoId, reinoFiltro, onVolver }) {
       ) : (
         <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
           {visibles.map((s) => (
-            <TarjetaEstudiante key={s.id} estudiante={s} reinos={reinos} onQuitar={quitar} onCambiarReino={cambiarReino} onAplicado={actualizarProgresoLocal} />
+            <TarjetaEstudiante key={s.id} estudiante={s} reinos={reinos} onQuitar={quitar} onCambiarReino={cambiarReino} onAplicado={actualizarProgresoLocal} roles={roles} onCambiarRol={cambiarRol} />
           ))}
         </div>
       )}
