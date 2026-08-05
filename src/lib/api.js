@@ -311,6 +311,34 @@ export async function moverEstudiantesReino(gradoId, nombreOrigen, nombreDestino
   if (e2) throw e2;
 }
 
+/* ---------------- Docentes / cuenta / administración ---------------- */
+export async function fetchProfesoresConMaterias() {
+  const { data, error } = await supabase.from("profesores").select("*, materias(nombre)").order("nombre");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function fetchMiPerfil() {
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData?.user) return null;
+  const { data, error } = await supabase.from("profesores").select("*").eq("id", userData.user.id).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+// Cambia la contraseña de la cuenta actualmente conectada. No existe (ni en
+// Supabase ni en ningún sistema serio) forma de leer o recuperar la
+// contraseña anterior de alguien: solo se puede establecer una nueva.
+export async function cambiarMiContrasena(nuevaContrasena) {
+  const { error } = await supabase.auth.updateUser({ password: nuevaContrasena });
+  if (error) throw error;
+}
+
+export async function establecerAdmin(profesorId, esAdmin) {
+  const { error } = await supabase.from("profesores").update({ es_admin: esAdmin }).eq("id", profesorId);
+  if (error) throw error;
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
