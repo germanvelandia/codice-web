@@ -493,3 +493,4 @@ function NuevaActaForm({ estudianteId, onCancelar, onGuardada }) {
     </div>
   );
 }
+ 
