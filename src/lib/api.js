@@ -20,7 +20,7 @@ export async function crearGrado(id) {
 export async function fetchEstudiantesPorGrado(gradoId) {
   const { data, error } = await supabase
     .from("estudiantes")
-    .select("*, progreso(*)")
+    .select("*, progreso(*), roles_asignados(rol_id)")
     .eq("grado_id", gradoId)
     .eq("activo", true)
     .order("nombre");
@@ -54,6 +54,37 @@ export async function quitarEstudiante(id) {
 
 export async function cambiarReino(id, reino_actual) {
   const { error } = await supabase.from("estudiantes").update({ reino_actual }).eq("id", id);
+  if (error) throw error;
+}
+
+/* ---------------- Roles de clase ---------------- */
+export async function fetchRoles() {
+  const { data, error } = await supabase.from("roles_clase").select("*").order("nombre");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearRol(nombre, descripcion) {
+  const { error } = await supabase.from("roles_clase").insert({ nombre, descripcion: descripcion || null });
+  if (error) throw error;
+}
+
+export async function eliminarRol(id) {
+  await supabase.from("roles_asignados").delete().eq("rol_id", id);
+  const { error } = await supabase.from("roles_clase").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function asignarRol(estudianteId, rolId) {
+  if (!rolId) {
+    const { error } = await supabase.from("roles_asignados").delete().eq("estudiante_id", estudianteId);
+    if (error) throw error;
+    return;
+  }
+  const { error } = await supabase.from("roles_asignados").upsert(
+    { estudiante_id: estudianteId, rol_id: rolId },
+    { onConflict: "estudiante_id" }
+  );
   if (error) throw error;
 }
 
