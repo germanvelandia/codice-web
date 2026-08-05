@@ -136,3 +136,13 @@ export function reinoColor(nombre) {
   for (let i = 0; i < (nombre || "").length; i++) hash = (hash * 31 + nombre.charCodeAt(i)) % REINO_COLORS.length;
   return REINO_COLORS[Math.abs(hash) % REINO_COLORS.length];
 }
+
+// Busca el reino por nombre en el catálogo (con color/logo personalizados);
+// si no existe todavía en el catálogo, cae al color automático de siempre.
+export function reinoInfo(nombre, catalogoReinos) {
+  const enCatalogo = (catalogoReinos || []).find((r) => r.nombre === nombre);
+  return {
+    color: enCatalogo?.color || reinoColor(nombre),
+    logo_url: enCatalogo?.logo_url || null,
+  };
+}
