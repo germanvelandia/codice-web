@@ -266,8 +266,9 @@ export async function fetchActividades(materiaId, gradoId, periodo) {
 }
 
 export async function crearActividad(campos) {
-  const { error } = await supabase.from("notas_actividades").insert(campos);
+  const { data, error } = await supabase.from("notas_actividades").insert(campos).select().single();
   if (error) throw error;
+  return data;
 }
 
 export async function editarActividad(id, cambios) {
