@@ -44,6 +44,32 @@ export function ordenarPorApellido(estudiantes) {
   );
 }
 
+// "Firma" de un nombre para poder comparar dos formatos distintos del mismo nombre
+// (ej. "Pérez García, Juan" vs "Juan Pérez García") sin importar el orden de las palabras.
+export function firmaNombre(s) {
+  return (s || "")
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z\s]/g, " ")
+    .split(/\s+/).filter(Boolean).sort().join(" ");
+}
+
+// Busca, dentro de una lista de estudiantes, el que mejor coincide con un nombre dado
+// (usado al importar notas de Moodle, donde el formato del nombre puede variar).
+export function buscarEstudiantePorNombre(nombre, estudiantes) {
+  const firma = firmaNombre(nombre);
+  if (!firma) return null;
+  let match = estudiantes.find((e) => firmaNombre(e.nombre) === firma);
+  if (match) return match;
+  // coincidencia parcial: todas las palabras del nombre buscado están en el nombre del estudiante
+  const palabras = firma.split(" ");
+  match = estudiantes.find((e) => {
+    const palabrasEst = firmaNombre(e.nombre).split(" ");
+    return palabras.every((p) => palabrasEst.includes(p));
+  });
+  return match || null;
+}
+
 // Acciones rápidas de gamificación (positivas y negativas), con su categoría.
 // Set reducido usado como botones de acceso directo (⚡ Puntos rápidos).
 export const ACCIONES_RAPIDAS = [
