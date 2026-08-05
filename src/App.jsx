@@ -268,4 +268,4 @@ function Panel({ session }) {
       </div>
     </div>
   );
-} 
+}
