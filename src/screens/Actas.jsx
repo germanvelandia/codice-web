@@ -1,11 +1,6 @@
 import React, { useEffect, useState } from "react";
 import * as api from "../lib/api";
-
-const FALTAS_MANUAL = {
-  leve: { tipo: "Leve", articulo: "Art. 68", plazoDias: 5 },
-  grave: { tipo: "Grave", articulo: "Art. 69", plazoDias: 10 },
-  gravisima: { tipo: "Gravísima", articulo: "Art. 70", plazoDias: 15 },
-};
+import { FALTAS_MANUAL, NIVELACION_COMPROMISOS_DEFAULT } from "../lib/actasTemplates";
 
 function hoyISO() {
   return new Date().toISOString().slice(0, 10);
@@ -89,6 +84,9 @@ export function ActasModal({ estudiante, onClose }) {
                 {a.tipo_falta && (
                   <div className="text-xs text-amber-600 mt-2">Falta {a.tipo_falta} ({a.articulo}) · Plazo: {a.plazo_dias} días hábiles</div>
                 )}
+                {a.implicaciones_legales && (
+                  <div className="text-xs text-slate-600 mt-2 bg-amber-50 rounded-lg p-2"><b>Implicaciones legales:</b> {a.implicaciones_legales}</div>
+                )}
                 {a.compromisos_academicos && (
                   <div className="text-xs text-slate-600 mt-2"><b>Compromisos académicos:</b> {a.compromisos_academicos}</div>
                 )}
@@ -156,6 +154,13 @@ function ActaPrintView({ estudiante, acta, institucion }) {
         </div>
       )}
 
+      {a.implicaciones_legales && (
+        <div style={{ marginBottom: 14, background: "#FEF3C7", padding: 10, borderRadius: 6 }}>
+          <div style={{ fontWeight: "bold", fontSize: 13, marginBottom: 4 }}>Implicaciones legales</div>
+          <div style={{ fontSize: 13 }}>{a.implicaciones_legales}</div>
+        </div>
+      )}
+
       {a.compromisos_academicos && (
         <div style={{ marginBottom: 14, background: "#F5F3FF", padding: 10, borderRadius: 6 }}>
           <div style={{ fontWeight: "bold", fontSize: 13, marginBottom: 4 }}>Compromisos académicos</div>
@@ -210,9 +215,22 @@ function NuevaActaForm({ estudianteId, onCancelar, onGuardada }) {
   const [compromisosAcademicos, setCompromisosAcademicos] = useState("");
   const [compromisosConvivenciales, setCompromisosConvivenciales] = useState("");
   const [categoriaFalta, setCategoriaFalta] = useState("leve");
+  const [implicaciones, setImplicaciones] = useState(FALTAS_MANUAL.leve.implicaciones);
   const [reincidente, setReincidente] = useState(false);
   const [incluirAsistencia, setIncluirAsistencia] = useState(false);
   const [guardando, setGuardando] = useState(false);
+
+  // Precarga las implicaciones legales según la falta elegida (queda editable)
+  useEffect(() => {
+    if (tipo === "Convivencial") setImplicaciones(FALTAS_MANUAL[categoriaFalta].implicaciones);
+  }, [tipo, categoriaFalta]);
+
+  // Precarga el plan de compromisos académicos al entrar en modo Nivelación (solo si está vacío, para no pisar lo que ya escribió el docente)
+  useEffect(() => {
+    if (tipo === "Nivelación" && !compromisosAcademicos.trim()) {
+      setCompromisosAcademicos(NIVELACION_COMPROMISOS_DEFAULT);
+    }
+  }, [tipo]);
 
   const guardar = async () => {
     if (!motivo.trim()) { alert("Escribe al menos el motivo."); return; }
@@ -229,6 +247,7 @@ function NuevaActaForm({ estudianteId, onCancelar, onGuardada }) {
         campos.tipo_falta = (reincidente ? "Reincidente / " : "") + f.tipo;
         campos.articulo = f.articulo;
         campos.plazo_dias = f.plazoDias;
+        campos.implicaciones_legales = implicaciones.trim() || f.implicaciones;
       }
       if (incluirAsistencia) {
         campos.asistencia_resumen = await api.fetchEstadisticasAsistencia(estudianteId);
@@ -270,6 +289,11 @@ function NuevaActaForm({ estudianteId, onCancelar, onGuardada }) {
             <input type="checkbox" checked={reincidente} onChange={(e) => setReincidente(e.target.checked)} />
             Es una falta constante / reincidente (incumplimiento repetido del manual de convivencia)
           </label>
+          <div className="mt-3">
+            <label className="text-xs text-slate-500 block mb-1">Implicaciones legales (precargadas según la falta — puedes ajustarlas)</label>
+            <textarea value={implicaciones} onChange={(e) => setImplicaciones(e.target.value)} rows={3}
+              className="w-full text-xs rounded-lg px-3 py-2 border border-amber-200 bg-amber-50 outline-none" />
+          </div>
         </div>
       )}
 
