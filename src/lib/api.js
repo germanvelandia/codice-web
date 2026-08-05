@@ -291,6 +291,26 @@ export async function renombrarReino(id, nombreAnterior, nombreNuevo) {
   if (e2) throw e2;
 }
 
+// Retira un reino: mueve a TODOS los estudiantes de ese grado que lo tengan
+// asignado hacia otro grupo (nombreDestino, ej. "Sin grupo"), para que el
+// reino de origen deje de aparecer en cualquier listado.
+export async function moverEstudiantesReino(gradoId, nombreOrigen, nombreDestino) {
+  const { error: e1 } = await supabase
+    .from("estudiantes")
+    .update({ reino_actual: nombreDestino, reino_original: nombreDestino })
+    .eq("grado_id", gradoId)
+    .eq("reino_actual", nombreOrigen);
+  if (e1) throw e1;
+
+  const { error: e2 } = await supabase
+    .from("estudiantes")
+    .update({ reino_actual: nombreDestino, reino_original: nombreDestino })
+    .eq("grado_id", gradoId)
+    .is("reino_actual", null)
+    .eq("reino_original", nombreOrigen);
+  if (e2) throw e2;
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
@@ -603,4 +623,3 @@ export async function registrarAccion(estudianteId, accion) {
   if (error) throw error;
   return { xp: nuevoXp, vida: nuevaVida, monedas: nuevasMonedas };
 }
- 
