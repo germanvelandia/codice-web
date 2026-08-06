@@ -147,7 +147,7 @@ export function VistaReportes({ grados }) {
           <div className="text-sm text-slate-400">Todavía no hay notas finales guardadas para este grado en ninguna materia.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="text-xs w-full" style={{ borderCollapse: "collapse" }}>
+            <table className="text-xs w-full" style={{ borderCollapse: "separate", borderSpacing: 0 }}>
               <thead>
                 <tr>
                   <th className="sticky left-0 top-0 z-20 bg-slate-50 text-left px-3 py-2 border-b border-slate-100">Estudiante</th>
