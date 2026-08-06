@@ -268,6 +268,7 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, rein
   const [actasAbiertas, setActasAbiertas] = useState(false);
   const [inclusionAbierta, setInclusionAbierta] = useState(false);
   const [trasladoAbierto, setTrasladoAbierto] = useState(false);
+  const [menuAbierto, setMenuAbierto] = useState(false);
   const [generando, setGenerando] = useState(false);
   const [editandoNombre, setEditandoNombre] = useState(false);
   const [nombreTemp, setNombreTemp] = useState(estudiante.nombre);
@@ -353,18 +354,27 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, rein
           </button>
         )}
       </div>
-      <div className="flex justify-between items-center mt-2">
-        <button onClick={() => onQuitar(estudiante.id)} className="text-xs text-slate-400 hover:text-rose-500">Quitar</button>
-        <div className="flex gap-1.5">
-          {grados && grados.length > 1 && (
-            <button onClick={() => setTrasladoAbierto(true)} className="text-xs px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🔀 Trasladar</button>
+      <div className="flex justify-between items-center mt-2 relative">
+        <div className="relative">
+          <button onClick={() => setMenuAbierto((v) => !v)} className="text-xs px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">⋯ Más</button>
+          {menuAbierto && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setMenuAbierto(false)} />
+              <div className="absolute left-0 bottom-full mb-1 bg-white rounded-xl shadow-lg border border-slate-100 py-1 w-48 z-20">
+                {grados && grados.length > 1 && (
+                  <button onClick={() => { setMenuAbierto(false); setTrasladoAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">🔀 Trasladar de grado</button>
+                )}
+                <button onClick={() => { setMenuAbierto(false); setInclusionAbierta(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">
+                  {estudiante.piar || estudiante.dua ? "🧩 Inclusión" : "+ Inclusión"}
+                </button>
+                <button onClick={() => { setMenuAbierto(false); setActasAbiertas(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📋 Actas</button>
+                <div className="border-t border-slate-100 my-1" />
+                <button onClick={() => { setMenuAbierto(false); onQuitar(estudiante.id); }} className="w-full text-left text-xs px-3 py-2 hover:bg-rose-50 text-rose-500">🗑 Quitar de la lista</button>
+              </div>
+            </>
           )}
-          <button onClick={() => setInclusionAbierta(true)} className={`text-xs px-3 py-1.5 rounded-full border ${estudiante.piar || estudiante.dua ? "border-violet-300 bg-violet-50 text-violet-700" : "border-slate-200 text-slate-600"}`}>
-            {estudiante.piar || estudiante.dua ? "🧩 Inclusión" : "+ Inclusión"}
-          </button>
-          <button onClick={() => setActasAbiertas(true)} className="text-xs px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">📋 Actas</button>
-          <QuickGamify estudiante={estudiante} onAplicado={onAplicado} />
         </div>
+        <QuickGamify estudiante={estudiante} onAplicado={onAplicado} />
       </div>
       {actasAbiertas && <ActasModal estudiante={estudiante} onClose={() => setActasAbiertas(false)} />}
       {inclusionAbierta && <InclusionModal estudiante={estudiante} onClose={() => setInclusionAbierta(false)} onGuardado={() => setInclusionAbierta(false)} />}
