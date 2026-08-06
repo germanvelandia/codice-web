@@ -62,6 +62,11 @@ export async function crearEstudiantesMasivo(filas) {
   const { error } = await supabase.from("estudiantes").insert(filas);
   if (error) throw error;
 }
+export async function editarNombreEstudiante(id, nombre) {
+  const { error } = await supabase.from("estudiantes").update({ nombre: nombre.trim() }).eq("id", id);
+  if (error) throw error;
+}
+
 export async function quitarEstudiante(id) {
   const { error } = await supabase.from("estudiantes").update({ activo: false }).eq("id", id);
   if (error) throw error;
