@@ -339,6 +339,40 @@ export async function establecerAdmin(profesorId, esAdmin) {
   if (error) throw error;
 }
 
+/* ---------------- Procesos de inclusión (PIAR / DUA) ---------------- */
+export async function guardarInclusion(estudianteId, cambios) {
+  const { error } = await supabase.from("estudiantes").update(cambios).eq("id", estudianteId);
+  if (error) throw error;
+}
+
+export async function fetchSeguimientosInclusion(estudianteId) {
+  const { data, error } = await supabase
+    .from("seguimiento_inclusion")
+    .select("*, profesores(nombre), materias(nombre)")
+    .eq("estudiante_id", estudianteId)
+    .order("fecha", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearSeguimientoInclusion(estudianteId, materiaId, tipo, observacion) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("seguimiento_inclusion").insert({
+    estudiante_id: estudianteId,
+    materia_id: materiaId || null,
+    docente_id: userData?.user?.id || null,
+    tipo,
+    observacion,
+    fecha: new Date().toISOString().slice(0, 10),
+  });
+  if (error) throw error;
+}
+
+export async function eliminarSeguimientoInclusion(id) {
+  const { error } = await supabase.from("seguimiento_inclusion").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
