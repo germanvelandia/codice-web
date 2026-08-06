@@ -693,10 +693,22 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
 
   const notaGuardada = (estudianteId, periodo) => finales.find((f) => f.estudiante_id === estudianteId && f.periodo === periodo)?.nota ?? null;
   const estadoNiv = (estudianteId, periodo) => nivelacion.find((n) => n.estudiante_id === estudianteId && n.periodo === periodo)?.estado || "";
+  const nivelacionDe = (estudianteId, periodo) => nivelacion.find((n) => n.estudiante_id === estudianteId && n.periodo === periodo);
 
   const cambiarNivelacion = async (estudianteId, periodo, estado) => {
-    await api.setNivelacion(materiaId, estudianteId, periodo, estado || null);
+    const registroPrevio = nivelacion.find((n) => n.estudiante_id === estudianteId && n.periodo === periodo);
+    const notaActual = notaGuardada(estudianteId, periodo);
+    // La nota original solo se fija la primera vez que se marca "superado" para este
+    // periodo — si ya se había guardado antes, se conserva (no se pisa en toggles repetidos).
+    const notaOriginal = estado === "superado"
+      ? (registroPrevio?.nota_original ?? notaActual)
+      : undefined;
+
+    await api.setNivelacion(materiaId, estudianteId, periodo, estado || null, notaOriginal);
     await api.sincronizarEstadoActaNivelacion(estudianteId, materiaId, periodo, estado);
+    if (estado === "superado" && (notaActual === null || notaActual < config.nota_minima)) {
+      await api.guardarNotaFinal(materiaId, estudianteId, periodo, config.nota_minima);
+    }
     cargar();
   };
 
@@ -735,10 +747,15 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
                     {periodos.map((p) => {
                       const n = notaGuardada(s.id, p);
                       const b = bandaDesempeno(n, config);
-                      const necesitaNiv = n !== null && n < config.nota_minima;
+                      const necesitaNiv = (n !== null && n < config.nota_minima) || !!nivelacionDe(s.id, p);
+                      const registroNiv = nivelacionDe(s.id, p);
+                      const mostrarOriginal = registroNiv?.estado === "superado" && registroNiv?.nota_original !== null && registroNiv?.nota_original !== undefined;
                       return (
                         <td key={p} className="text-center px-3 py-2">
-                          <div style={{ color: n !== null ? b.color : "#94A3B8", fontWeight: n !== null ? 700 : 400 }}>{n ?? "—"}</div>
+                          <div style={{ color: n !== null ? b.color : "#94A3B8", fontWeight: n !== null ? 700 : 400 }}>
+                            {n ?? "—"}
+                            {mostrarOriginal && <span className="text-[10px] text-slate-400 font-normal"> ({registroNiv.nota_original})</span>}
+                          </div>
                           {necesitaNiv && (
                             <div className="flex items-center gap-1 mt-1">
                               <select value={estadoNiv(s.id, p)} onChange={(e) => cambiarNivelacion(s.id, p, e.target.value)} className="text-[10px] rounded px-1 py-0.5 border border-slate-200">
