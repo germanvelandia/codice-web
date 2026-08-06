@@ -243,6 +243,7 @@ function Panel({ session }) {
             {grado && (modoLista || reino) && (
               <VistaEstudiantes
                 gradoId={grado}
+                grados={grados}
                 reinoFiltro={modoLista ? null : reino}
                 onVolver={() => { setReino(null); setModoLista(false); }}
               />
