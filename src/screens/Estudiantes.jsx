@@ -99,8 +99,124 @@ function QuickGamify({ estudiante, onAplicado }) {
   );
 }
 
+export function InclusionBadge({ estudiante, size = "text-sm" }) {
+  if (!estudiante?.piar && !estudiante?.dua) return null;
+  const partes = [estudiante.piar && "PIAR", estudiante.dua && "DUA"].filter(Boolean).join(" · ");
+  return <span title={`Proceso de inclusión activo: ${partes}`} className={size}>🧩</span>;
+}
+
+export function InclusionModal({ estudiante, materiaId, onClose, onGuardado }) {
+  const [piar, setPiar] = useState(!!estudiante.piar);
+  const [dua, setDua] = useState(!!estudiante.dua);
+  const [ajustes, setAjustes] = useState(estudiante.ajustes_inclusion || "");
+  const [guardando, setGuardando] = useState(false);
+  const [seguimientos, setSeguimientos] = useState([]);
+  const [cargandoSeg, setCargandoSeg] = useState(true);
+  const [nuevoTipo, setNuevoTipo] = useState("General");
+  const [nuevaObs, setNuevaObs] = useState("");
+
+  const cargarSeguimientos = () => {
+    setCargandoSeg(true);
+    api.fetchSeguimientosInclusion(estudiante.id).then((d) => { setSeguimientos(d); setCargandoSeg(false); });
+  };
+  useEffect(() => { cargarSeguimientos(); }, [estudiante.id]);
+
+  const guardar = async () => {
+    setGuardando(true);
+    try {
+      await api.guardarInclusion(estudiante.id, { piar, dua, ajustes_inclusion: ajustes.trim() || null });
+      onGuardado?.({ ...estudiante, piar, dua, ajustes_inclusion: ajustes.trim() || null });
+    } catch (e) {
+      alert("Error al guardar: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  const agregarSeguimiento = async () => {
+    if (!nuevaObs.trim()) return;
+    try {
+      await api.crearSeguimientoInclusion(estudiante.id, materiaId, nuevoTipo, nuevaObs.trim());
+      setNuevaObs("");
+      cargarSeguimientos();
+    } catch (e) {
+      alert("Error al guardar el seguimiento: " + e.message);
+    }
+  };
+
+  const borrarSeguimiento = async (id) => {
+    if (!confirm("¿Eliminar este registro de seguimiento?")) return;
+    await api.eliminarSeguimientoInclusion(id);
+    cargarSeguimientos();
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">🧩 Proceso de inclusión — {estudiante.nombre}</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+
+        <div className="flex gap-4 mb-3">
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" checked={piar} onChange={(e) => setPiar(e.target.checked)} /> Tiene PIAR
+          </label>
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" checked={dua} onChange={(e) => setDua(e.target.checked)} /> Aplica DUA
+          </label>
+        </div>
+
+        <label className="text-xs text-slate-500 block mb-1">Ajustes razonables / apoyos acordados</label>
+        <textarea value={ajustes} onChange={(e) => setAjustes(e.target.value)} rows={3}
+          placeholder="Ej: Tiempo adicional en evaluaciones, material en letra ampliada, ubicación cerca al docente…"
+          className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
+
+        <button disabled={guardando} onClick={guardar} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60 mb-4">
+          {guardando ? "Guardando…" : "Guardar"}
+        </button>
+
+        <div className="border-t border-slate-100 pt-4">
+          <div className="text-xs font-semibold text-slate-600 mb-2">Bitácora de seguimiento</div>
+
+          <div className="bg-violet-50 rounded-lg p-3 mb-3">
+            <div className="flex gap-2 mb-2">
+              {["PIAR", "DUA", "General"].map((t) => (
+                <button key={t} onClick={() => setNuevoTipo(t)} className={`text-xs px-2.5 py-1 rounded-full ${nuevoTipo === t ? "bg-violet-500 text-white" : "bg-white text-slate-600"}`}>{t}</button>
+              ))}
+            </div>
+            <textarea value={nuevaObs} onChange={(e) => setNuevaObs(e.target.value)} rows={2}
+              placeholder="Ej: Se aplicó tiempo adicional en la evaluación del periodo, buen desempeño…"
+              className="w-full text-xs rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none" />
+            <button onClick={agregarSeguimiento} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white">+ Agregar al seguimiento</button>
+          </div>
+
+          {cargandoSeg ? (
+            <div className="text-xs text-slate-400">Cargando…</div>
+          ) : seguimientos.length === 0 ? (
+            <div className="text-xs text-slate-400">Todavía no hay registros de seguimiento.</div>
+          ) : (
+            <div className="space-y-2">
+              {seguimientos.map((s) => (
+                <div key={s.id} className="border border-slate-100 rounded-lg p-2">
+                  <div className="flex justify-between items-start">
+                    <div className="text-[11px] font-semibold text-violet-600">{s.tipo} · {s.fecha}{s.materias?.nombre ? ` · ${s.materias.nombre}` : ""}</div>
+                    <button onClick={() => borrarSeguimiento(s.id)} className="text-[10px] text-slate-300 hover:text-rose-500">✕</button>
+                  </div>
+                  <div className="text-xs text-slate-600 mt-1">{s.observacion}</div>
+                  <div className="text-[10px] text-slate-400 mt-1">{s.profesores?.nombre}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TarjetaEstudiante({ estudiante, onQuitar, onAplicado, reinos, catalogoReinos, onCambiarReino, roles, onCambiarRol, onCodigoGenerado }) {
   const [actasAbiertas, setActasAbiertas] = useState(false);
+  const [inclusionAbierta, setInclusionAbierta] = useState(false);
   const [generando, setGenerando] = useState(false);
   const codigo = estudiante.codigo_acceso || null;
   const progreso = estudiante.progreso?.[0] || estudiante.progreso || { xp: 0, vida: 100, monedas: 0 };
@@ -131,7 +247,9 @@ function TarjetaEstudiante({ estudiante, onQuitar, onAplicado, reinos, catalogoR
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold text-slate-800 truncate">{estudiante.nombre}</div>
+          <div className="text-sm font-semibold text-slate-800 truncate flex items-center gap-1">
+            {estudiante.nombre} <InclusionBadge estudiante={estudiante} />
+          </div>
           <div className="flex items-center gap-1 text-xs text-slate-400">
             <select value={reino} onChange={(e) => onCambiarReino(estudiante.id, e.target.value)} className="text-xs bg-transparent outline-none">
               {reinos.map((r) => <option key={r} value={r}>{r}</option>)}
@@ -161,11 +279,13 @@ function TarjetaEstudiante({ estudiante, onQuitar, onAplicado, reinos, catalogoR
       <div className="flex justify-between items-center mt-2">
         <button onClick={() => onQuitar(estudiante.id)} className="text-xs text-slate-400 hover:text-rose-500">Quitar</button>
         <div className="flex gap-1.5">
+          <button onClick={() => setInclusionAbierta(true)} className={`text-xs px-3 py-1.5 rounded-full border ${estudiante.piar || estudiante.dua ? "border-violet-300 bg-violet-50 text-violet-700" : "border-slate-200 text-slate-600"}`}>🧩 Inclusión</button>
           <button onClick={() => setActasAbiertas(true)} className="text-xs px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">📋 Actas</button>
           <QuickGamify estudiante={estudiante} onAplicado={onAplicado} />
         </div>
       </div>
       {actasAbiertas && <ActasModal estudiante={estudiante} onClose={() => setActasAbiertas(false)} />}
+      {inclusionAbierta && <InclusionModal estudiante={estudiante} onClose={() => setInclusionAbierta(false)} onGuardado={() => setInclusionAbierta(false)} />}
     </div>
   );
 }
