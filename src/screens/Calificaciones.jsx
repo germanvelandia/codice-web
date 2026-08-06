@@ -7,6 +7,7 @@ import {
 } from "../lib/calificaciones";
 import { buscarEstudiantePorNombre } from "../lib/gamification";
 import { ActasModal } from "./Actas";
+import { InclusionBadge } from "./Estudiantes";
 
 function BarraMateria({ materias, materiaActualId, setMateriaActualId, onCambio }) {
   const [creando, setCreando] = useState(false);
@@ -584,7 +585,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
                 const banda = bandaDesempeno(final, config);
                 return (
                   <tr key={s.id} className="odd:bg-white even:bg-slate-50">
-                    <td className="sticky left-0 bg-inherit text-left px-3 py-2 font-medium text-slate-700">{s.nombre}</td>
+                    <td className="sticky left-0 bg-inherit text-left px-3 py-2 font-medium text-slate-700">{s.nombre} <InclusionBadge estudiante={s} size="text-xs" /></td>
                     {actividades.map((a) => {
                       const v = valorDeActividad(a, s.id);
                       const b = bandaDesempeno(v, config);
@@ -678,7 +679,7 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
                 const bandaProm = bandaDesempeno(prom, config);
                 return (
                   <tr key={s.id} className="odd:bg-white even:bg-slate-50">
-                    <td className="text-left px-3 py-2 font-medium text-slate-700">{s.nombre}</td>
+                    <td className="text-left px-3 py-2 font-medium text-slate-700">{s.nombre} <InclusionBadge estudiante={s} size="text-xs" /></td>
                     {periodos.map((p) => {
                       const n = notaGuardada(s.id, p);
                       const b = bandaDesempeno(n, config);
@@ -827,6 +828,13 @@ export function VistaCalificaciones({ grados }) {
         </div>
       ) : (
         <>
+          {estudiantes.some((s) => s.piar || s.dua) && (
+            <div className="bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 mb-4 text-sm text-violet-800">
+              🧩 <b>Recordatorio de inclusión</b> — este grupo tiene estudiantes con proceso PIAR/DUA activo:{" "}
+              {estudiantes.filter((s) => s.piar || s.dua).map((s) => s.nombre).join(", ")}.
+            </div>
+          )}
+
           <PanelCategorias materiaId={materiaActualId} categorias={categorias} onCambio={cargarConfigYCategorias} />
 
           <div className="flex flex-wrap gap-2 mb-4 items-center">
