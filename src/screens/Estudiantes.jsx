@@ -279,7 +279,9 @@ function TarjetaEstudiante({ estudiante, onQuitar, onAplicado, reinos, catalogoR
       <div className="flex justify-between items-center mt-2">
         <button onClick={() => onQuitar(estudiante.id)} className="text-xs text-slate-400 hover:text-rose-500">Quitar</button>
         <div className="flex gap-1.5">
-          <button onClick={() => setInclusionAbierta(true)} className={`text-xs px-3 py-1.5 rounded-full border ${estudiante.piar || estudiante.dua ? "border-violet-300 bg-violet-50 text-violet-700" : "border-slate-200 text-slate-600"}`}>🧩 Inclusión</button>
+          <button onClick={() => setInclusionAbierta(true)} className={`text-xs px-3 py-1.5 rounded-full border ${estudiante.piar || estudiante.dua ? "border-violet-300 bg-violet-50 text-violet-700" : "border-slate-200 text-slate-600"}`}>
+            {estudiante.piar || estudiante.dua ? "🧩 Inclusión" : "+ Inclusión"}
+          </button>
           <button onClick={() => setActasAbiertas(true)} className="text-xs px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">📋 Actas</button>
           <QuickGamify estudiante={estudiante} onAplicado={onAplicado} />
         </div>
