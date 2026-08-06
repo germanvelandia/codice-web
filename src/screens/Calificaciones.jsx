@@ -482,6 +482,8 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
   const [importarMoodleAbierto, setImportarMoodleAbierto] = useState(false);
   const [notaMasivaAbierta, setNotaMasivaAbierta] = useState(false);
   const [reinoFiltro, setReinoFiltro] = useState("Todos");
+  const [seleccionando, setSeleccionando] = useState(false);
+  const [seleccionadas, setSeleccionadas] = useState([]);
 
   const cargar = async () => {
     setCargando(true);
@@ -502,6 +504,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
   };
   useEffect(() => { cargar(); }, [materiaId, gradoId, periodo, estudiantes.length]);
   useEffect(() => { setReinoFiltro("Todos"); }, [gradoId]);
+  useEffect(() => { setSeleccionando(false); setSeleccionadas([]); }, [materiaId, periodo]);
 
   const reinos = useMemo(() => {
     const set = new Set(estudiantes.map((s) => s.reino_actual || s.reino_original || "Sin grupo"));
@@ -545,6 +548,19 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
 
   const eliminarAct = async (id) => { if (!confirm("¿Eliminar esta actividad?")) return; await api.eliminarActividad(id); cargar(); };
 
+  const toggleSeleccion = (id) => {
+    setSeleccionadas((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  };
+
+  const eliminarSeleccionadas = async () => {
+    if (seleccionadas.length === 0) return;
+    if (!confirm(`¿Eliminar ${seleccionadas.length} columna${seleccionadas.length === 1 ? "" : "s"} de notas? Esta acción no se puede deshacer.`)) return;
+    for (const id of seleccionadas) { await api.eliminarActividad(id); }
+    setSeleccionadas([]);
+    setSeleccionando(false);
+    cargar();
+  };
+
   return (
     <div>
       <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
@@ -556,6 +572,17 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
           <button onClick={() => setNotaMasivaAbierta(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🖊 Nota masiva</button>
           <button onClick={() => setImportarMoodleAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700">📥 Importar de Moodle/Excel</button>
           <button onClick={() => { setActividadEditar(null); setModalAbierto(true); }} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">+ Nueva actividad</button>
+          {seleccionando ? (
+            <>
+              <button onClick={eliminarSeleccionadas} disabled={seleccionadas.length === 0}
+                className="text-xs font-semibold px-3 py-1.5 rounded-full bg-rose-500 text-white disabled:opacity-40">
+                🗑 Eliminar {seleccionadas.length > 0 ? `(${seleccionadas.length})` : ""}
+              </button>
+              <button onClick={() => { setSeleccionando(false); setSeleccionadas([]); }} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">Cancelar</button>
+            </>
+          ) : (
+            <button onClick={() => setSeleccionando(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-rose-200 text-rose-600">🗑 Borrar varias columnas</button>
+          )}
         </div>
       </div>
       {cargando ? (
@@ -567,12 +594,19 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
               <tr>
                 <th className="sticky left-0 bg-slate-50 text-left px-3 py-2 border-b border-slate-100">Estudiante</th>
                 {actividades.map((a) => (
-                  <th key={a.id} className="px-3 py-2 border-b border-slate-100 bg-slate-50 min-w-[110px]">
+                  <th key={a.id} className={`px-3 py-2 border-b border-slate-100 min-w-[110px] ${seleccionando && seleccionadas.includes(a.id) ? "bg-rose-50" : "bg-slate-50"}`}>
                     <div className="flex items-center justify-center gap-1">
+                      {seleccionando && (
+                        <input type="checkbox" checked={seleccionadas.includes(a.id)} onChange={() => toggleSeleccion(a.id)} />
+                      )}
                       {a.es_automatica && <span title="Automática">⚡</span>}
                       <span>{a.nombre}</span>
-                      <button onClick={() => { setActividadEditar(a); setModalAbierto(true); }} className="text-slate-400">✎</button>
-                      <button onClick={() => eliminarAct(a.id)} className="text-slate-400">✕</button>
+                      {!seleccionando && (
+                        <>
+                          <button onClick={() => { setActividadEditar(a); setModalAbierto(true); }} className="text-slate-400">✎</button>
+                          <button onClick={() => eliminarAct(a.id)} className="text-slate-400">✕</button>
+                        </>
+                      )}
                     </div>
                   </th>
                 ))}
