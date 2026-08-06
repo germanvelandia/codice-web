@@ -610,14 +610,16 @@ export async function fetchNivelacion(materiaId) {
   return data || [];
 }
 
-export async function setNivelacion(materiaId, estudianteId, periodo, estado) {
+export async function setNivelacion(materiaId, estudianteId, periodo, estado, notaOriginal) {
   if (!estado) {
     const { error } = await supabase.from("nivelacion").delete().eq("materia_id", materiaId).eq("estudiante_id", estudianteId).eq("periodo", periodo);
     if (error) throw error;
     return;
   }
+  const payload = { materia_id: materiaId, estudiante_id: estudianteId, periodo, estado };
+  if (notaOriginal !== undefined) payload.nota_original = notaOriginal;
   const { error } = await supabase.from("nivelacion").upsert(
-    { materia_id: materiaId, estudiante_id: estudianteId, periodo, estado },
+    payload,
     { onConflict: "materia_id,estudiante_id,periodo" }
   );
   if (error) throw error;
