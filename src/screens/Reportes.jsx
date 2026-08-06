@@ -2,12 +2,16 @@ import React, { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
 import * as api from "../lib/api";
 import { nextLevel } from "../lib/gamification";
+import { bandaDesempeno } from "../lib/calificaciones";
 
 export function VistaReportes({ grados }) {
   const [gradoId, setGradoId] = useState(grados[0]?.id || "");
   const [estudiantes, setEstudiantes] = useState([]);
   const [estudianteId, setEstudianteId] = useState(null);
   const [cargando, setCargando] = useState(false);
+  const [periodoTransversal, setPeriodoTransversal] = useState("");
+  const [transversal, setTransversal] = useState(null);
+  const [cargandoTransversal, setCargandoTransversal] = useState(false);
 
   useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
   useEffect(() => {
@@ -17,6 +21,31 @@ export function VistaReportes({ grados }) {
       setEstudianteId(data[0]?.id || null);
     });
   }, [gradoId]);
+
+  const cargarTransversal = async () => {
+    if (!gradoId) return;
+    setCargandoTransversal(true);
+    try {
+      const r = await api.fetchNotasFinalesTransversal(gradoId, periodoTransversal || null);
+      setTransversal(r);
+    } catch (e) {
+      alert("Error al cargar el control transversal: " + e.message);
+    }
+    setCargandoTransversal(false);
+  };
+  useEffect(() => { cargarTransversal(); }, [gradoId, periodoTransversal]);
+
+  const exportarTransversal = () => {
+    if (!transversal) return;
+    const filas = transversal.estudiantes.map((s) => {
+      const fila = { Estudiante: s.nombre, Grupo: s.reino_actual || s.reino_original };
+      transversal.materias.forEach((m) => { fila[m.nombre] = transversal.notas[s.id]?.[m.id] ?? ""; });
+      return fila;
+    });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filas), `Grado ${gradoId}`);
+    XLSX.writeFile(wb, `Control_transversal_${gradoId}${periodoTransversal ? "_P" + periodoTransversal : ""}.xlsx`);
+  };
 
   const exportarGrado = async () => {
     setCargando(true);
@@ -91,6 +120,65 @@ export function VistaReportes({ grados }) {
     <div>
       <h2 className="text-xl font-bold text-slate-800 mb-1">Reportes</h2>
       <p className="text-sm text-slate-400 mb-4">Exporta los resultados a Excel — por grado completo o por estudiante.</p>
+
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-4">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+          <div>
+            <div className="font-semibold text-slate-700">Control transversal — todas las materias</div>
+            <p className="text-xs text-slate-400">Notas definitivas de cada estudiante en todas las materias registradas, de todos los docentes.</p>
+          </div>
+          <div className="flex gap-2 items-center">
+            <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none">
+              {grados.map((g) => <option key={g.id} value={g.id}>Grado {g.id}</option>)}
+            </select>
+            <select value={periodoTransversal} onChange={(e) => setPeriodoTransversal(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none">
+              <option value="">Todos los periodos (promedio)</option>
+              {["1", "2", "3", "4"].map((p) => <option key={p} value={p}>Periodo {p}</option>)}
+            </select>
+            <button disabled={!transversal} onClick={exportarTransversal} className="text-sm font-semibold px-4 py-2 rounded-full bg-violet-500 text-white disabled:opacity-60">
+              📊 Exportar Excel
+            </button>
+          </div>
+        </div>
+
+        {cargandoTransversal ? (
+          <div className="text-sm text-slate-400">Cargando…</div>
+        ) : !transversal || transversal.materias.length === 0 ? (
+          <div className="text-sm text-slate-400">Todavía no hay notas finales guardadas para este grado en ninguna materia.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="text-xs w-full" style={{ borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th className="sticky left-0 bg-slate-50 text-left px-3 py-2 border-b border-slate-100">Estudiante</th>
+                  {transversal.materias.map((m) => (
+                    <th key={m.id} className="text-center px-3 py-2 border-b border-slate-100 bg-slate-50 whitespace-nowrap">
+                      {m.nombre}{m.docente ? <div className="text-[9px] text-slate-400 font-normal">{m.docente}</div> : null}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {transversal.estudiantes.map((s) => (
+                  <tr key={s.id} className="odd:bg-white even:bg-slate-50">
+                    <td className="sticky left-0 bg-inherit text-left px-3 py-2 font-medium text-slate-700 whitespace-nowrap">{s.nombre}</td>
+                    {transversal.materias.map((m) => {
+                      const n = transversal.notas[s.id]?.[m.id];
+                      const banda = n !== undefined ? bandaDesempeno(n, { escala_min: 1, nota_minima: 3, nota_maxima: 5 }) : null;
+                      return (
+                        <td key={m.id} className="text-center px-3 py-2 font-semibold" style={{ color: banda?.color || "#CBD5E1" }}>
+                          {n ?? "—"}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="text-[10px] text-slate-400 mt-2">Los colores usan una escala de referencia general (mínima aprobatoria 3.0 / máxima 5.0); cada materia puede tener su propia escala configurada por su docente.</p>
+          </div>
+        )}
+      </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-4">
         <div className="font-semibold text-slate-700 mb-3">Reporte por grado</div>
