@@ -266,6 +266,14 @@ function ImportarMoodleModal({ materiaId, gradoId, periodo, categorias, periodos
     });
   };
 
+  const marcarIncluirTodas = (valor) => {
+    setConfig((prev) => {
+      const nuevo = { ...prev };
+      encabezados.filter((h) => h !== colNombre).forEach((h) => { nuevo[h] = { ...nuevo[h], incluir: valor }; });
+      return nuevo;
+    });
+  };
+
   const importar = async () => {
     if (columnasIncluidas.length === 0) { alert("Selecciona al menos una columna de notas."); return; }
     setImportando(true);
@@ -354,6 +362,12 @@ function ImportarMoodleModal({ materiaId, gradoId, periodo, categorias, periodos
             </div>
 
             <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <span className="text-xs text-slate-500">Casillas de notas:</span>
+              <button onClick={() => marcarIncluirTodas(true)} className="text-xs px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700">✓ Seleccionar todas</button>
+              <button onClick={() => marcarIncluirTodas(false)} className="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">✕ Ninguna</button>
+            </div>
+
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
               <span className="text-xs text-slate-500">Marcar todas las columnas incluidas como periodo:</span>
               {periodos.map((p) => (
                 <button key={p} onClick={() => marcarTodasComo(p)} className="text-xs px-2.5 py-1 rounded-full bg-violet-50 text-violet-600">Periodo {p}</button>
@@ -364,7 +378,11 @@ function ImportarMoodleModal({ materiaId, gradoId, periodo, categorias, periodos
               <table className="w-full text-xs">
                 <thead className="bg-slate-50">
                   <tr>
-                    <th className="text-left px-3 py-2">Incluir</th>
+                    <th className="text-left px-3 py-2">
+                      <input type="checkbox"
+                        checked={encabezados.filter((h) => h !== colNombre).length > 0 && encabezados.filter((h) => h !== colNombre).every((h) => config[h]?.incluir)}
+                        onChange={(e) => marcarIncluirTodas(e.target.checked)} />
+                    </th>
                     <th className="text-left px-3 py-2">Columna</th>
                     <th className="text-left px-3 py-2">Categoría</th>
                     <th className="text-left px-3 py-2">Periodo</th>
