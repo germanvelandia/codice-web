@@ -270,8 +270,9 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, rein
                 className="text-sm font-semibold text-slate-800 border-b border-violet-300 outline-none flex-1 min-w-0" />
             </div>
           ) : (
-            <div className="text-sm font-semibold text-slate-800 truncate flex items-center gap-1">
-              {estudiante.nombre} <InclusionBadge estudiante={estudiante} />
+            <div className="text-sm font-semibold text-slate-800 flex items-center gap-1 min-w-0">
+              <span className="truncate min-w-0">{estudiante.nombre}</span>
+              <InclusionBadge estudiante={estudiante} />
               <button onClick={() => { setNombreTemp(estudiante.nombre); setEditandoNombre(true); }} title="Editar nombre" className="text-slate-300 hover:text-violet-500 text-xs shrink-0">✏️</button>
             </div>
           )}
