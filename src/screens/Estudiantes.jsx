@@ -214,10 +214,12 @@ export function InclusionModal({ estudiante, materiaId, onClose, onGuardado }) {
   );
 }
 
-function TarjetaEstudiante({ estudiante, onQuitar, onAplicado, reinos, catalogoReinos, onCambiarReino, roles, onCambiarRol, onCodigoGenerado }) {
+function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, reinos, catalogoReinos, onCambiarReino, roles, onCambiarRol, onCodigoGenerado }) {
   const [actasAbiertas, setActasAbiertas] = useState(false);
   const [inclusionAbierta, setInclusionAbierta] = useState(false);
   const [generando, setGenerando] = useState(false);
+  const [editandoNombre, setEditandoNombre] = useState(false);
+  const [nombreTemp, setNombreTemp] = useState(estudiante.nombre);
   const codigo = estudiante.codigo_acceso || null;
   const progreso = estudiante.progreso?.[0] || estudiante.progreso || { xp: 0, vida: 100, monedas: 0 };
   const reino = estudiante.reino_actual || estudiante.reino_original || "Sin grupo";
@@ -235,6 +237,19 @@ function TarjetaEstudiante({ estudiante, onQuitar, onAplicado, reinos, catalogoR
     setGenerando(false);
   };
 
+  const guardarNombre = async () => {
+    if (!nombreTemp.trim()) { setNombreTemp(estudiante.nombre); setEditandoNombre(false); return; }
+    if (nombreTemp.trim() !== estudiante.nombre) {
+      try {
+        await onRenombrar(estudiante.id, nombreTemp);
+      } catch (e) {
+        alert("Error al renombrar: " + e.message);
+        setNombreTemp(estudiante.nombre);
+      }
+    }
+    setEditandoNombre(false);
+  };
+
   return (
     <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
       <div className="flex items-start gap-3 mb-2">
@@ -247,9 +262,19 @@ function TarjetaEstudiante({ estudiante, onQuitar, onAplicado, reinos, catalogoR
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold text-slate-800 truncate flex items-center gap-1">
-            {estudiante.nombre} <InclusionBadge estudiante={estudiante} />
-          </div>
+          {editandoNombre ? (
+            <div className="flex items-center gap-1">
+              <input autoFocus value={nombreTemp} onChange={(e) => setNombreTemp(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") guardarNombre(); if (e.key === "Escape") { setNombreTemp(estudiante.nombre); setEditandoNombre(false); } }}
+                onBlur={guardarNombre}
+                className="text-sm font-semibold text-slate-800 border-b border-violet-300 outline-none flex-1 min-w-0" />
+            </div>
+          ) : (
+            <div className="text-sm font-semibold text-slate-800 truncate flex items-center gap-1">
+              {estudiante.nombre} <InclusionBadge estudiante={estudiante} />
+              <button onClick={() => { setNombreTemp(estudiante.nombre); setEditandoNombre(true); }} title="Editar nombre" className="text-slate-300 hover:text-violet-500 text-xs shrink-0">✏️</button>
+            </div>
+          )}
           <div className="flex items-center gap-1 text-xs text-slate-400">
             <select value={reino} onChange={(e) => onCambiarReino(estudiante.id, e.target.value)} className="text-xs bg-transparent outline-none">
               {reinos.map((r) => <option key={r} value={r}>{r}</option>)}
@@ -567,6 +592,11 @@ export function VistaEstudiantes({ gradoId, reinoFiltro, onVolver }) {
     setEstudiantes((prev) => prev.map((s) => (s.id === id ? { ...s, reino_actual: reino } : s)));
   };
 
+  const renombrar = async (id, nombreNuevo) => {
+    await api.editarNombreEstudiante(id, nombreNuevo);
+    setEstudiantes((prev) => prev.map((s) => (s.id === id ? { ...s, nombre: nombreNuevo.trim() } : s)));
+  };
+
   const cambiarRol = async (id, rolId) => {
     await api.asignarRol(id, rolId);
     setEstudiantes((prev) => prev.map((s) => (s.id === id ? { ...s, roles_asignados: rolId ? [{ rol_id: rolId }] : [] } : s)));
@@ -626,7 +656,7 @@ export function VistaEstudiantes({ gradoId, reinoFiltro, onVolver }) {
       ) : (
         <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
           {visibles.map((s) => (
-            <TarjetaEstudiante key={s.id} estudiante={s} reinos={reinos} catalogoReinos={catalogoReinos} onQuitar={quitar} onCambiarReino={cambiarReino} onAplicado={actualizarProgresoLocal} roles={roles} onCambiarRol={cambiarRol} onCodigoGenerado={actualizarCodigoLocal} />
+            <TarjetaEstudiante key={s.id} estudiante={s} reinos={reinos} catalogoReinos={catalogoReinos} onQuitar={quitar} onRenombrar={renombrar} onCambiarReino={cambiarReino} onAplicado={actualizarProgresoLocal} roles={roles} onCambiarRol={cambiarRol} onCodigoGenerado={actualizarCodigoLocal} />
           ))}
         </div>
       )}
