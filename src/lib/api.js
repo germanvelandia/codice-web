@@ -542,6 +542,40 @@ export async function fetchNotasFinales(materiaId) {
   return data || [];
 }
 
+// Control transversal: notas finales de un grado en TODAS las materias
+// (de todos los docentes), para un periodo dado (o todos si periodo es null).
+export async function fetchNotasFinalesTransversal(gradoId, periodo = null) {
+  const estudiantes = await fetchEstudiantesPorGrado(gradoId);
+  const ids = estudiantes.map((e) => e.id);
+  if (ids.length === 0) return { estudiantes: [], materias: [], notas: {} };
+
+  let query = supabase.from("notas_finales_periodo").select("*, materias(nombre, profesores(nombre))").in("estudiante_id", ids);
+  if (periodo) query = query.eq("periodo", periodo);
+  const { data, error } = await query;
+  if (error) throw error;
+
+  const materiasMap = {};
+  const notas = {};
+  (data || []).forEach((n) => {
+    if (!materiasMap[n.materia_id]) {
+      materiasMap[n.materia_id] = { id: n.materia_id, nombre: n.materias?.nombre || `Materia ${n.materia_id}`, docente: n.materias?.profesores?.nombre || null };
+    }
+    notas[n.estudiante_id] = notas[n.estudiante_id] || {};
+    // Si hay varios periodos y no se filtró uno específico, se guarda el promedio simple de los periodos disponibles
+    const anterior = notas[n.estudiante_id][n.materia_id];
+    notas[n.estudiante_id][n.materia_id] = anterior !== undefined ? { suma: anterior.suma + n.nota, n: anterior.n + 1 } : { suma: n.nota, n: 1 };
+  });
+
+  const materias = Object.values(materiasMap).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  const notasFinales = {};
+  Object.entries(notas).forEach(([estId, porMateria]) => {
+    notasFinales[estId] = {};
+    Object.entries(porMateria).forEach(([matId, v]) => { notasFinales[estId][matId] = Math.round((v.suma / v.n) * 10) / 10; });
+  });
+
+  return { estudiantes, materias, notas: notasFinales };
+}
+
 export async function guardarNotaFinal(materiaId, estudianteId, periodo, nota) {
   const { error } = await supabase.from("notas_finales_periodo").upsert(
     { materia_id: materiaId, estudiante_id: estudianteId, periodo, nota },
