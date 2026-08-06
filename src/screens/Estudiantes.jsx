@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabaseClient";
-import { ACCIONES_RAPIDAS, ACADEMICO_POS, ACADEMICO_NEG, PILARES, CONVIVENCIAL_POS_EXTRA, CONVIVENCIAL_NEG, initials, nextLevel, reinoColor, reinoInfo, REINO_COLORS } from "../lib/gamification";
+import { ACCIONES_RAPIDAS, ACADEMICO_POS, ACADEMICO_NEG, PILARES, CONVIVENCIAL_POS_EXTRA, CONVIVENCIAL_NEG, initials, nextLevel, reinoColor, reinoInfo, REINO_COLORS, sugerirApellidos } from "../lib/gamification";
 import * as api from "../lib/api";
 import { ActasModal } from "./Actas";
 
@@ -385,6 +385,75 @@ function ImportarEstudiantesModal({ gradoId, reinoDefault, onClose, onImportado 
   );
 }
 
+function OrganizarApellidosModal({ estudiantes, onClose, onGuardado }) {
+  const [filas, setFilas] = useState(
+    estudiantes.map((s) => ({ id: s.id, nombre: s.nombre, apellidos: s.apellidos || sugerirApellidos(s.nombre) }))
+  );
+  const [guardando, setGuardando] = useState(false);
+
+  const cambiar = (id, valor) => setFilas((prev) => prev.map((f) => (f.id === id ? { ...f, apellidos: valor } : f)));
+
+  const previa = [...filas].sort((a, b) =>
+    `${a.apellidos} ${a.nombre}`.localeCompare(`${b.apellidos} ${b.nombre}`, "es", { sensitivity: "base" })
+  );
+
+  const guardar = async () => {
+    setGuardando(true);
+    try {
+      for (const f of filas) {
+        await api.guardarApellidos(f.id, f.apellidos);
+      }
+      onGuardado();
+      onClose();
+    } catch (e) {
+      alert("Error al guardar: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="font-bold text-slate-800">🔤 Organizar orden alfabético</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-500 mb-4">
+          Se sugirió un apellido a partir del nombre completo de cada estudiante — revisalo y corregilo donde haga falta.
+          Una vez guardado, ese apellido queda fijo y se usa siempre para ordenar (deja de adivinarse).
+        </p>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <div className="text-xs font-semibold text-slate-500 mb-1">Nombre completo → Apellido(s)</div>
+            <div className="space-y-1.5">
+              {filas.map((f) => (
+                <div key={f.id} className="flex items-center gap-2">
+                  <div className="flex-1 text-xs text-slate-600 truncate">{f.nombre}</div>
+                  <input value={f.apellidos} onChange={(e) => cambiar(f.id, e.target.value)}
+                    className="w-32 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs font-semibold text-slate-500 mb-1">Vista previa del orden resultante</div>
+            <div className="space-y-1.5">
+              {previa.map((f, i) => (
+                <div key={f.id} className="text-xs text-slate-600 px-2 py-1.5 bg-slate-50 rounded-lg">{i + 1}. {f.nombre}</div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <button disabled={guardando} onClick={guardar} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60 mt-4">
+          {guardando ? "Guardando…" : "Guardar y aplicar orden"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function CodigosModal({ estudiantes, onClose, onActualizado }) {
   const [lista, setLista] = useState(estudiantes);
   const [generando, setGenerando] = useState(false);
@@ -546,6 +615,7 @@ export function VistaEstudiantes({ gradoId, reinoFiltro, onVolver }) {
   const [importarAbierto, setImportarAbierto] = useState(false);
   const [codigosAbierto, setCodigosAbierto] = useState(false);
   const [planillaBlancoAbierta, setPlanillaBlancoAbierta] = useState(false);
+  const [ordenAbierto, setOrdenAbierto] = useState(false);
 
   const cargar = async () => {
     setCargando(true);
@@ -615,6 +685,7 @@ export function VistaEstudiantes({ gradoId, reinoFiltro, onVolver }) {
           <div className="text-xs uppercase tracking-wide text-slate-400">Agregar estudiante</div>
           <div className="flex gap-2">
             <button onClick={() => setCodigosAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🔑 Ver códigos de acceso</button>
+            <button onClick={() => setOrdenAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🔤 Organizar orden alfabético</button>
             <button onClick={() => setPlanillaBlancoAbierta(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🖨️ Planilla en blanco</button>
             <button onClick={() => setImportarAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700">📥 Importar varios</button>
           </div>
@@ -645,6 +716,9 @@ export function VistaEstudiantes({ gradoId, reinoFiltro, onVolver }) {
       )}
       {planillaBlancoAbierta && (
         <PlanillaBlancoModal estudiantes={visibles} gradoId={gradoId} onClose={() => setPlanillaBlancoAbierta(false)} />
+      )}
+      {ordenAbierto && (
+        <OrganizarApellidosModal estudiantes={estudiantes} onClose={() => setOrdenAbierto(false)} onGuardado={cargar} />
       )}
 
       <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar estudiante…"
