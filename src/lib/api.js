@@ -67,6 +67,11 @@ export async function editarNombreEstudiante(id, nombre) {
   if (error) throw error;
 }
 
+export async function guardarApellidos(id, apellidos) {
+  const { error } = await supabase.from("estudiantes").update({ apellidos: apellidos.trim() || null }).eq("id", id);
+  if (error) throw error;
+}
+
 export async function quitarEstudiante(id) {
   const { error } = await supabase.from("estudiantes").update({ activo: false }).eq("id", id);
   if (error) throw error;
