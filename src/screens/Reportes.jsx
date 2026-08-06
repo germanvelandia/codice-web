@@ -150,9 +150,9 @@ export function VistaReportes({ grados }) {
             <table className="text-xs w-full" style={{ borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  <th className="sticky left-0 bg-slate-50 text-left px-3 py-2 border-b border-slate-100">Estudiante</th>
+                  <th className="sticky left-0 top-0 z-20 bg-slate-50 text-left px-3 py-2 border-b border-slate-100">Estudiante</th>
                   {transversal.materias.map((m) => (
-                    <th key={m.id} className="text-center px-3 py-2 border-b border-slate-100 bg-slate-50 whitespace-nowrap">
+                    <th key={m.id} className="sticky top-0 z-10 text-center px-3 py-2 border-b border-slate-100 bg-slate-50 whitespace-nowrap">
                       {m.nombre}{m.docente ? <div className="text-[9px] text-slate-400 font-normal">{m.docente}</div> : null}
                     </th>
                   ))}
