@@ -214,9 +214,60 @@ export function InclusionModal({ estudiante, materiaId, onClose, onGuardado }) {
   );
 }
 
-function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, reinos, catalogoReinos, onCambiarReino, roles, onCambiarRol, onCodigoGenerado }) {
+function TrasladoModal({ estudiante, grados, gradoActual, onClose, onTrasladado }) {
+  const opciones = grados.filter((g) => g.id !== gradoActual);
+  const [destino, setDestino] = useState(opciones[0]?.id || "");
+  const [reiniciarGrupo, setReiniciarGrupo] = useState(true);
+  const [guardando, setGuardando] = useState(false);
+
+  const trasladar = async () => {
+    if (!destino) return;
+    if (!confirm(`¿Trasladar a ${estudiante.nombre} al grado ${destino}? Conserva todas sus notas, asistencia y actas.`)) return;
+    setGuardando(true);
+    try {
+      await api.trasladarEstudiante(estudiante.id, destino, reiniciarGrupo);
+      onTrasladado();
+      onClose();
+    } catch (e) {
+      alert("Error al trasladar: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">🔀 Trasladar de grado</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-500 mb-3">
+          {estudiante.nombre} pasa del grado {gradoActual} a otro grado, conservando sus notas, asistencia, actas y progreso —
+          no hace falta volver a crearlo ni recalificarlo.
+        </p>
+
+        <label className="text-xs text-slate-500 block mb-1">Grado destino</label>
+        <select value={destino} onChange={(e) => setDestino(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none">
+          {opciones.map((g) => <option key={g.id} value={g.id}>Grado {g.id}</option>)}
+        </select>
+
+        <label className="flex items-center gap-2 text-xs text-slate-600 mb-4">
+          <input type="checkbox" checked={reiniciarGrupo} onChange={(e) => setReiniciarGrupo(e.target.checked)} />
+          Reiniciar su grupo/reino a "Sin grupo" (recomendado, ya que los grupos suelen ser propios de cada grado)
+        </label>
+
+        <button disabled={guardando || !destino} onClick={trasladar} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+          {guardando ? "Trasladando…" : "Confirmar traslado"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, reinos, catalogoReinos, onCambiarReino, roles, onCambiarRol, onCodigoGenerado, grados, gradoActual, onTrasladado }) {
   const [actasAbiertas, setActasAbiertas] = useState(false);
   const [inclusionAbierta, setInclusionAbierta] = useState(false);
+  const [trasladoAbierto, setTrasladoAbierto] = useState(false);
   const [generando, setGenerando] = useState(false);
   const [editandoNombre, setEditandoNombre] = useState(false);
   const [nombreTemp, setNombreTemp] = useState(estudiante.nombre);
@@ -305,6 +356,9 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, rein
       <div className="flex justify-between items-center mt-2">
         <button onClick={() => onQuitar(estudiante.id)} className="text-xs text-slate-400 hover:text-rose-500">Quitar</button>
         <div className="flex gap-1.5">
+          {grados && grados.length > 1 && (
+            <button onClick={() => setTrasladoAbierto(true)} className="text-xs px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🔀 Trasladar</button>
+          )}
           <button onClick={() => setInclusionAbierta(true)} className={`text-xs px-3 py-1.5 rounded-full border ${estudiante.piar || estudiante.dua ? "border-violet-300 bg-violet-50 text-violet-700" : "border-slate-200 text-slate-600"}`}>
             {estudiante.piar || estudiante.dua ? "🧩 Inclusión" : "+ Inclusión"}
           </button>
@@ -314,6 +368,9 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, rein
       </div>
       {actasAbiertas && <ActasModal estudiante={estudiante} onClose={() => setActasAbiertas(false)} />}
       {inclusionAbierta && <InclusionModal estudiante={estudiante} onClose={() => setInclusionAbierta(false)} onGuardado={() => setInclusionAbierta(false)} />}
+      {trasladoAbierto && (
+        <TrasladoModal estudiante={estudiante} grados={grados} gradoActual={gradoActual} onClose={() => setTrasladoAbierto(false)} onTrasladado={onTrasladado} />
+      )}
     </div>
   );
 }
@@ -604,7 +661,7 @@ function PlanillaBlancoModal({ estudiantes, gradoId, onClose }) {
   );
 }
 
-export function VistaEstudiantes({ gradoId, reinoFiltro, onVolver }) {
+export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver }) {
   const [estudiantes, setEstudiantes] = useState([]);
   const [roles, setRoles] = useState([]);
   const [catalogoReinos, setCatalogoReinos] = useState([]);
@@ -731,7 +788,7 @@ export function VistaEstudiantes({ gradoId, reinoFiltro, onVolver }) {
       ) : (
         <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
           {visibles.map((s) => (
-            <TarjetaEstudiante key={s.id} estudiante={s} reinos={reinos} catalogoReinos={catalogoReinos} onQuitar={quitar} onRenombrar={renombrar} onCambiarReino={cambiarReino} onAplicado={actualizarProgresoLocal} roles={roles} onCambiarRol={cambiarRol} onCodigoGenerado={actualizarCodigoLocal} />
+            <TarjetaEstudiante key={s.id} estudiante={s} reinos={reinos} catalogoReinos={catalogoReinos} onQuitar={quitar} onRenombrar={renombrar} onCambiarReino={cambiarReino} onAplicado={actualizarProgresoLocal} roles={roles} onCambiarRol={cambiarRol} onCodigoGenerado={actualizarCodigoLocal} grados={grados} gradoActual={gradoId} onTrasladado={cargar} />
           ))}
         </div>
       )}
