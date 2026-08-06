@@ -40,8 +40,26 @@ export function claveApellidoNombre(nombreCompleto) {
 
 export function ordenarPorApellido(estudiantes) {
   return [...estudiantes].sort((a, b) =>
-    claveApellidoNombre(a.nombre).localeCompare(claveApellidoNombre(b.nombre), "es", { sensitivity: "base" })
+    claveOrden(a).localeCompare(claveOrden(b), "es", { sensitivity: "base" })
   );
+}
+
+// Si el estudiante tiene apellido guardado explícitamente, se usa ese (orden confiable).
+// Si no, cae de vuelta a la adivinanza por posición de palabras (comportamiento anterior).
+export function claveOrden(estudiante) {
+  if (estudiante?.apellidos && estudiante.apellidos.trim()) {
+    return `${estudiante.apellidos.trim()} ${estudiante.nombre || ""}`;
+  }
+  return claveApellidoNombre(estudiante?.nombre);
+}
+
+// Sugerencia inicial de apellido a partir del nombre completo, para prellenar
+// el editor — el docente la confirma o la corrige, nunca se guarda sola.
+export function sugerirApellidos(nombreCompleto) {
+  const partes = (nombreCompleto || "").trim().split(/\s+/).filter(Boolean);
+  if (partes.length <= 1) return "";
+  if (partes.length <= 3) return partes.slice(1).join(" ");
+  return partes.slice(-2).join(" ");
 }
 
 // "Firma" de un nombre para poder comparar dos formatos distintos del mismo nombre
