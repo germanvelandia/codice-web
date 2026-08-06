@@ -589,7 +589,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
         <div className="text-sm text-slate-400">Cargando…</div>
       ) : (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-x-auto">
-          <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
+          <table className="w-full text-xs" style={{ borderCollapse: "separate", borderSpacing: 0 }}>
             <thead>
               <tr>
                 <th className="sticky left-0 top-0 z-20 bg-slate-50 text-left px-3 py-2 border-b border-slate-100">Estudiante</th>
@@ -699,7 +699,7 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
         <div className="text-sm text-slate-400">Cargando…</div>
       ) : (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-x-auto">
-          <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
+          <table className="w-full text-xs" style={{ borderCollapse: "separate", borderSpacing: 0 }}>
             <thead>
               <tr>
                 <th className="sticky left-0 top-0 z-20 text-left px-3 py-2 border-b border-slate-100 bg-slate-50">Estudiante</th>
