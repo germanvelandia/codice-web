@@ -592,9 +592,9 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
           <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                <th className="sticky left-0 bg-slate-50 text-left px-3 py-2 border-b border-slate-100">Estudiante</th>
+                <th className="sticky left-0 top-0 z-20 bg-slate-50 text-left px-3 py-2 border-b border-slate-100">Estudiante</th>
                 {actividades.map((a) => (
-                  <th key={a.id} className={`px-3 py-2 border-b border-slate-100 min-w-[110px] ${seleccionando && seleccionadas.includes(a.id) ? "bg-rose-50" : "bg-slate-50"}`}>
+                  <th key={a.id} className={`sticky top-0 z-10 px-3 py-2 border-b border-slate-100 min-w-[110px] ${seleccionando && seleccionadas.includes(a.id) ? "bg-rose-50" : "bg-slate-50"}`}>
                     <div className="flex items-center justify-center gap-1">
                       {seleccionando && (
                         <input type="checkbox" checked={seleccionadas.includes(a.id)} onChange={() => toggleSeleccion(a.id)} />
@@ -610,7 +610,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
                     </div>
                   </th>
                 ))}
-                <th className="px-3 py-2 border-b border-slate-100 bg-slate-50">Nota Final</th>
+                <th className="sticky top-0 z-10 px-3 py-2 border-b border-slate-100 bg-slate-50">Nota Final</th>
               </tr>
             </thead>
             <tbody>
@@ -702,9 +702,9 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
           <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                <th className="text-left px-3 py-2 border-b border-slate-100 bg-slate-50">Estudiante</th>
-                {periodos.map((p) => <th key={p} className="px-3 py-2 border-b border-slate-100 bg-slate-50">Periodo {p}</th>)}
-                <th className="px-3 py-2 border-b border-slate-100 bg-slate-50">Promedio</th>
+                <th className="sticky left-0 top-0 z-20 text-left px-3 py-2 border-b border-slate-100 bg-slate-50">Estudiante</th>
+                {periodos.map((p) => <th key={p} className="sticky top-0 z-10 px-3 py-2 border-b border-slate-100 bg-slate-50">Periodo {p}</th>)}
+                <th className="sticky top-0 z-10 px-3 py-2 border-b border-slate-100 bg-slate-50">Promedio</th>
               </tr>
             </thead>
             <tbody>
