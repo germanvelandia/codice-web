@@ -72,6 +72,16 @@ export async function guardarApellidos(id, apellidos) {
   if (error) throw error;
 }
 
+// Traslada un estudiante a otro grado. Notas, asistencia, actas, progreso y
+// código de acceso quedan vinculados al estudiante (no al grado), así que se
+// conservan automáticamente — no hace falta volver a crearlo ni recalificarlo.
+export async function trasladarEstudiante(id, nuevoGradoId, reiniciarGrupo) {
+  const cambios = { grado_id: nuevoGradoId };
+  if (reiniciarGrupo) { cambios.reino_actual = "Sin grupo"; cambios.reino_original = "Sin grupo"; }
+  const { error } = await supabase.from("estudiantes").update(cambios).eq("id", id);
+  if (error) throw error;
+}
+
 export async function quitarEstudiante(id) {
   const { error } = await supabase.from("estudiantes").update({ activo: false }).eq("id", id);
   if (error) throw error;
