@@ -502,6 +502,9 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
   const [reinoFiltro, setReinoFiltro] = useState("Todos");
   const [seleccionando, setSeleccionando] = useState(false);
   const [seleccionadas, setSeleccionadas] = useState([]);
+  const [finalesGuardados, setFinalesGuardados] = useState([]);
+  const [editandoFinal, setEditandoFinal] = useState(null); // estudianteId
+  const [valorFinalTemp, setValorFinalTemp] = useState("");
 
   const cargar = async () => {
     setCargando(true);
@@ -518,6 +521,8 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
     } else {
       setXpMapa({});
     }
+    const finales = await api.fetchNotasFinales(materiaId);
+    setFinalesGuardados(finales.filter((f) => f.periodo === periodo));
     setCargando(false);
   };
   useEffect(() => { cargar(); }, [materiaId, gradoId, periodo, estudiantes.length]);
@@ -553,7 +558,11 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
     });
   };
 
-  const notaFinal = (estudianteId) => {
+  // Si el docente ya fijó manualmente la nota final de este periodo, esa manda;
+  // si no, se muestra el cálculo automático de siempre (como preview, hasta que se guarde).
+  const notaManual = (estudianteId) => finalesGuardados.find((f) => f.estudiante_id === estudianteId)?.nota;
+
+  const notaFinalCalculada = (estudianteId) => {
     const porCategoria = {};
     actividades.forEach((a) => {
       const v = valorDeActividad(a, estudianteId);
@@ -562,6 +571,33 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
       porCategoria[a.categoria_id].push(v);
     });
     return notaFinalPonderada(porCategoria, categorias);
+  };
+
+  const notaFinal = (estudianteId) => {
+    const manual = notaManual(estudianteId);
+    return manual !== undefined && manual !== null ? manual : notaFinalCalculada(estudianteId);
+  };
+
+  const esManual = (estudianteId) => {
+    const manual = notaManual(estudianteId);
+    return manual !== undefined && manual !== null;
+  };
+
+  const guardarNotaFinalManual = async (estudianteId) => {
+    const valor = valorFinalTemp.trim() === "" ? null : parseFloat(valorFinalTemp.replace(",", "."));
+    if (valorFinalTemp.trim() !== "" && (isNaN(valor) || valor < config.escala_min || valor > config.nota_maxima)) {
+      alert(`La nota debe estar entre ${config.escala_min} y ${config.nota_maxima}.`);
+      return;
+    }
+    await api.guardarNotaFinal(materiaId, estudianteId, periodo, valor);
+    setEditandoFinal(null);
+    cargar();
+  };
+
+  const quitarNotaManual = async (estudianteId) => {
+    if (!confirm("¿Quitar el valor manual y volver a mostrar el cálculo automático? (esto no borra las notas de las actividades, solo el valor fijado a mano)")) return;
+    await api.guardarNotaFinal(materiaId, estudianteId, periodo, null);
+    cargar();
   };
 
   const eliminarAct = async (id) => { if (!confirm("¿Eliminar esta actividad?")) return; await api.eliminarActividad(id); cargar(); };
@@ -652,7 +688,31 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
                         </td>
                       );
                     })}
-                    <td className="text-center px-3 py-2 font-bold" style={{ color: banda.color }}>{final ?? "—"}</td>
+                    <td className="text-center px-3 py-2 font-bold" style={{ color: banda.color }}>
+                      {editandoFinal === s.id ? (
+                        <div className="flex items-center justify-center gap-1">
+                          <input autoFocus type="text" inputMode="decimal" value={valorFinalTemp} onChange={(e) => setValorFinalTemp(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") guardarNotaFinalManual(s.id); if (e.key === "Escape") setEditandoFinal(null); }}
+                            className="w-14 text-center text-xs rounded px-1 py-0.5 border border-violet-300 outline-none font-normal" />
+                          <button onClick={() => guardarNotaFinalManual(s.id)} className="text-emerald-500 text-xs">✔</button>
+                          <button onClick={() => setEditandoFinal(null)} className="text-slate-400 text-xs">✕</button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center gap-1 group cursor-pointer"
+                          onClick={() => { setEditandoFinal(s.id); setValorFinalTemp(final !== null && final !== undefined ? String(final) : ""); }}
+                          title={esManual(s.id) ? "Nota fijada manualmente — clic para editar" : "Clic para fijar manualmente"}>
+                          <span>{final ?? "—"}</span>
+                          {esManual(s.id) ? (
+                            <span className="text-violet-400 text-[10px]" title="Valor manual (no calculado)">✎</span>
+                          ) : (
+                            <span className="text-slate-300 text-[10px] opacity-0 group-hover:opacity-100">✎</span>
+                          )}
+                        </div>
+                      )}
+                      {esManual(s.id) && editandoFinal !== s.id && (
+                        <button onClick={() => quitarNotaManual(s.id)} className="block mx-auto text-[9px] text-slate-400 hover:text-rose-500 font-normal mt-0.5">quitar manual</button>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
