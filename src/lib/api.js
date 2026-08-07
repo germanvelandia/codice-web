@@ -398,6 +398,26 @@ export async function eliminarSeguimientoInclusion(id) {
   if (error) throw error;
 }
 
+/* ---------------- Directorio de acudientes ---------------- */
+export async function fetchAcudientesPorGrado(gradoId) {
+  const estudiantes = await fetchEstudiantesPorGrado(gradoId);
+  const ids = estudiantes.map((e) => e.id);
+  if (ids.length === 0) return [];
+  const { data, error } = await supabase.from("acudientes").select("*").in("estudiante_id", ids);
+  if (error) throw error;
+  const mapa = {};
+  (data || []).forEach((a) => { mapa[a.estudiante_id] = a; });
+  return estudiantes.map((s) => ({ estudiante: s, acudiente: mapa[s.id] || null }));
+}
+
+export async function guardarAcudiente(estudianteId, campos) {
+  const { error } = await supabase.from("acudientes").upsert(
+    { estudiante_id: estudianteId, ...campos, actualizado_en: new Date().toISOString() },
+    { onConflict: "estudiante_id" }
+  );
+  if (error) throw error;
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
