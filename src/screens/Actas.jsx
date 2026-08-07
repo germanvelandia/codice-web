@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import * as api from "../lib/api";
 import { FALTAS_MANUAL, NIVELACION_COMPROMISOS_DEFAULT } from "../lib/actasTemplates";
+import { inicialesConPuntos, documentoEnmascarado } from "../lib/gamification";
 
 function hoyISO() {
   return new Date().toISOString().slice(0, 10);
@@ -172,12 +173,21 @@ function ActaPrintView({ estudiante, acta, institucion, actasRelacionadas }) {
       <table className="print-avoid-break" style={{ width: "100%", fontSize: 12.5, marginBottom: 18, borderCollapse: "collapse" }}>
         <tbody>
           <tr>
-            <td style={{ padding: "3px 6px 3px 0", fontWeight: 700, width: 110 }}>Estudiante:</td><td style={{ padding: "3px 0" }}>{estudiante.nombre}</td>
+            <td style={{ padding: "3px 6px 3px 0", fontWeight: 700, width: 110 }}>Estudiante:</td><td style={{ padding: "3px 0" }}>{inicialesConPuntos(estudiante.nombre)}</td>
             <td style={{ padding: "3px 6px 3px 24px", fontWeight: 700, width: 70 }}>Grado:</td><td style={{ padding: "3px 0" }}>{estudiante.grado_id}</td>
           </tr>
           <tr>
-            <td style={{ padding: "3px 6px 3px 0", fontWeight: 700 }}>Grupo:</td><td style={{ padding: "3px 0" }}>{estudiante.reino_actual || estudiante.reino_original || "—"}</td>
-            <td style={{ padding: "3px 6px 3px 24px", fontWeight: 700 }}>Fecha:</td><td style={{ padding: "3px 0" }}>{a.fecha}</td>
+            <td style={{ padding: "3px 6px 3px 0", fontWeight: 700 }}>Documento:</td><td style={{ padding: "3px 0" }}>{documentoEnmascarado(estudiante.documento) || "No registrado"}</td>
+            <td style={{ padding: "3px 6px 3px 24px", fontWeight: 700 }}>Grupo:</td><td style={{ padding: "3px 0" }}>{estudiante.reino_actual || estudiante.reino_original || "—"}</td>
+          </tr>
+          <tr>
+            <td style={{ padding: "3px 6px 3px 0", fontWeight: 700 }}>Fecha:</td><td style={{ padding: "3px 0" }}>{a.fecha}</td>
+            {(estudiante.piar || estudiante.dua) && (
+              <>
+                <td style={{ padding: "3px 6px 3px 24px", fontWeight: 700 }}>Inclusión:</td>
+                <td style={{ padding: "3px 0" }}>{[estudiante.piar && "PIAR", estudiante.dua && "DUA"].filter(Boolean).join(" · ")}</td>
+              </>
+            )}
           </tr>
           {a.estado && a.tipo === "Nivelación" && (
             <tr>
@@ -193,20 +203,22 @@ function ActaPrintView({ estudiante, acta, institucion, actasRelacionadas }) {
       {seccion("Motivo", a.motivo)}
       {a.descripcion && seccion("Observaciones / descripción de la situación", a.descripcion)}
 
-      {/* Proceso convivencial */}
-      {a.tipo_falta && seccion(
-        `Proceso convivencial — Falta ${a.tipo_falta} (${a.articulo})`,
-        `Plazo de respuesta: ${a.plazo_dias} días hábiles.` + (a.compromisos_convivenciales ? `\n\nCompromisos convivenciales:\n${a.compromisos_convivenciales}` : ""),
-        { bg: "#FFF3F8", accent: "#DB2777" }
-      )}
-      {a.implicaciones_legales && seccion("Implicaciones legales", a.implicaciones_legales, { bg: "#FEF3C7", accent: "#B45309" })}
-
-      {/* Proceso académico */}
-      {a.compromisos_academicos && seccion(
-        a.tipo === "Nivelación" ? "Proceso académico — plan de nivelación" : "Compromisos académicos",
-        a.compromisos_academicos,
+      {/* Aspecto académico — siempre visible, con lo que haya registrado en esta acta */}
+      {seccion(
+        "Aspecto académico",
+        a.compromisos_academicos || "Sin observaciones académicas registradas en esta acta.",
         { bg: "#F5F3FF", accent: "#7C3AED" }
       )}
+
+      {/* Aspecto convivencial — siempre visible, con lo que haya registrado en esta acta */}
+      {seccion(
+        a.tipo_falta ? `Aspecto convivencial — Falta ${a.tipo_falta} (${a.articulo})` : "Aspecto convivencial",
+        (a.tipo_falta ? `Plazo de respuesta: ${a.plazo_dias} días hábiles.\n\n` : "") +
+          (a.compromisos_convivenciales || "Sin observaciones convivenciales registradas en esta acta."),
+        { bg: "#FFF3F8", accent: "#DB2777" }
+      )}
+
+      {a.implicaciones_legales && seccion("Implicaciones legales", a.implicaciones_legales, { bg: "#FEF3C7", accent: "#B45309" })}
 
       {a.compromisos && seccion("Compromisos", a.compromisos)}
 
@@ -259,7 +271,7 @@ function ActaPrintView({ estudiante, acta, institucion, actasRelacionadas }) {
 
       {/* Pie de página repetido en cada hoja (abajo a la izquierda) */}
       <div className="print-footer">
-        {institucion.nombre} · Folio {folio} · {estudiante.nombre} · Generado {new Date().toLocaleDateString("es-CO")}
+        {institucion.nombre} · Folio {folio} · {inicialesConPuntos(estudiante.nombre)} · Generado {new Date().toLocaleDateString("es-CO")}
       </div>
     </div>
   );
@@ -493,4 +505,3 @@ function NuevaActaForm({ estudianteId, onCancelar, onGuardada }) {
     </div>
   );
 }
- 
