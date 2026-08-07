@@ -682,6 +682,8 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
   const [nivelacion, setNivelacion] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [actaEstudiante, setActaEstudiante] = useState(null);
+  const [editandoCelda, setEditandoCelda] = useState(null); // { estudianteId, periodo }
+  const [valorTemp, setValorTemp] = useState("");
 
   const cargar = async () => {
     setCargando(true);
@@ -694,6 +696,22 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
   const notaGuardada = (estudianteId, periodo) => finales.find((f) => f.estudiante_id === estudianteId && f.periodo === periodo)?.nota ?? null;
   const estadoNiv = (estudianteId, periodo) => nivelacion.find((n) => n.estudiante_id === estudianteId && n.periodo === periodo)?.estado || "";
   const nivelacionDe = (estudianteId, periodo) => nivelacion.find((n) => n.estudiante_id === estudianteId && n.periodo === periodo);
+
+  const guardarNotaManual = async (estudianteId, periodo) => {
+    const valor = valorTemp.trim() === "" ? null : parseFloat(valorTemp.replace(",", "."));
+    if (valorTemp.trim() !== "" && (isNaN(valor) || valor < config.escala_min || valor > config.nota_maxima)) {
+      alert(`La nota debe estar entre ${config.escala_min} y ${config.nota_maxima}.`);
+      return;
+    }
+    if (valor === null) {
+      // Borra la nota final guardada (vuelve a quedar "—" hasta que se recalcule o se edite de nuevo)
+      await api.guardarNotaFinal(materiaId, estudianteId, periodo, null);
+    } else {
+      await api.guardarNotaFinal(materiaId, estudianteId, periodo, valor);
+    }
+    setEditandoCelda(null);
+    cargar();
+  };
 
   const cambiarNivelacion = async (estudianteId, periodo, estado) => {
     const registroPrevio = nivelacion.find((n) => n.estudiante_id === estudianteId && n.periodo === periodo);
@@ -720,8 +738,11 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
 
   return (
     <div>
-      <div className="flex justify-end mb-3">
-        <button onClick={async () => { await guardarActual(); cargar(); }} className="text-xs font-semibold px-4 py-2 rounded-full bg-violet-500 text-white">
+      <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
+        <p className="text-[11px] text-slate-400">
+          💡 Hacé clic en cualquier nota para editarla a mano (útil al migrar notas de otra planilla). El botón de la derecha recalcula con la fórmula y <b>sobreescribe</b> las notas de ese periodo — usalo solo si querés volver a calcular automáticamente.
+        </p>
+        <button onClick={async () => { await guardarActual(); cargar(); }} className="text-xs font-semibold px-4 py-2 rounded-full bg-violet-500 text-white shrink-0">
           💾 Guardar notas finales del periodo actual
         </button>
       </div>
@@ -752,10 +773,24 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
                       const mostrarOriginal = registroNiv?.estado === "superado" && registroNiv?.nota_original !== null && registroNiv?.nota_original !== undefined;
                       return (
                         <td key={p} className="text-center px-3 py-2">
-                          <div style={{ color: n !== null ? b.color : "#94A3B8", fontWeight: n !== null ? 700 : 400 }}>
-                            {n ?? "—"}
-                            {mostrarOriginal && <span className="text-[10px] text-slate-400 font-normal"> ({registroNiv.nota_original})</span>}
-                          </div>
+                          {editandoCelda?.estudianteId === s.id && editandoCelda?.periodo === p ? (
+                            <div className="flex items-center justify-center gap-1">
+                              <input autoFocus type="text" inputMode="decimal" value={valorTemp} onChange={(e) => setValorTemp(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === "Enter") guardarNotaManual(s.id, p); if (e.key === "Escape") setEditandoCelda(null); }}
+                                className="w-14 text-center text-xs rounded px-1 py-0.5 border border-violet-300 outline-none" />
+                              <button onClick={() => guardarNotaManual(s.id, p)} className="text-emerald-500 text-xs">✔</button>
+                              <button onClick={() => setEditandoCelda(null)} className="text-slate-400 text-xs">✕</button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center gap-1 group cursor-pointer"
+                              onClick={() => { setEditandoCelda({ estudianteId: s.id, periodo: p }); setValorTemp(n !== null ? String(n) : ""); }}>
+                              <span style={{ color: n !== null ? b.color : "#94A3B8", fontWeight: n !== null ? 700 : 400 }}>
+                                {n ?? "—"}
+                                {mostrarOriginal && <span className="text-[10px] text-slate-400 font-normal"> ({registroNiv.nota_original})</span>}
+                              </span>
+                              <span className="text-slate-300 text-[10px] opacity-0 group-hover:opacity-100">✎</span>
+                            </div>
+                          )}
                           {necesitaNiv && (
                             <div className="flex items-center gap-1 mt-1">
                               <select value={estadoNiv(s.id, p)} onChange={(e) => cambiarNivelacion(s.id, p, e.target.value)} className="text-[10px] rounded px-1 py-0.5 border border-slate-200">
