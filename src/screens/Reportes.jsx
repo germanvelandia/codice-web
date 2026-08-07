@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import * as api from "../lib/api";
 import { nextLevel } from "../lib/gamification";
 import { bandaDesempeno } from "../lib/calificaciones";
+import { ActasModal } from "./Actas";
 
 export function VistaReportes({ grados }) {
   const [gradoId, setGradoId] = useState(grados[0]?.id || "");
@@ -12,6 +13,9 @@ export function VistaReportes({ grados }) {
   const [periodoTransversal, setPeriodoTransversal] = useState("");
   const [transversal, setTransversal] = useState(null);
   const [cargandoTransversal, setCargandoTransversal] = useState(false);
+  const [configsPorMateria, setConfigsPorMateria] = useState({});
+  const [actaEstudiante, setActaEstudiante] = useState(null);
+  const [generandoActas, setGenerandoActas] = useState(false);
 
   useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
   useEffect(() => {
@@ -28,12 +32,39 @@ export function VistaReportes({ grados }) {
     try {
       const r = await api.fetchNotasFinalesTransversal(gradoId, periodoTransversal || null);
       setTransversal(r);
+      const configs = {};
+      await Promise.all(r.materias.map(async (m) => { configs[m.id] = await api.fetchNotasConfig(m.id); }));
+      setConfigsPorMateria(configs);
     } catch (e) {
       alert("Error al cargar el control transversal: " + e.message);
     }
     setCargandoTransversal(false);
   };
   useEffect(() => { cargarTransversal(); }, [gradoId, periodoTransversal]);
+
+  const generarActasPendientes = async () => {
+    if (!periodoTransversal) { alert("Elegí un periodo específico (no \"Todos los periodos\") para poder generar las actas."); return; }
+    if (!transversal) return;
+    setGenerandoActas(true);
+    let creadas = 0;
+    try {
+      for (const s of transversal.estudiantes) {
+        for (const m of transversal.materias) {
+          const nota = transversal.notas[s.id]?.[m.id];
+          const cfg = configsPorMateria[m.id];
+          if (nota === undefined || !cfg) continue;
+          if (nota < cfg.nota_minima) {
+            await api.crearActaNivelacionSiReprobado(m.id, m.nombre, s.id, periodoTransversal, nota, cfg);
+            creadas++;
+          }
+        }
+      }
+      alert(`Listo. Se revisaron todas las materias del grado — se crearon o actualizaron ${creadas} acta(s) de nivelación para el periodo ${periodoTransversal}.`);
+    } catch (e) {
+      alert("Error al generar actas: " + e.message);
+    }
+    setGenerandoActas(false);
+  };
 
   const exportarTransversal = () => {
     if (!transversal) return;
@@ -51,9 +82,10 @@ export function VistaReportes({ grados }) {
     setCargando(true);
     try {
       const filas = [];
+      const filasPorMateria = [];
       for (const s of estudiantes) {
         const progreso = s.progreso?.[0] || s.progreso || { xp: 0, vida: 100, monedas: 0 };
-        const asis = await api.fetchEstadisticasAsistencia(s.id);
+        const asisConsolidada = await api.fetchAsistenciaConsolidadaEstudiante(s.id);
         const { level } = nextLevel(progreso.xp || 0);
         filas.push({
           Nombre: s.nombre,
@@ -62,15 +94,23 @@ export function VistaReportes({ grados }) {
           XP: progreso.xp || 0,
           Vida: progreso.vida ?? 100,
           Monedas: progreso.monedas || 0,
-          "% Asistencia": asis.pct ?? "—",
-          Presentes: asis.P,
-          Retardos: asis.R,
-          "Faltas injustificadas": asis.FI,
-          "Faltas justificadas": asis.FJ,
+          Presentes: asisConsolidada.general.P || 0,
+          Retardos: asisConsolidada.general.R || 0,
+          "Faltas injustificadas": asisConsolidada.general.FI || 0,
+          "Faltas justificadas": asisConsolidada.general.FJ || 0,
+        });
+        Object.entries(asisConsolidada.porMateria).forEach(([nombreMateria, m]) => {
+          filasPorMateria.push({
+            Nombre: s.nombre, Grupo: s.reino_actual || s.reino_original, Materia: nombreMateria, Docente: m.docente || "",
+            Presentes: m.P || 0, Retardos: m.R || 0, "Faltas injustificadas": m.FI || 0, "Faltas justificadas": m.FJ || 0,
+          });
         });
       }
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filas), `Grado ${gradoId}`);
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+        filasPorMateria.length > 0 ? filasPorMateria : [{ Info: "Sin registros de asistencia" }]
+      ), "Asistencia por materia");
       XLSX.writeFile(wb, `Grado_${gradoId}.xlsx`);
     } catch (e) {
       alert("Error al exportar: " + e.message);
@@ -85,7 +125,7 @@ export function VistaReportes({ grados }) {
     try {
       const progreso = s.progreso?.[0] || s.progreso || { xp: 0, vida: 100, monedas: 0 };
       const { level } = nextLevel(progreso.xp || 0);
-      const asis = await api.fetchEstadisticasAsistencia(s.id);
+      const asisConsolidada = await api.fetchAsistenciaConsolidadaEstudiante(s.id);
       const actas = await api.fetchActasPorEstudiante(s.id);
 
       const wb = XLSX.utils.book_new();
@@ -94,10 +134,30 @@ export function VistaReportes({ grados }) {
         Nivel: level.name, XP: progreso.xp || 0, Vida: progreso.vida ?? 100, Monedas: progreso.monedas || 0,
       }]), "Resumen");
 
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{
-        Presentes: asis.P, Retardos: asis.R, "Faltas injustificadas": asis.FI, "Faltas justificadas": asis.FJ,
-        Total: asis.total, "% Asistencia": asis.pct ?? "—",
-      }]), "Asistencia");
+      // Resumen de asistencia por materia (retardos y faltas separados, con el nombre de cada materia)
+      const resumenPorMateria = Object.entries(asisConsolidada.porMateria).map(([nombreMateria, m]) => ({
+        Materia: nombreMateria, Docente: m.docente || "", Presentes: m.P || 0, Retardos: m.R || 0,
+        "Faltas injustificadas": m.FI || 0, "Faltas justificadas": m.FJ || 0, Total: m.total,
+      }));
+      resumenPorMateria.push({
+        Materia: "TOTAL (todas las materias)", Docente: "", Presentes: asisConsolidada.general.P || 0,
+        Retardos: asisConsolidada.general.R || 0, "Faltas injustificadas": asisConsolidada.general.FI || 0,
+        "Faltas justificadas": asisConsolidada.general.FJ || 0, Total: asisConsolidada.general.total,
+      });
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumenPorMateria), "Asistencia (resumen)");
+
+      // Listado detallado: cada registro con su materia, fecha y tipo
+      const nombresCodigo = { P: "Presente", R: "Retardo", FI: "Falta injustificada", FJ: "Falta justificada" };
+      const detalle = asisConsolidada.registros.map((r) => ({
+        Fecha: r.fecha,
+        Materia: r.materia_id ? (r.materias?.nombre || `Materia ${r.materia_id}`) : "General (sin materia asociada)",
+        Docente: r.materias?.profesores?.nombre || "",
+        Tipo: nombresCodigo[r.codigo] || r.codigo,
+        Observación: r.observacion || "",
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+        detalle.length > 0 ? detalle : [{ Info: "Sin registros de asistencia" }]
+      ), "Asistencia (detalle)");
 
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
         actas.length > 0
@@ -138,6 +198,9 @@ export function VistaReportes({ grados }) {
             <button disabled={!transversal} onClick={exportarTransversal} className="text-sm font-semibold px-4 py-2 rounded-full bg-violet-500 text-white disabled:opacity-60">
               📊 Exportar Excel
             </button>
+            <button disabled={!transversal || generandoActas} onClick={generarActasPendientes} className="text-sm font-semibold px-4 py-2 rounded-full bg-rose-500 text-white disabled:opacity-60">
+              {generandoActas ? "Generando…" : "📋 Generar actas pendientes"}
+            </button>
           </div>
         </div>
 
@@ -161,10 +224,15 @@ export function VistaReportes({ grados }) {
               <tbody>
                 {transversal.estudiantes.map((s) => (
                   <tr key={s.id} className="odd:bg-white even:bg-slate-50">
-                    <td className="sticky left-0 bg-inherit text-left px-3 py-2 font-medium text-slate-700 whitespace-nowrap">{s.nombre}</td>
+                    <td className="sticky left-0 bg-inherit text-left px-3 py-2 font-medium text-slate-700 whitespace-nowrap">
+                      <button onClick={() => setActaEstudiante(s)} className="hover:text-violet-600" title="Ver / crear actas de este estudiante">
+                        📋 {s.nombre}
+                      </button>
+                    </td>
                     {transversal.materias.map((m) => {
                       const n = transversal.notas[s.id]?.[m.id];
-                      const banda = n !== undefined ? bandaDesempeno(n, { escala_min: 1, nota_minima: 3, nota_maxima: 5 }) : null;
+                      const cfg = configsPorMateria[m.id] || { escala_min: 1, nota_minima: 3.5, nota_maxima: 5 };
+                      const banda = n !== undefined ? bandaDesempeno(n, cfg) : null;
                       return (
                         <td key={m.id} className="text-center px-3 py-2 font-semibold" style={{ color: banda?.color || "#CBD5E1" }}>
                           {n ?? "—"}
@@ -175,7 +243,7 @@ export function VistaReportes({ grados }) {
                 ))}
               </tbody>
             </table>
-            <p className="text-[10px] text-slate-400 mt-2">Los colores usan una escala de referencia general (mínima aprobatoria 3.0 / máxima 5.0); cada materia puede tener su propia escala configurada por su docente.</p>
+            <p className="text-[10px] text-slate-400 mt-2">Los colores usan la escala mínima aprobatoria real configurada en cada materia (no una genérica). Clic en el nombre de un estudiante para ver o crear sus actas. El botón "Generar actas pendientes" solo funciona con un periodo específico seleccionado (no con "Todos los periodos").</p>
           </div>
         )}
       </div>
@@ -206,8 +274,10 @@ export function VistaReportes({ grados }) {
             {cargando ? "Generando…" : "📄 Exportar Excel"}
           </button>
         </div>
-        <p className="text-xs text-slate-400 mt-2">Incluye 3 hojas: Resumen (gamificación), Asistencia y Actas de seguimiento.</p>
+        <p className="text-xs text-slate-400 mt-2">Incluye 4 hojas: Resumen (gamificación), Asistencia por materia (resumen), Asistencia detallada (fecha, materia y tipo) y Actas de seguimiento.</p>
       </div>
+
+      {actaEstudiante && <ActasModal estudiante={actaEstudiante} onClose={() => setActaEstudiante(null)} />}
     </div>
   );
 }
