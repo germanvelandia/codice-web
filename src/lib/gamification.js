@@ -180,4 +180,4 @@ export function reinoInfo(nombre, catalogoReinos) {
     color: enCatalogo?.color || reinoColor(nombre),
     logo_url: enCatalogo?.logo_url || null,
   };
-}
+} 
