@@ -418,6 +418,49 @@ export async function guardarAcudiente(estudianteId, campos) {
   if (error) throw error;
 }
 
+/* ---------------- Horario de clases ---------------- */
+export async function fetchHorario() {
+  const { data, error } = await supabase
+    .from("horario")
+    .select("*, materias(nombre), profesores(nombre)")
+    .order("dia_semana").order("hora_inicio");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearHorario(campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("horario").insert({ ...campos, docente_id: userData?.user?.id || null });
+  if (error) throw error;
+}
+
+export async function eliminarHorario(id) {
+  const { error } = await supabase.from("horario").delete().eq("id", id);
+  if (error) throw error;
+}
+
+/* ---------------- Cronograma de actividades ---------------- */
+export async function fetchCronograma() {
+  const { data, error } = await supabase
+    .from("cronograma")
+    .select("*, profesores(nombre)")
+    .order("fecha");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearEventoCronograma(campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("cronograma").insert({ ...campos, docente_id: userData?.user?.id || null }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function eliminarEventoCronograma(id) {
+  const { error } = await supabase.from("cronograma").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
@@ -765,4 +808,4 @@ export async function registrarAccion(estudianteId, accion) {
   });
   if (error) throw error;
   return { xp: nuevoXp, vida: nuevaVida, monedas: nuevasMonedas };
-} 
+}
