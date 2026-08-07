@@ -20,19 +20,21 @@ html, body, #root {
     height: auto;
   }
 
-  body * {
-    visibility: hidden;
-  }
-
-  .print-only, .print-only * {
-    visibility: visible;
+  /* display:none libera el espacio que ocupaba el resto de la app —
+     con solo visibility:hidden ese espacio quedaba reservado y empujaba
+     el acta hacia abajo, generando hojas en blanco de más. */
+  body > *:not(.print-only) {
+    display: none !important;
   }
 
   .print-only {
-    display: block;
+    display: block !important;
     position: static;
     width: auto;
     margin: 0;
+  }
+  .print-only * {
+    visibility: visible;
   }
 
   /* Pie de página repetido en cada hoja impresa, alineado abajo a la izquierda */
