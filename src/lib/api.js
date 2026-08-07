@@ -420,12 +420,15 @@ export async function guardarAcudiente(estudianteId, campos) {
 
 /* ---------------- Horario de clases ---------------- */
 export async function fetchHorario() {
-  const { data, error } = await supabase
-    .from("horario")
-    .select("*, materias(nombre), profesores(nombre)")
-    .order("dia_semana").order("hora_inicio");
-  if (error) throw error;
-  return data || [];
+  const [horarioRes, profesoresRes] = await Promise.all([
+    supabase.from("horario").select("*, materias(nombre)").order("dia_semana").order("hora_inicio"),
+    supabase.from("profesores").select("id, nombre"),
+  ]);
+  if (horarioRes.error) throw horarioRes.error;
+  if (profesoresRes.error) throw profesoresRes.error;
+  const nombrePorId = {};
+  (profesoresRes.data || []).forEach((p) => { nombrePorId[p.id] = p.nombre; });
+  return (horarioRes.data || []).map((h) => ({ ...h, profesores: { nombre: nombrePorId[h.docente_id] || null } }));
 }
 
 export async function crearHorario(campos) {
@@ -441,12 +444,15 @@ export async function eliminarHorario(id) {
 
 /* ---------------- Cronograma de actividades ---------------- */
 export async function fetchCronograma() {
-  const { data, error } = await supabase
-    .from("cronograma")
-    .select("*, profesores(nombre)")
-    .order("fecha");
-  if (error) throw error;
-  return data || [];
+  const [cronoRes, profesoresRes] = await Promise.all([
+    supabase.from("cronograma").select("*").order("fecha"),
+    supabase.from("profesores").select("id, nombre"),
+  ]);
+  if (cronoRes.error) throw cronoRes.error;
+  if (profesoresRes.error) throw profesoresRes.error;
+  const nombrePorId = {};
+  (profesoresRes.data || []).forEach((p) => { nombrePorId[p.id] = p.nombre; });
+  return (cronoRes.data || []).map((e) => ({ ...e, profesores: { nombre: nombrePorId[e.docente_id] || null } }));
 }
 
 export async function crearEventoCronograma(campos) {
