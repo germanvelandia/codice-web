@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabaseClient";
 import { ACCIONES_RAPIDAS, ACADEMICO_POS, ACADEMICO_NEG, PILARES, CONVIVENCIAL_POS_EXTRA, CONVIVENCIAL_NEG, initials, nextLevel, reinoColor, reinoInfo, REINO_COLORS, sugerirApellidos } from "../lib/gamification";
 import * as api from "../lib/api";
 import { ActasModal } from "./Actas";
+import { DirectorioModal } from "./Directorio";
 
 function LevelBar({ xp }) {
   const { level, next, pct } = nextLevel(xp);
@@ -724,6 +725,7 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver }) {
   const [codigosAbierto, setCodigosAbierto] = useState(false);
   const [planillaBlancoAbierta, setPlanillaBlancoAbierta] = useState(false);
   const [ordenAbierto, setOrdenAbierto] = useState(false);
+  const [directorioAbierto, setDirectorioAbierto] = useState(false);
 
   const cargar = async () => {
     setCargando(true);
@@ -794,6 +796,7 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver }) {
           <div className="flex gap-2">
             <button onClick={() => setCodigosAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🔑 Ver códigos de acceso</button>
             <button onClick={() => setOrdenAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🔤 Organizar orden alfabético</button>
+            <button onClick={() => setDirectorioAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">👪 Directorio de acudientes</button>
             <button onClick={() => setPlanillaBlancoAbierta(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🖨️ Planilla en blanco</button>
             <button onClick={() => setImportarAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700">📥 Importar varios</button>
           </div>
@@ -827,6 +830,9 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver }) {
       )}
       {ordenAbierto && (
         <OrganizarApellidosModal estudiantes={estudiantes} onClose={() => setOrdenAbierto(false)} onGuardado={cargar} />
+      )}
+      {directorioAbierto && (
+        <DirectorioModal gradoId={gradoId} onClose={() => setDirectorioAbierto(false)} />
       )}
 
       <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar estudiante…"
