@@ -165,6 +165,7 @@ export function documentoEnmascarado(documento) {
   if (limpio.length <= 4) return limpio;
   return "*".repeat(limpio.length - 4) + limpio.slice(-4);
 }
+export const REINO_COLORS = ["#8B5CF6", "#F43F5E", "#F59E0B", "#22C55E", "#3B82F6", "#EC4899", "#14B8A6", "#FB923C"];
 export function reinoColor(nombre) {
   let hash = 0;
   for (let i = 0; i < (nombre || "").length; i++) hash = (hash * 31 + nombre.charCodeAt(i)) % REINO_COLORS.length;
