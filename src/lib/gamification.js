@@ -148,7 +148,23 @@ export const CONVIVENCIAL_NEG = [
   { label: "Falta grave / compromiso incumplido", xp: -20, vida: -15 },
 ];
 
-export const REINO_COLORS = ["#8B5CF6", "#F43F5E", "#F59E0B", "#22C55E", "#3B82F6", "#EC4899", "#14B8A6", "#FB923C"];
+// Iniciales con puntos para uso en documentos oficiales (ej: "Melany Garcia Giraldo" -> "M.G.G.")
+export function inicialesConPuntos(nombreCompleto) {
+  return (nombreCompleto || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((p) => p[0].toUpperCase() + ".")
+    .join("");
+}
+
+// Solo los últimos 4 dígitos de un documento, enmascarando el resto (ej: "1098765432" -> "******5432")
+export function documentoEnmascarado(documento) {
+  const limpio = (documento || "").replace(/\D/g, "");
+  if (!limpio) return null;
+  if (limpio.length <= 4) return limpio;
+  return "*".repeat(limpio.length - 4) + limpio.slice(-4);
+}
 export function reinoColor(nombre) {
   let hash = 0;
   for (let i = 0; i < (nombre || "").length; i++) hash = (hash * 31 + nombre.charCodeAt(i)) % REINO_COLORS.length;
