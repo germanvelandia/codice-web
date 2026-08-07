@@ -264,10 +264,47 @@ function TrasladoModal({ estudiante, grados, gradoActual, onClose, onTrasladado 
   );
 }
 
+function DocumentoModal({ estudiante, onClose, onGuardado }) {
+  const [documento, setDocumento] = useState(estudiante.documento || "");
+  const [guardando, setGuardando] = useState(false);
+
+  const guardar = async () => {
+    setGuardando(true);
+    try {
+      await api.guardarDocumento(estudiante.id, documento);
+      onGuardado(documento.trim() || null);
+      onClose();
+    } catch (e) {
+      alert("Error al guardar: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">🪪 Documento — {estudiante.nombre}</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-500 mb-3">
+          Se guarda completo, pero en las actas oficiales solo se muestran los últimos 4 dígitos.
+        </p>
+        <input value={documento} onChange={(e) => setDocumento(e.target.value)} placeholder="Número de documento"
+          className="w-full text-sm rounded-lg px-3 py-2 mb-4 border border-slate-200 outline-none" />
+        <button disabled={guardando} onClick={guardar} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+          {guardando ? "Guardando…" : "Guardar"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, reinos, catalogoReinos, onCambiarReino, roles, onCambiarRol, onCodigoGenerado, grados, gradoActual, onTrasladado }) {
   const [actasAbiertas, setActasAbiertas] = useState(false);
   const [inclusionAbierta, setInclusionAbierta] = useState(false);
   const [trasladoAbierto, setTrasladoAbierto] = useState(false);
+  const [documentoAbierto, setDocumentoAbierto] = useState(false);
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [generando, setGenerando] = useState(false);
   const [editandoNombre, setEditandoNombre] = useState(false);
@@ -368,6 +405,7 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, rein
                   {estudiante.piar || estudiante.dua ? "🧩 Inclusión" : "+ Inclusión"}
                 </button>
                 <button onClick={() => { setMenuAbierto(false); setActasAbiertas(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📋 Actas</button>
+                <button onClick={() => { setMenuAbierto(false); setDocumentoAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">🪪 Documento</button>
                 <div className="border-t border-slate-100 my-1" />
                 <button onClick={() => { setMenuAbierto(false); onQuitar(estudiante.id); }} className="w-full text-left text-xs px-3 py-2 hover:bg-rose-50 text-rose-500">🗑 Quitar de la lista</button>
               </div>
@@ -380,6 +418,9 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, rein
       {inclusionAbierta && <InclusionModal estudiante={estudiante} onClose={() => setInclusionAbierta(false)} onGuardado={() => setInclusionAbierta(false)} />}
       {trasladoAbierto && (
         <TrasladoModal estudiante={estudiante} grados={grados} gradoActual={gradoActual} onClose={() => setTrasladoAbierto(false)} onTrasladado={onTrasladado} />
+      )}
+      {documentoAbierto && (
+        <DocumentoModal estudiante={estudiante} onClose={() => setDocumentoAbierto(false)} onGuardado={onTrasladado} />
       )}
     </div>
   );
