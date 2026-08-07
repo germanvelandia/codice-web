@@ -765,4 +765,4 @@ export async function registrarAccion(estudianteId, accion) {
   });
   if (error) throw error;
   return { xp: nuevoXp, vida: nuevaVida, monedas: nuevasMonedas };
-}
+} 
