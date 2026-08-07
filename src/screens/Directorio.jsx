@@ -178,4 +178,4 @@ export function DirectorioModal({ gradoId, onClose }) {
       )}
     </div>
   );
-}
+}  
