@@ -10,6 +10,7 @@ import { VistaCalificaciones } from "./screens/Calificaciones";
 import { VistaReportes } from "./screens/Reportes";
 import { VistaHorario } from "./screens/Horario";
 import { VistaPlaneaciones } from "./screens/Planeaciones";
+import { VistaEvaluaciones } from "./screens/Evaluaciones";
 import { InstitucionModal } from "./screens/Institucion";
 import { AdministracionModal } from "./screens/Administracion";
 
@@ -54,9 +55,160 @@ function AccessGate() {
   );
 }
 
+function TomarEvaluacion({ evaluacion, estudianteId, onCerrar }) {
+  const [intentoId, setIntentoId] = useState(null);
+  const [preguntas, setPreguntas] = useState([]);
+  const [respuestas, setRespuestas] = useState({});
+  const [cargando, setCargando] = useState(true);
+  const [enviando, setEnviando] = useState(false);
+  const [enviado, setEnviado] = useState(false);
+  const [errorInicio, setErrorInicio] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const id = await api.iniciarIntento(evaluacion.id, estudianteId);
+        setIntentoId(id);
+        const p = await api.obtenerPreguntasParaEstudiante(evaluacion.id);
+        setPreguntas(p);
+      } catch (e) {
+        setErrorInicio(e.message);
+      }
+      setCargando(false);
+    })();
+  }, []);
+
+  const responder = (preguntaId, valor) => setRespuestas((prev) => ({ ...prev, [preguntaId]: valor }));
+
+  const enviar = async () => {
+    if (!confirm("¿Entregar la evaluación? No vas a poder cambiar tus respuestas después.")) return;
+    setEnviando(true);
+    try {
+      const payload = preguntas.map((p) => ({ pregunta_id: p.id, respuesta: respuestas[p.id] || "" }));
+      await api.entregarIntento(intentoId, payload);
+      setEnviado(true);
+    } catch (e) {
+      alert("Error al entregar: " + e.message);
+    }
+    setEnviando(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
+      <div className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
+        {cargando ? (
+          <div className="text-sm text-slate-400">Cargando…</div>
+        ) : errorInicio ? (
+          <>
+            <p className="text-sm text-rose-500 mb-3">{errorInicio}</p>
+            <button onClick={onCerrar} className="text-sm px-4 py-2 rounded-lg bg-violet-500 text-white">Cerrar</button>
+          </>
+        ) : enviado ? (
+          <div className="text-center py-6">
+            <div className="text-3xl mb-2">✅</div>
+            <p className="text-sm text-slate-700 mb-1">¡Entregado!</p>
+            <p className="text-xs text-slate-400 mb-4">Tu docente va a revisar y publicar tu nota pronto.</p>
+            <button onClick={onCerrar} className="text-sm px-4 py-2 rounded-lg bg-violet-500 text-white">Cerrar</button>
+          </div>
+        ) : (
+          <>
+            <h3 className="font-bold text-slate-800 mb-1">{evaluacion.titulo}</h3>
+            {evaluacion.descripcion && <p className="text-xs text-slate-500 mb-3">{evaluacion.descripcion}</p>}
+            <div className="space-y-3 mb-4">
+              {preguntas.map((p, i) => (
+                <div key={p.id} className="border border-slate-100 rounded-xl p-3">
+                  <div className="text-sm font-medium text-slate-800 mb-2">{i + 1}. {p.enunciado}</div>
+                  {p.tipo === "respuesta_corta" ? (
+                    <textarea value={respuestas[p.id] || ""} onChange={(e) => responder(p.id, e.target.value)} rows={2}
+                      className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" />
+                  ) : (
+                    <div className="space-y-1.5">
+                      {(p.opciones || []).map((o, j) => (
+                        <label key={j} className="flex items-center gap-2 text-sm">
+                          <input type="radio" name={`p-${p.id}`} checked={respuestas[p.id] === o.texto} onChange={() => responder(p.id, o.texto)} />
+                          {o.texto}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            <button disabled={enviando} onClick={enviar} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+              {enviando ? "Entregando…" : "Entregar evaluación"}
+            </button>
+            <button onClick={onCerrar} className="w-full text-xs text-slate-400 mt-2">Cancelar (no se guarda nada)</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TarjetaEvaluacionEstudiante({ evaluacion, estudianteId }) {
+  const [intentos, setIntentos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [tomando, setTomando] = useState(false);
+
+  const cargar = () => api.fetchMisIntentos(evaluacion.id, estudianteId).then((d) => { setIntentos(d); setCargando(false); });
+  useEffect(() => { cargar(); }, [evaluacion.id]);
+
+  if (cargando) return null;
+  const usados = intentos.length;
+  const maxIntentos = evaluacion.intentos_permitidos;
+  const puedeIntentar = maxIntentos === null || usados < maxIntentos;
+  const publicado = intentos.filter((i) => i.visible_para_estudiante).sort((a, b) => b.numero_intento - a.numero_intento)[0];
+  const hayPendiente = intentos.some((i) => i.estado !== "en_progreso" && !i.visible_para_estudiante);
+
+  return (
+    <div className="bg-slate-50 rounded-xl p-3">
+      <div className="text-sm font-semibold text-slate-800">{evaluacion.titulo}</div>
+      {evaluacion.descripcion && <div className="text-xs text-slate-500 mt-0.5">{evaluacion.descripcion}</div>}
+      <div className="text-[11px] text-slate-400 mt-1">
+        {maxIntentos ? `${usados}/${maxIntentos} intentos usados` : `${usados} intento(s) usados`}
+        {evaluacion.tiempo_limite_minutos ? ` · ${evaluacion.tiempo_limite_minutos} min` : ""}
+      </div>
+      {publicado && <div className="text-xs font-semibold text-emerald-600 mt-1">Nota: {publicado.puntaje_obtenido}/{publicado.puntaje_maximo}</div>}
+      {!publicado && hayPendiente && <div className="text-xs text-amber-600 mt-1">Entregado — pendiente de revisión del docente</div>}
+      {puedeIntentar && (
+        <button onClick={() => setTomando(true)} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white mt-2">
+          {usados > 0 ? "Presentar de nuevo" : "Presentar"}
+        </button>
+      )}
+      {tomando && <TomarEvaluacion evaluacion={evaluacion} estudianteId={estudianteId} onCerrar={() => { setTomando(false); cargar(); }} />}
+    </div>
+  );
+}
+
+function EvaluacionesEstudiante({ estudianteId, gradoId }) {
+  const [evaluaciones, setEvaluaciones] = useState([]);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    api.fetchEvaluacionesDisponibles(gradoId).then((data) => {
+      const hoy = new Date().toISOString().slice(0, 10);
+      const vigentes = data.filter((e) => (!e.fecha_apertura || e.fecha_apertura <= hoy) && (!e.fecha_cierre || e.fecha_cierre >= hoy));
+      setEvaluaciones(vigentes);
+      setCargando(false);
+    });
+  }, [gradoId]);
+
+  if (cargando || evaluaciones.length === 0) return null;
+
+  return (
+    <div className="mt-4 pt-4 border-t border-slate-100">
+      <div className="text-xs font-semibold text-slate-600 mb-2">📝 Evaluaciones disponibles</div>
+      <div className="space-y-2">
+        {evaluaciones.map((e) => <TarjetaEvaluacionEstudiante key={e.id} evaluacion={e} estudianteId={estudianteId} />)}
+      </div>
+    </div>
+  );
+}
+
 function PortalEstudiante() {
   const [codigo, setCodigo] = useState("");
   const [datos, setDatos] = useState(null);
+  const [estudianteInfo, setEstudianteInfo] = useState(null);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState("");
 
@@ -67,7 +219,11 @@ function PortalEstudiante() {
     try {
       const res = await api.consultarPortalEstudiante(codigo);
       if (!res) { setError("Código no encontrado. Verifica con tu docente."); setDatos(null); }
-      else setDatos(res);
+      else {
+        setDatos(res);
+        const info = await api.fetchEstudiantePorCodigo(codigo);
+        setEstudianteInfo(info);
+      }
     } catch (e) {
       setError("Ocurrió un error: " + e.message);
     }
@@ -110,7 +266,8 @@ function PortalEstudiante() {
         <div className="text-xs text-slate-500 mb-4">
           Presentes: {datos.presentes} · Retardos: {datos.retardos} · Faltas injustificadas: {datos.faltas_injustificadas} · Faltas justificadas: {datos.faltas_justificadas}
         </div>
-        <button onClick={() => { setDatos(null); setCodigo(""); }} className="w-full text-xs text-violet-500">← Consultar otro código</button>
+        {estudianteInfo && <EvaluacionesEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />}
+        <button onClick={() => { setDatos(null); setCodigo(""); setEstudianteInfo(null); }} className="w-full text-xs text-violet-500 mt-4">← Consultar otro código</button>
       </div>
     );
   }
@@ -223,6 +380,7 @@ function Panel({ session }) {
           <button onClick={() => setTab("reportes")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "reportes" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Reportes</button>
           <button onClick={() => setTab("horario")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "horario" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Horario</button>
           <button onClick={() => setTab("planeaciones")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "planeaciones" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Planeaciones</button>
+          <button onClick={() => setTab("evaluaciones")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "evaluaciones" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Evaluaciones</button>
         </div>
         <div className="flex items-center gap-3">
           <button onClick={() => setAdministracionAbierta(true)} className="text-lg" title="Docentes y mi cuenta">👤</button>
@@ -272,6 +430,7 @@ function Panel({ session }) {
         {tab === "reportes" && grados.length > 0 && <VistaReportes grados={grados} />}
         {tab === "horario" && grados.length > 0 && <VistaHorario grados={grados} />}
         {tab === "planeaciones" && grados.length > 0 && <VistaPlaneaciones grados={grados} />}
+        {tab === "evaluaciones" && grados.length > 0 && <VistaEvaluaciones grados={grados} />}
       </div>
     </div>
   );
