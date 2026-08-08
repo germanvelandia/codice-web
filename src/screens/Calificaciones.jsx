@@ -719,6 +719,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
   const [importarMoodleAbierto, setImportarMoodleAbierto] = useState(false);
   const [notaMasivaAbierta, setNotaMasivaAbierta] = useState(false);
   const [reinoFiltro, setReinoFiltro] = useState("Todos");
+  const [soloPerdiendo, setSoloPerdiendo] = useState(false);
   const [seleccionando, setSeleccionando] = useState(false);
   const [seleccionadas, setSeleccionadas] = useState([]);
   const [finalesGuardados, setFinalesGuardados] = useState([]);
@@ -753,8 +754,6 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
     const set = new Set(estudiantes.map((s) => s.reino_actual || s.reino_original || "Sin grupo"));
     return ["Todos", ...Array.from(set)];
   }, [estudiantes]);
-
-  const estudiantesVisibles = estudiantes.filter((s) => reinoFiltro === "Todos" || (s.reino_actual || s.reino_original) === reinoFiltro);
 
   const valorDeActividad = (actividad, estudianteId) => {
     if (actividad.es_automatica) {
@@ -797,6 +796,11 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
     const manual = notaManual(estudianteId);
     return manual !== undefined && manual !== null ? manual : notaFinalCalculada(estudianteId);
   };
+
+  const estudiantesVisiblesPorReino = estudiantes.filter((s) => reinoFiltro === "Todos" || (s.reino_actual || s.reino_original) === reinoFiltro);
+  const estudiantesVisibles = soloPerdiendo
+    ? estudiantesVisiblesPorReino.filter((s) => { const n = notaFinal(s.id); return n !== null && n !== undefined && n < config.nota_minima; })
+    : estudiantesVisiblesPorReino;
 
   const esManual = (estudianteId) => {
     const manual = notaManual(estudianteId);
@@ -853,6 +857,10 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
         <select value={reinoFiltro} onChange={(e) => setReinoFiltro(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
           {reinos.map((r) => <option key={r} value={r}>{r === "Todos" ? "Todos los grupos" : r}</option>)}
         </select>
+        <button onClick={() => setSoloPerdiendo((v) => !v)}
+          className={`text-xs font-semibold px-3 py-2 rounded-full border ${soloPerdiendo ? "bg-rose-500 text-white border-rose-500" : "border-rose-200 text-rose-600"}`}>
+          🔴 {soloPerdiendo ? "Viendo solo quienes van perdiendo" : "Ver solo quienes van perdiendo"}
+        </button>
         <div className="text-sm text-slate-500">{actividades.length} actividad{actividades.length === 1 ? "" : "es"} · {estudiantesVisibles.length} estudiante{estudiantesVisibles.length === 1 ? "" : "s"}</div>
         <div className="flex gap-2 flex-wrap">
           <button onClick={() => setNotaMasivaAbierta(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🖊 Nota masiva</button>
@@ -993,6 +1001,7 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
   const [actaEstudiante, setActaEstudiante] = useState(null);
   const [editandoCelda, setEditandoCelda] = useState(null); // { estudianteId, periodo }
   const [valorTemp, setValorTemp] = useState("");
+  const [soloPerdiendo, setSoloPerdiendo] = useState(false);
 
   const cargar = async () => {
     setCargando(true);
@@ -1048,7 +1057,11 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
   return (
     <div>
       <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
-        <p className="text-[11px] text-slate-400">
+        <button onClick={() => setSoloPerdiendo((v) => !v)}
+          className={`text-xs font-semibold px-3 py-2 rounded-full border shrink-0 ${soloPerdiendo ? "bg-rose-500 text-white border-rose-500" : "border-rose-200 text-rose-600"}`}>
+          🔴 {soloPerdiendo ? "Viendo solo quienes van perdiendo" : "Ver solo quienes van perdiendo"}
+        </button>
+        <p className="text-[11px] text-slate-400 flex-1 min-w-[220px]">
           💡 Hacé clic en cualquier nota para editarla a mano (útil al migrar notas de otra planilla). El botón de la derecha recalcula con la fórmula y <b>sobreescribe</b> las notas de ese periodo — usalo solo si querés volver a calcular automáticamente.
         </p>
         <button onClick={async () => { await guardarActual(); cargar(); }} className="text-xs font-semibold px-4 py-2 rounded-full bg-violet-500 text-white shrink-0">
@@ -1068,7 +1081,9 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
               </tr>
             </thead>
             <tbody>
-              {estudiantes.map((s, i) => {
+              {estudiantes
+                .filter((s) => !soloPerdiendo || periodos.some((p) => { const n = notaGuardada(s.id, p); return n !== null && n < config.nota_minima; }))
+                .map((s, i) => {
                 const prom = promedioAnual(s.id);
                 const bandaProm = bandaDesempeno(prom, config);
                 return (
