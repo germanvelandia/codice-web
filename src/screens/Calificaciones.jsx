@@ -574,9 +574,11 @@ function CopiarColumnasModal({ materiaDestinoId, gradoId, periodos, categoriasDe
   const [materiaOrigenId, setMateriaOrigenId] = useState("");
   const [periodoOrigen, setPeriodoOrigen] = useState(periodos[0] || "1");
   const [actividadesOrigen, setActividadesOrigen] = useState([]);
+  const [actividadesDestino, setActividadesDestino] = useState([]);
   const [cargando, setCargando] = useState(false);
   const [seleccionadas, setSeleccionadas] = useState({}); // { actividadId: true }
-  const [categoriaPorActividad, setCategoriaPorActividad] = useState({}); // { actividadId: categoriaDestinoId }
+  const [destinoPorActividad, setDestinoPorActividad] = useState({}); // { actividadId: "nueva" | actividadDestinoId }
+  const [categoriaPorActividad, setCategoriaPorActividad] = useState({}); // { actividadId: categoriaDestinoId } (solo si destino = "nueva")
   const [copiando, setCopiando] = useState(false);
   const [alcance, setAlcance] = useState("todos"); // "todos" | "uno"
   const [estudianteId, setEstudianteId] = useState("");
@@ -586,13 +588,23 @@ function CopiarColumnasModal({ materiaDestinoId, gradoId, periodos, categoriasDe
   const cargarActividades = async (matId, per) => {
     if (!matId) { setActividadesOrigen([]); return; }
     setCargando(true);
-    const acts = await api.fetchActividades(parseInt(matId, 10), gradoId, per);
+    const [acts, actsDestino] = await Promise.all([
+      api.fetchActividades(parseInt(matId, 10), gradoId, per),
+      api.fetchActividades(materiaDestinoId, gradoId, per),
+    ]);
     setActividadesOrigen(acts);
-    // Por defecto, sugiere la primera categoría destino disponible — el docente
-    // puede cambiarla por cada columna antes de copiar.
-    const mapaInicial = {};
-    acts.forEach((a) => { mapaInicial[a.id] = categoriasDestino[0]?.id || ""; });
-    setCategoriaPorActividad(mapaInicial);
+    setActividadesDestino(actsDestino);
+    // Por defecto: si hay una columna en destino con el mismo nombre, se sugiere esa;
+    // si no, se sugiere crear una nueva con la primera categoría disponible.
+    const mapaDestino = {};
+    const mapaCategoria = {};
+    acts.forEach((a) => {
+      const igual = actsDestino.find((d) => d.nombre === a.nombre);
+      mapaDestino[a.id] = igual ? igual.id : "nueva";
+      mapaCategoria[a.id] = categoriasDestino[0]?.id || "";
+    });
+    setDestinoPorActividad(mapaDestino);
+    setCategoriaPorActividad(mapaCategoria);
     setSeleccionadas({});
     setCargando(false);
   };
@@ -605,11 +617,17 @@ function CopiarColumnasModal({ materiaDestinoId, gradoId, periodos, categoriasDe
 
   const copiar = async () => {
     if (idsSeleccionados.length === 0) { alert("Elegí al menos una columna."); return; }
-    const sinCategoria = idsSeleccionados.filter((id) => !categoriaPorActividad[id]);
-    if (sinCategoria.length > 0) { alert("Elegí una categoría destino para cada columna seleccionada."); return; }
+    const sinDefinir = idsSeleccionados.filter((id) => destinoPorActividad[id] === "nueva" && !categoriaPorActividad[id]);
+    if (sinDefinir.length > 0) { alert("Elegí una categoría para cada columna nueva que vayas a crear."); return; }
     setCopiando(true);
     try {
-      const n = await api.copiarColumnasEspecificas(idsSeleccionados, materiaDestinoId, gradoId, categoriaPorActividad, alcance === "uno" ? estudianteId : null);
+      const mapaFinal = {};
+      idsSeleccionados.forEach((id) => {
+        mapaFinal[id] = destinoPorActividad[id] === "nueva"
+          ? { categoriaId: categoriaPorActividad[id] }
+          : { actividadDestinoId: destinoPorActividad[id] };
+      });
+      const n = await api.copiarColumnasEspecificas(idsSeleccionados, materiaDestinoId, gradoId, mapaFinal, alcance === "uno" ? estudianteId : null);
       alert(alcance === "uno"
         ? `Se copió la nota de ${estudiantes.find((s) => s.id === estudianteId)?.nombre || "ese estudiante"} en ${n} columna(s).`
         : `Se copiaron ${n} columna(s) con sus notas.`);
@@ -681,12 +699,24 @@ function CopiarColumnasModal({ materiaDestinoId, gradoId, periodos, categoriasDe
                   {a.nombre}
                 </label>
                 {seleccionadas[a.id] && (
-                  <div className="flex items-center gap-2 ml-6">
-                    <span className="text-[11px] text-slate-400">Categoría destino:</span>
-                    <select value={categoriaPorActividad[a.id] || ""} onChange={(e) => setCategoriaPorActividad((prev) => ({ ...prev, [a.id]: parseInt(e.target.value, 10) }))}
-                      className="text-xs rounded-lg px-2 py-1 border border-slate-200 outline-none">
-                      {categoriasDestino.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                    </select>
+                  <div className="ml-6 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-slate-400 shrink-0">Colocar en:</span>
+                      <select value={destinoPorActividad[a.id] || "nueva"} onChange={(e) => setDestinoPorActividad((prev) => ({ ...prev, [a.id]: e.target.value === "nueva" ? "nueva" : parseInt(e.target.value, 10) }))}
+                        className="text-xs rounded-lg px-2 py-1 border border-slate-200 outline-none flex-1">
+                        <option value="nueva">+ Crear columna nueva</option>
+                        {actividadesDestino.map((d) => <option key={d.id} value={d.id}>{d.nombre} (columna existente)</option>)}
+                      </select>
+                    </div>
+                    {destinoPorActividad[a.id] === "nueva" && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-slate-400 shrink-0">Categoría:</span>
+                        <select value={categoriaPorActividad[a.id] || ""} onChange={(e) => setCategoriaPorActividad((prev) => ({ ...prev, [a.id]: parseInt(e.target.value, 10) }))}
+                          className="text-xs rounded-lg px-2 py-1 border border-slate-200 outline-none">
+                          {categoriasDestino.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                        </select>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
