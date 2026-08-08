@@ -196,17 +196,17 @@ function MisNotas({ estudianteId }) {
   const [datos, setDatos] = useState(null);
   const [comentarios, setComentarios] = useState({});
   const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState(null);
   const [materiaAbierta, setMateriaAbierta] = useState(null);
 
   useEffect(() => {
-    Promise.all([api.fetchNotasEstudiante(estudianteId), api.fetchComentariosDesempeno()]).then(([d, c]) => {
-      setDatos(d);
-      setComentarios(c);
-      setCargando(false);
-    });
+    Promise.all([api.fetchNotasEstudiante(estudianteId), api.fetchComentariosDesempeno()])
+      .then(([d, c]) => { setDatos(d); setComentarios(c); setCargando(false); })
+      .catch((e) => { setError(e.message); setCargando(false); });
   }, [estudianteId]);
 
   if (cargando) return <div className="text-xs text-slate-400 mt-4">Cargando notas…</div>;
+  if (error) return <div className="text-xs text-rose-500 bg-rose-50 rounded-lg p-2 mt-4">Error al cargar notas: {error}</div>;
   if (!datos) return null;
 
   // Junta, por materia, los periodos con nota final guardada (definitiva) y los
@@ -227,7 +227,9 @@ function MisNotas({ estudianteId }) {
     materias[nombre].actividadesPorPeriodo[act.periodo].push(v);
   });
 
-  if (Object.keys(materias).length === 0) return null;
+  if (Object.keys(materias).length === 0) {
+    return <div className="text-xs text-slate-400 mt-4 pt-4 border-t border-slate-100">Todavía no tenés notas ni actividades cargadas.</div>;
+  }
   const config = { escala_min: 1, nota_minima: 3.5, nota_maxima: 5 };
 
   return (
