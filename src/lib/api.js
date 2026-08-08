@@ -857,7 +857,7 @@ export async function copiarNotasDesdeMateria(materiaOrigenId, materiaDestinoId)
 export async function fetchNotasConfig(materiaId) {
   const { data, error } = await supabase.from("notas_config").select("*").eq("materia_id", materiaId).maybeSingle();
   if (error) throw error;
-  if (!data) return { escala_min: 1.0, nota_minima: 3.5, nota_maxima: 5.0, sistema_periodos: "bimestre", cantidad_periodos: 4 };
+  if (!data) return { escala_min: 1.0, nota_minima: 3.5, nota_maxima: 5.0, sistema_periodos: "bimestre", cantidad_periodos: 4, periodo_actual: "1" };
   return data;
 }
 
