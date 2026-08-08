@@ -599,6 +599,39 @@ export async function eliminarActividad(id) {
   if (error) throw error;
 }
 
+// Copia columnas (actividades) puntuales de una materia a otra, junto con las
+// notas ya cargadas de esos estudiantes — a diferencia de copiarNotasDesdeMateria,
+// esto no trae todo, solo lo seleccionado, y no reemplaza lo que ya exista.
+export async function copiarColumnasEspecificas(actividadesOrigenIds, materiaDestinoId, gradoDestinoId, categoriaDestinoPorActividad) {
+  const actividadesOrigen = await Promise.all(
+    actividadesOrigenIds.map(async (id) => {
+      const { data, error } = await supabase.from("notas_actividades").select("*").eq("id", id).single();
+      if (error) throw error;
+      return data;
+    })
+  );
+  const valoresOrigen = await fetchValores(actividadesOrigenIds);
+
+  let copiadas = 0;
+  for (const act of actividadesOrigen) {
+    const nueva = await crearActividad({
+      nombre: act.nombre,
+      categoria_id: categoriaDestinoPorActividad[act.id],
+      materia_id: materiaDestinoId,
+      grado_id: gradoDestinoId,
+      periodo: act.periodo,
+      es_automatica: act.es_automatica,
+      gam_categoria: act.gam_categoria || null,
+    });
+    const valoresDeEsta = valoresOrigen.filter((v) => v.actividad_id === act.id);
+    for (const v of valoresDeEsta) {
+      await setValor(nueva.id, v.estudiante_id, v.valor);
+    }
+    copiadas++;
+  }
+  return copiadas;
+}
+
 export async function fetchValores(actividadIds) {
   if (actividadIds.length === 0) return [];
   const { data, error } = await supabase.from("notas_valores").select("*").in("actividad_id", actividadIds);
