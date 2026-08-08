@@ -9,6 +9,7 @@ import { VistaRoles } from "./screens/Roles";
 import { VistaCalificaciones } from "./screens/Calificaciones";
 import { VistaReportes } from "./screens/Reportes";
 import { VistaHorario } from "./screens/Horario";
+import { VistaPlaneaciones } from "./screens/Planeaciones";
 import { InstitucionModal } from "./screens/Institucion";
 import { AdministracionModal } from "./screens/Administracion";
 
@@ -221,6 +222,7 @@ function Panel({ session }) {
           <button onClick={() => setTab("calificaciones")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "calificaciones" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Calificaciones</button>
           <button onClick={() => setTab("reportes")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "reportes" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Reportes</button>
           <button onClick={() => setTab("horario")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "horario" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Horario</button>
+          <button onClick={() => setTab("planeaciones")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "planeaciones" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Planeaciones</button>
         </div>
         <div className="flex items-center gap-3">
           <button onClick={() => setAdministracionAbierta(true)} className="text-lg" title="Docentes y mi cuenta">👤</button>
@@ -269,6 +271,7 @@ function Panel({ session }) {
         {tab === "calificaciones" && grados.length > 0 && <VistaCalificaciones grados={grados} />}
         {tab === "reportes" && grados.length > 0 && <VistaReportes grados={grados} />}
         {tab === "horario" && grados.length > 0 && <VistaHorario grados={grados} />}
+        {tab === "planeaciones" && grados.length > 0 && <VistaPlaneaciones grados={grados} />}
       </div>
     </div>
   );
