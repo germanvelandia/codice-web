@@ -2,6 +2,25 @@
 
 export const GRADOS_BASE = ["801", "802", "803", "804", "901", "902", "903", "904", "1001", "1002", "1003"];
 
+// Separa un grado_id (ej: "801", "1001") en nivel ("8", "10") y número de curso ("01").
+// Regla: los últimos 2 dígitos son siempre el curso; lo que queda antes es el nivel.
+export function nivelYCurso(gradoId) {
+  const id = String(gradoId || "");
+  return { nivel: id.slice(0, -2) || id, curso: id.slice(-2) };
+}
+
+export function agruparPorNivel(grados) {
+  const mapa = {};
+  grados.forEach((g) => {
+    const { nivel } = nivelYCurso(g.id);
+    mapa[nivel] = mapa[nivel] || [];
+    mapa[nivel].push(g);
+  });
+  return Object.entries(mapa)
+    .sort((a, b) => parseInt(a[0], 10) - parseInt(b[0], 10))
+    .map(([nivel, cursos]) => ({ nivel, cursos: cursos.sort((a, b) => a.id.localeCompare(b.id)) }));
+}
+
 export const LEVELS = [
   { name: "Novato", min: 0 },
   { name: "Aprendiz", min: 150 },
@@ -180,4 +199,4 @@ export function reinoInfo(nombre, catalogoReinos) {
     color: enCatalogo?.color || reinoColor(nombre),
     logo_url: enCatalogo?.logo_url || null,
   };
-} 
+}
