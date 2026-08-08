@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import * as api from "../lib/api";
 import { agruparPorNivel, nivelYCurso } from "../lib/gamification";
 import { periodosDe } from "../lib/calificaciones";
@@ -11,6 +12,77 @@ const TIPOS_TAREA = [
   { key: "proyecto", label: "Proyecto" },
   { key: "evaluacion", label: "Evaluación" },
 ];
+
+function SelectorEstandares({ planeacionId, tipo }) {
+  const [vinculados, setVinculados] = useState([]);
+  const [catalogo, setCatalogo] = useState([]);
+  const [agregando, setAgregando] = useState(false);
+  const [creandoNuevo, setCreandoNuevo] = useState(false);
+  const [nuevoCodigo, setNuevoCodigo] = useState("");
+  const [nuevaDescripcion, setNuevaDescripcion] = useState("");
+
+  const cargar = async () => {
+    const [v, c] = await Promise.all([api.fetchEstandaresDePlaneacion(planeacionId), api.fetchEstandares(tipo)]);
+    setVinculados(v.filter((e) => e && e.tipo === tipo));
+    setCatalogo(c);
+  };
+  useEffect(() => { cargar(); }, [planeacionId]);
+
+  const vincular = async (estandarId) => { await api.vincularEstandar(planeacionId, estandarId); cargar(); };
+  const desvincular = async (estandarId) => { await api.desvincularEstandar(planeacionId, estandarId); cargar(); };
+
+  const crearYVincular = async () => {
+    if (!nuevaDescripcion.trim()) return;
+    const nuevo = await api.crearEstandar({ tipo, codigo: nuevoCodigo.trim() || null, descripcion: nuevaDescripcion.trim() });
+    await api.vincularEstandar(planeacionId, nuevo.id);
+    setNuevoCodigo(""); setNuevaDescripcion(""); setCreandoNuevo(false); setAgregando(false);
+    cargar();
+  };
+
+  const disponibles = catalogo.filter((e) => !vinculados.some((v) => v.id === e.id));
+  const etiqueta = tipo === "dba" ? "DBA" : "Competencia";
+  const estilo = tipo === "dba" ? "bg-blue-50 text-blue-700" : "bg-teal-50 text-teal-700";
+
+  return (
+    <div className="mt-1">
+      {vinculados.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-1">
+          {vinculados.map((e) => (
+            <span key={e.id} className={`text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 ${estilo}`}>
+              {e.codigo ? `${e.codigo} — ` : ""}{e.descripcion}
+              <button onClick={() => desvincular(e.id)} className="opacity-60 hover:opacity-100">✕</button>
+            </span>
+          ))}
+        </div>
+      )}
+      {agregando ? (
+        <div className="flex flex-col gap-1 bg-slate-50 rounded-lg p-2 max-w-md">
+          {disponibles.length > 0 && (
+            <select onChange={(e) => { if (e.target.value) { vincular(parseInt(e.target.value, 10)); e.target.value = ""; } }}
+              className="text-[11px] rounded px-1.5 py-1 border border-slate-200 outline-none">
+              <option value="">Elegir del catálogo…</option>
+              {disponibles.map((e) => <option key={e.id} value={e.id}>{e.codigo ? `${e.codigo} — ` : ""}{e.descripcion}</option>)}
+            </select>
+          )}
+          {creandoNuevo ? (
+            <div className="flex gap-1">
+              <input value={nuevoCodigo} onChange={(e) => setNuevoCodigo(e.target.value)} placeholder="Código"
+                className="w-16 text-[11px] rounded px-1.5 py-1 border border-slate-200 outline-none" />
+              <input value={nuevaDescripcion} onChange={(e) => setNuevaDescripcion(e.target.value)} placeholder="Descripción"
+                className="flex-1 text-[11px] rounded px-1.5 py-1 border border-slate-200 outline-none" />
+              <button onClick={crearYVincular} className="text-[11px] px-2 rounded bg-violet-500 text-white">Añadir</button>
+            </div>
+          ) : (
+            <button onClick={() => setCreandoNuevo(true)} className="text-[10px] text-violet-500 text-left">+ Crear nuevo {etiqueta}</button>
+          )}
+          <button onClick={() => { setAgregando(false); setCreandoNuevo(false); }} className="text-[10px] text-slate-400 text-left">Cerrar</button>
+        </div>
+      ) : (
+        <button onClick={() => setAgregando(true)} className="text-[10px] text-violet-500">+ {etiqueta}</button>
+      )}
+    </div>
+  );
+}
 
 function RecursosLista({ planeacionId }) {
   const [recursos, setRecursos] = useState([]);
@@ -197,15 +269,28 @@ function ClasesLista({ unidadId }) {
   const [agregando, setAgregando] = useState(false);
   const [titulo, setTitulo] = useState("");
   const [fecha, setFecha] = useState("");
-  const [contenido, setContenido] = useState("");
+  const [duracion, setDuracion] = useState("");
+  const [inicio, setInicio] = useState("");
+  const [desarrollo, setDesarrollo] = useState("");
+  const [cierre, setCierre] = useState("");
+  const [indicador, setIndicador] = useState("");
 
   const cargar = () => api.fetchClases(unidadId).then(setClases);
   useEffect(() => { cargar(); }, [unidadId]);
 
+  const limpiar = () => {
+    setTitulo(""); setFecha(""); setDuracion(""); setInicio(""); setDesarrollo(""); setCierre(""); setIndicador(""); setAgregando(false);
+  };
+
   const agregar = async () => {
     if (!titulo.trim()) return;
-    await api.crearPlaneacion({ tipo: "clase", unidad_id: unidadId, titulo: titulo.trim(), fecha: fecha || null, contenido: contenido.trim() || null, orden: clases.length });
-    setTitulo(""); setFecha(""); setContenido(""); setAgregando(false);
+    await api.crearPlaneacion({
+      tipo: "clase", unidad_id: unidadId, titulo: titulo.trim(), fecha: fecha || null, orden: clases.length,
+      duracion_minutos: duracion ? parseInt(duracion, 10) : null,
+      momento_inicio: inicio.trim() || null, momento_desarrollo: desarrollo.trim() || null, momento_cierre: cierre.trim() || null,
+      indicador_desempeno: indicador.trim() || null,
+    });
+    limpiar();
     cargar();
   };
 
@@ -215,33 +300,67 @@ function ClasesLista({ unidadId }) {
     <div className="mt-3">
       <div className="text-xs font-semibold text-slate-500 mb-2">Clases de esta unidad</div>
       {clases.length > 0 && (
-        <div className="space-y-1.5 mb-2">
+        <div className="space-y-2 mb-2">
           {clases.map((c, i) => (
             <div key={c.id} className="bg-white border border-slate-100 rounded-lg p-2.5">
               <div className="flex justify-between items-start">
                 <div className="text-xs">
                   <span className="font-semibold text-slate-700">Clase {i + 1}: {c.titulo}</span>
                   {c.fecha && <span className="text-slate-400"> · {c.fecha}</span>}
+                  {c.duracion_minutos && <span className="text-slate-400"> · {c.duracion_minutos} min</span>}
                 </div>
                 <button onClick={() => quitar(c.id)} className="text-slate-300 hover:text-rose-500 text-xs">✕</button>
               </div>
-              {c.contenido && <div className="text-[11px] text-slate-500 mt-1 whitespace-pre-line">{c.contenido}</div>}
+              {(c.momento_inicio || c.momento_desarrollo || c.momento_cierre) && (
+                <div className="grid sm:grid-cols-3 gap-2 mt-2">
+                  {c.momento_inicio && (
+                    <div className="bg-amber-50 rounded-lg p-2">
+                      <div className="text-[9px] font-bold text-amber-600 uppercase mb-0.5">Inicio</div>
+                      <div className="text-[11px] text-slate-600 whitespace-pre-line">{c.momento_inicio}</div>
+                    </div>
+                  )}
+                  {c.momento_desarrollo && (
+                    <div className="bg-violet-50 rounded-lg p-2">
+                      <div className="text-[9px] font-bold text-violet-600 uppercase mb-0.5">Desarrollo</div>
+                      <div className="text-[11px] text-slate-600 whitespace-pre-line">{c.momento_desarrollo}</div>
+                    </div>
+                  )}
+                  {c.momento_cierre && (
+                    <div className="bg-emerald-50 rounded-lg p-2">
+                      <div className="text-[9px] font-bold text-emerald-600 uppercase mb-0.5">Cierre / Evaluación</div>
+                      <div className="text-[11px] text-slate-600 whitespace-pre-line">{c.momento_cierre}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {c.indicador_desempeno && <p className="text-[11px] text-slate-500 mt-1.5"><b>Indicador de desempeño:</b> {c.indicador_desempeno}</p>}
+              <div className="flex flex-wrap gap-3 mt-1.5">
+                <SelectorEstandares planeacionId={c.id} tipo="dba" />
+                <SelectorEstandares planeacionId={c.id} tipo="competencia" />
+              </div>
               <RecursosLista planeacionId={c.id} />
             </div>
           ))}
         </div>
       )}
       {agregando ? (
-        <div className="bg-violet-50 rounded-lg p-2.5 space-y-1.5">
+        <div className="bg-violet-50 rounded-lg p-3 space-y-2">
           <div className="flex gap-1.5">
             <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título de la clase"
               className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
             <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+            <input type="number" value={duracion} onChange={(e) => setDuracion(e.target.value)} placeholder="Min." className="w-16 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
           </div>
-          <textarea value={contenido} onChange={(e) => setContenido(e.target.value)} rows={2} placeholder="Desarrollo de la clase (actividades, metodología…)"
+          <textarea value={inicio} onChange={(e) => setInicio(e.target.value)} rows={2} placeholder="Inicio (motivación, exploración de saberes previos…)"
+            className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+          <textarea value={desarrollo} onChange={(e) => setDesarrollo(e.target.value)} rows={2} placeholder="Desarrollo (actividades, metodología…)"
+            className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+          <textarea value={cierre} onChange={(e) => setCierre(e.target.value)} rows={2} placeholder="Cierre / evaluación (síntesis, verificación de aprendizaje…)"
+            className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+          <input value={indicador} onChange={(e) => setIndicador(e.target.value)} placeholder="Indicador de desempeño (opcional)"
             className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
           <div className="flex justify-end gap-2">
-            <button onClick={() => setAgregando(false)} className="text-xs text-slate-400">Cancelar</button>
+            <button onClick={limpiar} className="text-xs text-slate-400">Cancelar</button>
             <button onClick={agregar} className="text-xs px-3 py-1.5 rounded-lg bg-violet-500 text-white">Agregar clase</button>
           </div>
         </div>
@@ -252,13 +371,127 @@ function ClasesLista({ unidadId }) {
   );
 }
 
-function UnidadCard({ unidad, onCambio }) {
+function bloqueImpresion(titulo, contenido, opts = {}) {
+  if (!contenido) return null;
+  return (
+    <div className="print-avoid-break" style={{ marginBottom: 10, background: opts.bg || "transparent", padding: opts.bg ? 8 : 0, borderRadius: opts.bg ? 6 : 0 }}>
+      <div style={{ fontWeight: 700, fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, color: opts.accent || "#1e293b", marginBottom: 3 }}>{titulo}</div>
+      <div style={{ fontSize: 12, lineHeight: 1.4, whiteSpace: "pre-line" }}>{contenido}</div>
+    </div>
+  );
+}
+
+function PlaneacionPrintView({ unidad, institucion, materiaNombre, gradoId, onCerrado }) {
+  const [clases, setClases] = useState([]);
+  const [tareas, setTareas] = useState([]);
+  const [estandaresUnidad, setEstandaresUnidad] = useState([]);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      api.fetchClases(unidad.id),
+      api.fetchTareas(unidad.id),
+      api.fetchEstandaresDePlaneacion(unidad.id),
+    ]).then(([cls, tsk, est]) => {
+      setClases(cls);
+      setTareas(tsk);
+      setEstandaresUnidad(est);
+      setCargando(false);
+    });
+  }, [unidad.id]);
+
+  useEffect(() => {
+    if (cargando) return;
+    const id = setTimeout(() => window.print(), 200);
+    const onAfter = () => onCerrado();
+    window.addEventListener("afterprint", onAfter);
+    return () => { clearTimeout(id); window.removeEventListener("afterprint", onAfter); };
+  }, [cargando]);
+
+  if (cargando) return null;
+
+  const dba = estandaresUnidad.filter((e) => e?.tipo === "dba");
+  const competencias = estandaresUnidad.filter((e) => e?.tipo === "competencia");
+
+  const contenido = (
+    <div className="print-only" style={{ maxWidth: "180mm", margin: "0 auto", padding: "0 0 14mm 0", fontFamily: "Georgia, 'Times New Roman', serif", color: "#1e293b" }}>
+      <div className="print-avoid-break" style={{ textAlign: "center", marginBottom: 14, borderBottom: "2px solid #8B5CF6", paddingBottom: 8 }}>
+        {institucion?.logo_url && <img src={institucion.logo_url} alt="Logo" style={{ maxHeight: 56, marginBottom: 6, display: "block", marginLeft: "auto", marginRight: "auto" }} />}
+        <div style={{ fontSize: 17, fontWeight: 700 }}>{institucion?.nombre}</div>
+        <div style={{ fontSize: 13, marginTop: 6, fontStyle: "italic" }}>Planeación de Clase</div>
+      </div>
+
+      <table className="print-avoid-break" style={{ width: "100%", fontSize: 11.5, marginBottom: 12, borderCollapse: "collapse" }}>
+        <tbody>
+          <tr>
+            <td style={{ fontWeight: 700, padding: "2px 6px 2px 0", width: 90 }}>Materia:</td><td>{materiaNombre}</td>
+            <td style={{ fontWeight: 700, padding: "2px 6px 2px 20px", width: 60 }}>Grado:</td><td>{gradoId}</td>
+          </tr>
+          <tr>
+            <td style={{ fontWeight: 700, padding: "2px 6px 2px 0" }}>Unidad:</td><td colSpan={3}>{unidad.titulo}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      {bloqueImpresion("Objetivo de la unidad", unidad.objetivo)}
+      {bloqueImpresion("Contenido / temas", unidad.contenido)}
+
+      {dba.length > 0 && bloqueImpresion("DBA vinculados", dba.map((d) => `${d.codigo ? d.codigo + " — " : ""}${d.descripcion}`).join("\n"), { bg: "#EFF6FF", accent: "#2563EB" })}
+      {competencias.length > 0 && bloqueImpresion("Competencias vinculadas", competencias.map((c) => `${c.codigo ? c.codigo + " — " : ""}${c.descripcion}`).join("\n"), { bg: "#F0FDFA", accent: "#0D9488" })}
+
+      {clases.length > 0 && (
+        <div className="print-avoid-break" style={{ marginBottom: 12 }}>
+          <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Desarrollo de clases</div>
+          {clases.map((c, i) => (
+            <div key={c.id} className="print-avoid-break" style={{ border: "1px solid #E2E8F0", borderRadius: 6, padding: 8, marginBottom: 8 }}>
+              <div style={{ fontWeight: 700, fontSize: 12 }}>
+                Clase {i + 1}: {c.titulo}
+                {c.fecha && <span style={{ fontWeight: 400, color: "#64748B" }}> · {c.fecha}</span>}
+                {c.duracion_minutos && <span style={{ fontWeight: 400, color: "#64748B" }}> · {c.duracion_minutos} min</span>}
+              </div>
+              {c.momento_inicio && <div style={{ fontSize: 11, marginTop: 4 }}><b>Inicio:</b> {c.momento_inicio}</div>}
+              {c.momento_desarrollo && <div style={{ fontSize: 11, marginTop: 2 }}><b>Desarrollo:</b> {c.momento_desarrollo}</div>}
+              {c.momento_cierre && <div style={{ fontSize: 11, marginTop: 2 }}><b>Cierre/Evaluación:</b> {c.momento_cierre}</div>}
+              {c.indicador_desempeno && <div style={{ fontSize: 11, marginTop: 2 }}><b>Indicador de desempeño:</b> {c.indicador_desempeno}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tareas.length > 0 && (
+        <div className="print-avoid-break" style={{ marginBottom: 12 }}>
+          <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Tareas</div>
+          <table style={{ width: "100%", fontSize: 11, borderCollapse: "collapse" }}>
+            <tbody>
+              {tareas.map((t) => (
+                <tr key={t.id} style={{ borderTop: "1px solid #E2E8F0" }}>
+                  <td style={{ padding: "4px 6px 4px 0", fontWeight: 700 }}>{t.titulo}</td>
+                  <td style={{ padding: "4px 6px", color: "#64748B" }}>{t.tipo}</td>
+                  <td style={{ padding: "4px 0", color: "#64748B" }}>{t.fecha_entrega ? `Entrega: ${t.fecha_entrega}` : ""}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="print-footer">
+        {institucion?.nombre} · {materiaNombre} · Grado {gradoId} · {unidad.titulo} · Generado {new Date().toLocaleDateString("es-CO")}
+      </div>
+    </div>
+  );
+
+  return createPortal(contenido, document.body);
+}
+
+function UnidadCard({ unidad, institucion, materiaNombre, gradoId, onCambio }) {
   const [expandida, setExpandida] = useState(false);
   const [editando, setEditando] = useState(false);
   const [titulo, setTitulo] = useState(unidad.titulo);
   const [objetivo, setObjetivo] = useState(unidad.objetivo || "");
   const [contenido, setContenido] = useState(unidad.contenido || "");
   const [estado, setEstado] = useState(unidad.estado);
+  const [imprimiendo, setImprimiendo] = useState(false);
 
   const guardar = async () => {
     await api.editarPlaneacion(unidad.id, { titulo: titulo.trim(), objetivo: objetivo.trim() || null, contenido: contenido.trim() || null, estado });
@@ -288,6 +521,7 @@ function UnidadCard({ unidad, onCambio }) {
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <button onClick={() => setImprimiendo(true)} className="text-xs text-slate-400 hover:text-violet-600" title="Exportar / Imprimir PDF">🖨️</button>
           <button onClick={() => setEditando((v) => !v)} className="text-xs text-slate-400 hover:text-violet-600">{editando ? "✕" : "✏️"}</button>
           <button onClick={eliminar} className="text-xs text-slate-400 hover:text-rose-500">🗑</button>
           <button onClick={() => setExpandida((v) => !v)} className="text-xs text-violet-500">{expandida ? "Cerrar ▲" : "Abrir ▼"}</button>
@@ -317,10 +551,18 @@ function UnidadCard({ unidad, onCambio }) {
 
       {expandida && (
         <div className="mt-3 pt-3 border-t border-slate-100">
+          <div className="flex flex-wrap gap-3 mb-2">
+            <SelectorEstandares planeacionId={unidad.id} tipo="dba" />
+            <SelectorEstandares planeacionId={unidad.id} tipo="competencia" />
+          </div>
           <RecursosLista planeacionId={unidad.id} />
           <ClasesLista unidadId={unidad.id} />
           <TareasLista planeacionId={unidad.id} />
         </div>
+      )}
+
+      {imprimiendo && (
+        <PlaneacionPrintView unidad={unidad} institucion={institucion} materiaNombre={materiaNombre} gradoId={gradoId} onCerrado={() => setImprimiendo(false)} />
       )}
     </div>
   );
@@ -369,9 +611,11 @@ export function VistaPlaneaciones({ grados }) {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
   const [formAbierto, setFormAbierto] = useState(false);
+  const [institucion, setInstitucion] = useState(null);
 
   useEffect(() => {
     api.fetchMaterias().then((data) => { setMaterias(data); if (data[0]) setMateriaId(data[0].id); });
+    api.fetchInstitucion().then(setInstitucion);
   }, []);
   useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
 
@@ -443,7 +687,7 @@ export function VistaPlaneaciones({ grados }) {
           Todavía no hay unidades/temas para este periodo. Creá la primera con "+ Nueva unidad/tema".
         </div>
       ) : (
-        unidades.map((u) => <UnidadCard key={u.id} unidad={u} onCambio={cargar} />)
+        unidades.map((u) => <UnidadCard key={u.id} unidad={u} institucion={institucion} materiaNombre={materias.find((m) => m.id === materiaId)?.nombre || ""} gradoId={gradoId} onCambio={cargar} />)
       )}
     </div>
   );
