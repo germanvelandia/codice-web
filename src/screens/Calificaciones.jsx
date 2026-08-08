@@ -536,7 +536,126 @@ function NotaMasivaModal({ actividades, estudiantesVisibles, reinoFiltro, valorD
   );
 }
 
-function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo, onCambioCategorias }) {
+function CopiarColumnasModal({ materiaDestinoId, gradoId, periodos, categoriasDestino, materias, onClose, onCopiado }) {
+  const [materiaOrigenId, setMateriaOrigenId] = useState("");
+  const [periodoOrigen, setPeriodoOrigen] = useState(periodos[0] || "1");
+  const [actividadesOrigen, setActividadesOrigen] = useState([]);
+  const [cargando, setCargando] = useState(false);
+  const [seleccionadas, setSeleccionadas] = useState({}); // { actividadId: true }
+  const [categoriaPorActividad, setCategoriaPorActividad] = useState({}); // { actividadId: categoriaDestinoId }
+  const [copiando, setCopiando] = useState(false);
+
+  const materiasOrigenPosibles = materias.filter((m) => m.id !== materiaDestinoId);
+
+  const cargarActividades = async (matId, per) => {
+    if (!matId) { setActividadesOrigen([]); return; }
+    setCargando(true);
+    const acts = await api.fetchActividades(parseInt(matId, 10), gradoId, per);
+    setActividadesOrigen(acts);
+    // Por defecto, sugiere la primera categoría destino disponible — el docente
+    // puede cambiarla por cada columna antes de copiar.
+    const mapaInicial = {};
+    acts.forEach((a) => { mapaInicial[a.id] = categoriasDestino[0]?.id || ""; });
+    setCategoriaPorActividad(mapaInicial);
+    setSeleccionadas({});
+    setCargando(false);
+  };
+
+  useEffect(() => { cargarActividades(materiaOrigenId, periodoOrigen); }, [materiaOrigenId, periodoOrigen]);
+
+  const toggle = (id) => setSeleccionadas((prev) => ({ ...prev, [id]: !prev[id] }));
+  const idsSeleccionados = Object.keys(seleccionadas).filter((id) => seleccionadas[id]).map((id) => parseInt(id, 10));
+
+  const copiar = async () => {
+    if (idsSeleccionados.length === 0) { alert("Elegí al menos una columna."); return; }
+    const sinCategoria = idsSeleccionados.filter((id) => !categoriaPorActividad[id]);
+    if (sinCategoria.length > 0) { alert("Elegí una categoría destino para cada columna seleccionada."); return; }
+    setCopiando(true);
+    try {
+      const n = await api.copiarColumnasEspecificas(idsSeleccionados, materiaDestinoId, gradoId, categoriaPorActividad);
+      alert(`Se copiaron ${n} columna(s) con sus notas.`);
+      onCopiado();
+      onClose();
+    } catch (e) {
+      alert("Error al copiar: " + e.message);
+    }
+    setCopiando(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">📑 Copiar columnas específicas</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-500 mb-3">
+          Elegí de qué materia y periodo traer columnas puntuales (con sus notas ya cargadas) hacia la materia actual — no reemplaza nada, solo agrega.
+        </p>
+
+        {categoriasDestino.length === 0 ? (
+          <p className="text-xs text-amber-600 bg-amber-50 rounded-lg p-3 mb-3">
+            Esta materia todavía no tiene categorías de notas creadas. Cerrá este panel y creá al menos una categoría (arriba, en "Categorías") antes de copiar columnas.
+          </p>
+        ) : (
+          <>
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">Materia origen</label>
+            <select value={materiaOrigenId} onChange={(e) => setMateriaOrigenId(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none">
+              <option value="">Elegí…</option>
+              {materiasOrigenPosibles.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">Periodo origen</label>
+            <select value={periodoOrigen} onChange={(e) => setPeriodoOrigen(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none">
+              {periodos.map((p) => <option key={p} value={p}>Periodo {p}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {cargando ? (
+          <div className="text-sm text-slate-400">Cargando columnas…</div>
+        ) : materiaOrigenId && actividadesOrigen.length === 0 ? (
+          <div className="text-sm text-slate-400">Esa materia no tiene columnas en ese periodo.</div>
+        ) : (
+          <div className="space-y-2 mb-4">
+            {actividadesOrigen.map((a) => (
+              <div key={a.id} className={`border rounded-lg p-2 ${seleccionadas[a.id] ? "border-violet-300 bg-violet-50" : "border-slate-200"}`}>
+                <label className="flex items-center gap-2 text-sm text-slate-700 mb-1">
+                  <input type="checkbox" checked={!!seleccionadas[a.id]} onChange={() => toggle(a.id)} />
+                  {a.es_automatica && <span title="Automática">⚡</span>}
+                  {a.nombre}
+                </label>
+                {seleccionadas[a.id] && (
+                  <div className="flex items-center gap-2 ml-6">
+                    <span className="text-[11px] text-slate-400">Categoría destino:</span>
+                    <select value={categoriaPorActividad[a.id] || ""} onChange={(e) => setCategoriaPorActividad((prev) => ({ ...prev, [a.id]: parseInt(e.target.value, 10) }))}
+                      className="text-xs rounded-lg px-2 py-1 border border-slate-200 outline-none">
+                      {categoriasDestino.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                    </select>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
+          <button disabled={copiando || idsSeleccionados.length === 0} onClick={copiar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-40">
+            {copiando ? "Copiando…" : `Copiar ${idsSeleccionados.length || ""} columna(s)`}
+          </button>
+        </div>
+        </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo, materias, onCambioCategorias }) {
   const [actividades, setActividades] = useState([]);
   const [valores, setValores] = useState({});
   const [xpMapa, setXpMapa] = useState({});
@@ -551,6 +670,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
   const [finalesGuardados, setFinalesGuardados] = useState([]);
   const [editandoFinal, setEditandoFinal] = useState(null); // estudianteId
   const [valorFinalTemp, setValorFinalTemp] = useState("");
+  const [copiarColumnasAbierto, setCopiarColumnasAbierto] = useState(false);
 
   const cargar = async () => {
     setCargando(true);
@@ -670,6 +790,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
         <div className="text-sm text-slate-500">{actividades.length} actividad{actividades.length === 1 ? "" : "es"} · {estudiantesVisibles.length} estudiante{estudiantesVisibles.length === 1 ? "" : "s"}</div>
         <div className="flex gap-2 flex-wrap">
           <button onClick={() => setNotaMasivaAbierta(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🖊 Nota masiva</button>
+          <button onClick={() => setCopiarColumnasAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">📑 Copiar columnas de otra materia</button>
           <button onClick={() => setImportarMoodleAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700">📥 Importar de Moodle/Excel</button>
           <button onClick={() => { setActividadEditar(null); setModalAbierto(true); }} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">+ Nueva actividad</button>
           {seleccionando ? (
@@ -777,6 +898,10 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
       {notaMasivaAbierta && (
         <NotaMasivaModal actividades={actividades} estudiantesVisibles={estudiantesVisibles} reinoFiltro={reinoFiltro} valorDeActividad={valorDeActividad}
           onClose={() => setNotaMasivaAbierta(false)} onAplicado={aplicarNotaMasiva} />
+      )}
+      {copiarColumnasAbierto && (
+        <CopiarColumnasModal materiaDestinoId={materiaId} gradoId={gradoId} periodos={periodosDe(config)} categoriasDestino={categorias} materias={materias}
+          onClose={() => setCopiarColumnasAbierto(false)} onCopiado={cargar} />
       )}
     </div>
   );
@@ -1063,7 +1188,7 @@ export function VistaCalificaciones({ grados }) {
           </div>
 
           {subVista === "planilla" && (
-            <Planilla materiaId={materiaActualId} config={config} categorias={categorias} estudiantes={estudiantes} gradoId={gradoId} periodo={periodo} onCambioCategorias={cargarConfigYCategorias} />
+            <Planilla materiaId={materiaActualId} config={config} categorias={categorias} estudiantes={estudiantes} gradoId={gradoId} periodo={periodo} materias={materias} onCambioCategorias={cargarConfigYCategorias} />
           )}
           {subVista === "boletin" && (
             <Boletin materiaId={materiaActualId} config={config} categorias={categorias} estudiantes={estudiantes} gradoId={gradoId} guardarActual={guardarNotasFinalesActual} />
