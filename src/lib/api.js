@@ -24,9 +24,11 @@ export async function fetchUsuarioActualId() {
 }
 
 export async function fetchGrados() {
-  const { data, error } = await supabase.from("grados").select("*").order("id");
+  const { data, error } = await supabase.from("grados").select("*");
   if (error) throw error;
-  return data || [];
+  // Orden numérico (no alfabético): en texto "1001" queda antes que "801",
+  // lo que hacía que los selectores de grado arrancaran siempre en 1001.
+  return (data || []).sort((a, b) => parseInt(a.id, 10) - parseInt(b.id, 10));
 }
 
 export async function crearGrado(id) {
