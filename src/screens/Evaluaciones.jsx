@@ -513,5 +513,4 @@ export function VistaEvaluaciones({ grados }) {
       )}
     </div>
   );
-}
-}
+} 
