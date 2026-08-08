@@ -277,17 +277,25 @@ function ImportarMoodleModal({ materiaId, gradoId, periodo, categorias, periodos
     procesarDesdeArray(arr);
   };
 
+  const [procesandoArchivo, setProcesandoArchivo] = useState(false);
+
   const procesarArchivo = (file) => {
+    setProcesandoArchivo(true);
     const reader = new FileReader();
     reader.onload = (e) => {
-      try {
-        const wb = XLSX.read(e.target.result, { type: "binary" });
-        const hoja = wb.Sheets[wb.SheetNames[0]];
-        const arr = XLSX.utils.sheet_to_json(hoja, { header: 1 });
-        procesarDesdeArray(arr);
-      } catch (err) {
-        alert("No se pudo leer el archivo.");
-      }
+      // Pequeña pausa para que el navegador alcance a pintar el aviso de "Procesando…"
+      // antes del trabajo pesado de leer el Excel (que bloquea la pantalla un instante).
+      setTimeout(() => {
+        try {
+          const wb = XLSX.read(e.target.result, { type: "binary" });
+          const hoja = wb.Sheets[wb.SheetNames[0]];
+          const arr = XLSX.utils.sheet_to_json(hoja, { header: 1 });
+          procesarDesdeArray(arr);
+        } catch (err) {
+          alert("No se pudo leer el archivo.");
+        }
+        setProcesandoArchivo(false);
+      }, 50);
     };
     reader.readAsBinaryString(file);
   };
@@ -395,7 +403,8 @@ function ImportarMoodleModal({ materiaId, gradoId, periodo, categorias, periodos
               className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none font-mono" />
             <button onClick={procesarPegado} className="w-full text-sm font-semibold py-2 rounded-lg bg-violet-500 text-white mb-4">Continuar</button>
             <div className="text-xs uppercase tracking-wide text-slate-400 mb-1.5">Opción 2 — Subir archivo exportado de Moodle (.xlsx / .csv)</div>
-            <input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => { if (e.target.files[0]) procesarArchivo(e.target.files[0]); }} className="text-sm" />
+            <input type="file" accept=".xlsx,.xls,.csv" disabled={procesandoArchivo} onChange={(e) => { if (e.target.files[0]) procesarArchivo(e.target.files[0]); }} className="text-sm disabled:opacity-40" />
+            {procesandoArchivo && <p className="text-xs text-violet-600 mt-2">⏳ Procesando el archivo, un momento (los archivos grandes pueden tardar unos segundos)…</p>}
             <p className="text-xs text-slate-400 mt-3">La primera fila debe tener los nombres de las columnas (Nombre, y una por cada actividad/calificación).</p>
           </div>
         ) : (
