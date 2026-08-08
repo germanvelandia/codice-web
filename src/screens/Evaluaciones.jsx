@@ -302,9 +302,86 @@ function NuevaEvaluacionForm({ materiaId, gradoId, periodo, onCancelar, onCreada
   );
 }
 
-function EvaluacionCard({ evaluacion, onCambio }) {
+function CopiarEvaluacionModal({ evaluacion, materias, grados, onClose, onCopiada }) {
+  const [materiaDestinoId, setMateriaDestinoId] = useState(evaluacion.materia_id);
+  const [gradoDestinoId, setGradoDestinoId] = useState("");
+  const [periodoDestino, setPeriodoDestino] = useState("");
+  const [config, setConfig] = useState({ cantidad_periodos: 4, sistema_periodos: "bimestre" });
+  const [copiando, setCopiando] = useState(false);
+
+  const niveles = agruparPorNivel(grados);
+  const { nivel: nivelActual } = nivelYCurso(gradoDestinoId || grados[0]?.id || "");
+  const cursosDelNivel = niveles.find((n) => n.nivel === nivelActual)?.cursos || [];
+
+  useEffect(() => { if (grados.length && !gradoDestinoId) setGradoDestinoId(grados[0].id); }, [grados]);
+  useEffect(() => { if (materiaDestinoId) api.fetchNotasConfig(materiaDestinoId).then(setConfig); }, [materiaDestinoId]);
+  const listaPeriodos = periodosDe(config);
+  useEffect(() => { if (!listaPeriodos.includes(periodoDestino)) setPeriodoDestino(listaPeriodos[0] || "1"); }, [materiaDestinoId, config]);
+
+  const copiar = async () => {
+    setCopiando(true);
+    try {
+      await api.copiarEvaluacion(evaluacion.id, materiaDestinoId, gradoDestinoId, periodoDestino);
+      alert(`"${evaluacion.titulo}" se copió como borrador — recordá revisar las fechas y publicarla cuando esté lista.`);
+      onCopiada();
+      onClose();
+    } catch (e) {
+      alert("Error al copiar: " + e.message);
+    }
+    setCopiando(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">📋 Copiar evaluación</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-500 mb-3">
+          Copia "{evaluacion.titulo}" con todas sus preguntas a otro curso — siempre como borrador, sin fechas, para que la revises antes de publicar.
+        </p>
+
+        <label className="text-xs text-slate-500 block mb-1">Materia destino</label>
+        <select value={materiaDestinoId} onChange={(e) => setMateriaDestinoId(parseInt(e.target.value, 10))} className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none">
+          {materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+        </select>
+
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">Grado</label>
+            <select value={nivelActual} onChange={(e) => {
+              const n = niveles.find((x) => x.nivel === e.target.value);
+              if (n?.cursos[0]) setGradoDestinoId(n.cursos[0].id);
+            }} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none">
+              {niveles.map((n) => <option key={n.nivel} value={n.nivel}>Grado {n.nivel}°</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">Curso</label>
+            <select value={gradoDestinoId} onChange={(e) => setGradoDestinoId(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none">
+              {cursosDelNivel.map((g) => <option key={g.id} value={g.id}>Curso {g.id}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <label className="text-xs text-slate-500 block mb-1">Periodo destino</label>
+        <select value={periodoDestino} onChange={(e) => setPeriodoDestino(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 mb-4 border border-slate-200 outline-none">
+          {listaPeriodos.map((p) => <option key={p} value={p}>Periodo {p}</option>)}
+        </select>
+
+        <button disabled={copiando} onClick={copiar} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+          {copiando ? "Copiando…" : "Copiar evaluación"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function EvaluacionCard({ evaluacion, materias, grados, onCambio }) {
   const [expandida, setExpandida] = useState(false);
   const [resultadosAbiertos, setResultadosAbiertos] = useState(false);
+  const [copiando, setCopiando] = useState(false);
 
   const publicar = async () => {
     await api.editarEvaluacion(evaluacion.id, { estado: "publicada" });
@@ -344,6 +421,7 @@ function EvaluacionCard({ evaluacion, onCambio }) {
             <button onClick={despublicar} className="text-[11px] px-2.5 py-1 rounded-full border border-slate-200 text-slate-500">Volver a borrador</button>
           )}
           <button onClick={() => setResultadosAbiertos(true)} className="text-xs text-slate-400 hover:text-violet-600">📊</button>
+          <button onClick={() => setCopiando(true)} className="text-xs text-slate-400 hover:text-violet-600" title="Copiar a otro curso">📋</button>
           <button onClick={eliminar} className="text-xs text-slate-400 hover:text-rose-500">🗑</button>
           <button onClick={() => setExpandida((v) => !v)} className="text-xs text-violet-500">{expandida ? "▲" : "▼"}</button>
         </div>
@@ -351,6 +429,7 @@ function EvaluacionCard({ evaluacion, onCambio }) {
 
       {expandida && <PreguntasEditor evaluacionId={evaluacion.id} />}
       {resultadosAbiertos && <ResultadosEvaluacion evaluacion={evaluacion} onCerrar={() => setResultadosAbiertos(false)} />}
+      {copiando && <CopiarEvaluacionModal evaluacion={evaluacion} materias={materias} grados={grados} onClose={() => setCopiando(false)} onCopiada={onCambio} />}
     </div>
   );
 }
@@ -430,8 +509,9 @@ export function VistaEvaluaciones({ grados }) {
           Todavía no hay evaluaciones para este periodo. Creá la primera con "+ Nueva evaluación".
         </div>
       ) : (
-        evaluaciones.map((e) => <EvaluacionCard key={e.id} evaluacion={e} onCambio={cargar} />)
+        evaluaciones.map((e) => <EvaluacionCard key={e.id} evaluacion={e} materias={materias} grados={grados} onCambio={cargar} />)
       )}
     </div>
   );
+}
 }
