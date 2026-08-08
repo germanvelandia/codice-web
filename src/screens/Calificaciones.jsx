@@ -689,6 +689,26 @@ function CopiarColumnasModal({ materiaDestinoId, gradoId, periodos, categoriasDe
   );
 }
 
+// Colores reconocibles por tipo de categoría de evaluación (coinciden por nombre,
+// sin distinguir mayúsculas/acentos); cualquier categoría con otro nombre cae a un
+// color de una paleta de repuesto, siempre el mismo para el mismo nombre.
+const PALETA_CATEGORIAS = ["#3B82F6", "#8B5CF6", "#F59E0B", "#14B8A6", "#EC4899", "#64748B", "#22C55E", "#F43F5E"];
+const COLOR_CATEGORIA_FIJO = {
+  cognitivo: "#3B82F6", conceptual: "#3B82F6", saber: "#3B82F6",
+  procedimental: "#8B5CF6", propositivo: "#8B5CF6", "saberhacer": "#8B5CF6",
+  actitudinal: "#F59E0B", ser: "#F59E0B",
+  autoevaluacion: "#14B8A6",
+  coevaluacion: "#EC4899",
+  heteroevaluacion: "#64748B",
+};
+function colorCategoria(nombre) {
+  const key = (nombre || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "");
+  if (COLOR_CATEGORIA_FIJO[key]) return COLOR_CATEGORIA_FIJO[key];
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) % PALETA_CATEGORIAS.length;
+  return PALETA_CATEGORIAS[Math.abs(hash) % PALETA_CATEGORIAS.length];
+}
+
 function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo, materias, onCambioCategorias }) {
   const [actividades, setActividades] = useState([]);
   const [valores, setValores] = useState({});
@@ -802,6 +822,18 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
 
   const eliminarAct = async (id) => { if (!confirm("¿Eliminar esta actividad?")) return; await api.eliminarActividad(id); cargar(); };
 
+  // Agrupa las actividades por categoría (contiguas, en el orden de las categorías)
+  // para poder pintar una franja de color por grupo en el encabezado de la Planilla.
+  const gruposCategoria = categorias
+    .map((cat) => ({ id: cat.id, nombre: cat.nombre, color: colorCategoria(cat.nombre), items: actividades.filter((a) => a.categoria_id === cat.id) }))
+    .filter((g) => g.items.length > 0);
+  const idsAgrupados = new Set(gruposCategoria.flatMap((g) => g.items.map((a) => a.id)));
+  const sinCategoria = actividades.filter((a) => !idsAgrupados.has(a.id));
+  if (sinCategoria.length > 0) gruposCategoria.push({ id: "otras", nombre: "Otras", color: "#94A3B8", items: sinCategoria });
+  const actividadesOrdenadas = gruposCategoria.flatMap((g) => g.items);
+  const colorPorActividad = {};
+  gruposCategoria.forEach((g) => g.items.forEach((a) => { colorPorActividad[a.id] = g.color; }));
+
   const toggleSeleccion = (id) => {
     setSeleccionadas((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
   };
@@ -847,9 +879,20 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
           <table className="w-full text-xs" style={{ borderCollapse: "separate", borderSpacing: 0 }}>
             <thead>
               <tr>
+                <th className="sticky left-0 top-0 z-20 bg-slate-50"></th>
+                {gruposCategoria.map((g) => (
+                  <th key={g.id} colSpan={g.items.length} className="sticky top-0 z-10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white"
+                    style={{ background: g.color }}>
+                    {g.nombre}
+                  </th>
+                ))}
+                <th className="sticky top-0 z-10 bg-slate-50"></th>
+              </tr>
+              <tr>
                 <th className="sticky left-0 top-0 z-20 bg-slate-50 text-left px-3 py-2 border-b border-slate-100">Estudiante</th>
-                {actividades.map((a) => (
-                  <th key={a.id} className={`sticky top-0 z-10 px-3 py-2 border-b border-slate-100 min-w-[110px] ${seleccionando && seleccionadas.includes(a.id) ? "bg-rose-50" : "bg-slate-50"}`}>
+                {actividadesOrdenadas.map((a) => (
+                  <th key={a.id} className={`sticky top-0 z-10 px-3 py-2 border-b border-slate-100 min-w-[110px] ${seleccionando && seleccionadas.includes(a.id) ? "bg-rose-50" : ""}`}
+                    style={!seleccionando ? { background: `${colorPorActividad[a.id]}14` } : {}}>
                     <div className="flex items-center justify-center gap-1">
                       {seleccionando && (
                         <input type="checkbox" checked={seleccionadas.includes(a.id)} onChange={() => toggleSeleccion(a.id)} />
@@ -875,14 +918,15 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
                 return (
                   <tr key={s.id} className="odd:bg-white even:bg-slate-50">
                     <td className="sticky left-0 bg-inherit text-left px-3 py-2 font-medium text-slate-700">{s.nombre} <InclusionBadge estudiante={s} size="text-xs" /></td>
-                    {actividades.map((a) => {
+                    {actividadesOrdenadas.map((a) => {
                       const v = valorDeActividad(a, s.id);
                       const b = bandaDesempeno(v, config);
+                      const tinte = `${colorPorActividad[a.id]}0A`;
                       if (a.es_automatica) {
-                        return <td key={a.id} className="text-center px-3 py-2" style={{ color: b.color, fontWeight: 600 }}>{v}</td>;
+                        return <td key={a.id} className="text-center px-3 py-2" style={{ color: b.color, fontWeight: 600, background: tinte }}>{v}</td>;
                       }
                       return (
-                        <td key={a.id} className="text-center px-3 py-2">
+                        <td key={a.id} className="text-center px-3 py-2" style={{ background: tinte }}>
                           <input type="number" step="0.1" defaultValue={v ?? ""} onBlur={(e) => guardarValorManual(a.id, s.id, e.target.value)}
                             style={v !== null && v !== undefined ? { color: b.color, borderColor: b.color, background: `${b.color}11`, fontWeight: 700 } : {}}
                             className="w-14 text-center text-xs rounded px-1 py-1 border border-slate-200 outline-none" />
