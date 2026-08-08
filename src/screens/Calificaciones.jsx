@@ -6,6 +6,7 @@ import {
   calcularEstadisticas, GAM_CATEGORIAS_OPCIONES,
 } from "../lib/calificaciones";
 import { buscarEstudiantePorNombre } from "../lib/gamification";
+import { agruparPorNivel, nivelYCurso } from "../lib/gamification";
 import { ActasModal } from "./Actas";
 import { InclusionBadge } from "./Estudiantes";
 
@@ -1173,9 +1174,24 @@ export function VistaCalificaciones({ grados }) {
           <PanelCategorias materiaId={materiaActualId} categorias={categorias} onCambio={cargarConfigYCategorias} />
 
           <div className="flex flex-wrap gap-2 mb-4 items-center">
-            <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
-              {grados.map((g) => <option key={g.id} value={g.id}>Grado {g.id}</option>)}
-            </select>
+            {(() => {
+              const niveles = agruparPorNivel(grados);
+              const { nivel: nivelActual } = nivelYCurso(gradoId);
+              const cursosDelNivel = niveles.find((n) => n.nivel === nivelActual)?.cursos || [];
+              return (
+                <>
+                  <select value={nivelActual} onChange={(e) => {
+                    const nuevoNivel = niveles.find((n) => n.nivel === e.target.value);
+                    if (nuevoNivel?.cursos[0]) setGradoId(nuevoNivel.cursos[0].id);
+                  }} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
+                    {niveles.map((n) => <option key={n.nivel} value={n.nivel}>Grado {n.nivel}°</option>)}
+                  </select>
+                  <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
+                    {cursosDelNivel.map((g) => <option key={g.id} value={g.id}>Curso {g.id}</option>)}
+                  </select>
+                </>
+              );
+            })()}
             <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
               {periodosDe(config).map((p) => <option key={p} value={p}>Periodo {p}</option>)}
             </select>
