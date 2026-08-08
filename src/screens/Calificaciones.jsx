@@ -570,7 +570,7 @@ function NotaMasivaModal({ actividades, estudiantesVisibles, reinoFiltro, valorD
   );
 }
 
-function CopiarColumnasModal({ materiaDestinoId, gradoId, periodos, categoriasDestino, materias, onClose, onCopiado }) {
+function CopiarColumnasModal({ materiaDestinoId, gradoId, periodos, categoriasDestino, materias, estudiantes, onClose, onCopiado }) {
   const [materiaOrigenId, setMateriaOrigenId] = useState("");
   const [periodoOrigen, setPeriodoOrigen] = useState(periodos[0] || "1");
   const [actividadesOrigen, setActividadesOrigen] = useState([]);
@@ -578,6 +578,8 @@ function CopiarColumnasModal({ materiaDestinoId, gradoId, periodos, categoriasDe
   const [seleccionadas, setSeleccionadas] = useState({}); // { actividadId: true }
   const [categoriaPorActividad, setCategoriaPorActividad] = useState({}); // { actividadId: categoriaDestinoId }
   const [copiando, setCopiando] = useState(false);
+  const [alcance, setAlcance] = useState("todos"); // "todos" | "uno"
+  const [estudianteId, setEstudianteId] = useState("");
 
   const materiasOrigenPosibles = materias.filter((m) => m.id !== materiaDestinoId);
 
@@ -596,6 +598,7 @@ function CopiarColumnasModal({ materiaDestinoId, gradoId, periodos, categoriasDe
   };
 
   useEffect(() => { cargarActividades(materiaOrigenId, periodoOrigen); }, [materiaOrigenId, periodoOrigen]);
+  useEffect(() => { if (estudiantes.length && !estudianteId) setEstudianteId(estudiantes[0].id); }, [estudiantes]);
 
   const toggle = (id) => setSeleccionadas((prev) => ({ ...prev, [id]: !prev[id] }));
   const idsSeleccionados = Object.keys(seleccionadas).filter((id) => seleccionadas[id]).map((id) => parseInt(id, 10));
@@ -606,8 +609,10 @@ function CopiarColumnasModal({ materiaDestinoId, gradoId, periodos, categoriasDe
     if (sinCategoria.length > 0) { alert("Elegí una categoría destino para cada columna seleccionada."); return; }
     setCopiando(true);
     try {
-      const n = await api.copiarColumnasEspecificas(idsSeleccionados, materiaDestinoId, gradoId, categoriaPorActividad);
-      alert(`Se copiaron ${n} columna(s) con sus notas.`);
+      const n = await api.copiarColumnasEspecificas(idsSeleccionados, materiaDestinoId, gradoId, categoriaPorActividad, alcance === "uno" ? estudianteId : null);
+      alert(alcance === "uno"
+        ? `Se copió la nota de ${estudiantes.find((s) => s.id === estudianteId)?.nombre || "ese estudiante"} en ${n} columna(s).`
+        : `Se copiaron ${n} columna(s) con sus notas.`);
       onCopiado();
       onClose();
     } catch (e) {
@@ -633,6 +638,19 @@ function CopiarColumnasModal({ materiaDestinoId, gradoId, periodos, categoriasDe
           </p>
         ) : (
           <>
+        <div className="mb-3">
+          <label className="text-xs text-slate-500 block mb-1">¿A quién aplica esta copia?</label>
+          <div className="flex gap-1 mb-2">
+            <button onClick={() => setAlcance("todos")} className={`text-xs px-3 py-1.5 rounded-full ${alcance === "todos" ? "bg-violet-500 text-white" : "bg-slate-100 text-slate-600"}`}>Todo el curso</button>
+            <button onClick={() => setAlcance("uno")} className={`text-xs px-3 py-1.5 rounded-full ${alcance === "uno" ? "bg-violet-500 text-white" : "bg-slate-100 text-slate-600"}`}>Un solo estudiante</button>
+          </div>
+          {alcance === "uno" && (
+            <select value={estudianteId} onChange={(e) => setEstudianteId(parseInt(e.target.value, 10))} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none">
+              {estudiantes.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+            </select>
+          )}
+        </div>
+
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
             <label className="text-xs text-slate-500 block mb-1">Materia origen</label>
@@ -986,7 +1004,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
           onClose={() => setNotaMasivaAbierta(false)} onAplicado={aplicarNotaMasiva} />
       )}
       {copiarColumnasAbierto && (
-        <CopiarColumnasModal materiaDestinoId={materiaId} gradoId={gradoId} periodos={periodosDe(config)} categoriasDestino={categorias} materias={materias}
+        <CopiarColumnasModal materiaDestinoId={materiaId} gradoId={gradoId} periodos={periodosDe(config)} categoriasDestino={categorias} materias={materias} estudiantes={estudiantes}
           onClose={() => setCopiarColumnasAbierto(false)} onCopiado={cargar} />
       )}
     </div>
