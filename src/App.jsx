@@ -286,7 +286,7 @@ function MisNotas({ estudianteId }) {
                           Periodo {f.periodo} — <span style={{ color: b.color }}>{f.nota ?? "—"} ({b.label})</span>
                           {f.enCurso && <span className="text-amber-600 font-normal"> · En curso (provisional, puede cambiar)</span>}
                         </div>
-                        {f.actividadesPeriodo.length > 0 && (
+                        {f.enCurso && f.actividadesPeriodo.length > 0 && (
                           <div className="ml-2 mt-1 space-y-0.5">
                             {f.actividadesPeriodo.map((a) => (
                               <div key={a.id} className="text-[11px] text-slate-500 flex justify-between">
