@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "./lib/supabaseClient";
 import * as api from "./lib/api";
 import { nextLevel } from "./lib/gamification";
-import { bandaDesempeno } from "./lib/calificaciones";
+import { bandaDesempeno, notaFinalPonderada } from "./lib/calificaciones";
 import { VistaGrados, VistaReinos, VistaEstudiantes } from "./screens/Estudiantes";
 import { VistaAsistencia } from "./screens/Asistencia";
 import { VistaRuleta, VistaTemporizador, VistaHerramientas } from "./screens/Herramientas";
@@ -207,34 +207,67 @@ function MisNotas({ estudianteId }) {
   }, [estudianteId]);
 
   if (cargando) return <div className="text-xs text-slate-400 mt-4">Cargando notas…</div>;
-  if (!datos || datos.finales.length === 0) return null;
+  if (!datos) return null;
 
-  const porMateria = {};
+  // Junta, por materia, los periodos con nota final guardada (definitiva) y los
+  // periodos donde solo hay actividades cargadas todavía (en curso) — para estos
+  // últimos se calcula la nota en vivo con la misma fórmula ponderada del docente.
+  const materias = {};
   datos.finales.forEach((f) => {
     const nombre = f.materias?.nombre || `Materia ${f.materia_id}`;
-    porMateria[nombre] = porMateria[nombre] || [];
-    porMateria[nombre].push(f);
+    materias[nombre] = materias[nombre] || { finales: {}, actividadesPorPeriodo: {} };
+    materias[nombre].finales[f.periodo] = f.nota;
+  });
+  datos.valores.forEach((v) => {
+    const act = v.notas_actividades;
+    if (!act) return;
+    const nombre = act.materias?.nombre || `Materia ${act.materia_id}`;
+    materias[nombre] = materias[nombre] || { finales: {}, actividadesPorPeriodo: {} };
+    materias[nombre].actividadesPorPeriodo[act.periodo] = materias[nombre].actividadesPorPeriodo[act.periodo] || [];
+    materias[nombre].actividadesPorPeriodo[act.periodo].push(v);
   });
 
+  if (Object.keys(materias).length === 0) return null;
   const config = { escala_min: 1, nota_minima: 3.5, nota_maxima: 5 };
 
   return (
     <div className="mt-4 pt-4 border-t border-slate-100">
       <div className="text-xs font-semibold text-slate-600 mb-2">📚 Mis notas</div>
       <div className="space-y-2">
-        {Object.entries(porMateria).map(([nombreMateria, finales]) => {
+        {Object.entries(materias).map(([nombreMateria, m]) => {
           const abierta = materiaAbierta === nombreMateria;
-          const actividades = datos.valores.filter((v) => v.notas_actividades?.materias?.nombre === nombreMateria);
+          const periodos = [...new Set([...Object.keys(m.finales), ...Object.keys(m.actividadesPorPeriodo)])].sort();
+
+          const filas = periodos.map((periodo) => {
+            const actividadesPeriodo = m.actividadesPorPeriodo[periodo] || [];
+            if (Object.prototype.hasOwnProperty.call(m.finales, periodo)) {
+              return { periodo, nota: m.finales[periodo], enCurso: false, actividadesPeriodo };
+            }
+            // Sin nota final guardada todavía: se calcula en vivo con lo que hay cargado
+            const porCategoria = {};
+            const categoriasVistas = {};
+            actividadesPeriodo.forEach((a) => {
+              const cat = a.notas_actividades?.notas_categorias;
+              const catId = a.notas_actividades?.categoria_id;
+              if (!catId) return;
+              categoriasVistas[catId] = { id: catId, porcentaje: cat?.porcentaje || 0 };
+              porCategoria[catId] = porCategoria[catId] || [];
+              porCategoria[catId].push(a.valor);
+            });
+            const notaViva = notaFinalPonderada(porCategoria, Object.values(categoriasVistas));
+            return { periodo, nota: notaViva, enCurso: true, actividadesPeriodo };
+          });
+
           return (
             <div key={nombreMateria} className="bg-slate-50 rounded-xl p-3">
               <button onClick={() => setMateriaAbierta(abierta ? null : nombreMateria)} className="w-full text-left">
                 <div className="text-sm font-semibold text-slate-800">{nombreMateria}</div>
                 <div className="flex flex-wrap gap-1.5 mt-1">
-                  {finales.sort((a, b) => a.periodo.localeCompare(b.periodo)).map((f) => {
+                  {filas.map((f) => {
                     const b = bandaDesempeno(f.nota, config);
                     return (
-                      <span key={f.periodo} className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: `${b.color}22`, color: b.color }}>
-                        P{f.periodo}: {f.nota ?? "—"}
+                      <span key={f.periodo} className="text-[10px] px-2 py-0.5 rounded-full font-semibold flex items-center gap-1" style={{ background: `${b.color}22`, color: b.color }}>
+                        P{f.periodo}: {f.nota ?? "—"}{f.enCurso && " 🕓"}
                       </span>
                     );
                   })}
@@ -243,15 +276,17 @@ function MisNotas({ estudianteId }) {
 
               {abierta && (
                 <div className="mt-2 pt-2 border-t border-slate-200 space-y-2">
-                  {finales.sort((a, b) => a.periodo.localeCompare(b.periodo)).map((f) => {
+                  {filas.map((f) => {
                     const b = bandaDesempeno(f.nota, config);
-                    const actividadesPeriodo = actividades.filter((a) => a.notas_actividades?.periodo === f.periodo);
                     return (
                       <div key={f.periodo}>
-                        <div className="text-xs font-semibold text-slate-600">Periodo {f.periodo} — <span style={{ color: b.color }}>{f.nota ?? "—"} ({b.label})</span></div>
-                        {actividadesPeriodo.length > 0 && (
+                        <div className="text-xs font-semibold text-slate-600">
+                          Periodo {f.periodo} — <span style={{ color: b.color }}>{f.nota ?? "—"} ({b.label})</span>
+                          {f.enCurso && <span className="text-amber-600 font-normal"> · En curso (provisional, puede cambiar)</span>}
+                        </div>
+                        {f.actividadesPeriodo.length > 0 && (
                           <div className="ml-2 mt-1 space-y-0.5">
-                            {actividadesPeriodo.map((a) => (
+                            {f.actividadesPeriodo.map((a) => (
                               <div key={a.id} className="text-[11px] text-slate-500 flex justify-between">
                                 <span>{a.notas_actividades?.nombre}{a.notas_actividades?.notas_categorias?.nombre ? ` (${a.notas_actividades.notas_categorias.nombre})` : ""}</span>
                                 <span className="font-semibold">{a.valor}</span>
@@ -259,7 +294,7 @@ function MisNotas({ estudianteId }) {
                             ))}
                           </div>
                         )}
-                        {f.nota !== null && comentarios[b.key] && (
+                        {!f.enCurso && f.nota !== null && comentarios[b.key] && (
                           <div className="text-[11px] text-slate-500 italic mt-1 bg-white rounded-lg p-2">{comentarios[b.key]}</div>
                         )}
                       </div>
