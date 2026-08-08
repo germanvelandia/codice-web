@@ -1192,6 +1192,7 @@ export function VistaCalificaciones({ grados }) {
   const [categorias, setCategorias] = useState([]);
   const [gradoId, setGradoId] = useState(grados[0]?.id || "");
   const [periodo, setPeriodo] = useState("1");
+  const [soloVigente, setSoloVigente] = useState(true);
   const [subVista, setSubVista] = useState("planilla");
   const [comentariosAbiertos, setComentariosAbiertos] = useState(false);
   const [estudiantes, setEstudiantes] = useState([]);
@@ -1212,8 +1213,22 @@ export function VistaCalificaciones({ grados }) {
     const [cfg, cats] = await Promise.all([api.fetchNotasConfig(materiaActualId), api.fetchCategorias(materiaActualId)]);
     setConfig(cfg);
     setCategorias(cats);
+    return cfg;
   };
-  useEffect(() => { cargarConfigYCategorias(); }, [materiaActualId]);
+  // Al cambiar de materia, el periodo arranca en el "vigente" que hayas marcado
+  // para esa materia (no siempre en el Periodo 1).
+  useEffect(() => { cargarConfigYCategorias().then((cfg) => { if (cfg?.periodo_actual) setPeriodo(cfg.periodo_actual); }); }, [materiaActualId]);
+
+  const marcarPeriodoVigente = async () => {
+    await api.guardarNotasConfig(materiaActualId, { ...config, periodo_actual: periodo });
+    setConfig((prev) => ({ ...prev, periodo_actual: periodo }));
+  };
+
+  useEffect(() => {
+    if (soloVigente && config.periodo_actual && parseInt(periodo, 10) < parseInt(config.periodo_actual, 10)) {
+      setPeriodo(config.periodo_actual);
+    }
+  }, [soloVigente]);
 
   useEffect(() => {
     if (!gradoId) return;
@@ -1278,8 +1293,17 @@ export function VistaCalificaciones({ grados }) {
                 );
               })()}
               <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className="text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none">
-                {periodosDe(config).map((p) => <option key={p} value={p}>Periodo {p}</option>)}
+                {periodosDe(config)
+                  .filter((p) => !soloVigente || parseInt(p, 10) >= parseInt(config.periodo_actual || "1", 10))
+                  .map((p) => <option key={p} value={p}>Periodo {p}{p === config.periodo_actual ? " (vigente)" : ""}</option>)}
               </select>
+              {periodo !== config.periodo_actual && (
+                <button onClick={marcarPeriodoVigente} title="Marcar este periodo como el vigente para esta materia" className="text-xs px-2.5 py-1.5 rounded-full bg-violet-100 text-violet-700 shrink-0">📌 Marcar como vigente</button>
+              )}
+              <label className="flex items-center gap-1.5 text-xs text-slate-500 shrink-0">
+                <input type="checkbox" checked={soloVigente} onChange={(e) => setSoloVigente(e.target.checked)} />
+                Ocultar periodos anteriores
+              </label>
               <button onClick={() => setComentariosAbiertos(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600 ml-auto">💬 Comentarios por desempeño</button>
             </div>
             <div className="flex gap-1 rounded-full bg-violet-50 p-1 w-fit flex-wrap">
