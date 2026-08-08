@@ -911,9 +911,10 @@ export async function eliminarActividad(id) {
 }
 
 // Copia columnas (actividades) puntuales de una materia a otra, junto con las
-// notas ya cargadas de esos estudiantes — a diferencia de copiarNotasDesdeMateria,
-// esto no trae todo, solo lo seleccionado, y no reemplaza lo que ya exista.
-export async function copiarColumnasEspecificas(actividadesOrigenIds, materiaDestinoId, gradoDestinoId, categoriaDestinoPorActividad) {
+// notas ya cargadas — a diferencia de copiarNotasDesdeMateria, esto no trae todo,
+// solo lo seleccionado, y no reemplaza lo que ya exista.
+// Si se pasa estudianteId, solo copia la nota de ESE estudiante en vez de la de todos.
+export async function copiarColumnasEspecificas(actividadesOrigenIds, materiaDestinoId, gradoDestinoId, categoriaDestinoPorActividad, estudianteId = null) {
   const actividadesOrigen = await Promise.all(
     actividadesOrigenIds.map(async (id) => {
       const { data, error } = await supabase.from("notas_actividades").select("*").eq("id", id).single();
@@ -925,16 +926,23 @@ export async function copiarColumnasEspecificas(actividadesOrigenIds, materiaDes
 
   let copiadas = 0;
   for (const act of actividadesOrigen) {
-    const nueva = await crearActividad({
-      nombre: act.nombre,
-      categoria_id: categoriaDestinoPorActividad[act.id],
-      materia_id: materiaDestinoId,
-      grado_id: gradoDestinoId,
-      periodo: act.periodo,
-      es_automatica: act.es_automatica,
-      gam_categoria: act.gam_categoria || null,
-    });
-    const valoresDeEsta = valoresOrigen.filter((v) => v.actividad_id === act.id);
+    // Si ya existe una columna con el mismo nombre y periodo en la materia destino
+    // (por ejemplo, porque ya copiaste ahí a otro estudiante antes), se reutiliza
+    // en vez de crear una columna duplicada.
+    const existentes = await fetchActividades(materiaDestinoId, gradoDestinoId, act.periodo);
+    let nueva = existentes.find((e) => e.nombre === act.nombre);
+    if (!nueva) {
+      nueva = await crearActividad({
+        nombre: act.nombre,
+        categoria_id: categoriaDestinoPorActividad[act.id],
+        materia_id: materiaDestinoId,
+        grado_id: gradoDestinoId,
+        periodo: act.periodo,
+        es_automatica: act.es_automatica,
+        gam_categoria: act.gam_categoria || null,
+      });
+    }
+    const valoresDeEsta = valoresOrigen.filter((v) => v.actividad_id === act.id && (!estudianteId || v.estudiante_id === estudianteId));
     for (const v of valoresDeEsta) {
       await setValor(nueva.id, v.estudiante_id, v.valor);
     }
