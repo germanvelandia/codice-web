@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import * as api from "../lib/api";
 import { agruparPorNivel, nivelYCurso } from "../lib/gamification";
+import { periodosDe } from "../lib/calificaciones";
 
 const ICONO_RECURSO = { drive: "📁", docs: "📄", forms: "📝", otro: "🔗" };
 const LABEL_RECURSO = { drive: "Google Drive", docs: "Google Docs", forms: "Google Forms", otro: "Enlace" };
@@ -364,6 +365,7 @@ export function VistaPlaneaciones({ grados }) {
   const [gradoId, setGradoId] = useState("");
   const [periodo, setPeriodo] = useState("1");
   const [unidades, setUnidades] = useState([]);
+  const [config, setConfig] = useState({ cantidad_periodos: 4, sistema_periodos: "bimestre" });
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
   const [formAbierto, setFormAbierto] = useState(false);
@@ -372,6 +374,18 @@ export function VistaPlaneaciones({ grados }) {
     api.fetchMaterias().then((data) => { setMaterias(data); if (data[0]) setMateriaId(data[0].id); });
   }, []);
   useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
+
+  // Respeta la configuración real de periodos de cada materia (bimestre/trimestre/semestre),
+  // la misma que se define en Calificaciones → Escala y periodos.
+  useEffect(() => {
+    if (!materiaId) return;
+    api.fetchNotasConfig(materiaId).then(setConfig);
+  }, [materiaId]);
+
+  const listaPeriodos = periodosDe(config);
+  useEffect(() => {
+    if (!listaPeriodos.includes(periodo)) setPeriodo(listaPeriodos[0] || "1");
+  }, [materiaId, config]);
 
   const cargar = () => {
     if (!materiaId || !gradoId) return;
@@ -403,7 +417,7 @@ export function VistaPlaneaciones({ grados }) {
           {cursosDelNivel.map((g) => <option key={g.id} value={g.id}>Curso {g.id}</option>)}
         </select>
         <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
-          {["1", "2", "3", "4"].map((p) => <option key={p} value={p}>Periodo {p}</option>)}
+          {listaPeriodos.map((p) => <option key={p} value={p}>Periodo {p}</option>)}
         </select>
         <button onClick={() => setFormAbierto((v) => !v)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white ml-auto">
           {formAbierto ? "Cerrar" : "+ Nueva unidad/tema"}
@@ -412,6 +426,7 @@ export function VistaPlaneaciones({ grados }) {
 
       <p className="text-[11px] text-slate-400 mb-3">
         Plan de estudios de la materia, organizado por unidades/temas dentro de cada periodo. Cada unidad puede tener varias clases, tareas con rúbrica, y recursos de Google Drive/Docs/Forms.
+        Los periodos ({config.sistema_periodos === "trimestre" ? "trimestre" : config.sistema_periodos === "semestre" ? "semestre" : "bimestre"}, {listaPeriodos.length} en total) se toman de la configuración de esta materia en Calificaciones → Escala y periodos.
       </p>
 
       {formAbierto && (
