@@ -754,7 +754,7 @@ export async function fetchNotasEstudiante(estudianteId) {
 
   const { data: valores, error: e2 } = await supabase
     .from("notas_valores")
-    .select("*, notas_actividades(nombre, periodo, materia_id, materias(nombre), notas_categorias(nombre))")
+    .select("*, notas_actividades(nombre, periodo, materia_id, categoria_id, materias(nombre), notas_categorias(nombre, porcentaje))")
     .eq("estudiante_id", estudianteId);
   if (e2) throw e2;
 
