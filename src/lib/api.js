@@ -373,6 +373,11 @@ export async function establecerAdmin(profesorId, esAdmin) {
   if (error) throw error;
 }
 
+export async function eliminarDocente(profesorId) {
+  const { error } = await supabase.from("profesores").delete().eq("id", profesorId);
+  if (error) throw error;
+}
+
 /* ---------------- Procesos de inclusión (PIAR / DUA) ---------------- */
 export async function guardarInclusion(estudianteId, cambios) {
   const { error } = await supabase.from("estudiantes").update(cambios).eq("id", estudianteId);
