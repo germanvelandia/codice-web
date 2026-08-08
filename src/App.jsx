@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "./lib/supabaseClient";
 import * as api from "./lib/api";
 import { nextLevel } from "./lib/gamification";
+import { bandaDesempeno } from "./lib/calificaciones";
 import { VistaGrados, VistaReinos, VistaEstudiantes } from "./screens/Estudiantes";
 import { VistaAsistencia } from "./screens/Asistencia";
 import { VistaRuleta, VistaTemporizador, VistaHerramientas } from "./screens/Herramientas";
@@ -191,6 +192,89 @@ function TarjetaEvaluacionEstudiante({ evaluacion, estudianteId }) {
   );
 }
 
+function MisNotas({ estudianteId }) {
+  const [datos, setDatos] = useState(null);
+  const [comentarios, setComentarios] = useState({});
+  const [cargando, setCargando] = useState(true);
+  const [materiaAbierta, setMateriaAbierta] = useState(null);
+
+  useEffect(() => {
+    Promise.all([api.fetchNotasEstudiante(estudianteId), api.fetchComentariosDesempeno()]).then(([d, c]) => {
+      setDatos(d);
+      setComentarios(c);
+      setCargando(false);
+    });
+  }, [estudianteId]);
+
+  if (cargando) return <div className="text-xs text-slate-400 mt-4">Cargando notas…</div>;
+  if (!datos || datos.finales.length === 0) return null;
+
+  const porMateria = {};
+  datos.finales.forEach((f) => {
+    const nombre = f.materias?.nombre || `Materia ${f.materia_id}`;
+    porMateria[nombre] = porMateria[nombre] || [];
+    porMateria[nombre].push(f);
+  });
+
+  const config = { escala_min: 1, nota_minima: 3.5, nota_maxima: 5 };
+
+  return (
+    <div className="mt-4 pt-4 border-t border-slate-100">
+      <div className="text-xs font-semibold text-slate-600 mb-2">📚 Mis notas</div>
+      <div className="space-y-2">
+        {Object.entries(porMateria).map(([nombreMateria, finales]) => {
+          const abierta = materiaAbierta === nombreMateria;
+          const actividades = datos.valores.filter((v) => v.notas_actividades?.materias?.nombre === nombreMateria);
+          return (
+            <div key={nombreMateria} className="bg-slate-50 rounded-xl p-3">
+              <button onClick={() => setMateriaAbierta(abierta ? null : nombreMateria)} className="w-full text-left">
+                <div className="text-sm font-semibold text-slate-800">{nombreMateria}</div>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {finales.sort((a, b) => a.periodo.localeCompare(b.periodo)).map((f) => {
+                    const b = bandaDesempeno(f.nota, config);
+                    return (
+                      <span key={f.periodo} className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: `${b.color}22`, color: b.color }}>
+                        P{f.periodo}: {f.nota ?? "—"}
+                      </span>
+                    );
+                  })}
+                </div>
+              </button>
+
+              {abierta && (
+                <div className="mt-2 pt-2 border-t border-slate-200 space-y-2">
+                  {finales.sort((a, b) => a.periodo.localeCompare(b.periodo)).map((f) => {
+                    const b = bandaDesempeno(f.nota, config);
+                    const actividadesPeriodo = actividades.filter((a) => a.notas_actividades?.periodo === f.periodo);
+                    return (
+                      <div key={f.periodo}>
+                        <div className="text-xs font-semibold text-slate-600">Periodo {f.periodo} — <span style={{ color: b.color }}>{f.nota ?? "—"} ({b.label})</span></div>
+                        {actividadesPeriodo.length > 0 && (
+                          <div className="ml-2 mt-1 space-y-0.5">
+                            {actividadesPeriodo.map((a) => (
+                              <div key={a.id} className="text-[11px] text-slate-500 flex justify-between">
+                                <span>{a.notas_actividades?.nombre}{a.notas_actividades?.notas_categorias?.nombre ? ` (${a.notas_actividades.notas_categorias.nombre})` : ""}</span>
+                                <span className="font-semibold">{a.valor}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {f.nota !== null && comentarios[b.key] && (
+                          <div className="text-[11px] text-slate-500 italic mt-1 bg-white rounded-lg p-2">{comentarios[b.key]}</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function EvaluacionesEstudiante({ estudianteId, gradoId }) {
   const [evaluaciones, setEvaluaciones] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -277,6 +361,7 @@ function PortalEstudiante() {
         <div className="text-xs text-slate-500 mb-4">
           Presentes: {datos.presentes} · Retardos: {datos.retardos} · Faltas injustificadas: {datos.faltas_injustificadas} · Faltas justificadas: {datos.faltas_justificadas}
         </div>
+        {estudianteInfo && <MisNotas estudianteId={estudianteInfo.id} />}
         {estudianteInfo && <EvaluacionesEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />}
         <button onClick={() => { setDatos(null); setCodigo(""); setEstudianteInfo(null); }} className="w-full text-xs text-violet-500 mt-4">← Consultar otro código</button>
       </div>
