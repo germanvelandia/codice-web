@@ -130,6 +130,13 @@ export async function consultarPortalEstudiante(codigo) {
   return data && data.length > 0 ? data[0] : null;
 }
 
+// Usado por el flujo de evaluaciones para saber el id/grado del estudiante a partir de su código
+export async function fetchEstudiantePorCodigo(codigo) {
+  const { data, error } = await supabase.from("estudiantes").select("id, nombre, grado_id").eq("codigo_acceso", codigo.trim().toUpperCase()).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 /* ---------------- Roles de clase ---------------- */
 export async function fetchRoles() {
   const { data, error } = await supabase.from("roles_clase").select("*").order("nombre");
@@ -593,6 +600,120 @@ export async function vincularEstandar(planeacionId, estandarId) {
 
 export async function desvincularEstandar(planeacionId, estandarId) {
   const { error } = await supabase.from("planeacion_estandares").delete().eq("planeacion_id", planeacionId).eq("estandar_id", estandarId);
+  if (error) throw error;
+}
+
+/* ---------------- Evaluaciones virtuales (lado docente) ---------------- */
+export async function fetchEvaluaciones(materiaId, gradoId, periodo) {
+  const { data, error } = await supabase.from("evaluaciones").select("*")
+    .eq("materia_id", materiaId).eq("grado_id", gradoId).eq("periodo", periodo).order("creado_en", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearEvaluacion(campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("evaluaciones").insert({ ...campos, docente_id: userData?.user?.id || null }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function editarEvaluacion(id, cambios) {
+  const { error } = await supabase.from("evaluaciones").update(cambios).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarEvaluacion(id) {
+  const { error } = await supabase.from("evaluaciones").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function fetchPreguntasDocente(evaluacionId) {
+  const { data, error } = await supabase.from("evaluacion_preguntas").select("*").eq("evaluacion_id", evaluacionId).order("orden");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearPregunta(campos) {
+  const { error } = await supabase.from("evaluacion_preguntas").insert(campos);
+  if (error) throw error;
+}
+
+export async function eliminarPregunta(id) {
+  const { error } = await supabase.from("evaluacion_preguntas").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function fetchIntentosDeEvaluacion(evaluacionId) {
+  const [intentosRes, estudiantesRes] = await Promise.all([
+    supabase.from("evaluacion_intentos").select("*").eq("evaluacion_id", evaluacionId).order("entregado_en"),
+    supabase.from("estudiantes").select("id, nombre"),
+  ]);
+  if (intentosRes.error) throw intentosRes.error;
+  if (estudiantesRes.error) throw estudiantesRes.error;
+  const nombrePorId = {};
+  (estudiantesRes.data || []).forEach((e) => { nombrePorId[e.id] = e.nombre; });
+  return (intentosRes.data || []).map((i) => ({ ...i, estudiante_nombre: nombrePorId[i.estudiante_id] || `Estudiante ${i.estudiante_id}` }));
+}
+
+export async function fetchRespuestasDeIntento(intentoId) {
+  const { data, error } = await supabase.from("evaluacion_respuestas").select("*, evaluacion_preguntas(enunciado, tipo, puntos, opciones)").eq("intento_id", intentoId);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function calificarRespuesta(respuestaId, puntos, correcta) {
+  const { error } = await supabase.from("evaluacion_respuestas").update({ puntos_obtenidos: puntos, correcta }).eq("id", respuestaId);
+  if (error) throw error;
+}
+
+export async function recalcularPuntajeIntento(intentoId) {
+  const { data, error } = await supabase.from("evaluacion_respuestas").select("puntos_obtenidos").eq("intento_id", intentoId);
+  if (error) throw error;
+  const total = (data || []).reduce((acc, r) => acc + (r.puntos_obtenidos || 0), 0);
+  const { error: e2 } = await supabase.from("evaluacion_intentos").update({ puntaje_obtenido: total, estado: "calificado" }).eq("id", intentoId);
+  if (e2) throw e2;
+}
+
+export async function publicarResultado(intentoId, visible = true) {
+  const { error } = await supabase.from("evaluacion_intentos").update({ visible_para_estudiante: visible }).eq("id", intentoId);
+  if (error) throw error;
+}
+
+export async function publicarTodosLosResultados(evaluacionId) {
+  const { error } = await supabase.from("evaluacion_intentos").update({ visible_para_estudiante: true }).eq("evaluacion_id", evaluacionId);
+  if (error) throw error;
+}
+
+/* ---------------- Evaluaciones virtuales (lado estudiante, vía código de acceso) ---------------- */
+export async function fetchEvaluacionesDisponibles(gradoId, materiaId) {
+  let query = supabase.from("evaluaciones").select("*").eq("estado", "publicada").eq("grado_id", gradoId);
+  if (materiaId) query = query.eq("materia_id", materiaId);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function fetchMisIntentos(evaluacionId, estudianteId) {
+  const { data, error } = await supabase.from("evaluacion_intentos").select("*").eq("evaluacion_id", evaluacionId).eq("estudiante_id", estudianteId).order("numero_intento");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function obtenerPreguntasParaEstudiante(evaluacionId) {
+  const { data, error } = await supabase.rpc("obtener_preguntas_evaluacion", { p_evaluacion_id: evaluacionId });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function iniciarIntento(evaluacionId, estudianteId) {
+  const { data, error } = await supabase.rpc("iniciar_intento_evaluacion", { p_evaluacion_id: evaluacionId, p_estudiante_id: estudianteId });
+  if (error) throw error;
+  return data;
+}
+
+export async function entregarIntento(intentoId, respuestas) {
+  const { error } = await supabase.rpc("entregar_intento_evaluacion", { p_intento_id: intentoId, p_respuestas: respuestas });
   if (error) throw error;
 }
 
