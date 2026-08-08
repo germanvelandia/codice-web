@@ -14,9 +14,11 @@ function BarraMateria({ materias, materiaActualId, setMateriaActualId, onCambio 
   const [creando, setCreando] = useState(false);
   const [nombre, setNombre] = useState("");
   const [duplicando, setDuplicando] = useState(false);
+  const [copiando, setCopiando] = useState(false);
   const [copiarDesdeId, setCopiarDesdeId] = useState("");
   const [renombrando, setRenombrando] = useState(false);
   const [nombreRenombrar, setNombreRenombrar] = useState("");
+  const [menuAbierto, setMenuAbierto] = useState(false);
 
   const crear = async () => {
     if (!nombre.trim()) return;
@@ -47,6 +49,7 @@ function BarraMateria({ materias, materiaActualId, setMateriaActualId, onCambio 
     if (!origen) return;
     if (!confirm(`¿Copiar todas las categorías, actividades y notas de "${origen.nombre}" a esta materia? Esto reemplaza lo que ya tengas aquí.`)) return;
     await api.copiarNotasDesdeMateria(origen.id, materiaActualId);
+    setCopiando(false);
     onCambio();
   };
 
@@ -58,54 +61,75 @@ function BarraMateria({ materias, materiaActualId, setMateriaActualId, onCambio 
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 mb-4 flex flex-wrap items-center gap-2">
-      <span className="text-xs uppercase tracking-wide text-slate-400">Materia:</span>
-      {materias.length > 0 && (
-        <select value={materiaActualId || ""} onChange={(e) => setMateriaActualId(parseInt(e.target.value, 10))} className="text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none">
-          {materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
-        </select>
-      )}
-      {materiaActualId && !renombrando && (
-        <button onClick={() => { const actual = materias.find((m) => m.id === materiaActualId); setNombreRenombrar(actual?.nombre || ""); setRenombrando(true); }}
-          title="Renombrar esta materia (no toca las notas ya cargadas)" className="text-xs text-slate-400 hover:text-violet-600">✏️</button>
-      )}
-      {renombrando && (
-        <div className="flex gap-1">
-          <input value={nombreRenombrar} onChange={(e) => setNombreRenombrar(e.target.value)} placeholder="Nuevo nombre"
-            onKeyDown={(e) => { if (e.key === "Enter") renombrar(); if (e.key === "Escape") setRenombrando(false); }}
-            className="text-xs rounded-lg px-2 py-1.5 border border-violet-300 outline-none" />
-          <button onClick={renombrar} className="text-xs px-2 py-1.5 rounded-lg bg-violet-500 text-white">Guardar</button>
-          <button onClick={() => setRenombrando(false)} className="text-xs px-2 py-1.5 text-slate-400">✕</button>
-        </div>
-      )}
-      {!creando ? (
-        <button onClick={() => setCreando(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700">+ Nueva materia</button>
-      ) : (
-        <div className="flex gap-1">
-          <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre (ej: Ética)" className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-          <button onClick={crear} className="text-xs px-2 py-1.5 rounded-lg bg-violet-500 text-white">Crear</button>
-          <button onClick={() => setCreando(false)} className="text-xs px-2 py-1.5 text-slate-400">✕</button>
-        </div>
-      )}
-      {materiaActualId && !duplicando && (
-        <button onClick={() => setDuplicando(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">⧉ Duplicar como nueva</button>
-      )}
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 mb-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs uppercase tracking-wide text-slate-400 shrink-0">Materia:</span>
+        {materias.length > 0 && !renombrando && (
+          <select value={materiaActualId || ""} onChange={(e) => setMateriaActualId(parseInt(e.target.value, 10))} className="text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none">
+            {materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+          </select>
+        )}
+
+        {renombrando && (
+          <div className="flex gap-1">
+            <input value={nombreRenombrar} onChange={(e) => setNombreRenombrar(e.target.value)} placeholder="Nuevo nombre" autoFocus
+              onKeyDown={(e) => { if (e.key === "Enter") renombrar(); if (e.key === "Escape") setRenombrando(false); }}
+              className="text-xs rounded-lg px-2 py-1.5 border border-violet-300 outline-none" />
+            <button onClick={renombrar} className="text-xs px-2 py-1.5 rounded-lg bg-violet-500 text-white">Guardar</button>
+            <button onClick={() => setRenombrando(false)} className="text-xs px-2 py-1.5 text-slate-400">✕</button>
+          </div>
+        )}
+
+        {!creando ? (
+          <button onClick={() => setCreando(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700 shrink-0">+ Nueva materia</button>
+        ) : (
+          <div className="flex gap-1">
+            <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre (ej: Ética)" autoFocus className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+            <button onClick={crear} className="text-xs px-2 py-1.5 rounded-lg bg-violet-500 text-white">Crear</button>
+            <button onClick={() => setCreando(false)} className="text-xs px-2 py-1.5 text-slate-400">✕</button>
+          </div>
+        )}
+
+        {materiaActualId && !renombrando && (
+          <div className="relative ml-auto shrink-0">
+            <button onClick={() => setMenuAbierto((v) => !v)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">⋯ Más</button>
+            {menuAbierto && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setMenuAbierto(false)} />
+                <div className="absolute right-0 top-full mt-1 bg-white rounded-xl shadow-lg border border-slate-100 py-1 w-56 z-20">
+                  <button onClick={() => { setMenuAbierto(false); const actual = materias.find((m) => m.id === materiaActualId); setNombreRenombrar(actual?.nombre || ""); setRenombrando(true); }}
+                    className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">✏️ Renombrar materia</button>
+                  <button onClick={() => { setMenuAbierto(false); setDuplicando(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">⧉ Duplicar como nueva</button>
+                  {materias.length > 1 && (
+                    <button onClick={() => { setMenuAbierto(false); setCopiando(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">⇥ Copiar notas desde otra materia</button>
+                  )}
+                  <div className="border-t border-slate-100 my-1" />
+                  <button onClick={() => { setMenuAbierto(false); eliminar(); }} className="w-full text-left text-xs px-3 py-2 hover:bg-rose-50 text-rose-500">🗑 Eliminar esta materia</button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
       {duplicando && (
-        <div className="flex gap-1">
-          <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre de la copia" className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-          <button onClick={duplicar} className="text-xs px-2 py-1.5 rounded-lg bg-violet-500 text-white">Duplicar</button>
-          <button onClick={() => setDuplicando(false)} className="text-xs px-2 py-1.5 text-slate-400">✕</button>
+        <div className="flex gap-1.5 items-center mt-2 pt-2 border-t border-slate-100">
+          <span className="text-xs text-slate-400 shrink-0">Nombre de la copia:</span>
+          <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej: Ética 2026" autoFocus className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none flex-1 min-w-0" />
+          <button onClick={duplicar} className="text-xs px-3 py-1.5 rounded-lg bg-violet-500 text-white shrink-0">Duplicar</button>
+          <button onClick={() => setDuplicando(false)} className="text-xs px-2 py-1.5 text-slate-400 shrink-0">✕</button>
         </div>
       )}
-      {materiaActualId && <button onClick={eliminar} className="text-xs text-slate-400 hover:text-rose-500">🗑</button>}
-      {materiaActualId && materias.length > 1 && (
-        <div className="flex items-center gap-1.5 ml-auto">
-          <span className="text-xs text-slate-400">Copiar notas desde:</span>
-          <select value={copiarDesdeId} onChange={(e) => setCopiarDesdeId(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none">
+
+      {copiando && (
+        <div className="flex gap-1.5 items-center mt-2 pt-2 border-t border-slate-100">
+          <span className="text-xs text-slate-400 shrink-0">Copiar notas desde:</span>
+          <select value={copiarDesdeId} onChange={(e) => setCopiarDesdeId(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none flex-1 min-w-0">
             <option value="">Elige…</option>
             {materias.filter((m) => m.id !== materiaActualId).map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
           </select>
-          <button disabled={!copiarDesdeId} onClick={copiar} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white disabled:opacity-40">Copiar con un clic</button>
+          <button disabled={!copiarDesdeId} onClick={copiar} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white disabled:opacity-40 shrink-0">Copiar con un clic</button>
+          <button onClick={() => setCopiando(false)} className="text-xs px-2 py-1.5 text-slate-400 shrink-0">✕</button>
         </div>
       )}
     </div>
@@ -1233,35 +1257,37 @@ export function VistaCalificaciones({ grados }) {
 
           <PanelCategorias materiaId={materiaActualId} categorias={categorias} onCambio={cargarConfigYCategorias} />
 
-          <div className="flex flex-wrap gap-2 mb-4 items-center">
-            {(() => {
-              const niveles = agruparPorNivel(grados);
-              const { nivel: nivelActual } = nivelYCurso(gradoId);
-              const cursosDelNivel = niveles.find((n) => n.nivel === nivelActual)?.cursos || [];
-              return (
-                <>
-                  <select value={nivelActual} onChange={(e) => {
-                    const nuevoNivel = niveles.find((n) => n.nivel === e.target.value);
-                    if (nuevoNivel?.cursos[0]) setGradoId(nuevoNivel.cursos[0].id);
-                  }} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
-                    {niveles.map((n) => <option key={n.nivel} value={n.nivel}>Grado {n.nivel}°</option>)}
-                  </select>
-                  <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
-                    {cursosDelNivel.map((g) => <option key={g.id} value={g.id}>Curso {g.id}</option>)}
-                  </select>
-                </>
-              );
-            })()}
-            <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
-              {periodosDe(config).map((p) => <option key={p} value={p}>Periodo {p}</option>)}
-            </select>
-            <div className="flex gap-1 rounded-full bg-violet-50 p-1">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 mb-4">
+            <div className="flex flex-wrap gap-2 items-center mb-2">
+              {(() => {
+                const niveles = agruparPorNivel(grados);
+                const { nivel: nivelActual } = nivelYCurso(gradoId);
+                const cursosDelNivel = niveles.find((n) => n.nivel === nivelActual)?.cursos || [];
+                return (
+                  <>
+                    <select value={nivelActual} onChange={(e) => {
+                      const nuevoNivel = niveles.find((n) => n.nivel === e.target.value);
+                      if (nuevoNivel?.cursos[0]) setGradoId(nuevoNivel.cursos[0].id);
+                    }} className="text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none">
+                      {niveles.map((n) => <option key={n.nivel} value={n.nivel}>Grado {n.nivel}°</option>)}
+                    </select>
+                    <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none">
+                      {cursosDelNivel.map((g) => <option key={g.id} value={g.id}>Curso {g.id}</option>)}
+                    </select>
+                  </>
+                );
+              })()}
+              <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className="text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none">
+                {periodosDe(config).map((p) => <option key={p} value={p}>Periodo {p}</option>)}
+              </select>
+              <button onClick={() => setComentariosAbiertos(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600 ml-auto">💬 Comentarios por desempeño</button>
+            </div>
+            <div className="flex gap-1 rounded-full bg-violet-50 p-1 w-fit flex-wrap">
               <button onClick={() => setSubVista("planilla")} className={`text-xs px-3 py-1.5 rounded-full ${subVista === "planilla" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Planilla</button>
               <button onClick={() => setSubVista("boletin")} className={`text-xs px-3 py-1.5 rounded-full ${subVista === "boletin" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Boletín / Nivelación</button>
               <button onClick={() => setSubVista("estadisticas")} className={`text-xs px-3 py-1.5 rounded-full ${subVista === "estadisticas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Estadísticas</button>
               <button onClick={() => setSubVista("config")} className={`text-xs px-3 py-1.5 rounded-full ${subVista === "config" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Escala y periodos</button>
             </div>
-            <button onClick={() => setComentariosAbiertos(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">💬 Comentarios por desempeño</button>
           </div>
 
           {subVista === "planilla" && (
