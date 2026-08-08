@@ -14,6 +14,8 @@ function BarraMateria({ materias, materiaActualId, setMateriaActualId, onCambio 
   const [nombre, setNombre] = useState("");
   const [duplicando, setDuplicando] = useState(false);
   const [copiarDesdeId, setCopiarDesdeId] = useState("");
+  const [renombrando, setRenombrando] = useState(false);
+  const [nombreRenombrar, setNombreRenombrar] = useState("");
 
   const crear = async () => {
     if (!nombre.trim()) return;
@@ -47,6 +49,13 @@ function BarraMateria({ materias, materiaActualId, setMateriaActualId, onCambio 
     onCambio();
   };
 
+  const renombrar = async () => {
+    if (!nombreRenombrar.trim()) return;
+    await api.renombrarMateria(materiaActualId, nombreRenombrar.trim());
+    setRenombrando(false);
+    onCambio();
+  };
+
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 mb-4 flex flex-wrap items-center gap-2">
       <span className="text-xs uppercase tracking-wide text-slate-400">Materia:</span>
@@ -54,6 +63,19 @@ function BarraMateria({ materias, materiaActualId, setMateriaActualId, onCambio 
         <select value={materiaActualId || ""} onChange={(e) => setMateriaActualId(parseInt(e.target.value, 10))} className="text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none">
           {materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
         </select>
+      )}
+      {materiaActualId && !renombrando && (
+        <button onClick={() => { const actual = materias.find((m) => m.id === materiaActualId); setNombreRenombrar(actual?.nombre || ""); setRenombrando(true); }}
+          title="Renombrar esta materia (no toca las notas ya cargadas)" className="text-xs text-slate-400 hover:text-violet-600">✏️</button>
+      )}
+      {renombrando && (
+        <div className="flex gap-1">
+          <input value={nombreRenombrar} onChange={(e) => setNombreRenombrar(e.target.value)} placeholder="Nuevo nombre"
+            onKeyDown={(e) => { if (e.key === "Enter") renombrar(); if (e.key === "Escape") setRenombrando(false); }}
+            className="text-xs rounded-lg px-2 py-1.5 border border-violet-300 outline-none" />
+          <button onClick={renombrar} className="text-xs px-2 py-1.5 rounded-lg bg-violet-500 text-white">Guardar</button>
+          <button onClick={() => setRenombrando(false)} className="text-xs px-2 py-1.5 text-slate-400">✕</button>
+        </div>
       )}
       {!creando ? (
         <button onClick={() => setCreando(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700">+ Nueva materia</button>
