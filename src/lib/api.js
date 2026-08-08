@@ -743,6 +743,41 @@ export async function copiarEvaluacion(evaluacionId, materiaDestinoId, gradoDest
   return nueva;
 }
 
+// Notas de un estudiante (todas las materias, todos los periodos) — usado en el portal del estudiante
+export async function fetchNotasEstudiante(estudianteId) {
+  const { data: finales, error: e1 } = await supabase
+    .from("notas_finales_periodo")
+    .select("*, materias(nombre)")
+    .eq("estudiante_id", estudianteId)
+    .order("periodo");
+  if (e1) throw e1;
+
+  const { data: valores, error: e2 } = await supabase
+    .from("notas_valores")
+    .select("*, notas_actividades(nombre, periodo, materia_id, materias(nombre), notas_categorias(nombre))")
+    .eq("estudiante_id", estudianteId);
+  if (e2) throw e2;
+
+  return { finales: finales || [], valores: valores || [] };
+}
+
+/* ---------------- Comentarios generales por banda de desempeño ---------------- */
+export async function fetchComentariosDesempeno() {
+  const { data, error } = await supabase.from("comentarios_desempeno").select("*");
+  if (error) throw error;
+  const mapa = {};
+  (data || []).forEach((c) => { mapa[c.banda] = c.comentario; });
+  return mapa;
+}
+
+export async function guardarComentarioDesempeno(banda, comentario) {
+  const { error } = await supabase.from("comentarios_desempeno").upsert(
+    { banda, comentario, actualizado_en: new Date().toISOString() },
+    { onConflict: "banda" }
+  );
+  if (error) throw error;
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
