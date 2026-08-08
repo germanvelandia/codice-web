@@ -65,6 +65,12 @@ function ListaDocentes({ miPerfil, onCambio }) {
     onCambio?.();
   };
 
+  const eliminar = async (p) => {
+    if (!confirm(`¿Quitar a ${p.nombre} del listado de docentes? Esto NO revoca su acceso — si vuelve a iniciar sesión, va a reaparecer automáticamente. Para bloquearlo de verdad, hacelo desde Supabase → Authentication → Users.`)) return;
+    await api.eliminarDocente(p.id);
+    cargar();
+  };
+
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-x-auto">
       <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
@@ -98,9 +104,14 @@ function ListaDocentes({ miPerfil, onCambio }) {
                 {miPerfil?.es_admin && (
                   <td className="px-3 py-2">
                     {p.id !== miPerfil.id && (
-                      <button onClick={() => toggleAdmin(p)} className="text-[11px] text-violet-600 underline">
-                        {p.es_admin ? "Quitar admin" : "Hacer admin"}
-                      </button>
+                      <div className="flex gap-2">
+                        <button onClick={() => toggleAdmin(p)} className="text-[11px] text-violet-600 underline">
+                          {p.es_admin ? "Quitar admin" : "Hacer admin"}
+                        </button>
+                        <button onClick={() => eliminar(p)} className="text-[11px] text-rose-500 underline">
+                          Eliminar
+                        </button>
+                      </div>
                     )}
                   </td>
                 )}
