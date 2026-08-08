@@ -192,6 +192,95 @@ function TarjetaEvaluacionEstudiante({ evaluacion, estudianteId }) {
   );
 }
 
+// Resume, por materia, los periodos con nota (final o en curso calculada en vivo) —
+// misma lógica que usa "Mis notas", reutilizada acá para el aviso general.
+function resumenPorMateria(datos) {
+  const materias = {};
+  datos.finales.forEach((f) => {
+    const nombre = f.materias?.nombre || `Materia ${f.materia_id}`;
+    materias[nombre] = materias[nombre] || { finales: {}, actividadesPorPeriodo: {} };
+    materias[nombre].finales[f.periodo] = f.nota;
+  });
+  datos.valores.forEach((v) => {
+    const act = v.notas_actividades;
+    if (!act) return;
+    const nombre = act.materias?.nombre || `Materia ${act.materia_id}`;
+    materias[nombre] = materias[nombre] || { finales: {}, actividadesPorPeriodo: {} };
+    materias[nombre].actividadesPorPeriodo[act.periodo] = materias[nombre].actividadesPorPeriodo[act.periodo] || [];
+    materias[nombre].actividadesPorPeriodo[act.periodo].push(v);
+  });
+
+  const resultado = {};
+  Object.entries(materias).forEach(([nombre, m]) => {
+    const periodos = [...new Set([...Object.keys(m.finales), ...Object.keys(m.actividadesPorPeriodo)])].sort();
+    resultado[nombre] = periodos.map((periodo) => {
+      const actividadesPeriodo = m.actividadesPorPeriodo[periodo] || [];
+      if (Object.prototype.hasOwnProperty.call(m.finales, periodo)) {
+        return { periodo, nota: m.finales[periodo], enCurso: false };
+      }
+      const porCategoria = {};
+      const categoriasVistas = {};
+      actividadesPeriodo.forEach((a) => {
+        const cat = a.notas_actividades?.notas_categorias;
+        const catId = a.notas_actividades?.categoria_id;
+        if (!catId) return;
+        categoriasVistas[catId] = { id: catId, porcentaje: cat?.porcentaje || 0 };
+        porCategoria[catId] = porCategoria[catId] || [];
+        porCategoria[catId].push(a.valor);
+      });
+      return { periodo, nota: notaFinalPonderada(porCategoria, Object.values(categoriasVistas)), enCurso: true };
+    });
+  });
+  return resultado;
+}
+
+function AvisoRendimiento({ estudianteId }) {
+  const [resumen, setResumen] = useState(null);
+
+  useEffect(() => {
+    api.fetchNotasEstudiante(estudianteId).then((d) => setResumen(resumenPorMateria(d))).catch(() => setResumen({}));
+  }, [estudianteId]);
+
+  if (!resumen) return null;
+  const config = { escala_min: 1, nota_minima: 3.5, nota_maxima: 5 };
+
+  const estados = Object.entries(resumen)
+    .map(([nombre, filas]) => {
+      const ultima = filas[filas.length - 1];
+      return { nombre, nota: ultima?.nota ?? null };
+    })
+    .filter((e) => e.nota !== null);
+
+  if (estados.length === 0) return null;
+
+  const enRiesgo = estados.filter((e) => bandaDesempeno(e.nota, config).key === "bajo");
+
+  if (enRiesgo.length > 0) {
+    return (
+      <div className="rounded-xl p-3 mb-4 bg-rose-50 border border-rose-200">
+        <div className="text-sm font-bold text-rose-700">⚠️ Rendimiento académico en riesgo</div>
+        <div className="text-xs text-rose-600 mt-1">Estás perdiendo: {enRiesgo.map((e) => e.nombre).join(", ")}. Hablá con tu docente para ponerte al día.</div>
+      </div>
+    );
+  }
+
+  const promedio = estados.reduce((a, e) => a + e.nota, 0) / estados.length;
+  const bandaGeneral = bandaDesempeno(promedio, config);
+  const mensajes = {
+    basico: "Vas cumpliendo lo mínimo. ¡Con un poco más de esfuerzo podés subir de nivel!",
+    alto: "Buen desempeño general. ¡Seguí así!",
+    superior: "¡Excelente desempeño! Tu esfuerzo se nota.",
+  };
+  return (
+    <div className="rounded-xl p-3 mb-4" style={{ background: `${bandaGeneral.color}15`, border: `1px solid ${bandaGeneral.color}55` }}>
+      <div className="text-sm font-bold" style={{ color: bandaGeneral.color }}>
+        {bandaGeneral.key === "superior" ? "🌟" : bandaGeneral.key === "alto" ? "👍" : "💪"} {bandaGeneral.label} desempeño académico
+      </div>
+      <div className="text-xs mt-1" style={{ color: bandaGeneral.color }}>{mensajes[bandaGeneral.key]}</div>
+    </div>
+  );
+}
+
 function MisNotas({ estudianteId }) {
   const [datos, setDatos] = useState(null);
   const [comentarios, setComentarios] = useState({});
@@ -372,6 +461,7 @@ function PortalEstudiante() {
           <div className="text-lg font-bold text-slate-800">{datos.nombre}</div>
           <div className="text-xs text-slate-400">Grado {datos.grado_id} · {datos.grupo}</div>
         </div>
+        {estudianteInfo && <AvisoRendimiento estudianteId={estudianteInfo.id} />}
         <div className="mb-3">
           <div className="flex justify-between text-xs text-slate-500 mb-1">
             <span className="font-semibold text-violet-600">{level.name}</span>
