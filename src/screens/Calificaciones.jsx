@@ -1102,6 +1102,65 @@ function Estadisticas({ materiaId, config, categorias, estudiantes, gradoId, per
   );
 }
 
+const BANDAS_INFO = [
+  { key: "bajo", label: "Bajo", color: "#EF4444" },
+  { key: "basico", label: "Básico", color: "#F59E0B" },
+  { key: "alto", label: "Alto", color: "#3B82F6" },
+  { key: "superior", label: "Superior", color: "#22C55E" },
+];
+
+function ComentariosDesempenoModal({ onClose }) {
+  const [comentarios, setComentarios] = useState({});
+  const [cargando, setCargando] = useState(true);
+  const [guardando, setGuardando] = useState(null);
+
+  useEffect(() => { api.fetchComentariosDesempeno().then((d) => { setComentarios(d); setCargando(false); }); }, []);
+
+  const guardar = async (banda) => {
+    setGuardando(banda);
+    try {
+      await api.guardarComentarioDesempeno(banda, comentarios[banda] || "");
+    } catch (e) {
+      alert("Error al guardar: " + e.message);
+    }
+    setGuardando(null);
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">💬 Comentarios por desempeño</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-500 mb-4">
+          Un comentario general por nivel de desempeño, que se le muestra al estudiante junto a cada nota según en qué banda caiga
+          (no es por estudiante puntual — aplica a todas las materias y todos los estudiantes que obtengan esa banda).
+        </p>
+
+        {cargando ? (
+          <div className="text-sm text-slate-400">Cargando…</div>
+        ) : (
+          <div className="space-y-3">
+            {BANDAS_INFO.map((b) => (
+              <div key={b.key}>
+                <label className="text-xs font-semibold block mb-1" style={{ color: b.color }}>{b.label}</label>
+                <div className="flex gap-2">
+                  <textarea value={comentarios[b.key] || ""} onChange={(e) => setComentarios((prev) => ({ ...prev, [b.key]: e.target.value }))} rows={2}
+                    className="flex-1 text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" />
+                  <button disabled={guardando === b.key} onClick={() => guardar(b.key)} className="text-xs font-semibold px-3 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60 self-start">
+                    {guardando === b.key ? "…" : "Guardar"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function VistaCalificaciones({ grados }) {
   const [materias, setMaterias] = useState([]);
   const [materiaActualId, setMateriaActualId] = useState(null);
@@ -1110,6 +1169,7 @@ export function VistaCalificaciones({ grados }) {
   const [gradoId, setGradoId] = useState(grados[0]?.id || "");
   const [periodo, setPeriodo] = useState("1");
   const [subVista, setSubVista] = useState("planilla");
+  const [comentariosAbiertos, setComentariosAbiertos] = useState(false);
   const [estudiantes, setEstudiantes] = useState([]);
   const [cargando, setCargando] = useState(true);
 
@@ -1201,6 +1261,7 @@ export function VistaCalificaciones({ grados }) {
               <button onClick={() => setSubVista("estadisticas")} className={`text-xs px-3 py-1.5 rounded-full ${subVista === "estadisticas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Estadísticas</button>
               <button onClick={() => setSubVista("config")} className={`text-xs px-3 py-1.5 rounded-full ${subVista === "config" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Escala y periodos</button>
             </div>
+            <button onClick={() => setComentariosAbiertos(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">💬 Comentarios por desempeño</button>
           </div>
 
           {subVista === "planilla" && (
@@ -1215,6 +1276,7 @@ export function VistaCalificaciones({ grados }) {
           {subVista === "config" && (
             <ConfigEscala materiaId={materiaActualId} config={config} onGuardado={cargarConfigYCategorias} />
           )}
+          {comentariosAbiertos && <ComentariosDesempenoModal onClose={() => setComentariosAbiertos(false)} />}
         </>
       )}
     </div>
