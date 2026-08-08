@@ -365,6 +365,7 @@ export function VistaPlaneaciones({ grados }) {
   const [periodo, setPeriodo] = useState("1");
   const [unidades, setUnidades] = useState([]);
   const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState(null);
   const [formAbierto, setFormAbierto] = useState(false);
 
   useEffect(() => {
@@ -375,7 +376,10 @@ export function VistaPlaneaciones({ grados }) {
   const cargar = () => {
     if (!materiaId || !gradoId) return;
     setCargando(true);
-    api.fetchUnidades(materiaId, gradoId, periodo).then((data) => { setUnidades(data); setCargando(false); });
+    setError(null);
+    api.fetchUnidades(materiaId, gradoId, periodo)
+      .then((data) => { setUnidades(data); setCargando(false); })
+      .catch((e) => { setError(e.message); setCargando(false); });
   };
   useEffect(() => { cargar(); }, [materiaId, gradoId, periodo]);
 
@@ -417,6 +421,8 @@ export function VistaPlaneaciones({ grados }) {
 
       {cargando ? (
         <div className="text-sm text-slate-400">Cargando…</div>
+      ) : error ? (
+        <div className="text-sm text-rose-500 bg-rose-50 rounded-xl p-3">Error al cargar: {error}</div>
       ) : unidades.length === 0 ? (
         <div className="text-sm text-slate-400 bg-white rounded-2xl p-6 text-center border border-dashed border-slate-200">
           Todavía no hay unidades/temas para este periodo. Creá la primera con "+ Nueva unidad/tema".
