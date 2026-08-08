@@ -453,10 +453,11 @@ function ImportarMoodleModal({ materiaId, gradoId, periodo, categorias, periodos
   );
 }
 
-function NotaMasivaModal({ actividades, estudiantesVisibles, reinoFiltro, onClose, onAplicado }) {
+function NotaMasivaModal({ actividades, estudiantesVisibles, reinoFiltro, valorDeActividad, onClose, onAplicado }) {
   const manuales = actividades.filter((a) => !a.es_automatica);
   const [actividadId, setActividadId] = useState(manuales[0]?.id || "");
   const [valor, setValor] = useState("");
+  const [soloVacios, setSoloVacios] = useState(true);
   const [aplicando, setAplicando] = useState(false);
 
   if (manuales.length === 0) {
@@ -470,13 +471,25 @@ function NotaMasivaModal({ actividades, estudiantesVisibles, reinoFiltro, onClos
     );
   }
 
+  const actividadElegida = actividades.find((a) => a.id === parseInt(actividadId, 10));
+  const yaCalificados = actividadElegida ? estudiantesVisibles.filter((s) => {
+    const v = valorDeActividad(actividadElegida, s.id);
+    return v !== null && v !== undefined;
+  }).length : 0;
+
   const aplicar = async () => {
     const v = parseFloat(String(valor).replace(",", "."));
     if (isNaN(v)) { alert("Escribe una nota válida."); return; }
     setAplicando(true);
     try {
-      for (const s of estudiantesVisibles) { await api.setValor(actividadId, s.id, v); }
-      onAplicado(actividadId, estudiantesVisibles.map((s) => s.id), v);
+      const destino = soloVacios
+        ? estudiantesVisibles.filter((s) => {
+            const actual = valorDeActividad(actividadElegida, s.id);
+            return actual === null || actual === undefined;
+          })
+        : estudiantesVisibles;
+      for (const s of destino) { await api.setValor(actividadId, s.id, v); }
+      onAplicado(actividadId, destino.map((s) => s.id), v);
       onClose();
     } catch (e) {
       alert("Error al aplicar: " + e.message);
@@ -500,11 +513,22 @@ function NotaMasivaModal({ actividades, estudiantesVisibles, reinoFiltro, onClos
         </select>
         <label className="text-xs text-slate-500 block mb-1">Nota para todos</label>
         <input type="number" step="0.1" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="Ej: 4.5"
-          className="w-full text-sm rounded-lg px-3 py-2 mb-4 border border-slate-200 outline-none" />
+          className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
+
+        <label className="flex items-start gap-2 text-xs text-slate-600 mb-1 bg-violet-50 rounded-lg p-2">
+          <input type="checkbox" checked={soloVacios} onChange={(e) => setSoloVacios(e.target.checked)} className="mt-0.5" />
+          <span>Solo rellenar los que están <b>sin nota</b> — no toca a quienes ya tienen una nota puesta en esta actividad.</span>
+        </label>
+        <p className="text-[11px] text-slate-400 mb-4">
+          {soloVacios
+            ? `Se aplicará a ${estudiantesVisibles.length - yaCalificados} de ${estudiantesVisibles.length} estudiante(s) — ${yaCalificados} ya tienen nota y se van a respetar.`
+            : `⚠️ Se aplicará a los ${estudiantesVisibles.length} estudiantes visibles, incluso reemplazando notas que ya tengan.`}
+        </p>
+
         <div className="flex justify-end gap-2">
           <button onClick={onClose} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
           <button disabled={aplicando} onClick={aplicar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
-            {aplicando ? "Aplicando…" : "Aplicar a todos"}
+            {aplicando ? "Aplicando…" : "Aplicar"}
           </button>
         </div>
       </div>
@@ -751,7 +775,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
           onClose={() => setImportarMoodleAbierto(false)} onImportado={cargar} />
       )}
       {notaMasivaAbierta && (
-        <NotaMasivaModal actividades={actividades} estudiantesVisibles={estudiantesVisibles} reinoFiltro={reinoFiltro}
+        <NotaMasivaModal actividades={actividades} estudiantesVisibles={estudiantesVisibles} reinoFiltro={reinoFiltro} valorDeActividad={valorDeActividad}
           onClose={() => setNotaMasivaAbierta(false)} onAplicado={aplicarNotaMasiva} />
       )}
     </div>
