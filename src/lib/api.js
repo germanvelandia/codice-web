@@ -722,6 +722,27 @@ export async function entregarIntento(intentoId, respuestas) {
   if (error) throw error;
 }
 
+export async function copiarEvaluacion(evaluacionId, materiaDestinoId, gradoDestinoId, periodoDestino) {
+  const { data: original, error: e1 } = await supabase.from("evaluaciones").select("*").eq("id", evaluacionId).single();
+  if (e1) throw e1;
+  const preguntas = await fetchPreguntasDocente(evaluacionId);
+
+  const nueva = await crearEvaluacion({
+    materia_id: materiaDestinoId, grado_id: gradoDestinoId, periodo: periodoDestino,
+    titulo: original.titulo, descripcion: original.descripcion,
+    fecha_apertura: null, fecha_cierre: null,
+    intentos_permitidos: original.intentos_permitidos, tiempo_limite_minutos: original.tiempo_limite_minutos,
+    estado: "borrador",
+  });
+
+  for (const p of preguntas) {
+    await crearPregunta({
+      evaluacion_id: nueva.id, orden: p.orden, tipo: p.tipo, enunciado: p.enunciado, puntos: p.puntos, opciones: p.opciones,
+    });
+  }
+  return nueva;
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
