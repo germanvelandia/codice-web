@@ -480,7 +480,7 @@ function detectarTipoRecurso(url) {
 export async function fetchUnidades(materiaId, gradoId, periodo) {
   const { data, error } = await supabase
     .from("planeaciones")
-    .select("*, profesores(nombre)")
+    .select("*")
     .eq("materia_id", materiaId).eq("grado_id", gradoId).eq("periodo", periodo).eq("tipo", "unidad")
     .order("orden");
   if (error) throw error;
