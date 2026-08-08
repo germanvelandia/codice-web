@@ -493,6 +493,11 @@ export async function crearMateria(nombre) {
   return data;
 }
 
+export async function renombrarMateria(id, nombreNuevo) {
+  const { error } = await supabase.from("materias").update({ nombre: nombreNuevo.trim() }).eq("id", id);
+  if (error) throw error;
+}
+
 export async function eliminarMateria(id) {
   const { error } = await supabase.from("materias").delete().eq("id", id);
   if (error) throw error;
