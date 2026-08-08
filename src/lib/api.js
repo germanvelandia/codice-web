@@ -913,8 +913,11 @@ export async function eliminarActividad(id) {
 // Copia columnas (actividades) puntuales de una materia a otra, junto con las
 // notas ya cargadas — a diferencia de copiarNotasDesdeMateria, esto no trae todo,
 // solo lo seleccionado, y no reemplaza lo que ya exista.
+// destinoPorActividad: { [actividadOrigenId]: { actividadDestinoId } | { categoriaId } }
+//   - Si viene actividadDestinoId, la nota cae directo en esa columna ya existente.
+//   - Si no, se crea una columna nueva en categoriaId.
 // Si se pasa estudianteId, solo copia la nota de ESE estudiante en vez de la de todos.
-export async function copiarColumnasEspecificas(actividadesOrigenIds, materiaDestinoId, gradoDestinoId, categoriaDestinoPorActividad, estudianteId = null) {
+export async function copiarColumnasEspecificas(actividadesOrigenIds, materiaDestinoId, gradoDestinoId, destinoPorActividad, estudianteId = null) {
   const actividadesOrigen = await Promise.all(
     actividadesOrigenIds.map(async (id) => {
       const { data, error } = await supabase.from("notas_actividades").select("*").eq("id", id).single();
@@ -926,25 +929,25 @@ export async function copiarColumnasEspecificas(actividadesOrigenIds, materiaDes
 
   let copiadas = 0;
   for (const act of actividadesOrigen) {
-    // Si ya existe una columna con el mismo nombre y periodo en la materia destino
-    // (por ejemplo, porque ya copiaste ahí a otro estudiante antes), se reutiliza
-    // en vez de crear una columna duplicada.
-    const existentes = await fetchActividades(materiaDestinoId, gradoDestinoId, act.periodo);
-    let nueva = existentes.find((e) => e.nombre === act.nombre);
-    if (!nueva) {
-      nueva = await crearActividad({
+    const destino = destinoPorActividad[act.id] || {};
+    let actividadDestinoId = destino.actividadDestinoId || null;
+
+    if (!actividadDestinoId) {
+      const nueva = await crearActividad({
         nombre: act.nombre,
-        categoria_id: categoriaDestinoPorActividad[act.id],
+        categoria_id: destino.categoriaId,
         materia_id: materiaDestinoId,
         grado_id: gradoDestinoId,
         periodo: act.periodo,
         es_automatica: act.es_automatica,
         gam_categoria: act.gam_categoria || null,
       });
+      actividadDestinoId = nueva.id;
     }
+
     const valoresDeEsta = valoresOrigen.filter((v) => v.actividad_id === act.id && (!estudianteId || v.estudiante_id === estudianteId));
     for (const v of valoresDeEsta) {
-      await setValor(nueva.id, v.estudiante_id, v.valor);
+      await setValor(actividadDestinoId, v.estudiante_id, v.valor);
     }
     copiadas++;
   }
