@@ -469,6 +469,96 @@ export async function eliminarEventoCronograma(id) {
   if (error) throw error;
 }
 
+/* ---------------- Planeaciones (plan de estudios y clases) ---------------- */
+function detectarTipoRecurso(url) {
+  if (/docs\.google\.com\/document/.test(url)) return "docs";
+  if (/docs\.google\.com\/forms|forms\.gle/.test(url)) return "forms";
+  if (/drive\.google\.com/.test(url)) return "drive";
+  return "otro";
+}
+
+export async function fetchUnidades(materiaId, gradoId, periodo) {
+  const { data, error } = await supabase
+    .from("planeaciones")
+    .select("*, profesores(nombre)")
+    .eq("materia_id", materiaId).eq("grado_id", gradoId).eq("periodo", periodo).eq("tipo", "unidad")
+    .order("orden");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function fetchClases(unidadId) {
+  const { data, error } = await supabase.from("planeaciones").select("*").eq("unidad_id", unidadId).eq("tipo", "clase").order("orden");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearPlaneacion(campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("planeaciones").insert({ ...campos, docente_id: userData?.user?.id || null }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function editarPlaneacion(id, cambios) {
+  const { error } = await supabase.from("planeaciones").update(cambios).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarPlaneacion(id) {
+  const { error } = await supabase.from("planeaciones").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function fetchRecursos(planeacionId) {
+  const { data, error } = await supabase.from("planeacion_recursos").select("*").eq("planeacion_id", planeacionId).order("id");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearRecurso(planeacionId, url, titulo) {
+  const { error } = await supabase.from("planeacion_recursos").insert({
+    planeacion_id: planeacionId, url: url.trim(), titulo: titulo?.trim() || null, tipo: detectarTipoRecurso(url),
+  });
+  if (error) throw error;
+}
+
+export async function eliminarRecurso(id) {
+  const { error } = await supabase.from("planeacion_recursos").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function fetchTareas(planeacionId) {
+  const { data, error } = await supabase.from("planeacion_tareas").select("*").eq("planeacion_id", planeacionId).order("fecha_entrega");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearTarea(campos) {
+  const { data, error } = await supabase.from("planeacion_tareas").insert(campos).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function eliminarTarea(id) {
+  const { error } = await supabase.from("planeacion_tareas").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function fetchRubrica(tareaId) {
+  const { data, error } = await supabase.from("planeacion_rubricas").select("*").eq("tarea_id", tareaId).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function guardarRubrica(tareaId, criterios) {
+  const { error } = await supabase.from("planeacion_rubricas").upsert(
+    { tarea_id: tareaId, criterios, actualizado_en: new Date().toISOString() },
+    { onConflict: "tarea_id" }
+  );
+  if (error) throw error;
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
