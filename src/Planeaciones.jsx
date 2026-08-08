@@ -426,4 +426,4 @@ export function VistaPlaneaciones({ grados }) {
       )}
     </div>
   );
-}
+} 
