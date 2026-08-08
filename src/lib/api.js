@@ -559,6 +559,43 @@ export async function guardarRubrica(tareaId, criterios) {
   if (error) throw error;
 }
 
+/* ---------------- DBA y Competencias (catálogo propio, vinculable a planeaciones) ---------------- */
+export async function fetchEstandares(tipo) {
+  let query = supabase.from("estandares").select("*").order("codigo");
+  if (tipo) query = query.eq("tipo", tipo);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearEstandar(campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("estandares").insert({ ...campos, docente_id: userData?.user?.id || null }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function eliminarEstandar(id) {
+  const { error } = await supabase.from("estandares").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function fetchEstandaresDePlaneacion(planeacionId) {
+  const { data, error } = await supabase.from("planeacion_estandares").select("*, estandares(*)").eq("planeacion_id", planeacionId);
+  if (error) throw error;
+  return (data || []).map((r) => r.estandares);
+}
+
+export async function vincularEstandar(planeacionId, estandarId) {
+  const { error } = await supabase.from("planeacion_estandares").insert({ planeacion_id: planeacionId, estandar_id: estandarId });
+  if (error && error.code !== "23505") throw error; // ignora si ya estaba vinculado
+}
+
+export async function desvincularEstandar(planeacionId, estandarId) {
+  const { error } = await supabase.from("planeacion_estandares").delete().eq("planeacion_id", planeacionId).eq("estandar_id", estandarId);
+  if (error) throw error;
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
