@@ -5,7 +5,8 @@ import { nextLevel } from "./lib/gamification";
 import { bandaDesempeno, notaFinalPonderada } from "./lib/calificaciones";
 import { VistaGrados, VistaReinos, VistaEstudiantes } from "./screens/Estudiantes";
 import { VistaAsistencia } from "./screens/Asistencia";
-import { VistaRuleta, VistaTemporizador, VistaHerramientas } from "./screens/Herramientas";
+import { VistaRuleta, VistaRuletaMonedas, VistaTemporizador, VistaHerramientas } from "./screens/Herramientas";
+import { VistaBanco } from "./screens/Banco";
 import { VistaRoles } from "./screens/Roles";
 import { VistaCalificaciones } from "./screens/Calificaciones";
 import { VistaReportes } from "./screens/Reportes";
@@ -401,6 +402,103 @@ function MisNotas({ estudianteId }) {
   );
 }
 
+function BancoEstudiante({ estudianteId, monedas, onMonedasActualizadas }) {
+  const [premiosActivos, setPremiosActivos] = useState([]);
+  const [girando, setGirando] = useState(false);
+  const [resultado, setResultado] = useState(null);
+  const [historial, setHistorial] = useState([]);
+  const [mostrarHistorial, setMostrarHistorial] = useState(false);
+
+  const cargarPremios = () => api.fetchPremiosActivos().then(setPremiosActivos);
+  useEffect(() => { cargarPremios(); }, []);
+
+  const costoMinimo = premiosActivos.length > 0 ? Math.min(...premiosActivos.map((p) => p.costo_monedas)) : null;
+  const puedeCanjear = costoMinimo !== null && monedas >= costoMinimo;
+
+  const canjear = async () => {
+    setGirando(true);
+    setResultado(null);
+    try {
+      const r = await api.canjearAleatorio(estudianteId);
+      setTimeout(() => {
+        setGirando(false);
+        setResultado(r);
+        onMonedasActualizadas();
+        cargarPremios();
+      }, 1500);
+    } catch (e) {
+      setGirando(false);
+      alert("Error al canjear: " + e.message);
+    }
+  };
+
+  const verHistorial = async () => {
+    const c = await api.fetchCanjes();
+    setHistorial(c.filter((x) => x.estudiante_id === estudianteId));
+    setMostrarHistorial(true);
+  };
+
+  if (premiosActivos.length === 0) return null;
+
+  return (
+    <div className="mt-4 pt-4 border-t border-slate-100">
+      <div className="text-xs font-semibold text-slate-600 mb-2">🏦 Banco de premios</div>
+      <p className="text-[11px] text-slate-400 mb-2">Cangeá tus monedas por un premio sorpresa. Cuantas más monedas tengas, a más premios podés aspirar.</p>
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {premiosActivos.map((p) => (
+          <span key={p.id} className={`text-[10px] px-2 py-1 rounded-full ${monedas >= p.costo_monedas ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-400"}`}>
+            {p.emoji} {p.nombre} · 🪙{p.costo_monedas}
+          </span>
+        ))}
+      </div>
+
+      {girando ? (
+        <div className="text-center py-3 text-sm text-violet-500 animate-pulse">🎰 Sorteando tu premio…</div>
+      ) : resultado ? (
+        resultado.ok ? (
+          <div className="text-center bg-emerald-50 rounded-xl p-3 mb-2">
+            <div className="text-2xl">{resultado.premio.emoji}</div>
+            <div className="text-sm font-bold text-emerald-700">¡Ganaste "{resultado.premio.nombre}"!</div>
+            <div className="text-[11px] text-emerald-600">Pedíselo a tu docente. Te quedan {resultado.monedasRestantes} monedas.</div>
+          </div>
+        ) : (
+          <div className="text-center bg-amber-50 rounded-xl p-3 mb-2 text-xs text-amber-700">Todavía no te alcanzan las monedas para ningún premio disponible.</div>
+        )
+      ) : null}
+
+      <div className="flex gap-2">
+        <button disabled={!puedeCanjear || girando} onClick={canjear} className="flex-1 text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-50">
+          {puedeCanjear ? "🎰 Canjear por un premio sorpresa" : `Necesitás al menos ${costoMinimo} monedas`}
+        </button>
+        <button onClick={verHistorial} className="text-xs text-slate-400 px-2">Historial</button>
+      </div>
+
+      {mostrarHistorial && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.5)" }} onClick={() => setMostrarHistorial(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-4 w-full max-w-sm max-h-[70vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-2">
+              <h4 className="font-bold text-sm text-slate-800">Tus premios ganados</h4>
+              <button onClick={() => setMostrarHistorial(false)} className="text-slate-400">✕</button>
+            </div>
+            {historial.length === 0 ? (
+              <p className="text-xs text-slate-400">Todavía no ganaste ningún premio.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {historial.map((c) => (
+                  <div key={c.id} className="flex justify-between text-xs bg-slate-50 rounded-lg px-2 py-1.5">
+                    <span>{c.premio?.emoji} {c.premio?.nombre || "Premio"}</span>
+                    <span className={c.estado === "entregado" ? "text-emerald-600" : "text-amber-600"}>{c.estado === "entregado" ? "✔ Entregado" : "Pendiente"}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EvaluacionesEstudiante({ estudianteId, gradoId }) {
   const [evaluaciones, setEvaluaciones] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -489,6 +587,7 @@ function PortalEstudiante() {
           Presentes: {datos.presentes} · Retardos: {datos.retardos} · Faltas injustificadas: {datos.faltas_injustificadas} · Faltas justificadas: {datos.faltas_justificadas}
         </div>
         {estudianteInfo && <MisNotas estudianteId={estudianteInfo.id} />}
+        {estudianteInfo && <BancoEstudiante estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} />}
         {estudianteInfo && <EvaluacionesEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />}
         <button onClick={() => { setDatos(null); setCodigo(""); setEstudianteInfo(null); }} className="w-full text-xs text-violet-500 mt-4">← Consultar otro código</button>
       </div>
@@ -619,10 +718,14 @@ function Panel({ session }) {
           <>
             <div className="flex gap-1 mb-6 rounded-full bg-white p-1 w-fit border border-slate-100 shadow-sm">
               <button onClick={() => setSubTabHerramientas("ruleta")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "ruleta" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Ruleta</button>
+              <button onClick={() => setSubTabHerramientas("ruletamonedas")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "ruletamonedas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Ruleta de Monedas</button>
+              <button onClick={() => setSubTabHerramientas("banco")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "banco" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Banco</button>
               <button onClick={() => setSubTabHerramientas("temporizador")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "temporizador" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Temporizador</button>
               <button onClick={() => setSubTabHerramientas("otras")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "otras" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Otras herramientas</button>
             </div>
             {subTabHerramientas === "ruleta" && <VistaRuleta grados={grados} />}
+            {subTabHerramientas === "ruletamonedas" && <VistaRuletaMonedas grados={grados} />}
+            {subTabHerramientas === "banco" && <VistaBanco />}
             {subTabHerramientas === "temporizador" && <VistaTemporizador />}
             {subTabHerramientas === "otras" && <VistaHerramientas grados={grados} />}
           </>
