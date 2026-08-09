@@ -1,1319 +1,742 @@
-import { supabase } from "./supabaseClient";
-import { GRADOS_BASE, ordenarPorApellido } from "./gamification";
-import { notaAutomatica, notaFinalPonderada } from "./calificaciones";
-import { NIVELACION_COMPROMISOS_DEFAULT } from "./actasTemplates";
-
-export async function asegurarGradosBase() {
-  const filas = GRADOS_BASE.map((id) => ({ id }));
-  await supabase.from("grados").upsert(filas, { onConflict: "id", ignoreDuplicates: true });
-}
-
-export async function asegurarProfesor() {
-  const { data: userData } = await supabase.auth.getUser();
-  if (!userData?.user) return;
-  const { error } = await supabase.from("profesores").upsert(
-    { id: userData.user.id, nombre: userData.user.email, email: userData.user.email },
-    { onConflict: "id", ignoreDuplicates: true }
-  );
-  if (error) console.error("No se pudo asegurar el perfil de docente:", error.message);
-}
-
-export async function fetchUsuarioActualId() {
-  const { data } = await supabase.auth.getUser();
-  return data?.user?.id || null;
-}
-
-export async function fetchGrados() {
-  const { data, error } = await supabase.from("grados").select("*");
-  if (error) throw error;
-  // Orden numérico (no alfabético): en texto "1001" queda antes que "801",
-  // lo que hacía que los selectores de grado arrancaran siempre en 1001.
-  return (data || []).sort((a, b) => parseInt(a.id, 10) - parseInt(b.id, 10));
-}
-
-export async function crearGrado(id) {
-  const { error } = await supabase.from("grados").upsert({ id, es_personalizado: true }, { onConflict: "id" });
-  if (error) throw error;
-}
-
-export async function fetchEstudiantesPorGrado(gradoId) {
-  const { data, error } = await supabase
-    .from("estudiantes")
-    .select("*, progreso(*), roles_asignados(rol_id)")
-    .eq("grado_id", gradoId)
-    .eq("activo", true);
-  if (error) throw error;
-  return ordenarPorApellido(data || []);
-}
-
-export async function fetchTodosEstudiantes() {
-  const { data, error } = await supabase
-    .from("estudiantes")
-    .select("*, progreso(*)")
-    .eq("activo", true);
-  if (error) throw error;
-  return ordenarPorApellido(data || []);
-}
-
-export async function crearEstudiante({ nombre, grado_id, reino_original }) {
-  const { error } = await supabase.from("estudiantes").insert({ nombre, grado_id, reino_original: reino_original || "Sin grupo" });
-  if (error) throw error;
-}
-
-export async function crearEstudiantesMasivo(filas) {
-  const { error } = await supabase.from("estudiantes").insert(filas);
-  if (error) throw error;
-}
-export async function editarNombreEstudiante(id, nombre) {
-  const { error } = await supabase.from("estudiantes").update({ nombre: nombre.trim() }).eq("id", id);
-  if (error) throw error;
-}
-
-export async function guardarApellidos(id, apellidos) {
-  const { error } = await supabase.from("estudiantes").update({ apellidos: apellidos.trim() || null }).eq("id", id);
-  if (error) throw error;
-}
-
-export async function guardarDocumento(id, documento) {
-  const { error } = await supabase.from("estudiantes").update({ documento: documento.trim() || null }).eq("id", id);
-  if (error) throw error;
-}
-
-// Traslada un estudiante a otro grado. Notas, asistencia, actas, progreso y
-// código de acceso quedan vinculados al estudiante (no al grado), así que se
-// conservan automáticamente — no hace falta volver a crearlo ni recalificarlo.
-export async function trasladarEstudiante(id, nuevoGradoId, reiniciarGrupo) {
-  const cambios = { grado_id: nuevoGradoId };
-  if (reiniciarGrupo) { cambios.reino_actual = "Sin grupo"; cambios.reino_original = "Sin grupo"; }
-  const { error } = await supabase.from("estudiantes").update(cambios).eq("id", id);
-  if (error) throw error;
-}
-
-export async function quitarEstudiante(id) {
-  const { error } = await supabase.from("estudiantes").update({ activo: false }).eq("id", id);
-  if (error) throw error;
-}
-
-export async function cambiarReino(id, reino_actual) {
-  const { error } = await supabase.from("estudiantes").update({ reino_actual }).eq("id", id);
-  if (error) throw error;
-}
-
-/* ---------------- Acceso de estudiantes (código, sin cuenta) ---------------- */
-function generarCodigo() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
-}
-
-export async function generarCodigoAcceso(estudianteId) {
-  for (let intento = 0; intento < 5; intento++) {
-    const codigo = generarCodigo();
-    const { error } = await supabase.from("estudiantes").update({ codigo_acceso: codigo }).eq("id", estudianteId);
-    if (!error) return codigo;
-    if (error.code !== "23505") throw error;
-  }
-  throw new Error("No se pudo generar un código único, intenta de nuevo.");
-}
-
-export async function generarCodigosMasivo(estudiantes) {
-  const resultados = {};
-  for (const s of estudiantes) {
-    if (s.codigo_acceso) { resultados[s.id] = s.codigo_acceso; continue; }
-    resultados[s.id] = await generarCodigoAcceso(s.id);
-  }
-  return resultados;
-}
-
-export async function consultarPortalEstudiante(codigo) {
-  const { data, error } = await supabase.rpc("estudiante_portal", { p_codigo: codigo.trim().toUpperCase() });
-  if (error) throw error;
-  return data && data.length > 0 ? data[0] : null;
-}
-
-// Usado por el flujo de evaluaciones para saber el id/grado del estudiante a partir de su código
-export async function fetchEstudiantePorCodigo(codigo) {
-  const { data, error } = await supabase.from("estudiantes").select("id, nombre, grado_id").eq("codigo_acceso", codigo.trim().toUpperCase()).maybeSingle();
-  if (error) throw error;
-  return data;
-}
-
-/* ---------------- Roles de clase ---------------- */
-export async function fetchRoles() {
-  const { data, error } = await supabase.from("roles_clase").select("*").order("nombre");
-  if (error) throw error;
-  return data || [];
-}
-
-export async function crearRol(nombre, descripcion) {
-  const { error } = await supabase.from("roles_clase").insert({ nombre, descripcion: descripcion || null });
-  if (error) throw error;
-}
-
-export async function eliminarRol(id) {
-  await supabase.from("roles_asignados").delete().eq("rol_id", id);
-  const { error } = await supabase.from("roles_clase").delete().eq("id", id);
-  if (error) throw error;
-}
-
-export async function asignarRol(estudianteId, rolId) {
-  if (!rolId) {
-    const { error } = await supabase.from("roles_asignados").delete().eq("estudiante_id", estudianteId);
-    if (error) throw error;
-    return;
-  }
-  const { error } = await supabase.from("roles_asignados").upsert(
-    { estudiante_id: estudianteId, rol_id: rolId },
-    { onConflict: "estudiante_id" }
-  );
-  if (error) throw error;
-}
-
-/* ---------------- Actas de seguimiento ---------------- */
-export async function fetchActasPorEstudiante(estudianteId) {
-  const { data, error } = await supabase
-    .from("actas")
-    .select("*, profesores(nombre)")
-    .eq("estudiante_id", estudianteId)
-    .order("fecha", { ascending: false });
-  if (error) throw error;
-  return data || [];
-}
-
-export async function crearActa(estudianteId, campos) {
-  const { data: userData } = await supabase.auth.getUser();
-  const { error } = await supabase.from("actas").insert({
-    estudiante_id: estudianteId,
-    registrado_por: userData?.user?.id || null,
-    ...campos,
-  });
-  if (error) throw error;
-}
-
-export async function eliminarActa(id) {
-  const { error } = await supabase.from("actas").delete().eq("id", id);
-  if (error) throw error;
-}
-
-export async function editarActa(id, cambios) {
-  const { error } = await supabase.from("actas").update(cambios).eq("id", id);
-  if (error) throw error;
-}
-
-/* ---------------- Acta automática por pérdida de materia ---------------- */
-export async function crearActaNivelacionSiReprobado(materiaId, materiaNombre, estudianteId, periodo, notaFinal, config) {
-  if (notaFinal === null || notaFinal === undefined) return null;
-  const reprobado = notaFinal < config.nota_minima;
-
-  const { data: existente, error: eBusqueda } = await supabase
-    .from("actas")
-    .select("id, estado")
-    .eq("estudiante_id", estudianteId)
-    .eq("materia_id", materiaId)
-    .eq("periodo", periodo)
-    .eq("tipo", "Nivelación")
-    .maybeSingle();
-  if (eBusqueda) throw eBusqueda;
-
-  if (!reprobado) return null; // aprobó: no se crea acta, nada que tocar aquí
-
-  if (existente) {
-    // Ya existía el acta (quizás de una nota anterior) — se actualiza con la nota vigente,
-    // salvo que ya esté marcada como superada por el docente
-    if (existente.estado !== "superado") {
-      await editarActa(existente.id, {
-        motivo: `Pérdida de ${materiaNombre} en el periodo ${periodo} (nota final ${notaFinal}, mínima aprobatoria ${config.nota_minima}).`,
-        fecha: new Date().toISOString().slice(0, 10),
-      });
-    }
-    return existente;
-  }
-
-  await crearActa(estudianteId, {
-    tipo: "Nivelación",
-    fecha: new Date().toISOString().slice(0, 10),
-    materia_id: materiaId,
-    periodo,
-    estado: "pendiente",
-    motivo: `Pérdida de ${materiaNombre} en el periodo ${periodo} (nota final ${notaFinal}, mínima aprobatoria ${config.nota_minima}).`,
-    descripcion: "Acta generada automáticamente al guardar las notas finales del periodo.",
-    compromisos_academicos: NIVELACION_COMPROMISOS_DEFAULT,
-  });
-  return null;
-}
-
-/* Mantiene el acta de Nivelación sincronizada con el estado que el docente
-   marca manualmente en el Boletín (Pendiente / En proceso / Superado) */
-export async function sincronizarEstadoActaNivelacion(estudianteId, materiaId, periodo, estadoNivelacion) {
-  const { data: acta, error } = await supabase
-    .from("actas")
-    .select("id, estado")
-    .eq("estudiante_id", estudianteId)
-    .eq("materia_id", materiaId)
-    .eq("periodo", periodo)
-    .eq("tipo", "Nivelación")
-    .maybeSingle();
-  if (error) throw error;
-  if (!acta) return;
-
-  const nuevoEstado = estadoNivelacion || "pendiente";
-  if (acta.estado === nuevoEstado) return;
-
-  await editarActa(acta.id, {
-    estado: nuevoEstado,
-    ...(nuevoEstado === "superado" ? { descripcion: "Nivelación superada — compromiso cumplido." } : {}),
-  });
-}
-
-/* ---------------- Catálogo de comportamientos (convivenciales y académicos) ---------------- */
-export async function fetchComportamientos(categoria) {
-  let query = supabase.from("comportamientos").select("*, profesores(nombre)").order("nombre");
-  if (categoria) query = query.eq("categoria", categoria);
-  const { data, error } = await query;
-  if (error) throw error;
-  return data || [];
-}
-
-export async function crearComportamiento(campos) {
-  const { data: userData } = await supabase.auth.getUser();
-  const { data, error } = await supabase
-    .from("comportamientos")
-    .insert({ ...campos, docente_id: userData?.user?.id || null })
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
-}
-
-export async function eliminarComportamiento(id) {
-  const { error } = await supabase.from("comportamientos").delete().eq("id", id);
-  if (error) throw error;
-}
-
-/* ---------------- Catálogo de reinos/equipos ---------------- */
-export async function fetchReinos() {
-  const { data, error } = await supabase.from("reinos").select("*").order("nombre");
-  if (error) throw error;
-  return data || [];
-}
-
-export async function crearReino(nombre, color) {
-  const { data, error } = await supabase.from("reinos").insert({ nombre: nombre.trim(), color: color || null }).select().single();
-  if (error) throw error;
-  return data;
-}
-
-export async function guardarReino(id, cambios) {
-  const { error } = await supabase.from("reinos").update(cambios).eq("id", id);
-  if (error) throw error;
-}
-
-export async function eliminarReino(id) {
-  const { error } = await supabase.from("reinos").delete().eq("id", id);
-  if (error) throw error;
-}
-
-// Cambia el nombre del reino en el catálogo Y en todos los estudiantes que
-// lo tengan asignado (reino_actual y reino_original), para que el cambio se
-// vea reflejado en todas partes sin dejar estudiantes "huérfanos".
-export async function renombrarReino(id, nombreAnterior, nombreNuevo) {
-  const nuevo = nombreNuevo.trim();
-  if (!nuevo || nuevo === nombreAnterior) return;
-  await guardarReino(id, { nombre: nuevo });
-  const { error: e1 } = await supabase.from("estudiantes").update({ reino_actual: nuevo }).eq("reino_actual", nombreAnterior);
-  if (e1) throw e1;
-  const { error: e2 } = await supabase.from("estudiantes").update({ reino_original: nuevo }).eq("reino_original", nombreAnterior);
-  if (e2) throw e2;
-}
-
-// Retira un reino: mueve a TODOS los estudiantes de ese grado que lo tengan
-// asignado hacia otro grupo (nombreDestino, ej. "Sin grupo"), para que el
-// reino de origen deje de aparecer en cualquier listado.
-export async function moverEstudiantesReino(gradoId, nombreOrigen, nombreDestino) {
-  const { error: e1 } = await supabase
-    .from("estudiantes")
-    .update({ reino_actual: nombreDestino, reino_original: nombreDestino })
-    .eq("grado_id", gradoId)
-    .eq("reino_actual", nombreOrigen);
-  if (e1) throw e1;
-
-  const { error: e2 } = await supabase
-    .from("estudiantes")
-    .update({ reino_actual: nombreDestino, reino_original: nombreDestino })
-    .eq("grado_id", gradoId)
-    .is("reino_actual", null)
-    .eq("reino_original", nombreOrigen);
-  if (e2) throw e2;
-}
-
-/* ---------------- Docentes / cuenta / administración ---------------- */
-export async function fetchProfesoresConMaterias() {
-  const { data, error } = await supabase.from("profesores").select("*, materias(nombre)").order("nombre");
-  if (error) throw error;
-  return data || [];
-}
-
-export async function fetchMiPerfil() {
-  const { data: userData } = await supabase.auth.getUser();
-  if (!userData?.user) return null;
-  const { data, error } = await supabase.from("profesores").select("*").eq("id", userData.user.id).maybeSingle();
-  if (error) throw error;
-  return data;
-}
-
-// Cambia la contraseña de la cuenta actualmente conectada. No existe (ni en
-// Supabase ni en ningún sistema serio) forma de leer o recuperar la
-// contraseña anterior de alguien: solo se puede establecer una nueva.
-export async function cambiarMiContrasena(nuevaContrasena) {
-  const { error } = await supabase.auth.updateUser({ password: nuevaContrasena });
-  if (error) throw error;
-}
-
-export async function establecerAdmin(profesorId, esAdmin) {
-  const { error } = await supabase.from("profesores").update({ es_admin: esAdmin }).eq("id", profesorId);
-  if (error) throw error;
-}
-
-export async function eliminarDocente(profesorId) {
-  const { error } = await supabase.from("profesores").delete().eq("id", profesorId);
-  if (error) throw error;
-}
-
-/* ---------------- Procesos de inclusión (PIAR / DUA) ---------------- */
-export async function guardarInclusion(estudianteId, cambios) {
-  const { error } = await supabase.from("estudiantes").update(cambios).eq("id", estudianteId);
-  if (error) throw error;
-}
-
-export async function fetchSeguimientosInclusion(estudianteId) {
-  const { data, error } = await supabase
-    .from("seguimiento_inclusion")
-    .select("*, profesores(nombre), materias(nombre)")
-    .eq("estudiante_id", estudianteId)
-    .order("fecha", { ascending: false });
-  if (error) throw error;
-  return data || [];
-}
-
-export async function crearSeguimientoInclusion(estudianteId, materiaId, tipo, observacion) {
-  const { data: userData } = await supabase.auth.getUser();
-  const { error } = await supabase.from("seguimiento_inclusion").insert({
-    estudiante_id: estudianteId,
-    materia_id: materiaId || null,
-    docente_id: userData?.user?.id || null,
-    tipo,
-    observacion,
-    fecha: new Date().toISOString().slice(0, 10),
-  });
-  if (error) throw error;
-}
-
-export async function eliminarSeguimientoInclusion(id) {
-  const { error } = await supabase.from("seguimiento_inclusion").delete().eq("id", id);
-  if (error) throw error;
-}
-
-/* ---------------- Directorio de acudientes ---------------- */
-export async function fetchAcudientesPorGrado(gradoId) {
-  const estudiantes = await fetchEstudiantesPorGrado(gradoId);
-  const ids = estudiantes.map((e) => e.id);
-  if (ids.length === 0) return [];
-  const { data, error } = await supabase.from("acudientes").select("*").in("estudiante_id", ids);
-  if (error) throw error;
-  const mapa = {};
-  (data || []).forEach((a) => { mapa[a.estudiante_id] = a; });
-  return estudiantes.map((s) => ({ estudiante: s, acudiente: mapa[s.id] || null }));
-}
-
-export async function guardarAcudiente(estudianteId, campos) {
-  const { error } = await supabase.from("acudientes").upsert(
-    { estudiante_id: estudianteId, ...campos, actualizado_en: new Date().toISOString() },
-    { onConflict: "estudiante_id" }
-  );
-  if (error) throw error;
-}
-
-/* ---------------- Horario de clases ---------------- */
-export async function fetchHorario() {
-  const [horarioRes, profesoresRes] = await Promise.all([
-    supabase.from("horario").select("*, materias(nombre)").order("dia_semana").order("hora_inicio"),
-    supabase.from("profesores").select("id, nombre"),
-  ]);
-  if (horarioRes.error) throw horarioRes.error;
-  if (profesoresRes.error) throw profesoresRes.error;
-  const nombrePorId = {};
-  (profesoresRes.data || []).forEach((p) => { nombrePorId[p.id] = p.nombre; });
-  return (horarioRes.data || []).map((h) => ({ ...h, profesores: { nombre: nombrePorId[h.docente_id] || null } }));
-}
-
-export async function crearHorario(campos) {
-  const { data: userData } = await supabase.auth.getUser();
-  const { error } = await supabase.from("horario").insert({ ...campos, docente_id: userData?.user?.id || null });
-  if (error) throw error;
-}
-
-export async function eliminarHorario(id) {
-  const { error } = await supabase.from("horario").delete().eq("id", id);
-  if (error) throw error;
-}
-
-/* ---------------- Cronograma de actividades ---------------- */
-export async function fetchCronograma() {
-  const [cronoRes, profesoresRes] = await Promise.all([
-    supabase.from("cronograma").select("*").order("fecha"),
-    supabase.from("profesores").select("id, nombre"),
-  ]);
-  if (cronoRes.error) throw cronoRes.error;
-  if (profesoresRes.error) throw profesoresRes.error;
-  const nombrePorId = {};
-  (profesoresRes.data || []).forEach((p) => { nombrePorId[p.id] = p.nombre; });
-  return (cronoRes.data || []).map((e) => ({ ...e, profesores: { nombre: nombrePorId[e.docente_id] || null } }));
-}
-
-export async function crearEventoCronograma(campos) {
-  const { data: userData } = await supabase.auth.getUser();
-  const { data, error } = await supabase.from("cronograma").insert({ ...campos, docente_id: userData?.user?.id || null }).select().single();
-  if (error) throw error;
-  return data;
-}
-
-export async function eliminarEventoCronograma(id) {
-  const { error } = await supabase.from("cronograma").delete().eq("id", id);
-  if (error) throw error;
-}
-
-/* ---------------- Planeaciones (plan de estudios y clases) ---------------- */
-function detectarTipoRecurso(url) {
-  if (/docs\.google\.com\/document/.test(url)) return "docs";
-  if (/docs\.google\.com\/forms|forms\.gle/.test(url)) return "forms";
-  if (/drive\.google\.com/.test(url)) return "drive";
-  return "otro";
-}
-
-export async function fetchUnidades(materiaId, gradoId, periodo) {
-  const { data, error } = await supabase
-    .from("planeaciones")
-    .select("*")
-    .eq("materia_id", materiaId).eq("grado_id", gradoId).eq("periodo", periodo).eq("tipo", "unidad")
-    .order("orden");
-  if (error) throw error;
-  return data || [];
-}
-
-export async function fetchClases(unidadId) {
-  const { data, error } = await supabase.from("planeaciones").select("*").eq("unidad_id", unidadId).eq("tipo", "clase").order("orden");
-  if (error) throw error;
-  return data || [];
-}
-
-export async function crearPlaneacion(campos) {
-  const { data: userData } = await supabase.auth.getUser();
-  const { data, error } = await supabase.from("planeaciones").insert({ ...campos, docente_id: userData?.user?.id || null }).select().single();
-  if (error) throw error;
-  return data;
-}
-
-export async function editarPlaneacion(id, cambios) {
-  const { error } = await supabase.from("planeaciones").update(cambios).eq("id", id);
-  if (error) throw error;
-}
-
-export async function eliminarPlaneacion(id) {
-  const { error } = await supabase.from("planeaciones").delete().eq("id", id);
-  if (error) throw error;
-}
-
-export async function fetchRecursos(planeacionId) {
-  const { data, error } = await supabase.from("planeacion_recursos").select("*").eq("planeacion_id", planeacionId).order("id");
-  if (error) throw error;
-  return data || [];
-}
-
-export async function crearRecurso(planeacionId, url, titulo) {
-  const { error } = await supabase.from("planeacion_recursos").insert({
-    planeacion_id: planeacionId, url: url.trim(), titulo: titulo?.trim() || null, tipo: detectarTipoRecurso(url),
-  });
-  if (error) throw error;
-}
-
-export async function eliminarRecurso(id) {
-  const { error } = await supabase.from("planeacion_recursos").delete().eq("id", id);
-  if (error) throw error;
-}
-
-export async function fetchTareas(planeacionId) {
-  const { data, error } = await supabase.from("planeacion_tareas").select("*").eq("planeacion_id", planeacionId).order("fecha_entrega");
-  if (error) throw error;
-  return data || [];
-}
-
-export async function crearTarea(campos) {
-  const { data, error } = await supabase.from("planeacion_tareas").insert(campos).select().single();
-  if (error) throw error;
-  return data;
-}
-
-export async function eliminarTarea(id) {
-  const { error } = await supabase.from("planeacion_tareas").delete().eq("id", id);
-  if (error) throw error;
-}
-
-export async function fetchRubrica(tareaId) {
-  const { data, error } = await supabase.from("planeacion_rubricas").select("*").eq("tarea_id", tareaId).maybeSingle();
-  if (error) throw error;
-  return data;
-}
-
-export async function guardarRubrica(tareaId, criterios) {
-  const { error } = await supabase.from("planeacion_rubricas").upsert(
-    { tarea_id: tareaId, criterios, actualizado_en: new Date().toISOString() },
-    { onConflict: "tarea_id" }
-  );
-  if (error) throw error;
-}
-
-/* ---------------- DBA y Competencias (catálogo propio, vinculable a planeaciones) ---------------- */
-export async function fetchEstandares(tipo) {
-  let query = supabase.from("estandares").select("*").order("codigo");
-  if (tipo) query = query.eq("tipo", tipo);
-  const { data, error } = await query;
-  if (error) throw error;
-  return data || [];
-}
-
-export async function crearEstandar(campos) {
-  const { data: userData } = await supabase.auth.getUser();
-  const { data, error } = await supabase.from("estandares").insert({ ...campos, docente_id: userData?.user?.id || null }).select().single();
-  if (error) throw error;
-  return data;
-}
-
-export async function eliminarEstandar(id) {
-  const { error } = await supabase.from("estandares").delete().eq("id", id);
-  if (error) throw error;
-}
-
-export async function editarEstandar(id, cambios) {
-  const { error } = await supabase.from("estandares").update(cambios).eq("id", id);
-  if (error) throw error;
-}
-
-export async function fetchEstandaresDePlaneacion(planeacionId) {
-  const { data, error } = await supabase.from("planeacion_estandares").select("*, estandares(*)").eq("planeacion_id", planeacionId);
-  if (error) throw error;
-  return (data || []).map((r) => r.estandares);
-}
-
-export async function vincularEstandar(planeacionId, estandarId) {
-  const { error } = await supabase.from("planeacion_estandares").insert({ planeacion_id: planeacionId, estandar_id: estandarId });
-  if (error && error.code !== "23505") throw error; // ignora si ya estaba vinculado
-}
-
-export async function desvincularEstandar(planeacionId, estandarId) {
-  const { error } = await supabase.from("planeacion_estandares").delete().eq("planeacion_id", planeacionId).eq("estandar_id", estandarId);
-  if (error) throw error;
-}
-
-/* ---------------- Evaluaciones virtuales (lado docente) ---------------- */
-export async function fetchEvaluaciones(materiaId, gradoId, periodo) {
-  const { data, error } = await supabase.from("evaluaciones").select("*")
-    .eq("materia_id", materiaId).eq("grado_id", gradoId).eq("periodo", periodo).order("creado_en", { ascending: false });
-  if (error) throw error;
-  return data || [];
-}
-
-export async function crearEvaluacion(campos) {
-  const { data: userData } = await supabase.auth.getUser();
-  const { data, error } = await supabase.from("evaluaciones").insert({ ...campos, docente_id: userData?.user?.id || null }).select().single();
-  if (error) throw error;
-  return data;
-}
-
-export async function editarEvaluacion(id, cambios) {
-  const { error } = await supabase.from("evaluaciones").update(cambios).eq("id", id);
-  if (error) throw error;
-}
-
-export async function eliminarEvaluacion(id) {
-  const { error } = await supabase.from("evaluaciones").delete().eq("id", id);
-  if (error) throw error;
-}
-
-export async function fetchPreguntasDocente(evaluacionId) {
-  const { data, error } = await supabase.from("evaluacion_preguntas").select("*").eq("evaluacion_id", evaluacionId).order("orden");
-  if (error) throw error;
-  return data || [];
-}
-
-export async function crearPregunta(campos) {
-  const { error } = await supabase.from("evaluacion_preguntas").insert(campos);
-  if (error) throw error;
-}
-
-export async function eliminarPregunta(id) {
-  const { error } = await supabase.from("evaluacion_preguntas").delete().eq("id", id);
-  if (error) throw error;
-}
-
-export async function fetchIntentosDeEvaluacion(evaluacionId) {
-  const [intentosRes, estudiantesRes] = await Promise.all([
-    supabase.from("evaluacion_intentos").select("*").eq("evaluacion_id", evaluacionId).order("entregado_en"),
-    supabase.from("estudiantes").select("id, nombre"),
-  ]);
-  if (intentosRes.error) throw intentosRes.error;
-  if (estudiantesRes.error) throw estudiantesRes.error;
-  const nombrePorId = {};
-  (estudiantesRes.data || []).forEach((e) => { nombrePorId[e.id] = e.nombre; });
-  return (intentosRes.data || []).map((i) => ({ ...i, estudiante_nombre: nombrePorId[i.estudiante_id] || `Estudiante ${i.estudiante_id}` }));
-}
-
-export async function fetchRespuestasDeIntento(intentoId) {
-  const { data, error } = await supabase.from("evaluacion_respuestas").select("*, evaluacion_preguntas(enunciado, tipo, puntos, opciones)").eq("intento_id", intentoId);
-  if (error) throw error;
-  return data || [];
-}
-
-export async function calificarRespuesta(respuestaId, puntos, correcta) {
-  const { error } = await supabase.from("evaluacion_respuestas").update({ puntos_obtenidos: puntos, correcta }).eq("id", respuestaId);
-  if (error) throw error;
-}
-
-export async function recalcularPuntajeIntento(intentoId) {
-  const { data, error } = await supabase.from("evaluacion_respuestas").select("puntos_obtenidos").eq("intento_id", intentoId);
-  if (error) throw error;
-  const total = (data || []).reduce((acc, r) => acc + (r.puntos_obtenidos || 0), 0);
-  const { error: e2 } = await supabase.from("evaluacion_intentos").update({ puntaje_obtenido: total, estado: "calificado" }).eq("id", intentoId);
-  if (e2) throw e2;
-}
-
-export async function publicarResultado(intentoId, visible = true) {
-  const { error } = await supabase.from("evaluacion_intentos").update({ visible_para_estudiante: visible }).eq("id", intentoId);
-  if (error) throw error;
-}
-
-export async function publicarTodosLosResultados(evaluacionId) {
-  const { error } = await supabase.from("evaluacion_intentos").update({ visible_para_estudiante: true }).eq("evaluacion_id", evaluacionId);
-  if (error) throw error;
-}
-
-/* ---------------- Evaluaciones virtuales (lado estudiante, vía código de acceso) ---------------- */
-export async function fetchEvaluacionesDisponibles(gradoId, materiaId) {
-  let query = supabase.from("evaluaciones").select("*").eq("estado", "publicada").eq("grado_id", gradoId);
-  if (materiaId) query = query.eq("materia_id", materiaId);
-  const { data, error } = await query;
-  if (error) throw error;
-  return data || [];
-}
-
-export async function fetchMisIntentos(evaluacionId, estudianteId) {
-  const { data, error } = await supabase.from("evaluacion_intentos").select("*").eq("evaluacion_id", evaluacionId).eq("estudiante_id", estudianteId).order("numero_intento");
-  if (error) throw error;
-  return data || [];
-}
-
-export async function obtenerPreguntasParaEstudiante(evaluacionId) {
-  const { data, error } = await supabase.rpc("obtener_preguntas_evaluacion", { p_evaluacion_id: evaluacionId });
-  if (error) throw error;
-  return data || [];
-}
-
-export async function iniciarIntento(evaluacionId, estudianteId) {
-  const { data, error } = await supabase.rpc("iniciar_intento_evaluacion", { p_evaluacion_id: evaluacionId, p_estudiante_id: estudianteId });
-  if (error) throw error;
-  return data;
-}
-
-export async function entregarIntento(intentoId, respuestas) {
-  const { error } = await supabase.rpc("entregar_intento_evaluacion", { p_intento_id: intentoId, p_respuestas: respuestas });
-  if (error) throw error;
-}
-
-export async function copiarEvaluacion(evaluacionId, materiaDestinoId, gradoDestinoId, periodoDestino) {
-  const { data: original, error: e1 } = await supabase.from("evaluaciones").select("*").eq("id", evaluacionId).single();
-  if (e1) throw e1;
-  const preguntas = await fetchPreguntasDocente(evaluacionId);
-
-  const nueva = await crearEvaluacion({
-    materia_id: materiaDestinoId, grado_id: gradoDestinoId, periodo: periodoDestino,
-    titulo: original.titulo, descripcion: original.descripcion,
-    fecha_apertura: null, fecha_cierre: null,
-    intentos_permitidos: original.intentos_permitidos, tiempo_limite_minutos: original.tiempo_limite_minutos,
-    estado: "borrador",
-  });
-
-  for (const p of preguntas) {
-    await crearPregunta({
-      evaluacion_id: nueva.id, orden: p.orden, tipo: p.tipo, enunciado: p.enunciado, puntos: p.puntos, opciones: p.opciones,
+import React, { useEffect, useState } from "react";
+import { supabase } from "./lib/supabaseClient";
+import * as api from "./lib/api";
+import { nextLevel } from "./lib/gamification";
+import { bandaDesempeno, notaFinalPonderada } from "./lib/calificaciones";
+import { VistaGrados, VistaReinos, VistaEstudiantes } from "./screens/Estudiantes";
+import { VistaAsistencia } from "./screens/Asistencia";
+import { VistaRuleta, VistaRuletaMonedas, VistaTemporizador, VistaHerramientas } from "./screens/Herramientas";
+import { VistaBanco } from "./screens/Banco";
+import { VistaRoles } from "./screens/Roles";
+import { VistaCalificaciones } from "./screens/Calificaciones";
+import { VistaReportes } from "./screens/Reportes";
+import { VistaHorario } from "./screens/Horario";
+import { VistaPlaneaciones } from "./screens/Planeaciones";
+import { VistaEvaluaciones } from "./screens/Evaluaciones";
+import { InstitucionModal } from "./screens/Institucion";
+import { AdministracionModal } from "./screens/Administracion";
+
+export default function App() {
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Link dedicado para estudiantes: tu-sitio.vercel.app/#estudiante
+  // No muestra ninguna opción de docente, ni espera sesión de Supabase.
+  const soloEstudiante = typeof window !== "undefined" && window.location.hash === "#estudiante";
+
+  useEffect(() => {
+    if (soloEstudiante) return;
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setLoading(false);
     });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  if (soloEstudiante) {
+    return (
+      <Centered>
+        <div className="w-full max-w-sm">
+          <h1 className="text-2xl font-bold text-violet-600 text-center mb-1">CÓDICE</h1>
+          <PortalEstudiante />
+        </div>
+      </Centered>
+    );
   }
-  return nueva;
+
+  if (loading) return <Centered>Cargando…</Centered>;
+  return session ? <Panel session={session} /> : <AccessGate />;
 }
 
-// Notas de un estudiante (todas las materias, todos los periodos) — usado en el portal del estudiante
-export async function fetchNotasEstudiante(estudianteId) {
-  const { data: finales, error: e1 } = await supabase
-    .from("notas_finales_periodo")
-    .select("*, materias(nombre)")
-    .eq("estudiante_id", estudianteId)
-    .order("periodo");
-  if (e1) throw e1;
-
-  const { data: valores, error: e2 } = await supabase
-    .from("notas_valores")
-    .select("*, notas_actividades(nombre, periodo, materia_id, categoria_id, materias(nombre), notas_categorias(nombre, porcentaje))")
-    .eq("estudiante_id", estudianteId);
-  if (e2) throw e2;
-
-  return { finales: finales || [], valores: valores || [] };
-}
-
-/* ---------------- Comentarios generales por banda de desempeño ---------------- */
-export async function fetchComentariosDesempeno() {
-  const { data, error } = await supabase.from("comentarios_desempeno").select("*");
-  if (error) throw error;
-  const mapa = {};
-  (data || []).forEach((c) => { mapa[c.banda] = c.comentario; });
-  return mapa;
-}
-
-export async function guardarComentarioDesempeno(banda, comentario) {
-  const { error } = await supabase.from("comentarios_desempeno").upsert(
-    { banda, comentario, actualizado_en: new Date().toISOString() },
-    { onConflict: "banda" }
+function Centered({ children }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-violet-50 text-slate-700">
+      {children}
+    </div>
   );
-  if (error) throw error;
 }
 
-/* ---------------- Control de dictado (misma clase, varios cursos) ---------------- */
-export async function fetchDictados(claseId) {
-  const { data, error } = await supabase.from("planeacion_dictados").select("*").eq("clase_id", claseId).order("fecha");
-  if (error) throw error;
-  return data || [];
-}
-
-export async function crearDictado(claseId, gradoId, fecha, estado) {
-  const { error } = await supabase.from("planeacion_dictados").insert({ clase_id: claseId, grado_id: gradoId, fecha: fecha || null, estado });
-  if (error) throw error;
-}
-
-export async function editarDictado(id, cambios) {
-  const { error } = await supabase.from("planeacion_dictados").update(cambios).eq("id", id);
-  if (error) throw error;
-}
-
-export async function eliminarDictado(id) {
-  const { error } = await supabase.from("planeacion_dictados").delete().eq("id", id);
-  if (error) throw error;
-}
-
-// Todos los pendientes/aplazados de las clases de una materia (para el panel de seguimiento)
-export async function fetchDictadosPendientes(materiaId) {
-  const { data: unidades, error: e1 } = await supabase.from("planeaciones").select("id").eq("materia_id", materiaId).eq("tipo", "unidad");
-  if (e1) throw e1;
-  const unidadIds = (unidades || []).map((u) => u.id);
-  if (unidadIds.length === 0) return [];
-
-  const { data: clases, error: e2 } = await supabase.from("planeaciones").select("id, titulo, unidad_id").in("unidad_id", unidadIds).eq("tipo", "clase");
-  if (e2) throw e2;
-  const claseIds = (clases || []).map((c) => c.id);
-  if (claseIds.length === 0) return [];
-
-  const { data: dictados, error: e3 } = await supabase.from("planeacion_dictados").select("*").in("clase_id", claseIds).neq("estado", "dictada");
-  if (e3) throw e3;
-
-  const claseTitulo = {};
-  (clases || []).forEach((c) => { claseTitulo[c.id] = c.titulo; });
-  return (dictados || []).map((d) => ({ ...d, clase_titulo: claseTitulo[d.clase_id] || "Clase" }));
-}
-
-// Ajusta las monedas de un estudiante directamente (sumar o restar), sin pasar
-// por una acción de XP — usado por la Ruleta de Monedas y el Banco.
-export async function ajustarMonedas(estudianteId, delta) {
-  const { data: actual } = await supabase.from("progreso").select("*").eq("estudiante_id", estudianteId).maybeSingle();
-  const nuevasMonedas = Math.max(0, (actual?.monedas || 0) + delta);
-  const { error } = await supabase.from("progreso").upsert({
-    estudiante_id: estudianteId, xp: actual?.xp || 0, vida: actual?.vida ?? 100, monedas: nuevasMonedas,
-  });
-  if (error) throw error;
-  return nuevasMonedas;
-}
-
-export async function ajustarMonedasMasivo(estudianteIds, delta) {
-  const resultados = {};
-  for (const id of estudianteIds) { resultados[id] = await ajustarMonedas(id, delta); }
-  return resultados;
-}
-
-/* ---------------- Banco de premios ---------------- */
-export async function fetchPremios() {
-  const { data, error } = await supabase.from("banco_premios").select("*").order("costo_monedas");
-  if (error) throw error;
-  return data || [];
-}
-
-export async function fetchPremiosActivos() {
-  const { data, error } = await supabase.from("banco_premios").select("*").eq("activo", true).order("costo_monedas");
-  if (error) throw error;
-  return (data || []).filter((p) => p.stock === null || p.stock > 0);
-}
-
-export async function crearPremio(campos) {
-  const { data: userData } = await supabase.auth.getUser();
-  const { error } = await supabase.from("banco_premios").insert({ ...campos, docente_id: userData?.user?.id || null });
-  if (error) throw error;
-}
-
-export async function editarPremio(id, cambios) {
-  const { error } = await supabase.from("banco_premios").update(cambios).eq("id", id);
-  if (error) throw error;
-}
-
-export async function eliminarPremio(id) {
-  const { error } = await supabase.from("banco_premios").delete().eq("id", id);
-  if (error) throw error;
-}
-
-export async function fetchCanjes() {
-  const [canjesRes, premiosRes, estudiantesRes] = await Promise.all([
-    supabase.from("banco_canjes").select("*").order("fecha", { ascending: false }),
-    supabase.from("banco_premios").select("id, nombre, emoji"),
-    supabase.from("estudiantes").select("id, nombre, grado_id"),
-  ]);
-  if (canjesRes.error) throw canjesRes.error;
-  if (premiosRes.error) throw premiosRes.error;
-  if (estudiantesRes.error) throw estudiantesRes.error;
-  const premioPorId = {}; (premiosRes.data || []).forEach((p) => { premioPorId[p.id] = p; });
-  const estudiantePorId = {}; (estudiantesRes.data || []).forEach((e) => { estudiantePorId[e.id] = e; });
-  return (canjesRes.data || []).map((c) => ({ ...c, premio: premioPorId[c.premio_id], estudiante: estudiantePorId[c.estudiante_id] }));
-}
-
-export async function marcarCanjeEntregado(id) {
-  const { error } = await supabase.from("banco_canjes").update({ estado: "entregado" }).eq("id", id);
-  if (error) throw error;
-}
-
-// El estudiante gasta monedas por un premio SORPRESA: se sortea entre los
-// premios activos que pueda pagar y que tengan stock, con más chance los que
-// tengan mayor "peso". Devuelve el premio que le tocó, o null si no alcanza
-// para ninguno.
-export async function canjearAleatorio(estudianteId) {
-  const { data: prog } = await supabase.from("progreso").select("monedas").eq("estudiante_id", estudianteId).maybeSingle();
-  const monedas = prog?.monedas || 0;
-
-  const disponibles = (await fetchPremiosActivos()).filter((p) => p.costo_monedas <= monedas);
-  if (disponibles.length === 0) return { ok: false, monedas };
-
-  const pesoTotal = disponibles.reduce((a, p) => a + p.peso, 0);
-  let r = Math.random() * pesoTotal;
-  let elegido = disponibles[0];
-  for (const p of disponibles) {
-    if (r < p.peso) { elegido = p; break; }
-    r -= p.peso;
-  }
-
-  const nuevasMonedas = await ajustarMonedas(estudianteId, -elegido.costo_monedas);
-  if (elegido.stock !== null) {
-    await editarPremio(elegido.id, { stock: Math.max(0, elegido.stock - 1) });
-  }
-  const { error } = await supabase.from("banco_canjes").insert({ premio_id: elegido.id, estudiante_id: estudianteId, costo_pagado: elegido.costo_monedas });
-  if (error) throw error;
-
-  return { ok: true, premio: elegido, monedasRestantes: nuevasMonedas };
-}
-
-export async function fetchInstitucion() {
-  const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
-  if (error) throw error;
-  return data || { id: 1, nombre: "Institución Educativa", ciclo: "", anio: "", logo_url: null };
-}
-
-export async function guardarInstitucion(campos) {
-  const { error } = await supabase.from("institucion").upsert({ id: 1, ...campos }, { onConflict: "id" });
-  if (error) throw error;
-}
-
-/* ==================== CALIFICACIONES ==================== */
-
-export async function fetchMaterias() {
-  const { data, error } = await supabase.from("materias").select("*, profesores(nombre)").order("nombre");
-  if (error) throw error;
-  return data || [];
-}
-
-export async function crearMateria(nombre) {
-  const { data: userData } = await supabase.auth.getUser();
-  const { data, error } = await supabase.from("materias").insert({ nombre, docente_id: userData.user.id }).select().single();
-  if (error) throw error;
-  return data;
-}
-
-export async function renombrarMateria(id, nombreNuevo) {
-  const { error } = await supabase.from("materias").update({ nombre: nombreNuevo.trim() }).eq("id", id);
-  if (error) throw error;
-}
-
-export async function eliminarMateria(id) {
-  const { error } = await supabase.from("materias").delete().eq("id", id);
-  if (error) throw error;
-}
-
-export async function duplicarMateria(materiaOrigenId, nombreNuevo) {
-  const nueva = await crearMateria(nombreNuevo);
-  const cfg = await fetchNotasConfig(materiaOrigenId);
-  await guardarNotasConfig(nueva.id, cfg);
-  const cats = await fetchCategorias(materiaOrigenId);
-  for (const c of cats) { await crearCategoria(nueva.id, c.nombre, c.porcentaje); }
-  return nueva;
-}
-
-export async function copiarNotasDesdeMateria(materiaOrigenId, materiaDestinoId) {
-  const catsOrigen = await fetchCategorias(materiaOrigenId);
-  const catIdMap = {};
-  for (const c of catsOrigen) {
-    const { data, error } = await supabase.from("notas_categorias").insert({ materia_id: materiaDestinoId, nombre: c.nombre, porcentaje: c.porcentaje }).select().single();
-    if (error) throw error;
-    catIdMap[c.id] = data.id;
-  }
-  const { data: actsOrigen, error: eAct } = await supabase.from("notas_actividades").select("*").eq("materia_id", materiaOrigenId);
-  if (eAct) throw eAct;
-  const actIdMap = {};
-  for (const a of (actsOrigen || [])) {
-    const { data, error } = await supabase.from("notas_actividades").insert({
-      materia_id: materiaDestinoId, categoria_id: catIdMap[a.categoria_id], nombre: a.nombre,
-      grado_id: a.grado_id, periodo: a.periodo, es_automatica: a.es_automatica, gam_categoria: a.gam_categoria, xp_meta: a.xp_meta,
-    }).select().single();
-    if (error) throw error;
-    actIdMap[a.id] = data.id;
-  }
-  const origenActIds = (actsOrigen || []).map((a) => a.id);
-  if (origenActIds.length > 0) {
-    const { data: valoresOrigen, error: eVal } = await supabase.from("notas_valores").select("*").in("actividad_id", origenActIds);
-    if (eVal) throw eVal;
-    const nuevosValores = (valoresOrigen || []).map((v) => ({ actividad_id: actIdMap[v.actividad_id], estudiante_id: v.estudiante_id, valor: v.valor }));
-    if (nuevosValores.length > 0) {
-      const { error } = await supabase.from("notas_valores").insert(nuevosValores);
-      if (error) throw error;
-    }
-  }
-}
-
-export async function fetchNotasConfig(materiaId) {
-  const { data, error } = await supabase.from("notas_config").select("*").eq("materia_id", materiaId).maybeSingle();
-  if (error) throw error;
-  if (!data) return { escala_min: 1.0, nota_minima: 3.5, nota_maxima: 5.0, sistema_periodos: "bimestre", cantidad_periodos: 4, periodo_actual: "1" };
-  return data;
-}
-
-export async function guardarNotasConfig(materiaId, config) {
-  const { error } = await supabase.from("notas_config").upsert({ materia_id: materiaId, ...config }, { onConflict: "materia_id" });
-  if (error) throw error;
-}
-
-export async function fetchCategorias(materiaId) {
-  const { data, error } = await supabase.from("notas_categorias").select("*").eq("materia_id", materiaId).order("id");
-  if (error) throw error;
-  return data || [];
-}
-
-export async function crearCategoria(materiaId, nombre, porcentaje) {
-  const { error } = await supabase.from("notas_categorias").insert({ materia_id: materiaId, nombre, porcentaje });
-  if (error) throw error;
-}
-
-export async function eliminarCategoria(id) {
-  const { error } = await supabase.from("notas_categorias").delete().eq("id", id);
-  if (error) throw error;
-}
-
-export async function fetchActividades(materiaId, gradoId, periodo) {
-  const { data, error } = await supabase
-    .from("notas_actividades")
-    .select("*")
-    .eq("materia_id", materiaId)
-    .eq("grado_id", gradoId)
-    .eq("periodo", periodo)
-    .order("id");
-  if (error) throw error;
-  return data || [];
-}
-
-export async function crearActividad(campos) {
-  const { data, error } = await supabase.from("notas_actividades").insert(campos).select().single();
-  if (error) throw error;
-  return data;
-}
-
-export async function editarActividad(id, cambios) {
-  const { error } = await supabase.from("notas_actividades").update(cambios).eq("id", id);
-  if (error) throw error;
-}
-
-export async function eliminarActividad(id) {
-  const { error } = await supabase.from("notas_actividades").delete().eq("id", id);
-  if (error) throw error;
-}
-
-// Copia columnas (actividades) puntuales de una materia a otra, junto con las
-// notas ya cargadas — a diferencia de copiarNotasDesdeMateria, esto no trae todo,
-// solo lo seleccionado, y no reemplaza lo que ya exista.
-// destinoPorActividad: { [actividadOrigenId]: { actividadDestinoId } | { categoriaId } }
-//   - Si viene actividadDestinoId, la nota cae directo en esa columna ya existente.
-//   - Si no, se crea una columna nueva en categoriaId.
-// Si se pasa estudianteId, solo copia la nota de ESE estudiante en vez de la de todos.
-export async function copiarColumnasEspecificas(actividadesOrigenIds, materiaDestinoId, gradoDestinoId, destinoPorActividad, estudianteId = null) {
-  const actividadesOrigen = await Promise.all(
-    actividadesOrigenIds.map(async (id) => {
-      const { data, error } = await supabase.from("notas_actividades").select("*").eq("id", id).single();
-      if (error) throw error;
-      return data;
-    })
+function AccessGate() {
+  return (
+    <Centered>
+      <div className="w-full max-w-sm">
+        <h1 className="text-2xl font-bold text-violet-600 text-center mb-1">CÓDICE</h1>
+        <LoginScreen />
+      </div>
+    </Centered>
   );
-  const valoresOrigen = await fetchValores(actividadesOrigenIds);
-
-  let copiadas = 0;
-  for (const act of actividadesOrigen) {
-    const destino = destinoPorActividad[act.id] || {};
-    let actividadDestinoId = destino.actividadDestinoId || null;
-
-    if (!actividadDestinoId) {
-      const nueva = await crearActividad({
-        nombre: act.nombre,
-        categoria_id: destino.categoriaId,
-        materia_id: materiaDestinoId,
-        grado_id: gradoDestinoId,
-        periodo: act.periodo,
-        es_automatica: act.es_automatica,
-        gam_categoria: act.gam_categoria || null,
-      });
-      actividadDestinoId = nueva.id;
-    }
-
-    const valoresDeEsta = valoresOrigen.filter((v) => v.actividad_id === act.id && (!estudianteId || v.estudiante_id === estudianteId));
-    for (const v of valoresDeEsta) {
-      await setValor(actividadDestinoId, v.estudiante_id, v.valor);
-    }
-    copiadas++;
-  }
-  return copiadas;
 }
 
-export async function fetchValores(actividadIds) {
-  if (actividadIds.length === 0) return [];
-  const { data, error } = await supabase.from("notas_valores").select("*").in("actividad_id", actividadIds);
-  if (error) throw error;
-  return data || [];
-}
+function TomarEvaluacion({ evaluacion, estudianteId, onCerrar }) {
+  const [intentoId, setIntentoId] = useState(null);
+  const [preguntas, setPreguntas] = useState([]);
+  const [respuestas, setRespuestas] = useState({});
+  const [cargando, setCargando] = useState(true);
+  const [enviando, setEnviando] = useState(false);
+  const [enviado, setEnviado] = useState(false);
+  const [errorInicio, setErrorInicio] = useState("");
 
-export async function setValor(actividadId, estudianteId, valor) {
-  if (valor === null || valor === "" || isNaN(valor)) {
-    const { error } = await supabase.from("notas_valores").delete().eq("actividad_id", actividadId).eq("estudiante_id", estudianteId);
-    if (error) throw error;
-    return;
-  }
-  const { error } = await supabase.from("notas_valores").upsert(
-    { actividad_id: actividadId, estudiante_id: estudianteId, valor },
-    { onConflict: "actividad_id,estudiante_id" }
-  );
-  if (error) throw error;
-}
-
-export async function fetchXpPorCategoria(estudianteIds, categorias) {
-  if (estudianteIds.length === 0 || categorias.length === 0) return {};
-  const { data, error } = await supabase
-    .from("historial_gamificacion")
-    .select("estudiante_id, categoria, xp")
-    .in("estudiante_id", estudianteIds)
-    .in("categoria", categorias);
-  if (error) throw error;
-  const mapa = {};
-  (data || []).forEach((r) => {
-    mapa[r.estudiante_id] = mapa[r.estudiante_id] || {};
-    mapa[r.estudiante_id][r.categoria] = (mapa[r.estudiante_id][r.categoria] || 0) + r.xp;
-  });
-  return mapa;
-}
-
-export async function fetchNotasFinales(materiaId) {
-  const { data, error } = await supabase.from("notas_finales_periodo").select("*").eq("materia_id", materiaId);
-  if (error) throw error;
-  return data || [];
-}
-
-// Control transversal: notas finales de un grado en TODAS las materias
-// (de todos los docentes), para un periodo dado (o todos si periodo es null).
-export async function fetchNotasFinalesTransversal(gradoId, periodo = null) {
-  const estudiantes = await fetchEstudiantesPorGrado(gradoId);
-  const ids = estudiantes.map((e) => e.id);
-  if (ids.length === 0) return { estudiantes: [], materias: [], notas: {} };
-
-  let query = supabase.from("notas_finales_periodo").select("*, materias(nombre, profesores(nombre))").in("estudiante_id", ids);
-  if (periodo) query = query.eq("periodo", periodo);
-  const { data, error } = await query;
-  if (error) throw error;
-
-  const materiasMap = {};
-  const notas = {};
-  (data || []).forEach((n) => {
-    if (!materiasMap[n.materia_id]) {
-      materiasMap[n.materia_id] = { id: n.materia_id, nombre: n.materias?.nombre || `Materia ${n.materia_id}`, docente: n.materias?.profesores?.nombre || null };
-    }
-    notas[n.estudiante_id] = notas[n.estudiante_id] || {};
-    // Si hay varios periodos y no se filtró uno específico, se guarda el promedio simple de los periodos disponibles
-    const anterior = notas[n.estudiante_id][n.materia_id];
-    notas[n.estudiante_id][n.materia_id] = anterior !== undefined ? { suma: anterior.suma + n.nota, n: anterior.n + 1 } : { suma: n.nota, n: 1 };
-  });
-
-  const materias = Object.values(materiasMap).sort((a, b) => a.nombre.localeCompare(b.nombre));
-  const notasFinales = {};
-  Object.entries(notas).forEach(([estId, porMateria]) => {
-    notasFinales[estId] = {};
-    Object.entries(porMateria).forEach(([matId, v]) => { notasFinales[estId][matId] = Math.round((v.suma / v.n) * 10) / 10; });
-  });
-
-  return { estudiantes, materias, notas: notasFinales };
-}
-
-export async function guardarNotaFinal(materiaId, estudianteId, periodo, nota) {
-  const { error } = await supabase.from("notas_finales_periodo").upsert(
-    { materia_id: materiaId, estudiante_id: estudianteId, periodo, nota },
-    { onConflict: "materia_id,estudiante_id,periodo" }
-  );
-  if (error) throw error;
-}
-
-export async function fetchNivelacion(materiaId) {
-  const { data, error } = await supabase.from("nivelacion").select("*").eq("materia_id", materiaId);
-  if (error) throw error;
-  return data || [];
-}
-
-export async function setNivelacion(materiaId, estudianteId, periodo, estado, notaOriginal) {
-  if (!estado) {
-    const { error } = await supabase.from("nivelacion").delete().eq("materia_id", materiaId).eq("estudiante_id", estudianteId).eq("periodo", periodo);
-    if (error) throw error;
-    return;
-  }
-  const payload = { materia_id: materiaId, estudiante_id: estudianteId, periodo, estado };
-  if (notaOriginal !== undefined) payload.nota_original = notaOriginal;
-  const { error } = await supabase.from("nivelacion").upsert(
-    payload,
-    { onConflict: "materia_id,estudiante_id,periodo" }
-  );
-  if (error) throw error;
-}
-
-export async function calcularNotasFinalesPeriodo(materiaId, gradoId, periodo, estudiantes, categorias, config) {
-  const acts = await fetchActividades(materiaId, gradoId, periodo);
-  const valoresRows = await fetchValores(acts.map((a) => a.id));
-  const categoriasGam = [...new Set(acts.filter((a) => a.es_automatica).map((a) => a.gam_categoria))];
-  const xpMapa = categoriasGam.length > 0 ? await fetchXpPorCategoria(estudiantes.map((s) => s.id), categoriasGam) : {};
-  const resultado = {};
-  for (const s of estudiantes) {
-    const porCategoria = {};
-    acts.forEach((a) => {
-      let v;
-      if (a.es_automatica) {
-        const xp = xpMapa[s.id]?.[a.gam_categoria] || 0;
-        v = notaAutomatica(xp, a.xp_meta, config);
-      } else {
-        v = valoresRows.find((r) => r.actividad_id === a.id && r.estudiante_id === s.id)?.valor ?? null;
+  useEffect(() => {
+    (async () => {
+      try {
+        const id = await api.iniciarIntento(evaluacion.id, estudianteId);
+        setIntentoId(id);
+        const p = await api.obtenerPreguntasParaEstudiante(evaluacion.id);
+        setPreguntas(p);
+      } catch (e) {
+        setErrorInicio(e.message);
       }
-      if (v === null || v === undefined) return;
-      porCategoria[a.categoria_id] = porCategoria[a.categoria_id] || [];
-      porCategoria[a.categoria_id].push(v);
+      setCargando(false);
+    })();
+  }, []);
+
+  const responder = (preguntaId, valor) => setRespuestas((prev) => ({ ...prev, [preguntaId]: valor }));
+
+  const enviar = async () => {
+    if (!confirm("¿Entregar la evaluación? No vas a poder cambiar tus respuestas después.")) return;
+    setEnviando(true);
+    try {
+      const payload = preguntas.map((p) => ({ pregunta_id: p.id, respuesta: respuestas[p.id] || "" }));
+      await api.entregarIntento(intentoId, payload);
+      setEnviado(true);
+    } catch (e) {
+      alert("Error al entregar: " + e.message);
+    }
+    setEnviando(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
+      <div className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
+        {cargando ? (
+          <div className="text-sm text-slate-400">Cargando…</div>
+        ) : errorInicio ? (
+          <>
+            <p className="text-sm text-rose-500 mb-3">{errorInicio}</p>
+            <button onClick={onCerrar} className="text-sm px-4 py-2 rounded-lg bg-violet-500 text-white">Cerrar</button>
+          </>
+        ) : enviado ? (
+          <div className="text-center py-6">
+            <div className="text-3xl mb-2">✅</div>
+            <p className="text-sm text-slate-700 mb-1">¡Entregado!</p>
+            <p className="text-xs text-slate-400 mb-4">Tu docente va a revisar y publicar tu nota pronto.</p>
+            <button onClick={onCerrar} className="text-sm px-4 py-2 rounded-lg bg-violet-500 text-white">Cerrar</button>
+          </div>
+        ) : (
+          <>
+            <h3 className="font-bold text-slate-800 mb-1">{evaluacion.titulo}</h3>
+            {evaluacion.descripcion && <p className="text-xs text-slate-500 mb-3">{evaluacion.descripcion}</p>}
+            <div className="space-y-3 mb-4">
+              {preguntas.map((p, i) => (
+                <div key={p.id} className="border border-slate-100 rounded-xl p-3">
+                  <div className="text-sm font-medium text-slate-800 mb-2">{i + 1}. {p.enunciado}</div>
+                  {p.tipo === "respuesta_corta" ? (
+                    <textarea value={respuestas[p.id] || ""} onChange={(e) => responder(p.id, e.target.value)} rows={2}
+                      className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" />
+                  ) : (
+                    <div className="space-y-1.5">
+                      {(p.opciones || []).map((o, j) => (
+                        <label key={j} className="flex items-center gap-2 text-sm">
+                          <input type="radio" name={`p-${p.id}`} checked={respuestas[p.id] === o.texto} onChange={() => responder(p.id, o.texto)} />
+                          {o.texto}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            <button disabled={enviando} onClick={enviar} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+              {enviando ? "Entregando…" : "Entregar evaluación"}
+            </button>
+            <button onClick={onCerrar} className="w-full text-xs text-slate-400 mt-2">Cancelar (no se guarda nada)</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TarjetaEvaluacionEstudiante({ evaluacion, estudianteId }) {
+  const [intentos, setIntentos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [tomando, setTomando] = useState(false);
+
+  const cargar = () => api.fetchMisIntentos(evaluacion.id, estudianteId).then((d) => { setIntentos(d); setCargando(false); });
+  useEffect(() => { cargar(); }, [evaluacion.id]);
+
+  if (cargando) return null;
+  const usados = intentos.length;
+  const maxIntentos = evaluacion.intentos_permitidos;
+  const puedeIntentar = maxIntentos === null || usados < maxIntentos;
+  const publicado = intentos.filter((i) => i.visible_para_estudiante).sort((a, b) => b.numero_intento - a.numero_intento)[0];
+  const hayPendiente = intentos.some((i) => i.estado !== "en_progreso" && !i.visible_para_estudiante);
+
+  return (
+    <div className="bg-slate-50 rounded-xl p-3">
+      <div className="text-sm font-semibold text-slate-800">{evaluacion.titulo}</div>
+      {evaluacion.descripcion && <div className="text-xs text-slate-500 mt-0.5">{evaluacion.descripcion}</div>}
+      <div className="text-[11px] text-slate-400 mt-1">
+        {maxIntentos ? `${usados}/${maxIntentos} intentos usados` : `${usados} intento(s) usados`}
+        {evaluacion.tiempo_limite_minutos ? ` · ${evaluacion.tiempo_limite_minutos} min` : ""}
+      </div>
+      {publicado && <div className="text-xs font-semibold text-emerald-600 mt-1">Nota: {publicado.puntaje_obtenido}/{publicado.puntaje_maximo}</div>}
+      {!publicado && hayPendiente && <div className="text-xs text-amber-600 mt-1">Entregado — pendiente de revisión del docente</div>}
+      {puedeIntentar && (
+        <button onClick={() => setTomando(true)} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white mt-2">
+          {usados > 0 ? "Presentar de nuevo" : "Presentar"}
+        </button>
+      )}
+      {tomando && <TomarEvaluacion evaluacion={evaluacion} estudianteId={estudianteId} onCerrar={() => { setTomando(false); cargar(); }} />}
+    </div>
+  );
+}
+
+// Resume, por materia, los periodos con nota (final o en curso calculada en vivo) —
+// misma lógica que usa "Mis notas", reutilizada acá para el aviso general.
+function resumenPorMateria(datos) {
+  const materias = {};
+  datos.finales.forEach((f) => {
+    const nombre = f.materias?.nombre || `Materia ${f.materia_id}`;
+    materias[nombre] = materias[nombre] || { finales: {}, actividadesPorPeriodo: {} };
+    materias[nombre].finales[f.periodo] = f.nota;
+  });
+  datos.valores.forEach((v) => {
+    const act = v.notas_actividades;
+    if (!act) return;
+    const nombre = act.materias?.nombre || `Materia ${act.materia_id}`;
+    materias[nombre] = materias[nombre] || { finales: {}, actividadesPorPeriodo: {} };
+    materias[nombre].actividadesPorPeriodo[act.periodo] = materias[nombre].actividadesPorPeriodo[act.periodo] || [];
+    materias[nombre].actividadesPorPeriodo[act.periodo].push(v);
+  });
+
+  const resultado = {};
+  Object.entries(materias).forEach(([nombre, m]) => {
+    const periodos = [...new Set([...Object.keys(m.finales), ...Object.keys(m.actividadesPorPeriodo)])].sort();
+    resultado[nombre] = periodos.map((periodo) => {
+      const actividadesPeriodo = m.actividadesPorPeriodo[periodo] || [];
+      if (Object.prototype.hasOwnProperty.call(m.finales, periodo)) {
+        return { periodo, nota: m.finales[periodo], enCurso: false };
+      }
+      const porCategoria = {};
+      const categoriasVistas = {};
+      actividadesPeriodo.forEach((a) => {
+        const cat = a.notas_actividades?.notas_categorias;
+        const catId = a.notas_actividades?.categoria_id;
+        if (!catId) return;
+        categoriasVistas[catId] = { id: catId, porcentaje: cat?.porcentaje || 0 };
+        porCategoria[catId] = porCategoria[catId] || [];
+        porCategoria[catId].push(a.valor);
+      });
+      return { periodo, nota: notaFinalPonderada(porCategoria, Object.values(categoriasVistas)), enCurso: true };
     });
-    resultado[s.id] = notaFinalPonderada(porCategoria, categorias);
-  }
+  });
   return resultado;
 }
 
-/* ---------------- Asistencia ---------------- */
-// materiaId: la materia/clase en la que se toma la asistencia. Usa null para
-// asistencia "general" (no asociada a una materia puntual).
-export async function fetchAsistenciaFecha(estudianteIds, fecha, materiaId = null) {
-  if (estudianteIds.length === 0) return {};
-  let query = supabase.from("asistencia").select("*").eq("fecha", fecha).in("estudiante_id", estudianteIds);
-  query = materiaId ? query.eq("materia_id", materiaId) : query.is("materia_id", null);
-  const { data, error } = await query;
-  if (error) throw error;
-  const mapa = {};
-  (data || []).forEach((f) => { mapa[f.estudiante_id] = f; });
-  return mapa;
-}
+function AvisoRendimiento({ estudianteId }) {
+  const [resumen, setResumen] = useState(null);
 
-export async function marcarAsistencia(estudianteId, fecha, codigo, observacion, materiaId = null) {
-  const { data: userData } = await supabase.auth.getUser();
-  const { error } = await supabase.from("asistencia").upsert(
-    { estudiante_id: estudianteId, fecha, codigo, observacion: observacion || null, materia_id: materiaId, docente_id: userData?.user?.id || null },
-    { onConflict: "estudiante_id,fecha,materia_id" }
+  useEffect(() => {
+    api.fetchNotasEstudiante(estudianteId).then((d) => setResumen(resumenPorMateria(d))).catch(() => setResumen({}));
+  }, [estudianteId]);
+
+  if (!resumen) return null;
+  const config = { escala_min: 1, nota_minima: 3.5, nota_maxima: 5 };
+
+  const estados = Object.entries(resumen)
+    .map(([nombre, filas]) => {
+      const ultima = filas[filas.length - 1];
+      return { nombre, nota: ultima?.nota ?? null };
+    })
+    .filter((e) => e.nota !== null);
+
+  if (estados.length === 0) return null;
+
+  const enRiesgo = estados.filter((e) => bandaDesempeno(e.nota, config).key === "bajo");
+
+  if (enRiesgo.length > 0) {
+    return (
+      <div className="rounded-xl p-3 mb-4 bg-rose-50 border border-rose-200">
+        <div className="text-sm font-bold text-rose-700">⚠️ Rendimiento académico en riesgo</div>
+        <div className="text-xs text-rose-600 mt-1">Estás perdiendo: {enRiesgo.map((e) => e.nombre).join(", ")}. Hablá con tu docente para ponerte al día.</div>
+      </div>
+    );
+  }
+
+  const promedio = estados.reduce((a, e) => a + e.nota, 0) / estados.length;
+  const bandaGeneral = bandaDesempeno(promedio, config);
+  const mensajes = {
+    basico: "Vas cumpliendo lo mínimo. ¡Con un poco más de esfuerzo podés subir de nivel!",
+    alto: "Buen desempeño general. ¡Seguí así!",
+    superior: "¡Excelente desempeño! Tu esfuerzo se nota.",
+  };
+  return (
+    <div className="rounded-xl p-3 mb-4" style={{ background: `${bandaGeneral.color}15`, border: `1px solid ${bandaGeneral.color}55` }}>
+      <div className="text-sm font-bold" style={{ color: bandaGeneral.color }}>
+        {bandaGeneral.key === "superior" ? "🌟" : bandaGeneral.key === "alto" ? "👍" : "💪"} {bandaGeneral.label} desempeño académico
+      </div>
+      <div className="text-xs mt-1" style={{ color: bandaGeneral.color }}>{mensajes[bandaGeneral.key]}</div>
+    </div>
   );
-  if (error) throw error;
 }
 
-export async function quitarAsistencia(estudianteId, fecha, materiaId = null) {
-  let query = supabase.from("asistencia").delete().eq("estudiante_id", estudianteId).eq("fecha", fecha);
-  query = materiaId ? query.eq("materia_id", materiaId) : query.is("materia_id", null);
-  const { error } = await query;
-  if (error) throw error;
-}
+function MisNotas({ estudianteId }) {
+  const [datos, setDatos] = useState(null);
+  const [comentarios, setComentarios] = useState({});
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState(null);
+  const [materiaAbierta, setMateriaAbierta] = useState(null);
 
-export async function marcarTodosPresentes(estudianteIds, fecha, materiaId = null) {
-  const { data: userData } = await supabase.auth.getUser();
-  const filas = estudianteIds.map((id) => ({ estudiante_id: id, fecha, codigo: "P", materia_id: materiaId, docente_id: userData?.user?.id || null }));
-  const { error } = await supabase.from("asistencia").upsert(filas, { onConflict: "estudiante_id,fecha,materia_id" });
-  if (error) throw error;
-}
+  useEffect(() => {
+    Promise.all([api.fetchNotasEstudiante(estudianteId), api.fetchComentariosDesempeno()])
+      .then(([d, c]) => { setDatos(d); setComentarios(c); setCargando(false); })
+      .catch((e) => { setError(e.message); setCargando(false); });
+  }, [estudianteId]);
 
-export async function fetchEstadisticasAsistencia(estudianteId) {
-  const { data, error } = await supabase.from("asistencia").select("codigo").eq("estudiante_id", estudianteId);
-  if (error) throw error;
-  const total = (data || []).length;
-  const conteo = { P: 0, R: 0, FI: 0, FJ: 0 };
-  (data || []).forEach((f) => { conteo[f.codigo] = (conteo[f.codigo] || 0) + 1; });
-  const pct = total > 0 ? Math.round((conteo.P / total) * 100) : null;
-  return { ...conteo, total, pct };
-}
+  if (cargando) return <div className="text-xs text-slate-400 mt-4">Cargando notas…</div>;
+  if (error) return <div className="text-xs text-rose-500 bg-rose-50 rounded-lg p-2 mt-4">Error al cargar notas: {error}</div>;
+  if (!datos) return null;
 
-// Vista consolidada de la asistencia de un estudiante en TODAS sus materias
-// (de todos los docentes), para sustentar procesos convivenciales.
-export async function fetchAsistenciaConsolidadaEstudiante(estudianteId) {
-  const { data, error } = await supabase
-    .from("asistencia")
-    .select("*, materias(nombre, profesores(nombre))")
-    .eq("estudiante_id", estudianteId)
-    .order("fecha", { ascending: false });
-  if (error) throw error;
-
-  const porMateria = {};
-  const general = { P: 0, R: 0, FI: 0, FJ: 0, total: 0 };
-  (data || []).forEach((f) => {
-    const key = f.materia_id ? (f.materias?.nombre || `Materia ${f.materia_id}`) : "General (sin materia asociada)";
-    if (!porMateria[key]) porMateria[key] = { P: 0, R: 0, FI: 0, FJ: 0, total: 0, docente: f.materias?.profesores?.nombre || null };
-    porMateria[key][f.codigo] = (porMateria[key][f.codigo] || 0) + 1;
-    porMateria[key].total++;
-    general[f.codigo] = (general[f.codigo] || 0) + 1;
-    general.total++;
+  // Junta, por materia, los periodos con nota final guardada (definitiva) y los
+  // periodos donde solo hay actividades cargadas todavía (en curso) — para estos
+  // últimos se calcula la nota en vivo con la misma fórmula ponderada del docente.
+  const materias = {};
+  datos.finales.forEach((f) => {
+    const nombre = f.materias?.nombre || `Materia ${f.materia_id}`;
+    materias[nombre] = materias[nombre] || { finales: {}, actividadesPorPeriodo: {} };
+    materias[nombre].finales[f.periodo] = f.nota;
   });
-  return { general, porMateria, registros: data || [] };
+  datos.valores.forEach((v) => {
+    const act = v.notas_actividades;
+    if (!act) return;
+    const nombre = act.materias?.nombre || `Materia ${act.materia_id}`;
+    materias[nombre] = materias[nombre] || { finales: {}, actividadesPorPeriodo: {} };
+    materias[nombre].actividadesPorPeriodo[act.periodo] = materias[nombre].actividadesPorPeriodo[act.periodo] || [];
+    materias[nombre].actividadesPorPeriodo[act.periodo].push(v);
+  });
+
+  if (Object.keys(materias).length === 0) {
+    return <div className="text-xs text-slate-400 mt-4 pt-4 border-t border-slate-100">Todavía no tenés notas ni actividades cargadas.</div>;
+  }
+  const config = { escala_min: 1, nota_minima: 3.5, nota_maxima: 5 };
+
+  return (
+    <div className="mt-4 pt-4 border-t border-slate-100">
+      <div className="text-xs font-semibold text-slate-600 mb-2">📚 Mis notas</div>
+      <div className="space-y-2">
+        {Object.entries(materias).map(([nombreMateria, m]) => {
+          const abierta = materiaAbierta === nombreMateria;
+          const periodos = [...new Set([...Object.keys(m.finales), ...Object.keys(m.actividadesPorPeriodo)])].sort();
+
+          const filas = periodos.map((periodo) => {
+            const actividadesPeriodo = m.actividadesPorPeriodo[periodo] || [];
+            if (Object.prototype.hasOwnProperty.call(m.finales, periodo)) {
+              return { periodo, nota: m.finales[periodo], enCurso: false, actividadesPeriodo };
+            }
+            // Sin nota final guardada todavía: se calcula en vivo con lo que hay cargado
+            const porCategoria = {};
+            const categoriasVistas = {};
+            actividadesPeriodo.forEach((a) => {
+              const cat = a.notas_actividades?.notas_categorias;
+              const catId = a.notas_actividades?.categoria_id;
+              if (!catId) return;
+              categoriasVistas[catId] = { id: catId, porcentaje: cat?.porcentaje || 0 };
+              porCategoria[catId] = porCategoria[catId] || [];
+              porCategoria[catId].push(a.valor);
+            });
+            const notaViva = notaFinalPonderada(porCategoria, Object.values(categoriasVistas));
+            return { periodo, nota: notaViva, enCurso: true, actividadesPeriodo };
+          });
+
+          return (
+            <div key={nombreMateria} className="bg-slate-50 rounded-xl p-3">
+              <button onClick={() => setMateriaAbierta(abierta ? null : nombreMateria)} className="w-full text-left">
+                <div className="text-sm font-semibold text-slate-800">{nombreMateria}</div>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {filas.map((f) => {
+                    const b = bandaDesempeno(f.nota, config);
+                    return (
+                      <span key={f.periodo} className="text-[10px] px-2 py-0.5 rounded-full font-semibold flex items-center gap-1" style={{ background: `${b.color}22`, color: b.color }}>
+                        P{f.periodo}: {f.nota ?? "—"}{f.enCurso && " 🕓"}
+                      </span>
+                    );
+                  })}
+                </div>
+              </button>
+
+              {abierta && (
+                <div className="mt-2 pt-2 border-t border-slate-200 space-y-2">
+                  {filas.map((f) => {
+                    const b = bandaDesempeno(f.nota, config);
+                    return (
+                      <div key={f.periodo}>
+                        <div className="text-xs font-semibold text-slate-600">
+                          Periodo {f.periodo} — <span style={{ color: b.color }}>{f.nota ?? "—"} ({b.label})</span>
+                          {f.enCurso && <span className="text-amber-600 font-normal"> · En curso (provisional, puede cambiar)</span>}
+                        </div>
+                        {f.enCurso && f.actividadesPeriodo.length > 0 && (
+                          <div className="ml-2 mt-1 space-y-0.5">
+                            {f.actividadesPeriodo.map((a) => (
+                              <div key={a.id} className="text-[11px] text-slate-500 flex justify-between">
+                                <span>{a.notas_actividades?.nombre}{a.notas_actividades?.notas_categorias?.nombre ? ` (${a.notas_actividades.notas_categorias.nombre})` : ""}</span>
+                                <span className="font-semibold">{a.valor}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {!f.enCurso && f.nota !== null && comentarios[b.key] && (
+                          <div className="text-[11px] text-slate-500 italic mt-1 bg-white rounded-lg p-2">{comentarios[b.key]}</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
-export async function registrarAccion(estudianteId, accion) {
-  await supabase.from("historial_gamificacion").insert({
-    estudiante_id: estudianteId,
-    etiqueta: accion.label,
-    xp: accion.xp,
-    vida: accion.vida,
-    categoria: accion.categoria,
-  });
-  const { data: actual } = await supabase.from("progreso").select("*").eq("estudiante_id", estudianteId).maybeSingle();
-  const nuevoXp = Math.max(0, (actual?.xp || 0) + accion.xp);
-  const nuevaVida = Math.max(0, Math.min(100, (actual?.vida ?? 100) + accion.vida));
-  const nuevasMonedas = (actual?.monedas || 0) + (accion.xp > 0 ? 1 : 0);
-  const { error } = await supabase.from("progreso").upsert({
-    estudiante_id: estudianteId,
-    xp: nuevoXp,
-    vida: nuevaVida,
-    monedas: nuevasMonedas,
-  });
-  if (error) throw error;
-  return { xp: nuevoXp, vida: nuevaVida, monedas: nuevasMonedas };
+function BancoEstudiante({ estudianteId, monedas, onMonedasActualizadas }) {
+  const [premiosActivos, setPremiosActivos] = useState([]);
+  const [girando, setGirando] = useState(false);
+  const [resultado, setResultado] = useState(null);
+  const [historial, setHistorial] = useState([]);
+  const [mostrarHistorial, setMostrarHistorial] = useState(false);
+
+  const cargarPremios = () => api.fetchPremiosActivos().then(setPremiosActivos);
+  useEffect(() => { cargarPremios(); }, []);
+
+  const costoMinimo = premiosActivos.length > 0 ? Math.min(...premiosActivos.map((p) => p.costo_monedas)) : null;
+  const puedeCanjear = costoMinimo !== null && monedas >= costoMinimo;
+
+  const canjear = async () => {
+    setGirando(true);
+    setResultado(null);
+    try {
+      const r = await api.canjearAleatorio(estudianteId);
+      setTimeout(() => {
+        setGirando(false);
+        setResultado(r);
+        onMonedasActualizadas();
+        cargarPremios();
+      }, 1500);
+    } catch (e) {
+      setGirando(false);
+      alert("Error al canjear: " + e.message);
+    }
+  };
+
+  const verHistorial = async () => {
+    const c = await api.fetchCanjes();
+    setHistorial(c.filter((x) => x.estudiante_id === estudianteId));
+    setMostrarHistorial(true);
+  };
+
+  if (premiosActivos.length === 0) return null;
+
+  return (
+    <div className="mt-4 pt-4 border-t border-slate-100">
+      <div className="text-xs font-semibold text-slate-600 mb-2">🏦 Banco de premios</div>
+      <p className="text-[11px] text-slate-400 mb-2">Cangeá tus monedas por un premio sorpresa. Cuantas más monedas tengas, a más premios podés aspirar.</p>
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {premiosActivos.map((p) => (
+          <span key={p.id} className={`text-[10px] px-2 py-1 rounded-full ${monedas >= p.costo_monedas ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-400"}`}>
+            {p.emoji} {p.nombre} · 🪙{p.costo_monedas}
+          </span>
+        ))}
+      </div>
+
+      {girando ? (
+        <div className="text-center py-3 text-sm text-violet-500 animate-pulse">🎰 Sorteando tu premio…</div>
+      ) : resultado ? (
+        resultado.ok ? (
+          <div className="text-center bg-emerald-50 rounded-xl p-3 mb-2">
+            <div className="text-2xl">{resultado.premio.emoji}</div>
+            <div className="text-sm font-bold text-emerald-700">¡Ganaste "{resultado.premio.nombre}"!</div>
+            <div className="text-[11px] text-emerald-600">Pedíselo a tu docente. Te quedan {resultado.monedasRestantes} monedas.</div>
+          </div>
+        ) : (
+          <div className="text-center bg-amber-50 rounded-xl p-3 mb-2 text-xs text-amber-700">Todavía no te alcanzan las monedas para ningún premio disponible.</div>
+        )
+      ) : null}
+
+      <div className="flex gap-2">
+        <button disabled={!puedeCanjear || girando} onClick={canjear} className="flex-1 text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-50">
+          {puedeCanjear ? "🎰 Canjear por un premio sorpresa" : `Necesitás al menos ${costoMinimo} monedas`}
+        </button>
+        <button onClick={verHistorial} className="text-xs text-slate-400 px-2">Historial</button>
+      </div>
+
+      {mostrarHistorial && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.5)" }} onClick={() => setMostrarHistorial(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-4 w-full max-w-sm max-h-[70vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-2">
+              <h4 className="font-bold text-sm text-slate-800">Tus premios ganados</h4>
+              <button onClick={() => setMostrarHistorial(false)} className="text-slate-400">✕</button>
+            </div>
+            {historial.length === 0 ? (
+              <p className="text-xs text-slate-400">Todavía no ganaste ningún premio.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {historial.map((c) => (
+                  <div key={c.id} className="flex justify-between text-xs bg-slate-50 rounded-lg px-2 py-1.5">
+                    <span>{c.premio?.emoji} {c.premio?.nombre || "Premio"}</span>
+                    <span className={c.estado === "entregado" ? "text-emerald-600" : "text-amber-600"}>{c.estado === "entregado" ? "✔ Entregado" : "Pendiente"}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EvaluacionesEstudiante({ estudianteId, gradoId }) {
+  const [evaluaciones, setEvaluaciones] = useState([]);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    api.fetchEvaluacionesDisponibles(gradoId).then((data) => {
+      const hoy = new Date().toISOString().slice(0, 10);
+      const vigentes = data.filter((e) => (!e.fecha_apertura || e.fecha_apertura <= hoy) && (!e.fecha_cierre || e.fecha_cierre >= hoy));
+      setEvaluaciones(vigentes);
+      setCargando(false);
+    });
+  }, [gradoId]);
+
+  if (cargando || evaluaciones.length === 0) return null;
+
+  return (
+    <div className="mt-4 pt-4 border-t border-slate-100">
+      <div className="text-xs font-semibold text-slate-600 mb-2">📝 Evaluaciones disponibles</div>
+      <div className="space-y-2">
+        {evaluaciones.map((e) => <TarjetaEvaluacionEstudiante key={e.id} evaluacion={e} estudianteId={estudianteId} />)}
+      </div>
+    </div>
+  );
+}
+
+function PortalEstudiante() {
+  const [codigo, setCodigo] = useState("");
+  const [datos, setDatos] = useState(null);
+  const [estudianteInfo, setEstudianteInfo] = useState(null);
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState("");
+
+  const consultar = async () => {
+    if (!codigo.trim()) return;
+    setCargando(true);
+    setError("");
+    try {
+      const res = await api.consultarPortalEstudiante(codigo);
+      if (!res) { setError("Código no encontrado. Verifica con tu docente."); setDatos(null); }
+      else {
+        setDatos(res);
+        const info = await api.fetchEstudiantePorCodigo(codigo);
+        setEstudianteInfo(info);
+      }
+    } catch (e) {
+      setError("Ocurrió un error: " + e.message);
+    }
+    setCargando(false);
+  };
+
+  if (datos) {
+    const { level, next, pct } = nextLevel(datos.xp || 0);
+    const totalAsis = Number(datos.total_asistencia) || 0;
+    const pctAsis = totalAsis > 0 ? Math.round((Number(datos.presentes) / totalAsis) * 100) : null;
+    return (
+      <div className="bg-white rounded-2xl shadow-lg p-6">
+        <div className="text-center mb-4">
+          <div className="text-lg font-bold text-slate-800">{datos.nombre}</div>
+          <div className="text-xs text-slate-400">Grado {datos.grado_id} · {datos.grupo}</div>
+        </div>
+        {estudianteInfo && <AvisoRendimiento estudianteId={estudianteInfo.id} />}
+        <div className="mb-3">
+          <div className="flex justify-between text-xs text-slate-500 mb-1">
+            <span className="font-semibold text-violet-600">{level.name}</span>
+            <span>{datos.xp}{next ? ` / ${next.min} XP` : " XP · nivel máximo"}</span>
+          </div>
+          <div className="h-2.5 rounded-full bg-violet-100 overflow-hidden">
+            <div className="h-full rounded-full bg-gradient-to-r from-violet-400 to-violet-600" style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-2 mb-4">
+          <div className="bg-emerald-50 rounded-xl p-2 text-center">
+            <div className="text-sm font-bold text-emerald-600">{datos.vida}</div>
+            <div className="text-[10px] text-slate-400">Vida</div>
+          </div>
+          <div className="bg-amber-50 rounded-xl p-2 text-center">
+            <div className="text-sm font-bold text-amber-600">{datos.monedas}</div>
+            <div className="text-[10px] text-slate-400">Monedas</div>
+          </div>
+          <div className="bg-blue-50 rounded-xl p-2 text-center">
+            <div className="text-sm font-bold text-blue-600">{pctAsis ?? "—"}{pctAsis !== null && "%"}</div>
+            <div className="text-[10px] text-slate-400">Asistencia</div>
+          </div>
+        </div>
+        <div className="text-xs text-slate-500 mb-4">
+          Presentes: {datos.presentes} · Retardos: {datos.retardos} · Faltas injustificadas: {datos.faltas_injustificadas} · Faltas justificadas: {datos.faltas_justificadas}
+        </div>
+        {estudianteInfo && <MisNotas estudianteId={estudianteInfo.id} />}
+        {estudianteInfo && <BancoEstudiante estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} />}
+        {estudianteInfo && <EvaluacionesEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />}
+        <button onClick={() => { setDatos(null); setCodigo(""); setEstudianteInfo(null); }} className="w-full text-xs text-violet-500 mt-4">← Consultar otro código</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-2xl shadow-lg p-6">
+      <p className="text-sm text-slate-500 text-center mb-4">Ingresa el código de acceso que te dio tu docente para ver tu progreso.</p>
+      <input value={codigo} onChange={(e) => setCodigo(e.target.value.toUpperCase())} placeholder="Ej: AB3D9K" maxLength={6}
+        className="w-full text-center text-lg font-mono font-bold tracking-widest rounded-lg px-3 py-3 mb-3 border border-slate-200 outline-none" />
+      {error && <p className="text-xs text-rose-500 mb-2 text-center">{error}</p>}
+      <button disabled={cargando} onClick={consultar} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+        {cargando ? "Consultando…" : "Ver mi progreso"}
+      </button>
+    </div>
+  );
+}
+
+function LoginScreen() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [mensaje, setMensaje] = useState("");
+  const [cargando, setCargando] = useState(false);
+
+  const entrar = async () => {
+    setCargando(true);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setCargando(false);
+    if (error) setMensaje(error.message);
+  };
+
+  const recuperar = async () => {
+    if (!email) { setMensaje("Escribe tu correo arriba primero."); return; }
+    setCargando(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    setCargando(false);
+    setMensaje(error ? error.message : "Te enviamos un correo para restablecer tu contraseña.");
+  };
+
+  return (
+    <div className="bg-white rounded-2xl shadow-lg p-6">
+      <p className="text-sm text-slate-500 text-center mb-5">Acceso de docentes</p>
+
+      <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Correo" type="email"
+        className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none" />
+      <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Contraseña" type="password"
+        className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
+
+      {mensaje && <p className="text-xs text-rose-500 mb-2">{mensaje}</p>}
+
+      <button disabled={cargando} onClick={entrar}
+        className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+        {cargando ? "Un momento…" : "Entrar"}
+      </button>
+
+      <button onClick={recuperar} className="w-full text-xs text-violet-500 mt-3">¿Olvidaste tu contraseña?</button>
+      <p className="text-[11px] text-slate-400 text-center mt-4">
+        ¿Sos docente nuevo y no tenés cuenta? Pedile a un administrador de la plataforma que te invite.
+      </p>
+    </div>
+  );
+}
+
+function Panel({ session }) {
+  const [tab, setTab] = useState("estudiantes");
+  const [subTabHerramientas, setSubTabHerramientas] = useState("ruleta");
+  const [grado, setGrado] = useState(null);
+  const [reino, setReino] = useState(null);
+  const [modoLista, setModoLista] = useState(false);
+  const [grados, setGrados] = useState([]);
+  const [institucionAbierta, setInstitucionAbierta] = useState(false);
+  const [administracionAbierta, setAdministracionAbierta] = useState(false);
+
+  useEffect(() => {
+    api.asegurarProfesor().then(() => api.asegurarGradosBase()).then(() => api.fetchGrados()).then(setGrados);
+  }, []);
+
+  const irAEstudiantes = () => { setTab("estudiantes"); setGrado(null); setReino(null); setModoLista(false); };
+
+  return (
+    <div className="min-h-screen bg-violet-50">
+      <div className="bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between flex-wrap gap-2">
+        <h1 className="text-lg font-bold text-violet-700 cursor-pointer" onClick={irAEstudiantes}>CÓDICE</h1>
+        <div className="flex gap-1 rounded-full bg-violet-50 p-1 flex-wrap">
+          <button onClick={irAEstudiantes} className={`text-xs px-3 py-1.5 rounded-full ${tab === "estudiantes" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Estudiantes</button>
+          <button onClick={() => setTab("asistencia")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "asistencia" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Asistencia</button>
+          <button onClick={() => setTab("herramientas")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "herramientas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Herramientas</button>
+          <button onClick={() => setTab("roles")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "roles" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Roles</button>
+          <button onClick={() => setTab("calificaciones")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "calificaciones" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Calificaciones</button>
+          <button onClick={() => setTab("reportes")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "reportes" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Reportes</button>
+          <button onClick={() => setTab("horario")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "horario" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Horario</button>
+          <button onClick={() => setTab("planeaciones")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "planeaciones" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Planeaciones</button>
+          <button onClick={() => setTab("evaluaciones")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "evaluaciones" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Evaluaciones</button>
+        </div>
+        <div className="flex items-center gap-3">
+          <button onClick={() => setAdministracionAbierta(true)} className="text-lg" title="Docentes y mi cuenta">👤</button>
+          <button onClick={() => setInstitucionAbierta(true)} className="text-lg" title="Datos de la institución">⚙️</button>
+          <button onClick={() => supabase.auth.signOut()} className="text-sm text-slate-500">Cerrar sesión ({session.user.email})</button>
+        </div>
+      </div>
+      {institucionAbierta && <InstitucionModal onClose={() => setInstitucionAbierta(false)} />}
+      {administracionAbierta && <AdministracionModal onClose={() => setAdministracionAbierta(false)} />}
+      <div className="p-6 max-w-6xl mx-auto">
+        {tab === "estudiantes" && (
+          <>
+            {!grado && <VistaGrados onElegirGrado={(g) => { setGrado(g); setReino(null); setModoLista(false); }} />}
+            {grado && !modoLista && !reino && (
+              <VistaReinos
+                gradoId={grado}
+                onElegirReino={(r) => setReino(r)}
+                onVerTodos={() => setModoLista(true)}
+                onVolver={() => setGrado(null)}
+              />
+            )}
+            {grado && (modoLista || reino) && (
+              <VistaEstudiantes
+                gradoId={grado}
+                grados={grados}
+                reinoFiltro={modoLista ? null : reino}
+                onVolver={() => { setReino(null); setModoLista(false); }}
+              />
+            )}
+          </>
+        )}
+        {tab === "asistencia" && grados.length > 0 && <VistaAsistencia grados={grados} />}
+        {tab === "herramientas" && grados.length > 0 && (
+          <>
+            <div className="flex gap-1 mb-6 rounded-full bg-white p-1 w-fit border border-slate-100 shadow-sm">
+              <button onClick={() => setSubTabHerramientas("ruleta")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "ruleta" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Ruleta</button>
+              <button onClick={() => setSubTabHerramientas("ruletamonedas")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "ruletamonedas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Ruleta de Monedas</button>
+              <button onClick={() => setSubTabHerramientas("banco")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "banco" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Banco</button>
+              <button onClick={() => setSubTabHerramientas("temporizador")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "temporizador" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Temporizador</button>
+              <button onClick={() => setSubTabHerramientas("otras")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "otras" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Otras herramientas</button>
+            </div>
+            {subTabHerramientas === "ruleta" && <VistaRuleta grados={grados} />}
+            {subTabHerramientas === "ruletamonedas" && <VistaRuletaMonedas grados={grados} />}
+            {subTabHerramientas === "banco" && <VistaBanco />}
+            {subTabHerramientas === "temporizador" && <VistaTemporizador />}
+            {subTabHerramientas === "otras" && <VistaHerramientas grados={grados} />}
+          </>
+        )}
+        {tab === "roles" && <VistaRoles />}
+        {tab === "calificaciones" && grados.length > 0 && <VistaCalificaciones grados={grados} />}
+        {tab === "reportes" && grados.length > 0 && <VistaReportes grados={grados} />}
+        {tab === "horario" && grados.length > 0 && <VistaHorario grados={grados} />}
+        {tab === "planeaciones" && grados.length > 0 && <VistaPlaneaciones grados={grados} />}
+        {tab === "evaluaciones" && grados.length > 0 && <VistaEvaluaciones grados={grados} />}
+      </div>
+    </div>
+  );
 }
