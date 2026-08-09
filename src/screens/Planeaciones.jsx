@@ -272,7 +272,78 @@ function TareasLista({ planeacionId }) {
   );
 }
 
-function ClasesLista({ unidadId }) {
+const ESTADOS_DICTADO = [
+  { key: "pendiente", label: "Pendiente", color: "#F59E0B" },
+  { key: "dictada", label: "Dictada", color: "#22C55E" },
+  { key: "aplazada", label: "Aplazada", color: "#EF4444" },
+];
+
+function DictadoControl({ claseId, grados }) {
+  const [dictados, setDictados] = useState([]);
+  const [agregando, setAgregando] = useState(false);
+  const [gradoId, setGradoId] = useState("");
+  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
+  const [estado, setEstado] = useState("dictada");
+
+  const cargar = () => api.fetchDictados(claseId).then(setDictados);
+  useEffect(() => { cargar(); }, [claseId]);
+  useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
+
+  const agregar = async () => {
+    if (!gradoId) return;
+    try {
+      await api.crearDictado(claseId, gradoId, fecha, estado);
+      setAgregando(false);
+      cargar();
+    } catch (e) {
+      alert("Error al registrar: " + e.message);
+    }
+  };
+
+  const cambiarEstado = async (id, nuevoEstado) => { await api.editarDictado(id, { estado: nuevoEstado }); cargar(); };
+  const quitar = async (id) => { await api.eliminarDictado(id); cargar(); };
+
+  return (
+    <div className="mt-2 pt-2 border-t border-slate-100">
+      <div className="text-[10px] font-semibold text-slate-400 uppercase mb-1">Control por curso</div>
+      {dictados.length > 0 && (
+        <div className="space-y-1 mb-1.5">
+          {dictados.map((d) => {
+            const info = ESTADOS_DICTADO.find((e) => e.key === d.estado);
+            return (
+              <div key={d.id} className="flex items-center gap-2 text-[11px]">
+                <span className="font-semibold text-slate-600 w-16 shrink-0">Curso {d.grado_id}</span>
+                <span className="text-slate-400 w-24 shrink-0">{d.fecha || "sin fecha"}</span>
+                <select value={d.estado} onChange={(e) => cambiarEstado(d.id, e.target.value)}
+                  className="text-[10px] px-2 py-0.5 rounded-full border-0 outline-none" style={{ background: `${info.color}22`, color: info.color }}>
+                  {ESTADOS_DICTADO.map((e) => <option key={e.key} value={e.key}>{e.label}</option>)}
+                </select>
+                <button onClick={() => quitar(d.id)} className="text-slate-300 hover:text-rose-500">✕</button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {agregando ? (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-[11px] rounded-lg px-2 py-1 border border-slate-200 outline-none">
+            {grados.map((g) => <option key={g.id} value={g.id}>Curso {g.id}</option>)}
+          </select>
+          <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="text-[11px] rounded-lg px-2 py-1 border border-slate-200 outline-none" />
+          <select value={estado} onChange={(e) => setEstado(e.target.value)} className="text-[11px] rounded-lg px-2 py-1 border border-slate-200 outline-none">
+            {ESTADOS_DICTADO.map((e) => <option key={e.key} value={e.key}>{e.label}</option>)}
+          </select>
+          <button onClick={agregar} className="text-[11px] px-2 py-1 rounded-lg bg-violet-500 text-white">Guardar</button>
+          <button onClick={() => setAgregando(false)} className="text-[11px] text-slate-400">✕</button>
+        </div>
+      ) : (
+        <button onClick={() => setAgregando(true)} className="text-[11px] text-violet-500">+ Registrar en un curso</button>
+      )}
+    </div>
+  );
+}
+
+function ClasesLista({ unidadId, grados }) {
   const [clases, setClases] = useState([]);
   const [agregando, setAgregando] = useState(false);
   const [titulo, setTitulo] = useState("");
@@ -351,6 +422,7 @@ function ClasesLista({ unidadId }) {
                 <SelectorEstandares planeacionId={c.id} tipo="competencia" />
               </div>
               <RecursosLista planeacionId={c.id} />
+              <DictadoControl claseId={c.id} grados={grados} />
             </div>
           ))}
         </div>
@@ -498,7 +570,7 @@ function PlaneacionPrintView({ unidad, institucion, materiaNombre, gradoId, onCe
   return createPortal(contenido, document.body);
 }
 
-function UnidadCard({ unidad, institucion, materiaNombre, gradoId, onCambio }) {
+function UnidadCard({ unidad, institucion, materiaNombre, gradoId, grados, onCambio }) {
   const [expandida, setExpandida] = useState(false);
   const [editando, setEditando] = useState(false);
   const [titulo, setTitulo] = useState(unidad.titulo);
@@ -600,7 +672,7 @@ function UnidadCard({ unidad, institucion, materiaNombre, gradoId, onCambio }) {
             <SelectorEstandares planeacionId={unidad.id} tipo="competencia" />
           </div>
           <RecursosLista planeacionId={unidad.id} />
-          <ClasesLista unidadId={unidad.id} />
+          <ClasesLista unidadId={unidad.id} grados={grados} />
           <TareasLista planeacionId={unidad.id} />
         </div>
       )}
@@ -645,6 +717,51 @@ function NuevaUnidadForm({ materiaId, gradoId, periodo, orden, onCancelar, onCre
   );
 }
 
+function PendientesModal({ materiaId, materiaNombre, onClose }) {
+  const [pendientes, setPendientes] = useState([]);
+  const [cargando, setCargando] = useState(true);
+
+  const cargar = () => {
+    setCargando(true);
+    api.fetchDictadosPendientes(materiaId).then((d) => { setPendientes(d); setCargando(false); });
+  };
+  useEffect(() => { cargar(); }, [materiaId]);
+
+  const marcarDictada = async (id) => { await api.editarDictado(id, { estado: "dictada" }); cargar(); };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">📋 Clases pendientes — {materiaNombre}</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        {cargando ? (
+          <div className="text-sm text-slate-400">Cargando…</div>
+        ) : pendientes.length === 0 ? (
+          <div className="text-sm text-slate-400">No hay clases pendientes ni aplazadas en esta materia. 🎉</div>
+        ) : (
+          <div className="space-y-1.5">
+            {pendientes.map((d) => {
+              const info = ESTADOS_DICTADO.find((e) => e.key === d.estado);
+              return (
+                <div key={d.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
+                  <div className="text-xs">
+                    <span className="font-semibold text-slate-700">{d.clase_titulo}</span>
+                    <span className="text-slate-400"> · Curso {d.grado_id}{d.fecha ? ` · ${d.fecha}` : ""}</span>
+                    <span className="ml-1 text-[10px] px-2 py-0.5 rounded-full" style={{ background: `${info.color}22`, color: info.color }}>{info.label}</span>
+                  </div>
+                  <button onClick={() => marcarDictada(d.id)} className="text-[11px] text-violet-500 shrink-0">Marcar dictada</button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function VistaPlaneaciones({ grados }) {
   const [materias, setMaterias] = useState([]);
   const [materiaId, setMateriaId] = useState("");
@@ -656,6 +773,7 @@ export function VistaPlaneaciones({ grados }) {
   const [error, setError] = useState(null);
   const [formAbierto, setFormAbierto] = useState(false);
   const [institucion, setInstitucion] = useState(null);
+  const [pendientesAbierto, setPendientesAbierto] = useState(false);
 
   useEffect(() => {
     api.fetchMaterias().then((data) => { setMaterias(data); if (data[0]) setMateriaId(data[0].id); });
@@ -707,6 +825,7 @@ export function VistaPlaneaciones({ grados }) {
         <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
           {listaPeriodos.map((p) => <option key={p} value={p}>Periodo {p}</option>)}
         </select>
+        <button onClick={() => setPendientesAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-amber-200 text-amber-600">📋 Pendientes</button>
         <button onClick={() => setFormAbierto((v) => !v)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white ml-auto">
           {formAbierto ? "Cerrar" : "+ Nueva unidad/tema"}
         </button>
@@ -731,7 +850,10 @@ export function VistaPlaneaciones({ grados }) {
           Todavía no hay unidades/temas para este periodo. Creá la primera con "+ Nueva unidad/tema".
         </div>
       ) : (
-        unidades.map((u) => <UnidadCard key={u.id} unidad={u} institucion={institucion} materiaNombre={materias.find((m) => m.id === materiaId)?.nombre || ""} gradoId={gradoId} onCambio={cargar} />)
+        unidades.map((u) => <UnidadCard key={u.id} unidad={u} institucion={institucion} materiaNombre={materias.find((m) => m.id === materiaId)?.nombre || ""} gradoId={gradoId} grados={grados} onCambio={cargar} />)
+      )}
+      {pendientesAbierto && (
+        <PendientesModal materiaId={materiaId} materiaNombre={materias.find((m) => m.id === materiaId)?.nombre || ""} onClose={() => setPendientesAbierto(false)} />
       )}
     </div>
   );
