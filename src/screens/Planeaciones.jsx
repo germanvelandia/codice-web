@@ -235,7 +235,7 @@ function TareasLista({ planeacionId }) {
 
   return (
     <div className="mt-3 border-t border-slate-100 pt-3">
-      <div className="text-xs font-semibold text-slate-500 mb-2">Tareas</div>
+      <div className="text-xs font-semibold text-slate-500 mb-2">Tareas (evidencias de aprendizaje)</div>
       {tareas.length > 0 && (
         <div className="space-y-1.5 mb-2">
           {tareas.map((t) => (
@@ -327,19 +327,19 @@ function ClasesLista({ unidadId }) {
                 <div className="grid sm:grid-cols-3 gap-2 mt-2">
                   {c.momento_inicio && (
                     <div className="bg-amber-50 rounded-lg p-2">
-                      <div className="text-[9px] font-bold text-amber-600 uppercase mb-0.5">Inicio</div>
+                      <div className="text-[9px] font-bold text-amber-600 uppercase mb-0.5">Actividades de apertura</div>
                       <div className="text-[11px] text-slate-600 whitespace-pre-line">{c.momento_inicio}</div>
                     </div>
                   )}
                   {c.momento_desarrollo && (
                     <div className="bg-violet-50 rounded-lg p-2">
-                      <div className="text-[9px] font-bold text-violet-600 uppercase mb-0.5">Desarrollo</div>
+                      <div className="text-[9px] font-bold text-violet-600 uppercase mb-0.5">Actividades de desarrollo</div>
                       <div className="text-[11px] text-slate-600 whitespace-pre-line">{c.momento_desarrollo}</div>
                     </div>
                   )}
                   {c.momento_cierre && (
                     <div className="bg-emerald-50 rounded-lg p-2">
-                      <div className="text-[9px] font-bold text-emerald-600 uppercase mb-0.5">Cierre / Evaluación</div>
+                      <div className="text-[9px] font-bold text-emerald-600 uppercase mb-0.5">Actividades de cierre</div>
                       <div className="text-[11px] text-slate-600 whitespace-pre-line">{c.momento_cierre}</div>
                     </div>
                   )}
@@ -358,16 +358,16 @@ function ClasesLista({ unidadId }) {
       {agregando ? (
         <div className="bg-violet-50 rounded-lg p-3 space-y-2">
           <div className="flex gap-1.5">
-            <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título de la clase"
+            <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título de la clase (sesión)"
               className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
             <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
             <input type="number" value={duracion} onChange={(e) => setDuracion(e.target.value)} placeholder="Min." className="w-16 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
           </div>
-          <textarea value={inicio} onChange={(e) => setInicio(e.target.value)} rows={2} placeholder="Inicio (motivación, exploración de saberes previos…)"
+          <textarea value={inicio} onChange={(e) => setInicio(e.target.value)} rows={2} placeholder="Actividades de apertura (recuperar saberes previos, plantear un problema o pregunta detonadora…)"
             className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-          <textarea value={desarrollo} onChange={(e) => setDesarrollo(e.target.value)} rows={2} placeholder="Desarrollo (actividades, metodología…)"
+          <textarea value={desarrollo} onChange={(e) => setDesarrollo(e.target.value)} rows={2} placeholder="Actividades de desarrollo (interacción con la nueva información, aplicación en un caso o problema…)"
             className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-          <textarea value={cierre} onChange={(e) => setCierre(e.target.value)} rows={2} placeholder="Cierre / evaluación (síntesis, verificación de aprendizaje…)"
+          <textarea value={cierre} onChange={(e) => setCierre(e.target.value)} rows={2} placeholder="Actividades de cierre (síntesis, reconstrucción de lo aprendido…)"
             className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
           <input value={indicador} onChange={(e) => setIndicador(e.target.value)} placeholder="Indicador de desempeño (opcional)"
             className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
@@ -445,8 +445,10 @@ function PlaneacionPrintView({ unidad, institucion, materiaNombre, gradoId, onCe
         </tbody>
       </table>
 
-      {bloqueImpresion("Objetivo de la unidad", unidad.objetivo)}
-      {bloqueImpresion("Contenido / temas", unidad.contenido)}
+      {bloqueImpresion("Finalidad, propósitos u objetivos", unidad.objetivo)}
+      {bloqueImpresion("Contenidos", unidad.contenido)}
+      {bloqueImpresion("Problema, caso o proyecto", unidad.problema_proyecto, { bg: "#F5F3FF", accent: "#7C3AED" })}
+      {bloqueImpresion("Orientaciones generales para la evaluación", unidad.orientaciones_evaluacion, { bg: "#EFF6FF", accent: "#2563EB" })}
 
       {dba.length > 0 && bloqueImpresion("DBA vinculados", dba.map((d) => `${d.codigo ? d.codigo + " — " : ""}${d.descripcion}`).join("\n"), { bg: "#EFF6FF", accent: "#2563EB" })}
       {competencias.length > 0 && bloqueImpresion("Competencias vinculadas", competencias.map((c) => `${c.codigo ? c.codigo + " — " : ""}${c.descripcion}`).join("\n"), { bg: "#F0FDFA", accent: "#0D9488" })}
@@ -461,9 +463,9 @@ function PlaneacionPrintView({ unidad, institucion, materiaNombre, gradoId, onCe
                 {c.fecha && <span style={{ fontWeight: 400, color: "#64748B" }}> · {c.fecha}</span>}
                 {c.duracion_minutos && <span style={{ fontWeight: 400, color: "#64748B" }}> · {c.duracion_minutos} min</span>}
               </div>
-              {c.momento_inicio && <div style={{ fontSize: 11, marginTop: 4 }}><b>Inicio:</b> {c.momento_inicio}</div>}
-              {c.momento_desarrollo && <div style={{ fontSize: 11, marginTop: 2 }}><b>Desarrollo:</b> {c.momento_desarrollo}</div>}
-              {c.momento_cierre && <div style={{ fontSize: 11, marginTop: 2 }}><b>Cierre/Evaluación:</b> {c.momento_cierre}</div>}
+              {c.momento_inicio && <div style={{ fontSize: 11, marginTop: 4 }}><b>Actividades de apertura:</b> {c.momento_inicio}</div>}
+              {c.momento_desarrollo && <div style={{ fontSize: 11, marginTop: 2 }}><b>Actividades de desarrollo:</b> {c.momento_desarrollo}</div>}
+              {c.momento_cierre && <div style={{ fontSize: 11, marginTop: 2 }}><b>Actividades de cierre:</b> {c.momento_cierre}</div>}
               {c.indicador_desempeno && <div style={{ fontSize: 11, marginTop: 2 }}><b>Indicador de desempeño:</b> {c.indicador_desempeno}</div>}
             </div>
           ))}
@@ -502,11 +504,17 @@ function UnidadCard({ unidad, institucion, materiaNombre, gradoId, onCambio }) {
   const [titulo, setTitulo] = useState(unidad.titulo);
   const [objetivo, setObjetivo] = useState(unidad.objetivo || "");
   const [contenido, setContenido] = useState(unidad.contenido || "");
+  const [problemaProyecto, setProblemaProyecto] = useState(unidad.problema_proyecto || "");
+  const [orientacionesEvaluacion, setOrientacionesEvaluacion] = useState(unidad.orientaciones_evaluacion || "");
   const [estado, setEstado] = useState(unidad.estado);
   const [imprimiendo, setImprimiendo] = useState(false);
 
   const guardar = async () => {
-    await api.editarPlaneacion(unidad.id, { titulo: titulo.trim(), objetivo: objetivo.trim() || null, contenido: contenido.trim() || null, estado });
+    await api.editarPlaneacion(unidad.id, {
+      titulo: titulo.trim(), objetivo: objetivo.trim() || null, contenido: contenido.trim() || null,
+      problema_proyecto: problemaProyecto.trim() || null, orientaciones_evaluacion: orientacionesEvaluacion.trim() || null,
+      estado,
+    });
     setEditando(false);
     onCambio();
   };
@@ -542,10 +550,28 @@ function UnidadCard({ unidad, institucion, materiaNombre, gradoId, onCambio }) {
 
       {editando ? (
         <div className="mt-2 space-y-2">
-          <input value={objetivo} onChange={(e) => setObjetivo(e.target.value)} placeholder="Objetivo de aprendizaje de la unidad"
-            className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-          <textarea value={contenido} onChange={(e) => setContenido(e.target.value)} rows={2} placeholder="Contenido / temas a desarrollar"
-            className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+          <div>
+            <label className="text-[10px] font-semibold text-slate-400 uppercase">Finalidad, propósitos u objetivos</label>
+            <input value={objetivo} onChange={(e) => setObjetivo(e.target.value)} placeholder="¿Qué se espera que logren los estudiantes?"
+              className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none mt-1" />
+          </div>
+          <div>
+            <label className="text-[10px] font-semibold text-slate-400 uppercase">Contenidos</label>
+            <textarea value={contenido} onChange={(e) => setContenido(e.target.value)} rows={2} placeholder="Contenido / temas a desarrollar"
+              className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none mt-1" />
+          </div>
+          <div>
+            <label className="text-[10px] font-semibold text-slate-400 uppercase">Problema, caso o proyecto (opcional)</label>
+            <textarea value={problemaProyecto} onChange={(e) => setProblemaProyecto(e.target.value)} rows={2}
+              placeholder="Situación real o problema que dará sentido a la secuencia (si aplica)"
+              className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none mt-1" />
+          </div>
+          <div>
+            <label className="text-[10px] font-semibold text-slate-400 uppercase">Orientaciones generales para la evaluación</label>
+            <textarea value={orientacionesEvaluacion} onChange={(e) => setOrientacionesEvaluacion(e.target.value)} rows={2}
+              placeholder="Criterios de valoración del portafolio de evidencias; lineamientos para exámenes, etc."
+              className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none mt-1" />
+          </div>
           <div className="flex items-center gap-2">
             <select value={estado} onChange={(e) => setEstado(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none">
               <option value="borrador">Borrador</option>
@@ -556,8 +582,14 @@ function UnidadCard({ unidad, institucion, materiaNombre, gradoId, onCambio }) {
         </div>
       ) : (
         <>
-          {unidad.objetivo && <p className="text-xs text-slate-500 mt-1"><b>Objetivo:</b> {unidad.objetivo}</p>}
-          {unidad.contenido && <p className="text-xs text-slate-500 mt-1 whitespace-pre-line">{unidad.contenido}</p>}
+          {unidad.objetivo && <p className="text-xs text-slate-500 mt-1"><b>Finalidad/objetivo:</b> {unidad.objetivo}</p>}
+          {unidad.contenido && <p className="text-xs text-slate-500 mt-1 whitespace-pre-line"><b>Contenidos:</b> {unidad.contenido}</p>}
+          {unidad.problema_proyecto && (
+            <p className="text-xs text-slate-500 mt-1 whitespace-pre-line bg-violet-50 rounded-lg p-2"><b>Problema/proyecto:</b> {unidad.problema_proyecto}</p>
+          )}
+          {unidad.orientaciones_evaluacion && (
+            <p className="text-xs text-slate-500 mt-1 whitespace-pre-line bg-blue-50 rounded-lg p-2"><b>Evaluación:</b> {unidad.orientaciones_evaluacion}</p>
+          )}
         </>
       )}
 
