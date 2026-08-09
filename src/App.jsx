@@ -646,6 +646,7 @@ const MENU_CODICE = [
   { key: "proyectos", label: "Proyectos", icono: "📜" },
   { key: "forja", label: "Forja", icono: "🔨" },
   { key: "codice", label: "Códice", icono: "📖" },
+  { key: "notas", label: "Notas", icono: "📝" },
   { key: "ranking", label: "Ranking", icono: "🏆" },
   { key: "recompensas", label: "Recompensas", icono: "🎁" },
   { key: "perfil", label: "Perfil", icono: "👤" },
@@ -763,7 +764,7 @@ function PortalEstudiante() {
             <ForjaEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />
           )}
 
-          {vista === "codice" && estudianteInfo && (
+          {(vista === "codice" || vista === "notas") && estudianteInfo && (
             <MisNotas estudianteId={estudianteInfo.id} />
           )}
 
