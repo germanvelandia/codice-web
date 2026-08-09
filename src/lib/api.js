@@ -931,6 +931,101 @@ export async function fetchRankingGrado(gradoId) {
     .sort((a, b) => b.xp - a.xp);
 }
 
+/* ---------------- Proyectos y Forja (tareas calificables con envío automático a Calificaciones) ---------------- */
+export async function fetchTareasCalificables(materiaId, gradoId, periodo, tipo) {
+  let query = supabase.from("tareas_calificables").select("*").eq("materia_id", materiaId).eq("grado_id", gradoId).eq("periodo", periodo);
+  if (tipo) query = query.eq("tipo", tipo);
+  const { data, error } = await query.order("creado_en", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearTareaCalificable(campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("tareas_calificables").insert({ ...campos, docente_id: userData?.user?.id || null }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function editarTareaCalificable(id, cambios) {
+  const { error } = await supabase.from("tareas_calificables").update(cambios).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarTareaCalificable(id) {
+  const { error } = await supabase.from("tareas_calificables").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function fetchEntregasDeTarea(tareaId) {
+  const [entregasRes, estudiantesRes] = await Promise.all([
+    supabase.from("tarea_entregas").select("*").eq("tarea_id", tareaId),
+    supabase.from("estudiantes").select("id, nombre"),
+  ]);
+  if (entregasRes.error) throw entregasRes.error;
+  if (estudiantesRes.error) throw estudiantesRes.error;
+  const nombrePorId = {}; (estudiantesRes.data || []).forEach((e) => { nombrePorId[e.id] = e.nombre; });
+  return (entregasRes.data || []).map((e) => ({ ...e, estudiante_nombre: nombrePorId[e.estudiante_id] || `Estudiante ${e.estudiante_id}` }));
+}
+
+// Califica la entrega de un estudiante Y manda esa nota directo a la Planilla
+// de Calificaciones (crea o reutiliza la columna/actividad correspondiente).
+export async function calificarTarea(tarea, estudianteId, nota, comentario) {
+  const { error: e1 } = await supabase.from("tarea_entregas").upsert(
+    { tarea_id: tarea.id, estudiante_id: estudianteId, estado: "calificado", nota, comentario: comentario || null, fecha_calificacion: new Date().toISOString() },
+    { onConflict: "tarea_id,estudiante_id" }
+  );
+  if (e1) throw e1;
+
+  if (tarea.categoria_id) {
+    const existentes = await fetchActividades(tarea.materia_id, tarea.grado_id, tarea.periodo);
+    let actividad = existentes.find((a) => a.nombre === tarea.titulo);
+    if (!actividad) {
+      actividad = await crearActividad({
+        nombre: tarea.titulo, categoria_id: tarea.categoria_id, materia_id: tarea.materia_id,
+        grado_id: tarea.grado_id, periodo: tarea.periodo, es_automatica: false,
+      });
+    }
+    await setValor(actividad.id, estudianteId, nota);
+  }
+}
+
+// Lado estudiante
+export async function fetchTareasCalificablesEstudiante(gradoId, tipo) {
+  const { data, error } = await supabase.from("tareas_calificables").select("*, materias(nombre)").eq("grado_id", gradoId).eq("tipo", tipo).order("fecha_entrega");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function fetchMiEntrega(tareaId, estudianteId) {
+  const { data, error } = await supabase.from("tarea_entregas").select("*").eq("tarea_id", tareaId).eq("estudiante_id", estudianteId).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+// Tareas del banco de Planeaciones (con rúbrica) asignadas al grado del estudiante,
+// para mostrarlas también dentro de "Proyectos" como referencia.
+export async function fetchTareasPlaneacionParaGrado(gradoId) {
+  const { data: unidades, error: e1 } = await supabase.from("planeaciones").select("id, titulo, materia_id, materias(nombre)").eq("grado_id", gradoId).eq("tipo", "unidad");
+  if (e1) throw e1;
+  const unidadIds = (unidades || []).map((u) => u.id);
+  if (unidadIds.length === 0) return [];
+  const unidadPorId = {}; (unidades || []).forEach((u) => { unidadPorId[u.id] = u; });
+
+  const { data: clases, error: e2 } = await supabase.from("planeaciones").select("id, unidad_id").in("unidad_id", unidadIds).eq("tipo", "clase");
+  if (e2) throw e2;
+  const planeacionIds = [...unidadIds, ...(clases || []).map((c) => c.id)];
+  const unidadDeClase = {}; (clases || []).forEach((c) => { unidadDeClase[c.id] = c.unidad_id; });
+
+  const { data: tareas, error: e3 } = await supabase.from("planeacion_tareas").select("*").in("planeacion_id", planeacionIds);
+  if (e3) throw e3;
+  return (tareas || []).map((t) => {
+    const unidadId = unidadDeClase[t.planeacion_id] || t.planeacion_id;
+    const u = unidadPorId[unidadId];
+    return { ...t, materia_nombre: u?.materias?.nombre || "", unidad_titulo: u?.titulo || "" };
+  });
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
