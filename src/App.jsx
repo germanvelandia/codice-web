@@ -524,12 +524,90 @@ function EvaluacionesEstudiante({ estudianteId, gradoId }) {
   );
 }
 
+function RankingEstudiante({ estudianteId, gradoId }) {
+  const [ranking, setRanking] = useState([]);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => { api.fetchRankingGrado(gradoId).then((r) => { setRanking(r); setCargando(false); }); }, [gradoId]);
+
+  if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
+
+  const medalla = (i) => i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`;
+
+  return (
+    <div>
+      <h3 className="font-bold text-slate-800 mb-1">🏆 Ranking de tu grado</h3>
+      <p className="text-xs text-slate-400 mb-3">Ordenado por experiencia (XP) acumulada.</p>
+      <div className="space-y-1.5">
+        {ranking.map((r, i) => (
+          <div key={r.id} className={`flex items-center justify-between px-3 py-2 rounded-xl ${r.id === estudianteId ? "bg-violet-100 border border-violet-300" : "bg-slate-50"}`}>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-sm w-6 text-center shrink-0">{medalla(i)}</span>
+              <span className={`text-xs truncate ${r.id === estudianteId ? "font-bold text-violet-700" : "text-slate-700"}`}>{r.nombre}{r.id === estudianteId ? " (vos)" : ""}</span>
+            </div>
+            <span className="text-xs font-semibold text-slate-500 shrink-0">{r.xp} XP</span>
+          </div>
+        ))}
+        {ranking.length === 0 && <p className="text-xs text-slate-400">Todavía no hay datos de XP en tu grado.</p>}
+      </div>
+    </div>
+  );
+}
+
+function ProximamentePanel({ nombre }) {
+  return (
+    <div className="text-center py-8">
+      <div className="text-4xl mb-2">🔒</div>
+      <p className="text-sm font-semibold text-slate-600">{nombre}</p>
+      <p className="text-xs text-slate-400 mt-1">Todavía no está disponible — próximamente.</p>
+    </div>
+  );
+}
+
+const MENU_CODICE = [
+  { key: "inicio", label: "Inicio", icono: "🏠" },
+  { key: "misiones", label: "Misiones", icono: "⚔️" },
+  { key: "proyectos", label: "Proyectos", icono: "📜" },
+  { key: "forja", label: "Forja", icono: "🔨" },
+  { key: "codice", label: "Códice", icono: "📖" },
+  { key: "ranking", label: "Ranking", icono: "🏆" },
+  { key: "recompensas", label: "Recompensas", icono: "🎁" },
+  { key: "perfil", label: "Perfil", icono: "👤" },
+];
+
+function MenuCodice({ activo, onCambiar }) {
+  return (
+    <div className="rounded-2xl overflow-hidden mb-4" style={{ background: "linear-gradient(180deg, #1e1b30 0%, #14101f 100%)", border: "2px solid #8B5CF6" }}>
+      <div className="text-center py-3" style={{ background: "linear-gradient(180deg, #2d2450 0%, #1e1b30 100%)", borderBottom: "2px solid #7c3aed55" }}>
+        <div className="text-2xl">🧭</div>
+        <div className="text-violet-200 text-xs font-bold tracking-[0.2em] mt-0.5" style={{ fontFamily: "Georgia, serif" }}>CÓDICE</div>
+      </div>
+      <div>
+        {MENU_CODICE.map((m) => (
+          <button key={m.key} onClick={() => onCambiar(m.key)}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors"
+            style={{
+              background: activo === m.key ? "rgba(139,92,246,0.25)" : "transparent",
+              borderLeft: activo === m.key ? "3px solid #C4B5FD" : "3px solid transparent",
+              borderBottom: "1px solid rgba(139,92,246,0.15)",
+            }}>
+            <span className="text-lg">{m.icono}</span>
+            <span className={`text-xs font-semibold tracking-wide uppercase ${activo === m.key ? "text-violet-100" : "text-violet-300/70"}`}>{m.label}</span>
+            {activo === m.key && <span className="ml-auto text-violet-300">›</span>}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function PortalEstudiante() {
   const [codigo, setCodigo] = useState("");
   const [datos, setDatos] = useState(null);
   const [estudianteInfo, setEstudianteInfo] = useState(null);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState("");
+  const [vista, setVista] = useState("inicio");
 
   const consultar = async () => {
     if (!codigo.trim()) return;
@@ -553,43 +631,83 @@ function PortalEstudiante() {
     const { level, next, pct } = nextLevel(datos.xp || 0);
     const totalAsis = Number(datos.total_asistencia) || 0;
     const pctAsis = totalAsis > 0 ? Math.round((Number(datos.presentes) / totalAsis) * 100) : null;
+
     return (
-      <div className="bg-white rounded-2xl shadow-lg p-6">
-        <div className="text-center mb-4">
-          <div className="text-lg font-bold text-slate-800">{datos.nombre}</div>
-          <div className="text-xs text-slate-400">Grado {datos.grado_id} · {datos.grupo}</div>
+      <div>
+        <MenuCodice activo={vista} onCambiar={setVista} />
+
+        <div className="bg-white rounded-2xl shadow-lg p-6">
+          {vista === "inicio" && (
+            <>
+              <div className="text-center mb-4">
+                <div className="text-lg font-bold text-slate-800">{datos.nombre}</div>
+                <div className="text-xs text-slate-400">Grado {datos.grado_id} · {datos.grupo}</div>
+              </div>
+              {estudianteInfo && <AvisoRendimiento estudianteId={estudianteInfo.id} />}
+              <div className="mb-3">
+                <div className="flex justify-between text-xs text-slate-500 mb-1">
+                  <span className="font-semibold text-violet-600">{level.name}</span>
+                  <span>{datos.xp}{next ? ` / ${next.min} XP` : " XP · nivel máximo"}</span>
+                </div>
+                <div className="h-2.5 rounded-full bg-violet-100 overflow-hidden">
+                  <div className="h-full rounded-full bg-gradient-to-r from-violet-400 to-violet-600" style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                <div className="bg-emerald-50 rounded-xl p-2 text-center">
+                  <div className="text-sm font-bold text-emerald-600">{datos.vida}</div>
+                  <div className="text-[10px] text-slate-400">Vida</div>
+                </div>
+                <div className="bg-amber-50 rounded-xl p-2 text-center">
+                  <div className="text-sm font-bold text-amber-600">{datos.monedas}</div>
+                  <div className="text-[10px] text-slate-400">Monedas</div>
+                </div>
+                <div className="bg-blue-50 rounded-xl p-2 text-center">
+                  <div className="text-sm font-bold text-blue-600">{pctAsis ?? "—"}{pctAsis !== null && "%"}</div>
+                  <div className="text-[10px] text-slate-400">Asistencia</div>
+                </div>
+              </div>
+              <div className="text-xs text-slate-500">
+                Presentes: {datos.presentes} · Retardos: {datos.retardos} · Faltas injustificadas: {datos.faltas_injustificadas} · Faltas justificadas: {datos.faltas_justificadas}
+              </div>
+            </>
+          )}
+
+          {vista === "misiones" && estudianteInfo && (
+            <EvaluacionesEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />
+          )}
+
+          {vista === "codice" && estudianteInfo && (
+            <MisNotas estudianteId={estudianteInfo.id} />
+          )}
+
+          {vista === "recompensas" && estudianteInfo && (
+            <BancoEstudiante estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} />
+          )}
+
+          {vista === "ranking" && estudianteInfo && (
+            <RankingEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />
+          )}
+
+          {vista === "perfil" && (
+            <div>
+              <h3 className="font-bold text-slate-800 mb-3">👤 Mi perfil</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-400">Nombre</span><span className="font-semibold text-slate-700">{datos.nombre}</span></div>
+                <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-400">Grado</span><span className="font-semibold text-slate-700">{datos.grado_id}</span></div>
+                <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-400">Grupo</span><span className="font-semibold text-slate-700">{datos.grupo}</span></div>
+                <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-400">Nivel</span><span className="font-semibold text-violet-600">{level.name}</span></div>
+                <div className="flex justify-between"><span className="text-slate-400">XP total</span><span className="font-semibold text-slate-700">{datos.xp}</span></div>
+              </div>
+            </div>
+          )}
+
+          {(vista === "proyectos" || vista === "forja" || vista === "mensajes") && (
+            <ProximamentePanel nombre={MENU_CODICE.find((m) => m.key === vista)?.label || ""} />
+          )}
+
+          <button onClick={() => { setDatos(null); setCodigo(""); setEstudianteInfo(null); setVista("inicio"); }} className="w-full text-xs text-violet-500 mt-4">← Consultar otro código</button>
         </div>
-        {estudianteInfo && <AvisoRendimiento estudianteId={estudianteInfo.id} />}
-        <div className="mb-3">
-          <div className="flex justify-between text-xs text-slate-500 mb-1">
-            <span className="font-semibold text-violet-600">{level.name}</span>
-            <span>{datos.xp}{next ? ` / ${next.min} XP` : " XP · nivel máximo"}</span>
-          </div>
-          <div className="h-2.5 rounded-full bg-violet-100 overflow-hidden">
-            <div className="h-full rounded-full bg-gradient-to-r from-violet-400 to-violet-600" style={{ width: `${pct}%` }} />
-          </div>
-        </div>
-        <div className="grid grid-cols-3 gap-2 mb-4">
-          <div className="bg-emerald-50 rounded-xl p-2 text-center">
-            <div className="text-sm font-bold text-emerald-600">{datos.vida}</div>
-            <div className="text-[10px] text-slate-400">Vida</div>
-          </div>
-          <div className="bg-amber-50 rounded-xl p-2 text-center">
-            <div className="text-sm font-bold text-amber-600">{datos.monedas}</div>
-            <div className="text-[10px] text-slate-400">Monedas</div>
-          </div>
-          <div className="bg-blue-50 rounded-xl p-2 text-center">
-            <div className="text-sm font-bold text-blue-600">{pctAsis ?? "—"}{pctAsis !== null && "%"}</div>
-            <div className="text-[10px] text-slate-400">Asistencia</div>
-          </div>
-        </div>
-        <div className="text-xs text-slate-500 mb-4">
-          Presentes: {datos.presentes} · Retardos: {datos.retardos} · Faltas injustificadas: {datos.faltas_injustificadas} · Faltas justificadas: {datos.faltas_justificadas}
-        </div>
-        {estudianteInfo && <MisNotas estudianteId={estudianteInfo.id} />}
-        {estudianteInfo && <BancoEstudiante estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} />}
-        {estudianteInfo && <EvaluacionesEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />}
-        <button onClick={() => { setDatos(null); setCodigo(""); setEstudianteInfo(null); }} className="w-full text-xs text-violet-500 mt-4">← Consultar otro código</button>
       </div>
     );
   }
