@@ -592,6 +592,11 @@ export async function eliminarEstandar(id) {
   if (error) throw error;
 }
 
+export async function editarEstandar(id, cambios) {
+  const { error } = await supabase.from("estandares").update(cambios).eq("id", id);
+  if (error) throw error;
+}
+
 export async function fetchEstandaresDePlaneacion(planeacionId) {
   const { data, error } = await supabase.from("planeacion_estandares").select("*, estandares(*)").eq("planeacion_id", planeacionId);
   if (error) throw error;
