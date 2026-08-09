@@ -122,6 +122,138 @@ export function VistaRuleta({ grados }) {
   );
 }
 
+const OPCIONES_MONEDAS_DEFAULT = [10, 5, 3, -3, -5, 0, 15, -10];
+
+export function VistaRuletaMonedas({ grados }) {
+  const [gradoId, setGradoId] = useState(grados[0]?.id || "");
+  const [reinoFiltro, setReinoFiltro] = useState("Todos");
+  const [estudiantes, setEstudiantes] = useState([]);
+  const [objetivo, setObjetivo] = useState("uno"); // "uno" | "todos"
+  const [estudianteId, setEstudianteId] = useState("");
+  const [opciones, setOpciones] = useState(OPCIONES_MONEDAS_DEFAULT);
+  const [rotation, setRotation] = useState(0);
+  const [spinning, setSpinning] = useState(false);
+  const [resultado, setResultado] = useState(null);
+  const [aplicando, setAplicando] = useState(false);
+
+  useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
+  useEffect(() => { if (gradoId) api.fetchEstudiantesPorGrado(gradoId).then(setEstudiantes); }, [gradoId]);
+  useEffect(() => { if (estudiantes.length && !estudianteId) setEstudianteId(estudiantes[0].id); }, [estudiantes]);
+
+  const reinos = useMemo(() => ["Todos", ...new Set(estudiantes.map((s) => s.reino_actual || s.reino_original || "Sin grupo"))], [estudiantes]);
+  const visibles = estudiantes.filter((s) => reinoFiltro === "Todos" || (s.reino_actual || s.reino_original) === reinoFiltro);
+
+  const n = Math.max(opciones.length, 1);
+  const sliceDeg = 360 / n;
+  const colorOpcion = (v) => v > 0 ? "#22C55E" : v < 0 ? "#EF4444" : "#94A3B8";
+  const colores = opciones.map(colorOpcion);
+  const gradient = `conic-gradient(${colores.map((c, i) => `${c} ${i * sliceDeg}deg ${(i + 1) * sliceDeg}deg`).join(",")})`;
+
+  const cambiarOpcion = (i, valor) => setOpciones((prev) => prev.map((o, idx) => idx === i ? (parseInt(valor, 10) || 0) : o));
+  const agregarOpcion = () => setOpciones((prev) => [...prev, 5]);
+  const quitarOpcion = (i) => setOpciones((prev) => prev.filter((_, idx) => idx !== i));
+
+  const spin = () => {
+    if (spinning || opciones.length < 2) return;
+    if (objetivo === "uno" && !estudianteId) return;
+    setSpinning(true);
+    setResultado(null);
+    const idx = Math.floor(Math.random() * opciones.length);
+    const vueltas = 6;
+    const anguloFinal = 360 * vueltas + (360 - (idx * sliceDeg + sliceDeg / 2));
+    setRotation((r) => r + anguloFinal);
+    beep(500, 0.05);
+    setTimeout(async () => {
+      setSpinning(false);
+      const valor = opciones[idx];
+      setResultado(valor);
+      beep(900, 0.2, 0.2);
+      setAplicando(true);
+      try {
+        if (objetivo === "uno") {
+          await api.ajustarMonedas(estudianteId, valor);
+        } else {
+          await api.ajustarMonedasMasivo(visibles.map((s) => s.id), valor);
+        }
+      } catch (e) {
+        alert("Error al aplicar las monedas: " + e.message);
+      }
+      setAplicando(false);
+    }, 4000);
+  };
+
+  return (
+    <div>
+      <h2 className="text-xl font-bold text-slate-800 mb-1">🪙 Ruleta de Monedas</h2>
+      <p className="text-sm text-slate-400 mb-4">Gira para dar (o quitar) monedas a un estudiante puntual, o a todo el grupo visible a la vez.</p>
+
+      <div className="flex flex-wrap gap-2 mb-4">
+        <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
+          {grados.map((g) => <option key={g.id} value={g.id}>Grado {g.id}</option>)}
+        </select>
+        <select value={reinoFiltro} onChange={(e) => setReinoFiltro(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
+          {reinos.map((r) => <option key={r} value={r}>{r === "Todos" ? "Todos los grupos" : r}</option>)}
+        </select>
+        <div className="flex gap-1 rounded-full bg-violet-50 p-1">
+          <button onClick={() => setObjetivo("uno")} className={`text-xs px-3 py-1.5 rounded-full ${objetivo === "uno" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Un estudiante</button>
+          <button onClick={() => setObjetivo("todos")} className={`text-xs px-3 py-1.5 rounded-full ${objetivo === "todos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Todos los visibles ({visibles.length})</button>
+        </div>
+        {objetivo === "uno" && (
+          <select value={estudianteId} onChange={(e) => setEstudianteId(parseInt(e.target.value, 10))} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
+            {visibles.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+          </select>
+        )}
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-100 p-3 mb-4">
+        <div className="text-xs font-semibold text-slate-500 mb-2">Casillas de la ruleta (monedas a dar o quitar)</div>
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {opciones.map((o, i) => (
+            <div key={i} className="flex items-center gap-1">
+              <input type="number" value={o} onChange={(e) => cambiarOpcion(i, e.target.value)}
+                className="w-16 text-xs text-center rounded-lg px-1 py-1 border border-slate-200 outline-none" style={{ color: colorOpcion(o) }} />
+              {opciones.length > 2 && <button onClick={() => quitarOpcion(i)} className="text-slate-300 hover:text-rose-500 text-xs">✕</button>}
+            </div>
+          ))}
+          <button onClick={agregarOpcion} className="text-xs text-violet-500 px-2">+ Casilla</button>
+        </div>
+      </div>
+
+      <div className="flex flex-col items-center gap-6">
+        <div className="relative" style={{ width: 260, height: 260 }}>
+          <div style={{ position: "absolute", top: -8, left: "50%", transform: "translateX(-50%)", zIndex: 2, width: 0, height: 0, borderLeft: "10px solid transparent", borderRight: "10px solid transparent", borderTop: "18px solid #8B5CF6" }} />
+          <div style={{
+            width: 260, height: 260, borderRadius: "50%", background: opciones.length > 1 ? gradient : "#EDE9FE",
+            border: "5px solid #8B5CF6", transform: `rotate(${rotation}deg)`,
+            transition: spinning ? "transform 4s cubic-bezier(0.15,0.75,0.15,1)" : "none", position: "relative",
+          }}>
+            {opciones.map((o, i) => {
+              const angle = i * sliceDeg + sliceDeg / 2;
+              return (
+                <div key={i} style={{ position: "absolute", top: "50%", left: "50%", width: 100, transformOrigin: "0 0", transform: `rotate(${angle}deg) translate(8px, -5px)` }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "#fff", textShadow: "0 1px 2px rgba(0,0,0,0.6)" }}>
+                    {o > 0 ? `+${o}` : o}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <button onClick={spin} disabled={spinning || aplicando || opciones.length < 2 || (objetivo === "uno" && !estudianteId)}
+          className="text-sm font-bold px-6 py-3 rounded-full bg-violet-500 text-white disabled:opacity-50">
+          {spinning ? "Girando…" : aplicando ? "Aplicando…" : "🪙 Girar la ruleta"}
+        </button>
+        {resultado !== null && !spinning && !aplicando && (
+          <div className={`text-lg font-bold px-6 py-3 rounded-2xl ${resultado >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+            {resultado > 0 ? `🎉 +${resultado} monedas` : resultado < 0 ? `😬 ${resultado} monedas` : "😐 Sin cambio"}
+            {" — "}{objetivo === "uno" ? (visibles.find((s) => s.id === estudianteId)?.nombre || "") : `${visibles.length} estudiantes`}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function VistaTemporizador() {
   const [seconds, setSeconds] = useState(300);
   const [running, setRunning] = useState(false);
