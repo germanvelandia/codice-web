@@ -101,8 +101,12 @@ export function VistaRuleta({ grados }) {
             {items.map((it, i) => {
               const angle = i * sliceDeg + sliceDeg / 2;
               return (
-                <div key={i} style={{ position: "absolute", top: "50%", left: "50%", width: 120, transformOrigin: "0 0", transform: `rotate(${angle}deg) translate(8px, -5px)` }}>
-                  <span style={{ fontSize: n > 20 ? 7 : n > 10 ? 9 : 11, color: "#fff", textShadow: "0 1px 2px rgba(0,0,0,0.6)" }}>
+                <div key={i} style={{ position: "absolute", top: "50%", left: "50%", width: "50%", height: 0, transform: `rotate(${angle}deg)`, transformOrigin: "0 0" }}>
+                  <span style={{
+                    position: "absolute", right: 14, top: -8,
+                    display: "inline-block", maxWidth: 90, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                    fontSize: n > 20 ? 8 : n > 10 ? 10 : 12, fontWeight: 600, color: "#fff", textShadow: "0 1px 3px rgba(0,0,0,0.7)",
+                  }}>
                     {it.length > 16 ? it.slice(0, 15) + "…" : it}
                   </span>
                 </div>
@@ -230,8 +234,11 @@ export function VistaRuletaMonedas({ grados }) {
             {opciones.map((o, i) => {
               const angle = i * sliceDeg + sliceDeg / 2;
               return (
-                <div key={i} style={{ position: "absolute", top: "50%", left: "50%", width: 100, transformOrigin: "0 0", transform: `rotate(${angle}deg) translate(8px, -5px)` }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: "#fff", textShadow: "0 1px 2px rgba(0,0,0,0.6)" }}>
+                <div key={i} style={{ position: "absolute", top: "50%", left: "50%", width: "50%", height: 0, transform: `rotate(${angle}deg)`, transformOrigin: "0 0" }}>
+                  <span style={{
+                    position: "absolute", right: 16, top: -10,
+                    display: "inline-block", fontSize: 14, fontWeight: 700, color: "#fff", textShadow: "0 1px 3px rgba(0,0,0,0.7)",
+                  }}>
                     {o > 0 ? `+${o}` : o}
                   </span>
                 </div>
