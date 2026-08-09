@@ -879,7 +879,7 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
       <div className="hidden md:flex md:flex-col md:w-60 md:shrink-0 md:h-screen md:sticky md:top-0"
         style={{ background: "linear-gradient(180deg, #1e1b30 0%, #14101f 100%)", borderRight: "2px solid #8B5CF6" }}>
         <button onClick={() => onCambiar("inicio")} className="text-center py-5" style={{ background: "linear-gradient(180deg, #2d2450 0%, #1e1b30 100%)", borderBottom: "2px solid #7c3aed55" }}>
-          {institucion?.logo_url ? (
+          {institucion?.imagen_menu_url ? (
             <img src={institucion.logo_url} alt="Logo" className="mx-auto rounded-xl object-cover" style={{ width: 56, height: 56 }} />
           ) : (
             <div className="text-2xl">🧭</div>
@@ -911,7 +911,7 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
       <div className="md:hidden" style={{ background: "linear-gradient(180deg, #1e1b30 0%, #14101f 100%)" }}>
         <div className="flex items-center justify-between px-4 py-3">
           <button onClick={() => onCambiar("inicio")} className="flex items-center gap-2">
-            {institucion?.logo_url ? (
+            {institucion?.imagen_menu_url ? (
               <img src={institucion.logo_url} alt="Logo" className="rounded-lg object-cover" style={{ width: 24, height: 24 }} />
             ) : (
               <span className="text-lg">🧭</span>
