@@ -95,9 +95,13 @@ function RecursosLista({ planeacionId }) {
 
   const agregar = async () => {
     if (!url.trim()) return;
-    await api.crearRecurso(planeacionId, url, titulo);
-    setUrl(""); setTitulo(""); setAgregando(false);
-    cargar();
+    try {
+      await api.crearRecurso(planeacionId, url, titulo);
+      setUrl(""); setTitulo(""); setAgregando(false);
+      cargar();
+    } catch (e) {
+      alert("Error al agregar el recurso: " + e.message);
+    }
   };
 
   const quitar = async (id) => { await api.eliminarRecurso(id); cargar(); };
@@ -218,9 +222,13 @@ function TareasLista({ planeacionId }) {
 
   const agregar = async () => {
     if (!titulo.trim()) return;
-    await api.crearTarea({ planeacion_id: planeacionId, titulo: titulo.trim(), tipo, fecha_entrega: fechaEntrega || null });
-    setTitulo(""); setFechaEntrega(""); setAgregando(false);
-    cargar();
+    try {
+      await api.crearTarea({ planeacion_id: planeacionId, titulo: titulo.trim(), tipo, fecha_entrega: fechaEntrega || null });
+      setTitulo(""); setFechaEntrega(""); setAgregando(false);
+      cargar();
+    } catch (e) {
+      alert("Error al agregar la tarea: " + e.message);
+    }
   };
 
   const quitar = async (id) => { if (!confirm("¿Eliminar esta tarea?")) return; await api.eliminarTarea(id); cargar(); };
@@ -284,14 +292,18 @@ function ClasesLista({ unidadId }) {
 
   const agregar = async () => {
     if (!titulo.trim()) return;
-    await api.crearPlaneacion({
-      tipo: "clase", unidad_id: unidadId, titulo: titulo.trim(), fecha: fecha || null, orden: clases.length,
-      duracion_minutos: duracion ? parseInt(duracion, 10) : null,
-      momento_inicio: inicio.trim() || null, momento_desarrollo: desarrollo.trim() || null, momento_cierre: cierre.trim() || null,
-      indicador_desempeno: indicador.trim() || null,
-    });
-    limpiar();
-    cargar();
+    try {
+      await api.crearPlaneacion({
+        tipo: "clase", unidad_id: unidadId, titulo: titulo.trim(), fecha: fecha || null, orden: clases.length,
+        duracion_minutos: duracion ? parseInt(duracion, 10) : null,
+        momento_inicio: inicio.trim() || null, momento_desarrollo: desarrollo.trim() || null, momento_cierre: cierre.trim() || null,
+        indicador_desempeno: indicador.trim() || null,
+      });
+      limpiar();
+      cargar();
+    } catch (e) {
+      alert("Error al guardar la clase: " + e.message);
+    }
   };
 
   const quitar = async (id) => { if (!confirm("¿Eliminar esta clase?")) return; await api.eliminarPlaneacion(id); cargar(); };
