@@ -243,219 +243,6 @@ function ActividadModal({ materiaId, gradoId, periodo, categorias, editar, onClo
   );
 }
 
-// Normaliza texto para comparar nombres sin importar mayúsculas/acentos
-function normalizaTexto(s) {
-  return (s || "").toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-}
-// Quita el "(35%)" del final de una fila tipo "Cognitivo (35%)" para comparar solo el nombre
-function limpiaNombreCategoria(s) {
-  return normalizaTexto(s).replace(/\(.*?%\)\s*$/, "").trim();
-}
-
-function ImportarPorCategoriasModal({ materiaId, gradoId, periodo, categorias, estudiantes, onClose, onImportado }) {
-  const [paso, setPaso] = useState(1);
-  const [texto, setTexto] = useState("");
-  const [alumnosCol, setAlumnosCol] = useState([]);
-  const [items, setItems] = useState([]);
-  const [procesandoArchivo, setProcesandoArchivo] = useState(false);
-  const [importando, setImportando] = useState(false);
-  const [progresoTexto, setProgresoTexto] = useState("");
-  const [resultado, setResultado] = useState(null);
-
-  const matchCategoria = (nombreFila) => {
-    const limpio = limpiaNombreCategoria(nombreFila);
-    return categorias.find((c) => limpiaNombreCategoria(c.nombre) === limpio);
-  };
-  const esFilaTotal = (nombreFila) => /total|acumulad/i.test(nombreFila);
-
-  const procesarFilas = (arr) => {
-    if (arr.length < 2) { alert("No se encontraron suficientes filas."); return; }
-    const header = arr[0].map((h) => String(h || "").trim());
-    const nombresAlumnos = header.slice(1).filter(Boolean);
-    setAlumnosCol(nombresAlumnos);
-
-    const filasDatos = arr.slice(1).filter((r) => r.length > 0 && r.some((c) => c !== "" && c !== undefined));
-    const resultadoItems = [];
-    let pendientes = [];
-
-    filasDatos.forEach((fila) => {
-      const nombre = String(fila[0] || "").trim();
-      if (!nombre) return;
-      if (esFilaTotal(nombre)) return; // se omite (ej: "Ética total (acumulado)")
-
-      const cat = matchCategoria(nombre);
-      if (cat) {
-        // Fila de subtotal (ej: "Cognitivo (35%)") — asigna esa categoría a las
-        // actividades acumuladas desde el último subtotal, y no se importa como nota.
-        pendientes.forEach((p) => { p.categoriaId = cat.id; });
-        resultadoItems.push(...pendientes);
-        pendientes = [];
-        return;
-      }
-
-      const valores = {};
-      nombresAlumnos.forEach((_, i) => {
-        const txt = String(fila[i + 1] ?? "").trim();
-        if (txt === "" || txt === "—" || txt === "-") return;
-        const num = parseFloat(txt.replace(",", "."));
-        if (!isNaN(num)) valores[i] = num;
-      });
-      pendientes.push({ nombre, valores, categoriaId: null, incluir: true });
-    });
-    resultadoItems.push(...pendientes);
-
-    setItems(resultadoItems);
-    setPaso(2);
-  };
-
-  const procesarPegado = () => {
-    const lineas = texto.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-    const arr = lineas.map((l) => l.split(/\t/).map((x) => x.trim()));
-    procesarFilas(arr);
-  };
-
-  const procesarArchivo = (file) => {
-    setProcesandoArchivo(true);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setTimeout(() => {
-        try {
-          const wb = XLSX.read(e.target.result, { type: "binary" });
-          const hoja = wb.Sheets[wb.SheetNames[0]];
-          const arr = XLSX.utils.sheet_to_json(hoja, { header: 1 });
-          procesarFilas(arr);
-        } catch (err) {
-          alert("No se pudo leer el archivo.");
-        }
-        setProcesandoArchivo(false);
-      }, 50);
-    };
-    reader.readAsBinaryString(file);
-  };
-
-  const cambiarCategoria = (idx, categoriaId) => setItems((prev) => prev.map((it, i) => i === idx ? { ...it, categoriaId: categoriaId || null } : it));
-  const toggleIncluir = (idx) => setItems((prev) => prev.map((it, i) => i === idx ? { ...it, incluir: !it.incluir } : it));
-
-  const itemsIncluidos = items.filter((it) => it.incluir);
-
-  const importar = async () => {
-    const sinCategoria = itemsIncluidos.filter((it) => !it.categoriaId);
-    if (sinCategoria.length > 0) { alert(`Hay ${sinCategoria.length} actividad(es) sin categoría asignada. Elegí una para cada una (o desmarcalas para omitirlas).`); return; }
-    setImportando(true);
-    const encontrados = new Set();
-    const noEncontrados = new Set();
-    try {
-      let i = 0;
-      for (const it of itemsIncluidos) {
-        i++;
-        setProgresoTexto(`Creando "${it.nombre}"… (${i} / ${itemsIncluidos.length})`);
-        const act = await api.crearActividad({ nombre: it.nombre, categoria_id: it.categoriaId, materia_id: materiaId, grado_id: gradoId, periodo, es_automatica: false });
-        for (const [colIdx, valor] of Object.entries(it.valores)) {
-          const nombreAlumno = alumnosCol[parseInt(colIdx, 10)];
-          const estudiante = buscarEstudiantePorNombre(nombreAlumno, estudiantes);
-          if (!estudiante) { noEncontrados.add(nombreAlumno); continue; }
-          encontrados.add(nombreAlumno);
-          await api.setValor(act.id, estudiante.id, valor);
-        }
-      }
-      setResultado({ actividades: itemsIncluidos.length, importados: encontrados.size, noEncontrados: [...noEncontrados] });
-    } catch (e) {
-      alert("Error al importar: " + e.message);
-    }
-    setImportando(false);
-    setProgresoTexto("");
-  };
-
-  return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-3xl max-h-[85vh] overflow-y-auto shadow-xl">
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="font-bold text-slate-800">Importar tabla por categorías</h3>
-          <button onClick={onClose} className="text-slate-400">✕</button>
-        </div>
-
-        {resultado ? (
-          <div>
-            <p className="text-sm text-emerald-600 mb-2">
-              ✔️ Se crearon {resultado.actividades} columna{resultado.actividades === 1 ? "" : "s"} con notas para {resultado.importados} estudiante{resultado.importados === 1 ? "" : "s"}.
-            </p>
-            {resultado.noEncontrados.length > 0 && (
-              <div className="bg-amber-50 rounded-lg p-3 mb-3">
-                <p className="text-xs text-amber-700 font-semibold mb-1">No se encontraron en el grado (verifica el nombre o agrégalos manualmente):</p>
-                <ul className="text-xs text-amber-700 list-disc list-inside">
-                  {resultado.noEncontrados.map((n) => <li key={n}>{n}</li>)}
-                </ul>
-              </div>
-            )}
-            <button onClick={() => { onImportado(); onClose(); }} className="w-full text-sm font-semibold py-2 rounded-lg bg-violet-500 text-white">Listo</button>
-          </div>
-        ) : paso === 1 ? (
-          <div>
-            <p className="text-xs text-slate-500 mb-3">
-              Pensado para tablas con las <b>actividades como filas</b> y los <b>estudiantes como columnas</b>, con filas de subtotal
-              tipo "Cognitivo (35%)" entre medio — esas filas no se importan como nota; solo se usan para saber a qué categoría
-              pertenecen las actividades de arriba. Las filas de "total" o "acumulado" también se omiten automáticamente.
-            </p>
-            <div className="text-xs uppercase tracking-wide text-slate-400 mb-1.5">Opción 1 — Pegar tabla (copiada desde Excel, con tabulaciones)</div>
-            <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={8}
-              placeholder={"Actividad\tJ.E. Herrera\tDiego Sastre\nMisión 01: Sello de la Sabiduría\t5\t1\nCognitivo (35%)\t3.45\t2.87"}
-              className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none font-mono" />
-            <button onClick={procesarPegado} className="w-full text-sm font-semibold py-2 rounded-lg bg-violet-500 text-white mb-4">Continuar</button>
-            <div className="text-xs uppercase tracking-wide text-slate-400 mb-1.5">Opción 2 — Subir archivo (.xlsx / .csv)</div>
-            <input type="file" accept=".xlsx,.xls,.csv" disabled={procesandoArchivo} onChange={(e) => { if (e.target.files[0]) procesarArchivo(e.target.files[0]); }} className="text-sm disabled:opacity-40" />
-            {procesandoArchivo && <p className="text-xs text-violet-600 mt-2">⏳ Procesando el archivo, un momento…</p>}
-          </div>
-        ) : (
-          <div>
-            <p className="text-sm text-slate-600 mb-3">
-              Se detectaron {items.length} actividad{items.length === 1 ? "" : "es"}. Revisá la categoría de cada una (ya se completaron solas las que tenían un subtotal debajo) y desmarcá las que no quieras importar.
-            </p>
-            <div className="border border-slate-100 rounded-xl overflow-hidden mb-3">
-              <table className="w-full text-xs">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="text-left px-3 py-2">Incluir</th>
-                    <th className="text-left px-3 py-2">Actividad</th>
-                    <th className="text-left px-3 py-2">Categoría</th>
-                    <th className="text-left px-3 py-2">Notas detectadas</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((it, idx) => (
-                    <tr key={idx} className={`border-t border-slate-100 ${!it.categoriaId && it.incluir ? "bg-amber-50" : ""}`}>
-                      <td className="px-3 py-2">
-                        <input type="checkbox" checked={it.incluir} onChange={() => toggleIncluir(idx)} />
-                      </td>
-                      <td className="px-3 py-2 font-medium text-slate-700">{it.nombre}</td>
-                      <td className="px-3 py-2">
-                        <select value={it.categoriaId || ""} disabled={!it.incluir} onChange={(e) => cambiarCategoria(idx, parseInt(e.target.value, 10) || null)}
-                          className="text-xs rounded-lg px-2 py-1 border border-slate-200 outline-none disabled:opacity-40">
-                          <option value="">— Elegí una —</option>
-                          {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                        </select>
-                      </td>
-                      <td className="px-3 py-2 text-slate-400">{Object.keys(it.valores).length} de {alumnosCol.length}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {importando && <p className="text-xs text-violet-600 mb-2">{progresoTexto}</p>}
-
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setPaso(1)} className="text-xs text-slate-500 px-3 py-2">← Volver</button>
-              <button disabled={importando || itemsIncluidos.length === 0} onClick={importar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
-                {importando ? "Importando…" : `Importar ${itemsIncluidos.length} actividad(es)`}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function ImportarMoodleModal({ materiaId, gradoId, periodo, categorias, periodos, estudiantes, onClose, onImportado }) {
   const [paso, setPaso] = useState(1);
   const [texto, setTexto] = useState("");
@@ -987,7 +774,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
   const [editandoFinal, setEditandoFinal] = useState(null); // estudianteId
   const [valorFinalTemp, setValorFinalTemp] = useState("");
   const [copiarColumnasAbierto, setCopiarColumnasAbierto] = useState(false);
-  const [importarCategoriasAbierto, setImportarCategoriasAbierto] = useState(false);
+  const [menuHerramientasAbierto, setMenuHerramientasAbierto] = useState(false);
 
   const cargar = async () => {
     setCargando(true);
@@ -1115,21 +902,21 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
-        <select value={reinoFiltro} onChange={(e) => setReinoFiltro(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
-          {reinos.map((r) => <option key={r} value={r}>{r === "Todos" ? "Todos los grupos" : r}</option>)}
-        </select>
-        <button onClick={() => setSoloPerdiendo((v) => !v)}
-          className={`text-xs font-semibold px-3 py-2 rounded-full border ${soloPerdiendo ? "bg-rose-500 text-white border-rose-500" : "border-rose-200 text-rose-600"}`}>
-          🔴 {soloPerdiendo ? "Viendo solo quienes van perdiendo" : "Ver solo quienes van perdiendo"}
-        </button>
-        <div className="text-sm text-slate-500">{actividades.length} actividad{actividades.length === 1 ? "" : "es"} · {estudiantesVisibles.length} estudiante{estudiantesVisibles.length === 1 ? "" : "s"}</div>
-        <div className="flex gap-2 flex-wrap">
-          <button onClick={() => setNotaMasivaAbierta(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🖊 Nota masiva</button>
-          <button onClick={() => setCopiarColumnasAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">📑 Copiar columnas de otra materia</button>
-          <button onClick={() => setImportarMoodleAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700">📥 Importar de Moodle/Excel</button>
-          <button onClick={() => setImportarCategoriasAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700">📊 Importar tabla por categorías</button>
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 mb-3">
+        <div className="flex flex-wrap items-center gap-2 mb-2">
+          <select value={reinoFiltro} onChange={(e) => setReinoFiltro(e.target.value)} className="text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none">
+            {reinos.map((r) => <option key={r} value={r}>{r === "Todos" ? "Todos los grupos" : r}</option>)}
+          </select>
+          <button onClick={() => setSoloPerdiendo((v) => !v)}
+            className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${soloPerdiendo ? "bg-rose-500 text-white border-rose-500" : "border-rose-200 text-rose-600"}`}>
+            🔴 {soloPerdiendo ? "Viendo solo quienes van perdiendo" : "Ver solo quienes van perdiendo"}
+          </button>
+          <div className="text-xs text-slate-400 ml-auto">{actividades.length} actividad{actividades.length === 1 ? "" : "es"} · {estudiantesVisibles.length} estudiante{estudiantesVisibles.length === 1 ? "" : "s"}</div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
           <button onClick={() => { setActividadEditar(null); setModalAbierto(true); }} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">+ Nueva actividad</button>
+          <button onClick={() => setNotaMasivaAbierta(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🖊 Nota masiva</button>
+
           {seleccionando ? (
             <>
               <button onClick={eliminarSeleccionadas} disabled={seleccionadas.length === 0}
@@ -1139,7 +926,20 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
               <button onClick={() => { setSeleccionando(false); setSeleccionadas([]); }} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">Cancelar</button>
             </>
           ) : (
-            <button onClick={() => setSeleccionando(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-rose-200 text-rose-600">🗑 Borrar varias columnas</button>
+            <div className="relative">
+              <button onClick={() => setMenuHerramientasAbierto((v) => !v)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">⋯ Más acciones</button>
+              {menuHerramientasAbierto && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setMenuHerramientasAbierto(false)} />
+                  <div className="absolute left-0 top-full mt-1 bg-white rounded-xl shadow-lg border border-slate-100 py-1 w-64 z-20">
+                    <button onClick={() => { setMenuHerramientasAbierto(false); setCopiarColumnasAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📑 Copiar columnas de otra materia</button>
+                    <button onClick={() => { setMenuHerramientasAbierto(false); setImportarMoodleAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📥 Importar de Moodle/Excel</button>
+                    <div className="border-t border-slate-100 my-1" />
+                    <button onClick={() => { setMenuHerramientasAbierto(false); setSeleccionando(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-rose-50 text-rose-500">🗑 Borrar varias columnas</button>
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -1243,10 +1043,6 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
       {importarMoodleAbierto && (
         <ImportarMoodleModal materiaId={materiaId} gradoId={gradoId} periodo={periodo} categorias={categorias} periodos={periodosDe(config)} estudiantes={estudiantes}
           onClose={() => setImportarMoodleAbierto(false)} onImportado={cargar} />
-      )}
-      {importarCategoriasAbierto && (
-        <ImportarPorCategoriasModal materiaId={materiaId} gradoId={gradoId} periodo={periodo} categorias={categorias} estudiantes={estudiantes}
-          onClose={() => setImportarCategoriasAbierto(false)} onImportado={cargar} />
       )}
       {notaMasivaAbierta && (
         <NotaMasivaModal actividades={actividades} estudiantesVisibles={estudiantesVisibles} reinoFiltro={reinoFiltro} valorDeActividad={valorDeActividad}
