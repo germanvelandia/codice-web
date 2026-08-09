@@ -14,6 +14,7 @@ import { VistaHorario } from "./screens/Horario";
 import { VistaPlaneaciones } from "./screens/Planeaciones";
 import { VistaEvaluaciones } from "./screens/Evaluaciones";
 import { VistaProyectosForja } from "./screens/TareasCalificables";
+import { VistaInicio } from "./screens/Inicio";
 import { InstitucionModal } from "./screens/Institucion";
 import { AdministracionModal } from "./screens/Administracion";
 
@@ -857,8 +858,79 @@ function LoginScreen() {
   );
 }
 
+const MENU_PANEL = [
+  { key: "inicio", label: "Inicio", icono: "🏠" },
+  { key: "estudiantes", label: "Estudiantes", icono: "🏰" },
+  { key: "asistencia", label: "Asistencia", icono: "📋" },
+  { key: "calificaciones", label: "Códice", icono: "📖" },
+  { key: "evaluaciones", label: "Misiones", icono: "⚔️" },
+  { key: "proyectosforja", label: "La Forja", icono: "🔨" },
+  { key: "planeaciones", label: "Biblioteca", icono: "📚" },
+  { key: "horario", label: "Agenda", icono: "🗓️" },
+  { key: "herramientas", label: "Herramientas", icono: "🛠️" },
+  { key: "roles", label: "Roles", icono: "🎭" },
+  { key: "reportes", label: "Reportes", icono: "📊" },
+];
+
+function SidebarPanel({ activo, onCambiar, email, onAdmin, onInstitucion, onSalir }) {
+  return (
+    <>
+      {/* Escritorio: barra lateral fija */}
+      <div className="hidden md:flex md:flex-col md:w-60 md:shrink-0 md:h-screen md:sticky md:top-0"
+        style={{ background: "linear-gradient(180deg, #1e1b30 0%, #14101f 100%)", borderRight: "2px solid #8B5CF6" }}>
+        <button onClick={() => onCambiar("inicio")} className="text-center py-5" style={{ background: "linear-gradient(180deg, #2d2450 0%, #1e1b30 100%)", borderBottom: "2px solid #7c3aed55" }}>
+          <div className="text-2xl">🧭</div>
+          <div className="text-violet-200 text-sm font-bold tracking-[0.2em] mt-0.5" style={{ fontFamily: "Georgia, serif" }}>CÓDICE</div>
+        </button>
+        <div className="flex-1 overflow-y-auto py-2">
+          {MENU_PANEL.map((m) => (
+            <button key={m.key} onClick={() => onCambiar(m.key)}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors"
+              style={{
+                background: activo === m.key ? "rgba(139,92,246,0.25)" : "transparent",
+                borderLeft: activo === m.key ? "3px solid #C4B5FD" : "3px solid transparent",
+              }}>
+              <span className="text-base">{m.icono}</span>
+              <span className={`text-xs font-semibold tracking-wide ${activo === m.key ? "text-violet-100" : "text-violet-300/70"}`}>{m.label}</span>
+            </button>
+          ))}
+        </div>
+        <div className="p-3 border-t border-violet-900/60 space-y-1.5">
+          <button onClick={onAdmin} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-violet-300/80 hover:bg-white/5 text-xs"><span>👤</span> Docentes y mi cuenta</button>
+          <button onClick={onInstitucion} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-violet-300/80 hover:bg-white/5 text-xs"><span>⚙️</span> Institución</button>
+          <button onClick={onSalir} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-violet-300/80 hover:bg-white/5 text-xs"><span>🚪</span> Cerrar sesión</button>
+          <div className="text-[10px] text-violet-400/60 px-2 pt-1 truncate">{email}</div>
+        </div>
+      </div>
+
+      {/* Móvil: barra superior con scroll horizontal */}
+      <div className="md:hidden" style={{ background: "linear-gradient(180deg, #1e1b30 0%, #14101f 100%)" }}>
+        <div className="flex items-center justify-between px-4 py-3">
+          <button onClick={() => onCambiar("inicio")} className="flex items-center gap-2">
+            <span className="text-lg">🧭</span>
+            <span className="text-violet-200 text-sm font-bold tracking-[0.15em]" style={{ fontFamily: "Georgia, serif" }}>CÓDICE</span>
+          </button>
+          <div className="flex items-center gap-3">
+            <button onClick={onAdmin} className="text-base">👤</button>
+            <button onClick={onInstitucion} className="text-base">⚙️</button>
+          </div>
+        </div>
+        <div className="flex gap-1 overflow-x-auto px-2 pb-2">
+          {MENU_PANEL.map((m) => (
+            <button key={m.key} onClick={() => onCambiar(m.key)}
+              className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap shrink-0"
+              style={{ background: activo === m.key ? "rgba(139,92,246,0.35)" : "transparent", color: activo === m.key ? "#EDE9FE" : "#A78BFA" }}>
+              {m.icono} {m.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
 function Panel({ session }) {
-  const [tab, setTab] = useState("estudiantes");
+  const [tab, setTab] = useState("inicio");
   const [subTabHerramientas, setSubTabHerramientas] = useState("ruleta");
   const [grado, setGrado] = useState(null);
   const [reino, setReino] = useState(null);
@@ -871,33 +943,22 @@ function Panel({ session }) {
     api.asegurarProfesor().then(() => api.asegurarGradosBase()).then(() => api.fetchGrados()).then(setGrados);
   }, []);
 
-  const irAEstudiantes = () => { setTab("estudiantes"); setGrado(null); setReino(null); setModoLista(false); };
+  const irA = (key) => {
+    setTab(key);
+    if (key === "estudiantes") { setGrado(null); setReino(null); setModoLista(false); }
+  };
 
   return (
-    <div className="min-h-screen bg-violet-50">
-      <div className="bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-lg font-bold text-violet-700 cursor-pointer" onClick={irAEstudiantes}>CÓDICE</h1>
-        <div className="flex gap-1 rounded-full bg-violet-50 p-1 flex-wrap">
-          <button onClick={irAEstudiantes} className={`text-xs px-3 py-1.5 rounded-full ${tab === "estudiantes" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Estudiantes</button>
-          <button onClick={() => setTab("asistencia")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "asistencia" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Asistencia</button>
-          <button onClick={() => setTab("herramientas")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "herramientas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Herramientas</button>
-          <button onClick={() => setTab("roles")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "roles" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Roles</button>
-          <button onClick={() => setTab("calificaciones")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "calificaciones" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Calificaciones</button>
-          <button onClick={() => setTab("reportes")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "reportes" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Reportes</button>
-          <button onClick={() => setTab("horario")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "horario" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Horario</button>
-          <button onClick={() => setTab("planeaciones")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "planeaciones" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Planeaciones</button>
-          <button onClick={() => setTab("evaluaciones")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "evaluaciones" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Evaluaciones</button>
-          <button onClick={() => setTab("proyectosforja")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "proyectosforja" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Proyectos/Forja</button>
-        </div>
-        <div className="flex items-center gap-3">
-          <button onClick={() => setAdministracionAbierta(true)} className="text-lg" title="Docentes y mi cuenta">👤</button>
-          <button onClick={() => setInstitucionAbierta(true)} className="text-lg" title="Datos de la institución">⚙️</button>
-          <button onClick={() => supabase.auth.signOut()} className="text-sm text-slate-500">Cerrar sesión ({session.user.email})</button>
-        </div>
-      </div>
+    <div className="min-h-screen bg-violet-50 md:flex">
+      <SidebarPanel activo={tab} onCambiar={irA} email={session.user.email}
+        onAdmin={() => setAdministracionAbierta(true)} onInstitucion={() => setInstitucionAbierta(true)}
+        onSalir={() => supabase.auth.signOut()} />
+
       {institucionAbierta && <InstitucionModal onClose={() => setInstitucionAbierta(false)} />}
       {administracionAbierta && <AdministracionModal onClose={() => setAdministracionAbierta(false)} />}
-      <div className="p-6 max-w-6xl mx-auto">
+
+      <div className="p-6 max-w-6xl mx-auto md:flex-1 md:min-w-0">
+        {tab === "inicio" && <VistaInicio onIrA={irA} />}
         {tab === "estudiantes" && (
           <>
             {!grado && <VistaGrados onElegirGrado={(g) => { setGrado(g); setReino(null); setModoLista(false); }} />}
