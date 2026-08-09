@@ -778,6 +778,48 @@ export async function guardarComentarioDesempeno(banda, comentario) {
   if (error) throw error;
 }
 
+/* ---------------- Control de dictado (misma clase, varios cursos) ---------------- */
+export async function fetchDictados(claseId) {
+  const { data, error } = await supabase.from("planeacion_dictados").select("*").eq("clase_id", claseId).order("fecha");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearDictado(claseId, gradoId, fecha, estado) {
+  const { error } = await supabase.from("planeacion_dictados").insert({ clase_id: claseId, grado_id: gradoId, fecha: fecha || null, estado });
+  if (error) throw error;
+}
+
+export async function editarDictado(id, cambios) {
+  const { error } = await supabase.from("planeacion_dictados").update(cambios).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarDictado(id) {
+  const { error } = await supabase.from("planeacion_dictados").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// Todos los pendientes/aplazados de las clases de una materia (para el panel de seguimiento)
+export async function fetchDictadosPendientes(materiaId) {
+  const { data: unidades, error: e1 } = await supabase.from("planeaciones").select("id").eq("materia_id", materiaId).eq("tipo", "unidad");
+  if (e1) throw e1;
+  const unidadIds = (unidades || []).map((u) => u.id);
+  if (unidadIds.length === 0) return [];
+
+  const { data: clases, error: e2 } = await supabase.from("planeaciones").select("id, titulo, unidad_id").in("unidad_id", unidadIds).eq("tipo", "clase");
+  if (e2) throw e2;
+  const claseIds = (clases || []).map((c) => c.id);
+  if (claseIds.length === 0) return [];
+
+  const { data: dictados, error: e3 } = await supabase.from("planeacion_dictados").select("*").in("clase_id", claseIds).neq("estado", "dictada");
+  if (e3) throw e3;
+
+  const claseTitulo = {};
+  (clases || []).forEach((c) => { claseTitulo[c.id] = c.titulo; });
+  return (dictados || []).map((d) => ({ ...d, clase_titulo: claseTitulo[d.clase_id] || "Clase" }));
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
