@@ -6,6 +6,7 @@ export function InstitucionModal({ onClose }) {
   const [ciclo, setCiclo] = useState("");
   const [anio, setAnio] = useState("");
   const [logoUrl, setLogoUrl] = useState(null);
+  const [imagenMenuUrl, setImagenMenuUrl] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
 
@@ -15,24 +16,25 @@ export function InstitucionModal({ onClose }) {
       setCiclo(data.ciclo || "");
       setAnio(data.anio || "");
       setLogoUrl(data.logo_url || null);
+      setImagenMenuUrl(data.imagen_menu_url || null);
       setCargando(false);
     });
   }, []);
 
-  const subirLogo = (file) => {
+  const subirImagen = (file, setter) => {
     if (file.size > 500 * 1024) {
-      alert("La imagen es muy grande. Usa un logo pequeño (menos de 500 KB) para que cargue rápido en las actas.");
+      alert("La imagen es muy grande. Usa una imagen pequeña (menos de 500 KB) para que cargue rápido.");
       return;
     }
     const reader = new FileReader();
-    reader.onload = (e) => setLogoUrl(e.target.result);
+    reader.onload = (e) => setter(e.target.result);
     reader.readAsDataURL(file);
   };
 
   const guardar = async () => {
     setGuardando(true);
     try {
-      await api.guardarInstitucion({ nombre: nombre.trim() || "Institución Educativa", ciclo: ciclo.trim(), anio: anio.trim(), logo_url: logoUrl });
+      await api.guardarInstitucion({ nombre: nombre.trim() || "Institución Educativa", ciclo: ciclo.trim(), anio: anio.trim(), logo_url: logoUrl, imagen_menu_url: imagenMenuUrl });
       onClose();
     } catch (e) {
       alert("Error al guardar: " + e.message);
@@ -71,6 +73,7 @@ export function InstitucionModal({ onClose }) {
             </div>
 
             <label className="text-xs text-slate-500 block mb-1">Logo (opcional)</label>
+            <p className="text-[11px] text-slate-400 mb-1">Este aparece en el encabezado de las actas y planillas impresas.</p>
             <div className="flex items-center gap-3 mb-4">
               {logoUrl ? (
                 <img src={logoUrl} alt="Logo" className="h-14 w-14 object-contain rounded-lg border border-slate-200" />
@@ -78,8 +81,22 @@ export function InstitucionModal({ onClose }) {
                 <div className="h-14 w-14 rounded-lg border border-dashed border-slate-200 flex items-center justify-center text-xs text-slate-400">Sin logo</div>
               )}
               <div className="flex flex-col gap-1">
-                <input type="file" accept="image/*" onChange={(e) => { if (e.target.files[0]) subirLogo(e.target.files[0]); }} className="text-xs" />
+                <input type="file" accept="image/*" onChange={(e) => { if (e.target.files[0]) subirImagen(e.target.files[0], setLogoUrl); }} className="text-xs" />
                 {logoUrl && <button onClick={() => setLogoUrl(null)} className="text-xs text-rose-500 text-left">Quitar logo</button>}
+              </div>
+            </div>
+
+            <label className="text-xs text-slate-500 block mb-1">Imagen del menú (opcional, independiente del logo)</label>
+            <p className="text-[11px] text-slate-400 mb-1">Esta se muestra arriba del menú lateral de la app — es una imagen distinta, no afecta a las actas.</p>
+            <div className="flex items-center gap-3 mb-4">
+              {imagenMenuUrl ? (
+                <img src={imagenMenuUrl} alt="Imagen del menú" className="h-14 w-14 object-cover rounded-lg border border-slate-200" />
+              ) : (
+                <div className="h-14 w-14 rounded-lg border border-dashed border-slate-200 flex items-center justify-center text-xs text-slate-400">Sin imagen</div>
+              )}
+              <div className="flex flex-col gap-1">
+                <input type="file" accept="image/*" onChange={(e) => { if (e.target.files[0]) subirImagen(e.target.files[0], setImagenMenuUrl); }} className="text-xs" />
+                {imagenMenuUrl && <button onClick={() => setImagenMenuUrl(null)} className="text-xs text-rose-500 text-left">Quitar imagen del menú</button>}
               </div>
             </div>
 
