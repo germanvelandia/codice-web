@@ -872,15 +872,19 @@ const MENU_PANEL = [
   { key: "reportes", label: "Reportes", icono: "📊" },
 ];
 
-function SidebarPanel({ activo, onCambiar, email, onAdmin, onInstitucion, onSalir }) {
+function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstitucion, onSalir }) {
   return (
     <>
       {/* Escritorio: barra lateral fija */}
       <div className="hidden md:flex md:flex-col md:w-60 md:shrink-0 md:h-screen md:sticky md:top-0"
         style={{ background: "linear-gradient(180deg, #1e1b30 0%, #14101f 100%)", borderRight: "2px solid #8B5CF6" }}>
         <button onClick={() => onCambiar("inicio")} className="text-center py-5" style={{ background: "linear-gradient(180deg, #2d2450 0%, #1e1b30 100%)", borderBottom: "2px solid #7c3aed55" }}>
-          <div className="text-2xl">🧭</div>
-          <div className="text-violet-200 text-sm font-bold tracking-[0.2em] mt-0.5" style={{ fontFamily: "Georgia, serif" }}>CÓDICE</div>
+          {institucion?.logo_url ? (
+            <img src={institucion.logo_url} alt="Logo" className="mx-auto rounded-xl object-cover" style={{ width: 56, height: 56 }} />
+          ) : (
+            <div className="text-2xl">🧭</div>
+          )}
+          <div className="text-violet-200 text-sm font-bold tracking-[0.2em] mt-1.5" style={{ fontFamily: "Georgia, serif" }}>CÓDICE</div>
         </button>
         <div className="flex-1 overflow-y-auto py-2">
           {MENU_PANEL.map((m) => (
@@ -907,7 +911,11 @@ function SidebarPanel({ activo, onCambiar, email, onAdmin, onInstitucion, onSali
       <div className="md:hidden" style={{ background: "linear-gradient(180deg, #1e1b30 0%, #14101f 100%)" }}>
         <div className="flex items-center justify-between px-4 py-3">
           <button onClick={() => onCambiar("inicio")} className="flex items-center gap-2">
-            <span className="text-lg">🧭</span>
+            {institucion?.logo_url ? (
+              <img src={institucion.logo_url} alt="Logo" className="rounded-lg object-cover" style={{ width: 24, height: 24 }} />
+            ) : (
+              <span className="text-lg">🧭</span>
+            )}
             <span className="text-violet-200 text-sm font-bold tracking-[0.15em]" style={{ fontFamily: "Georgia, serif" }}>CÓDICE</span>
           </button>
           <div className="flex items-center gap-3">
@@ -938,9 +946,13 @@ function Panel({ session }) {
   const [grados, setGrados] = useState([]);
   const [institucionAbierta, setInstitucionAbierta] = useState(false);
   const [administracionAbierta, setAdministracionAbierta] = useState(false);
+  const [institucion, setInstitucion] = useState(null);
+
+  const cargarInstitucion = () => api.fetchInstitucion().then(setInstitucion);
 
   useEffect(() => {
     api.asegurarProfesor().then(() => api.asegurarGradosBase()).then(() => api.fetchGrados()).then(setGrados);
+    cargarInstitucion();
   }, []);
 
   const irA = (key) => {
@@ -950,11 +962,11 @@ function Panel({ session }) {
 
   return (
     <div className="min-h-screen bg-violet-50 md:flex">
-      <SidebarPanel activo={tab} onCambiar={irA} email={session.user.email}
+      <SidebarPanel activo={tab} onCambiar={irA} email={session.user.email} institucion={institucion}
         onAdmin={() => setAdministracionAbierta(true)} onInstitucion={() => setInstitucionAbierta(true)}
         onSalir={() => supabase.auth.signOut()} />
 
-      {institucionAbierta && <InstitucionModal onClose={() => setInstitucionAbierta(false)} />}
+      {institucionAbierta && <InstitucionModal onClose={() => { setInstitucionAbierta(false); cargarInstitucion(); }} />}
       {administracionAbierta && <AdministracionModal onClose={() => setAdministracionAbierta(false)} />}
 
       <div className="p-6 max-w-6xl mx-auto md:flex-1 md:min-w-0">
