@@ -825,6 +825,101 @@ export async function fetchDictadosPendientes(materiaId) {
   return (dictados || []).map((d) => ({ ...d, clase_titulo: claseTitulo[d.clase_id] || "Clase" }));
 }
 
+// Ajusta las monedas de un estudiante directamente (sumar o restar), sin pasar
+// por una acción de XP — usado por la Ruleta de Monedas y el Banco.
+export async function ajustarMonedas(estudianteId, delta) {
+  const { data: actual } = await supabase.from("progreso").select("*").eq("estudiante_id", estudianteId).maybeSingle();
+  const nuevasMonedas = Math.max(0, (actual?.monedas || 0) + delta);
+  const { error } = await supabase.from("progreso").upsert({
+    estudiante_id: estudianteId, xp: actual?.xp || 0, vida: actual?.vida ?? 100, monedas: nuevasMonedas,
+  });
+  if (error) throw error;
+  return nuevasMonedas;
+}
+
+export async function ajustarMonedasMasivo(estudianteIds, delta) {
+  const resultados = {};
+  for (const id of estudianteIds) { resultados[id] = await ajustarMonedas(id, delta); }
+  return resultados;
+}
+
+/* ---------------- Banco de premios ---------------- */
+export async function fetchPremios() {
+  const { data, error } = await supabase.from("banco_premios").select("*").order("costo_monedas");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function fetchPremiosActivos() {
+  const { data, error } = await supabase.from("banco_premios").select("*").eq("activo", true).order("costo_monedas");
+  if (error) throw error;
+  return (data || []).filter((p) => p.stock === null || p.stock > 0);
+}
+
+export async function crearPremio(campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("banco_premios").insert({ ...campos, docente_id: userData?.user?.id || null });
+  if (error) throw error;
+}
+
+export async function editarPremio(id, cambios) {
+  const { error } = await supabase.from("banco_premios").update(cambios).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarPremio(id) {
+  const { error } = await supabase.from("banco_premios").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function fetchCanjes() {
+  const [canjesRes, premiosRes, estudiantesRes] = await Promise.all([
+    supabase.from("banco_canjes").select("*").order("fecha", { ascending: false }),
+    supabase.from("banco_premios").select("id, nombre, emoji"),
+    supabase.from("estudiantes").select("id, nombre, grado_id"),
+  ]);
+  if (canjesRes.error) throw canjesRes.error;
+  if (premiosRes.error) throw premiosRes.error;
+  if (estudiantesRes.error) throw estudiantesRes.error;
+  const premioPorId = {}; (premiosRes.data || []).forEach((p) => { premioPorId[p.id] = p; });
+  const estudiantePorId = {}; (estudiantesRes.data || []).forEach((e) => { estudiantePorId[e.id] = e; });
+  return (canjesRes.data || []).map((c) => ({ ...c, premio: premioPorId[c.premio_id], estudiante: estudiantePorId[c.estudiante_id] }));
+}
+
+export async function marcarCanjeEntregado(id) {
+  const { error } = await supabase.from("banco_canjes").update({ estado: "entregado" }).eq("id", id);
+  if (error) throw error;
+}
+
+// El estudiante gasta monedas por un premio SORPRESA: se sortea entre los
+// premios activos que pueda pagar y que tengan stock, con más chance los que
+// tengan mayor "peso". Devuelve el premio que le tocó, o null si no alcanza
+// para ninguno.
+export async function canjearAleatorio(estudianteId) {
+  const { data: prog } = await supabase.from("progreso").select("monedas").eq("estudiante_id", estudianteId).maybeSingle();
+  const monedas = prog?.monedas || 0;
+
+  const disponibles = (await fetchPremiosActivos()).filter((p) => p.costo_monedas <= monedas);
+  if (disponibles.length === 0) return { ok: false, monedas };
+
+  const pesoTotal = disponibles.reduce((a, p) => a + p.peso, 0);
+  let r = Math.random() * pesoTotal;
+  let elegido = disponibles[0];
+  for (const p of disponibles) {
+    if (r < p.peso) { elegido = p; break; }
+    r -= p.peso;
+  }
+
+  const nuevasMonedas = await ajustarMonedas(estudianteId, -elegido.costo_monedas);
+  if (elegido.stock !== null) {
+    await editarPremio(elegido.id, { stock: Math.max(0, elegido.stock - 1) });
+  }
+  const { error } = await supabase.from("banco_canjes").insert({ premio_id: elegido.id, estudiante_id: estudianteId, costo_pagado: elegido.costo_monedas });
+  if (error) throw error;
+
+  return { ok: true, premio: elegido, monedasRestantes: nuevasMonedas };
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
