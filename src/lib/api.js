@@ -1026,6 +1026,88 @@ export async function fetchTareasPlaneacionParaGrado(gradoId) {
   });
 }
 
+/* ---------------- Estadísticas del docente e Inicio (dashboard) ---------------- */
+const NIVELES_DOCENTE = [
+  { min: 0, nombre: "Aprendiz" }, { min: 100, nombre: "Docente" }, { min: 300, nombre: "Mentor" },
+  { min: 600, nombre: "Maestro" }, { min: 1000, nombre: "Gran Maestro" },
+];
+
+export async function fetchStatsDocente() {
+  const { data: userData } = await supabase.auth.getUser();
+  const docenteId = userData?.user?.id;
+  const vacio = { xp: 0, nivel: "Aprendiz", insignias: 0, estudiantesACargo: 0 };
+  if (!docenteId) return vacio;
+
+  const contar = async (tabla, filtroExtra) => {
+    let q = supabase.from(tabla).select("id", { count: "exact", head: true }).eq("docente_id", docenteId);
+    if (filtroExtra) q = filtroExtra(q);
+    const { count, error } = await q;
+    if (error) return 0;
+    return count || 0;
+  };
+
+  const [materias, unidades, evaluaciones, horario, tareas] = await Promise.all([
+    contar("materias"),
+    contar("planeaciones", (q) => q.eq("tipo", "unidad")),
+    contar("evaluaciones"),
+    contar("horario"),
+    contar("tareas_calificables"),
+  ]);
+
+  const xp = materias * 20 + unidades * 15 + evaluaciones * 25 + horario * 5 + tareas * 15;
+  const insignias = [materias > 0, unidades > 0, evaluaciones > 0, horario > 0, tareas > 0].filter(Boolean).length;
+
+  let nivel = NIVELES_DOCENTE[0].nombre;
+  for (const n of NIVELES_DOCENTE) if (xp >= n.min) nivel = n.nombre;
+
+  const { count: estudiantesACargo } = await supabase.from("estudiantes").select("id", { count: "exact", head: true }).eq("activo", true);
+
+  return { xp, nivel, insignias, estudiantesACargo: estudiantesACargo || 0 };
+}
+
+export async function fetchResumenDocente() {
+  const { data: userData } = await supabase.auth.getUser();
+  const docenteId = userData?.user?.id;
+  if (!docenteId) return { clasesHoy: [], eventosHoy: [], evaluacionesPublicadas: 0, entregasPendientes: 0, tareasSinCalificar: 0, clasesPendientes: 0 };
+
+  const hoy = new Date();
+  const diaSemana = hoy.getDay();
+  const fechaHoy = hoy.toISOString().slice(0, 10);
+
+  const [horarioRes, cronogramaRes, evaluacionesRes, tareasRes, dictadosRes] = await Promise.all([
+    supabase.from("horario").select("*, materias(nombre)").eq("docente_id", docenteId).eq("dia_semana", diaSemana).order("hora_inicio"),
+    supabase.from("cronograma").select("*"),
+    supabase.from("evaluaciones").select("id").eq("docente_id", docenteId).eq("estado", "publicada"),
+    supabase.from("tareas_calificables").select("id").eq("docente_id", docenteId),
+    supabase.from("planeacion_dictados").select("id", { count: "exact", head: true }).eq("estado", "pendiente"),
+  ]);
+
+  const eventosHoy = (cronogramaRes.data || []).filter((e) => e.fecha <= fechaHoy && (!e.fecha_fin || e.fecha_fin >= fechaHoy));
+
+  const evaluacionIds = (evaluacionesRes.data || []).map((e) => e.id);
+  let entregasPendientes = 0;
+  if (evaluacionIds.length > 0) {
+    const { count } = await supabase.from("evaluacion_intentos").select("id", { count: "exact", head: true }).in("evaluacion_id", evaluacionIds).eq("estado", "entregado");
+    entregasPendientes = count || 0;
+  }
+
+  const tareaIds = (tareasRes.data || []).map((t) => t.id);
+  let tareasSinCalificar = 0;
+  if (tareaIds.length > 0) {
+    const { count } = await supabase.from("tarea_entregas").select("id", { count: "exact", head: true }).in("tarea_id", tareaIds).is("nota", null);
+    tareasSinCalificar = count || 0;
+  }
+
+  return {
+    clasesHoy: horarioRes.data || [],
+    eventosHoy,
+    evaluacionesPublicadas: evaluacionIds.length,
+    entregasPendientes,
+    tareasSinCalificar,
+    clasesPendientes: dictadosRes.count || 0,
+  };
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
