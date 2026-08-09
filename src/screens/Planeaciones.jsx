@@ -762,6 +762,98 @@ function PendientesModal({ materiaId, materiaNombre, onClose }) {
   );
 }
 
+function FilaEstandar({ e, onCambio }) {
+  const [editando, setEditando] = useState(false);
+  const [codigo, setCodigo] = useState(e.codigo || "");
+  const [descripcion, setDescripcion] = useState(e.descripcion || "");
+
+  const guardar = async () => {
+    if (!descripcion.trim()) { alert("La descripción no puede quedar vacía."); return; }
+    try {
+      await api.editarEstandar(e.id, { codigo: codigo.trim() || null, descripcion: descripcion.trim() });
+      setEditando(false);
+      onCambio();
+    } catch (err) {
+      alert("Error al guardar: " + err.message);
+    }
+  };
+
+  const eliminar = async () => {
+    if (!confirm(`¿Eliminar "${e.descripcion}" del catálogo? Se quita de todas las clases/unidades donde estuviera vinculado. No se puede deshacer.`)) return;
+    try {
+      await api.eliminarEstandar(e.id);
+      onCambio();
+    } catch (err) {
+      alert("Error al eliminar: " + err.message);
+    }
+  };
+
+  if (editando) {
+    return (
+      <div className="flex items-center gap-2 bg-violet-50 rounded-lg p-2">
+        <input value={codigo} onChange={(ev) => setCodigo(ev.target.value)} placeholder="Código" className="w-20 text-xs rounded px-2 py-1 border border-slate-200 outline-none" />
+        <input value={descripcion} onChange={(ev) => setDescripcion(ev.target.value)} placeholder="Descripción" className="flex-1 text-xs rounded px-2 py-1 border border-slate-200 outline-none" />
+        <button onClick={guardar} className="text-xs px-2 py-1 rounded-lg bg-violet-500 text-white shrink-0">Guardar</button>
+        <button onClick={() => setEditando(false)} className="text-xs text-slate-400 shrink-0">✕</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-2 bg-slate-50 rounded-lg px-2 py-1.5">
+      <div className="text-xs text-slate-700 min-w-0">{e.codigo ? <span className="font-semibold">{e.codigo} — </span> : ""}{e.descripcion}</div>
+      <div className="flex items-center gap-2 shrink-0">
+        <button onClick={() => setEditando(true)} className="text-xs text-slate-400 hover:text-violet-600">✏️</button>
+        <button onClick={eliminar} className="text-xs text-slate-400 hover:text-rose-500">🗑</button>
+      </div>
+    </div>
+  );
+}
+
+function GestionarEstandaresModal({ onClose }) {
+  const [dba, setDba] = useState([]);
+  const [competencias, setCompetencias] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [tab, setTab] = useState("dba");
+
+  const cargar = () => {
+    setCargando(true);
+    Promise.all([api.fetchEstandares("dba"), api.fetchEstandares("competencia")]).then(([d, c]) => {
+      setDba(d); setCompetencias(c); setCargando(false);
+    });
+  };
+  useEffect(() => { cargar(); }, []);
+
+  const lista = tab === "dba" ? dba : competencias;
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">🗂️ Catálogo de DBA y Competencias</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-500 mb-3">
+          Corregí o eliminá los que hayan quedado mal escritos. Es un catálogo compartido: los cambios se reflejan en todas las clases/unidades donde estén vinculados.
+        </p>
+        <div className="flex gap-1 mb-3 rounded-full bg-slate-100 p-1 w-fit">
+          <button onClick={() => setTab("dba")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "dba" ? "bg-blue-500 text-white" : "text-slate-600"}`}>DBA ({dba.length})</button>
+          <button onClick={() => setTab("competencia")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "competencia" ? "bg-teal-500 text-white" : "text-slate-600"}`}>Competencias ({competencias.length})</button>
+        </div>
+        {cargando ? (
+          <div className="text-sm text-slate-400">Cargando…</div>
+        ) : lista.length === 0 ? (
+          <div className="text-sm text-slate-400">Todavía no hay ninguno creado en esta categoría.</div>
+        ) : (
+          <div className="space-y-1.5">
+            {lista.map((e) => <FilaEstandar key={e.id} e={e} onCambio={cargar} />)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function VistaPlaneaciones({ grados }) {
   const [materias, setMaterias] = useState([]);
   const [materiaId, setMateriaId] = useState("");
@@ -774,6 +866,7 @@ export function VistaPlaneaciones({ grados }) {
   const [formAbierto, setFormAbierto] = useState(false);
   const [institucion, setInstitucion] = useState(null);
   const [pendientesAbierto, setPendientesAbierto] = useState(false);
+  const [estandaresAbierto, setEstandaresAbierto] = useState(false);
 
   useEffect(() => {
     api.fetchMaterias().then((data) => { setMaterias(data); if (data[0]) setMateriaId(data[0].id); });
@@ -826,6 +919,7 @@ export function VistaPlaneaciones({ grados }) {
           {listaPeriodos.map((p) => <option key={p} value={p}>Periodo {p}</option>)}
         </select>
         <button onClick={() => setPendientesAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-amber-200 text-amber-600">📋 Pendientes</button>
+        <button onClick={() => setEstandaresAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🗂️ Gestionar DBA/Competencias</button>
         <button onClick={() => setFormAbierto((v) => !v)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white ml-auto">
           {formAbierto ? "Cerrar" : "+ Nueva unidad/tema"}
         </button>
@@ -855,6 +949,7 @@ export function VistaPlaneaciones({ grados }) {
       {pendientesAbierto && (
         <PendientesModal materiaId={materiaId} materiaNombre={materias.find((m) => m.id === materiaId)?.nombre || ""} onClose={() => setPendientesAbierto(false)} />
       )}
+      {estandaresAbierto && <GestionarEstandaresModal onClose={() => setEstandaresAbierto(false)} />}
     </div>
   );
 }
