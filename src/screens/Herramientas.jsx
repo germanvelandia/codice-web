@@ -22,6 +22,51 @@ function beep(freq = 700, dur = 0.08, vol = 0.15) {
   } catch (e) { /* silencioso si el navegador bloquea audio */ }
 }
 
+// Sonido corto y seco tipo "clac" (para las ruletas)
+function clack(vol = 0.18) {
+  try {
+    const ctx = getCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "square";
+    osc.frequency.value = 900;
+    gain.gain.value = vol;
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start();
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.03);
+    osc.stop(ctx.currentTime + 0.03);
+  } catch (e) { /* silencioso */ }
+}
+
+// Estallido grave para la bomba
+function boom() {
+  try {
+    const ctx = getCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(180, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(30, ctx.currentTime + 0.5);
+    gain.gain.value = 0.3;
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start();
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+    osc.stop(ctx.currentTime + 0.6);
+  } catch (e) { /* silencioso */ }
+}
+
+// Programa sonidos de "clac" que se van espaciando con el tiempo, simulando
+// una ruleta real que gira rápido y va frenando (usa la misma curva del CSS).
+function programarClacs(duracionMs, vueltas, nSegmentos) {
+  const totalClacs = Math.max(8, Math.round(vueltas * nSegmentos * 0.6));
+  for (let i = 1; i <= totalClacs; i++) {
+    const frac = i / totalClacs;
+    // Aproximación de easing "ease-out cúbico" inverso: los clacs se separan más hacia el final
+    const t = 1 - Math.pow(1 - frac, 3);
+    setTimeout(() => clack(0.15 - frac * 0.08), t * duracionMs);
+  }
+}
+
 export function VistaRuleta({ grados }) {
   const [gradoId, setGradoId] = useState(grados[0]?.id || "");
   const [modo, setModo] = useState("grado");
@@ -61,7 +106,7 @@ export function VistaRuleta({ grados }) {
     const vueltas = 6;
     const anguloFinal = 360 * vueltas + (360 - (winnerIdx * sliceDeg + sliceDeg / 2));
     setRotation((r) => r + anguloFinal);
-    beep(500, 0.05);
+    programarClacs(4000, vueltas, items.length);
     setTimeout(() => {
       setSpinning(false);
       setWinner(items[winnerIdx]);
@@ -166,7 +211,7 @@ export function VistaRuletaMonedas({ grados }) {
     const vueltas = 6;
     const anguloFinal = 360 * vueltas + (360 - (idx * sliceDeg + sliceDeg / 2));
     setRotation((r) => r + anguloFinal);
-    beep(500, 0.05);
+    programarClacs(4000, vueltas, opciones.length);
     setTimeout(async () => {
       setSpinning(false);
       const valor = opciones[idx];
@@ -263,36 +308,105 @@ export function VistaRuletaMonedas({ grados }) {
 
 export function VistaTemporizador() {
   const [seconds, setSeconds] = useState(300);
+  const [totalInicial, setTotalInicial] = useState(300);
   const [running, setRunning] = useState(false);
   const [manual, setManual] = useState(5);
+  const [estilo, setEstilo] = useState("digital"); // "digital" | "arena" | "bomba"
+  const [explotó, setExplotó] = useState(false);
 
   useEffect(() => {
     if (!running) return;
     if (seconds <= 0) { setRunning(false); return; }
     const id = setInterval(() => setSeconds((s) => {
-      if (s <= 1) { beep(300, 0.3, 0.25); return 0; }
-      if (s <= 4) beep(700, 0.05);
-      return s - 1;
+      const restante = s - 1;
+      if (estilo === "bomba") {
+        if (restante <= 0) { boom(); setExplotó(true); return 0; }
+        if (restante <= 3) beep(1100, 0.06, 0.22);
+        else if (restante <= 10) beep(850, 0.05, 0.18);
+        else beep(700, 0.04, 0.1);
+      } else if (estilo === "arena") {
+        if (restante <= 0) beep(400, 0.4, 0.2);
+        else if (restante % 1 === 0) beep(600, 0.02, 0.06);
+      } else {
+        if (s <= 1) beep(300, 0.3, 0.25);
+        else if (s <= 4) beep(700, 0.05);
+      }
+      return Math.max(0, restante);
     }), 1000);
     return () => clearInterval(id);
-  }, [running, seconds]);
+  }, [running, seconds, estilo]);
 
   const mm = String(Math.floor(seconds / 60)).padStart(2, "0");
   const ss = String(seconds % 60).padStart(2, "0");
-  const addTime = (v) => setSeconds((s) => Math.max(0, s + v));
+  const addTime = (v) => setSeconds((s) => { const n = Math.max(0, s + v); setTotalInicial((t) => Math.max(t, n)); return n; });
+  const reiniciar = () => { setRunning(false); setExplotó(false); setSeconds(totalInicial); };
+  const fijar = () => {
+    const total = Math.max(0, manual) * 60;
+    setRunning(false); setExplotó(false); setSeconds(total); setTotalInicial(total);
+  };
+
+  const fraccionRestante = totalInicial > 0 ? seconds / totalInicial : 0;
+  const urgente = seconds <= 10 && running;
 
   return (
     <div className="flex flex-col items-center">
       <h2 className="text-xl font-bold text-slate-800 mb-1">Temporizador del Aula</h2>
-      <p className="text-sm text-slate-400 mb-8">Agrega tiempo manualmente durante actividades o retos.</p>
-      <div className="rounded-full flex items-center justify-center mb-6 bg-violet-50 border-8 border-violet-500" style={{ width: 220, height: 220 }}>
-        <span className={`text-4xl font-bold ${seconds <= 10 && running ? "text-rose-500" : "text-slate-800"}`}>{mm}:{ss}</span>
+      <p className="text-sm text-slate-400 mb-4">Agrega tiempo manualmente durante actividades o retos.</p>
+
+      <div className="flex gap-1 rounded-full bg-violet-50 p-1 mb-6">
+        <button onClick={() => setEstilo("digital")} className={`text-xs px-3 py-1.5 rounded-full ${estilo === "digital" ? "bg-violet-500 text-white" : "text-slate-600"}`}>⏱ Digital</button>
+        <button onClick={() => setEstilo("arena")} className={`text-xs px-3 py-1.5 rounded-full ${estilo === "arena" ? "bg-violet-500 text-white" : "text-slate-600"}`}>⏳ Reloj de arena</button>
+        <button onClick={() => setEstilo("bomba")} className={`text-xs px-3 py-1.5 rounded-full ${estilo === "bomba" ? "bg-violet-500 text-white" : "text-slate-600"}`}>💣 Bomba</button>
       </div>
+
+      {estilo === "digital" && (
+        <div className={`rounded-full flex items-center justify-center mb-6 bg-violet-50 border-8 ${urgente ? "border-rose-500" : "border-violet-500"}`} style={{ width: 220, height: 220 }}>
+          <span className={`text-4xl font-bold ${urgente ? "text-rose-500" : "text-slate-800"}`}>{mm}:{ss}</span>
+        </div>
+      )}
+
+      {estilo === "arena" && (
+        <div className="flex flex-col items-center mb-6">
+          <div style={{ width: 140, height: 200 }} className="relative">
+            {/* Cuerpo del reloj de arena */}
+            <svg viewBox="0 0 140 200" width="140" height="200">
+              <polygon points="15,10 125,10 70,100 125,190 15,190 70,100" fill="none" stroke="#8B5CF6" strokeWidth="6" strokeLinejoin="round" />
+              {/* Arena arriba (disminuye) */}
+              <clipPath id="clipArriba"><polygon points="15,10 125,10 70,100" /></clipPath>
+              <rect x="15" y={10 + 90 * (1 - fraccionRestante)} width="110" height={90 * fraccionRestante} fill="#F59E0B" clipPath="url(#clipArriba)" />
+              {/* Arena abajo (aumenta) */}
+              <clipPath id="clipAbajo"><polygon points="70,100 125,190 15,190" /></clipPath>
+              <rect x="15" y={190 - 90 * (1 - fraccionRestante)} width="110" height={90 * (1 - fraccionRestante)} fill="#F59E0B" clipPath="url(#clipAbajo)" />
+              {running && seconds > 0 && <rect x="68" y="96" width="4" height="8" fill="#F59E0B" />}
+            </svg>
+          </div>
+          <span className={`text-3xl font-bold mt-3 ${urgente ? "text-rose-500" : "text-slate-800"}`}>{mm}:{ss}</span>
+        </div>
+      )}
+
+      {estilo === "bomba" && (
+        <div className="flex flex-col items-center mb-6">
+          <div
+            className="text-8xl"
+            style={{
+              animation: explotó ? "none" : running && seconds <= 5 ? "sacudir 0.15s infinite" : running && seconds <= 15 ? "sacudir 0.4s infinite" : "none",
+            }}
+          >
+            {explotó ? "💥" : "💣"}
+          </div>
+          <style>{`@keyframes sacudir { 0%,100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }`}</style>
+          <span className={`text-3xl font-bold mt-2 ${seconds <= 10 && running ? "text-rose-500" : "text-slate-800"}`}>
+            {explotó ? "¡BOOM!" : `${mm}:${ss}`}
+          </span>
+        </div>
+      )}
+
       <div className="flex gap-2 mb-4">
-        <button onClick={() => setRunning((r) => !r)} className="text-sm font-bold px-5 py-2.5 rounded-full bg-violet-500 text-white">
+        <button onClick={() => { if (seconds > 0) { setExplotó(false); setRunning((r) => !r); } }} disabled={seconds <= 0}
+          className="text-sm font-bold px-5 py-2.5 rounded-full bg-violet-500 text-white disabled:opacity-50">
           {running ? "⏸ Pausar" : "▶ Iniciar"}
         </button>
-        <button onClick={() => { setRunning(false); setSeconds(300); }} className="text-sm font-semibold px-5 py-2.5 rounded-full border border-slate-200 text-slate-600">↺ Reiniciar</button>
+        <button onClick={reiniciar} className="text-sm font-semibold px-5 py-2.5 rounded-full border border-slate-200 text-slate-600">↺ Reiniciar</button>
       </div>
       <div className="flex gap-2 mb-6 flex-wrap justify-center">
         {[-60, -30, 30, 60, 300].map((v) => (
@@ -304,7 +418,7 @@ export function VistaTemporizador() {
       <div className="flex items-center gap-2">
         <span className="text-sm text-slate-500">Fijar minutos:</span>
         <input type="number" value={manual} onChange={(e) => setManual(parseInt(e.target.value || "0", 10))} className="w-20 text-sm rounded-lg px-2 py-1 border border-slate-200 outline-none" />
-        <button onClick={() => { setRunning(false); setSeconds(Math.max(0, manual) * 60); }} className="text-xs px-3 py-1.5 rounded-full bg-violet-500 text-white">Fijar</button>
+        <button onClick={fijar} className="text-xs px-3 py-1.5 rounded-full bg-violet-500 text-white">Fijar</button>
       </div>
     </div>
   );
