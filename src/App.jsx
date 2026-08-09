@@ -13,6 +13,7 @@ import { VistaReportes } from "./screens/Reportes";
 import { VistaHorario } from "./screens/Horario";
 import { VistaPlaneaciones } from "./screens/Planeaciones";
 import { VistaEvaluaciones } from "./screens/Evaluaciones";
+import { VistaProyectosForja } from "./screens/TareasCalificables";
 import { InstitucionModal } from "./screens/Institucion";
 import { AdministracionModal } from "./screens/Administracion";
 
@@ -37,7 +38,7 @@ export default function App() {
   if (soloEstudiante) {
     return (
       <Centered>
-        <div className="w-full max-w-sm">
+        <div className="w-full max-w-sm md:max-w-3xl">
           <h1 className="text-2xl font-bold text-violet-600 text-center mb-1">CÓDICE</h1>
           <PortalEstudiante />
         </div>
@@ -554,6 +555,81 @@ function RankingEstudiante({ estudianteId, gradoId }) {
   );
 }
 
+function TareaCalificableEstudiante({ tarea, estudianteId }) {
+  const [entrega, setEntrega] = useState(null);
+  useEffect(() => { api.fetchMiEntrega(tarea.id, estudianteId).then(setEntrega); }, [tarea.id]);
+  return (
+    <div className="bg-slate-50 rounded-xl p-3">
+      <div className="text-sm font-semibold text-slate-800">{tarea.titulo}</div>
+      {tarea.materias?.nombre && <div className="text-[11px] text-slate-400">{tarea.materias.nombre}</div>}
+      {tarea.descripcion && <div className="text-xs text-slate-500 mt-1">{tarea.descripcion}</div>}
+      {tarea.fecha_entrega && <div className="text-[11px] text-slate-400 mt-1">Entrega: {tarea.fecha_entrega}</div>}
+      {entrega?.nota !== null && entrega?.nota !== undefined ? (
+        <div className="text-xs font-semibold text-emerald-600 mt-1.5">Nota: {entrega.nota}{entrega.comentario ? ` — "${entrega.comentario}"` : ""}</div>
+      ) : (
+        <div className="text-[11px] text-amber-600 mt-1.5">Pendiente de calificación</div>
+      )}
+    </div>
+  );
+}
+
+function ProyectosEstudiante({ estudianteId, gradoId }) {
+  const [proyectos, setProyectos] = useState([]);
+  const [tareasPlan, setTareasPlan] = useState([]);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    Promise.all([api.fetchTareasCalificablesEstudiante(gradoId, "proyecto"), api.fetchTareasPlaneacionParaGrado(gradoId)])
+      .then(([p, t]) => { setProyectos(p); setTareasPlan(t); setCargando(false); });
+  }, [gradoId]);
+
+  if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
+  if (proyectos.length === 0 && tareasPlan.length === 0) return <p className="text-sm text-slate-400">Todavía no tenés proyectos asignados.</p>;
+
+  return (
+    <div>
+      <h3 className="font-bold text-slate-800 mb-3">📜 Proyectos</h3>
+      {proyectos.length > 0 && (
+        <div className="space-y-2 mb-4">
+          {proyectos.map((p) => <TareaCalificableEstudiante key={p.id} tarea={p} estudianteId={estudianteId} />)}
+        </div>
+      )}
+      {tareasPlan.length > 0 && (
+        <>
+          <div className="text-xs font-semibold text-slate-500 mb-2">Otras tareas de clase</div>
+          <div className="space-y-2">
+            {tareasPlan.map((t) => (
+              <div key={t.id} className="bg-slate-50 rounded-xl p-3">
+                <div className="text-sm font-semibold text-slate-800">{t.titulo}</div>
+                <div className="text-[11px] text-slate-400">{t.materia_nombre}{t.unidad_titulo ? ` · ${t.unidad_titulo}` : ""}</div>
+                {t.fecha_entrega && <div className="text-[11px] text-slate-400 mt-0.5">Entrega: {t.fecha_entrega}</div>}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ForjaEstudiante({ estudianteId, gradoId }) {
+  const [talleres, setTalleres] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  useEffect(() => { api.fetchTareasCalificablesEstudiante(gradoId, "forja").then((d) => { setTalleres(d); setCargando(false); }); }, [gradoId]);
+
+  if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
+  if (talleres.length === 0) return <p className="text-sm text-slate-400">Todavía no tenés talleres o entregables asignados.</p>;
+
+  return (
+    <div>
+      <h3 className="font-bold text-slate-800 mb-3">🔨 Forja</h3>
+      <div className="space-y-2">
+        {talleres.map((t) => <TareaCalificableEstudiante key={t.id} tarea={t} estudianteId={estudianteId} />)}
+      </div>
+    </div>
+  );
+}
+
 function ProximamentePanel({ nombre }) {
   return (
     <div className="text-center py-8">
@@ -633,10 +709,12 @@ function PortalEstudiante() {
     const pctAsis = totalAsis > 0 ? Math.round((Number(datos.presentes) / totalAsis) * 100) : null;
 
     return (
-      <div>
-        <MenuCodice activo={vista} onCambiar={setVista} />
+      <div className="md:flex md:gap-5 md:items-start">
+        <div className="md:w-60 md:shrink-0">
+          <MenuCodice activo={vista} onCambiar={setVista} />
+        </div>
 
-        <div className="bg-white rounded-2xl shadow-lg p-6">
+        <div className="bg-white rounded-2xl shadow-lg p-6 md:flex-1">
           {vista === "inicio" && (
             <>
               <div className="text-center mb-4">
@@ -677,6 +755,14 @@ function PortalEstudiante() {
             <EvaluacionesEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />
           )}
 
+          {vista === "proyectos" && estudianteInfo && (
+            <ProyectosEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />
+          )}
+
+          {vista === "forja" && estudianteInfo && (
+            <ForjaEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />
+          )}
+
           {vista === "codice" && estudianteInfo && (
             <MisNotas estudianteId={estudianteInfo.id} />
           )}
@@ -702,8 +788,8 @@ function PortalEstudiante() {
             </div>
           )}
 
-          {(vista === "proyectos" || vista === "forja" || vista === "mensajes") && (
-            <ProximamentePanel nombre={MENU_CODICE.find((m) => m.key === vista)?.label || ""} />
+          {vista === "mensajes" && (
+            <ProximamentePanel nombre="Mensajes" />
           )}
 
           <button onClick={() => { setDatos(null); setCodigo(""); setEstudianteInfo(null); setVista("inicio"); }} className="w-full text-xs text-violet-500 mt-4">← Consultar otro código</button>
@@ -800,6 +886,7 @@ function Panel({ session }) {
           <button onClick={() => setTab("horario")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "horario" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Horario</button>
           <button onClick={() => setTab("planeaciones")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "planeaciones" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Planeaciones</button>
           <button onClick={() => setTab("evaluaciones")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "evaluaciones" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Evaluaciones</button>
+          <button onClick={() => setTab("proyectosforja")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "proyectosforja" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Proyectos/Forja</button>
         </div>
         <div className="flex items-center gap-3">
           <button onClick={() => setAdministracionAbierta(true)} className="text-lg" title="Docentes y mi cuenta">👤</button>
@@ -854,6 +941,7 @@ function Panel({ session }) {
         {tab === "horario" && grados.length > 0 && <VistaHorario grados={grados} />}
         {tab === "planeaciones" && grados.length > 0 && <VistaPlaneaciones grados={grados} />}
         {tab === "evaluaciones" && grados.length > 0 && <VistaEvaluaciones grados={grados} />}
+        {tab === "proyectosforja" && grados.length > 0 && <VistaProyectosForja grados={grados} />}
       </div>
     </div>
   );
