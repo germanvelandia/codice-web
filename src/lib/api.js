@@ -1111,7 +1111,7 @@ export async function fetchResumenDocente() {
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
-  return data || { id: 1, nombre: "Institución Educativa", ciclo: "", anio: "", logo_url: null };
+  return data || { id: 1, nombre: "Institución Educativa", ciclo: "", anio: "", logo_url: null, imagen_menu_url: null };
 }
 
 export async function guardarInstitucion(campos) {
