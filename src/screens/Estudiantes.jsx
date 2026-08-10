@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabaseClient";
 import { ACCIONES_RAPIDAS, ACADEMICO_POS, ACADEMICO_NEG, PILARES, CONVIVENCIAL_POS_EXTRA, CONVIVENCIAL_NEG, initials, nextLevel, reinoColor, reinoInfo, sugerirApellidos, colorGrado, REINO_COLORS, buscarEstudiantePorNombre } from "../lib/gamification";
@@ -604,6 +605,27 @@ function CodigosModal({ estudiantes, gradoId, onClose, onActualizado }) {
 
   const conCodigo = lista.filter((s) => s.codigo_acceso);
 
+  const contenidoImprimible = imprimiendo ? (
+    <div className="print-only" style={{ maxWidth: 900, margin: "0 auto", padding: 28, fontFamily: "Georgia, serif", color: "#1e293b" }}>
+      <div style={{ textAlign: "center", marginBottom: 16, borderBottom: "2px solid #8B5CF6", paddingBottom: 10 }}>
+        {institucion?.logo_url && (
+          <img src={institucion.logo_url} alt="Logo" style={{ maxHeight: 60, marginBottom: 6, display: "block", marginLeft: "auto", marginRight: "auto" }} />
+        )}
+        <div style={{ fontSize: 18, fontWeight: "bold" }}>{institucion?.nombre || "Institución Educativa"}</div>
+        <div style={{ fontSize: 14, marginTop: 4 }}>Códigos de acceso — Grado {gradoId}</div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+        {conCodigo.map((s) => (
+          <div key={s.id} className="print-avoid-break" style={{ border: "1.5px dashed #C4B5FD", borderRadius: 8, padding: 10, textAlign: "center" }}>
+            <div style={{ fontSize: 11, marginBottom: 4 }}>{s.nombre}</div>
+            <div style={{ fontSize: 20, fontWeight: "bold", letterSpacing: 2, color: "#7C3AED", fontFamily: "monospace" }}>{s.codigo_acceso}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 16, fontSize: 10, color: "#64748b" }}>Generado el {new Date().toLocaleDateString("es-CO")} — codice-web.vercel.app/#estudiante</div>
+    </div>
+  ) : null;
+
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4 no-print" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-md max-h-[85vh] overflow-y-auto shadow-xl">
@@ -634,26 +656,7 @@ function CodigosModal({ estudiantes, gradoId, onClose, onActualizado }) {
         <p className="text-xs text-slate-400 mt-4">Comparte cada código con el estudiante o acudiente correspondiente — con él pueden entrar desde el link de estudiantes.</p>
       </div>
 
-      {imprimiendo && (
-        <div className="print-only" style={{ maxWidth: 900, margin: "0 auto", padding: 28, fontFamily: "Georgia, serif", color: "#1e293b" }}>
-          <div style={{ textAlign: "center", marginBottom: 16, borderBottom: "2px solid #8B5CF6", paddingBottom: 10 }}>
-            {institucion?.logo_url && (
-              <img src={institucion.logo_url} alt="Logo" style={{ maxHeight: 60, marginBottom: 6, display: "block", marginLeft: "auto", marginRight: "auto" }} />
-            )}
-            <div style={{ fontSize: 18, fontWeight: "bold" }}>{institucion?.nombre || "Institución Educativa"}</div>
-            <div style={{ fontSize: 14, marginTop: 4 }}>Códigos de acceso — Grado {gradoId}</div>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
-            {conCodigo.map((s) => (
-              <div key={s.id} className="print-avoid-break" style={{ border: "1.5px dashed #C4B5FD", borderRadius: 8, padding: 10, textAlign: "center" }}>
-                <div style={{ fontSize: 11, marginBottom: 4 }}>{s.nombre}</div>
-                <div style={{ fontSize: 20, fontWeight: "bold", letterSpacing: 2, color: "#7C3AED", fontFamily: "monospace" }}>{s.codigo_acceso}</div>
-              </div>
-            ))}
-          </div>
-          <div style={{ marginTop: 16, fontSize: 10, color: "#64748b" }}>Generado el {new Date().toLocaleDateString("es-CO")} — codice-web.vercel.app/#estudiante</div>
-        </div>
-      )}
+      {contenidoImprimible && createPortal(contenidoImprimible, document.body)}
     </div>
   );
 }
@@ -679,6 +682,58 @@ function PlanillaBlancoModal({ estudiantes, gradoId, onClose }) {
     return () => { clearTimeout(id); window.removeEventListener("afterprint", onAfter); };
   }, [imprimiendo]);
 
+  const contenidoImprimible = imprimiendo ? (
+    <div className="print-only" style={{ maxWidth: 900, margin: "0 auto", padding: 28, fontFamily: "Georgia, serif", color: "#1e293b" }}>
+      <div style={{ textAlign: "center", marginBottom: 16, borderBottom: "2px solid #8B5CF6", paddingBottom: 10 }}>
+        {institucion.logo_url && (
+          <img src={institucion.logo_url} alt="Logo" style={{ maxHeight: 60, marginBottom: 6, display: "block", marginLeft: "auto", marginRight: "auto" }} />
+        )}
+        <div style={{ fontSize: 18, fontWeight: "bold" }}>{institucion.nombre}</div>
+        {(institucion.ciclo || institucion.anio) && (
+          <div style={{ fontSize: 11, color: "#64748b" }}>{institucion.ciclo}{institucion.ciclo && institucion.anio ? " — " : ""}{institucion.anio}</div>
+        )}
+        <div style={{ fontSize: 14, marginTop: 4 }}>Planilla de Calificaciones</div>
+      </div>
+      <table style={{ width: "100%", fontSize: 11, marginBottom: 14, borderCollapse: "collapse" }}>
+        <tbody>
+          <tr>
+            <td style={{ padding: 3, fontWeight: "bold" }}>Grado:</td><td style={{ padding: 3 }}>{gradoId}</td>
+            <td style={{ padding: 3, fontWeight: "bold" }}>Materia:</td><td style={{ padding: 3 }}>{materia || "—"}</td>
+          </tr>
+          <tr>
+            <td style={{ padding: 3, fontWeight: "bold" }}>Docente:</td><td style={{ padding: 3 }}>{docente || "—"}</td>
+            <td style={{ padding: 3, fontWeight: "bold" }}>Periodo:</td><td style={{ padding: 3 }}>{periodo || "—"}</td>
+          </tr>
+        </tbody>
+      </table>
+      <table style={{ width: "100%", fontSize: 11, borderCollapse: "collapse", border: "1px solid #cbd5e1" }}>
+        <thead>
+          <tr>
+            <th style={{ border: "1px solid #cbd5e1", padding: 6, width: 28 }}>#</th>
+            <th style={{ border: "1px solid #cbd5e1", padding: 6, textAlign: "left" }}>Estudiante</th>
+            {Array.from({ length: numColumnas }).map((_, i) => (
+              <th key={i} style={{ border: "1px solid #cbd5e1", padding: 6, width: 60 }}>&nbsp;</th>
+            ))}
+            <th style={{ border: "1px solid #cbd5e1", padding: 6, width: 70 }}>Nota Final</th>
+          </tr>
+        </thead>
+        <tbody>
+          {estudiantes.map((s, i) => (
+            <tr key={s.id}>
+              <td style={{ border: "1px solid #cbd5e1", padding: 6, textAlign: "center" }}>{i + 1}</td>
+              <td style={{ border: "1px solid #cbd5e1", padding: 6 }}>{s.nombre}</td>
+              {Array.from({ length: numColumnas }).map((_, j) => (
+                <td key={j} style={{ border: "1px solid #cbd5e1", padding: 6 }}>&nbsp;</td>
+              ))}
+              <td style={{ border: "1px solid #cbd5e1", padding: 6 }}>&nbsp;</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div style={{ marginTop: 16, fontSize: 10, color: "#64748b" }}>Generado el {new Date().toLocaleDateString("es-CO")}</div>
+    </div>
+  ) : null;
+
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4 no-print" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-md shadow-xl">
@@ -700,57 +755,7 @@ function PlanillaBlancoModal({ estudiantes, gradoId, onClose }) {
         </button>
       </div>
 
-      {imprimiendo && (
-        <div className="print-only" style={{ maxWidth: 900, margin: "0 auto", padding: 28, fontFamily: "Georgia, serif", color: "#1e293b" }}>
-          <div style={{ textAlign: "center", marginBottom: 16, borderBottom: "2px solid #8B5CF6", paddingBottom: 10 }}>
-            {institucion.logo_url && (
-              <img src={institucion.logo_url} alt="Logo" style={{ maxHeight: 60, marginBottom: 6, display: "block", marginLeft: "auto", marginRight: "auto" }} />
-            )}
-            <div style={{ fontSize: 18, fontWeight: "bold" }}>{institucion.nombre}</div>
-            {(institucion.ciclo || institucion.anio) && (
-              <div style={{ fontSize: 11, color: "#64748b" }}>{institucion.ciclo}{institucion.ciclo && institucion.anio ? " — " : ""}{institucion.anio}</div>
-            )}
-            <div style={{ fontSize: 14, marginTop: 4 }}>Planilla de Calificaciones</div>
-          </div>
-          <table style={{ width: "100%", fontSize: 11, marginBottom: 14, borderCollapse: "collapse" }}>
-            <tbody>
-              <tr>
-                <td style={{ padding: 3, fontWeight: "bold" }}>Grado:</td><td style={{ padding: 3 }}>{gradoId}</td>
-                <td style={{ padding: 3, fontWeight: "bold" }}>Materia:</td><td style={{ padding: 3 }}>{materia || "—"}</td>
-              </tr>
-              <tr>
-                <td style={{ padding: 3, fontWeight: "bold" }}>Docente:</td><td style={{ padding: 3 }}>{docente || "—"}</td>
-                <td style={{ padding: 3, fontWeight: "bold" }}>Periodo:</td><td style={{ padding: 3 }}>{periodo || "—"}</td>
-              </tr>
-            </tbody>
-          </table>
-          <table style={{ width: "100%", fontSize: 11, borderCollapse: "collapse", border: "1px solid #cbd5e1" }}>
-            <thead>
-              <tr>
-                <th style={{ border: "1px solid #cbd5e1", padding: 6, width: 28 }}>#</th>
-                <th style={{ border: "1px solid #cbd5e1", padding: 6, textAlign: "left" }}>Estudiante</th>
-                {Array.from({ length: numColumnas }).map((_, i) => (
-                  <th key={i} style={{ border: "1px solid #cbd5e1", padding: 6, width: 60 }}>&nbsp;</th>
-                ))}
-                <th style={{ border: "1px solid #cbd5e1", padding: 6, width: 70 }}>Nota Final</th>
-              </tr>
-            </thead>
-            <tbody>
-              {estudiantes.map((s, i) => (
-                <tr key={s.id}>
-                  <td style={{ border: "1px solid #cbd5e1", padding: 6, textAlign: "center" }}>{i + 1}</td>
-                  <td style={{ border: "1px solid #cbd5e1", padding: 6 }}>{s.nombre}</td>
-                  {Array.from({ length: numColumnas }).map((_, j) => (
-                    <td key={j} style={{ border: "1px solid #cbd5e1", padding: 6 }}>&nbsp;</td>
-                  ))}
-                  <td style={{ border: "1px solid #cbd5e1", padding: 6 }}>&nbsp;</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div style={{ marginTop: 16, fontSize: 10, color: "#64748b" }}>Generado el {new Date().toLocaleDateString("es-CO")}</div>
-        </div>
-      )}
+      {contenidoImprimible && createPortal(contenidoImprimible, document.body)}
     </div>
   );
 }
