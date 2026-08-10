@@ -760,7 +760,7 @@ function PlanillaBlancoModal({ estudiantes, gradoId, onClose }) {
   );
 }
 
-export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver }) {
+export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVerGrupos }) {
   const [estudiantes, setEstudiantes] = useState([]);
   const [roles, setRoles] = useState([]);
   const [catalogoReinos, setCatalogoReinos] = useState([]);
@@ -832,7 +832,10 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver }) {
 
   return (
     <div>
-      <button onClick={onVolver} className="text-sm text-violet-500 mb-3">← Grado {gradoId}</button>
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <button onClick={onVolver} className="text-sm text-violet-500">← Grados</button>
+        {onVerGrupos && <button onClick={onVerGrupos} className="text-sm text-violet-500">👪 Ver por grupos/reinos</button>}
+      </div>
       <h2 className="text-xl font-bold text-slate-800 mb-4">
         {reinoFiltro ? reinoFiltro : `Grado ${gradoId} — todos los estudiantes`}
       </h2>
