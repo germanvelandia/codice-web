@@ -565,9 +565,21 @@ function OrganizarApellidosModal({ estudiantes, onClose, onGuardado }) {
   );
 }
 
-function CodigosModal({ estudiantes, onClose, onActualizado }) {
+function CodigosModal({ estudiantes, gradoId, onClose, onActualizado }) {
   const [lista, setLista] = useState(estudiantes);
   const [generando, setGenerando] = useState(false);
+  const [institucion, setInstitucion] = useState(null);
+  const [imprimiendo, setImprimiendo] = useState(false);
+
+  useEffect(() => { api.fetchInstitucion().then(setInstitucion); }, []);
+
+  useEffect(() => {
+    if (!imprimiendo) return;
+    const id = setTimeout(() => window.print(), 150);
+    const onAfter = () => setImprimiendo(false);
+    window.addEventListener("afterprint", onAfter);
+    return () => { clearTimeout(id); window.removeEventListener("afterprint", onAfter); };
+  }, [imprimiendo]);
 
   const generarUno = async (id) => {
     try {
@@ -590,16 +602,23 @@ function CodigosModal({ estudiantes, onClose, onActualizado }) {
     setGenerando(false);
   };
 
+  const conCodigo = lista.filter((s) => s.codigo_acceso);
+
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4 no-print" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-md max-h-[85vh] overflow-y-auto shadow-xl">
         <div className="flex justify-between items-center mb-3">
           <h3 className="font-bold text-slate-800">Códigos de acceso</h3>
           <button onClick={onClose} className="text-slate-400">✕</button>
         </div>
-        <button disabled={generando} onClick={generarTodos} className="w-full text-sm font-semibold py-2 rounded-lg bg-violet-500 text-white mb-4 disabled:opacity-60">
-          {generando ? "Generando…" : "🔑 Generar los que falten"}
-        </button>
+        <div className="flex gap-2 mb-4">
+          <button disabled={generando} onClick={generarTodos} className="flex-1 text-sm font-semibold py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+            {generando ? "Generando…" : "🔑 Generar los que falten"}
+          </button>
+          <button disabled={conCodigo.length === 0} onClick={() => setImprimiendo(true)} className="text-sm font-semibold px-3 py-2 rounded-lg border border-slate-200 text-slate-600 disabled:opacity-40">
+            🖨️ PDF
+          </button>
+        </div>
         <div className="divide-y divide-slate-100">
           {lista.map((s) => (
             <div key={s.id} className="flex items-center justify-between py-2">
@@ -612,8 +631,29 @@ function CodigosModal({ estudiantes, onClose, onActualizado }) {
             </div>
           ))}
         </div>
-        <p className="text-xs text-slate-400 mt-4">Comparte cada código con el estudiante o acudiente correspondiente — con él pueden entrar desde "Soy estudiante" en la pantalla de inicio.</p>
+        <p className="text-xs text-slate-400 mt-4">Comparte cada código con el estudiante o acudiente correspondiente — con él pueden entrar desde el link de estudiantes.</p>
       </div>
+
+      {imprimiendo && (
+        <div className="print-only" style={{ maxWidth: 900, margin: "0 auto", padding: 28, fontFamily: "Georgia, serif", color: "#1e293b" }}>
+          <div style={{ textAlign: "center", marginBottom: 16, borderBottom: "2px solid #8B5CF6", paddingBottom: 10 }}>
+            {institucion?.logo_url && (
+              <img src={institucion.logo_url} alt="Logo" style={{ maxHeight: 60, marginBottom: 6, display: "block", marginLeft: "auto", marginRight: "auto" }} />
+            )}
+            <div style={{ fontSize: 18, fontWeight: "bold" }}>{institucion?.nombre || "Institución Educativa"}</div>
+            <div style={{ fontSize: 14, marginTop: 4 }}>Códigos de acceso — Grado {gradoId}</div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+            {conCodigo.map((s) => (
+              <div key={s.id} className="print-avoid-break" style={{ border: "1.5px dashed #C4B5FD", borderRadius: 8, padding: 10, textAlign: "center" }}>
+                <div style={{ fontSize: 11, marginBottom: 4 }}>{s.nombre}</div>
+                <div style={{ fontSize: 20, fontWeight: "bold", letterSpacing: 2, color: "#7C3AED", fontFamily: "monospace" }}>{s.codigo_acceso}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: 16, fontSize: 10, color: "#64748b" }}>Generado el {new Date().toLocaleDateString("es-CO")} — codice-web.vercel.app/#estudiante</div>
+        </div>
+      )}
     </div>
   );
 }
@@ -823,6 +863,7 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver }) {
       {codigosAbierto && (
         <CodigosModal
           estudiantes={visibles}
+          gradoId={gradoId}
           onClose={() => setCodigosAbierto(false)}
           onActualizado={actualizarCodigoLocal}
         />
