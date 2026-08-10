@@ -217,12 +217,31 @@ function horaAFraccion(horaStr, base) {
   return (h - base) + m / 60;
 }
 
-const COLORES_MATERIA = ["#8B5CF6", "#3B82F6", "#F59E0B", "#14B8A6", "#EC4899", "#22C55E", "#F43F5E", "#64748B"];
-function colorDeClase(h) {
-  const clave = h.materia_id || h.nombre_actividad || "x";
+const COLORES_GRADO = ["#8B5CF6", "#3B82F6", "#F59E0B", "#14B8A6", "#EC4899", "#22C55E", "#F43F5E", "#0EA5E9", "#A855F7", "#84CC16"];
+const COLOR_SIN_GRADO = "#64748B";
+function colorDeGrado(gradoId) {
+  if (!gradoId) return COLOR_SIN_GRADO;
   let hash = 0;
-  for (const c of String(clave)) hash = (hash * 31 + c.charCodeAt(0)) % COLORES_MATERIA.length;
-  return COLORES_MATERIA[Math.abs(hash) % COLORES_MATERIA.length];
+  for (const c of String(gradoId)) hash = (hash * 31 + c.charCodeAt(0)) % COLORES_GRADO.length;
+  return COLORES_GRADO[Math.abs(hash) % COLORES_GRADO.length];
+}
+function colorDeClase(h) {
+  return colorDeGrado(h.grado_id);
+}
+
+function LeyendaGrados({ grados }) {
+  return (
+    <div className="flex flex-wrap gap-2 mb-2">
+      {grados.map((g) => (
+        <span key={g.id} className="flex items-center gap-1.5 text-[11px] text-slate-600">
+          <span className="w-2.5 h-2.5 rounded-full" style={{ background: colorDeGrado(g.id) }} /> Grado {g.id}
+        </span>
+      ))}
+      <span className="flex items-center gap-1.5 text-[11px] text-slate-400">
+        <span className="w-2.5 h-2.5 rounded-full" style={{ background: COLOR_SIN_GRADO }} /> Sin grado
+      </span>
+    </div>
+  );
 }
 
 function CalendarioHorario({ visible, modo, onEditar }) {
@@ -337,7 +356,8 @@ function HorarioSemanal({ grados, materias, usuarioId }) {
         <div className="text-sm text-rose-500 bg-rose-50 rounded-xl p-3">Error al cargar el horario: {error}</div>
       ) : vista === "calendario" ? (
         <>
-          <p className="text-[11px] text-slate-400 mb-2">Tocá cualquier bloque para editarlo o eliminarlo.</p>
+          <p className="text-[11px] text-slate-400 mb-2">Tocá cualquier bloque para editarlo o eliminarlo. El color de cada bloque es según el grado.</p>
+          <LeyendaGrados grados={grados} />
           <CalendarioHorario visible={visible} modo={modo} onEditar={intentarEditar} />
         </>
       ) : (
