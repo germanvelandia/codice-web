@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as api from "../lib/api";
 import { reinoColor } from "../lib/gamification";
+import { ACCIONES_RAPIDAS } from "../lib/gamification";
 
 let audioCtx = null;
 function getCtx() {
@@ -75,6 +76,8 @@ export function VistaRuleta({ grados }) {
   const [rotation, setRotation] = useState(0);
   const [spinning, setSpinning] = useState(false);
   const [winner, setWinner] = useState(null);
+  const [registrando, setRegistrando] = useState(null);
+  const [registrado, setRegistrado] = useState(null);
 
   useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
   useEffect(() => { if (gradoId) api.fetchEstudiantesPorGrado(gradoId).then(setEstudiantes); }, [gradoId]);
@@ -86,22 +89,25 @@ export function VistaRuleta({ grados }) {
 
   useEffect(() => { if (reinos.length && !reino) setReino(reinos[0]); }, [reinos]);
 
+  // Cada opción lleva { label, estudianteId } — estudianteId es null en modo "equipos"
+  // (un reino no es una persona, no se le puede registrar una acción individual).
   const items = useMemo(() => {
-    if (modo === "grado") return estudiantes.map((s) => s.nombre);
-    if (modo === "reino") return estudiantes.filter((s) => (s.reino_actual || s.reino_original) === reino).map((s) => s.nombre);
-    if (modo === "equipos") return reinos;
+    if (modo === "grado") return estudiantes.map((s) => ({ label: s.nombre, estudianteId: s.id }));
+    if (modo === "reino") return estudiantes.filter((s) => (s.reino_actual || s.reino_original) === reino).map((s) => ({ label: s.nombre, estudianteId: s.id }));
+    if (modo === "equipos") return reinos.map((r) => ({ label: r, estudianteId: null }));
     return [];
   }, [modo, estudiantes, reino, reinos]);
 
   const n = Math.max(items.length, 1);
   const sliceDeg = 360 / n;
-  const colores = items.map((_, i) => reinoColor(items[i] + i));
+  const colores = items.map((it, i) => reinoColor(it.label + i));
   const gradient = `conic-gradient(${colores.map((c, i) => `${c} ${i * sliceDeg}deg ${(i + 1) * sliceDeg}deg`).join(",")})`;
 
   const spin = () => {
     if (items.length < 2 || spinning) return;
     setSpinning(true);
     setWinner(null);
+    setRegistrado(null);
     const winnerIdx = Math.floor(Math.random() * items.length);
     const vueltas = 6;
     programarClacs(4000, vueltas, items.length);
@@ -117,6 +123,18 @@ export function VistaRuleta({ grados }) {
       setWinner(items[winnerIdx]);
       beep(900, 0.2, 0.2);
     }, 4000);
+  };
+
+  const registrarParticipacion = async (accion) => {
+    if (!winner?.estudianteId) return;
+    setRegistrando(accion.key);
+    try {
+      await api.registrarAccion(winner.estudianteId, accion);
+      setRegistrado(accion.label);
+    } catch (e) {
+      alert("Error al registrar: " + e.message);
+    }
+    setRegistrando(null);
   };
 
   return (
@@ -157,7 +175,7 @@ export function VistaRuleta({ grados }) {
                     display: "inline-block", maxWidth: 90, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                     fontSize: n > 20 ? 8 : n > 10 ? 10 : 12, fontWeight: 600, color: "#fff", textShadow: "0 1px 3px rgba(0,0,0,0.7)",
                   }}>
-                    {it.length > 16 ? it.slice(0, 15) + "…" : it}
+                    {it.label.length > 16 ? it.label.slice(0, 15) + "…" : it.label}
                   </span>
                 </div>
               );
@@ -168,7 +186,23 @@ export function VistaRuleta({ grados }) {
           {spinning ? "Girando…" : "🎡 Girar la ruleta"}
         </button>
         {winner && !spinning && (
-          <div className="text-lg font-bold px-6 py-3 rounded-2xl bg-violet-100 text-violet-700">🎉 {winner}</div>
+          <div className="text-center">
+            <div className="text-lg font-bold px-6 py-3 rounded-2xl bg-violet-100 text-violet-700 mb-3">🎉 {winner.label}</div>
+            {winner.estudianteId && (
+              <div className="bg-white rounded-2xl border border-slate-100 p-3 max-w-sm">
+                <div className="text-xs font-semibold text-slate-500 mb-2">Registrar participación</div>
+                <div className="flex flex-wrap gap-1.5 justify-center">
+                  {ACCIONES_RAPIDAS.map((a) => (
+                    <button key={a.key} disabled={registrando === a.key} onClick={() => registrarParticipacion(a)}
+                      className={`text-xs px-2.5 py-1.5 rounded-full ${a.tipo === "positiva" ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-600"} disabled:opacity-50`}>
+                      {registrando === a.key ? "…" : a.label}
+                    </button>
+                  ))}
+                </div>
+                {registrado && <p className="text-xs text-emerald-600 mt-2">✔ "{registrado}" registrada.</p>}
+              </div>
+            )}
+          </div>
         )}
         {items.length < 2 && <p className="text-xs text-slate-400">Necesitas al menos 2 opciones para girar.</p>}
       </div>
