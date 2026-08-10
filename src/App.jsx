@@ -973,7 +973,7 @@ function Panel({ session }) {
         {tab === "inicio" && <VistaInicio onIrA={irA} />}
         {tab === "estudiantes" && (
           <>
-            {!grado && <VistaGrados onElegirGrado={(g) => { setGrado(g); setReino(null); setModoLista(false); }} />}
+            {!grado && <VistaGrados onElegirGrado={(g) => { setGrado(g); setReino(null); setModoLista(true); }} />}
             {grado && !modoLista && !reino && (
               <VistaReinos
                 gradoId={grado}
@@ -987,7 +987,8 @@ function Panel({ session }) {
                 gradoId={grado}
                 grados={grados}
                 reinoFiltro={modoLista ? null : reino}
-                onVolver={() => { setReino(null); setModoLista(false); }}
+                onVolver={() => setGrado(null)}
+                onVerGrupos={() => { setReino(null); setModoLista(false); }}
               />
             )}
           </>
