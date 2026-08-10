@@ -104,9 +104,14 @@ export function VistaRuleta({ grados }) {
     setWinner(null);
     const winnerIdx = Math.floor(Math.random() * items.length);
     const vueltas = 6;
-    const anguloFinal = 360 * vueltas + (360 - (winnerIdx * sliceDeg + sliceDeg / 2));
-    setRotation((r) => r + anguloFinal);
     programarClacs(4000, vueltas, items.length);
+    setRotation((r) => {
+      const rMod = ((r % 360) + 360) % 360;
+      const objetivoMod = (360 - (winnerIdx * sliceDeg + sliceDeg / 2) + 360) % 360;
+      let delta = objetivoMod - rMod;
+      if (delta <= 0) delta += 360; // siempre gira hacia adelante, nunca "hacia atrás"
+      return r + 360 * vueltas + delta;
+    });
     setTimeout(() => {
       setSpinning(false);
       setWinner(items[winnerIdx]);
@@ -184,6 +189,11 @@ export function VistaRuletaMonedas({ grados }) {
   const [spinning, setSpinning] = useState(false);
   const [resultado, setResultado] = useState(null);
   const [aplicando, setAplicando] = useState(false);
+  const [manualValor, setManualValor] = useState("");
+  const [aplicandoManual, setAplicandoManual] = useState(false);
+  const [rangoMin, setRangoMin] = useState(-10);
+  const [rangoMax, setRangoMax] = useState(15);
+  const [rangoCantidad, setRangoCantidad] = useState(8);
 
   useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
   useEffect(() => { if (gradoId) api.fetchEstudiantesPorGrado(gradoId).then(setEstudiantes); }, [gradoId]);
@@ -202,6 +212,34 @@ export function VistaRuletaMonedas({ grados }) {
   const agregarOpcion = () => setOpciones((prev) => [...prev, 5]);
   const quitarOpcion = (i) => setOpciones((prev) => prev.filter((_, idx) => idx !== i));
 
+  const generarPorRango = () => {
+    const min = parseInt(rangoMin, 10) || 0;
+    const max = parseInt(rangoMax, 10) || 0;
+    const cantidad = Math.max(2, Math.min(16, parseInt(rangoCantidad, 10) || 8));
+    if (min >= max) { alert("El mínimo debe ser menor que el máximo."); return; }
+    const nuevas = Array.from({ length: cantidad }, () => Math.round(min + Math.random() * (max - min)));
+    setOpciones(nuevas);
+  };
+
+  const aplicarManual = async () => {
+    const valor = parseInt(manualValor, 10);
+    if (isNaN(valor)) { alert("Escribí un número (puede ser negativo)."); return; }
+    if (objetivo === "uno" && !estudianteId) return;
+    setAplicandoManual(true);
+    try {
+      if (objetivo === "uno") {
+        await api.ajustarMonedas(estudianteId, valor);
+      } else {
+        await api.ajustarMonedasMasivo(visibles.map((s) => s.id), valor);
+      }
+      setResultado(valor);
+      setManualValor("");
+    } catch (e) {
+      alert("Error al aplicar: " + e.message);
+    }
+    setAplicandoManual(false);
+  };
+
   const spin = () => {
     if (spinning || opciones.length < 2) return;
     if (objetivo === "uno" && !estudianteId) return;
@@ -209,9 +247,14 @@ export function VistaRuletaMonedas({ grados }) {
     setResultado(null);
     const idx = Math.floor(Math.random() * opciones.length);
     const vueltas = 6;
-    const anguloFinal = 360 * vueltas + (360 - (idx * sliceDeg + sliceDeg / 2));
-    setRotation((r) => r + anguloFinal);
     programarClacs(4000, vueltas, opciones.length);
+    setRotation((r) => {
+      const rMod = ((r % 360) + 360) % 360;
+      const objetivoMod = (360 - (idx * sliceDeg + sliceDeg / 2) + 360) % 360;
+      let delta = objetivoMod - rMod;
+      if (delta <= 0) delta += 360;
+      return r + 360 * vueltas + delta;
+    });
     setTimeout(async () => {
       setSpinning(false);
       const valor = opciones[idx];
@@ -256,7 +299,7 @@ export function VistaRuletaMonedas({ grados }) {
 
       <div className="bg-white rounded-2xl border border-slate-100 p-3 mb-4">
         <div className="text-xs font-semibold text-slate-500 mb-2">Casillas de la ruleta (monedas a dar o quitar)</div>
-        <div className="flex flex-wrap gap-1.5 mb-2">
+        <div className="flex flex-wrap gap-1.5 mb-3">
           {opciones.map((o, i) => (
             <div key={i} className="flex items-center gap-1">
               <input type="number" value={o} onChange={(e) => cambiarOpcion(i, e.target.value)}
@@ -265,6 +308,28 @@ export function VistaRuletaMonedas({ grados }) {
             </div>
           ))}
           <button onClick={agregarOpcion} className="text-xs text-violet-500 px-2">+ Casilla</button>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap bg-violet-50 rounded-lg p-2">
+          <span className="text-[11px] text-slate-500">O generar por rango:</span>
+          <input type="number" value={rangoMin} onChange={(e) => setRangoMin(e.target.value)} className="w-16 text-xs text-center rounded-lg px-1 py-1 border border-slate-200 outline-none" title="Mínimo (puede ser negativo)" />
+          <span className="text-[11px] text-slate-400">a</span>
+          <input type="number" value={rangoMax} onChange={(e) => setRangoMax(e.target.value)} className="w-16 text-xs text-center rounded-lg px-1 py-1 border border-slate-200 outline-none" title="Máximo" />
+          <span className="text-[11px] text-slate-400">·</span>
+          <input type="number" value={rangoCantidad} onChange={(e) => setRangoCantidad(e.target.value)} className="w-14 text-xs text-center rounded-lg px-1 py-1 border border-slate-200 outline-none" title="Cantidad de casillas" />
+          <span className="text-[11px] text-slate-400">casillas</span>
+          <button onClick={generarPorRango} className="text-[11px] font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white ml-auto">Generar</button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-100 p-3 mb-4">
+        <div className="text-xs font-semibold text-slate-500 mb-2">O aplicar manualmente, sin girar</div>
+        <div className="flex items-center gap-2">
+          <input type="number" value={manualValor} onChange={(e) => setManualValor(e.target.value)} placeholder="Ej: 10 o -5"
+            className="w-24 text-sm text-center rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+          <button disabled={aplicandoManual || (objetivo === "uno" && !estudianteId)} onClick={aplicarManual}
+            className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white disabled:opacity-50">
+            {aplicandoManual ? "Aplicando…" : `Aplicar a ${objetivo === "uno" ? (visibles.find((s) => s.id === estudianteId)?.nombre || "estudiante") : `${visibles.length} estudiantes`}`}
+          </button>
         </div>
       </div>
 
