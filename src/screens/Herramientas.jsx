@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as api from "../lib/api";
-import { reinoColor } from "../lib/gamification";
 import { ACCIONES_RAPIDAS } from "../lib/gamification";
 
 let audioCtx = null;
@@ -58,23 +57,15 @@ function boom() {
 
 // Programa sonidos de "clac" que se van espaciando con el tiempo, simulando
 // una ruleta real que gira rápido y va frenando (usa la misma curva del CSS).
-function programarClacs(duracionMs, vueltas, nSegmentos) {
-  const totalClacs = Math.max(8, Math.round(vueltas * nSegmentos * 0.6));
-  for (let i = 1; i <= totalClacs; i++) {
-    const frac = i / totalClacs;
-    // Aproximación de easing "ease-out cúbico" inverso: los clacs se separan más hacia el final
-    const t = 1 - Math.pow(1 - frac, 3);
-    setTimeout(() => clack(0.15 - frac * 0.08), t * duracionMs);
-  }
-}
+// (los sonidos de "clac" ahora se generan directo en cada spin(), ver más abajo)
 
 export function VistaRuleta({ grados }) {
   const [gradoId, setGradoId] = useState(grados[0]?.id || "");
   const [modo, setModo] = useState("grado");
   const [reino, setReino] = useState("");
   const [estudiantes, setEstudiantes] = useState([]);
-  const [rotation, setRotation] = useState(0);
   const [spinning, setSpinning] = useState(false);
+  const [mostrado, setMostrado] = useState(null); // item que se ve en pantalla en cada instante
   const [winner, setWinner] = useState(null);
   const [registrando, setRegistrando] = useState(null);
   const [registrado, setRegistrado] = useState(null);
@@ -98,31 +89,32 @@ export function VistaRuleta({ grados }) {
     return [];
   }, [modo, estudiantes, reino, reinos]);
 
-  const n = Math.max(items.length, 1);
-  const sliceDeg = 360 / n;
-  const colores = items.map((it, i) => reinoColor(it.label + i));
-  const gradient = `conic-gradient(${colores.map((c, i) => `${c} ${i * sliceDeg}deg ${(i + 1) * sliceDeg}deg`).join(",")})`;
-
+  // Sorteo tipo "máquina": va mostrando nombres al azar cada vez más lento, y el
+  // ÚLTIMO que muestra es literalmente el mismo que se guarda como ganador — no hay
+  // ningún cálculo de ángulos/geometría de por medio, así nunca pueden desincronizarse.
   const spin = () => {
     if (items.length < 2 || spinning) return;
     setSpinning(true);
     setWinner(null);
     setRegistrado(null);
     const winnerIdx = Math.floor(Math.random() * items.length);
-    const vueltas = 6;
-    programarClacs(4000, vueltas, items.length);
-    setRotation((r) => {
-      const rMod = ((r % 360) + 360) % 360;
-      const objetivoMod = (360 - (winnerIdx * sliceDeg + sliceDeg / 2) + 360) % 360;
-      let delta = objetivoMod - rMod;
-      if (delta <= 0) delta += 360; // siempre gira hacia adelante, nunca "hacia atrás"
-      return r + 360 * vueltas + delta;
-    });
-    setTimeout(() => {
-      setSpinning(false);
-      setWinner(items[winnerIdx]);
-      beep(900, 0.2, 0.2);
-    }, 4000);
+    const duracionTotal = 2800;
+    const pasos = Math.max(18, Math.min(34, items.length * 2));
+    for (let i = 1; i <= pasos; i++) {
+      const frac = i / pasos;
+      const t = 1 - Math.pow(1 - frac, 3); // desacelera hacia el final
+      const esUltimo = i === pasos;
+      setTimeout(() => {
+        const idxMostrado = esUltimo ? winnerIdx : Math.floor(Math.random() * items.length);
+        setMostrado(items[idxMostrado]);
+        clack(0.15 - frac * 0.08);
+        if (esUltimo) {
+          setSpinning(false);
+          setWinner(items[winnerIdx]);
+          beep(900, 0.2, 0.2);
+        }
+      }, t * duracionTotal);
+    }
   };
 
   const registrarParticipacion = async (accion) => {
@@ -159,31 +151,20 @@ export function VistaRuleta({ grados }) {
       </div>
 
       <div className="flex flex-col items-center gap-6">
-        <div className="relative" style={{ width: 280, height: 280 }}>
-          <div style={{ position: "absolute", top: -8, left: "50%", transform: "translateX(-50%)", zIndex: 2, width: 0, height: 0, borderLeft: "10px solid transparent", borderRight: "10px solid transparent", borderTop: "18px solid #8B5CF6" }} />
-          <div style={{
-            width: 280, height: 280, borderRadius: "50%", background: items.length > 1 ? gradient : "#EDE9FE",
-            border: "5px solid #8B5CF6", transform: `rotate(${rotation}deg)`,
-            transition: spinning ? "transform 4s cubic-bezier(0.15,0.75,0.15,1)" : "none", position: "relative",
+        <div className="rounded-3xl flex items-center justify-center text-center px-6"
+          style={{
+            width: 320, minHeight: 160, background: "linear-gradient(180deg, #EDE9FE 0%, #F5F3FF 100%)",
+            border: "4px solid #8B5CF6", boxShadow: spinning ? "0 0 0 6px rgba(139,92,246,0.15)" : "none",
+            transition: "box-shadow 0.2s",
           }}>
-            {items.map((it, i) => {
-              const angle = i * sliceDeg + sliceDeg / 2;
-              return (
-                <div key={i} style={{ position: "absolute", top: "50%", left: "50%", width: "50%", height: 0, transform: `rotate(${angle}deg)`, transformOrigin: "0 0" }}>
-                  <span style={{
-                    position: "absolute", right: 14, top: -8,
-                    display: "inline-block", maxWidth: 90, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                    fontSize: n > 20 ? 8 : n > 10 ? 10 : 12, fontWeight: 600, color: "#fff", textShadow: "0 1px 3px rgba(0,0,0,0.7)",
-                  }}>
-                    {it.label.length > 16 ? it.label.slice(0, 15) + "…" : it.label}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+          {mostrado ? (
+            <span className="text-2xl font-bold text-violet-700 break-words" style={{ opacity: spinning ? 0.85 : 1 }}>{mostrado.label}</span>
+          ) : (
+            <span className="text-sm text-slate-400">Tocá "Girar" para sortear</span>
+          )}
         </div>
         <button onClick={spin} disabled={spinning || items.length < 2} className="text-sm font-bold px-6 py-3 rounded-full bg-violet-500 text-white disabled:opacity-50">
-          {spinning ? "Girando…" : "🎡 Girar la ruleta"}
+          {spinning ? "Sorteando…" : "🎲 Girar"}
         </button>
         {winner && !spinning && (
           <div className="text-center">
@@ -219,8 +200,8 @@ export function VistaRuletaMonedas({ grados }) {
   const [objetivo, setObjetivo] = useState("uno"); // "uno" | "todos"
   const [estudianteId, setEstudianteId] = useState("");
   const [opciones, setOpciones] = useState(OPCIONES_MONEDAS_DEFAULT);
-  const [rotation, setRotation] = useState(0);
   const [spinning, setSpinning] = useState(false);
+  const [mostrado, setMostrado] = useState(null);
   const [resultado, setResultado] = useState(null);
   const [aplicando, setAplicando] = useState(false);
   const [manualValor, setManualValor] = useState("");
@@ -236,11 +217,7 @@ export function VistaRuletaMonedas({ grados }) {
   const reinos = useMemo(() => ["Todos", ...new Set(estudiantes.map((s) => s.reino_actual || s.reino_original || "Sin grupo"))], [estudiantes]);
   const visibles = estudiantes.filter((s) => reinoFiltro === "Todos" || (s.reino_actual || s.reino_original) === reinoFiltro);
 
-  const n = Math.max(opciones.length, 1);
-  const sliceDeg = 360 / n;
   const colorOpcion = (v) => v > 0 ? "#22C55E" : v < 0 ? "#EF4444" : "#94A3B8";
-  const colores = opciones.map(colorOpcion);
-  const gradient = `conic-gradient(${colores.map((c, i) => `${c} ${i * sliceDeg}deg ${(i + 1) * sliceDeg}deg`).join(",")})`;
 
   const cambiarOpcion = (i, valor) => setOpciones((prev) => prev.map((o, idx) => idx === i ? (parseInt(valor, 10) || 0) : o));
   const agregarOpcion = () => setOpciones((prev) => [...prev, 5]);
@@ -274,38 +251,44 @@ export function VistaRuletaMonedas({ grados }) {
     setAplicandoManual(false);
   };
 
+  // Mismo formato de "máquina de sorteo" que la Ruleta del Códice: lo último que
+  // se muestra en pantalla es exactamente el mismo valor que se aplica — sin
+  // geometría de por medio, no se pueden desincronizar.
   const spin = () => {
     if (spinning || opciones.length < 2) return;
     if (objetivo === "uno" && !estudianteId) return;
     setSpinning(true);
     setResultado(null);
     const idx = Math.floor(Math.random() * opciones.length);
-    const vueltas = 6;
-    programarClacs(4000, vueltas, opciones.length);
-    setRotation((r) => {
-      const rMod = ((r % 360) + 360) % 360;
-      const objetivoMod = (360 - (idx * sliceDeg + sliceDeg / 2) + 360) % 360;
-      let delta = objetivoMod - rMod;
-      if (delta <= 0) delta += 360;
-      return r + 360 * vueltas + delta;
-    });
-    setTimeout(async () => {
-      setSpinning(false);
-      const valor = opciones[idx];
-      setResultado(valor);
-      beep(900, 0.2, 0.2);
-      setAplicando(true);
-      try {
-        if (objetivo === "uno") {
-          await api.ajustarMonedas(estudianteId, valor);
-        } else {
-          await api.ajustarMonedasMasivo(visibles.map((s) => s.id), valor);
+    const duracionTotal = 2800;
+    const pasos = Math.max(18, Math.min(34, opciones.length * 3));
+    for (let i = 1; i <= pasos; i++) {
+      const frac = i / pasos;
+      const t = 1 - Math.pow(1 - frac, 3);
+      const esUltimo = i === pasos;
+      setTimeout(async () => {
+        const idxMostrado = esUltimo ? idx : Math.floor(Math.random() * opciones.length);
+        setMostrado(opciones[idxMostrado]);
+        clack(0.15 - frac * 0.08);
+        if (esUltimo) {
+          setSpinning(false);
+          const valor = opciones[idx];
+          setResultado(valor);
+          beep(900, 0.2, 0.2);
+          setAplicando(true);
+          try {
+            if (objetivo === "uno") {
+              await api.ajustarMonedas(estudianteId, valor);
+            } else {
+              await api.ajustarMonedasMasivo(visibles.map((s) => s.id), valor);
+            }
+          } catch (e) {
+            alert("Error al aplicar las monedas: " + e.message);
+          }
+          setAplicando(false);
         }
-      } catch (e) {
-        alert("Error al aplicar las monedas: " + e.message);
-      }
-      setAplicando(false);
-    }, 4000);
+      }, t * duracionTotal);
+    }
   };
 
   return (
@@ -332,7 +315,7 @@ export function VistaRuletaMonedas({ grados }) {
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-100 p-3 mb-4">
-        <div className="text-xs font-semibold text-slate-500 mb-2">Casillas de la ruleta (monedas a dar o quitar)</div>
+        <div className="text-xs font-semibold text-slate-500 mb-2">Casillas del sorteo (monedas a dar o quitar)</div>
         <div className="flex flex-wrap gap-1.5 mb-3">
           {opciones.map((o, i) => (
             <div key={i} className="flex items-center gap-1">
@@ -368,31 +351,23 @@ export function VistaRuletaMonedas({ grados }) {
       </div>
 
       <div className="flex flex-col items-center gap-6">
-        <div className="relative" style={{ width: 260, height: 260 }}>
-          <div style={{ position: "absolute", top: -8, left: "50%", transform: "translateX(-50%)", zIndex: 2, width: 0, height: 0, borderLeft: "10px solid transparent", borderRight: "10px solid transparent", borderTop: "18px solid #8B5CF6" }} />
-          <div style={{
-            width: 260, height: 260, borderRadius: "50%", background: opciones.length > 1 ? gradient : "#EDE9FE",
-            border: "5px solid #8B5CF6", transform: `rotate(${rotation}deg)`,
-            transition: spinning ? "transform 4s cubic-bezier(0.15,0.75,0.15,1)" : "none", position: "relative",
+        <div className="rounded-3xl flex items-center justify-center text-center px-6"
+          style={{
+            width: 280, minHeight: 140, background: "linear-gradient(180deg, #EDE9FE 0%, #F5F3FF 100%)",
+            border: "4px solid #8B5CF6", boxShadow: spinning ? "0 0 0 6px rgba(139,92,246,0.15)" : "none",
+            transition: "box-shadow 0.2s",
           }}>
-            {opciones.map((o, i) => {
-              const angle = i * sliceDeg + sliceDeg / 2;
-              return (
-                <div key={i} style={{ position: "absolute", top: "50%", left: "50%", width: "50%", height: 0, transform: `rotate(${angle}deg)`, transformOrigin: "0 0" }}>
-                  <span style={{
-                    position: "absolute", right: 16, top: -10,
-                    display: "inline-block", fontSize: 14, fontWeight: 700, color: "#fff", textShadow: "0 1px 3px rgba(0,0,0,0.7)",
-                  }}>
-                    {o > 0 ? `+${o}` : o}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+          {mostrado !== null ? (
+            <span className="text-4xl font-bold" style={{ color: colorOpcion(mostrado), opacity: spinning ? 0.85 : 1 }}>
+              {mostrado > 0 ? `+${mostrado}` : mostrado}
+            </span>
+          ) : (
+            <span className="text-sm text-slate-400">Tocá "Girar" para sortear</span>
+          )}
         </div>
         <button onClick={spin} disabled={spinning || aplicando || opciones.length < 2 || (objetivo === "uno" && !estudianteId)}
           className="text-sm font-bold px-6 py-3 rounded-full bg-violet-500 text-white disabled:opacity-50">
-          {spinning ? "Girando…" : aplicando ? "Aplicando…" : "🪙 Girar la ruleta"}
+          {spinning ? "Sorteando…" : aplicando ? "Aplicando…" : "🪙 Girar"}
         </button>
         {resultado !== null && !spinning && !aplicando && (
           <div className={`text-lg font-bold px-6 py-3 rounded-2xl ${resultado >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
