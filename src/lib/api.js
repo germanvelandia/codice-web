@@ -36,6 +36,11 @@ export async function crearGrado(id) {
   if (error) throw error;
 }
 
+export async function guardarColorGrado(id, color) {
+  const { error } = await supabase.from("grados").update({ color }).eq("id", id);
+  if (error) throw error;
+}
+
 export async function fetchEstudiantesPorGrado(gradoId) {
   const { data, error } = await supabase
     .from("estudiantes")
