@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabaseClient";
-import { ACCIONES_RAPIDAS, ACADEMICO_POS, ACADEMICO_NEG, PILARES, CONVIVENCIAL_POS_EXTRA, CONVIVENCIAL_NEG, initials, nextLevel, reinoColor, reinoInfo, sugerirApellidos } from "../lib/gamification";
+import { ACCIONES_RAPIDAS, ACADEMICO_POS, ACADEMICO_NEG, PILARES, CONVIVENCIAL_POS_EXTRA, CONVIVENCIAL_NEG, initials, nextLevel, reinoColor, reinoInfo, sugerirApellidos, colorGrado, REINO_COLORS } from "../lib/gamification";
 
 // Declarada acá directamente (en vez de importarla) para evitar depender del
 // export de gamification.js en el build.
@@ -1068,6 +1068,7 @@ export function VistaGrados({ onElegirGrado }) {
   const [grados, setGrados] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [nuevoGrado, setNuevoGrado] = useState("");
+  const [editandoColorDe, setEditandoColorDe] = useState(null);
 
   const cargar = async () => {
     setCargando(true);
@@ -1085,6 +1086,12 @@ export function VistaGrados({ onElegirGrado }) {
     cargar();
   };
 
+  const elegirColor = async (gradoId, color) => {
+    await api.guardarColorGrado(gradoId, color);
+    setEditandoColorDe(null);
+    cargar();
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
@@ -1095,16 +1102,31 @@ export function VistaGrados({ onElegirGrado }) {
           <button onClick={crear} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white">Crear</button>
         </div>
       </div>
+      <p className="text-xs text-slate-400 mb-3">El color de cada grado se usa automáticamente en el calendario de Horario y en otros lugares de la app. Tocá el círculo de color para cambiarlo.</p>
       {cargando ? (
         <div className="text-sm text-slate-400">Cargando…</div>
       ) : (
         <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))" }}>
-          {grados.map((g) => (
-            <button key={g.id} onClick={() => onElegirGrado(g.id)} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 text-center hover:shadow-md">
-              <div className="text-2xl font-bold text-violet-600">{g.id}</div>
-              <div className="text-xs text-slate-400 mt-1">Grado</div>
-            </button>
-          ))}
+          {grados.map((g) => {
+            const color = colorGrado(g.id, grados);
+            return (
+              <div key={g.id} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 text-center hover:shadow-md relative">
+                <button onClick={(e) => { e.stopPropagation(); setEditandoColorDe(editandoColorDe === g.id ? null : g.id); }}
+                  className="absolute top-2 right-2 w-4 h-4 rounded-full border border-white shadow" style={{ background: color }} title="Cambiar color" />
+                <button onClick={() => onElegirGrado(g.id)} className="w-full">
+                  <div className="text-2xl font-bold" style={{ color }}>{g.id}</div>
+                  <div className="text-xs text-slate-400 mt-1">Grado</div>
+                </button>
+                {editandoColorDe === g.id && (
+                  <div className="absolute z-10 top-8 right-2 bg-white rounded-xl shadow-lg border border-slate-100 p-2 grid grid-cols-4 gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    {REINO_COLORS.map((c) => (
+                      <button key={c} onClick={() => elegirColor(g.id, c)} className="w-6 h-6 rounded-full border border-slate-200" style={{ background: c }} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
