@@ -862,14 +862,18 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
       alert(`La nota debe estar entre ${config.escala_min} y ${config.nota_maxima}.`);
       return;
     }
-    await api.guardarNotaFinal(materiaId, estudianteId, periodo, valor);
+    if (valor === null) {
+      await api.eliminarNotaFinalPeriodo(materiaId, estudianteId, periodo);
+    } else {
+      await api.guardarNotaFinal(materiaId, estudianteId, periodo, valor);
+    }
     setEditandoFinal(null);
     cargar();
   };
 
   const quitarNotaManual = async (estudianteId) => {
-    if (!confirm("¿Quitar el valor manual y volver a mostrar el cálculo automático? (esto no borra las notas de las actividades, solo el valor fijado a mano)")) return;
-    await api.guardarNotaFinal(materiaId, estudianteId, periodo, null);
+    if (!confirm("¿Quitar el valor manual y volver a mostrar el cálculo automático/en vivo? (esto no borra las notas de las actividades, solo el valor fijado a mano)")) return;
+    await api.eliminarNotaFinalPeriodo(materiaId, estudianteId, periodo);
     cargar();
   };
 
@@ -1085,12 +1089,19 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
       return;
     }
     if (valor === null) {
-      // Borra la nota final guardada (vuelve a quedar "—" hasta que se recalcule o se edite de nuevo)
-      await api.guardarNotaFinal(materiaId, estudianteId, periodo, null);
+      // Borra la fila por completo (no solo el valor) para que el periodo vuelva
+      // a calcularse en vivo, en vez de quedar "cerrado" con una nota vacía.
+      await api.eliminarNotaFinalPeriodo(materiaId, estudianteId, periodo);
     } else {
       await api.guardarNotaFinal(materiaId, estudianteId, periodo, valor);
     }
     setEditandoCelda(null);
+    cargar();
+  };
+
+  const volverACalcularEnVivo = async (estudianteId, periodo) => {
+    if (!confirm("¿Quitar la nota fijada de este periodo y volver a calcularla en vivo a partir de las actividades? Esta acción no borra las actividades, solo el valor que quedó guardado como definitivo.")) return;
+    await api.eliminarNotaFinalPeriodo(materiaId, estudianteId, periodo);
     cargar();
   };
 
@@ -1169,13 +1180,18 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
                               <button onClick={() => setEditandoCelda(null)} className="text-slate-400 text-xs">✕</button>
                             </div>
                           ) : (
-                            <div className="flex items-center justify-center gap-1 group cursor-pointer"
-                              onClick={() => { setEditandoCelda({ estudianteId: s.id, periodo: p }); setValorTemp(n !== null ? String(n) : ""); }}>
-                              <span style={{ color: n !== null ? b.color : "#94A3B8", fontWeight: n !== null ? 700 : 400 }}>
+                            <div className="flex items-center justify-center gap-1 group">
+                              <span className="cursor-pointer" style={{ color: n !== null ? b.color : "#94A3B8", fontWeight: n !== null ? 700 : 400 }}
+                                onClick={() => { setEditandoCelda({ estudianteId: s.id, periodo: p }); setValorTemp(n !== null ? String(n) : ""); }}>
                                 {n ?? "—"}
                                 {mostrarOriginal && <span className="text-[10px] text-slate-400 font-normal"> ({registroNiv.nota_original})</span>}
                               </span>
-                              <span className="text-slate-300 text-[10px] opacity-0 group-hover:opacity-100">✎</span>
+                              <span className="text-slate-300 text-[10px] opacity-0 group-hover:opacity-100 cursor-pointer"
+                                onClick={() => { setEditandoCelda({ estudianteId: s.id, periodo: p }); setValorTemp(n !== null ? String(n) : ""); }}>✎</span>
+                              {n !== null && (
+                                <button onClick={() => volverACalcularEnVivo(s.id, p)} title="Quitar nota fijada y volver a calcular en vivo"
+                                  className="text-violet-300 hover:text-violet-600 text-[10px] opacity-0 group-hover:opacity-100">↺</button>
+                              )}
                             </div>
                           )}
                           {necesitaNiv && (
