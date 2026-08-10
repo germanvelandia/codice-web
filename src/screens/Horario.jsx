@@ -461,6 +461,71 @@ function NuevoEventoForm({ grados, onCancelar, onCreado }) {
   );
 }
 
+const MESES_NOMBRE = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+const DIAS_SEMANA_CORTOS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+
+function fechaALocal(fechaStr) {
+  const [a, m, d] = fechaStr.split("-").map(Number);
+  return new Date(a, m - 1, d);
+}
+function aFechaStr(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function CalendarioMensual({ eventos, mesActual, onCambiarMes, diaSeleccionado, onSeleccionarDia }) {
+  const primerDiaMes = new Date(mesActual.getFullYear(), mesActual.getMonth(), 1);
+  const diasEnMes = new Date(mesActual.getFullYear(), mesActual.getMonth() + 1, 0).getDate();
+  const offset = (primerDiaMes.getDay() + 6) % 7; // 0 = lunes
+
+  const celdas = [];
+  for (let i = 0; i < offset; i++) celdas.push(null);
+  for (let d = 1; d <= diasEnMes; d++) celdas.push(d);
+  while (celdas.length % 7 !== 0) celdas.push(null);
+
+  const hoyStr = aFechaStr(new Date());
+
+  const eventosDelDia = (fechaStr) => eventos.filter((e) => e.fecha <= fechaStr && (e.fecha_fin || e.fecha) >= fechaStr);
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-100 p-3">
+      <div className="flex items-center justify-between mb-3">
+        <button onClick={() => onCambiarMes(-1)} className="text-slate-400 hover:text-violet-600 px-2 text-lg">‹</button>
+        <div className="font-bold text-slate-800 capitalize">{MESES_NOMBRE[mesActual.getMonth()]} {mesActual.getFullYear()}</div>
+        <button onClick={() => onCambiarMes(1)} className="text-slate-400 hover:text-violet-600 px-2 text-lg">›</button>
+      </div>
+      <div className="grid grid-cols-7 gap-1 mb-1">
+        {DIAS_SEMANA_CORTOS.map((d) => <div key={d} className="text-center text-[10px] font-bold text-slate-400 py-1">{d}</div>)}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {celdas.map((d, i) => {
+          if (d === null) return <div key={i} />;
+          const fechaStr = aFechaStr(new Date(mesActual.getFullYear(), mesActual.getMonth(), d));
+          const eventosDia = eventosDelDia(fechaStr);
+          const esHoy = fechaStr === hoyStr;
+          const esSeleccionado = fechaStr === diaSeleccionado;
+          return (
+            <button key={i} onClick={() => onSeleccionarDia(fechaStr)}
+              className="aspect-square rounded-lg p-1 flex flex-col items-center justify-start relative"
+              style={{
+                background: esSeleccionado ? "#EDE9FE" : esHoy ? "#F5F3FF" : "transparent",
+                border: esHoy ? "1.5px solid #8B5CF6" : "1px solid transparent",
+              }}>
+              <span className={`text-[11px] ${esSeleccionado ? "font-bold text-violet-700" : "text-slate-600"}`}>{d}</span>
+              {eventosDia.length > 0 && (
+                <div className="flex gap-0.5 mt-0.5 flex-wrap justify-center">
+                  {eventosDia.slice(0, 3).map((e) => (
+                    <span key={e.id} className="w-1.5 h-1.5 rounded-full" style={{ background: tipoInfo(e.tipo).color }} />
+                  ))}
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function Cronograma({ grados }) {
   const [eventos, setEventos] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -468,6 +533,9 @@ function Cronograma({ grados }) {
   const [filtroTipo, setFiltroTipo] = useState("Todos");
   const [filtroGrado, setFiltroGrado] = useState("Todos");
   const [error, setError] = useState(null);
+  const [vista, setVista] = useState("calendario"); // "calendario" | "lista"
+  const [mesActual, setMesActual] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const [diaSeleccionado, setDiaSeleccionado] = useState(aFechaStr(new Date()));
 
   const cargar = () => {
     setCargando(true);
@@ -491,6 +559,11 @@ function Cronograma({ grados }) {
   const proximos = visibles.filter((e) => (e.fecha_fin || e.fecha) >= hoy);
   const pasados = visibles.filter((e) => (e.fecha_fin || e.fecha) < hoy);
 
+  const cambiarMes = (delta) => setMesActual((prev) => new Date(prev.getFullYear(), prev.getMonth() + delta, 1));
+  const irAHoy = () => { setMesActual(new Date(new Date().getFullYear(), new Date().getMonth(), 1)); setDiaSeleccionado(aFechaStr(new Date())); };
+
+  const eventosDelDiaSeleccionado = visibles.filter((e) => e.fecha <= diaSeleccionado && (e.fecha_fin || e.fecha) >= diaSeleccionado);
+
   const Tarjeta = ({ e }) => {
     const info = tipoInfo(e.tipo);
     return (
@@ -513,6 +586,10 @@ function Cronograma({ grados }) {
     <div>
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-1 rounded-full bg-white p-1 w-fit border border-slate-100">
+            <button onClick={() => setVista("calendario")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "calendario" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📅 Calendario</button>
+            <button onClick={() => setVista("lista")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "lista" ? "bg-violet-500 text-white" : "text-slate-600"}`}>☰ Lista</button>
+          </div>
           <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)} className="text-xs rounded-full px-3 py-1.5 border border-slate-200 outline-none bg-white">
             <option value="Todos">Todos los tipos</option>
             {TIPOS_EVENTO.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
@@ -535,6 +612,26 @@ function Cronograma({ grados }) {
         <div className="text-sm text-slate-400">Cargando…</div>
       ) : error ? (
         <div className="text-sm text-rose-500 bg-rose-50 rounded-xl p-3">Error al cargar el cronograma: {error}</div>
+      ) : vista === "calendario" ? (
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <button onClick={irAHoy} className="text-[11px] text-violet-500 mb-2">Ir a hoy</button>
+            <CalendarioMensual eventos={visibles} mesActual={mesActual} onCambiarMes={cambiarMes}
+              diaSeleccionado={diaSeleccionado} onSeleccionarDia={setDiaSeleccionado} />
+          </div>
+          <div>
+            <div className="text-xs font-semibold text-slate-500 mb-2">
+              {fechaALocal(diaSeleccionado).toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" })}
+            </div>
+            {eventosDelDiaSeleccionado.length === 0 ? (
+              <div className="text-sm text-slate-400 bg-white rounded-2xl p-4 text-center border border-dashed border-slate-200">Sin eventos este día.</div>
+            ) : (
+              <div className="space-y-2">
+                {eventosDelDiaSeleccionado.map((e) => <Tarjeta key={e.id} e={e} />)}
+              </div>
+            )}
+          </div>
+        </div>
       ) : (
         <>
           <div className="text-xs font-semibold text-slate-500 mb-2">Próximos</div>
