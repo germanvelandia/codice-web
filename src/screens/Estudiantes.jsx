@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabaseClient";
-import { ACCIONES_RAPIDAS, ACADEMICO_POS, ACADEMICO_NEG, PILARES, CONVIVENCIAL_POS_EXTRA, CONVIVENCIAL_NEG, initials, nextLevel, reinoColor, reinoInfo, sugerirApellidos, colorGrado, REINO_COLORS } from "../lib/gamification";
+import { ACCIONES_RAPIDAS, ACADEMICO_POS, ACADEMICO_NEG, PILARES, CONVIVENCIAL_POS_EXTRA, CONVIVENCIAL_NEG, initials, nextLevel, reinoColor, reinoInfo, sugerirApellidos, colorGrado, REINO_COLORS, buscarEstudiantePorNombre } from "../lib/gamification";
 
 // (REINO_COLORS ahora se importa directo desde gamification.js, ver arriba)
 import * as api from "../lib/api";
@@ -1062,11 +1062,131 @@ export function VistaReinos({ gradoId, onElegirReino, onVerTodos, onVolver }) {
   );
 }
 
+// Mapeo de columnas del formato típico de formularios de matrícula institucionales
+// (una hoja por curso, con datos de padre/madre/acudiente/emergencia)
+function extraerFilaAcudiente(fila) {
+  const val = (clave) => (fila[clave] ?? "").toString().trim();
+  const nombres = val("Nombres del Estudiante (Completos)") || val("Nombres del Estudiante");
+  const apellidos = val("Apellidos del Estudiante");
+  const direccionBase = val("Dirección de Residencia Principal");
+  const direccionExtra = val("Detalles adicionales de dirección");
+  return {
+    nombreCompleto: [nombres, apellidos].filter(Boolean).join(" "),
+    documento: val("profile_field_documento") || val("Documento"),
+    direccion: [direccionBase, direccionExtra].filter(Boolean).join(" — ") || null,
+    nombre_padre: val("profile_field_padre") || null,
+    telefono_padre: val("profile_field_telefono_padre") || null,
+    nombre_madre: val("profile_field_madre") || null,
+    telefono_madre: val("profile_field_telefono_madre") || null,
+    contacto_emergencia_nombre: val("CONTACTO DE EMERGENCIA (Distinto a padres/acudiente)") || null,
+    contacto_emergencia_telefono: val("Teléfono del Contacto de Emergencia") || null,
+  };
+}
+
+function ImportarDirectorioInstitucionalModal({ onClose }) {
+  const [paso, setPaso] = useState(1);
+  const [procesando, setProcesando] = useState(false);
+  const [progresoTexto, setProgresoTexto] = useState("");
+  const [resultado, setResultado] = useState(null);
+
+  const procesarArchivo = (file) => {
+    setProcesando(true);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setTimeout(async () => {
+        try {
+          const wb = XLSX.read(e.target.result, { type: "binary" });
+          const resumenPorCurso = [];
+          for (const nombreHoja of wb.SheetNames) {
+            const gradoId = nombreHoja.trim();
+            const hoja = wb.Sheets[nombreHoja];
+            const filas = XLSX.utils.sheet_to_json(hoja, { defval: "" });
+            if (filas.length === 0) continue;
+
+            setProgresoTexto(`Cargando estudiantes del curso ${gradoId}…`);
+            const estudiantesDelCurso = await api.fetchEstudiantesPorGrado(gradoId);
+
+            let actualizados = 0;
+            const sinEmparejar = [];
+
+            for (let i = 0; i < filas.length; i++) {
+              const datos = extraerFilaAcudiente(filas[i]);
+              if (!datos.nombreCompleto.trim()) continue;
+              setProgresoTexto(`Curso ${gradoId}: procesando ${i + 1} de ${filas.length}…`);
+
+              const estudiante = buscarEstudiantePorNombre(datos.nombreCompleto, estudiantesDelCurso);
+              if (!estudiante) { sinEmparejar.push(datos.nombreCompleto); continue; }
+
+              if (datos.documento) await api.guardarDocumento(estudiante.id, datos.documento);
+              await api.guardarAcudiente(estudiante.id, {
+                nombre_padre: datos.nombre_padre, telefono_padre: datos.telefono_padre,
+                nombre_madre: datos.nombre_madre, telefono_madre: datos.telefono_madre,
+                contacto_emergencia_nombre: datos.contacto_emergencia_nombre, contacto_emergencia_telefono: datos.contacto_emergencia_telefono,
+                contacto_emergencia_relacion: null, direccion: datos.direccion,
+              });
+              actualizados++;
+            }
+            resumenPorCurso.push({ gradoId, actualizados, sinEmparejar, total: filas.length });
+          }
+          setResultado(resumenPorCurso);
+          setPaso(2);
+        } catch (err) {
+          alert("Error al procesar el archivo: " + err.message);
+        }
+        setProcesando(false);
+      }, 50);
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">🗂️ Importar directorio institucional</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+
+        {paso === 1 ? (
+          <>
+            <p className="text-xs text-slate-500 mb-3">
+              Subí el Excel de matrícula con <b>una hoja por curso</b> (ej: "801", "802", "803", "804") — cada nombre de hoja debe
+              coincidir con un grado ya creado en la app. Reconoce automáticamente las columnas de nombre, documento, dirección,
+              padre/madre y contacto de emergencia del formato típico de formularios de matrícula.
+            </p>
+            <input type="file" accept=".xlsx,.xls" disabled={procesando} onChange={(e) => { if (e.target.files[0]) procesarArchivo(e.target.files[0]); }} className="text-sm disabled:opacity-40" />
+            {procesando && <p className="text-xs text-violet-600 mt-3">⏳ {progresoTexto || "Procesando…"}</p>}
+          </>
+        ) : (
+          <div>
+            <p className="text-sm text-emerald-600 mb-3">✔️ Importación completada.</p>
+            <div className="space-y-2">
+              {resultado.map((r) => (
+                <div key={r.gradoId} className="bg-slate-50 rounded-lg p-3">
+                  <div className="text-sm font-semibold text-slate-700">Curso {r.gradoId}</div>
+                  <div className="text-xs text-slate-500">{r.actualizados} de {r.total} estudiantes actualizados.</div>
+                  {r.sinEmparejar.length > 0 && (
+                    <div className="text-xs text-amber-700 mt-1">
+                      <b>No se encontraron ({r.sinEmparejar.length}):</b> {r.sinEmparejar.join(", ")}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            <button onClick={onClose} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white mt-4">Listo</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function VistaGrados({ onElegirGrado }) {
   const [grados, setGrados] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [nuevoGrado, setNuevoGrado] = useState("");
   const [editandoColorDe, setEditandoColorDe] = useState(null);
+  const [importarAbierto, setImportarAbierto] = useState(false);
 
   const cargar = async () => {
     setCargando(true);
@@ -1098,6 +1218,7 @@ export function VistaGrados({ onElegirGrado }) {
           <input value={nuevoGrado} onChange={(e) => setNuevoGrado(e.target.value)} placeholder="Nuevo grado (ej: 1004)"
             className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none w-40" />
           <button onClick={crear} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white">Crear</button>
+          <button onClick={() => setImportarAbierto(true)} className="text-sm font-semibold px-4 py-2 rounded-lg border border-slate-200 text-slate-600">🗂️ Importar directorio</button>
         </div>
       </div>
       <p className="text-xs text-slate-400 mb-3">El color de cada grado se usa automáticamente en el calendario de Horario y en otros lugares de la app. Tocá el círculo de color para cambiarlo.</p>
@@ -1127,6 +1248,7 @@ export function VistaGrados({ onElegirGrado }) {
           })}
         </div>
       )}
+      {importarAbierto && <ImportarDirectorioInstitucionalModal onClose={() => setImportarAbierto(false)} />}
     </div>
   );
 }
