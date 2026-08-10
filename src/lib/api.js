@@ -456,6 +456,11 @@ export async function eliminarHorario(id) {
   if (error) throw error;
 }
 
+export async function editarHorario(id, cambios) {
+  const { error } = await supabase.from("horario").update(cambios).eq("id", id);
+  if (error) throw error;
+}
+
 /* ---------------- Cronograma de actividades ---------------- */
 export async function fetchCronograma() {
   const [cronoRes, profesoresRes] = await Promise.all([
