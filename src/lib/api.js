@@ -1378,6 +1378,15 @@ export async function guardarNotaFinal(materiaId, estudianteId, periodo, nota) {
   if (error) throw error;
 }
 
+// A diferencia de guardarNotaFinal(..., null) —que deja la fila con nota vacía y
+// sigue contando como "cerrado"— esto borra la fila por completo, así el periodo
+// vuelve a calcularse en vivo a partir de las actividades cargadas.
+export async function eliminarNotaFinalPeriodo(materiaId, estudianteId, periodo) {
+  const { error } = await supabase.from("notas_finales_periodo").delete()
+    .eq("materia_id", materiaId).eq("estudiante_id", estudianteId).eq("periodo", periodo);
+  if (error) throw error;
+}
+
 export async function fetchNivelacion(materiaId) {
   const { data, error } = await supabase.from("nivelacion").select("*").eq("materia_id", materiaId);
   if (error) throw error;
