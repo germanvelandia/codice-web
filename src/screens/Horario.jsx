@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import * as api from "../lib/api";
+import { colorGrado } from "../lib/gamification";
 
 const DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 const TIPOS_EVENTO = [
@@ -217,16 +218,10 @@ function horaAFraccion(horaStr, base) {
   return (h - base) + m / 60;
 }
 
-const COLORES_GRADO = ["#8B5CF6", "#3B82F6", "#F59E0B", "#14B8A6", "#EC4899", "#22C55E", "#F43F5E", "#0EA5E9", "#A855F7", "#84CC16"];
 const COLOR_SIN_GRADO = "#64748B";
-function colorDeGrado(gradoId) {
-  if (!gradoId) return COLOR_SIN_GRADO;
-  let hash = 0;
-  for (const c of String(gradoId)) hash = (hash * 31 + c.charCodeAt(0)) % COLORES_GRADO.length;
-  return COLORES_GRADO[Math.abs(hash) % COLORES_GRADO.length];
-}
-function colorDeClase(h) {
-  return colorDeGrado(h.grado_id);
+function colorDeClase(h, grados) {
+  if (!h.grado_id) return COLOR_SIN_GRADO;
+  return colorGrado(h.grado_id, grados);
 }
 
 function LeyendaGrados({ grados }) {
@@ -234,7 +229,7 @@ function LeyendaGrados({ grados }) {
     <div className="flex flex-wrap gap-2 mb-2">
       {grados.map((g) => (
         <span key={g.id} className="flex items-center gap-1.5 text-[11px] text-slate-600">
-          <span className="w-2.5 h-2.5 rounded-full" style={{ background: colorDeGrado(g.id) }} /> Grado {g.id}
+          <span className="w-2.5 h-2.5 rounded-full" style={{ background: colorGrado(g.id, grados) }} /> Grado {g.id}
         </span>
       ))}
       <span className="flex items-center gap-1.5 text-[11px] text-slate-400">
@@ -244,7 +239,7 @@ function LeyendaGrados({ grados }) {
   );
 }
 
-function CalendarioHorario({ visible, modo, onEditar }) {
+function CalendarioHorario({ visible, modo, grados, onEditar }) {
   const horas = horasDeGrilla(visible);
   const alturaHora = 52; // px por hora
 
@@ -275,7 +270,7 @@ function CalendarioHorario({ visible, modo, onEditar }) {
                 const base = horas[0];
                 const top = horaAFraccion(clase.hora_inicio.slice(0, 5), base) * alturaHora;
                 const alto = Math.max(24, (horaAFraccion(clase.hora_fin.slice(0, 5), base) - horaAFraccion(clase.hora_inicio.slice(0, 5), base)) * alturaHora);
-                const color = colorDeClase(clase);
+                const color = colorDeClase(clase, grados);
                 return (
                   <button key={clase.id} onClick={() => onEditar(clase)}
                     className="absolute left-0.5 right-0.5 rounded-md px-1.5 py-1 text-left overflow-hidden hover:brightness-95"
@@ -358,7 +353,7 @@ function HorarioSemanal({ grados, materias, usuarioId }) {
         <>
           <p className="text-[11px] text-slate-400 mb-2">Tocá cualquier bloque para editarlo o eliminarlo. El color de cada bloque es según el grado.</p>
           <LeyendaGrados grados={grados} />
-          <CalendarioHorario visible={visible} modo={modo} onEditar={intentarEditar} />
+          <CalendarioHorario visible={visible} modo={modo} grados={grados} onEditar={intentarEditar} />
         </>
       ) : (
         <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
