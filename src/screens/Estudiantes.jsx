@@ -3,9 +3,7 @@ import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabaseClient";
 import { ACCIONES_RAPIDAS, ACADEMICO_POS, ACADEMICO_NEG, PILARES, CONVIVENCIAL_POS_EXTRA, CONVIVENCIAL_NEG, initials, nextLevel, reinoColor, reinoInfo, sugerirApellidos, colorGrado, REINO_COLORS } from "../lib/gamification";
 
-// Declarada acá directamente (en vez de importarla) para evitar depender del
-// export de gamification.js en el build.
-const REINO_COLORS = ["#8B5CF6", "#F43F5E", "#F59E0B", "#22C55E", "#3B82F6", "#EC4899", "#14B8A6", "#FB923C"];
+// (REINO_COLORS ahora se importa directo desde gamification.js, ver arriba)
 import * as api from "../lib/api";
 import { ActasModal } from "./Actas";
 import { DirectorioModal } from "./Directorio";
