@@ -431,7 +431,7 @@ export async function fetchAcudientesPorGrado(gradoId) {
 
 export async function guardarAcudiente(estudianteId, campos) {
   const { error } = await supabase.from("acudientes").upsert(
-    { estudiante_id: estudianteId, ...campos, actualizado_en: new Date().toISOString() },
+    { estudiante_id: estudianteId, ...campos },
     { onConflict: "estudiante_id" }
   );
   if (error) throw error;
