@@ -13,7 +13,7 @@ const TIPOS_EVENTO = [
 function tipoInfo(key) { return TIPOS_EVENTO.find((t) => t.key === key) || TIPOS_EVENTO[4]; }
 
 function NuevaClaseForm({ grados, materias, onCancelar, onCreada }) {
-  const [gradoId, setGradoId] = useState(grados[0]?.id || "");
+  const [gradoId, setGradoId] = useState("");
   const [materiaId, setMateriaId] = useState("");
   const [nombreActividad, setNombreActividad] = useState("");
   const [diasSeleccionados, setDiasSeleccionados] = useState([1]);
@@ -52,8 +52,9 @@ function NuevaClaseForm({ grados, materias, onCancelar, onCreada }) {
   return (
     <div className="bg-violet-50 rounded-xl p-4 mb-4">
       <div className="mb-3">
-        <label className="text-xs text-slate-500 block mb-1">Grado</label>
+        <label className="text-xs text-slate-500 block mb-1">Grado (opcional — dejalo vacío para actividades generales que no son de un curso puntual)</label>
         <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white">
+          <option value="">— Sin grado (actividad general) —</option>
           {grados.map((g) => <option key={g.id} value={g.id}>Grado {g.id}</option>)}
         </select>
       </div>
@@ -154,8 +155,9 @@ function EditarClaseModal({ clase, grados, materias, onCerrar, onGuardado }) {
 
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
-            <label className="text-xs text-slate-500 block mb-1">Grado</label>
+            <label className="text-xs text-slate-500 block mb-1">Grado (opcional)</label>
             <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none">
+              <option value="">— Sin grado (actividad general) —</option>
               {grados.map((g) => <option key={g.id} value={g.id}>Grado {g.id}</option>)}
             </select>
           </div>
