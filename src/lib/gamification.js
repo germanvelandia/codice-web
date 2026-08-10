@@ -191,6 +191,14 @@ export function reinoColor(nombre) {
   return REINO_COLORS[Math.abs(hash) % REINO_COLORS.length];
 }
 
+// Color de un grado: si el docente le asignó uno a mano (en Estudiantes → Grados),
+// se usa ese; si no, cae al mismo color automático de siempre. Un solo lugar para
+// que todos los elementos de la app (calendario de Horario, etc.) queden en sync.
+export function colorGrado(gradoId, listaGrados) {
+  const g = (listaGrados || []).find((x) => String(x.id) === String(gradoId));
+  return g?.color || reinoColor(String(gradoId));
+}
+
 // Busca el reino por nombre en el catálogo (con color/logo personalizados);
 // si no existe todavía en el catálogo, cae al color automático de siempre.
 export function reinoInfo(nombre, catalogoReinos) {
