@@ -782,13 +782,20 @@ const MENU_CODICE = [
   { key: "perfil", label: "Perfil", icono: "👤" },
 ];
 
-function MenuCodice({ activo, onCambiar }) {
+function MenuCodice({ activo, onCambiar, monedas }) {
   return (
     <div className="rounded-2xl overflow-hidden mb-4" style={{ background: "linear-gradient(180deg, #1e1b30 0%, #14101f 100%)", border: "2px solid #8B5CF6" }}>
       <div className="text-center py-3" style={{ background: "linear-gradient(180deg, #2d2450 0%, #1e1b30 100%)", borderBottom: "2px solid #7c3aed55" }}>
         <div className="text-2xl">🧭</div>
         <div className="text-violet-200 text-xs font-bold tracking-[0.2em] mt-0.5" style={{ fontFamily: "Georgia, serif" }}>CÓDICE</div>
       </div>
+      {monedas !== undefined && (
+        <div className="flex items-center justify-center gap-1.5 py-2" style={{ background: "rgba(245,158,11,0.12)", borderBottom: "1px solid rgba(139,92,246,0.15)" }}>
+          <span className="text-base">🪙</span>
+          <span className="text-sm font-bold text-amber-300">{monedas}</span>
+          <span className="text-[10px] text-amber-200/70 uppercase tracking-wide">monedas</span>
+        </div>
+      )}
       <div>
         {MENU_CODICE.map((m) => (
           <button key={m.key} onClick={() => onCambiar(m.key)}
@@ -969,7 +976,7 @@ function PortalEstudiante() {
     return (
       <div className="md:flex md:gap-5 md:items-start">
         <div className="md:w-60 md:shrink-0">
-          <MenuCodice activo={vista} onCambiar={setVista} />
+          <MenuCodice activo={vista} onCambiar={setVista} monedas={datos.monedas} />
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg p-6 md:flex-1">
