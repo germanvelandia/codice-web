@@ -10,15 +10,19 @@ function ValorSemanaCard() {
   const [nombre, setNombre] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [imagenUrl, setImagenUrl] = useState(null);
+  const [htmlContenido, setHtmlContenido] = useState("");
+  const [modo, setModo] = useState("archivo"); // "archivo" | "html"
   const [guardando, setGuardando] = useState(false);
 
   const cargar = () => api.fetchValorSemanal().then((v) => {
-    setValor(v); setNombre(v.nombre || ""); setDescripcion(v.descripcion || ""); setImagenUrl(v.imagen_url || null);
+    setValor(v); setNombre(v.nombre || ""); setDescripcion(v.descripcion || "");
+    setImagenUrl(v.imagen_url || null); setHtmlContenido(v.html_contenido || "");
+    setModo(v.html_contenido ? "html" : "archivo");
   });
   useEffect(() => { cargar(); }, []);
 
   const subirImagen = (file) => {
-    if (file.size > 500 * 1024) { alert("La imagen es muy grande. Usa una de menos de 500 KB."); return; }
+    if (file.size > 500 * 1024) { alert("La imagen es muy grande. Usa una de menos de 500 KB, o mejor usá la opción de código HTML para imágenes más grandes."); return; }
     const reader = new FileReader();
     reader.onload = (e) => setImagenUrl(e.target.result);
     reader.readAsDataURL(file);
@@ -27,7 +31,11 @@ function ValorSemanaCard() {
   const guardar = async () => {
     setGuardando(true);
     try {
-      await api.guardarValorSemanal({ nombre: nombre.trim() || null, descripcion: descripcion.trim() || null, imagen_url: imagenUrl });
+      await api.guardarValorSemanal({
+        nombre: nombre.trim() || null, descripcion: descripcion.trim() || null,
+        imagen_url: modo === "archivo" ? imagenUrl : null,
+        html_contenido: modo === "html" ? htmlContenido.trim() || null : null,
+      });
       setEditando(false);
       cargar();
     } catch (e) {
@@ -42,10 +50,26 @@ function ValorSemanaCard() {
     return (
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-4">
         <div className="font-bold text-slate-800 mb-3">🌟 Valor de la semana</div>
-        <div className="flex items-center gap-3 mb-2">
-          <input type="file" accept="image/*" onChange={(e) => { if (e.target.files[0]) subirImagen(e.target.files[0]); }} className="text-xs flex-1" />
-          {imagenUrl && <button onClick={() => setImagenUrl(null)} className="text-xs text-rose-500">Quitar</button>}
+
+        <div className="flex gap-1 rounded-full bg-violet-50 p-1 w-fit mb-3">
+          <button onClick={() => setModo("archivo")} className={`text-xs px-3 py-1.5 rounded-full ${modo === "archivo" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🖼️ Subir archivo</button>
+          <button onClick={() => setModo("html")} className={`text-xs px-3 py-1.5 rounded-full ${modo === "html" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🔤 Código HTML</button>
         </div>
+
+        {modo === "archivo" ? (
+          <div className="flex items-center gap-3 mb-3">
+            <input type="file" accept="image/*" onChange={(e) => { if (e.target.files[0]) subirImagen(e.target.files[0]); }} className="text-xs flex-1" />
+            {imagenUrl && <button onClick={() => setImagenUrl(null)} className="text-xs text-rose-500">Quitar</button>}
+          </div>
+        ) : (
+          <div className="mb-3">
+            <label className="text-xs text-slate-500 block mb-1">Pegá el código HTML de la imagen (ej: {"<img src=\"https://...\">"})</label>
+            <textarea value={htmlContenido} onChange={(e) => setHtmlContenido(e.target.value)} rows={3} placeholder='<img src="https://ejemplo.com/imagen.jpg">'
+              className="w-full text-xs font-mono rounded-lg px-3 py-2 border border-slate-200 outline-none" />
+            <p className="text-[11px] text-slate-400 mt-1">Sin límite de tamaño — la imagen se muestra en su proporción real, sin recortarse.</p>
+          </div>
+        )}
+
         <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre del valor (ej: Respeto)"
           className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none" />
         <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2} placeholder="Descripción (opcional)"
@@ -62,13 +86,17 @@ function ValorSemanaCard() {
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-4 flex items-center gap-4">
-      <div className="rounded-xl overflow-hidden shrink-0" style={{ width: 72, height: 72, background: "#F5F3FF" }}>
-        {valor.imagen_url ? (
-          <img src={valor.imagen_url} alt={valor.nombre || "Valor de la semana"} className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-3xl">🌟</div>
-        )}
-      </div>
+      {valor.html_contenido ? (
+        <div className="shrink-0 rounded-xl overflow-hidden" style={{ maxWidth: 140 }} dangerouslySetInnerHTML={{ __html: valor.html_contenido }} />
+      ) : (
+        <div className="rounded-xl overflow-hidden shrink-0" style={{ width: 72, height: 72, background: "#F5F3FF" }}>
+          {valor.imagen_url ? (
+            <img src={valor.imagen_url} alt={valor.nombre || "Valor de la semana"} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-3xl">🌟</div>
+          )}
+        </div>
+      )}
       <div className="flex-1 min-w-0">
         <div className="text-[10px] font-bold text-violet-500 uppercase tracking-wide">Valor de la semana</div>
         <div className="text-base font-bold text-slate-800 truncate">{valor.nombre || "Sin definir todavía"}</div>
