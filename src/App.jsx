@@ -926,7 +926,54 @@ const MENU_PANEL = [
   { key: "reportes", label: "Reportes", icono: "📊" },
 ];
 
-function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstitucion, onSalir }) {
+function BuscadorEstudiantesGlobal({ onSeleccionar }) {
+  const [query, setQuery] = useState("");
+  const [resultados, setResultados] = useState([]);
+  const [buscando, setBuscando] = useState(false);
+  const [abierto, setAbierto] = useState(false);
+
+  useEffect(() => {
+    if (query.trim().length < 2) { setResultados([]); return; }
+    setBuscando(true);
+    const id = setTimeout(() => {
+      api.buscarEstudiantesGlobal(query).then((r) => { setResultados(r); setBuscando(false); setAbierto(true); });
+    }, 300);
+    return () => clearTimeout(id);
+  }, [query]);
+
+  const elegir = (est) => {
+    onSeleccionar(est);
+    setQuery("");
+    setResultados([]);
+    setAbierto(false);
+  };
+
+  return (
+    <div className="relative">
+      <input value={query} onChange={(e) => setQuery(e.target.value)} onFocus={() => resultados.length && setAbierto(true)}
+        placeholder="🔍 Buscar estudiante…"
+        className="w-full text-xs rounded-full px-3 py-2 border border-slate-200 outline-none bg-slate-50 focus:bg-white" />
+      {abierto && (query.trim().length >= 2) && (
+        <div className="absolute z-30 top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-lg border border-slate-100 max-h-64 overflow-y-auto" onMouseLeave={() => setAbierto(false)}>
+          {buscando ? (
+            <div className="text-xs text-slate-400 p-3">Buscando…</div>
+          ) : resultados.length === 0 ? (
+            <div className="text-xs text-slate-400 p-3">Sin resultados.</div>
+          ) : (
+            resultados.map((r) => (
+              <button key={r.id} onClick={() => elegir(r)} className="w-full text-left px-3 py-2 text-xs hover:bg-violet-50 flex justify-between items-center">
+                <span className="text-slate-700">{r.nombre}</span>
+                <span className="text-slate-400">Grado {r.grado_id}</span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstitucion, onSalir, onBuscarEstudiante }) {
   return (
     <>
       {/* Escritorio: barra lateral fija */}
@@ -934,12 +981,15 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
         style={{ background: "linear-gradient(180deg, #1e1b30 0%, #14101f 100%)", borderRight: "2px solid #8B5CF6" }}>
         <button onClick={() => onCambiar("inicio")} className="text-center py-5" style={{ background: "linear-gradient(180deg, #2d2450 0%, #1e1b30 100%)", borderBottom: "2px solid #7c3aed55" }}>
           {institucion?.imagen_menu_url ? (
-            <img src={institucion.logo_url} alt="Logo" className="mx-auto rounded-xl object-cover" style={{ width: 56, height: 56 }} />
+            <img src={institucion.imagen_menu_url} alt="Logo" className="mx-auto rounded-xl object-cover" style={{ width: 56, height: 56 }} />
           ) : (
             <div className="text-2xl">🧭</div>
           )}
           <div className="text-violet-200 text-sm font-bold tracking-[0.2em] mt-1.5" style={{ fontFamily: "Georgia, serif" }}>CÓDICE</div>
         </button>
+        <div className="px-3 pt-3">
+          <BuscadorEstudiantesGlobal onSeleccionar={onBuscarEstudiante} />
+        </div>
         <div className="flex-1 overflow-y-auto py-2">
           {MENU_PANEL.map((m) => (
             <button key={m.key} onClick={() => onCambiar(m.key)}
@@ -966,7 +1016,7 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
         <div className="flex items-center justify-between px-4 py-3">
           <button onClick={() => onCambiar("inicio")} className="flex items-center gap-2">
             {institucion?.imagen_menu_url ? (
-              <img src={institucion.logo_url} alt="Logo" className="rounded-lg object-cover" style={{ width: 24, height: 24 }} />
+              <img src={institucion.imagen_menu_url} alt="Logo" className="rounded-lg object-cover" style={{ width: 24, height: 24 }} />
             ) : (
               <span className="text-lg">🧭</span>
             )}
@@ -976,6 +1026,9 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
             <button onClick={onAdmin} className="text-base">👤</button>
             <button onClick={onInstitucion} className="text-base">⚙️</button>
           </div>
+        </div>
+        <div className="px-3 pb-2">
+          <BuscadorEstudiantesGlobal onSeleccionar={onBuscarEstudiante} />
         </div>
         <div className="flex gap-1 overflow-x-auto px-2 pb-2">
           {MENU_PANEL.map((m) => (
@@ -1001,6 +1054,12 @@ function Panel({ session }) {
   const [institucionAbierta, setInstitucionAbierta] = useState(false);
   const [administracionAbierta, setAdministracionAbierta] = useState(false);
   const [institucion, setInstitucion] = useState(null);
+  const [destinoBusqueda, setDestinoBusqueda] = useState(null);
+
+  const irACalificacionesDesdeBusqueda = (estudiante) => {
+    setTab("calificaciones");
+    setDestinoBusqueda({ estudianteId: estudiante.id, gradoId: estudiante.grado_id, ts: Date.now() });
+  };
 
   const cargarInstitucion = () => api.fetchInstitucion().then(setInstitucion);
 
@@ -1018,7 +1077,7 @@ function Panel({ session }) {
     <div className="min-h-screen bg-violet-50 md:flex">
       <SidebarPanel activo={tab} onCambiar={irA} email={session.user.email} institucion={institucion}
         onAdmin={() => setAdministracionAbierta(true)} onInstitucion={() => setInstitucionAbierta(true)}
-        onSalir={() => supabase.auth.signOut()} />
+        onSalir={() => supabase.auth.signOut()} onBuscarEstudiante={irACalificacionesDesdeBusqueda} />
 
       {institucionAbierta && <InstitucionModal onClose={() => { setInstitucionAbierta(false); cargarInstitucion(); }} />}
       {administracionAbierta && <AdministracionModal onClose={() => setAdministracionAbierta(false)} />}
@@ -1065,7 +1124,7 @@ function Panel({ session }) {
           </>
         )}
         {tab === "roles" && <VistaRoles />}
-        {tab === "calificaciones" && grados.length > 0 && <VistaCalificaciones grados={grados} />}
+        {tab === "calificaciones" && grados.length > 0 && <VistaCalificaciones grados={grados} destinoBusqueda={destinoBusqueda} />}
         {tab === "reportes" && grados.length > 0 && <VistaReportes grados={grados} />}
         {tab === "horario" && grados.length > 0 && <VistaHorario grados={grados} />}
         {tab === "planeaciones" && grados.length > 0 && <VistaPlaneaciones grados={grados} />}
