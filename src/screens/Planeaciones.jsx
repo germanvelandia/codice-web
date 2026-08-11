@@ -378,9 +378,11 @@ function DictadoControl({ claseId, grados }) {
 function ClasesLista({ unidadId, grados }) {
   const [clases, setClases] = useState([]);
   const [agregando, setAgregando] = useState(false);
+  const [modo, setModo] = useState("agil"); // "agil" | "completo"
   const [titulo, setTitulo] = useState("");
   const [fecha, setFecha] = useState("");
   const [duracion, setDuracion] = useState("");
+  const [descripcionAgil, setDescripcionAgil] = useState("");
   const [inicio, setInicio] = useState("");
   const [desarrollo, setDesarrollo] = useState("");
   const [cierre, setCierre] = useState("");
@@ -390,7 +392,7 @@ function ClasesLista({ unidadId, grados }) {
   useEffect(() => { cargar(); }, [unidadId]);
 
   const limpiar = () => {
-    setTitulo(""); setFecha(""); setDuracion(""); setInicio(""); setDesarrollo(""); setCierre(""); setIndicador(""); setAgregando(false);
+    setTitulo(""); setFecha(""); setDuracion(""); setDescripcionAgil(""); setInicio(""); setDesarrollo(""); setCierre(""); setIndicador(""); setAgregando(false);
   };
 
   const agregar = async () => {
@@ -399,8 +401,10 @@ function ClasesLista({ unidadId, grados }) {
       await api.crearPlaneacion({
         tipo: "clase", unidad_id: unidadId, titulo: titulo.trim(), fecha: fecha || null, orden: clases.length,
         duracion_minutos: duracion ? parseInt(duracion, 10) : null,
-        momento_inicio: inicio.trim() || null, momento_desarrollo: desarrollo.trim() || null, momento_cierre: cierre.trim() || null,
-        indicador_desempeno: indicador.trim() || null,
+        momento_inicio: modo === "agil" ? null : (inicio.trim() || null),
+        momento_desarrollo: modo === "agil" ? (descripcionAgil.trim() || null) : (desarrollo.trim() || null),
+        momento_cierre: modo === "agil" ? null : (cierre.trim() || null),
+        indicador_desempeno: modo === "agil" ? null : (indicador.trim() || null),
       });
       limpiar();
       cargar();
@@ -461,20 +465,31 @@ function ClasesLista({ unidadId, grados }) {
       )}
       {agregando ? (
         <div className="bg-violet-50 rounded-lg p-3 space-y-2">
+          <div className="flex gap-1 rounded-full bg-white p-1 w-fit border border-slate-200">
+            <button onClick={() => setModo("agil")} className={`text-[11px] px-3 py-1 rounded-full ${modo === "agil" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🚀 Ágil</button>
+            <button onClick={() => setModo("completo")} className={`text-[11px] px-3 py-1 rounded-full ${modo === "completo" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📋 Completo (inicio/desarrollo/cierre)</button>
+          </div>
           <div className="flex gap-1.5">
             <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título de la clase (sesión)"
               className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
             <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
             <input type="number" value={duracion} onChange={(e) => setDuracion(e.target.value)} placeholder="Min." className="w-16 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
           </div>
-          <textarea value={inicio} onChange={(e) => setInicio(e.target.value)} rows={2} placeholder="Actividades de apertura (recuperar saberes previos, plantear un problema o pregunta detonadora…)"
-            className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-          <textarea value={desarrollo} onChange={(e) => setDesarrollo(e.target.value)} rows={2} placeholder="Actividades de desarrollo (interacción con la nueva información, aplicación en un caso o problema…)"
-            className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-          <textarea value={cierre} onChange={(e) => setCierre(e.target.value)} rows={2} placeholder="Actividades de cierre (síntesis, reconstrucción de lo aprendido…)"
-            className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-          <input value={indicador} onChange={(e) => setIndicador(e.target.value)} placeholder="Indicador de desempeño (opcional)"
-            className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+          {modo === "agil" ? (
+            <textarea value={descripcionAgil} onChange={(e) => setDescripcionAgil(e.target.value)} rows={3} placeholder="¿Qué se va a hacer en esta clase? (una sola descripción libre)"
+              className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+          ) : (
+            <>
+              <textarea value={inicio} onChange={(e) => setInicio(e.target.value)} rows={2} placeholder="Actividades de apertura (recuperar saberes previos, plantear un problema o pregunta detonadora…)"
+                className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+              <textarea value={desarrollo} onChange={(e) => setDesarrollo(e.target.value)} rows={2} placeholder="Actividades de desarrollo (interacción con la nueva información, aplicación en un caso o problema…)"
+                className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+              <textarea value={cierre} onChange={(e) => setCierre(e.target.value)} rows={2} placeholder="Actividades de cierre (síntesis, reconstrucción de lo aprendido…)"
+                className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+              <input value={indicador} onChange={(e) => setIndicador(e.target.value)} placeholder="Indicador de desempeño (opcional)"
+                className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+            </>
+          )}
           <div className="flex justify-end gap-2">
             <button onClick={limpiar} className="text-xs text-slate-400">Cancelar</button>
             <button onClick={agregar} className="text-xs px-3 py-1.5 rounded-lg bg-violet-500 text-white">Agregar clase</button>
@@ -636,10 +651,13 @@ function UnidadCard({ unidad, institucion, materiaNombre, gradoId, grados, onCam
           {editando ? (
             <input value={titulo} onChange={(e) => setTitulo(e.target.value)} className="w-full text-sm font-bold rounded-lg px-2 py-1 border border-violet-300 outline-none mb-1" />
           ) : (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h4 className="font-bold text-slate-800">{unidad.titulo}</h4>
               <span className={`text-[10px] px-2 py-0.5 rounded-full ${unidad.estado === "publicado" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
                 {unidad.estado === "publicado" ? "Publicado" : "Borrador"}
+              </span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-50 text-violet-600">
+                {grados.some((g) => String(g.id) === String(unidad.grado_id)) ? `📍 Curso ${unidad.grado_id}` : `🏫 Todo el grado ${unidad.grado_id}°`}
               </span>
             </div>
           )}
@@ -719,13 +737,17 @@ function UnidadCard({ unidad, institucion, materiaNombre, gradoId, grados, onCam
 function NuevaUnidadForm({ materiaId, gradoId, periodo, orden, onCancelar, onCreada }) {
   const [titulo, setTitulo] = useState("");
   const [objetivo, setObjetivo] = useState("");
+  const [alcance, setAlcance] = useState("grado"); // "grado" | "curso"
   const [guardando, setGuardando] = useState(false);
+
+  const { nivel, curso } = nivelYCurso(gradoId);
+  const gradoIdAGuardar = alcance === "grado" ? nivel : gradoId;
 
   const guardar = async () => {
     if (!titulo.trim()) { alert("Escribe un título para la unidad/tema."); return; }
     setGuardando(true);
     try {
-      await api.crearPlaneacion({ tipo: "unidad", materia_id: materiaId, grado_id: gradoId, periodo, titulo: titulo.trim(), objetivo: objetivo.trim() || null, orden });
+      await api.crearPlaneacion({ tipo: "unidad", materia_id: materiaId, grado_id: gradoIdAGuardar, periodo, titulo: titulo.trim(), objetivo: objetivo.trim() || null, orden });
       onCreada();
     } catch (e) {
       alert("Error al guardar: " + e.message);
@@ -739,6 +761,20 @@ function NuevaUnidadForm({ materiaId, gradoId, periodo, orden, onCancelar, onCre
         className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
       <input value={objetivo} onChange={(e) => setObjetivo(e.target.value)} placeholder="Objetivo de aprendizaje (opcional)"
         className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none bg-white" />
+      <div className="mb-3">
+        <label className="text-xs text-slate-500 block mb-1">Esta planeación aplica a</label>
+        <div className="flex gap-1 rounded-full bg-white p-1 w-fit border border-slate-200">
+          <button onClick={() => setAlcance("grado")} className={`text-xs px-3 py-1.5 rounded-full ${alcance === "grado" ? "bg-violet-500 text-white" : "text-slate-600"}`}>
+            🏫 Todo el grado {nivel}° (todos los cursos)
+          </button>
+          <button onClick={() => setAlcance("curso")} className={`text-xs px-3 py-1.5 rounded-full ${alcance === "curso" ? "bg-violet-500 text-white" : "text-slate-600"}`}>
+            📍 Solo el curso {gradoId}
+          </button>
+        </div>
+        {alcance === "grado" && (
+          <p className="text-[11px] text-slate-400 mt-1">Va a aparecer en todos los cursos del grado {nivel}° — usá el "Control por curso" dentro de cada clase para registrar en qué curso y fecha se dictó cada una.</p>
+        )}
+      </div>
       <div className="flex justify-end gap-2">
         <button onClick={onCancelar} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
         <button disabled={guardando} onClick={guardar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
