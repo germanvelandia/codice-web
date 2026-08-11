@@ -912,6 +912,29 @@ function CodiceEstudiante({ estudianteId }) {
   );
 }
 
+function ValorSemanaEstudiante() {
+  const [valor, setValor] = useState(null);
+  useEffect(() => { api.fetchValorSemanal().then(setValor); }, []);
+  if (!valor || (!valor.nombre && !valor.imagen_url)) return null;
+
+  return (
+    <div className="bg-violet-50 rounded-2xl p-3 mb-4 flex items-center gap-3">
+      <div className="rounded-xl overflow-hidden shrink-0" style={{ width: 56, height: 56, background: "white" }}>
+        {valor.imagen_url ? (
+          <img src={valor.imagen_url} alt={valor.nombre || "Valor de la semana"} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-2xl">🌟</div>
+        )}
+      </div>
+      <div className="min-w-0">
+        <div className="text-[9px] font-bold text-violet-500 uppercase tracking-wide">Valor de la semana</div>
+        <div className="text-sm font-bold text-slate-800 truncate">{valor.nombre}</div>
+        {valor.descripcion && <div className="text-[11px] text-slate-500 mt-0.5">{valor.descripcion}</div>}
+      </div>
+    </div>
+  );
+}
+
 function PortalEstudiante() {
   const [codigo, setCodigo] = useState("");
   const [datos, setDatos] = useState(null);
@@ -956,6 +979,7 @@ function PortalEstudiante() {
                 <div className="text-lg font-bold text-slate-800">{datos.nombre}</div>
                 <div className="text-xs text-slate-400">Grado {datos.grado_id} · {datos.grupo}</div>
               </div>
+              <ValorSemanaEstudiante />
               {estudianteInfo && <AvisoRendimiento estudianteId={estudianteInfo.id} />}
               <div className="mb-3">
                 <div className="flex justify-between text-xs text-slate-500 mb-1">
