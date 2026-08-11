@@ -127,8 +127,28 @@ function TomarEvaluacion({ evaluacion, estudianteId, onCerrar }) {
           </div>
         ) : (
           <>
-            <h3 className="font-bold text-slate-800 mb-1">{evaluacion.titulo}</h3>
-            {evaluacion.descripcion && <p className="text-xs text-slate-500 mb-3">{evaluacion.descripcion}</p>}
+            <h3 className="font-bold text-slate-800 mb-2">⚔️ {evaluacion.titulo}</h3>
+            {(evaluacion.descripcion || (evaluacion.indicaciones && evaluacion.indicaciones.length > 0) || evaluacion.tiempo_limite_minutos) && (
+              <div className="bg-violet-50 rounded-2xl p-4 mb-4">
+                {evaluacion.descripcion && <p className="text-xs text-slate-600 leading-relaxed mb-3">{evaluacion.descripcion}</p>}
+                {evaluacion.indicaciones && evaluacion.indicaciones.length > 0 && (
+                  <>
+                    <div className="text-[11px] font-bold text-violet-700 uppercase tracking-wide mb-1.5">Indicaciones</div>
+                    <ul className="space-y-1.5 mb-1">
+                      {evaluacion.indicaciones.map((ind, i) => (
+                        <li key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                          <span className="text-violet-400 shrink-0">✓</span>
+                          <span className="leading-relaxed">{ind}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+                {evaluacion.tiempo_limite_minutos && (
+                  <div className="text-[11px] font-semibold text-violet-700 mt-2">⏱ Tiempo sugerido: {evaluacion.tiempo_limite_minutos} minutos</div>
+                )}
+              </div>
+            )}
             <div className="space-y-3 mb-4">
               {preguntas.map((p, i) => (
                 <div key={p.id} className="border border-slate-100 rounded-xl p-3">
