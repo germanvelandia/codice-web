@@ -695,14 +695,41 @@ export async function recalcularPuntajeIntento(intentoId) {
   if (e2) throw e2;
 }
 
-export async function publicarResultado(intentoId, visible = true) {
-  const { error } = await supabase.from("evaluacion_intentos").update({ visible_para_estudiante: visible }).eq("id", intentoId);
-  if (error) throw error;
+// Manda la nota de una Misión (evaluación) escalada a la escala de la materia
+// (ej: puntaje 7/10 -> 3.5/5), directo a la Planilla de Calificaciones.
+async function empujarNotaAEvaluacion(evaluacion, estudianteId, puntajeObtenido, puntajeMaximo) {
+  if (!evaluacion?.categoria_id || !puntajeMaximo || puntajeMaximo <= 0 || puntajeObtenido === null) return;
+  const config = await fetchNotasConfig(evaluacion.materia_id);
+  const notaEscalada = Math.round((puntajeObtenido / puntajeMaximo) * (config.nota_maxima || 5) * 10) / 10;
+  const existentes = await fetchActividades(evaluacion.materia_id, evaluacion.grado_id, evaluacion.periodo);
+  let actividad = existentes.find((a) => a.nombre === evaluacion.titulo);
+  if (!actividad) {
+    actividad = await crearActividad({
+      nombre: evaluacion.titulo, categoria_id: evaluacion.categoria_id, materia_id: evaluacion.materia_id,
+      grado_id: evaluacion.grado_id, periodo: evaluacion.periodo, es_automatica: false,
+    });
+  }
+  await setValor(actividad.id, estudianteId, notaEscalada);
 }
 
-export async function publicarTodosLosResultados(evaluacionId) {
+export async function publicarResultado(intentoId, visible = true, evaluacion = null, intento = null) {
+  const { error } = await supabase.from("evaluacion_intentos").update({ visible_para_estudiante: visible }).eq("id", intentoId);
+  if (error) throw error;
+  if (visible && evaluacion && intento) {
+    await empujarNotaAEvaluacion(evaluacion, intento.estudiante_id, intento.puntaje_obtenido, intento.puntaje_maximo);
+  }
+}
+
+export async function publicarTodosLosResultados(evaluacionId, evaluacion = null) {
+  const { data: intentos, error: e1 } = await supabase.from("evaluacion_intentos").select("*").eq("evaluacion_id", evaluacionId).neq("estado", "en_progreso");
+  if (e1) throw e1;
   const { error } = await supabase.from("evaluacion_intentos").update({ visible_para_estudiante: true }).eq("evaluacion_id", evaluacionId);
   if (error) throw error;
+  if (evaluacion) {
+    for (const intento of intentos || []) {
+      await empujarNotaAEvaluacion(evaluacion, intento.estudiante_id, intento.puntaje_obtenido, intento.puntaje_maximo);
+    }
+  }
 }
 
 /* ---------------- Evaluaciones virtuales (lado estudiante, vía código de acceso) ---------------- */
@@ -1116,6 +1143,83 @@ export async function fetchResumenDocente() {
     tareasSinCalificar,
     clasesPendientes: dictadosRes.count || 0,
   };
+}
+
+/* ---------------- PIAR completo ---------------- */
+export async function fetchPiarFormularios(estudianteId) {
+  const { data, error } = await supabase.from("piar_formularios").select("*").eq("estudiante_id", estudianteId).order("creado_en", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearPiarFormulario(estudianteId, campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("piar_formularios").insert({ estudiante_id: estudianteId, ...campos, diligenciado_por: userData?.user?.id || null }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function editarPiarFormulario(id, campos) {
+  const { error } = await supabase.from("piar_formularios").update(campos).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarPiarFormulario(id) {
+  const { error } = await supabase.from("piar_formularios").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function fetchPiarDatosSensibles(formularioId) {
+  const { data, error } = await supabase.from("piar_datos_sensibles").select("*").eq("piar_formulario_id", formularioId).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function guardarPiarDatosSensibles(formularioId, campos) {
+  const { error } = await supabase.from("piar_datos_sensibles").upsert(
+    { piar_formulario_id: formularioId, ...campos },
+    { onConflict: "piar_formulario_id" }
+  );
+  if (error) throw error;
+}
+
+export async function fetchPiarAjustes(formularioId) {
+  const { data, error } = await supabase.from("piar_ajustes").select("*").eq("piar_formulario_id", formularioId).order("creado_en");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearPiarAjuste(formularioId, campos) {
+  const { data, error } = await supabase.from("piar_ajustes").insert({ piar_formulario_id: formularioId, ...campos }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function eliminarPiarAjuste(id) {
+  const { error } = await supabase.from("piar_ajustes").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function fetchPiarSeguimiento(ajusteId) {
+  const [segRes, profesoresRes] = await Promise.all([
+    supabase.from("piar_seguimiento").select("*").eq("piar_ajuste_id", ajusteId).order("fecha", { ascending: false }),
+    supabase.from("profesores").select("id, nombre"),
+  ]);
+  if (segRes.error) throw segRes.error;
+  if (profesoresRes.error) throw profesoresRes.error;
+  const nombrePorId = {}; (profesoresRes.data || []).forEach((p) => { nombrePorId[p.id] = p.nombre; });
+  return (segRes.data || []).map((s) => ({ ...s, autor_nombre: nombrePorId[s.autor_id] || "Docente" }));
+}
+
+export async function crearPiarSeguimiento(ajusteId, campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("piar_seguimiento").insert({ piar_ajuste_id: ajusteId, autor_id: userData?.user?.id || null, ...campos });
+  if (error) throw error;
+}
+
+export async function eliminarPiarSeguimiento(id) {
+  const { error } = await supabase.from("piar_seguimiento").delete().eq("id", id);
+  if (error) throw error;
 }
 
 export async function fetchInstitucion() {
