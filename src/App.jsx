@@ -175,18 +175,27 @@ function TarjetaEvaluacionEstudiante({ evaluacion, estudianteId }) {
   const publicado = intentos.filter((i) => i.visible_para_estudiante).sort((a, b) => b.numero_intento - a.numero_intento)[0];
   const hayPendiente = intentos.some((i) => i.estado !== "en_progreso" && !i.visible_para_estudiante);
 
+  const colorBorde = publicado ? "#22C55E" : hayPendiente ? "#F59E0B" : "#8B5CF6";
+
   return (
-    <div className="bg-slate-50 rounded-xl p-3">
-      <div className="text-sm font-semibold text-slate-800">{evaluacion.titulo}</div>
-      {evaluacion.descripcion && <div className="text-xs text-slate-500 mt-0.5">{evaluacion.descripcion}</div>}
-      <div className="text-[11px] text-slate-400 mt-1">
-        {maxIntentos ? `${usados}/${maxIntentos} intentos usados` : `${usados} intento(s) usados`}
-        {evaluacion.tiempo_limite_minutos ? ` · ${evaluacion.tiempo_limite_minutos} min` : ""}
+    <div className="bg-white rounded-xl p-3.5 shadow-sm" style={{ borderLeft: `4px solid ${colorBorde}` }}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-sm font-bold text-slate-800">⚔️ {evaluacion.titulo}</div>
+          {evaluacion.descripcion && <div className="text-xs text-slate-500 mt-1 leading-relaxed">{evaluacion.descripcion}</div>}
+        </div>
+        {publicado ? (
+          <span className="text-xs font-bold text-white bg-emerald-500 px-2.5 py-1 rounded-full shrink-0">{publicado.puntaje_obtenido}/{publicado.puntaje_maximo}</span>
+        ) : hayPendiente ? (
+          <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-2 py-1 rounded-full shrink-0 whitespace-nowrap">⏳ En revisión</span>
+        ) : null}
       </div>
-      {publicado && <div className="text-xs font-semibold text-emerald-600 mt-1">Nota: {publicado.puntaje_obtenido}/{publicado.puntaje_maximo}</div>}
-      {!publicado && hayPendiente && <div className="text-xs text-amber-600 mt-1">Entregado — pendiente de revisión del docente</div>}
+      <div className="flex items-center gap-2 mt-2 text-[11px] text-slate-400">
+        <span>{maxIntentos ? `${usados}/${maxIntentos} intentos` : `${usados} intento(s)`}</span>
+        {evaluacion.tiempo_limite_minutos && <span>· ⏱ {evaluacion.tiempo_limite_minutos} min</span>}
+      </div>
       {puedeIntentar && (
-        <button onClick={() => setTomando(true)} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white mt-2">
+        <button onClick={() => setTomando(true)} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white mt-2.5">
           {usados > 0 ? "Presentar de nuevo" : "Presentar"}
         </button>
       )}
@@ -556,19 +565,30 @@ function RankingEstudiante({ estudianteId, gradoId }) {
   );
 }
 
-function TareaCalificableEstudiante({ tarea, estudianteId }) {
+function TareaCalificableEstudiante({ tarea, estudianteId, icono = "📄" }) {
   const [entrega, setEntrega] = useState(null);
   useEffect(() => { api.fetchMiEntrega(tarea.id, estudianteId).then(setEntrega); }, [tarea.id]);
+
+  const calificado = entrega?.nota !== null && entrega?.nota !== undefined;
+  const colorBorde = calificado ? "#22C55E" : "#F59E0B";
+
   return (
-    <div className="bg-slate-50 rounded-xl p-3">
-      <div className="text-sm font-semibold text-slate-800">{tarea.titulo}</div>
-      {tarea.materias?.nombre && <div className="text-[11px] text-slate-400">{tarea.materias.nombre}</div>}
-      {tarea.descripcion && <div className="text-xs text-slate-500 mt-1">{tarea.descripcion}</div>}
-      {tarea.fecha_entrega && <div className="text-[11px] text-slate-400 mt-1">Entrega: {tarea.fecha_entrega}</div>}
-      {entrega?.nota !== null && entrega?.nota !== undefined ? (
-        <div className="text-xs font-semibold text-emerald-600 mt-1.5">Nota: {entrega.nota}{entrega.comentario ? ` — "${entrega.comentario}"` : ""}</div>
-      ) : (
-        <div className="text-[11px] text-amber-600 mt-1.5">Pendiente de calificación</div>
+    <div className="bg-white rounded-xl p-3.5 shadow-sm" style={{ borderLeft: `4px solid ${colorBorde}` }}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-sm font-bold text-slate-800">{icono} {tarea.titulo}</div>
+          {tarea.materias?.nombre && <div className="text-[11px] text-violet-500 font-semibold mt-0.5">{tarea.materias.nombre}</div>}
+          {tarea.descripcion && <div className="text-xs text-slate-500 mt-1 leading-relaxed">{tarea.descripcion}</div>}
+        </div>
+        {calificado ? (
+          <span className="text-xs font-bold text-white bg-emerald-500 px-2.5 py-1 rounded-full shrink-0">{entrega.nota}</span>
+        ) : (
+          <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-2 py-1 rounded-full shrink-0 whitespace-nowrap">⏳ Pendiente</span>
+        )}
+      </div>
+      {tarea.fecha_entrega && <div className="text-[11px] text-slate-400 mt-2">📅 Entrega: {tarea.fecha_entrega}</div>}
+      {calificado && entrega.comentario && (
+        <div className="text-xs text-slate-600 italic bg-slate-50 rounded-lg p-2 mt-2">"{entrega.comentario}"</div>
       )}
     </div>
   );
@@ -585,25 +605,32 @@ function ProyectosEstudiante({ estudianteId, gradoId }) {
   }, [gradoId]);
 
   if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
-  if (proyectos.length === 0 && tareasPlan.length === 0) return <p className="text-sm text-slate-400">Todavía no tenés proyectos asignados.</p>;
+  if (proyectos.length === 0 && tareasPlan.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-3xl mb-2">📜</div>
+        <p className="text-sm text-slate-400">Todavía no tenés proyectos asignados.</p>
+      </div>
+    );
+  }
 
   return (
     <div>
       <h3 className="font-bold text-slate-800 mb-3">📜 Proyectos</h3>
       {proyectos.length > 0 && (
-        <div className="space-y-2 mb-4">
-          {proyectos.map((p) => <TareaCalificableEstudiante key={p.id} tarea={p} estudianteId={estudianteId} />)}
+        <div className="space-y-2 mb-5">
+          {proyectos.map((p) => <TareaCalificableEstudiante key={p.id} tarea={p} estudianteId={estudianteId} icono="📜" />)}
         </div>
       )}
       {tareasPlan.length > 0 && (
         <>
-          <div className="text-xs font-semibold text-slate-500 mb-2">Otras tareas de clase</div>
+          <div className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wide">Otras tareas de clase</div>
           <div className="space-y-2">
             {tareasPlan.map((t) => (
-              <div key={t.id} className="bg-slate-50 rounded-xl p-3">
-                <div className="text-sm font-semibold text-slate-800">{t.titulo}</div>
-                <div className="text-[11px] text-slate-400">{t.materia_nombre}{t.unidad_titulo ? ` · ${t.unidad_titulo}` : ""}</div>
-                {t.fecha_entrega && <div className="text-[11px] text-slate-400 mt-0.5">Entrega: {t.fecha_entrega}</div>}
+              <div key={t.id} className="bg-white rounded-xl p-3.5 shadow-sm border-l-4 border-slate-300">
+                <div className="text-sm font-bold text-slate-800">📝 {t.titulo}</div>
+                <div className="text-[11px] text-violet-500 font-semibold mt-0.5">{t.materia_nombre}{t.unidad_titulo ? ` · ${t.unidad_titulo}` : ""}</div>
+                {t.fecha_entrega && <div className="text-[11px] text-slate-400 mt-1.5">📅 Entrega: {t.fecha_entrega}</div>}
               </div>
             ))}
           </div>
@@ -619,13 +646,20 @@ function ForjaEstudiante({ estudianteId, gradoId }) {
   useEffect(() => { api.fetchTareasCalificablesEstudiante(gradoId, "forja").then((d) => { setTalleres(d); setCargando(false); }); }, [gradoId]);
 
   if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
-  if (talleres.length === 0) return <p className="text-sm text-slate-400">Todavía no tenés talleres o entregables asignados.</p>;
+  if (talleres.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-3xl mb-2">🔨</div>
+        <p className="text-sm text-slate-400">Todavía no tenés talleres o entregables asignados.</p>
+      </div>
+    );
+  }
 
   return (
     <div>
       <h3 className="font-bold text-slate-800 mb-3">🔨 Forja</h3>
       <div className="space-y-2">
-        {talleres.map((t) => <TareaCalificableEstudiante key={t.id} tarea={t} estudianteId={estudianteId} />)}
+        {talleres.map((t) => <TareaCalificableEstudiante key={t.id} tarea={t} estudianteId={estudianteId} icono="🔨" />)}
       </div>
     </div>
   );
