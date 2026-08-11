@@ -757,7 +757,7 @@ function colorCategoria(nombre) {
   return PALETA_CATEGORIAS[Math.abs(hash) % PALETA_CATEGORIAS.length];
 }
 
-function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo, materias, onCambioCategorias }) {
+function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo, materias, onCambioCategorias, estudianteDestacadoId }) {
   const [actividades, setActividades] = useState([]);
   const [valores, setValores] = useState({});
   const [xpMapa, setXpMapa] = useState({});
@@ -990,8 +990,11 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
               {estudiantesVisibles.map((s) => {
                 const final = notaFinal(s.id);
                 const banda = bandaDesempeno(final, config);
+                const destacado = estudianteDestacadoId && s.id === estudianteDestacadoId;
                 return (
-                  <tr key={s.id} className="odd:bg-white even:bg-slate-50">
+                  <tr key={s.id} ref={destacado ? (el) => el?.scrollIntoView({ behavior: "smooth", block: "center" }) : null}
+                    className={destacado ? "bg-amber-100" : "odd:bg-white even:bg-slate-50"}
+                    style={destacado ? { boxShadow: "inset 0 0 0 2px #F59E0B" } : undefined}>
                     <td className="sticky left-0 bg-inherit text-left px-3 py-2 font-medium text-slate-700">{s.nombre} <InclusionBadge estudiante={s} size="text-xs" /></td>
                     {actividadesOrdenadas.map((a) => {
                       const v = valorDeActividad(a, s.id);
@@ -1332,7 +1335,7 @@ function ComentariosDesempenoModal({ onClose }) {
   );
 }
 
-export function VistaCalificaciones({ grados }) {
+export function VistaCalificaciones({ grados, destinoBusqueda }) {
   const [materias, setMaterias] = useState([]);
   const [materiaActualId, setMateriaActualId] = useState(null);
   const [config, setConfig] = useState(CONFIG_DEFAULT);
@@ -1344,6 +1347,15 @@ export function VistaCalificaciones({ grados }) {
   const [comentariosAbiertos, setComentariosAbiertos] = useState(false);
   const [estudiantes, setEstudiantes] = useState([]);
   const [cargando, setCargando] = useState(true);
+
+  // Cuando llega desde el buscador global de estudiantes: saltar directo a su
+  // curso, en la Planilla, con su fila resaltada.
+  useEffect(() => {
+    if (!destinoBusqueda) return;
+    setGradoId(destinoBusqueda.gradoId);
+    setSubVista("planilla");
+    setSoloVigente(false);
+  }, [destinoBusqueda]);
 
   const cargarMaterias = async () => {
     const m = await api.fetchMaterias();
@@ -1462,7 +1474,7 @@ export function VistaCalificaciones({ grados }) {
           </div>
 
           {subVista === "planilla" && (
-            <Planilla materiaId={materiaActualId} config={config} categorias={categorias} estudiantes={estudiantes} gradoId={gradoId} periodo={periodo} materias={materias} onCambioCategorias={cargarConfigYCategorias} />
+            <Planilla materiaId={materiaActualId} config={config} categorias={categorias} estudiantes={estudiantes} gradoId={gradoId} periodo={periodo} materias={materias} onCambioCategorias={cargarConfigYCategorias} estudianteDestacadoId={destinoBusqueda?.estudianteId} />
           )}
           {subVista === "boletin" && (
             <Boletin materiaId={materiaActualId} config={config} categorias={categorias} estudiantes={estudiantes} gradoId={gradoId} guardarActual={guardarNotasFinalesActual} />
