@@ -681,6 +681,11 @@ function TareaCalificableEstudiante({ tarea, estudianteId, icono = "📄" }) {
         )}
       </div>
       {tarea.fecha_entrega && <div className="text-[11px] text-slate-400 mt-2">📅 Entrega: {tarea.fecha_entrega}</div>}
+      {tarea.url && (
+        <a href={tarea.url} target="_blank" rel="noreferrer" className="inline-block text-xs font-semibold text-white bg-violet-500 px-3 py-1.5 rounded-lg mt-2">
+          🔗 Abrir enlace
+        </a>
+      )}
       {calificado && entrega.comentario && (
         <div className="text-xs text-slate-600 italic bg-slate-50 rounded-lg p-2 mt-2">"{entrega.comentario}"</div>
       )}
