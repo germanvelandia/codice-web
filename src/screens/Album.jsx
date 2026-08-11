@@ -110,11 +110,11 @@ function CriaturaForm({ criatura, onCancelar, onGuardado }) {
 export function CartaCriatura({ criatura, revelada = true, tamano = "normal" }) {
   const info = RAREZAS.find((r) => r.key === criatura.rareza) || RAREZAS[0];
   const w = tamano === "chico" ? 130 : 168;
-  const h = tamano === "chico" ? 182 : 235;
+  const nombreLargo = (criatura.nombre || "").length > 14;
 
   if (!revelada) {
     return (
-      <div className="rounded-2xl flex flex-col items-center justify-center" style={{ width: w, height: h, background: "#E2E8F0", border: "3px solid #CBD5E1" }}>
+      <div className="rounded-2xl flex flex-col items-center justify-center" style={{ width: w, minHeight: w * 1.4, background: "#E2E8F0", border: "3px solid #CBD5E1" }}>
         <div className="text-4xl opacity-40">❓</div>
         <div className="text-[10px] font-semibold text-slate-400 mt-1">???</div>
       </div>
@@ -122,15 +122,15 @@ export function CartaCriatura({ criatura, revelada = true, tamano = "normal" }) 
   }
 
   return (
-    <div className="rounded-2xl overflow-hidden flex flex-col" style={{ width: w, height: h, border: `3px solid ${info.color}`, background: "white", boxShadow: `0 2px 10px ${info.color}33` }}>
-      {/* Encabezado: nombre + esquina de rareza (tipo/logo) */}
-      <div className="flex items-center justify-between px-2 py-1" style={{ background: info.color }}>
-        <span className="text-[10px] font-bold text-white truncate">{criatura.nombre}</span>
-        <span className="text-[8px] font-bold text-white bg-black/20 rounded-full px-1.5 py-0.5 shrink-0 uppercase">{info.label}</span>
+    <div className="rounded-2xl overflow-hidden flex flex-col" style={{ width: w, border: `3px solid ${info.color}`, background: "white", boxShadow: `0 2px 10px ${info.color}33` }}>
+      {/* Encabezado: nombre + esquina de rareza (tipo/logo) — el nombre nunca se corta, si es largo pasa a dos líneas con letra más chica */}
+      <div className="flex items-start justify-between gap-1 px-2 py-1" style={{ background: info.color }}>
+        <span className="font-bold text-white leading-tight break-words" style={{ fontSize: nombreLargo ? 8.5 : 10 }}>{criatura.nombre}</span>
+        <span className="text-[7px] font-bold text-white bg-black/20 rounded-full px-1.5 py-0.5 shrink-0 uppercase whitespace-nowrap">{info.label}</span>
       </div>
 
-      {/* Imagen */}
-      <div className="flex-1 flex items-center justify-center" style={{ background: `linear-gradient(160deg, ${info.color}18, ${info.color}05)` }}>
+      {/* Imagen — alto fijo propio, ya no compite por espacio con el texto */}
+      <div className="flex items-center justify-center shrink-0" style={{ height: w * 0.85, background: `linear-gradient(160deg, ${info.color}18, ${info.color}05)` }}>
         {criatura.imagen_url ? (
           <img src={criatura.imagen_url} alt={criatura.nombre} className="w-full h-full object-cover" />
         ) : (
@@ -138,15 +138,15 @@ export function CartaCriatura({ criatura, revelada = true, tamano = "normal" }) 
         )}
       </div>
 
-      {/* Descripción / poder especial */}
+      {/* Descripción / poder especial — se muestra completa, envuelve el texto sin cortarlo */}
       {criatura.descripcion && (
-        <div className="px-2 py-1 text-[8px] text-slate-500 italic leading-tight" style={{ minHeight: 24 }}>
-          {criatura.descripcion.length > 60 ? criatura.descripcion.slice(0, 58) + "…" : criatura.descripcion}
+        <div className="px-2 py-1.5 text-[8px] text-slate-500 italic leading-snug break-words">
+          {criatura.descripcion}
         </div>
       )}
 
       {/* Estadísticas */}
-      <div className="grid grid-cols-4 gap-0.5 px-1.5 pb-1.5">
+      <div className="grid grid-cols-4 gap-0.5 px-1.5 pb-1.5 pt-1 mt-auto">
         <div className="text-center bg-slate-50 rounded py-0.5">
           <div className="text-[9px]">⚔️</div>
           <div className="text-[9px] font-bold text-slate-700">{criatura.poder || 0}</div>
@@ -271,4 +271,4 @@ export function VistaAlbum() {
       )}
     </div>
   );
-} 
+}
