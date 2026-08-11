@@ -41,6 +41,15 @@ export async function guardarColorGrado(id, color) {
   if (error) throw error;
 }
 
+// Busca estudiantes por nombre en TODOS los grados a la vez (para el buscador global)
+export async function buscarEstudiantesGlobal(query) {
+  const q = query.trim();
+  if (q.length < 2) return [];
+  const { data, error } = await supabase.from("estudiantes").select("id, nombre, grado_id").eq("activo", true).ilike("nombre", `%${q}%`).order("nombre").limit(15);
+  if (error) throw error;
+  return data || [];
+}
+
 export async function fetchEstudiantesPorGrado(gradoId) {
   const { data, error } = await supabase
     .from("estudiantes")
