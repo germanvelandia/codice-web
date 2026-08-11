@@ -7,7 +7,7 @@ import { VistaGrados, VistaReinos, VistaEstudiantes } from "./screens/Estudiante
 import { VistaAsistencia } from "./screens/Asistencia";
 import { VistaRuleta, VistaRuletaMonedas, VistaTemporizador, VistaHerramientas } from "./screens/Herramientas";
 import { VistaBanco } from "./screens/Banco";
-import { VistaAlbum } from "./screens/Album";
+import { VistaAlbum, CartaCriatura } from "./screens/Album";
 import { VistaRoles } from "./screens/Roles";
 import { VistaCalificaciones } from "./screens/Calificaciones";
 import { VistaReportes } from "./screens/Reportes";
@@ -434,13 +434,6 @@ function MisNotas({ estudianteId }) {
   );
 }
 
-const RAREZA_INFO = {
-  comun: { label: "Común", color: "#94A3B8" },
-  rara: { label: "Rara", color: "#3B82F6" },
-  epica: { label: "Épica", color: "#8B5CF6" },
-  legendaria: { label: "Legendaria", color: "#F59E0B" },
-};
-
 function AlbumEstudiante({ estudianteId, monedas, onMonedasActualizadas }) {
   const [config, setConfig] = useState(null);
   const [catalogo, setCatalogo] = useState([]);
@@ -491,16 +484,7 @@ function AlbumEstudiante({ estudianteId, monedas, onMonedasActualizadas }) {
           <div className="bg-violet-50 rounded-2xl p-4 mb-3 text-center">
             <div className="text-xs font-semibold text-violet-700 mb-2">¡Te tocaron estas criaturas!</div>
             <div className="flex justify-center gap-2 flex-wrap">
-              {resultado.cartas.map((c, i) => {
-                const info = RAREZA_INFO[c.rareza];
-                return (
-                  <div key={i} className="rounded-xl p-2 text-center" style={{ background: "white", border: `2px solid ${info.color}`, width: 72 }}>
-                    <div className="text-2xl">{c.emoji}</div>
-                    <div className="text-[9px] font-semibold text-slate-700 truncate">{c.nombre}</div>
-                    <div className="text-[8px]" style={{ color: info.color }}>{info.label}</div>
-                  </div>
-                );
-              })}
+              {resultado.cartas.map((c, i) => <CartaCriatura key={i} criatura={c} tamano="chico" />)}
             </div>
           </div>
         ) : (
@@ -513,17 +497,10 @@ function AlbumEstudiante({ estudianteId, monedas, onMonedasActualizadas }) {
       </button>
 
       <div className="text-xs font-semibold text-slate-600 mb-2">Tu colección ({coleccion.length}/{catalogo.length})</div>
-      <div className="grid grid-cols-4 gap-2">
+      <div className="flex flex-wrap gap-2 justify-center">
         {catalogo.map((c) => {
           const tenida = poseidas.get(c.id);
-          const info = RAREZA_INFO[c.rareza];
-          return (
-            <div key={c.id} className="rounded-xl p-2 text-center" style={{ background: tenida ? "white" : "#F1F5F9", border: `2px solid ${tenida ? info.color : "#E2E8F0"}` }}>
-              <div className="text-2xl" style={{ filter: tenida ? "none" : "grayscale(1)", opacity: tenida ? 1 : 0.3 }}>{tenida ? c.emoji : "❓"}</div>
-              <div className="text-[9px] font-semibold text-slate-700 truncate">{tenida ? c.nombre : "???"}</div>
-              {tenida?.cantidad > 1 && <div className="text-[8px] text-violet-500">x{tenida.cantidad}</div>}
-            </div>
-          );
+          return <CartaCriatura key={c.id} criatura={tenida ? { ...c, cantidad: tenida.cantidad } : c} tamano="chico" revelada={!!tenida} />;
         })}
       </div>
     </div>
@@ -1237,4 +1214,4 @@ function Panel({ session }) {
       </div>
     </div>
   );
-} 
+}
