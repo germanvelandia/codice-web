@@ -164,10 +164,14 @@ function ResultadosEvaluacion({ evaluacion, onCerrar }) {
     cargar();
   };
 
-  const publicar = async (intentoId) => { await api.publicarResultado(intentoId, true); cargar(); };
+  const publicar = async (intentoId) => {
+    const intento = intentos.find((i) => i.id === intentoId);
+    await api.publicarResultado(intentoId, true, evaluacion, intento);
+    cargar();
+  };
   const publicarTodos = async () => {
     if (!confirm("¿Publicar el resultado de todos los estudiantes que ya están calificados?")) return;
-    await api.publicarTodosLosResultados(evaluacion.id);
+    await api.publicarTodosLosResultados(evaluacion.id, evaluacion);
     cargar();
   };
 
@@ -235,13 +239,14 @@ function ResultadosEvaluacion({ evaluacion, onCerrar }) {
   );
 }
 
-function NuevaEvaluacionForm({ materiaId, gradoId, periodo, onCancelar, onCreada }) {
+function NuevaEvaluacionForm({ materiaId, gradoId, periodo, categorias, onCancelar, onCreada }) {
   const [titulo, setTitulo] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [fechaApertura, setFechaApertura] = useState("");
   const [fechaCierre, setFechaCierre] = useState("");
   const [intentos, setIntentos] = useState("1");
   const [tiempoLimite, setTiempoLimite] = useState("");
+  const [categoriaId, setCategoriaId] = useState("");
   const [guardando, setGuardando] = useState(false);
 
   const guardar = async () => {
@@ -253,6 +258,7 @@ function NuevaEvaluacionForm({ materiaId, gradoId, periodo, onCancelar, onCreada
         fecha_apertura: fechaApertura || null, fecha_cierre: fechaCierre || null,
         intentos_permitidos: intentos === "ilimitado" ? null : parseInt(intentos, 10),
         tiempo_limite_minutos: tiempoLimite ? parseInt(tiempoLimite, 10) : null,
+        categoria_id: categoriaId ? parseInt(categoriaId, 10) : null,
       });
       onCreada(nueva);
     } catch (e) {
@@ -267,6 +273,11 @@ function NuevaEvaluacionForm({ materiaId, gradoId, periodo, onCancelar, onCreada
         className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
       <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2} placeholder="Instrucciones para el estudiante (opcional)"
         className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
+      <label className="text-xs text-slate-500 block mb-1">Categoría en Calificaciones (opcional — si la elegís, la nota se manda sola a la Planilla al publicar)</label>
+      <select value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white">
+        <option value="">— No enviar a Calificaciones —</option>
+        {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+      </select>
       <div className="grid grid-cols-2 gap-2 mb-2">
         <div>
           <label className="text-xs text-slate-500 block mb-1">Abre</label>
@@ -440,6 +451,7 @@ export function VistaEvaluaciones({ grados }) {
   const [gradoId, setGradoId] = useState("");
   const [periodo, setPeriodo] = useState("1");
   const [config, setConfig] = useState({ cantidad_periodos: 4, sistema_periodos: "bimestre" });
+  const [categorias, setCategorias] = useState([]);
   const [evaluaciones, setEvaluaciones] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
@@ -449,7 +461,11 @@ export function VistaEvaluaciones({ grados }) {
     api.fetchMaterias().then((data) => { setMaterias(data); if (data[0]) setMateriaId(data[0].id); });
   }, []);
   useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
-  useEffect(() => { if (!materiaId) return; api.fetchNotasConfig(materiaId).then(setConfig); }, [materiaId]);
+  useEffect(() => {
+    if (!materiaId) return;
+    api.fetchNotasConfig(materiaId).then(setConfig);
+    api.fetchCategorias(materiaId).then(setCategorias);
+  }, [materiaId]);
 
   const listaPeriodos = periodosDe(config);
   useEffect(() => { if (!listaPeriodos.includes(periodo)) setPeriodo(listaPeriodos[0] || "1"); }, [materiaId, config]);
@@ -496,7 +512,7 @@ export function VistaEvaluaciones({ grados }) {
       </p>
 
       {formAbierto && (
-        <NuevaEvaluacionForm materiaId={materiaId} gradoId={gradoId} periodo={periodo}
+        <NuevaEvaluacionForm materiaId={materiaId} gradoId={gradoId} periodo={periodo} categorias={categorias}
           onCancelar={() => setFormAbierto(false)} onCreada={() => { setFormAbierto(false); cargar(); }} />
       )}
 
