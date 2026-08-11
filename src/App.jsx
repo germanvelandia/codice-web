@@ -927,17 +927,21 @@ function CodiceEstudiante({ estudianteId }) {
 function ValorSemanaEstudiante() {
   const [valor, setValor] = useState(null);
   useEffect(() => { api.fetchValorSemanal().then(setValor); }, []);
-  if (!valor || (!valor.nombre && !valor.imagen_url)) return null;
+  if (!valor || (!valor.nombre && !valor.imagen_url && !valor.html_contenido)) return null;
 
   return (
     <div className="bg-violet-50 rounded-2xl p-3 mb-4 flex items-center gap-3">
-      <div className="rounded-xl overflow-hidden shrink-0" style={{ width: 56, height: 56, background: "white" }}>
-        {valor.imagen_url ? (
-          <img src={valor.imagen_url} alt={valor.nombre || "Valor de la semana"} className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-2xl">🌟</div>
-        )}
-      </div>
+      {valor.html_contenido ? (
+        <div className="shrink-0 rounded-xl overflow-hidden" style={{ maxWidth: 110 }} dangerouslySetInnerHTML={{ __html: valor.html_contenido }} />
+      ) : (
+        <div className="rounded-xl overflow-hidden shrink-0" style={{ width: 56, height: 56, background: "white" }}>
+          {valor.imagen_url ? (
+            <img src={valor.imagen_url} alt={valor.nombre || "Valor de la semana"} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-2xl">🌟</div>
+          )}
+        </div>
+      )}
       <div className="min-w-0">
         <div className="text-[9px] font-bold text-violet-500 uppercase tracking-wide">Valor de la semana</div>
         <div className="text-sm font-bold text-slate-800 truncate">{valor.nombre}</div>
