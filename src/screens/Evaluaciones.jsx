@@ -239,15 +239,15 @@ function ResultadosEvaluacion({ evaluacion, onCerrar }) {
   );
 }
 
-function NuevaEvaluacionForm({ materiaId, gradoId, periodo, categorias, onCancelar, onCreada }) {
-  const [titulo, setTitulo] = useState("");
-  const [descripcion, setDescripcion] = useState("");
-  const [indicaciones, setIndicaciones] = useState([""]);
-  const [fechaApertura, setFechaApertura] = useState("");
-  const [fechaCierre, setFechaCierre] = useState("");
-  const [intentos, setIntentos] = useState("1");
-  const [tiempoLimite, setTiempoLimite] = useState("");
-  const [categoriaId, setCategoriaId] = useState("");
+function NuevaEvaluacionForm({ materiaId, gradoId, periodo, categorias, evaluacion, onCancelar, onCreada }) {
+  const [titulo, setTitulo] = useState(evaluacion?.titulo || "");
+  const [descripcion, setDescripcion] = useState(evaluacion?.descripcion || "");
+  const [indicaciones, setIndicaciones] = useState(evaluacion?.indicaciones?.length ? evaluacion.indicaciones : [""]);
+  const [fechaApertura, setFechaApertura] = useState(evaluacion?.fecha_apertura || "");
+  const [fechaCierre, setFechaCierre] = useState(evaluacion?.fecha_cierre || "");
+  const [intentos, setIntentos] = useState(evaluacion?.intentos_permitidos ? String(evaluacion.intentos_permitidos) : evaluacion ? "ilimitado" : "1");
+  const [tiempoLimite, setTiempoLimite] = useState(evaluacion?.tiempo_limite_minutos ? String(evaluacion.tiempo_limite_minutos) : "");
+  const [categoriaId, setCategoriaId] = useState(evaluacion?.categoria_id ? String(evaluacion.categoria_id) : "");
   const [guardando, setGuardando] = useState(false);
 
   const cambiarIndicacion = (i, valor) => setIndicaciones((prev) => prev.map((x, idx) => idx === i ? valor : x));
@@ -258,15 +258,21 @@ function NuevaEvaluacionForm({ materiaId, gradoId, periodo, categorias, onCancel
     if (!titulo.trim()) { alert("Escribe un título."); return; }
     setGuardando(true);
     try {
-      const nueva = await api.crearEvaluacion({
-        materia_id: materiaId, grado_id: gradoId, periodo, titulo: titulo.trim(), descripcion: descripcion.trim() || null,
+      const campos = {
+        titulo: titulo.trim(), descripcion: descripcion.trim() || null,
         indicaciones: indicaciones.map((i) => i.trim()).filter(Boolean),
         fecha_apertura: fechaApertura || null, fecha_cierre: fechaCierre || null,
         intentos_permitidos: intentos === "ilimitado" ? null : parseInt(intentos, 10),
         tiempo_limite_minutos: tiempoLimite ? parseInt(tiempoLimite, 10) : null,
         categoria_id: categoriaId ? parseInt(categoriaId, 10) : null,
-      });
-      onCreada(nueva);
+      };
+      if (evaluacion) {
+        await api.editarEvaluacion(evaluacion.id, campos);
+        onCreada(null);
+      } else {
+        const nueva = await api.crearEvaluacion({ materia_id: materiaId, grado_id: gradoId, periodo, ...campos });
+        onCreada(nueva);
+      }
     } catch (e) {
       alert("Error al guardar: " + e.message);
     }
@@ -327,7 +333,7 @@ function NuevaEvaluacionForm({ materiaId, gradoId, periodo, categorias, onCancel
       <div className="flex justify-end gap-2">
         <button onClick={onCancelar} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
         <button disabled={guardando} onClick={guardar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
-          {guardando ? "Guardando…" : "Crear evaluación"}
+          {guardando ? "Guardando…" : evaluacion ? "Guardar cambios" : "Crear evaluación"}
         </button>
       </div>
     </div>
@@ -410,10 +416,11 @@ function CopiarEvaluacionModal({ evaluacion, materias, grados, onClose, onCopiad
   );
 }
 
-function EvaluacionCard({ evaluacion, materias, grados, onCambio }) {
+function EvaluacionCard({ evaluacion, materias, grados, categorias, onCambio }) {
   const [expandida, setExpandida] = useState(false);
   const [resultadosAbiertos, setResultadosAbiertos] = useState(false);
   const [copiando, setCopiando] = useState(false);
+  const [editando, setEditando] = useState(false);
 
   const publicar = async () => {
     await api.editarEvaluacion(evaluacion.id, { estado: "publicada" });
@@ -428,6 +435,13 @@ function EvaluacionCard({ evaluacion, materias, grados, onCambio }) {
     await api.eliminarEvaluacion(evaluacion.id);
     onCambio();
   };
+
+  if (editando) {
+    return (
+      <NuevaEvaluacionForm evaluacion={evaluacion} categorias={categorias}
+        onCancelar={() => setEditando(false)} onCreada={() => { setEditando(false); onCambio(); }} />
+    );
+  }
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 mb-3">
@@ -452,6 +466,7 @@ function EvaluacionCard({ evaluacion, materias, grados, onCambio }) {
           ) : (
             <button onClick={despublicar} className="text-[11px] px-2.5 py-1 rounded-full border border-slate-200 text-slate-500">Volver a borrador</button>
           )}
+          <button onClick={() => setEditando(true)} className="text-xs text-slate-400 hover:text-violet-600" title="Editar">✏️</button>
           <button onClick={() => setResultadosAbiertos(true)} className="text-xs text-slate-400 hover:text-violet-600">📊</button>
           <button onClick={() => setCopiando(true)} className="text-xs text-slate-400 hover:text-violet-600" title="Copiar a otro curso">📋</button>
           <button onClick={eliminar} className="text-xs text-slate-400 hover:text-rose-500">🗑</button>
@@ -546,7 +561,7 @@ export function VistaEvaluaciones({ grados }) {
           Todavía no hay evaluaciones para este periodo. Creá la primera con "+ Nueva evaluación".
         </div>
       ) : (
-        evaluaciones.map((e) => <EvaluacionCard key={e.id} evaluacion={e} materias={materias} grados={grados} onCambio={cargar} />)
+        evaluaciones.map((e) => <EvaluacionCard key={e.id} evaluacion={e} materias={materias} grados={grados} categorias={categorias} onCambio={cargar} />)
       )}
     </div>
   );
