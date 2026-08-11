@@ -3,11 +3,11 @@ import * as api from "../lib/api";
 import { agruparPorNivel, nivelYCurso } from "../lib/gamification";
 import { periodosDe } from "../lib/calificaciones";
 
-function TareaForm({ tipo, materiaId, gradoId, periodo, categorias, onCancelar, onCreada }) {
-  const [titulo, setTitulo] = useState("");
-  const [descripcion, setDescripcion] = useState("");
-  const [fechaEntrega, setFechaEntrega] = useState("");
-  const [categoriaId, setCategoriaId] = useState(categorias[0]?.id || "");
+function TareaForm({ tipo, materiaId, gradoId, periodo, categorias, tarea, onCancelar, onCreada }) {
+  const [titulo, setTitulo] = useState(tarea?.titulo || "");
+  const [descripcion, setDescripcion] = useState(tarea?.descripcion || "");
+  const [fechaEntrega, setFechaEntrega] = useState(tarea?.fecha_entrega || "");
+  const [categoriaId, setCategoriaId] = useState(tarea?.categoria_id || categorias[0]?.id || "");
   const [guardando, setGuardando] = useState(false);
 
   const guardar = async () => {
@@ -15,10 +15,12 @@ function TareaForm({ tipo, materiaId, gradoId, periodo, categorias, onCancelar, 
     if (!categoriaId) { alert("Elegí a qué categoría de la Planilla va a mandar la nota."); return; }
     setGuardando(true);
     try {
-      await api.crearTareaCalificable({
-        tipo, materia_id: materiaId, grado_id: gradoId, periodo, categoria_id: categoriaId,
-        titulo: titulo.trim(), descripcion: descripcion.trim() || null, fecha_entrega: fechaEntrega || null,
-      });
+      const campos = { titulo: titulo.trim(), descripcion: descripcion.trim() || null, fecha_entrega: fechaEntrega || null, categoria_id: categoriaId };
+      if (tarea) {
+        await api.editarTareaCalificable(tarea.id, campos);
+      } else {
+        await api.crearTareaCalificable({ tipo, materia_id: materiaId, grado_id: gradoId, periodo, ...campos });
+      }
       onCreada();
     } catch (e) {
       alert("Error al guardar: " + e.message);
@@ -48,7 +50,7 @@ function TareaForm({ tipo, materiaId, gradoId, periodo, categorias, onCancelar, 
       <div className="flex justify-end gap-2">
         <button onClick={onCancelar} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
         <button disabled={guardando} onClick={guardar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
-          {guardando ? "Guardando…" : "Crear"}
+          {guardando ? "Guardando…" : tarea ? "Guardar cambios" : "Crear"}
         </button>
       </div>
     </div>
@@ -118,13 +120,22 @@ function CalificarModal({ tarea, onClose, onCambio }) {
   );
 }
 
-function TareaCard({ tarea, onCambio }) {
+function TareaCard({ tarea, categorias, onCambio }) {
   const [calificando, setCalificando] = useState(false);
+  const [editando, setEditando] = useState(false);
   const eliminar = async () => {
     if (!confirm(`¿Eliminar "${tarea.titulo}"? Esto no borra la nota que ya se envió a Calificaciones.`)) return;
     await api.eliminarTareaCalificable(tarea.id);
     onCambio();
   };
+
+  if (editando) {
+    return (
+      <TareaForm tipo={tarea.tipo} tarea={tarea} categorias={categorias}
+        onCancelar={() => setEditando(false)} onCreada={() => { setEditando(false); onCambio(); }} />
+    );
+  }
+
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 mb-3">
       <div className="flex justify-between items-start">
@@ -135,6 +146,7 @@ function TareaCard({ tarea, onCambio }) {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button onClick={() => setCalificando(true)} className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-violet-500 text-white">Calificar</button>
+          <button onClick={() => setEditando(true)} className="text-xs text-slate-400 hover:text-violet-600">✏️</button>
           <button onClick={eliminar} className="text-xs text-slate-400 hover:text-rose-500">🗑</button>
         </div>
       </div>
@@ -218,7 +230,7 @@ export function VistaProyectosForja({ grados }) {
           Todavía no hay {tipo === "proyecto" ? "proyectos" : "talleres"} para este periodo.
         </div>
       ) : (
-        tareas.map((t) => <TareaCard key={t.id} tarea={t} onCambio={cargar} />)
+        tareas.map((t) => <TareaCard key={t.id} tarea={t} categorias={categorias} onCambio={cargar} />)
       )}
     </div>
   );
