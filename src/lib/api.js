@@ -499,16 +499,29 @@ function detectarTipoRecurso(url) {
   return "otro";
 }
 
+// Todas las clases (de todas las unidades) de una materia+grado+periodo, con el
+// título de su unidad — para la vista de calendario.
+export async function fetchTodasLasClases(materiaId, gradoId, periodo) {
+  const unidades = await fetchUnidades(materiaId, gradoId, periodo);
+  const unidadIds = unidades.map((u) => u.id);
+  if (unidadIds.length === 0) return { clases: [], unidades: [] };
+  const { data, error } = await supabase.from("planeaciones").select("*").in("unidad_id", unidadIds).eq("tipo", "clase").order("orden");
+  if (error) throw error;
+  const unidadPorId = {}; unidades.forEach((u) => { unidadPorId[u.id] = u; });
+  const clases = (data || []).map((c) => ({ ...c, unidad_titulo: unidadPorId[c.unidad_id]?.titulo || "" }));
+  return { clases, unidades };
+}
+
 export async function fetchUnidades(materiaId, gradoId, periodo) {
   const nivel = String(gradoId || "").slice(0, -2) || String(gradoId || "");
   const { data, error } = await supabase
     .from("planeaciones")
     .select("*")
-    .eq("materia_id", materiaId).eq("periodo", periodo).eq("tipo", "unidad")
+    .eq("periodo", periodo).eq("tipo", "unidad")
     .or(`grado_id.eq.${gradoId},grado_id.eq.${nivel}`)
     .order("orden");
   if (error) throw error;
-  return data || [];
+  return (data || []).filter((u) => u.materia_id === materiaId || (u.materias_extra || []).includes(materiaId));
 }
 
 export async function fetchClases(unidadId) {
