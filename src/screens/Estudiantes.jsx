@@ -109,6 +109,394 @@ export function InclusionBadge({ estudiante, size = "text-sm" }) {
   return <span title={`Proceso de inclusión activo: ${partes}`} className={size}>🧩</span>;
 }
 
+const TIPOS_APOYO = ["Humano", "Técnico", "Tecnológico", "Comunicativo", "Pedagógico", "Otro"];
+const INDICADORES_SEGUIMIENTO = ["Permanente", "Temporal", "Por periodo", "Por actividad"];
+
+function AjusteConSeguimiento({ ajuste, onEliminado }) {
+  const [expandido, setExpandido] = useState(false);
+  const [seguimientos, setSeguimientos] = useState([]);
+  const [cargando, setCargando] = useState(false);
+  const [nota, setNota] = useState("");
+  const [periodo, setPeriodo] = useState("");
+  const [requiereModificacion, setRequiereModificacion] = useState(false);
+
+  const cargar = () => { setCargando(true); api.fetchPiarSeguimiento(ajuste.id).then((d) => { setSeguimientos(d); setCargando(false); }); };
+  useEffect(() => { if (expandido) cargar(); }, [expandido]);
+
+  const agregar = async () => {
+    if (!nota.trim()) return;
+    await api.crearPiarSeguimiento(ajuste.id, { nota: nota.trim(), periodo_academico: periodo.trim() || null, requiere_modificacion: requiereModificacion });
+    setNota(""); setPeriodo(""); setRequiereModificacion(false);
+    cargar();
+  };
+
+  const eliminar = async () => {
+    if (!confirm("¿Eliminar este ajuste razonable y todo su seguimiento?")) return;
+    await api.eliminarPiarAjuste(ajuste.id);
+    onEliminado();
+  };
+
+  return (
+    <div className="border border-slate-100 rounded-lg p-3">
+      <div className="flex justify-between items-start">
+        <div className="min-w-0">
+          <div className="text-xs font-semibold text-violet-700">{ajuste.area_asignatura || "General"}{ajuste.tipo_apoyo ? ` · Apoyo ${ajuste.tipo_apoyo.toLowerCase()}` : ""}</div>
+          {ajuste.objetivo && <div className="text-xs text-slate-700 mt-1"><b>Objetivo:</b> {ajuste.objetivo}</div>}
+          {ajuste.barrera_identificada && <div className="text-xs text-slate-500 mt-0.5"><b>Barrera:</b> {ajuste.barrera_identificada}</div>}
+          {ajuste.descripcion_ajuste && <div className="text-xs text-slate-500 mt-0.5"><b>Ajuste:</b> {ajuste.descripcion_ajuste}</div>}
+          {ajuste.indicador_seguimiento && <div className="text-[10px] text-slate-400 mt-0.5">Seguimiento: {ajuste.indicador_seguimiento}</div>}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button onClick={eliminar} className="text-[10px] text-slate-300 hover:text-rose-500">🗑</button>
+          <button onClick={() => setExpandido((v) => !v)} className="text-[11px] text-violet-500">{expandido ? "▲" : "▼ Seguimiento"}</button>
+        </div>
+      </div>
+
+      {expandido && (
+        <div className="mt-2 pt-2 border-t border-slate-100">
+          <div className="bg-slate-50 rounded-lg p-2 mb-2">
+            <textarea value={nota} onChange={(e) => setNota(e.target.value)} rows={2} placeholder="¿Funcionó el ajuste? Observación libre…"
+              className="w-full text-xs rounded-lg px-2 py-1.5 mb-1.5 border border-slate-200 outline-none" />
+            <div className="flex items-center gap-2 flex-wrap">
+              <input value={periodo} onChange={(e) => setPeriodo(e.target.value)} placeholder="Periodo (opcional)"
+                className="text-xs rounded-lg px-2 py-1 border border-slate-200 outline-none w-32" />
+              <label className="flex items-center gap-1 text-[11px] text-slate-500">
+                <input type="checkbox" checked={requiereModificacion} onChange={(e) => setRequiereModificacion(e.target.checked)} /> Requiere modificar el ajuste
+              </label>
+              <button onClick={agregar} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-violet-500 text-white ml-auto">+ Agregar</button>
+            </div>
+          </div>
+          {cargando ? (
+            <div className="text-[11px] text-slate-400">Cargando…</div>
+          ) : seguimientos.length === 0 ? (
+            <div className="text-[11px] text-slate-400">Sin registros todavía.</div>
+          ) : (
+            <div className="space-y-1.5">
+              {seguimientos.map((s) => (
+                <div key={s.id} className="text-[11px] bg-white border border-slate-100 rounded-lg p-2">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">{s.fecha}{s.periodo_academico ? ` · ${s.periodo_academico}` : ""} · {s.autor_nombre}</span>
+                    {s.requiere_modificacion && <span className="text-amber-600 font-semibold">⚠ Requiere modificar</span>}
+                  </div>
+                  <div className="text-slate-600 mt-0.5">{s.nota}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PiarCompleto({ estudianteId }) {
+  const [formularios, setFormularios] = useState([]);
+  const [formularioActivo, setFormularioActivo] = useState(null);
+  const [cargando, setCargando] = useState(true);
+  const [creandoForm, setCreandoForm] = useState(false);
+
+  const cargarFormularios = async () => {
+    setCargando(true);
+    const data = await api.fetchPiarFormularios(estudianteId);
+    setFormularios(data);
+    if (data.length > 0 && !formularioActivo) setFormularioActivo(data[0]);
+    setCargando(false);
+  };
+  useEffect(() => { cargarFormularios(); }, [estudianteId]);
+
+  if (cargando) return <div className="text-xs text-slate-400">Cargando PIAR…</div>;
+
+  if (formularios.length === 0 && !creandoForm) {
+    return (
+      <div className="bg-violet-50 rounded-xl p-4 text-center">
+        <p className="text-xs text-slate-500 mb-2">Todavía no hay un formulario PIAR diligenciado para este estudiante.</p>
+        <button onClick={() => setCreandoForm(true)} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white">+ Diligenciar formulario PIAR</button>
+      </div>
+    );
+  }
+
+  if (creandoForm) {
+    return <NuevoPiarFormulario estudianteId={estudianteId} onCancelar={() => setCreandoForm(false)} onCreado={async (f) => { setCreandoForm(false); await cargarFormularios(); setFormularioActivo(f); }} />;
+  }
+
+  return (
+    <div>
+      {formularios.length > 1 && (
+        <select value={formularioActivo?.id} onChange={(e) => setFormularioActivo(formularios.find((f) => f.id === parseInt(e.target.value, 10)))}
+          className="w-full text-xs rounded-lg px-2 py-1.5 mb-3 border border-slate-200 outline-none">
+          {formularios.map((f) => <option key={f.id} value={f.id}>Diligenciado {f.fecha_diligenciamiento || "(sin fecha)"}</option>)}
+        </select>
+      )}
+      {formularioActivo && <PiarFormularioDetalle formulario={formularioActivo} onNuevoFormulario={() => setCreandoForm(true)} onEliminado={cargarFormularios} />}
+    </div>
+  );
+}
+
+function NuevoPiarFormulario({ estudianteId, onCancelar, onCreado }) {
+  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
+  const [lugar, setLugar] = useState("");
+  const [institucion, setInstitucion] = useState("");
+  const [guardando, setGuardando] = useState(false);
+
+  const crear = async () => {
+    setGuardando(true);
+    try {
+      const f = await api.crearPiarFormulario(estudianteId, { fecha_diligenciamiento: fecha || null, lugar_diligenciamiento: lugar.trim() || null, institucion_educativa: institucion.trim() || null });
+      onCreado(f);
+    } catch (e) {
+      alert("Error al crear: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  return (
+    <div className="bg-violet-50 rounded-xl p-4">
+      <label className="text-xs text-slate-500 block mb-1">Fecha de diligenciamiento</label>
+      <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none" />
+      <label className="text-xs text-slate-500 block mb-1">Lugar de diligenciamiento (opcional)</label>
+      <input value={lugar} onChange={(e) => setLugar(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none" />
+      <label className="text-xs text-slate-500 block mb-1">Institución educativa (opcional)</label>
+      <input value={institucion} onChange={(e) => setInstitucion(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
+      <div className="flex justify-end gap-2">
+        <button onClick={onCancelar} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
+        <button disabled={guardando} onClick={crear} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+          {guardando ? "Creando…" : "Crear formulario"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PiarFormularioDetalle({ formulario, onNuevoFormulario, onEliminado }) {
+  const [tab, setTab] = useState("ajustes"); // "ajustes" | "sensibles"
+  const [ajustes, setAjustes] = useState([]);
+  const [cargandoAjustes, setCargandoAjustes] = useState(true);
+  const [formAjusteAbierto, setFormAjusteAbierto] = useState(false);
+
+  const cargarAjustes = () => { setCargandoAjustes(true); api.fetchPiarAjustes(formulario.id).then((d) => { setAjustes(d); setCargandoAjustes(false); }); };
+  useEffect(() => { cargarAjustes(); }, [formulario.id]);
+
+  return (
+    <div>
+      <div className="text-[11px] text-slate-400 mb-2">
+        Diligenciado: {formulario.fecha_diligenciamiento || "—"}{formulario.lugar_diligenciamiento ? ` · ${formulario.lugar_diligenciamiento}` : ""}
+      </div>
+      <div className="flex gap-1 mb-3 rounded-full bg-slate-100 p-1 w-fit">
+        <button onClick={() => setTab("ajustes")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "ajustes" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Ajustes razonables</button>
+        <button onClick={() => setTab("sensibles")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "sensibles" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Datos de salud/hogar</button>
+      </div>
+
+      {tab === "ajustes" && (
+        <div>
+          {cargandoAjustes ? (
+            <div className="text-xs text-slate-400">Cargando…</div>
+          ) : (
+            <div className="space-y-2 mb-2">
+              {ajustes.map((a) => <AjusteConSeguimiento key={a.id} ajuste={a} onEliminado={cargarAjustes} />)}
+            </div>
+          )}
+          {formAjusteAbierto ? (
+            <NuevoAjusteForm formularioId={formulario.id} onCancelar={() => setFormAjusteAbierto(false)} onCreado={() => { setFormAjusteAbierto(false); cargarAjustes(); }} />
+          ) : (
+            <button onClick={() => setFormAjusteAbierto(true)} className="text-xs text-violet-500">+ Agregar ajuste razonable</button>
+          )}
+        </div>
+      )}
+
+      {tab === "sensibles" && <PiarDatosSensiblesForm formularioId={formulario.id} />}
+
+      <button onClick={onNuevoFormulario} className="text-[11px] text-slate-400 mt-4">+ Diligenciar un nuevo formulario (revisión)</button>
+    </div>
+  );
+}
+
+function NuevoAjusteForm({ formularioId, onCancelar, onCreado }) {
+  const [area, setArea] = useState("");
+  const [objetivo, setObjetivo] = useState("");
+  const [barrera, setBarrera] = useState("");
+  const [descripcion, setDescripcion] = useState("");
+  const [tipoApoyo, setTipoApoyo] = useState("Pedagógico");
+  const [indicador, setIndicador] = useState("Por periodo");
+  const [guardando, setGuardando] = useState(false);
+
+  const guardar = async () => {
+    if (!descripcion.trim()) { alert("Describí el ajuste."); return; }
+    setGuardando(true);
+    try {
+      await api.crearPiarAjuste(formularioId, {
+        area_asignatura: area.trim() || null, objetivo: objetivo.trim() || null, barrera_identificada: barrera.trim() || null,
+        descripcion_ajuste: descripcion.trim(), tipo_apoyo: tipoApoyo, indicador_seguimiento: indicador,
+      });
+      onCreado();
+    } catch (e) {
+      alert("Error al guardar: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  return (
+    <div className="bg-violet-50 rounded-lg p-3 mt-2">
+      <input value={area} onChange={(e) => setArea(e.target.value)} placeholder="Área/asignatura (ej: Matemáticas, Comportamental…)"
+        className="w-full text-xs rounded-lg px-2 py-1.5 mb-1.5 border border-slate-200 outline-none" />
+      <input value={objetivo} onChange={(e) => setObjetivo(e.target.value)} placeholder="Objetivo"
+        className="w-full text-xs rounded-lg px-2 py-1.5 mb-1.5 border border-slate-200 outline-none" />
+      <input value={barrera} onChange={(e) => setBarrera(e.target.value)} placeholder="Barrera identificada"
+        className="w-full text-xs rounded-lg px-2 py-1.5 mb-1.5 border border-slate-200 outline-none" />
+      <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2} placeholder="Descripción del ajuste"
+        className="w-full text-xs rounded-lg px-2 py-1.5 mb-1.5 border border-slate-200 outline-none" />
+      <div className="flex gap-1.5 mb-2">
+        <select value={tipoApoyo} onChange={(e) => setTipoApoyo(e.target.value)} className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none">
+          {TIPOS_APOYO.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <select value={indicador} onChange={(e) => setIndicador(e.target.value)} className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none">
+          {INDICADORES_SEGUIMIENTO.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </div>
+      <div className="flex justify-end gap-2">
+        <button onClick={onCancelar} className="text-xs text-slate-500 px-2 py-1">Cancelar</button>
+        <button disabled={guardando} onClick={guardar} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+          {guardando ? "Guardando…" : "Agregar"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PiarDatosSensiblesForm({ formularioId }) {
+  const [datos, setDatos] = useState({});
+  const [cargando, setCargando] = useState(true);
+  const [guardando, setGuardando] = useState(false);
+
+  useEffect(() => { api.fetchPiarDatosSensibles(formularioId).then((d) => { setDatos(d || {}); setCargando(false); }); }, [formularioId]);
+
+  const campo = (clave) => datos[clave] || "";
+  const set = (clave, valor) => setDatos((prev) => ({ ...prev, [clave]: valor }));
+
+  const guardar = async () => {
+    setGuardando(true);
+    try {
+      await api.guardarPiarDatosSensibles(formularioId, {
+        afiliacion_salud: campo("afiliacion_salud") || null, diagnostico_medico: campo("diagnostico_medico") || null,
+        atencion_medica: campo("atencion_medica") || null, medicamentos: campo("medicamentos") || null, apoyos_tecnicos: campo("apoyos_tecnicos") || null,
+        nombre_madre: campo("nombre_madre") || null, nombre_padre: campo("nombre_padre") || null, nombre_cuidador: campo("nombre_cuidador") || null,
+        ocupacion_madre: campo("ocupacion_madre") || null, ocupacion_padre: campo("ocupacion_padre") || null,
+        redes_apoyo: campo("redes_apoyo") || null, otras_observaciones: campo("otras_observaciones") || null,
+      });
+      alert("Guardado.");
+    } catch (e) {
+      alert("Error al guardar: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  if (cargando) return <div className="text-xs text-slate-400">Cargando…</div>;
+
+  const Campo = ({ etiqueta, clave, textarea }) => (
+    <div className="mb-2">
+      <label className="text-[11px] text-slate-500 block mb-1">{etiqueta}</label>
+      {textarea ? (
+        <textarea value={campo(clave)} onChange={(e) => set(clave, e.target.value)} rows={2} className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+      ) : (
+        <input value={campo(clave)} onChange={(e) => set(clave, e.target.value)} className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+      )}
+    </div>
+  );
+
+  return (
+    <div>
+      <p className="text-[10px] text-amber-600 bg-amber-50 rounded-lg p-2 mb-3">🔒 Información sensible de salud y hogar — manejar con confidencialidad.</p>
+      <div className="text-xs font-semibold text-slate-600 mb-2">Entorno salud</div>
+      <Campo etiqueta="Afiliación en salud" clave="afiliacion_salud" />
+      <Campo etiqueta="Diagnóstico médico" clave="diagnostico_medico" textarea />
+      <Campo etiqueta="Atención médica" clave="atencion_medica" textarea />
+      <Campo etiqueta="Medicamentos" clave="medicamentos" textarea />
+      <Campo etiqueta="Apoyos técnicos" clave="apoyos_tecnicos" textarea />
+      <div className="text-xs font-semibold text-slate-600 mb-2 mt-3">Entorno hogar</div>
+      <Campo etiqueta="Nombre de la madre" clave="nombre_madre" />
+      <Campo etiqueta="Ocupación de la madre" clave="ocupacion_madre" />
+      <Campo etiqueta="Nombre del padre" clave="nombre_padre" />
+      <Campo etiqueta="Ocupación del padre" clave="ocupacion_padre" />
+      <Campo etiqueta="Nombre del cuidador (si aplica)" clave="nombre_cuidador" />
+      <Campo etiqueta="Redes de apoyo" clave="redes_apoyo" textarea />
+      <Campo etiqueta="Otras observaciones" clave="otras_observaciones" textarea />
+      <button disabled={guardando} onClick={guardar} className="w-full text-sm font-semibold py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60 mt-1">
+        {guardando ? "Guardando…" : "Guardar datos sensibles"}
+      </button>
+    </div>
+  );
+}
+
+function EntradaCodiceDocente({ entrada }) {
+  const [comentarios, setComentarios] = useState([]);
+  const [comentando, setComentando] = useState(false);
+  const [texto, setTexto] = useState("");
+  const [cargando, setCargando] = useState(true);
+
+  const cargar = () => api.fetchComentariosCodice(entrada.id).then((d) => { setComentarios(d); setCargando(false); });
+  useEffect(() => { cargar(); }, [entrada.id]);
+
+  const enviar = async () => {
+    if (!texto.trim()) return;
+    await api.crearComentarioCodice(entrada.id, texto.trim());
+    setTexto(""); setComentando(false);
+    cargar();
+  };
+
+  return (
+    <div className="bg-slate-50 rounded-xl p-3">
+      <div className="text-[11px] text-slate-400 mb-1">{entrada.fecha}{entrada.materia_nombre ? ` · ${entrada.materia_nombre}` : ""}</div>
+      {entrada.titulo && <div className="text-sm font-bold text-slate-800 mb-1">{entrada.titulo}</div>}
+      <div className="text-xs text-slate-600 leading-relaxed whitespace-pre-line mb-2">{entrada.contenido}</div>
+      {!cargando && comentarios.length > 0 && (
+        <div className="space-y-1.5 mb-2">
+          {comentarios.map((c) => (
+            <div key={c.id} className="bg-white rounded-lg p-2 text-[11px]">
+              <span className="font-semibold text-violet-600">{c.autor_nombre}: </span>
+              <span className="text-slate-600">{c.comentario}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {comentando ? (
+        <div className="flex gap-1.5">
+          <input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Escribí tu comentario…" className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+          <button onClick={enviar} className="text-xs px-2.5 py-1.5 rounded-lg bg-violet-500 text-white">Enviar</button>
+          <button onClick={() => setComentando(false)} className="text-xs text-slate-400">✕</button>
+        </div>
+      ) : (
+        <button onClick={() => setComentando(true)} className="text-[11px] text-violet-500">💬 Comentar</button>
+      )}
+    </div>
+  );
+}
+
+function CodiceDocenteModal({ estudiante, onClose }) {
+  const [entradas, setEntradas] = useState([]);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => { api.fetchEntradasCodice(estudiante.id).then((d) => { setEntradas(d); setCargando(false); }); }, [estudiante.id]);
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">📖 Códice de {estudiante.nombre}</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        {cargando ? (
+          <div className="text-sm text-slate-400">Cargando…</div>
+        ) : entradas.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-4">Este estudiante todavía no escribió ninguna entrada.</p>
+        ) : (
+          <div className="space-y-2">
+            {entradas.map((e) => <EntradaCodiceDocente key={e.id} entrada={e} />)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function InclusionModal({ estudiante, materiaId, onClose, onGuardado }) {
   const [piar, setPiar] = useState(!!estudiante.piar);
   const [dua, setDua] = useState(!!estudiante.dua);
@@ -307,6 +695,7 @@ function DocumentoModal({ estudiante, onClose, onGuardado }) {
 function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, reinos, catalogoReinos, onCambiarReino, roles, onCambiarRol, onCodigoGenerado, grados, gradoActual, onTrasladado }) {
   const [actasAbiertas, setActasAbiertas] = useState(false);
   const [inclusionAbierta, setInclusionAbierta] = useState(false);
+  const [codiceAbierto, setCodiceAbierto] = useState(false);
   const [trasladoAbierto, setTrasladoAbierto] = useState(false);
   const [documentoAbierto, setDocumentoAbierto] = useState(false);
   const [menuAbierto, setMenuAbierto] = useState(false);
@@ -408,6 +797,7 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, rein
                 <button onClick={() => { setMenuAbierto(false); setInclusionAbierta(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">
                   {estudiante.piar || estudiante.dua ? "🧩 Inclusión" : "+ Inclusión"}
                 </button>
+                <button onClick={() => { setMenuAbierto(false); setCodiceAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📖 Ver Códice</button>
                 <button onClick={() => { setMenuAbierto(false); setActasAbiertas(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📋 Actas</button>
                 <button onClick={() => { setMenuAbierto(false); setDocumentoAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">🪪 Documento</button>
                 <div className="border-t border-slate-100 my-1" />
@@ -420,6 +810,7 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, rein
       </div>
       {actasAbiertas && <ActasModal estudiante={estudiante} onClose={() => setActasAbiertas(false)} />}
       {inclusionAbierta && <InclusionModal estudiante={estudiante} onClose={() => setInclusionAbierta(false)} onGuardado={() => setInclusionAbierta(false)} />}
+      {codiceAbierto && <CodiceDocenteModal estudiante={estudiante} onClose={() => setCodiceAbierto(false)} />}
       {trasladoAbierto && (
         <TrasladoModal estudiante={estudiante} grados={grados} gradoActual={gradoActual} onClose={() => setTrasladoAbierto(false)} onTrasladado={onTrasladado} />
       )}
