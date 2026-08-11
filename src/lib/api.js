@@ -562,6 +562,11 @@ export async function crearTarea(campos) {
   return data;
 }
 
+export async function editarTarea(id, campos) {
+  const { error } = await supabase.from("planeacion_tareas").update(campos).eq("id", id);
+  if (error) throw error;
+}
+
 export async function eliminarTarea(id) {
   const { error } = await supabase.from("planeacion_tareas").delete().eq("id", id);
   if (error) throw error;
