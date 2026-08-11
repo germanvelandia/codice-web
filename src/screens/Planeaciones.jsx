@@ -216,6 +216,10 @@ function TareasLista({ planeacionId }) {
   const [tipo, setTipo] = useState("tarea");
   const [fechaEntrega, setFechaEntrega] = useState("");
   const [rubricaAbierta, setRubricaAbierta] = useState(null);
+  const [editandoId, setEditandoId] = useState(null);
+  const [tituloEdit, setTituloEdit] = useState("");
+  const [tipoEdit, setTipoEdit] = useState("tarea");
+  const [fechaEdit, setFechaEdit] = useState("");
 
   const cargar = () => api.fetchTareas(planeacionId).then(setTareas);
   useEffect(() => { cargar(); }, [planeacionId]);
@@ -231,6 +235,21 @@ function TareasLista({ planeacionId }) {
     }
   };
 
+  const empezarEdicion = (t) => {
+    setEditandoId(t.id); setTituloEdit(t.titulo); setTipoEdit(t.tipo); setFechaEdit(t.fecha_entrega || "");
+  };
+
+  const guardarEdicion = async () => {
+    if (!tituloEdit.trim()) return;
+    try {
+      await api.editarTarea(editandoId, { titulo: tituloEdit.trim(), tipo: tipoEdit, fecha_entrega: fechaEdit || null });
+      setEditandoId(null);
+      cargar();
+    } catch (e) {
+      alert("Error al guardar: " + e.message);
+    }
+  };
+
   const quitar = async (id) => { if (!confirm("¿Eliminar esta tarea?")) return; await api.eliminarTarea(id); cargar(); };
 
   return (
@@ -239,16 +258,29 @@ function TareasLista({ planeacionId }) {
       {tareas.length > 0 && (
         <div className="space-y-1.5 mb-2">
           {tareas.map((t) => (
-            <div key={t.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-2.5 py-1.5">
-              <div className="text-xs text-slate-700">
-                <span className="font-semibold">{t.titulo}</span>
-                <span className="text-slate-400"> · {TIPOS_TAREA.find((x) => x.key === t.tipo)?.label}{t.fecha_entrega ? ` · Entrega: ${t.fecha_entrega}` : ""}</span>
+            editandoId === t.id ? (
+              <div key={t.id} className="bg-violet-50 rounded-lg p-2 flex gap-1.5 items-center flex-wrap">
+                <input value={tituloEdit} onChange={(e) => setTituloEdit(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none flex-1 min-w-[120px]" />
+                <select value={tipoEdit} onChange={(e) => setTipoEdit(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none">
+                  {TIPOS_TAREA.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
+                </select>
+                <input type="date" value={fechaEdit} onChange={(e) => setFechaEdit(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+                <button onClick={guardarEdicion} className="text-xs px-2 py-1.5 rounded-lg bg-violet-500 text-white">Guardar</button>
+                <button onClick={() => setEditandoId(null)} className="text-xs text-slate-400">✕</button>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button onClick={() => setRubricaAbierta(t)} className="text-[11px] text-violet-500">📊 Rúbrica</button>
-                <button onClick={() => quitar(t.id)} className="text-slate-300 hover:text-rose-500 text-xs">✕</button>
+            ) : (
+              <div key={t.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-2.5 py-1.5">
+                <div className="text-xs text-slate-700">
+                  <span className="font-semibold">{t.titulo}</span>
+                  <span className="text-slate-400"> · {TIPOS_TAREA.find((x) => x.key === t.tipo)?.label}{t.fecha_entrega ? ` · Entrega: ${t.fecha_entrega}` : ""}</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button onClick={() => setRubricaAbierta(t)} className="text-[11px] text-violet-500">📊 Rúbrica</button>
+                  <button onClick={() => empezarEdicion(t)} className="text-slate-300 hover:text-violet-600 text-xs">✏️</button>
+                  <button onClick={() => quitar(t.id)} className="text-slate-300 hover:text-rose-500 text-xs">✕</button>
+                </div>
               </div>
-            </div>
+            )
           ))}
         </div>
       )}
