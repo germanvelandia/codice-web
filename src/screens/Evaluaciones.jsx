@@ -242,6 +242,7 @@ function ResultadosEvaluacion({ evaluacion, onCerrar }) {
 function NuevaEvaluacionForm({ materiaId, gradoId, periodo, categorias, onCancelar, onCreada }) {
   const [titulo, setTitulo] = useState("");
   const [descripcion, setDescripcion] = useState("");
+  const [indicaciones, setIndicaciones] = useState([""]);
   const [fechaApertura, setFechaApertura] = useState("");
   const [fechaCierre, setFechaCierre] = useState("");
   const [intentos, setIntentos] = useState("1");
@@ -249,12 +250,17 @@ function NuevaEvaluacionForm({ materiaId, gradoId, periodo, categorias, onCancel
   const [categoriaId, setCategoriaId] = useState("");
   const [guardando, setGuardando] = useState(false);
 
+  const cambiarIndicacion = (i, valor) => setIndicaciones((prev) => prev.map((x, idx) => idx === i ? valor : x));
+  const agregarIndicacion = () => setIndicaciones((prev) => [...prev, ""]);
+  const quitarIndicacion = (i) => setIndicaciones((prev) => prev.filter((_, idx) => idx !== i));
+
   const guardar = async () => {
     if (!titulo.trim()) { alert("Escribe un título."); return; }
     setGuardando(true);
     try {
       const nueva = await api.crearEvaluacion({
         materia_id: materiaId, grado_id: gradoId, periodo, titulo: titulo.trim(), descripcion: descripcion.trim() || null,
+        indicaciones: indicaciones.map((i) => i.trim()).filter(Boolean),
         fecha_apertura: fechaApertura || null, fecha_cierre: fechaCierre || null,
         intentos_permitidos: intentos === "ilimitado" ? null : parseInt(intentos, 10),
         tiempo_limite_minutos: tiempoLimite ? parseInt(tiempoLimite, 10) : null,
@@ -271,8 +277,23 @@ function NuevaEvaluacionForm({ materiaId, gradoId, periodo, categorias, onCancel
     <div className="bg-violet-50 rounded-2xl p-4 mb-3">
       <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título de la evaluación"
         className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
-      <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2} placeholder="Instrucciones para el estudiante (opcional)"
+      <label className="text-xs text-slate-500 block mb-1">Propósito / introducción (opcional)</label>
+      <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2} placeholder="Ej: Esta prueba busca identificar tus conocimientos previos sobre…"
         className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
+
+      <label className="text-xs text-slate-500 block mb-1">Indicaciones (una por línea — se muestran como lista al estudiante)</label>
+      <div className="space-y-1.5 mb-2">
+        {indicaciones.map((ind, i) => (
+          <div key={i} className="flex items-center gap-1.5">
+            <span className="text-xs text-slate-400 shrink-0">•</span>
+            <input value={ind} onChange={(e) => cambiarIndicacion(i, e.target.value)} placeholder="Ej: Selecciona una sola respuesta por pregunta"
+              className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
+            {indicaciones.length > 1 && <button onClick={() => quitarIndicacion(i)} className="text-slate-300 hover:text-rose-500 text-xs shrink-0">✕</button>}
+          </div>
+        ))}
+        <button onClick={agregarIndicacion} className="text-[11px] text-violet-500">+ Agregar indicación</button>
+      </div>
+
       <label className="text-xs text-slate-500 block mb-1">Categoría en Calificaciones (opcional — si la elegís, la nota se manda sola a la Planilla al publicar)</label>
       <select value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white">
         <option value="">— No enviar a Calificaciones —</option>
