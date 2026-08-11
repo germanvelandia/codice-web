@@ -808,6 +808,110 @@ function MenuCodice({ activo, onCambiar }) {
   );
 }
 
+function EntradaCodiceCard({ entrada }) {
+  const [comentarios, setComentarios] = useState([]);
+  const [expandido, setExpandido] = useState(false);
+
+  const verComentarios = () => {
+    if (!expandido) api.fetchComentariosCodice(entrada.id).then(setComentarios);
+    setExpandido((v) => !v);
+  };
+
+  return (
+    <div className="bg-slate-50 rounded-xl p-3">
+      <div className="flex items-center justify-between mb-1">
+        <div className="text-[11px] text-slate-400">{entrada.fecha}{entrada.materia_nombre ? ` · ${entrada.materia_nombre}` : ""}</div>
+      </div>
+      {entrada.titulo && <div className="text-sm font-bold text-slate-800 mb-1">{entrada.titulo}</div>}
+      <div className="text-xs text-slate-600 leading-relaxed whitespace-pre-line">{entrada.contenido}</div>
+      <button onClick={verComentarios} className="text-[11px] text-violet-500 mt-2">
+        {expandido ? "Ocultar comentarios" : "💬 Ver comentarios del docente"}
+      </button>
+      {expandido && (
+        <div className="mt-2 space-y-1.5">
+          {comentarios.length === 0 ? (
+            <p className="text-[11px] text-slate-400">Todavía no tiene comentarios.</p>
+          ) : (
+            comentarios.map((c) => (
+              <div key={c.id} className="bg-white rounded-lg p-2 text-[11px]">
+                <span className="font-semibold text-violet-600">{c.autor_nombre}: </span>
+                <span className="text-slate-600">{c.comentario}</span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CodiceEstudiante({ estudianteId }) {
+  const [entradas, setEntradas] = useState([]);
+  const [materias, setMaterias] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [escribiendo, setEscribiendo] = useState(false);
+  const [titulo, setTitulo] = useState("");
+  const [contenido, setContenido] = useState("");
+  const [materiaId, setMateriaId] = useState("");
+  const [guardando, setGuardando] = useState(false);
+
+  const cargar = () => api.fetchEntradasCodice(estudianteId).then((d) => { setEntradas(d); setCargando(false); });
+  useEffect(() => { cargar(); api.fetchMaterias().then(setMaterias); }, [estudianteId]);
+
+  const guardar = async () => {
+    if (!contenido.trim()) return;
+    setGuardando(true);
+    try {
+      await api.crearEntradaCodice(estudianteId, { titulo: titulo.trim() || null, contenido: contenido.trim(), materia_id: materiaId ? parseInt(materiaId, 10) : null });
+      setTitulo(""); setContenido(""); setMateriaId(""); setEscribiendo(false);
+      cargar();
+    } catch (e) {
+      alert("Error al guardar: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  return (
+    <div>
+      <h3 className="font-bold text-slate-800 mb-1">📖 Mi Códice</h3>
+      <p className="text-xs text-slate-400 mb-3">Tu diario personal de aprendizajes — anotá qué entendiste, qué te costó, o cualquier reflexión sobre tus clases.</p>
+
+      {escribiendo ? (
+        <div className="bg-violet-50 rounded-xl p-3 mb-3">
+          <select value={materiaId} onChange={(e) => setMateriaId(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none">
+            <option value="">Sin materia específica</option>
+            {materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+          </select>
+          <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título (opcional)"
+            className="w-full text-sm rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none" />
+          <textarea value={contenido} onChange={(e) => setContenido(e.target.value)} rows={4} placeholder="¿Qué aprendiste hoy? ¿Qué te costó entender? ¿Qué reflexión te queda?"
+            className="w-full text-sm rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none" />
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setEscribiendo(false)} className="text-xs text-slate-400 px-2 py-1">Cancelar</button>
+            <button disabled={guardando} onClick={guardar} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+              {guardando ? "Guardando…" : "Guardar entrada"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setEscribiendo(true)} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white mb-3">
+          ✎ Nueva entrada
+        </button>
+      )}
+
+      {cargando ? (
+        <div className="text-sm text-slate-400">Cargando…</div>
+      ) : entradas.length === 0 ? (
+        <p className="text-sm text-slate-400 text-center py-4">Todavía no escribiste ninguna entrada en tu Códice.</p>
+      ) : (
+        <div className="space-y-2">
+          {entradas.map((e) => <EntradaCodiceCard key={e.id} entrada={e} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PortalEstudiante() {
   const [codigo, setCodigo] = useState("");
   const [datos, setDatos] = useState(null);
@@ -894,7 +998,11 @@ function PortalEstudiante() {
             <ForjaEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />
           )}
 
-          {(vista === "codice" || vista === "notas") && estudianteInfo && (
+          {vista === "codice" && estudianteInfo && (
+            <CodiceEstudiante estudianteId={estudianteInfo.id} />
+          )}
+
+          {vista === "notas" && estudianteInfo && (
             <MisNotas estudianteId={estudianteInfo.id} />
           )}
 
