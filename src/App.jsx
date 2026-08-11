@@ -7,6 +7,7 @@ import { VistaGrados, VistaReinos, VistaEstudiantes } from "./screens/Estudiante
 import { VistaAsistencia } from "./screens/Asistencia";
 import { VistaRuleta, VistaRuletaMonedas, VistaTemporizador, VistaHerramientas } from "./screens/Herramientas";
 import { VistaBanco } from "./screens/Banco";
+import { VistaAlbum } from "./screens/Album";
 import { VistaRoles } from "./screens/Roles";
 import { VistaCalificaciones } from "./screens/Calificaciones";
 import { VistaReportes } from "./screens/Reportes";
@@ -433,6 +434,102 @@ function MisNotas({ estudianteId }) {
   );
 }
 
+const RAREZA_INFO = {
+  comun: { label: "Común", color: "#94A3B8" },
+  rara: { label: "Rara", color: "#3B82F6" },
+  epica: { label: "Épica", color: "#8B5CF6" },
+  legendaria: { label: "Legendaria", color: "#F59E0B" },
+};
+
+function AlbumEstudiante({ estudianteId, monedas, onMonedasActualizadas }) {
+  const [config, setConfig] = useState(null);
+  const [catalogo, setCatalogo] = useState([]);
+  const [coleccion, setColeccion] = useState([]);
+  const [abriendo, setAbriendo] = useState(false);
+  const [resultado, setResultado] = useState(null);
+  const [cargando, setCargando] = useState(true);
+
+  const cargar = () => {
+    Promise.all([api.fetchAlbumConfig(), api.fetchCriaturasActivas(), api.fetchColeccion(estudianteId)]).then(([cfg, cat, col]) => {
+      setConfig(cfg); setCatalogo(cat); setColeccion(col); setCargando(false);
+    });
+  };
+  useEffect(() => { cargar(); }, [estudianteId]);
+
+  if (cargando || !config) return <div className="text-sm text-slate-400">Cargando…</div>;
+  if (catalogo.length === 0) return <p className="text-sm text-slate-400">Todavía no hay criaturas disponibles para coleccionar.</p>;
+
+  const poseidas = new Map(coleccion.map((c) => [c.criatura_id, c]));
+  const puedeAbrir = monedas >= config.costo_sobre;
+
+  const abrirSobre = async () => {
+    setAbriendo(true);
+    setResultado(null);
+    try {
+      const r = await api.abrirSobre(estudianteId);
+      setTimeout(() => {
+        setAbriendo(false);
+        setResultado(r);
+        onMonedasActualizadas();
+        cargar();
+      }, 1400);
+    } catch (e) {
+      setAbriendo(false);
+      alert("Error al abrir el sobre: " + e.message);
+    }
+  };
+
+  return (
+    <div>
+      <h3 className="font-bold text-slate-800 mb-1">🎴 {config.nombre_album}</h3>
+      <p className="text-xs text-slate-400 mb-3">Comprá sobres con tus monedas y coleccioná criaturas al azar. Vas a tener {config.cartas_por_sobre} por sobre.</p>
+
+      {abriendo ? (
+        <div className="text-center py-6 text-violet-500 animate-pulse text-sm">🎴 Abriendo sobre…</div>
+      ) : resultado ? (
+        resultado.ok ? (
+          <div className="bg-violet-50 rounded-2xl p-4 mb-3 text-center">
+            <div className="text-xs font-semibold text-violet-700 mb-2">¡Te tocaron estas criaturas!</div>
+            <div className="flex justify-center gap-2 flex-wrap">
+              {resultado.cartas.map((c, i) => {
+                const info = RAREZA_INFO[c.rareza];
+                return (
+                  <div key={i} className="rounded-xl p-2 text-center" style={{ background: "white", border: `2px solid ${info.color}`, width: 72 }}>
+                    <div className="text-2xl">{c.emoji}</div>
+                    <div className="text-[9px] font-semibold text-slate-700 truncate">{c.nombre}</div>
+                    <div className="text-[8px]" style={{ color: info.color }}>{info.label}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="text-center bg-amber-50 rounded-xl p-3 mb-3 text-xs text-amber-700">Te faltan monedas para abrir un sobre (necesitás {resultado.costo}).</div>
+        )
+      ) : null}
+
+      <button disabled={!puedeAbrir} onClick={abrirSobre} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-50 mb-4">
+        {puedeAbrir ? `🎴 Abrir sobre (🪙 ${config.costo_sobre})` : `Necesitás ${config.costo_sobre} monedas`}
+      </button>
+
+      <div className="text-xs font-semibold text-slate-600 mb-2">Tu colección ({coleccion.length}/{catalogo.length})</div>
+      <div className="grid grid-cols-4 gap-2">
+        {catalogo.map((c) => {
+          const tenida = poseidas.get(c.id);
+          const info = RAREZA_INFO[c.rareza];
+          return (
+            <div key={c.id} className="rounded-xl p-2 text-center" style={{ background: tenida ? "white" : "#F1F5F9", border: `2px solid ${tenida ? info.color : "#E2E8F0"}` }}>
+              <div className="text-2xl" style={{ filter: tenida ? "none" : "grayscale(1)", opacity: tenida ? 1 : 0.3 }}>{tenida ? c.emoji : "❓"}</div>
+              <div className="text-[9px] font-semibold text-slate-700 truncate">{tenida ? c.nombre : "???"}</div>
+              {tenida?.cantidad > 1 && <div className="text-[8px] text-violet-500">x{tenida.cantidad}</div>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function BancoEstudiante({ estudianteId, monedas, onMonedasActualizadas }) {
   const [premiosActivos, setPremiosActivos] = useState([]);
   const [girando, setGirando] = useState(false);
@@ -704,6 +801,7 @@ const MENU_CODICE = [
   { key: "notas", label: "Notas", icono: "📝" },
   { key: "ranking", label: "Ranking", icono: "🏆" },
   { key: "recompensas", label: "Recompensas", icono: "🎁" },
+  { key: "album", label: "Álbum", icono: "🎴" },
   { key: "perfil", label: "Perfil", icono: "👤" },
 ];
 
@@ -825,6 +923,10 @@ function PortalEstudiante() {
 
           {vista === "recompensas" && estudianteInfo && (
             <BancoEstudiante estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} />
+          )}
+
+          {vista === "album" && estudianteInfo && (
+            <AlbumEstudiante estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} />
           )}
 
           {vista === "ranking" && estudianteInfo && (
@@ -1113,12 +1215,14 @@ function Panel({ session }) {
               <button onClick={() => setSubTabHerramientas("ruleta")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "ruleta" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Ruleta</button>
               <button onClick={() => setSubTabHerramientas("ruletamonedas")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "ruletamonedas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Ruleta de Monedas</button>
               <button onClick={() => setSubTabHerramientas("banco")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "banco" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Banco</button>
+              <button onClick={() => setSubTabHerramientas("album")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "album" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Álbum</button>
               <button onClick={() => setSubTabHerramientas("temporizador")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "temporizador" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Temporizador</button>
               <button onClick={() => setSubTabHerramientas("otras")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "otras" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Otras herramientas</button>
             </div>
             {subTabHerramientas === "ruleta" && <VistaRuleta grados={grados} />}
             {subTabHerramientas === "ruletamonedas" && <VistaRuletaMonedas grados={grados} />}
             {subTabHerramientas === "banco" && <VistaBanco />}
+            {subTabHerramientas === "album" && <VistaAlbum />}
             {subTabHerramientas === "temporizador" && <VistaTemporizador />}
             {subTabHerramientas === "otras" && <VistaHerramientas grados={grados} />}
           </>
