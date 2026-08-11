@@ -1379,6 +1379,18 @@ export async function crearComentarioCodice(entradaId, comentario) {
   if (error) throw error;
 }
 
+/* ---------------- Valor de la semana ---------------- */
+export async function fetchValorSemanal() {
+  const { data, error } = await supabase.from("valor_semanal").select("*").eq("id", 1).maybeSingle();
+  if (error) throw error;
+  return data || { id: 1, nombre: null, descripcion: null, imagen_url: null };
+}
+
+export async function guardarValorSemanal(campos) {
+  const { error } = await supabase.from("valor_semanal").upsert({ id: 1, ...campos, actualizado_en: new Date().toISOString() }, { onConflict: "id" });
+  if (error) throw error;
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
