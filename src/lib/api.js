@@ -1334,6 +1334,51 @@ export async function abrirSobre(estudianteId) {
   return { ok: true, cartas, monedasRestantes: nuevasMonedas };
 }
 
+/* ---------------- Códice personal (diario de reflexiones del estudiante) ---------------- */
+export async function fetchEntradasCodice(estudianteId) {
+  const [entradasRes, materiasRes] = await Promise.all([
+    supabase.from("codice_entradas").select("*").eq("estudiante_id", estudianteId).order("fecha", { ascending: false }),
+    supabase.from("materias").select("id, nombre"),
+  ]);
+  if (entradasRes.error) throw entradasRes.error;
+  if (materiasRes.error) throw materiasRes.error;
+  const nombrePorId = {}; (materiasRes.data || []).forEach((m) => { nombrePorId[m.id] = m.nombre; });
+  return (entradasRes.data || []).map((e) => ({ ...e, materia_nombre: e.materia_id ? nombrePorId[e.materia_id] : null }));
+}
+
+export async function crearEntradaCodice(estudianteId, campos) {
+  const { data, error } = await supabase.from("codice_entradas").insert({ estudiante_id: estudianteId, ...campos }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function editarEntradaCodice(id, campos) {
+  const { error } = await supabase.from("codice_entradas").update(campos).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarEntradaCodice(id) {
+  const { error } = await supabase.from("codice_entradas").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function fetchComentariosCodice(entradaId) {
+  const [comRes, profesoresRes] = await Promise.all([
+    supabase.from("codice_comentarios").select("*").eq("entrada_id", entradaId).order("creado_en"),
+    supabase.from("profesores").select("id, nombre"),
+  ]);
+  if (comRes.error) throw comRes.error;
+  if (profesoresRes.error) throw profesoresRes.error;
+  const nombrePorId = {}; (profesoresRes.data || []).forEach((p) => { nombrePorId[p.id] = p.nombre; });
+  return (comRes.data || []).map((c) => ({ ...c, autor_nombre: nombrePorId[c.autor_id] || "Docente" }));
+}
+
+export async function crearComentarioCodice(entradaId, comentario) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("codice_comentarios").insert({ entrada_id: entradaId, autor_id: userData?.user?.id || null, comentario });
+  if (error) throw error;
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
