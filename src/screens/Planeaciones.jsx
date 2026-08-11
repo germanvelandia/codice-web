@@ -617,7 +617,7 @@ function PlaneacionPrintView({ unidad, institucion, materiaNombre, gradoId, onCe
   return createPortal(contenido, document.body);
 }
 
-function UnidadCard({ unidad, institucion, materiaNombre, gradoId, grados, onCambio }) {
+function UnidadCard({ unidad, institucion, materiaNombre, materias, gradoId, grados, onCambio }) {
   const [expandida, setExpandida] = useState(false);
   const [editando, setEditando] = useState(false);
   const [titulo, setTitulo] = useState(unidad.titulo);
@@ -659,6 +659,11 @@ function UnidadCard({ unidad, institucion, materiaNombre, gradoId, grados, onCam
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-50 text-violet-600">
                 {grados.some((g) => String(g.id) === String(unidad.grado_id)) ? `📍 Curso ${unidad.grado_id}` : `🏫 Todo el grado ${unidad.grado_id}°`}
               </span>
+              {unidad.materias_extra && unidad.materias_extra.length > 0 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">
+                  🔗 + {unidad.materias_extra.map((id) => materias.find((m) => m.id === id)?.nombre || id).join(", ")}
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -734,20 +739,27 @@ function UnidadCard({ unidad, institucion, materiaNombre, gradoId, grados, onCam
   );
 }
 
-function NuevaUnidadForm({ materiaId, gradoId, periodo, orden, onCancelar, onCreada }) {
+function NuevaUnidadForm({ materiaId, materias, gradoId, periodo, orden, onCancelar, onCreada }) {
   const [titulo, setTitulo] = useState("");
   const [objetivo, setObjetivo] = useState("");
   const [alcance, setAlcance] = useState("grado"); // "grado" | "curso"
+  const [materiasExtra, setMateriasExtra] = useState([]);
   const [guardando, setGuardando] = useState(false);
 
   const { nivel, curso } = nivelYCurso(gradoId);
   const gradoIdAGuardar = alcance === "grado" ? nivel : gradoId;
+  const otrasMaterias = materias.filter((m) => m.id !== materiaId);
+
+  const toggleMateriaExtra = (id) => setMateriasExtra((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
 
   const guardar = async () => {
     if (!titulo.trim()) { alert("Escribe un título para la unidad/tema."); return; }
     setGuardando(true);
     try {
-      await api.crearPlaneacion({ tipo: "unidad", materia_id: materiaId, grado_id: gradoIdAGuardar, periodo, titulo: titulo.trim(), objetivo: objetivo.trim() || null, orden });
+      await api.crearPlaneacion({
+        tipo: "unidad", materia_id: materiaId, materias_extra: materiasExtra, grado_id: gradoIdAGuardar, periodo,
+        titulo: titulo.trim(), objetivo: objetivo.trim() || null, orden,
+      });
       onCreada();
     } catch (e) {
       alert("Error al guardar: " + e.message);
@@ -761,6 +773,21 @@ function NuevaUnidadForm({ materiaId, gradoId, periodo, orden, onCancelar, onCre
         className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
       <input value={objetivo} onChange={(e) => setObjetivo(e.target.value)} placeholder="Objetivo de aprendizaje (opcional)"
         className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none bg-white" />
+
+      {otrasMaterias.length > 0 && (
+        <div className="mb-3">
+          <label className="text-xs text-slate-500 block mb-1">Combinar con otra(s) materia(s) (opcional — para clases integradas, ej: Ética + Religión)</label>
+          <div className="flex flex-wrap gap-1.5">
+            {otrasMaterias.map((m) => (
+              <button key={m.id} onClick={() => toggleMateriaExtra(m.id)}
+                className={`text-xs px-3 py-1.5 rounded-full border ${materiasExtra.includes(m.id) ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>
+                {m.nombre}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="mb-3">
         <label className="text-xs text-slate-500 block mb-1">Esta planeación aplica a</label>
         <div className="flex gap-1 rounded-full bg-white p-1 w-fit border border-slate-200">
@@ -783,6 +810,153 @@ function NuevaUnidadForm({ materiaId, gradoId, periodo, orden, onCancelar, onCre
       </div>
     </div>
   );
+}
+
+const MESES_NOMBRE_PLAN = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+const DIAS_SEMANA_CORTOS_PLAN = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+
+function aFechaStrPlan(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function AgregarClaseCalendarioForm({ unidades, fecha, onCancelar, onCreada }) {
+  const [unidadId, setUnidadId] = useState(unidades[0]?.id || "");
+  const [titulo, setTitulo] = useState("");
+  const [descripcion, setDescripcion] = useState("");
+  const [duracion, setDuracion] = useState("");
+  const [guardando, setGuardando] = useState(false);
+
+  const guardar = async () => {
+    if (!unidadId) { alert("Elegí a qué unidad pertenece esta clase."); return; }
+    if (!titulo.trim()) { alert("Escribe un título."); return; }
+    setGuardando(true);
+    try {
+      await api.crearPlaneacion({
+        tipo: "clase", unidad_id: unidadId, titulo: titulo.trim(), fecha, orden: 999,
+        duracion_minutos: duracion ? parseInt(duracion, 10) : null,
+        momento_desarrollo: descripcion.trim() || null,
+      });
+      onCreada();
+    } catch (e) {
+      alert("Error al guardar: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  return (
+    <div className="bg-violet-50 rounded-lg p-3 mt-2">
+      <label className="text-[11px] text-slate-500 block mb-1">Unidad a la que pertenece</label>
+      <select value={unidadId} onChange={(e) => setUnidadId(parseInt(e.target.value, 10))} className="w-full text-xs rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none bg-white">
+        {unidades.map((u) => <option key={u.id} value={u.id}>{u.titulo}</option>)}
+      </select>
+      <div className="flex gap-1.5 mb-2">
+        <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título de la clase"
+          className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+        <input type="number" value={duracion} onChange={(e) => setDuracion(e.target.value)} placeholder="Min." className="w-16 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+      </div>
+      <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2} placeholder="¿Qué se va a hacer? (opcional)"
+        className="w-full text-xs rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none" />
+      <div className="flex justify-end gap-2">
+        <button onClick={onCancelar} className="text-xs text-slate-400">Cancelar</button>
+        <button disabled={guardando} onClick={guardar} className="text-xs px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+          {guardando ? "Guardando…" : "Agregar clase"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CalendarioClases({ materiaId, gradoId, periodo, onAbrirUnidad }) {
+  const [clases, setClases] = useState([]);
+  const [unidades, setUnidades] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [mesActual, setMesActual] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const [diaSeleccionado, setDiaSeleccionado] = useState(aFechaStrPlan(new Date()));
+  const [agregando, setAgregando] = useState(false);
+
+  const cargar = () => {
+    setCargando(true);
+    api.fetchTodasLasClases(materiaId, gradoId, periodo).then(({ clases, unidades }) => { setClases(clases); setUnidades(unidades); setCargando(false); });
+  };
+  useEffect(() => { cargar(); }, [materiaId, gradoId, periodo]);
+
+  const primerDiaMes = new Date(mesActual.getFullYear(), mesActual.getMonth(), 1);
+  const diasEnMes = new Date(mesActual.getFullYear(), mesActual.getMonth() + 1, 0).getDate();
+  const offset = (primerDiaMes.getDay() + 6) % 7;
+  const celdas = [];
+  for (let i = 0; i < offset; i++) celdas.push(null);
+  for (let d = 1; d <= diasEnMes; d++) celdas.push(d);
+  while (celdas.length % 7 !== 0) celdas.push(null);
+
+  const clasesDelDia = (fechaStr) => clases.filter((c) => c.fecha === fechaStr);
+  const clasesSeleccionado = clasesDelDia(diaSeleccionado);
+  const hoyStr = aFechaStrPlan(new Date());
+
+  if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
+  if (unidades.length === 0) {
+    return <div className="text-sm text-slate-400 bg-white rounded-2xl p-6 text-center border border-dashed border-slate-200">Creá primero una unidad/tema para poder agendar clases en el calendario.</div>;
+  }
+
+  return (
+    <div className="grid md:grid-cols-2 gap-4">
+      <div className="bg-white rounded-2xl border border-slate-100 p-3">
+        <div className="flex items-center justify-between mb-3">
+          <button onClick={() => setMesActual((p) => new Date(p.getFullYear(), p.getMonth() - 1, 1))} className="text-slate-400 hover:text-violet-600 px-2 text-lg">‹</button>
+          <div className="font-bold text-slate-800 capitalize">{MESES_NOMBRE_PLAN[mesActual.getMonth()]} {mesActual.getFullYear()}</div>
+          <button onClick={() => setMesActual((p) => new Date(p.getFullYear(), p.getMonth() + 1, 1))} className="text-slate-400 hover:text-violet-600 px-2 text-lg">›</button>
+        </div>
+        <div className="grid grid-cols-7 gap-1 mb-1">
+          {DIAS_SEMANA_CORTOS_PLAN.map((d) => <div key={d} className="text-center text-[10px] font-bold text-slate-400 py-1">{d}</div>)}
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {celdas.map((d, i) => {
+            if (d === null) return <div key={i} />;
+            const fechaStr = aFechaStrPlan(new Date(mesActual.getFullYear(), mesActual.getMonth(), d));
+            const clasesDia = clasesDelDia(fechaStr);
+            const esHoy = fechaStr === hoyStr;
+            const esSeleccionado = fechaStr === diaSeleccionado;
+            return (
+              <button key={i} onClick={() => { setDiaSeleccionado(fechaStr); setAgregando(false); }}
+                className="aspect-square rounded-lg p-1 flex flex-col items-center justify-start relative"
+                style={{ background: esSeleccionado ? "#EDE9FE" : esHoy ? "#F5F3FF" : "transparent", border: esHoy ? "1.5px solid #8B5CF6" : "1px solid transparent" }}>
+                <span className={`text-[11px] ${esSeleccionado ? "font-bold text-violet-700" : "text-slate-600"}`}>{d}</span>
+                {clasesDia.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-violet-500 mt-0.5" />}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <div className="text-xs font-semibold text-slate-500 mb-2">
+          {fechaALocalPlan(diaSeleccionado).toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" })}
+        </div>
+        {clasesSeleccionado.length === 0 ? (
+          <div className="text-sm text-slate-400 bg-white rounded-2xl p-4 text-center border border-dashed border-slate-200 mb-2">Sin clases agendadas este día.</div>
+        ) : (
+          <div className="space-y-2 mb-2">
+            {clasesSeleccionado.map((c) => (
+              <button key={c.id} onClick={() => onAbrirUnidad(c.unidad_id)} className="w-full text-left bg-white rounded-xl border border-slate-100 p-3 hover:border-violet-200">
+                <div className="text-sm font-semibold text-slate-800">{c.titulo}</div>
+                <div className="text-[11px] text-violet-500">{c.unidad_titulo}</div>
+                {c.momento_desarrollo && <div className="text-[11px] text-slate-500 mt-1 line-clamp-2">{c.momento_desarrollo}</div>}
+              </button>
+            ))}
+          </div>
+        )}
+        {agregando ? (
+          <AgregarClaseCalendarioForm unidades={unidades} fecha={diaSeleccionado} onCancelar={() => setAgregando(false)} onCreada={() => { setAgregando(false); cargar(); }} />
+        ) : (
+          <button onClick={() => setAgregando(true)} className="text-xs text-violet-500">+ Agregar clase este día</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function fechaALocalPlan(fechaStr) {
+  const [a, m, d] = fechaStr.split("-").map(Number);
+  return new Date(a, m - 1, d);
 }
 
 function PendientesModal({ materiaId, materiaNombre, onClose }) {
@@ -935,6 +1109,7 @@ export function VistaPlaneaciones({ grados }) {
   const [institucion, setInstitucion] = useState(null);
   const [pendientesAbierto, setPendientesAbierto] = useState(false);
   const [estandaresAbierto, setEstandaresAbierto] = useState(false);
+  const [vista, setVista] = useState("unidades"); // "unidades" | "calendario"
 
   useEffect(() => {
     api.fetchMaterias().then((data) => { setMaterias(data); if (data[0]) setMateriaId(data[0].id); });
@@ -988,6 +1163,10 @@ export function VistaPlaneaciones({ grados }) {
         </select>
         <button onClick={() => setPendientesAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-amber-200 text-amber-600">📋 Pendientes</button>
         <button onClick={() => setEstandaresAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🗂️ Gestionar DBA/Competencias</button>
+        <div className="flex gap-1 rounded-full bg-white p-1 border border-slate-200">
+          <button onClick={() => setVista("unidades")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "unidades" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📋 Por unidad</button>
+          <button onClick={() => setVista("calendario")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "calendario" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📅 Calendario</button>
+        </div>
         <button onClick={() => setFormAbierto((v) => !v)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white ml-auto">
           {formAbierto ? "Cerrar" : "+ Nueva unidad/tema"}
         </button>
@@ -999,11 +1178,13 @@ export function VistaPlaneaciones({ grados }) {
       </p>
 
       {formAbierto && (
-        <NuevaUnidadForm materiaId={materiaId} gradoId={gradoId} periodo={periodo} orden={unidades.length}
+        <NuevaUnidadForm materiaId={materiaId} materias={materias} gradoId={gradoId} periodo={periodo} orden={unidades.length}
           onCancelar={() => setFormAbierto(false)} onCreada={() => { setFormAbierto(false); cargar(); }} />
       )}
 
-      {cargando ? (
+      {vista === "calendario" ? (
+        <CalendarioClases materiaId={materiaId} gradoId={gradoId} periodo={periodo} onAbrirUnidad={() => setVista("unidades")} />
+      ) : cargando ? (
         <div className="text-sm text-slate-400">Cargando…</div>
       ) : error ? (
         <div className="text-sm text-rose-500 bg-rose-50 rounded-xl p-3">Error al cargar: {error}</div>
@@ -1012,7 +1193,7 @@ export function VistaPlaneaciones({ grados }) {
           Todavía no hay unidades/temas para este periodo. Creá la primera con "+ Nueva unidad/tema".
         </div>
       ) : (
-        unidades.map((u) => <UnidadCard key={u.id} unidad={u} institucion={institucion} materiaNombre={materias.find((m) => m.id === materiaId)?.nombre || ""} gradoId={gradoId} grados={grados} onCambio={cargar} />)
+        unidades.map((u) => <UnidadCard key={u.id} unidad={u} institucion={institucion} materiaNombre={materias.find((m) => m.id === materiaId)?.nombre || ""} materias={materias} gradoId={gradoId} grados={grados} onCambio={cargar} />)
       )}
       {pendientesAbierto && (
         <PendientesModal materiaId={materiaId} materiaNombre={materias.find((m) => m.id === materiaId)?.nombre || ""} onClose={() => setPendientesAbierto(false)} />
