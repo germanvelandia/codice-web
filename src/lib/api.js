@@ -500,10 +500,12 @@ function detectarTipoRecurso(url) {
 }
 
 export async function fetchUnidades(materiaId, gradoId, periodo) {
+  const nivel = String(gradoId || "").slice(0, -2) || String(gradoId || "");
   const { data, error } = await supabase
     .from("planeaciones")
     .select("*")
-    .eq("materia_id", materiaId).eq("grado_id", gradoId).eq("periodo", periodo).eq("tipo", "unidad")
+    .eq("materia_id", materiaId).eq("periodo", periodo).eq("tipo", "unidad")
+    .or(`grado_id.eq.${gradoId},grado_id.eq.${nivel}`)
     .order("orden");
   if (error) throw error;
   return data || [];
@@ -1048,7 +1050,9 @@ export async function fetchMiEntrega(tareaId, estudianteId) {
 // Tareas del banco de Planeaciones (con rúbrica) asignadas al grado del estudiante,
 // para mostrarlas también dentro de "Proyectos" como referencia.
 export async function fetchTareasPlaneacionParaGrado(gradoId) {
-  const { data: unidades, error: e1 } = await supabase.from("planeaciones").select("id, titulo, materia_id, materias(nombre)").eq("grado_id", gradoId).eq("tipo", "unidad");
+  const nivel = String(gradoId || "").slice(0, -2) || String(gradoId || "");
+  const { data: unidades, error: e1 } = await supabase.from("planeaciones").select("id, titulo, materia_id, materias(nombre)")
+    .or(`grado_id.eq.${gradoId},grado_id.eq.${nivel}`).eq("tipo", "unidad");
   if (e1) throw e1;
   const unidadIds = (unidades || []).map((u) => u.id);
   if (unidadIds.length === 0) return [];
