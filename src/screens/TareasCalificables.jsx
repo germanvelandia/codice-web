@@ -6,6 +6,7 @@ import { periodosDe } from "../lib/calificaciones";
 function TareaForm({ tipo, materiaId, gradoId, periodo, categorias, tarea, onCancelar, onCreada }) {
   const [titulo, setTitulo] = useState(tarea?.titulo || "");
   const [descripcion, setDescripcion] = useState(tarea?.descripcion || "");
+  const [url, setUrl] = useState(tarea?.url || "");
   const [fechaEntrega, setFechaEntrega] = useState(tarea?.fecha_entrega || "");
   const [categoriaId, setCategoriaId] = useState(tarea?.categoria_id || categorias[0]?.id || "");
   const [guardando, setGuardando] = useState(false);
@@ -13,9 +14,11 @@ function TareaForm({ tipo, materiaId, gradoId, periodo, categorias, tarea, onCan
   const guardar = async () => {
     if (!titulo.trim()) { alert("Escribe un título."); return; }
     if (!categoriaId) { alert("Elegí a qué categoría de la Planilla va a mandar la nota."); return; }
+    let urlLimpia = url.trim();
+    if (urlLimpia && !/^https?:\/\//i.test(urlLimpia)) urlLimpia = "https://" + urlLimpia;
     setGuardando(true);
     try {
-      const campos = { titulo: titulo.trim(), descripcion: descripcion.trim() || null, fecha_entrega: fechaEntrega || null, categoria_id: categoriaId };
+      const campos = { titulo: titulo.trim(), descripcion: descripcion.trim() || null, url: urlLimpia || null, fecha_entrega: fechaEntrega || null, categoria_id: categoriaId };
       if (tarea) {
         await api.editarTareaCalificable(tarea.id, campos);
       } else {
@@ -34,6 +37,9 @@ function TareaForm({ tipo, materiaId, gradoId, periodo, categorias, tarea, onCan
         className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
       <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2} placeholder="Instrucciones para el estudiante (opcional)"
         className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
+      <label className="text-xs text-slate-500 block mb-1">Enlace para el estudiante (opcional — formulario, material, actividad externa…)</label>
+      <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Ej: docs.google.com/forms/..."
+        className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none bg-white" />
       <div className="grid grid-cols-2 gap-2 mb-3">
         <div>
           <label className="text-xs text-slate-500 block mb-1">Fecha de entrega</label>
@@ -143,6 +149,7 @@ function TareaCard({ tarea, categorias, onCambio }) {
           <h4 className="font-bold text-slate-800">{tarea.titulo}</h4>
           {tarea.descripcion && <p className="text-xs text-slate-500 mt-1">{tarea.descripcion}</p>}
           {tarea.fecha_entrega && <p className="text-[11px] text-slate-400 mt-1">Entrega: {tarea.fecha_entrega}</p>}
+          {tarea.url && <a href={tarea.url} target="_blank" rel="noreferrer" className="text-[11px] text-violet-500 mt-1 block truncate">🔗 {tarea.url}</a>}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button onClick={() => setCalificando(true)} className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-violet-500 text-white">Calificar</button>
