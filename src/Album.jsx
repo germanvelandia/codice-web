@@ -169,4 +169,4 @@ export function VistaAlbum() {
       )}
     </div>
   );
-}
+} 
