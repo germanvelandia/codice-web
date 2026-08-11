@@ -1253,6 +1253,87 @@ export async function eliminarPiarSeguimiento(id) {
   if (error) throw error;
 }
 
+/* ---------------- Álbum de criaturas (sobres comprados con monedas) ---------------- */
+export async function fetchCriaturas() {
+  const { data, error } = await supabase.from("criaturas").select("*").order("rareza").order("nombre");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function fetchCriaturasActivas() {
+  const { data, error } = await supabase.from("criaturas").select("*").eq("activo", true);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearCriatura(campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("criaturas").insert({ ...campos, docente_id: userData?.user?.id || null });
+  if (error) throw error;
+}
+
+export async function editarCriatura(id, cambios) {
+  const { error } = await supabase.from("criaturas").update(cambios).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarCriatura(id) {
+  const { error } = await supabase.from("criaturas").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function fetchAlbumConfig() {
+  const { data, error } = await supabase.from("album_config").select("*").eq("id", 1).maybeSingle();
+  if (error) throw error;
+  return data || { id: 1, costo_sobre: 15, cartas_por_sobre: 3, nombre_album: "Álbum de Criaturas del Códice" };
+}
+
+export async function guardarAlbumConfig(campos) {
+  const { error } = await supabase.from("album_config").upsert({ id: 1, ...campos }, { onConflict: "id" });
+  if (error) throw error;
+}
+
+export async function fetchColeccion(estudianteId) {
+  const { data, error } = await supabase.from("estudiante_criaturas").select("*, criaturas(*)").eq("estudiante_id", estudianteId);
+  if (error) throw error;
+  return data || [];
+}
+
+// Abre un sobre: descuenta las monedas, sortea N criaturas (con peso por rareza)
+// entre las activas, y las suma a la colección del estudiante (o le aumenta la
+// cantidad si ya la tenía). Devuelve las cartas que salieron en ese sobre.
+export async function abrirSobre(estudianteId) {
+  const config = await fetchAlbumConfig();
+  const { data: prog } = await supabase.from("progreso").select("monedas").eq("estudiante_id", estudianteId).maybeSingle();
+  const monedas = prog?.monedas || 0;
+  if (monedas < config.costo_sobre) return { ok: false, monedas, costo: config.costo_sobre };
+
+  const catalogo = await fetchCriaturasActivas();
+  if (catalogo.length === 0) return { ok: false, sinCatalogo: true };
+
+  const pesoTotal = catalogo.reduce((a, c) => a + c.peso, 0);
+  const sortear = () => {
+    let r = Math.random() * pesoTotal;
+    for (const c of catalogo) { if (r < c.peso) return c; r -= c.peso; }
+    return catalogo[0];
+  };
+
+  const cartas = Array.from({ length: config.cartas_por_sobre }, sortear);
+
+  const nuevasMonedas = await ajustarMonedas(estudianteId, -config.costo_sobre);
+
+  for (const carta of cartas) {
+    const { data: existente } = await supabase.from("estudiante_criaturas").select("*").eq("estudiante_id", estudianteId).eq("criatura_id", carta.id).maybeSingle();
+    if (existente) {
+      await supabase.from("estudiante_criaturas").update({ cantidad: existente.cantidad + 1 }).eq("id", existente.id);
+    } else {
+      await supabase.from("estudiante_criaturas").insert({ estudiante_id: estudianteId, criatura_id: carta.id, cantidad: 1 });
+    }
+  }
+
+  return { ok: true, cartas, monedasRestantes: nuevasMonedas };
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
