@@ -4,6 +4,81 @@ import * as api from "../lib/api";
 const DIAS_NOMBRE = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 const TIPO_EVENTO_COLOR = { institucional: "#8B5CF6", academico: "#7C3AED", convivencial: "#DB2777", festivo: "#F59E0B", otro: "#64748B" };
 
+function ValorSemanaCard() {
+  const [valor, setValor] = useState(null);
+  const [editando, setEditando] = useState(false);
+  const [nombre, setNombre] = useState("");
+  const [descripcion, setDescripcion] = useState("");
+  const [imagenUrl, setImagenUrl] = useState(null);
+  const [guardando, setGuardando] = useState(false);
+
+  const cargar = () => api.fetchValorSemanal().then((v) => {
+    setValor(v); setNombre(v.nombre || ""); setDescripcion(v.descripcion || ""); setImagenUrl(v.imagen_url || null);
+  });
+  useEffect(() => { cargar(); }, []);
+
+  const subirImagen = (file) => {
+    if (file.size > 500 * 1024) { alert("La imagen es muy grande. Usa una de menos de 500 KB."); return; }
+    const reader = new FileReader();
+    reader.onload = (e) => setImagenUrl(e.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  const guardar = async () => {
+    setGuardando(true);
+    try {
+      await api.guardarValorSemanal({ nombre: nombre.trim() || null, descripcion: descripcion.trim() || null, imagen_url: imagenUrl });
+      setEditando(false);
+      cargar();
+    } catch (e) {
+      alert("Error al guardar: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  if (!valor) return null;
+
+  if (editando) {
+    return (
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-4">
+        <div className="font-bold text-slate-800 mb-3">🌟 Valor de la semana</div>
+        <div className="flex items-center gap-3 mb-2">
+          <input type="file" accept="image/*" onChange={(e) => { if (e.target.files[0]) subirImagen(e.target.files[0]); }} className="text-xs flex-1" />
+          {imagenUrl && <button onClick={() => setImagenUrl(null)} className="text-xs text-rose-500">Quitar</button>}
+        </div>
+        <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre del valor (ej: Respeto)"
+          className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none" />
+        <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2} placeholder="Descripción (opcional)"
+          className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
+        <div className="flex justify-end gap-2">
+          <button onClick={() => setEditando(false)} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
+          <button disabled={guardando} onClick={guardar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+            {guardando ? "Guardando…" : "Guardar"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-4 flex items-center gap-4">
+      <div className="rounded-xl overflow-hidden shrink-0" style={{ width: 72, height: 72, background: "#F5F3FF" }}>
+        {valor.imagen_url ? (
+          <img src={valor.imagen_url} alt={valor.nombre || "Valor de la semana"} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-3xl">🌟</div>
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-[10px] font-bold text-violet-500 uppercase tracking-wide">Valor de la semana</div>
+        <div className="text-base font-bold text-slate-800 truncate">{valor.nombre || "Sin definir todavía"}</div>
+        {valor.descripcion && <div className="text-xs text-slate-500 mt-0.5">{valor.descripcion}</div>}
+      </div>
+      <button onClick={() => setEditando(true)} className="text-xs text-slate-400 hover:text-violet-600 shrink-0">✏️</button>
+    </div>
+  );
+}
+
 export function VistaInicio({ onIrA }) {
   const [stats, setStats] = useState(null);
   const [resumen, setResumen] = useState(null);
@@ -78,6 +153,8 @@ export function VistaInicio({ onIrA }) {
           </div>
         </div>
       </div>
+
+      <ValorSemanaCard />
 
       {/* Resumen del día */}
       <div className="grid md:grid-cols-3 gap-4 mb-4">
