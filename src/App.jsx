@@ -9,6 +9,7 @@ import { VistaRuleta, VistaRuletaMonedas, VistaTemporizador, VistaHerramientas }
 import { VistaBanco } from "./screens/Banco";
 import { VistaAlbum, CartaCriatura } from "./screens/Album";
 import { VistaAnuncios } from "./screens/Anuncios";
+import { VistaLogros } from "./screens/Logros";
 import { VistaRoles } from "./screens/Roles";
 import { VistaCalificaciones } from "./screens/Calificaciones";
 import { VistaReportes } from "./screens/Reportes";
@@ -1006,6 +1007,40 @@ function AnunciosEstudiante({ gradoId }) {
   );
 }
 
+function LogrosEstudiante({ estudianteId }) {
+  const [catalogo, setCatalogo] = useState([]);
+  const [desbloqueados, setDesbloqueados] = useState([]);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    Promise.all([api.fetchLogrosCatalogo(), api.fetchLogrosEstudiante(estudianteId)]).then(([c, d]) => {
+      setCatalogo(c.filter((l) => l.activo)); setDesbloqueados(d); setCargando(false);
+    });
+  }, [estudianteId]);
+
+  if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
+  if (catalogo.length === 0) return null;
+
+  const idsDesbloqueados = new Set(desbloqueados.map((d) => d.logro_id));
+
+  return (
+    <div>
+      <div className="text-xs font-semibold text-slate-600 mb-2">🏅 Insignias ({desbloqueados.length}/{catalogo.length})</div>
+      <div className="grid grid-cols-3 gap-2">
+        {catalogo.map((l) => {
+          const tiene = idsDesbloqueados.has(l.id);
+          return (
+            <div key={l.id} className="rounded-xl p-2 text-center" style={{ background: tiene ? "#F5F3FF" : "#F1F5F9", border: `1.5px solid ${tiene ? "#8B5CF6" : "#E2E8F0"}` }}>
+              <div className="text-2xl" style={{ filter: tiene ? "none" : "grayscale(1)", opacity: tiene ? 1 : 0.35 }}>{l.emoji}</div>
+              <div className="text-[9px] font-semibold text-slate-700 truncate mt-0.5">{tiene ? l.nombre : "???"}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function PortalEstudiante() {
   const [codigo, setCodigo] = useState("");
   const [datos, setDatos] = useState(null);
@@ -1013,6 +1048,7 @@ function PortalEstudiante() {
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState("");
   const [vista, setVista] = useState("inicio");
+  const [nuevosLogros, setNuevosLogros] = useState([]);
 
   const consultar = async () => {
     if (!codigo.trim()) return;
@@ -1025,6 +1061,9 @@ function PortalEstudiante() {
         setDatos(res);
         const info = await api.fetchEstudiantePorCodigo(codigo);
         setEstudianteInfo(info);
+        if (info) {
+          api.verificarYOtorgarLogros(info.id).then((nuevos) => { if (nuevos.length > 0) setNuevosLogros(nuevos); });
+        }
       }
     } catch (e) {
       setError("Ocurrió un error: " + e.message);
@@ -1039,6 +1078,19 @@ function PortalEstudiante() {
 
     return (
       <div className="md:flex md:gap-5 md:items-start">
+        {nuevosLogros.length > 0 && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }} onClick={() => setNuevosLogros((prev) => prev.slice(1))}>
+            <div onClick={(e) => e.stopPropagation()} className="rounded-3xl p-6 text-center max-w-xs" style={{ background: "linear-gradient(160deg, #2d2450, #1e1b30)", border: "2px solid #F59E0B" }}>
+              <div className="text-[11px] font-bold text-amber-300 uppercase tracking-widest mb-2">¡Nuevo logro desbloqueado!</div>
+              <div className="text-6xl mb-2">{nuevosLogros[0].emoji}</div>
+              <div className="text-lg font-bold text-white">{nuevosLogros[0].nombre}</div>
+              {nuevosLogros[0].descripcion && <div className="text-xs text-violet-200 mt-1">{nuevosLogros[0].descripcion}</div>}
+              <button onClick={() => setNuevosLogros((prev) => prev.slice(1))} className="mt-4 text-sm font-semibold px-5 py-2 rounded-full bg-amber-400 text-slate-900">
+                {nuevosLogros.length > 1 ? `Genial (${nuevosLogros.length - 1} más)` : "¡Genial!"}
+              </button>
+            </div>
+          </div>
+        )}
         <div className="md:w-60 md:shrink-0">
           <MenuCodice activo={vista} onCambiar={setVista} monedas={datos.monedas} gradoId={datos.grado_id} />
         </div>
@@ -1113,16 +1165,17 @@ function PortalEstudiante() {
             <RankingEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />
           )}
 
-          {vista === "perfil" && (
+          {vista === "perfil" && estudianteInfo && (
             <div>
               <h3 className="font-bold text-slate-800 mb-3">👤 Mi perfil</h3>
-              <div className="space-y-2 text-sm">
+              <div className="space-y-2 text-sm mb-5">
                 <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-400">Nombre</span><span className="font-semibold text-slate-700">{datos.nombre}</span></div>
                 <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-400">Grado</span><span className="font-semibold text-slate-700">{datos.grado_id}</span></div>
                 <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-400">Grupo</span><span className="font-semibold text-slate-700">{datos.grupo}</span></div>
                 <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-400">Nivel</span><span className="font-semibold text-violet-600">{level.name}</span></div>
                 <div className="flex justify-between"><span className="text-slate-400">XP total</span><span className="font-semibold text-slate-700">{datos.xp}</span></div>
               </div>
+              <LogrosEstudiante estudianteId={estudianteInfo.id} />
             </div>
           )}
 
@@ -1397,6 +1450,7 @@ function Panel({ session }) {
               <button onClick={() => setSubTabHerramientas("banco")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "banco" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Banco</button>
               <button onClick={() => setSubTabHerramientas("album")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "album" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Álbum</button>
               <button onClick={() => setSubTabHerramientas("anuncios")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "anuncios" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Anuncios</button>
+              <button onClick={() => setSubTabHerramientas("logros")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "logros" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Logros</button>
               <button onClick={() => setSubTabHerramientas("temporizador")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "temporizador" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Temporizador</button>
               <button onClick={() => setSubTabHerramientas("otras")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "otras" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Otras herramientas</button>
             </div>
@@ -1405,6 +1459,7 @@ function Panel({ session }) {
             {subTabHerramientas === "banco" && <VistaBanco />}
             {subTabHerramientas === "album" && <VistaAlbum />}
             {subTabHerramientas === "anuncios" && <VistaAnuncios grados={grados} />}
+            {subTabHerramientas === "logros" && <VistaLogros />}
             {subTabHerramientas === "temporizador" && <VistaTemporizador />}
             {subTabHerramientas === "otras" && <VistaHerramientas grados={grados} />}
           </>
