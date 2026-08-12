@@ -1577,6 +1577,53 @@ export async function verificarYOtorgarLogros(estudianteId) {
   return nuevos;
 }
 
+/* ---------------- Salón de Honor (ranking institucional) ---------------- */
+export async function fetchSalonDeHonor() {
+  const [estudiantesRes, progresoRes, logrosRes, catalogoLogrosRes] = await Promise.all([
+    supabase.from("estudiantes").select("id, nombre, grado_id").eq("activo", true),
+    supabase.from("progreso").select("estudiante_id, xp"),
+    supabase.from("estudiante_logros").select("*").order("desbloqueado_en", { ascending: false }).limit(20),
+    supabase.from("logros_catalogo").select("id, nombre, emoji"),
+  ]);
+  if (estudiantesRes.error) throw estudiantesRes.error;
+  if (progresoRes.error) throw progresoRes.error;
+  if (logrosRes.error) throw logrosRes.error;
+  if (catalogoLogrosRes.error) throw catalogoLogrosRes.error;
+
+  const estPorId = {}; (estudiantesRes.data || []).forEach((e) => { estPorId[e.id] = e; });
+  const xpPorEstudiante = {}; (progresoRes.data || []).forEach((p) => { xpPorEstudiante[p.estudiante_id] = p.xp || 0; });
+  const logroPorId = {}; (catalogoLogrosRes.data || []).forEach((l) => { logroPorId[l.id] = l; });
+
+  // Top por XP (institucional, todos los grados)
+  const topXp = (estudiantesRes.data || [])
+    .map((e) => ({ id: e.id, nombre: e.nombre, grado_id: e.grado_id, xp: xpPorEstudiante[e.id] || 0 }))
+    .sort((a, b) => b.xp - a.xp)
+    .slice(0, 10);
+
+  // Top por cantidad de insignias
+  const conteoLogros = {};
+  (logrosRes.data || []).forEach((l) => { conteoLogros[l.estudiante_id] = (conteoLogros[l.estudiante_id] || 0) + 1; });
+  const { data: todosLosLogros } = await supabase.from("estudiante_logros").select("estudiante_id");
+  const conteoTotalLogros = {};
+  (todosLosLogros || []).forEach((l) => { conteoTotalLogros[l.estudiante_id] = (conteoTotalLogros[l.estudiante_id] || 0) + 1; });
+  const topInsignias = Object.entries(conteoTotalLogros)
+    .map(([estudianteId, cantidad]) => ({ id: parseInt(estudianteId, 10), nombre: estPorId[estudianteId]?.nombre || "Estudiante", grado_id: estPorId[estudianteId]?.grado_id, cantidad }))
+    .filter((x) => x.nombre !== "Estudiante" || estPorId[x.id])
+    .sort((a, b) => b.cantidad - a.cantidad)
+    .slice(0, 10);
+
+  // Muro de logros recientes (toda la institución)
+  const muroReciente = (logrosRes.data || []).map((l) => ({
+    ...l,
+    estudiante_nombre: estPorId[l.estudiante_id]?.nombre || "Estudiante",
+    grado_id: estPorId[l.estudiante_id]?.grado_id,
+    logro_nombre: logroPorId[l.logro_id]?.nombre || "Logro",
+    logro_emoji: logroPorId[l.logro_id]?.emoji || "🏅",
+  }));
+
+  return { topXp, topInsignias, muroReciente };
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
