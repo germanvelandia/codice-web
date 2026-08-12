@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as api from "../lib/api";
-import { ACCIONES_RAPIDAS } from "../lib/gamification";
 
 let audioCtx = null;
 function getCtx() {
@@ -69,6 +68,9 @@ export function VistaRuleta({ grados }) {
   const [winner, setWinner] = useState(null);
   const [registrando, setRegistrando] = useState(null);
   const [registrado, setRegistrado] = useState(null);
+  const [accionesRapidas, setAccionesRapidas] = useState([]);
+
+  useEffect(() => { api.fetchAccionesGamificacion().then((d) => setAccionesRapidas(d.filter((a) => a.tab === "rapido" && a.activo))); }, []);
 
   useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
   useEffect(() => { if (gradoId) api.fetchEstudiantesPorGrado(gradoId).then(setEstudiantes); }, [gradoId]);
@@ -119,9 +121,9 @@ export function VistaRuleta({ grados }) {
 
   const registrarParticipacion = async (accion) => {
     if (!winner?.estudianteId) return;
-    setRegistrando(accion.key);
+    setRegistrando(accion.id);
     try {
-      await api.registrarAccion(winner.estudianteId, accion);
+      await api.registrarAccion(winner.estudianteId, { label: accion.label, xp: accion.xp, vida: accion.vida, categoria: "general" });
       setRegistrado(accion.label);
     } catch (e) {
       alert("Error al registrar: " + e.message);
@@ -173,10 +175,10 @@ export function VistaRuleta({ grados }) {
               <div className="bg-white rounded-2xl border border-slate-100 p-3 max-w-sm">
                 <div className="text-xs font-semibold text-slate-500 mb-2">Registrar participación</div>
                 <div className="flex flex-wrap gap-1.5 justify-center">
-                  {ACCIONES_RAPIDAS.map((a) => (
-                    <button key={a.key} disabled={registrando === a.key} onClick={() => registrarParticipacion(a)}
-                      className={`text-xs px-2.5 py-1.5 rounded-full ${a.tipo === "positiva" ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-600"} disabled:opacity-50`}>
-                      {registrando === a.key ? "…" : a.label}
+                  {accionesRapidas.map((a) => (
+                    <button key={a.id} disabled={registrando === a.id} onClick={() => registrarParticipacion(a)}
+                      className={`text-xs px-2.5 py-1.5 rounded-full ${a.xp >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-600"} disabled:opacity-50`}>
+                      {registrando === a.id ? "…" : a.label}
                     </button>
                   ))}
                 </div>
