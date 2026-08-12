@@ -15,6 +15,72 @@ function hoyISO() {
   return d.toISOString().slice(0, 10);
 }
 
+function TotalesPorGrado() {
+  const [totales, setTotales] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [fechaDesde, setFechaDesde] = useState("");
+  const [fechaHasta, setFechaHasta] = useState("");
+
+  const cargar = () => {
+    setCargando(true);
+    api.fetchTotalesAsistenciaPorGrado(fechaDesde || null, fechaHasta || null).then((d) => { setTotales(d); setCargando(false); });
+  };
+  useEffect(() => { cargar(); }, []);
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <label className="text-xs text-slate-500">Desde</label>
+        <input type="date" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)} className="text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+        <label className="text-xs text-slate-500">Hasta</label>
+        <input type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} className="text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+        <button onClick={cargar} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">Aplicar</button>
+        {(fechaDesde || fechaHasta) && (
+          <button onClick={() => { setFechaDesde(""); setFechaHasta(""); setTimeout(cargar, 0); }} className="text-xs text-slate-400">Quitar filtro de fechas</button>
+        )}
+      </div>
+
+      {cargando ? (
+        <div className="text-sm text-slate-400">Cargando…</div>
+      ) : totales.length === 0 ? (
+        <div className="text-sm text-slate-400 bg-white rounded-2xl p-6 text-center border border-dashed border-slate-200">Todavía no hay registros de asistencia.</div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-50">
+                <th className="text-left px-3 py-2">Grado</th>
+                <th className="px-3 py-2">✅ Presentes</th>
+                <th className="px-3 py-2">🟡 Retardos</th>
+                <th className="px-3 py-2">🔴 Faltas injust.</th>
+                <th className="px-3 py-2">🔵 Faltas justif.</th>
+                <th className="px-3 py-2">Total registros</th>
+                <th className="px-3 py-2">% Asistencia</th>
+              </tr>
+            </thead>
+            <tbody>
+              {totales.map((t) => {
+                const pctAsistencia = t.total > 0 ? Math.round((t.P / t.total) * 100) : null;
+                return (
+                  <tr key={t.grado} className="odd:bg-white even:bg-slate-50">
+                    <td className="px-3 py-2 font-semibold text-slate-700">Grado {t.grado}</td>
+                    <td className="text-center px-3 py-2 text-emerald-600 font-semibold">{t.P}</td>
+                    <td className="text-center px-3 py-2 text-amber-600 font-semibold">{t.R}</td>
+                    <td className="text-center px-3 py-2 text-rose-600 font-semibold">{t.FI}</td>
+                    <td className="text-center px-3 py-2 text-blue-600 font-semibold">{t.FJ}</td>
+                    <td className="text-center px-3 py-2 text-slate-400">{t.total}</td>
+                    <td className="text-center px-3 py-2 font-bold text-violet-600">{pctAsistencia !== null ? `${pctAsistencia}%` : "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function VistaAsistencia({ grados }) {
   const [gradoId, setGradoId] = useState(grados[0]?.id || "");
   const [reinoFiltro, setReinoFiltro] = useState("Todos");
@@ -28,6 +94,7 @@ export function VistaAsistencia({ grados }) {
   const [materiaId, setMateriaId] = useState(""); // "" = General (sin materia)
   const [usuarioId, setUsuarioId] = useState(null);
   const [consolidadoEstudiante, setConsolidadoEstudiante] = useState(null);
+  const [vista, setVista] = useState("diaria"); // "diaria" | "totales"
 
   useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
   useEffect(() => { api.fetchMaterias().then(setMaterias); api.fetchUsuarioActualId().then(setUsuarioId); }, []);
@@ -91,8 +158,17 @@ export function VistaAsistencia({ grados }) {
   return (
     <div>
       <h2 className="text-xl font-bold text-slate-800 mb-1">Control de Asistencia</h2>
-      <p className="text-xs text-slate-400 mb-4">P = Presente · R = Retardo · FI = Falta injustificada · FJ = Falta justificada. Un segundo clic sobre el mismo código lo quita.</p>
+      <p className="text-xs text-slate-400 mb-3">P = Presente · R = Retardo · FI = Falta injustificada · FJ = Falta justificada. Un segundo clic sobre el mismo código lo quita.</p>
 
+      <div className="flex gap-1 mb-4 rounded-full bg-white p-1 w-fit border border-slate-100 shadow-sm">
+        <button onClick={() => setVista("diaria")} className={`text-xs px-4 py-2 rounded-full ${vista === "diaria" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📋 Marcar asistencia</button>
+        <button onClick={() => setVista("totales")} className={`text-xs px-4 py-2 rounded-full ${vista === "totales" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📊 Totales por grado</button>
+      </div>
+
+      {vista === "totales" ? (
+        <TotalesPorGrado />
+      ) : (
+        <>
       <div className="flex flex-wrap gap-2 mb-3 items-center">
         <select value={gradoId} onChange={(e) => { setGradoId(e.target.value); setReinoFiltro("Todos"); }} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
           {grados.map((g) => <option key={g.id} value={g.id}>Grado {g.id}</option>)}
@@ -176,6 +252,8 @@ export function VistaAsistencia({ grados }) {
 
       {consolidadoEstudiante && (
         <ConsolidadoAsistenciaModal estudiante={consolidadoEstudiante} onClose={() => setConsolidadoEstudiante(null)} />
+      )}
+        </>
       )}
     </div>
   );
