@@ -1405,10 +1405,9 @@ export async function fetchAnuncios() {
 
 // Para el estudiante: los generales (sin grado) + los de su grado específico
 export async function fetchAnunciosParaGrado(gradoId) {
-  const { data, error } = await supabase.from("anuncios").select("*").or(`grado_id.is.null,grado_id.eq.${gradoId}`)
-    .order("fijado", { ascending: false }).order("creado_en", { ascending: false });
+  const { data, error } = await supabase.from("anuncios").select("*").order("fijado", { ascending: false }).order("creado_en", { ascending: false });
   if (error) throw error;
-  return data || [];
+  return (data || []).filter((a) => !a.grado_id || String(a.grado_id) === String(gradoId));
 }
 
 export async function crearAnuncio(campos) {
