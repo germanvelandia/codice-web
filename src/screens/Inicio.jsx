@@ -107,11 +107,110 @@ function ValorSemanaCard() {
   );
 }
 
+function CalificarEntradaCodiceForm({ entrada, onCancelar, onCalificado }) {
+  const [nota, setNota] = useState(entrada.nota ?? "");
+  const [categoriaId, setCategoriaId] = useState(entrada.categoria_id || "");
+  const [periodo, setPeriodo] = useState("1");
+  const [categorias, setCategorias] = useState([]);
+  const [guardando, setGuardando] = useState(false);
+
+  useEffect(() => {
+    if (entrada.materia_id) {
+      api.fetchCategorias(entrada.materia_id).then(setCategorias);
+      api.fetchNotasConfig(entrada.materia_id).then((c) => setPeriodo(c.periodo_actual || "1"));
+    }
+  }, [entrada.materia_id]);
+
+  const guardar = async () => {
+    const valor = parseFloat(String(nota).replace(",", "."));
+    if (isNaN(valor)) { alert("Escribí una nota válida."); return; }
+    setGuardando(true);
+    try {
+      await api.calificarEntradaCodice(entrada, entrada.estudiante_id, entrada.grado_id, valor, categoriaId || null, entrada.materia_id ? periodo : null);
+      onCalificado();
+    } catch (e) {
+      alert("Error al calificar: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  return (
+    <div className="bg-violet-50 rounded-lg p-2 mt-2 flex items-center gap-1.5 flex-wrap">
+      <input type="text" inputMode="decimal" value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Nota"
+        className="w-16 text-xs text-center rounded px-2 py-1 border border-slate-200 outline-none" />
+      {entrada.materia_id && categorias.length > 0 && (
+        <select value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)} className="text-xs rounded px-2 py-1 border border-slate-200 outline-none">
+          <option value="">Sin enviar a Calificaciones</option>
+          {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre} (P{periodo})</option>)}
+        </select>
+      )}
+      <button disabled={guardando} onClick={guardar} className="text-xs px-2.5 py-1 rounded bg-violet-500 text-white">{guardando ? "…" : "Guardar"}</button>
+      <button onClick={onCancelar} className="text-xs text-slate-400">Cancelar</button>
+    </div>
+  );
+}
+
+function EntradaCodicePendiente({ entrada, onCambio }) {
+  const [calificando, setCalificando] = useState(false);
+
+  const marcarRevisada = async () => { await api.marcarCodiceRevisado(entrada.id); onCambio(); };
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-100 p-3">
+      <div className="flex justify-between items-start gap-2">
+        <div className="min-w-0">
+          <div className="text-xs text-slate-400">{entrada.fecha}{entrada.materia_nombre ? ` · ${entrada.materia_nombre}` : ""}</div>
+          <div className="text-sm font-bold text-slate-800">{entrada.estudiante_nombre} <span className="text-xs font-normal text-slate-400">· Grado {entrada.grado_id}</span></div>
+          {entrada.titulo && <div className="text-xs font-semibold text-slate-600 mt-1">{entrada.titulo}</div>}
+          <div className="text-xs text-slate-500 mt-1 whitespace-pre-line">{entrada.contenido}</div>
+        </div>
+        <button onClick={marcarRevisada} className="text-[10px] text-slate-400 hover:text-emerald-600 shrink-0">✔ Marcar visto</button>
+      </div>
+      {calificando ? (
+        <CalificarEntradaCodiceForm entrada={entrada} onCancelar={() => setCalificando(false)} onCalificado={() => { setCalificando(false); onCambio(); }} />
+      ) : (
+        <button onClick={() => setCalificando(true)} className="text-[11px] text-violet-500 mt-2">
+          {entrada.nota !== null ? `Nota: ${entrada.nota} — editar` : "+ Poner nota"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ReflexionesSinRevisarModal({ onClose }) {
+  const [entradas, setEntradas] = useState([]);
+  const [cargando, setCargando] = useState(true);
+
+  const cargar = () => { setCargando(true); api.fetchEntradasCodiceSinRevisar().then((d) => { setEntradas(d); setCargando(false); }); };
+  useEffect(() => { cargar(); }, []);
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">📜 Reflexiones sin revisar</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        {cargando ? (
+          <div className="text-sm text-slate-400">Cargando…</div>
+        ) : entradas.length === 0 ? (
+          <div className="text-sm text-slate-400 text-center py-4">No hay reflexiones pendientes. 🎉</div>
+        ) : (
+          <div className="space-y-2">
+            {entradas.map((e) => <EntradaCodicePendiente key={e.id} entrada={e} onCambio={cargar} />)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function VistaInicio({ onIrA }) {
   const [stats, setStats] = useState(null);
   const [resumen, setResumen] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [nombreDocente, setNombreDocente] = useState("");
+  const [codiceAbierto, setCodiceAbierto] = useState(false);
 
   useEffect(() => {
     Promise.all([api.fetchStatsDocente(), api.fetchResumenDocente(), api.fetchMiPerfil()]).then(([s, r, perfil]) => {
@@ -195,6 +294,9 @@ export function VistaInicio({ onIrA }) {
             <div className="flex justify-between"><span className="text-slate-500">📝 Entregas por revisar</span><span className="font-semibold text-amber-600">{resumen.entregasPendientes}</span></div>
             <div className="flex justify-between"><span className="text-slate-500">🔨 Tareas sin calificar</span><span className="font-semibold text-amber-600">{resumen.tareasSinCalificar}</span></div>
             <div className="flex justify-between"><span className="text-slate-500">📖 Clases planeadas pendientes</span><span className="font-semibold text-amber-600">{resumen.clasesPendientes}</span></div>
+            <button onClick={() => setCodiceAbierto(true)} className="w-full flex justify-between hover:bg-slate-50 rounded px-1 -mx-1">
+              <span className="text-slate-500">📜 Reflexiones sin revisar</span><span className="font-semibold text-amber-600">{resumen.codiceSinRevisar}</span>
+            </button>
           </div>
         </div>
 
@@ -242,6 +344,8 @@ export function VistaInicio({ onIrA }) {
           </button>
         ))}
       </div>
+
+      {codiceAbierto && <ReflexionesSinRevisarModal onClose={() => setCodiceAbierto(false)} />}
     </div>
   );
 }
