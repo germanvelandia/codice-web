@@ -11,6 +11,7 @@ import { VistaAlbum, CartaCriatura } from "./screens/Album";
 import { VistaAnuncios } from "./screens/Anuncios";
 import { VistaLogros } from "./screens/Logros";
 import { VistaSalonHonor } from "./screens/SalonHonor";
+import { VistaGamificacionExtra } from "./screens/GamificacionExtra";
 import { VistaRoles } from "./screens/Roles";
 import { VistaCalificaciones } from "./screens/Calificaciones";
 import { VistaReportes } from "./screens/Reportes";
@@ -607,6 +608,52 @@ function BancoEstudiante({ estudianteId, monedas, onMonedasActualizadas }) {
   );
 }
 
+function MicroMisionesEstudiante({ estudianteId, onCambio }) {
+  const [misiones, setMisiones] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [completando, setCompletando] = useState(null);
+
+  const cargar = () => api.fetchMicroMisionesEstudiante(estudianteId).then((d) => { setMisiones(d); setCargando(false); });
+  useEffect(() => { cargar(); }, [estudianteId]);
+
+  const completar = async (mision) => {
+    setCompletando(mision.id);
+    try {
+      await api.completarMicroMision(mision, estudianteId);
+      cargar();
+      onCambio && onCambio();
+    } catch (e) {
+      alert(e.message);
+    }
+    setCompletando(null);
+  };
+
+  if (cargando || misiones.length === 0) return null;
+
+  return (
+    <div className="mb-4 pb-4 border-b border-slate-100">
+      <div className="text-xs font-semibold text-slate-600 mb-2">🎯 Misiones diarias/semanales</div>
+      <div className="space-y-1.5">
+        {misiones.map((m) => (
+          <div key={m.id} className={`flex items-center justify-between rounded-lg px-3 py-2 ${m.completada ? "bg-emerald-50" : "bg-slate-50"}`}>
+            <div className="min-w-0">
+              <div className="text-xs font-semibold text-slate-700">{m.tipo === "diaria" ? "☀️" : "📅"} {m.titulo}</div>
+              <div className="text-[10px] text-slate-400">🪙{m.recompensa_monedas} · ⭐{m.recompensa_xp}</div>
+            </div>
+            {m.completada ? (
+              <span className="text-[11px] text-emerald-600 font-semibold shrink-0">✔ Cumplida</span>
+            ) : (
+              <button disabled={completando === m.id} onClick={() => completar(m)} className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-violet-500 text-white shrink-0">
+                {completando === m.id ? "…" : "Marcar cumplida"}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function EvaluacionesEstudiante({ estudianteId, gradoId }) {
   const [evaluaciones, setEvaluaciones] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -1105,6 +1152,119 @@ function LogrosEstudiante({ estudianteId }) {
   );
 }
 
+function DesafioReinoEstudiante({ gradoId, miReino }) {
+  const [desafios, setDesafios] = useState([]);
+  const [progresoPorDesafio, setProgresoPorDesafio] = useState({});
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    api.fetchDesafiosReino(gradoId).then(async (lista) => {
+      const activos = lista.filter((d) => d.activo);
+      setDesafios(activos);
+      const progresos = {};
+      for (const d of activos) { progresos[d.id] = await api.fetchProgresoDesafio(d); }
+      setProgresoPorDesafio(progresos);
+      setCargando(false);
+    });
+  }, [gradoId]);
+
+  if (cargando || desafios.length === 0) return null;
+
+  return (
+    <div className="mb-4">
+      <div className="text-xs font-semibold text-slate-600 mb-2">⚔️ Desafío de tu Reino</div>
+      {desafios.map((d) => {
+        const filas = progresoPorDesafio[d.id] || [];
+        const miFila = filas.find((f) => f.reino === miReino);
+        return (
+          <div key={d.id} className="bg-violet-50 rounded-xl p-3 mb-2">
+            <div className="text-sm font-bold text-slate-800">{d.titulo}</div>
+            {d.descripcion && <div className="text-[11px] text-slate-500 mt-0.5">{d.descripcion}</div>}
+            <div className="space-y-1.5 mt-2">
+              {filas.slice(0, 4).map((f) => (
+                <div key={f.reino}>
+                  <div className="flex justify-between text-[11px] mb-0.5">
+                    <span className={`font-semibold ${f.reino === miReino ? "text-violet-700" : "text-slate-500"}`}>{f.reino}{f.reino === miReino ? " (vos)" : ""}</span>
+                    <span className="text-slate-400">{f.total}/{d.meta}</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-white overflow-hidden">
+                    <div className="h-full rounded-full bg-gradient-to-r from-violet-400 to-violet-600" style={{ width: `${f.pct}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function CosmeticosEstudiante({ estudianteId, monedas, onMonedasActualizadas }) {
+  const [catalogo, setCatalogo] = useState([]);
+  const [poseidos, setPoseidos] = useState([]);
+  const [equipados, setEquipados] = useState({ marco: null, titulo: null });
+  const [cargando, setCargando] = useState(true);
+
+  const cargar = () => {
+    Promise.all([api.fetchCosmeticosCatalogo(), api.fetchCosmeticosEstudiante(estudianteId), api.fetchEquipadosEstudiante(estudianteId)]).then(([cat, pos, eq]) => {
+      setCatalogo(cat.filter((c) => c.activo)); setPoseidos(pos); setEquipados(eq); setCargando(false);
+    });
+  };
+  useEffect(() => { cargar(); }, [estudianteId]);
+
+  if (cargando) return null;
+
+  const idsPoseidos = new Set(poseidos.map((p) => p.cosmetico_id));
+
+  const comprar = async (c) => {
+    try {
+      await api.comprarCosmetico(estudianteId, c);
+      cargar();
+      onMonedasActualizadas();
+    } catch (e) {
+      alert(e.message);
+    }
+  };
+
+  const equipar = async (c) => {
+    await api.equiparCosmetico(estudianteId, c.tipo, equipados[c.tipo]?.id === c.id ? null : c.id);
+    cargar();
+  };
+
+  return (
+    <div>
+      <div className="text-xs font-semibold text-slate-600 mb-2">🎨 Personalización</div>
+      <div className="grid grid-cols-2 gap-2">
+        {catalogo.map((c) => {
+          const tengo = idsPoseidos.has(c.id);
+          const equipado = equipados[c.tipo]?.id === c.id;
+          return (
+            <div key={c.id} className="bg-slate-50 rounded-xl p-2.5 text-center">
+              {c.tipo === "marco" ? (
+                <div className="w-8 h-8 rounded-full border-4 mx-auto" style={{ borderColor: c.valor }} />
+              ) : (
+                <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-violet-100 text-violet-700 inline-block">{c.valor}</span>
+              )}
+              <div className="text-[11px] font-semibold text-slate-700 mt-1">{c.nombre}</div>
+              {tengo ? (
+                <button onClick={() => equipar(c)} className={`text-[10px] mt-1 px-2 py-1 rounded-full ${equipado ? "bg-violet-500 text-white" : "bg-white border border-slate-200 text-slate-500"}`}>
+                  {equipado ? "✔ Equipado" : "Equipar"}
+                </button>
+              ) : (
+                <button onClick={() => comprar(c)} disabled={monedas < c.costo_monedas} className="text-[10px] mt-1 px-2 py-1 rounded-full bg-amber-100 text-amber-700 disabled:opacity-40">
+                  🪙 {c.costo_monedas}
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {catalogo.length === 0 && <p className="text-xs text-slate-400">Todavía no hay cosméticos disponibles.</p>}
+    </div>
+  );
+}
+
 function PortalEstudiante() {
   const [codigo, setCodigo] = useState("");
   const [datos, setDatos] = useState(null);
@@ -1113,6 +1273,7 @@ function PortalEstudiante() {
   const [error, setError] = useState("");
   const [vista, setVista] = useState("inicio");
   const [nuevosLogros, setNuevosLogros] = useState([]);
+  const [equipados, setEquipados] = useState({ marco: null, titulo: null });
 
   const consultar = async () => {
     if (!codigo.trim()) return;
@@ -1127,6 +1288,7 @@ function PortalEstudiante() {
         setEstudianteInfo(info);
         if (info) {
           api.verificarYOtorgarLogros(info.id).then((nuevos) => { if (nuevos.length > 0) setNuevosLogros(nuevos); });
+          api.fetchEquipadosEstudiante(info.id).then(setEquipados);
         }
       }
     } catch (e) {
@@ -1163,10 +1325,15 @@ function PortalEstudiante() {
           {vista === "inicio" && (
             <>
               <div className="text-center mb-4">
+                <div className="mx-auto mb-1.5 flex items-center justify-center rounded-full" style={{ width: 56, height: 56, border: equipados.marco ? `4px solid ${equipados.marco.valor}` : "4px solid transparent", background: "#F5F3FF" }}>
+                  <span className="text-2xl">🎓</span>
+                </div>
                 <div className="text-lg font-bold text-slate-800">{datos.nombre}</div>
+                {equipados.titulo && <div className="text-[11px] font-semibold text-violet-500">✨ {equipados.titulo.valor}</div>}
                 <div className="text-xs text-slate-400">Grado {datos.grado_id} · {datos.grupo}</div>
               </div>
               <ValorSemanaEstudiante />
+              {estudianteInfo && <DesafioReinoEstudiante gradoId={estudianteInfo.grado_id} miReino={estudianteInfo.reino_actual || estudianteInfo.reino_original || "Sin grupo"} />}
               {estudianteInfo && <AvisoRendimiento estudianteId={estudianteInfo.id} />}
               <div className="mb-3">
                 <div className="flex justify-between text-xs text-slate-500 mb-1">
@@ -1198,7 +1365,10 @@ function PortalEstudiante() {
           )}
 
           {vista === "misiones" && estudianteInfo && (
-            <EvaluacionesEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />
+            <>
+              <MicroMisionesEstudiante estudianteId={estudianteInfo.id} onCambio={() => consultar()} />
+              <EvaluacionesEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />
+            </>
           )}
 
           {vista === "proyectos" && estudianteInfo && (
@@ -1244,6 +1414,9 @@ function PortalEstudiante() {
                 <div className="flex justify-between"><span className="text-slate-400">XP total</span><span className="font-semibold text-slate-700">{datos.xp}</span></div>
               </div>
               <LogrosEstudiante estudianteId={estudianteInfo.id} />
+              <div className="mt-5 pt-4 border-t border-slate-100">
+                <CosmeticosEstudiante estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} />
+              </div>
             </div>
           )}
 
@@ -1520,6 +1693,7 @@ function Panel({ session }) {
               <button onClick={() => setSubTabHerramientas("anuncios")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "anuncios" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Anuncios</button>
               <button onClick={() => setSubTabHerramientas("logros")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "logros" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Logros</button>
               <button onClick={() => setSubTabHerramientas("salonhonor")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "salonhonor" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Salón de Honor</button>
+              <button onClick={() => setSubTabHerramientas("gamext")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "gamext" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Desafíos/Misiones/Cosméticos</button>
               <button onClick={() => setSubTabHerramientas("temporizador")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "temporizador" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Temporizador</button>
               <button onClick={() => setSubTabHerramientas("otras")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "otras" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Otras herramientas</button>
             </div>
@@ -1530,6 +1704,7 @@ function Panel({ session }) {
             {subTabHerramientas === "anuncios" && <VistaAnuncios grados={grados} />}
             {subTabHerramientas === "logros" && <VistaLogros />}
             {subTabHerramientas === "salonhonor" && <VistaSalonHonor />}
+            {subTabHerramientas === "gamext" && <VistaGamificacionExtra grados={grados} />}
             {subTabHerramientas === "temporizador" && <VistaTemporizador />}
             {subTabHerramientas === "otras" && <VistaHerramientas grados={grados} />}
           </>
