@@ -2320,6 +2320,31 @@ export async function fetchTotalesAsistenciaPorGrado(fechaDesde, fechaHasta) {
   return Object.values(totales).sort((a, b) => a.grado.localeCompare(b.grado, undefined, { numeric: true }));
 }
 
+// Igual que fetchTotalesAsistenciaPorGrado, pero desglosado por estudiante
+// (agrupado/ordenado por grado) en vez de solo el total agregado del grado.
+export async function fetchTotalesAsistenciaPorEstudiante(fechaDesde, fechaHasta) {
+  let query = supabase.from("asistencia").select("estudiante_id, codigo");
+  if (fechaDesde) query = query.gte("fecha", fechaDesde);
+  if (fechaHasta) query = query.lte("fecha", fechaHasta);
+  const { data: registros, error } = await query;
+  if (error) throw error;
+
+  const { data: estudiantes, error: e2 } = await supabase.from("estudiantes").select("id, nombre, grado_id").eq("activo", true);
+  if (e2) throw e2;
+
+  const totales = {};
+  (estudiantes || []).forEach((e) => {
+    totales[e.id] = { estudianteId: e.id, nombre: e.nombre, grado: e.grado_id, P: 0, R: 0, FI: 0, FJ: 0, total: 0 };
+  });
+  (registros || []).forEach((r) => {
+    if (!totales[r.estudiante_id]) return;
+    totales[r.estudiante_id][r.codigo] = (totales[r.estudiante_id][r.codigo] || 0) + 1;
+    totales[r.estudiante_id].total += 1;
+  });
+
+  return Object.values(totales).sort((a, b) => a.grado.localeCompare(b.grado, undefined, { numeric: true }) || a.nombre.localeCompare(b.nombre));
+}
+
 export async function marcarTodosPresentes(estudianteIds, fecha, materiaId = null) {
   for (const id of estudianteIds) {
     await marcarAsistencia(id, fecha, "P", null, materiaId);
