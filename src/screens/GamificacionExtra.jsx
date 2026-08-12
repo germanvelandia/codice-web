@@ -296,11 +296,75 @@ function CosmeticoForm({ cosmetico, onCancelar, onGuardado }) {
   );
 }
 
+function DuplicadosCosmeticosModal({ onClose, onCambio }) {
+  const [grupos, setGrupos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [fusionando, setFusionando] = useState(null);
+
+  const cargar = () => { setCargando(true); api.fetchCosmeticosDuplicados().then((g) => { setGrupos(g); setCargando(false); }); };
+  useEffect(() => { cargar(); }, []);
+
+  const fusionar = async (grupo, idAConservar) => {
+    setFusionando(idAConservar);
+    try {
+      const idsAEliminar = grupo.filter((c) => c.id !== idAConservar).map((c) => c.id);
+      await api.fusionarCosmeticosDuplicados(idAConservar, idsAEliminar);
+      cargar();
+      onCambio();
+    } catch (e) {
+      alert("Error al fusionar: " + e.message);
+    }
+    setFusionando(null);
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">🧹 Cosméticos duplicados</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-500 mb-3">
+          Elegí cuál versión conservar de cada nombre repetido. Los estudiantes que ya lo tenían comprado (o equipado) pasan a
+          quedar con la que elijas — nadie pierde su compra.
+        </p>
+        {cargando ? (
+          <div className="text-sm text-slate-400">Cargando…</div>
+        ) : grupos.length === 0 ? (
+          <div className="text-sm text-slate-400 text-center py-4">No hay duplicados. 🎉</div>
+        ) : (
+          <div className="space-y-4">
+            {grupos.map((grupo, i) => (
+              <div key={i} className="border border-slate-100 rounded-xl p-3">
+                <div className="text-sm font-semibold text-slate-700 mb-2">"{grupo[0].nombre}" — {grupo.length} versiones</div>
+                <div className="space-y-1.5">
+                  {grupo.map((c) => (
+                    <div key={c.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
+                      <div className="flex items-center gap-2 text-xs text-slate-600">
+                        {c.tipo === "marco" ? <span className="w-4 h-4 rounded-full border-2 inline-block" style={{ borderColor: c.valor }} /> : <span className="font-semibold">{c.valor}</span>}
+                        <span>ID {c.id} · {c.total_poseido} estudiante(s) lo tienen</span>
+                      </div>
+                      <button disabled={fusionando !== null} onClick={() => fusionar(grupo, c.id)} className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-violet-500 text-white disabled:opacity-50">
+                        {fusionando === c.id ? "Fusionando…" : "Conservar esta"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function PanelCosmeticos() {
   const [items, setItems] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [formAbierto, setFormAbierto] = useState(false);
   const [editando, setEditando] = useState(null);
+  const [duplicadosAbierto, setDuplicadosAbierto] = useState(false);
 
   const cargar = () => { setCargando(true); api.fetchCosmeticosCatalogo().then((d) => { setItems(d); setCargando(false); }); };
   useEffect(() => { cargar(); }, []);
@@ -310,12 +374,14 @@ function PanelCosmeticos() {
 
   return (
     <div>
-      <div className="flex justify-end mb-3">
+      <div className="flex justify-end gap-2 mb-3">
+        <button onClick={() => setDuplicadosAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-amber-200 text-amber-600">🧹 Duplicados</button>
         <button onClick={() => { setEditando(null); setFormAbierto((v) => !v); }} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">
           {formAbierto ? "Cerrar" : "+ Nuevo cosmético"}
         </button>
       </div>
       {formAbierto && <CosmeticoForm cosmetico={editando} onCancelar={() => setFormAbierto(false)} onGuardado={() => { setFormAbierto(false); setEditando(null); cargar(); }} />}
+      {duplicadosAbierto && <DuplicadosCosmeticosModal onClose={() => setDuplicadosAbierto(false)} onCambio={cargar} />}
       {cargando ? (
         <div className="text-sm text-slate-400">Cargando…</div>
       ) : items.length === 0 ? (
@@ -362,4 +428,4 @@ export function VistaGamificacionExtra({ grados }) {
       {tab === "cosmeticos" && <PanelCosmeticos />}
     </div>
   );
-} 
+}
