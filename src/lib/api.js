@@ -1514,6 +1514,69 @@ export async function eliminarAnuncio(id) {
   if (error) throw error;
 }
 
+/* ---------------- Insignias / logros automáticos ---------------- */
+export async function fetchLogrosCatalogo() {
+  const { data, error } = await supabase.from("logros_catalogo").select("*").order("tipo").order("umbral");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearLogro(campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("logros_catalogo").insert({ ...campos, docente_id: userData?.user?.id || null });
+  if (error) throw error;
+}
+
+export async function editarLogro(id, cambios) {
+  const { error } = await supabase.from("logros_catalogo").update(cambios).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarLogro(id) {
+  const { error } = await supabase.from("logros_catalogo").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function fetchLogrosEstudiante(estudianteId) {
+  const { data, error } = await supabase.from("estudiante_logros").select("*, logros_catalogo(*)").eq("estudiante_id", estudianteId);
+  if (error) throw error;
+  return data || [];
+}
+
+// Revisa los hitos actuales del estudiante contra el catálogo activo y
+// desbloquea automáticamente los que ya cumple y todavía no tenía.
+// Devuelve los logros NUEVOS desbloqueados en esta pasada (para festejarlos).
+export async function verificarYOtorgarLogros(estudianteId) {
+  const [catalogo, yaDesbloqueados, progreso, coleccion, catalogoCriaturas, entradas, intentos, asistencia] = await Promise.all([
+    fetchLogrosCatalogo(),
+    supabase.from("estudiante_logros").select("logro_id").eq("estudiante_id", estudianteId).then((r) => (r.data || []).map((x) => x.logro_id)),
+    supabase.from("progreso").select("xp, monedas").eq("estudiante_id", estudianteId).maybeSingle().then((r) => r.data || { xp: 0, monedas: 0 }),
+    supabase.from("estudiante_criaturas").select("criatura_id").eq("estudiante_id", estudianteId).then((r) => r.data || []),
+    supabase.from("criaturas").select("id").eq("activo", true).then((r) => r.data || []),
+    supabase.from("codice_entradas").select("id", { count: "exact", head: true }).eq("estudiante_id", estudianteId).then((r) => r.count || 0),
+    supabase.from("evaluacion_intentos").select("id", { count: "exact", head: true }).eq("estudiante_id", estudianteId).neq("estado", "en_progreso").then((r) => r.count || 0),
+    supabase.from("asistencia").select("id", { count: "exact", head: true }).eq("estudiante_id", estudianteId).eq("estado", "presente").then((r) => r.count || 0),
+  ]);
+
+  const cumple = (logro) => {
+    switch (logro.tipo) {
+      case "nivel_xp": return progreso.xp >= logro.umbral;
+      case "monedas": return progreso.monedas >= logro.umbral;
+      case "coleccion_completa": return catalogoCriaturas.length > 0 && coleccion.length >= catalogoCriaturas.length;
+      case "codice_entradas": return entradas >= logro.umbral;
+      case "evaluaciones_completadas": return intentos >= logro.umbral;
+      case "asistencia_presentes": return asistencia >= logro.umbral;
+      default: return false;
+    }
+  };
+
+  const nuevos = catalogo.filter((l) => l.activo && !yaDesbloqueados.includes(l.id) && cumple(l));
+  for (const logro of nuevos) {
+    await supabase.from("estudiante_logros").insert({ estudiante_id: estudianteId, logro_id: logro.id });
+  }
+  return nuevos;
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
