@@ -17,13 +17,18 @@ function hoyISO() {
 
 function TotalesPorGrado() {
   const [totales, setTotales] = useState([]);
+  const [totalesEstudiante, setTotalesEstudiante] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
+  const [detalle, setDetalle] = useState("grado"); // "grado" | "estudiante"
 
   const cargar = () => {
     setCargando(true);
-    api.fetchTotalesAsistenciaPorGrado(fechaDesde || null, fechaHasta || null).then((d) => { setTotales(d); setCargando(false); });
+    Promise.all([
+      api.fetchTotalesAsistenciaPorGrado(fechaDesde || null, fechaHasta || null),
+      api.fetchTotalesAsistenciaPorEstudiante(fechaDesde || null, fechaHasta || null),
+    ]).then(([g, e]) => { setTotales(g); setTotalesEstudiante(e); setCargando(false); });
   };
   useEffect(() => { cargar(); }, []);
 
@@ -38,32 +43,74 @@ function TotalesPorGrado() {
         {(fechaDesde || fechaHasta) && (
           <button onClick={() => { setFechaDesde(""); setFechaHasta(""); setTimeout(cargar, 0); }} className="text-xs text-slate-400">Quitar filtro de fechas</button>
         )}
+        <div className="flex gap-1 rounded-full bg-violet-50 p-1 ml-auto">
+          <button onClick={() => setDetalle("grado")} className={`text-xs px-3 py-1.5 rounded-full ${detalle === "grado" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Por grado</button>
+          <button onClick={() => setDetalle("estudiante")} className={`text-xs px-3 py-1.5 rounded-full ${detalle === "estudiante" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Por estudiante</button>
+        </div>
       </div>
 
       {cargando ? (
         <div className="text-sm text-slate-400">Cargando…</div>
-      ) : totales.length === 0 ? (
-        <div className="text-sm text-slate-400 bg-white rounded-2xl p-6 text-center border border-dashed border-slate-200">Todavía no hay registros de asistencia.</div>
+      ) : detalle === "grado" ? (
+        totales.length === 0 ? (
+          <div className="text-sm text-slate-400 bg-white rounded-2xl p-6 text-center border border-dashed border-slate-200">Todavía no hay registros de asistencia.</div>
+        ) : (
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50">
+                  <th className="text-left px-3 py-2">Grado</th>
+                  <th className="px-3 py-2">✅ Presentes</th>
+                  <th className="px-3 py-2">🟡 Retardos</th>
+                  <th className="px-3 py-2">🔴 Faltas injust.</th>
+                  <th className="px-3 py-2">🔵 Faltas justif.</th>
+                  <th className="px-3 py-2">Total registros</th>
+                  <th className="px-3 py-2">% Asistencia</th>
+                </tr>
+              </thead>
+              <tbody>
+                {totales.map((t) => {
+                  const pctAsistencia = t.total > 0 ? Math.round((t.P / t.total) * 100) : null;
+                  return (
+                    <tr key={t.grado} className="odd:bg-white even:bg-slate-50">
+                      <td className="px-3 py-2 font-semibold text-slate-700">Grado {t.grado}</td>
+                      <td className="text-center px-3 py-2 text-emerald-600 font-semibold">{t.P}</td>
+                      <td className="text-center px-3 py-2 text-amber-600 font-semibold">{t.R}</td>
+                      <td className="text-center px-3 py-2 text-rose-600 font-semibold">{t.FI}</td>
+                      <td className="text-center px-3 py-2 text-blue-600 font-semibold">{t.FJ}</td>
+                      <td className="text-center px-3 py-2 text-slate-400">{t.total}</td>
+                      <td className="text-center px-3 py-2 font-bold text-violet-600">{pctAsistencia !== null ? `${pctAsistencia}%` : "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )
+      ) : totalesEstudiante.length === 0 ? (
+        <div className="text-sm text-slate-400 bg-white rounded-2xl p-6 text-center border border-dashed border-slate-200">No hay estudiantes activos.</div>
       ) : (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50">
                 <th className="text-left px-3 py-2">Grado</th>
-                <th className="px-3 py-2">✅ Presentes</th>
-                <th className="px-3 py-2">🟡 Retardos</th>
-                <th className="px-3 py-2">🔴 Faltas injust.</th>
-                <th className="px-3 py-2">🔵 Faltas justif.</th>
-                <th className="px-3 py-2">Total registros</th>
+                <th className="text-left px-3 py-2">Estudiante</th>
+                <th className="px-3 py-2">✅ P</th>
+                <th className="px-3 py-2">🟡 R</th>
+                <th className="px-3 py-2">🔴 FI</th>
+                <th className="px-3 py-2">🔵 FJ</th>
+                <th className="px-3 py-2">Total</th>
                 <th className="px-3 py-2">% Asistencia</th>
               </tr>
             </thead>
             <tbody>
-              {totales.map((t) => {
+              {totalesEstudiante.map((t) => {
                 const pctAsistencia = t.total > 0 ? Math.round((t.P / t.total) * 100) : null;
                 return (
-                  <tr key={t.grado} className="odd:bg-white even:bg-slate-50">
-                    <td className="px-3 py-2 font-semibold text-slate-700">Grado {t.grado}</td>
+                  <tr key={t.estudianteId} className="odd:bg-white even:bg-slate-50">
+                    <td className="px-3 py-2 text-slate-400">{t.grado}</td>
+                    <td className="px-3 py-2 font-semibold text-slate-700">{t.nombre}</td>
                     <td className="text-center px-3 py-2 text-emerald-600 font-semibold">{t.P}</td>
                     <td className="text-center px-3 py-2 text-amber-600 font-semibold">{t.R}</td>
                     <td className="text-center px-3 py-2 text-rose-600 font-semibold">{t.FI}</td>
