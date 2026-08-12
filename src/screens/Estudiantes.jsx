@@ -426,20 +426,34 @@ function PiarDatosSensiblesForm({ formularioId }) {
   );
 }
 
-function EntradaCodiceDocente({ entrada }) {
+function EntradaCodiceDocente({ entrada, onCambio }) {
   const [comentarios, setComentarios] = useState([]);
   const [comentando, setComentando] = useState(false);
+  const [calificando, setCalificando] = useState(false);
+  const [notaTemp, setNotaTemp] = useState(entrada.nota ?? "");
   const [texto, setTexto] = useState("");
   const [cargando, setCargando] = useState(true);
 
   const cargar = () => api.fetchComentariosCodice(entrada.id).then((d) => { setComentarios(d); setCargando(false); });
-  useEffect(() => { cargar(); }, [entrada.id]);
+  useEffect(() => { cargar(); if (!entrada.revisado) api.marcarCodiceRevisado(entrada.id); }, [entrada.id]);
 
   const enviar = async () => {
     if (!texto.trim()) return;
     await api.crearComentarioCodice(entrada.id, texto.trim());
     setTexto(""); setComentando(false);
     cargar();
+  };
+
+  const guardarNota = async () => {
+    const valor = parseFloat(String(notaTemp).replace(",", "."));
+    if (isNaN(valor)) { alert("Escribí una nota válida."); return; }
+    try {
+      await api.calificarEntradaCodice(entrada, entrada.estudiante_id, entrada.grado_id, valor, entrada.categoria_id, null);
+      setCalificando(false);
+      onCambio && onCambio();
+    } catch (e) {
+      alert("Error al guardar: " + e.message);
+    }
   };
 
   return (
@@ -457,15 +471,26 @@ function EntradaCodiceDocente({ entrada }) {
           ))}
         </div>
       )}
-      {comentando ? (
-        <div className="flex gap-1.5">
-          <input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Escribí tu comentario…" className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-          <button onClick={enviar} className="text-xs px-2.5 py-1.5 rounded-lg bg-violet-500 text-white">Enviar</button>
-          <button onClick={() => setComentando(false)} className="text-xs text-slate-400">✕</button>
-        </div>
-      ) : (
-        <button onClick={() => setComentando(true)} className="text-[11px] text-violet-500">💬 Comentar</button>
-      )}
+      <div className="flex items-center gap-3 flex-wrap">
+        {comentando ? (
+          <div className="flex gap-1.5 flex-1 min-w-[180px]">
+            <input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Escribí tu comentario…" className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+            <button onClick={enviar} className="text-xs px-2.5 py-1.5 rounded-lg bg-violet-500 text-white">Enviar</button>
+            <button onClick={() => setComentando(false)} className="text-xs text-slate-400">✕</button>
+          </div>
+        ) : (
+          <button onClick={() => setComentando(true)} className="text-[11px] text-violet-500">💬 Comentar</button>
+        )}
+        {calificando ? (
+          <div className="flex gap-1.5 items-center">
+            <input type="text" inputMode="decimal" value={notaTemp} onChange={(e) => setNotaTemp(e.target.value)} placeholder="Nota" className="w-14 text-xs text-center rounded px-2 py-1 border border-slate-200 outline-none" />
+            <button onClick={guardarNota} className="text-xs px-2 py-1 rounded bg-violet-500 text-white">✔</button>
+            <button onClick={() => setCalificando(false)} className="text-xs text-slate-400">✕</button>
+          </div>
+        ) : (
+          <button onClick={() => setCalificando(true)} className="text-[11px] text-violet-500">{entrada.nota !== null && entrada.nota !== undefined ? `Nota: ${entrada.nota} ✏️` : "+ Poner nota"}</button>
+        )}
+      </div>
     </div>
   );
 }
@@ -474,7 +499,8 @@ function CodiceDocenteModal({ estudiante, onClose }) {
   const [entradas, setEntradas] = useState([]);
   const [cargando, setCargando] = useState(true);
 
-  useEffect(() => { api.fetchEntradasCodice(estudiante.id).then((d) => { setEntradas(d); setCargando(false); }); }, [estudiante.id]);
+  const cargar = () => api.fetchEntradasCodice(estudiante.id).then((d) => { setEntradas(d); setCargando(false); });
+  useEffect(() => { cargar(); }, [estudiante.id]);
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
@@ -489,7 +515,7 @@ function CodiceDocenteModal({ estudiante, onClose }) {
           <p className="text-sm text-slate-400 text-center py-4">Este estudiante todavía no escribió ninguna entrada.</p>
         ) : (
           <div className="space-y-2">
-            {entradas.map((e) => <EntradaCodiceDocente key={e.id} entrada={e} />)}
+            {entradas.map((e) => <EntradaCodiceDocente key={e.id} entrada={{ ...e, grado_id: estudiante.grado_id }} onCambio={cargar} />)}
           </div>
         )}
       </div>
