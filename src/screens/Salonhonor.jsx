@@ -80,4 +80,4 @@ export function VistaSalonHonor() {
       </div>
     </div>
   );
-}
+} 
