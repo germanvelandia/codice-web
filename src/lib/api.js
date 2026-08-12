@@ -1142,12 +1142,13 @@ export async function fetchResumenDocente() {
   const diaSemana = hoy.getDay();
   const fechaHoy = hoy.toISOString().slice(0, 10);
 
-  const [horarioRes, cronogramaRes, evaluacionesRes, tareasRes, dictadosRes] = await Promise.all([
+  const [horarioRes, cronogramaRes, evaluacionesRes, tareasRes, dictadosRes, codiceRes] = await Promise.all([
     supabase.from("horario").select("*, materias(nombre)").eq("docente_id", docenteId).eq("dia_semana", diaSemana).order("hora_inicio"),
     supabase.from("cronograma").select("*"),
     supabase.from("evaluaciones").select("id").eq("docente_id", docenteId).eq("estado", "publicada"),
     supabase.from("tareas_calificables").select("id").eq("docente_id", docenteId),
     supabase.from("planeacion_dictados").select("id", { count: "exact", head: true }).eq("estado", "pendiente"),
+    supabase.from("codice_entradas").select("id", { count: "exact", head: true }).eq("revisado", false),
   ]);
 
   const eventosHoy = (cronogramaRes.data || []).filter((e) => e.fecha <= fechaHoy && (!e.fecha_fin || e.fecha_fin >= fechaHoy));
@@ -1173,6 +1174,7 @@ export async function fetchResumenDocente() {
     entregasPendientes,
     tareasSinCalificar,
     clasesPendientes: dictadosRes.count || 0,
+    codiceSinRevisar: codiceRes.count || 0,
   };
 }
 
@@ -1377,6 +1379,49 @@ export async function crearComentarioCodice(entradaId, comentario) {
   const { data: userData } = await supabase.auth.getUser();
   const { error } = await supabase.from("codice_comentarios").insert({ entrada_id: entradaId, autor_id: userData?.user?.id || null, comentario });
   if (error) throw error;
+}
+
+export async function marcarCodiceRevisado(id) {
+  const { error } = await supabase.from("codice_entradas").update({ revisado: true }).eq("id", id);
+  if (error) throw error;
+}
+
+// Todas las entradas de Códice de todos los estudiantes que el docente todavía
+// no revisó, con el nombre del estudiante/grado/materia ya resueltos.
+export async function fetchEntradasCodiceSinRevisar() {
+  const [entradasRes, estudiantesRes, materiasRes] = await Promise.all([
+    supabase.from("codice_entradas").select("*").eq("revisado", false).order("creado_en", { ascending: false }),
+    supabase.from("estudiantes").select("id, nombre, grado_id"),
+    supabase.from("materias").select("id, nombre"),
+  ]);
+  if (entradasRes.error) throw entradasRes.error;
+  if (estudiantesRes.error) throw estudiantesRes.error;
+  if (materiasRes.error) throw materiasRes.error;
+  const estPorId = {}; (estudiantesRes.data || []).forEach((e) => { estPorId[e.id] = e; });
+  const matPorId = {}; (materiasRes.data || []).forEach((m) => { matPorId[m.id] = m.nombre; });
+  return (entradasRes.data || []).map((e) => ({
+    ...e,
+    estudiante_nombre: estPorId[e.estudiante_id]?.nombre || "Estudiante",
+    grado_id: estPorId[e.estudiante_id]?.grado_id,
+    materia_nombre: e.materia_id ? matPorId[e.materia_id] : null,
+  }));
+}
+
+// Le pone nota a una entrada del Códice. Si la entrada tiene materia y se le
+// pasa categoría+periodo, la nota también se manda a la Planilla de Calificaciones
+// (columna compartida "Códice — Reflexiones" en esa categoría).
+export async function calificarEntradaCodice(entrada, estudianteId, gradoId, nota, categoriaId, periodo) {
+  const { error } = await supabase.from("codice_entradas").update({ nota, categoria_id: categoriaId || null, revisado: true }).eq("id", entrada.id);
+  if (error) throw error;
+
+  if (entrada.materia_id && categoriaId && periodo) {
+    const existentes = await fetchActividades(entrada.materia_id, gradoId, periodo);
+    let actividad = existentes.find((a) => a.nombre === "Códice — Reflexiones" && a.categoria_id === categoriaId);
+    if (!actividad) {
+      actividad = await crearActividad({ nombre: "Códice — Reflexiones", categoria_id: categoriaId, materia_id: entrada.materia_id, grado_id: gradoId, periodo, es_automatica: false });
+    }
+    await setValor(actividad.id, estudianteId, nota);
+  }
 }
 
 /* ---------------- Valor de la semana ---------------- */
