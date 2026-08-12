@@ -936,7 +936,7 @@ function ValorSemanaEstudiante() {
       ) : (
         <div className="rounded-xl overflow-hidden shrink-0" style={{ width: 56, height: 56, background: "white" }}>
           {valor.imagen_url ? (
-            <img src={valor.imagen_url} alt={valor.nombre || "Valor de la semana"} className="w-full h-full object-cover" />
+            <img src={valor.imagen_url} alt={valor.nombre || "Valor de la semana"} className="w-full h-full object-contain" />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-2xl">🌟</div>
           )}
