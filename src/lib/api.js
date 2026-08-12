@@ -1829,6 +1829,29 @@ export async function fetchEquipadosEstudiante(estudianteId) {
   return { marco: data.marco_equipado_id ? porId[data.marco_equipado_id] : null, titulo: data.titulo_equipado_id ? porId[data.titulo_equipado_id] : null };
 }
 
+/* ---------------- Catálogo de acciones de gamificación (editable) ---------------- */
+export async function fetchAccionesGamificacion() {
+  const { data, error } = await supabase.from("acciones_gamificacion").select("*").order("tab").order("id");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearAccionGamificacion(campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("acciones_gamificacion").insert({ ...campos, docente_id: userData?.user?.id || null });
+  if (error) throw error;
+}
+
+export async function editarAccionGamificacion(id, cambios) {
+  const { error } = await supabase.from("acciones_gamificacion").update(cambios).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarAccionGamificacion(id) {
+  const { error } = await supabase.from("acciones_gamificacion").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
