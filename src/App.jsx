@@ -10,6 +10,7 @@ import { VistaBanco } from "./screens/Banco";
 import { VistaAlbum, CartaCriatura } from "./screens/Album";
 import { VistaAnuncios } from "./screens/Anuncios";
 import { VistaLogros } from "./screens/Logros";
+import { VistaSalonHonor } from "./screens/SalonHonor";
 import { VistaRoles } from "./screens/Roles";
 import { VistaCalificaciones } from "./screens/Calificaciones";
 import { VistaReportes } from "./screens/Reportes";
@@ -631,6 +632,68 @@ function EvaluacionesEstudiante({ estudianteId, gradoId }) {
   );
 }
 
+function SalonHonorEstudiante({ estudianteId }) {
+  const [datos, setDatos] = useState(null);
+  const [cargando, setCargando] = useState(true);
+  useEffect(() => { api.fetchSalonDeHonor().then((d) => { setDatos(d); setCargando(false); }); }, []);
+
+  if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
+
+  const medalla = (i) => i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`;
+
+  return (
+    <div>
+      <h3 className="font-bold text-slate-800 mb-1">🏆 Salón de Honor</h3>
+      <p className="text-xs text-slate-400 mb-3">Los mejores de toda la institución, cruzando todos los grados.</p>
+
+      <div className="text-xs font-semibold text-slate-600 mb-1.5">⭐ Más XP</div>
+      <div className="space-y-1.5 mb-4">
+        {datos.topXp.map((e) => (
+          <div key={e.id} className={`flex items-center justify-between px-3 py-2 rounded-xl ${e.id === estudianteId ? "bg-violet-100 border border-violet-300" : "bg-slate-50"}`}>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-sm w-6 text-center shrink-0">{medalla(datos.topXp.indexOf(e))}</span>
+              <span className={`text-xs truncate ${e.id === estudianteId ? "font-bold text-violet-700" : "text-slate-700"}`}>{e.nombre}{e.id === estudianteId ? " (vos)" : ""}</span>
+              <span className="text-[10px] text-slate-400 shrink-0">G{e.grado_id}</span>
+            </div>
+            <span className="text-xs font-semibold text-slate-500 shrink-0">{e.xp} XP</span>
+          </div>
+        ))}
+        {datos.topXp.length === 0 && <p className="text-xs text-slate-400">Todavía no hay datos.</p>}
+      </div>
+
+      <div className="text-xs font-semibold text-slate-600 mb-1.5">🏅 Más insignias</div>
+      <div className="space-y-1.5 mb-4">
+        {datos.topInsignias.map((e) => (
+          <div key={e.id} className={`flex items-center justify-between px-3 py-2 rounded-xl ${e.id === estudianteId ? "bg-violet-100 border border-violet-300" : "bg-slate-50"}`}>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-sm w-6 text-center shrink-0">{medalla(datos.topInsignias.indexOf(e))}</span>
+              <span className={`text-xs truncate ${e.id === estudianteId ? "font-bold text-violet-700" : "text-slate-700"}`}>{e.nombre}{e.id === estudianteId ? " (vos)" : ""}</span>
+              <span className="text-[10px] text-slate-400 shrink-0">G{e.grado_id}</span>
+            </div>
+            <span className="text-xs font-semibold text-amber-600 shrink-0">{e.cantidad} 🏅</span>
+          </div>
+        ))}
+        {datos.topInsignias.length === 0 && <p className="text-xs text-slate-400">Todavía nadie desbloqueó insignias.</p>}
+      </div>
+
+      <div className="text-xs font-semibold text-slate-600 mb-1.5">📜 Logros recientes</div>
+      <div className="space-y-1.5">
+        {datos.muroReciente.slice(0, 8).map((l) => (
+          <div key={l.id} className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2">
+            <span className="text-base shrink-0">{l.logro_emoji}</span>
+            <div className="text-[11px] min-w-0">
+              <span className="font-semibold text-slate-700">{l.estudiante_nombre}</span>
+              <span className="text-slate-400"> desbloqueó </span>
+              <span className="font-semibold text-violet-600">{l.logro_nombre}</span>
+            </div>
+          </div>
+        ))}
+        {datos.muroReciente.length === 0 && <p className="text-xs text-slate-400">Todavía no hay logros desbloqueados.</p>}
+      </div>
+    </div>
+  );
+}
+
 function RankingEstudiante({ estudianteId, gradoId }) {
   const [ranking, setRanking] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -783,7 +846,8 @@ const MENU_CODICE = [
   { key: "forja", label: "Forja", icono: "🔨" },
   { key: "codice", label: "Códice", icono: "📖" },
   { key: "notas", label: "Notas", icono: "📝" },
-  { key: "ranking", label: "Ranking", icono: "🏆" },
+  { key: "ranking", label: "Ranking", icono: "📊" },
+  { key: "salonhonor", label: "Salón de Honor", icono: "🏆" },
   { key: "recompensas", label: "Recompensas", icono: "🎁" },
   { key: "album", label: "Álbum", icono: "🎴" },
   { key: "perfil", label: "Perfil", icono: "👤" },
@@ -1165,6 +1229,10 @@ function PortalEstudiante() {
             <RankingEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />
           )}
 
+          {vista === "salonhonor" && estudianteInfo && (
+            <SalonHonorEstudiante estudianteId={estudianteInfo.id} />
+          )}
+
           {vista === "perfil" && estudianteInfo && (
             <div>
               <h3 className="font-bold text-slate-800 mb-3">👤 Mi perfil</h3>
@@ -1451,6 +1519,7 @@ function Panel({ session }) {
               <button onClick={() => setSubTabHerramientas("album")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "album" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Álbum</button>
               <button onClick={() => setSubTabHerramientas("anuncios")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "anuncios" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Anuncios</button>
               <button onClick={() => setSubTabHerramientas("logros")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "logros" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Logros</button>
+              <button onClick={() => setSubTabHerramientas("salonhonor")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "salonhonor" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Salón de Honor</button>
               <button onClick={() => setSubTabHerramientas("temporizador")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "temporizador" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Temporizador</button>
               <button onClick={() => setSubTabHerramientas("otras")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "otras" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Otras herramientas</button>
             </div>
@@ -1460,6 +1529,7 @@ function Panel({ session }) {
             {subTabHerramientas === "album" && <VistaAlbum />}
             {subTabHerramientas === "anuncios" && <VistaAnuncios grados={grados} />}
             {subTabHerramientas === "logros" && <VistaLogros />}
+            {subTabHerramientas === "salonhonor" && <VistaSalonHonor />}
             {subTabHerramientas === "temporizador" && <VistaTemporizador />}
             {subTabHerramientas === "otras" && <VistaHerramientas grados={grados} />}
           </>
