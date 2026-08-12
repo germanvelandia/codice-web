@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabaseClient";
-import { ACCIONES_RAPIDAS, ACADEMICO_POS, ACADEMICO_NEG, PILARES, CONVIVENCIAL_POS_EXTRA, CONVIVENCIAL_NEG, initials, nextLevel, reinoColor, reinoInfo, sugerirApellidos, colorGrado, REINO_COLORS, buscarEstudiantePorNombre } from "../lib/gamification";
+import { initials, nextLevel, reinoColor, reinoInfo, sugerirApellidos, colorGrado, REINO_COLORS, buscarEstudiantePorNombre } from "../lib/gamification";
 
 // (REINO_COLORS ahora se importa directo desde gamification.js, ver arriba)
 import * as api from "../lib/api";
@@ -32,15 +32,67 @@ function VidaBar({ vida }) {
   );
 }
 
+function AccionGamificacionForm({ tab, accion, onCancelar, onGuardado }) {
+  const [label, setLabel] = useState(accion?.label || "");
+  const [xp, setXp] = useState(accion?.xp ?? 10);
+  const [vida, setVida] = useState(accion?.vida ?? 2);
+  const [guardando, setGuardando] = useState(false);
+
+  const guardar = async () => {
+    if (!label.trim()) { alert("Escribe un nombre."); return; }
+    setGuardando(true);
+    try {
+      const campos = { label: label.trim(), xp: parseInt(xp, 10) || 0, vida: parseInt(vida, 10) || 0 };
+      if (accion) await api.editarAccionGamificacion(accion.id, campos);
+      else await api.crearAccionGamificacion({ ...campos, tab, activo: true });
+      onGuardado();
+    } catch (e) {
+      alert("Error al guardar: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  return (
+    <div className="bg-violet-50 rounded-xl p-3 mb-2">
+      <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Nombre de la acción"
+        className="w-full text-xs rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none bg-white" />
+      <div className="grid grid-cols-2 gap-2 mb-2">
+        <div>
+          <label className="text-[10px] text-slate-500 block mb-0.5">XP (puede ser negativo)</label>
+          <input type="number" value={xp} onChange={(e) => setXp(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
+        </div>
+        <div>
+          <label className="text-[10px] text-slate-500 block mb-0.5">Vida (puede ser negativa)</label>
+          <input type="number" value={vida} onChange={(e) => setVida(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
+        </div>
+      </div>
+      <div className="flex justify-end gap-2">
+        <button onClick={onCancelar} className="text-xs text-slate-500 px-2 py-1">Cancelar</button>
+        <button disabled={guardando} onClick={guardar} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+          {guardando ? "Guardando…" : accion ? "Guardar cambios" : "Agregar"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function QuickGamify({ estudiante, onAplicado }) {
   const [abierto, setAbierto] = useState(false);
   const [tab, setTab] = useState("rapido");
   const [cargando, setCargando] = useState(false);
+  const [catalogo, setCatalogo] = useState([]);
+  const [cargandoCatalogo, setCargandoCatalogo] = useState(true);
+  const [gestionando, setGestionando] = useState(false);
+  const [formAbierto, setFormAbierto] = useState(false);
+  const [editando, setEditando] = useState(null);
+
+  const cargarCatalogo = () => api.fetchAccionesGamificacion().then((d) => { setCatalogo(d); setCargandoCatalogo(false); });
+  useEffect(() => { if (abierto) cargarCatalogo(); }, [abierto]);
 
   const aplicar = async (accion) => {
     setCargando(true);
     try {
-      const nuevo = await api.registrarAccion(estudiante.id, accion);
+      const nuevo = await api.registrarAccion(estudiante.id, { label: accion.label, xp: accion.xp, vida: accion.vida, categoria: accion.tab.startsWith("academico") ? "academico" : accion.tab === "pilares" ? "pilares" : accion.tab.startsWith("conviv") ? "convivencial" : "general" });
       onAplicado(estudiante.id, nuevo);
       setAbierto(false);
     } catch (e) {
@@ -58,15 +110,8 @@ function QuickGamify({ estudiante, onAplicado }) {
     { key: "conviv_neg", label: "Convivencial −" },
   ];
 
-  const listaActual = () => {
-    if (tab === "rapido") return ACCIONES_RAPIDAS.map((a) => ({ label: a.label, xp: a.xp, vida: a.vida, categoria: a.categoria }));
-    if (tab === "academico_pos") return ACADEMICO_POS.map((a) => ({ ...a, categoria: "academico" }));
-    if (tab === "academico_neg") return ACADEMICO_NEG.map((a) => ({ ...a, categoria: "academico" }));
-    if (tab === "pilares") return PILARES.map((a) => ({ ...a, categoria: a.key }));
-    if (tab === "conviv_pos") return CONVIVENCIAL_POS_EXTRA.map((a) => ({ ...a, categoria: "convivencial" }));
-    if (tab === "conviv_neg") return CONVIVENCIAL_NEG.map((a) => ({ ...a, categoria: "convivencial" }));
-    return [];
-  };
+  const listaActual = catalogo.filter((a) => a.tab === tab && a.activo);
+  const eliminar = async (a) => { if (!confirm(`¿Eliminar "${a.label}" del catálogo?`)) return; await api.eliminarAccionGamificacion(a.id); cargarCatalogo(); };
 
   return (
     <>
@@ -78,24 +123,55 @@ function QuickGamify({ estudiante, onAplicado }) {
           <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl shadow-xl p-4 w-full max-w-lg max-h-[80vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-3">
               <h3 className="font-bold text-slate-800">Gamificación — {estudiante.nombre}</h3>
-              <button onClick={() => setAbierto(false)} className="text-slate-400">✕</button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => { setGestionando((v) => !v); setFormAbierto(false); }} className="text-xs text-slate-400 hover:text-violet-600">{gestionando ? "✕ Salir" : "⚙️ Gestionar"}</button>
+                <button onClick={() => setAbierto(false)} className="text-slate-400">✕</button>
+              </div>
             </div>
             <div className="flex gap-1 mb-3 flex-wrap">
               {TABS.map((t) => (
-                <button key={t.key} onClick={() => setTab(t.key)}
+                <button key={t.key} onClick={() => { setTab(t.key); setFormAbierto(false); }}
                   className={`text-xs px-2.5 py-1.5 rounded-full ${tab === t.key ? "bg-violet-500 text-white" : "bg-violet-50 text-violet-600"}`}>
                   {t.label}
                 </button>
               ))}
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              {listaActual().map((a, i) => (
-                <button key={i} disabled={cargando} onClick={() => aplicar(a)}
-                  className={`text-xs text-left px-2.5 py-2 rounded-xl ${a.xp >= 0 ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "bg-rose-50 text-rose-700 hover:bg-rose-100"}`}>
-                  {a.label}<div className="text-[10px] opacity-70">{a.xp > 0 ? "+" : ""}{a.xp} XP</div>
-                </button>
-              ))}
-            </div>
+
+            {gestionando && (
+              <div className="mb-3">
+                {formAbierto ? (
+                  <AccionGamificacionForm tab={tab} accion={editando} onCancelar={() => setFormAbierto(false)} onGuardado={() => { setFormAbierto(false); setEditando(null); cargarCatalogo(); }} />
+                ) : (
+                  <button onClick={() => { setEditando(null); setFormAbierto(true); }} className="text-xs font-semibold text-violet-500 mb-2">+ Agregar acción a "{TABS.find((t) => t.key === tab)?.label}"</button>
+                )}
+              </div>
+            )}
+
+            {cargandoCatalogo ? (
+              <div className="text-xs text-slate-400">Cargando…</div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {listaActual.map((a) => (
+                  gestionando ? (
+                    <div key={a.id} className={`text-xs text-left px-2.5 py-2 rounded-xl flex items-center justify-between ${a.xp >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
+                      <div>
+                        {a.label}<div className="text-[10px] opacity-70">{a.xp > 0 ? "+" : ""}{a.xp} XP</div>
+                      </div>
+                      <div className="flex gap-1 shrink-0 ml-1">
+                        <button onClick={() => { setEditando(a); setFormAbierto(true); }} className="opacity-60 hover:opacity-100">✏️</button>
+                        <button onClick={() => eliminar(a)} className="opacity-60 hover:opacity-100">🗑</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button key={a.id} disabled={cargando} onClick={() => aplicar(a)}
+                      className={`text-xs text-left px-2.5 py-2 rounded-xl ${a.xp >= 0 ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "bg-rose-50 text-rose-700 hover:bg-rose-100"}`}>
+                      {a.label}<div className="text-[10px] opacity-70">{a.xp > 0 ? "+" : ""}{a.xp} XP</div>
+                    </button>
+                  )
+                ))}
+                {listaActual.length === 0 && <p className="text-xs text-slate-400 col-span-2">Todavía no hay acciones en esta pestaña.</p>}
+              </div>
+            )}
           </div>
         </div>
       )}
