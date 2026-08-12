@@ -8,6 +8,7 @@ import { VistaAsistencia } from "./screens/Asistencia";
 import { VistaRuleta, VistaRuletaMonedas, VistaTemporizador, VistaHerramientas } from "./screens/Herramientas";
 import { VistaBanco } from "./screens/Banco";
 import { VistaAlbum, CartaCriatura } from "./screens/Album";
+import { VistaAnuncios } from "./screens/Anuncios";
 import { VistaRoles } from "./screens/Roles";
 import { VistaCalificaciones } from "./screens/Calificaciones";
 import { VistaReportes } from "./screens/Reportes";
@@ -951,6 +952,40 @@ function ValorSemanaEstudiante() {
   );
 }
 
+function AnunciosEstudiante({ gradoId }) {
+  const [anuncios, setAnuncios] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  useEffect(() => { api.fetchAnunciosParaGrado(gradoId).then((d) => { setAnuncios(d); setCargando(false); }); }, [gradoId]);
+
+  if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
+  if (anuncios.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-3xl mb-2">✉️</div>
+        <p className="text-sm text-slate-400">No hay anuncios por ahora.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h3 className="font-bold text-slate-800 mb-3">✉️ Mensajes</h3>
+      <div className="space-y-2">
+        {anuncios.map((a) => (
+          <div key={a.id} className={`bg-white rounded-xl p-3.5 shadow-sm ${a.fijado ? "border-l-4 border-amber-400" : "border-l-4 border-violet-300"}`}>
+            <div className="flex items-center gap-1.5">
+              {a.fijado && <span className="text-xs">📌</span>}
+              <div className="text-sm font-bold text-slate-800">{a.titulo}</div>
+            </div>
+            <p className="text-xs text-slate-600 mt-1 whitespace-pre-line leading-relaxed">{a.contenido}</p>
+            <p className="text-[10px] text-slate-400 mt-2">{new Date(a.creado_en).toLocaleDateString("es-CO", { day: "numeric", month: "long" })}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function PortalEstudiante() {
   const [codigo, setCodigo] = useState("");
   const [datos, setDatos] = useState(null);
@@ -1071,8 +1106,8 @@ function PortalEstudiante() {
             </div>
           )}
 
-          {vista === "mensajes" && (
-            <ProximamentePanel nombre="Mensajes" />
+          {vista === "mensajes" && estudianteInfo && (
+            <AnunciosEstudiante gradoId={estudianteInfo.grado_id} />
           )}
 
           <button onClick={() => { setDatos(null); setCodigo(""); setEstudianteInfo(null); setVista("inicio"); }} className="w-full text-xs text-violet-500 mt-4">← Consultar otro código</button>
@@ -1341,6 +1376,7 @@ function Panel({ session }) {
               <button onClick={() => setSubTabHerramientas("ruletamonedas")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "ruletamonedas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Ruleta de Monedas</button>
               <button onClick={() => setSubTabHerramientas("banco")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "banco" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Banco</button>
               <button onClick={() => setSubTabHerramientas("album")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "album" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Álbum</button>
+              <button onClick={() => setSubTabHerramientas("anuncios")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "anuncios" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Anuncios</button>
               <button onClick={() => setSubTabHerramientas("temporizador")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "temporizador" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Temporizador</button>
               <button onClick={() => setSubTabHerramientas("otras")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "otras" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Otras herramientas</button>
             </div>
@@ -1348,6 +1384,7 @@ function Panel({ session }) {
             {subTabHerramientas === "ruletamonedas" && <VistaRuletaMonedas grados={grados} />}
             {subTabHerramientas === "banco" && <VistaBanco />}
             {subTabHerramientas === "album" && <VistaAlbum />}
+            {subTabHerramientas === "anuncios" && <VistaAnuncios grados={grados} />}
             {subTabHerramientas === "temporizador" && <VistaTemporizador />}
             {subTabHerramientas === "otras" && <VistaHerramientas grados={grados} />}
           </>
