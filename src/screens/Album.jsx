@@ -171,6 +171,69 @@ export function CartaCriatura({ criatura, revelada = true, tamano = "normal" }) 
   );
 }
 
+function DuplicadosModal({ onClose, onCambio }) {
+  const [grupos, setGrupos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [fusionando, setFusionando] = useState(null);
+
+  const cargar = () => { setCargando(true); api.fetchCriaturasDuplicadas().then((g) => { setGrupos(g); setCargando(false); }); };
+  useEffect(() => { cargar(); }, []);
+
+  const fusionar = async (grupo, idAConservar) => {
+    setFusionando(idAConservar);
+    try {
+      const idsAEliminar = grupo.filter((c) => c.id !== idAConservar).map((c) => c.id);
+      await api.fusionarCriaturasDuplicadas(idAConservar, idsAEliminar);
+      cargar();
+      onCambio();
+    } catch (e) {
+      alert("Error al fusionar: " + e.message);
+    }
+    setFusionando(null);
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">🧹 Criaturas duplicadas</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-500 mb-3">
+          Elegí cuál versión querés conservar de cada nombre repetido. Las colecciones de los estudiantes que tenían la otra se
+          suman a la que elijas — nadie pierde lo que ya coleccionó.
+        </p>
+        {cargando ? (
+          <div className="text-sm text-slate-400">Cargando…</div>
+        ) : grupos.length === 0 ? (
+          <div className="text-sm text-slate-400 text-center py-4">No hay duplicados. 🎉</div>
+        ) : (
+          <div className="space-y-4">
+            {grupos.map((grupo, i) => (
+              <div key={i} className="border border-slate-100 rounded-xl p-3">
+                <div className="text-sm font-semibold text-slate-700 mb-2">"{grupo[0].nombre}" — {grupo.length} versiones</div>
+                <div className="space-y-1.5">
+                  {grupo.map((c) => (
+                    <div key={c.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
+                      <div className="flex items-center gap-2 text-xs text-slate-600">
+                        <span className="text-lg">{c.emoji}</span>
+                        <span>ID {c.id} · {c.total_coleccionado} estudiante(s) la tienen</span>
+                      </div>
+                      <button disabled={fusionando !== null} onClick={() => fusionar(grupo, c.id)} className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-violet-500 text-white disabled:opacity-50">
+                        {fusionando === c.id ? "Fusionando…" : "Conservar esta"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function VistaAlbum() {
   const [criaturas, setCriaturas] = useState([]);
   const [config, setConfig] = useState({ costo_sobre: 15, cartas_por_sobre: 3, nombre_album: "" });
@@ -178,6 +241,7 @@ export function VistaAlbum() {
   const [formAbierto, setFormAbierto] = useState(false);
   const [editando, setEditando] = useState(null);
   const [configAbierta, setConfigAbierta] = useState(false);
+  const [duplicadosAbierto, setDuplicadosAbierto] = useState(false);
   const [guardandoConfig, setGuardandoConfig] = useState(false);
 
   const cargar = () => {
@@ -214,6 +278,7 @@ export function VistaAlbum() {
         </div>
         <div className="flex gap-2">
           <button onClick={() => setConfigAbierta(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">⚙️ Configurar sobre</button>
+          <button onClick={() => setDuplicadosAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-amber-200 text-amber-600">🧹 Duplicados</button>
           <button onClick={() => { setEditando(null); setFormAbierto((v) => !v); }} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">
             {formAbierto ? "Cerrar" : "+ Nueva criatura"}
           </button>
@@ -269,6 +334,7 @@ export function VistaAlbum() {
           ))}
         </div>
       )}
+      {duplicadosAbierto && <DuplicadosModal onClose={() => setDuplicadosAbierto(false)} onCambio={cargar} />}
     </div>
   );
 }
