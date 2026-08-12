@@ -146,7 +146,7 @@ export async function consultarPortalEstudiante(codigo) {
 
 // Usado por el flujo de evaluaciones para saber el id/grado del estudiante a partir de su código
 export async function fetchEstudiantePorCodigo(codigo) {
-  const { data, error } = await supabase.from("estudiantes").select("id, nombre, grado_id").eq("codigo_acceso", codigo.trim().toUpperCase()).maybeSingle();
+  const { data, error } = await supabase.from("estudiantes").select("id, nombre, grado_id, reino_actual, reino_original").eq("codigo_acceso", codigo.trim().toUpperCase()).maybeSingle();
   if (error) throw error;
   return data;
 }
@@ -1622,6 +1622,192 @@ export async function fetchSalonDeHonor() {
   }));
 
   return { topXp, topInsignias, muroReciente };
+}
+
+/* ---------------- Desafíos de equipo (Reinos) ---------------- */
+export async function crearDesafioReino(campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data: desafio, error } = await supabase.from("desafios_reino").insert({ ...campos, docente_id: userData?.user?.id || null }).select().single();
+  if (error) throw error;
+
+  // Toma una "foto" del xp/monedas actual de cada estudiante del grado, para
+  // medir después cuánto sumó cada uno DESDE que arrancó el desafío.
+  const estudiantes = await fetchEstudiantesPorGrado(campos.grado_id);
+  const { data: progresos } = await supabase.from("progreso").select("estudiante_id, xp, monedas").in("estudiante_id", estudiantes.map((e) => e.id));
+  const progPorId = {}; (progresos || []).forEach((p) => { progPorId[p.estudiante_id] = p; });
+  const filas = estudiantes.map((e) => ({
+    desafio_id: desafio.id, estudiante_id: e.id,
+    valor_inicial: campos.tipo === "monedas" ? (progPorId[e.id]?.monedas || 0) : (progPorId[e.id]?.xp || 0),
+  }));
+  if (filas.length > 0) await supabase.from("desafio_snapshots").insert(filas);
+  return desafio;
+}
+
+export async function fetchDesafiosReino(gradoId) {
+  const { data, error } = await supabase.from("desafios_reino").select("*").eq("grado_id", gradoId).order("creado_en", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function eliminarDesafioReino(id) {
+  const { error } = await supabase.from("desafios_reino").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// Progreso actual del desafío, agrupado por reino
+export async function fetchProgresoDesafio(desafio) {
+  const [snapshotsRes, estudiantesRes] = await Promise.all([
+    supabase.from("desafio_snapshots").select("*").eq("desafio_id", desafio.id),
+    fetchEstudiantesPorGrado(desafio.grado_id),
+  ]);
+  if (snapshotsRes.error) throw snapshotsRes.error;
+  const snapshots = snapshotsRes.data || [];
+  const estudiantes = estudiantesRes || [];
+  const estudianteIds = estudiantes.map((e) => e.id);
+  const { data: progresos } = await supabase.from("progreso").select("estudiante_id, xp, monedas").in("estudiante_id", estudianteIds);
+  const progPorId = {}; (progresos || []).forEach((p) => { progPorId[p.estudiante_id] = p; });
+  const estPorId = {}; estudiantes.forEach((e) => { estPorId[e.id] = e; });
+
+  const porReino = {};
+  snapshots.forEach((s) => {
+    const est = estPorId[s.estudiante_id];
+    if (!est) return;
+    const reino = est.reino_actual || est.reino_original || "Sin grupo";
+    const actual = campos_tipo_valor(progPorId[s.estudiante_id], desafio.tipo);
+    const delta = Math.max(0, actual - s.valor_inicial);
+    porReino[reino] = (porReino[reino] || 0) + delta;
+  });
+
+  return Object.entries(porReino).map(([reino, total]) => ({ reino, total, pct: Math.min(100, Math.round((total / desafio.meta) * 100)) })).sort((a, b) => b.total - a.total);
+}
+
+function campos_tipo_valor(prog, tipo) {
+  if (!prog) return 0;
+  return tipo === "monedas" ? (prog.monedas || 0) : (prog.xp || 0);
+}
+
+/* ---------------- Misiones diarias/semanales ---------------- */
+function claveDePeriodo(tipo) {
+  const hoy = new Date();
+  if (tipo === "diaria") return hoy.toISOString().slice(0, 10);
+  // Clave de semana ISO simplificada: año + número de semana
+  const inicioAno = new Date(hoy.getFullYear(), 0, 1);
+  const semana = Math.ceil((((hoy - inicioAno) / 86400000) + inicioAno.getDay() + 1) / 7);
+  return `${hoy.getFullYear()}-W${semana}`;
+}
+
+export async function fetchMicroMisiones() {
+  const { data, error } = await supabase.from("micro_misiones").select("*").order("tipo").order("creado_en");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearMicroMision(campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("micro_misiones").insert({ ...campos, docente_id: userData?.user?.id || null });
+  if (error) throw error;
+}
+
+export async function editarMicroMision(id, cambios) {
+  const { error } = await supabase.from("micro_misiones").update(cambios).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarMicroMision(id) {
+  const { error } = await supabase.from("micro_misiones").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// Misiones activas + si el estudiante ya la completó en el periodo actual
+export async function fetchMicroMisionesEstudiante(estudianteId) {
+  const [misionesRes, completadasRes] = await Promise.all([
+    supabase.from("micro_misiones").select("*").eq("activo", true),
+    supabase.from("micro_mision_completadas").select("*").eq("estudiante_id", estudianteId),
+  ]);
+  if (misionesRes.error) throw misionesRes.error;
+  if (completadasRes.error) throw completadasRes.error;
+  return (misionesRes.data || []).map((m) => {
+    const clave = claveDePeriodo(m.tipo);
+    const completada = (completadasRes.data || []).some((c) => c.mision_id === m.id && c.periodo_clave === clave);
+    return { ...m, completada };
+  });
+}
+
+export async function completarMicroMision(mision, estudianteId) {
+  const clave = claveDePeriodo(mision.tipo);
+  const { error } = await supabase.from("micro_mision_completadas").insert({ mision_id: mision.id, estudiante_id: estudianteId, periodo_clave: clave });
+  if (error) {
+    if (error.code === "23505") throw new Error("Ya la completaste en este periodo.");
+    throw error;
+  }
+  if (mision.recompensa_monedas) await ajustarMonedas(estudianteId, mision.recompensa_monedas);
+  if (mision.recompensa_xp) await ajustarXp(estudianteId, mision.recompensa_xp);
+}
+
+export async function ajustarXp(estudianteId, delta) {
+  const { data: actual } = await supabase.from("progreso").select("*").eq("estudiante_id", estudianteId).maybeSingle();
+  const nuevoXp = Math.max(0, (actual?.xp || 0) + delta);
+  const { error } = await supabase.from("progreso").upsert({ estudiante_id: estudianteId, xp: nuevoXp, vida: actual?.vida ?? 100, monedas: actual?.monedas || 0 });
+  if (error) throw error;
+  return nuevoXp;
+}
+
+/* ---------------- Personalización cosmética ---------------- */
+export async function fetchCosmeticosCatalogo() {
+  const { data, error } = await supabase.from("cosmeticos_catalogo").select("*").order("tipo").order("costo_monedas");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearCosmetico(campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("cosmeticos_catalogo").insert({ ...campos, docente_id: userData?.user?.id || null });
+  if (error) throw error;
+}
+
+export async function editarCosmetico(id, cambios) {
+  const { error } = await supabase.from("cosmeticos_catalogo").update(cambios).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarCosmetico(id) {
+  const { error } = await supabase.from("cosmeticos_catalogo").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function fetchCosmeticosEstudiante(estudianteId) {
+  const { data, error } = await supabase.from("estudiante_cosmeticos").select("*, cosmeticos_catalogo(*)").eq("estudiante_id", estudianteId);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function comprarCosmetico(estudianteId, cosmetico) {
+  const { data: prog } = await supabase.from("progreso").select("monedas").eq("estudiante_id", estudianteId).maybeSingle();
+  if ((prog?.monedas || 0) < cosmetico.costo_monedas) throw new Error("No te alcanzan las monedas.");
+  const { error } = await supabase.from("estudiante_cosmeticos").insert({ estudiante_id: estudianteId, cosmetico_id: cosmetico.id });
+  if (error) { if (error.code === "23505") throw new Error("Ya lo tenés."); throw error; }
+  await ajustarMonedas(estudianteId, -cosmetico.costo_monedas);
+}
+
+export async function equiparCosmetico(estudianteId, tipo, cosmeticoId) {
+  const campo = tipo === "marco" ? "marco_equipado_id" : "titulo_equipado_id";
+  const { data: actual } = await supabase.from("progreso").select("*").eq("estudiante_id", estudianteId).maybeSingle();
+  const { error } = await supabase.from("progreso").upsert({
+    estudiante_id: estudianteId, xp: actual?.xp || 0, vida: actual?.vida ?? 100, monedas: actual?.monedas || 0,
+    marco_equipado_id: actual?.marco_equipado_id, titulo_equipado_id: actual?.titulo_equipado_id,
+    [campo]: cosmeticoId,
+  });
+  if (error) throw error;
+}
+
+export async function fetchEquipadosEstudiante(estudianteId) {
+  const { data, error } = await supabase.from("progreso").select("marco_equipado_id, titulo_equipado_id").eq("estudiante_id", estudianteId).maybeSingle();
+  if (error) throw error;
+  if (!data || (!data.marco_equipado_id && !data.titulo_equipado_id)) return { marco: null, titulo: null };
+  const ids = [data.marco_equipado_id, data.titulo_equipado_id].filter(Boolean);
+  const { data: cosmeticos } = await supabase.from("cosmeticos_catalogo").select("*").in("id", ids);
+  const porId = {}; (cosmeticos || []).forEach((c) => { porId[c.id] = c; });
+  return { marco: data.marco_equipado_id ? porId[data.marco_equipado_id] : null, titulo: data.titulo_equipado_id ? porId[data.titulo_equipado_id] : null };
 }
 
 export async function fetchInstitucion() {
