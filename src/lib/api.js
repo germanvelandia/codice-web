@@ -2295,6 +2295,31 @@ export async function quitarAsistencia(estudianteId, fecha, materiaId = null) {
   }
 }
 
+// Totales de asistencia agrupados por grado (para comparar entre cursos de
+// un vistazo), opcionalmente acotado a un rango de fechas.
+export async function fetchTotalesAsistenciaPorGrado(fechaDesde, fechaHasta) {
+  let query = supabase.from("asistencia").select("estudiante_id, codigo");
+  if (fechaDesde) query = query.gte("fecha", fechaDesde);
+  if (fechaHasta) query = query.lte("fecha", fechaHasta);
+  const { data: registros, error } = await query;
+  if (error) throw error;
+
+  const { data: estudiantes, error: e2 } = await supabase.from("estudiantes").select("id, grado_id");
+  if (e2) throw e2;
+  const gradoPorEstudiante = {}; (estudiantes || []).forEach((e) => { gradoPorEstudiante[e.id] = e.grado_id; });
+
+  const totales = {};
+  (registros || []).forEach((r) => {
+    const grado = gradoPorEstudiante[r.estudiante_id];
+    if (!grado) return;
+    totales[grado] = totales[grado] || { grado, P: 0, R: 0, FI: 0, FJ: 0, total: 0 };
+    totales[grado][r.codigo] = (totales[grado][r.codigo] || 0) + 1;
+    totales[grado].total += 1;
+  });
+
+  return Object.values(totales).sort((a, b) => a.grado.localeCompare(b.grado, undefined, { numeric: true }));
+}
+
 export async function marcarTodosPresentes(estudianteIds, fecha, materiaId = null) {
   for (const id of estudianteIds) {
     await marcarAsistencia(id, fecha, "P", null, materiaId);
