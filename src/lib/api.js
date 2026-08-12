@@ -1284,6 +1284,49 @@ export async function eliminarCriatura(id) {
   if (error) throw error;
 }
 
+// Agrupa las criaturas por nombre (sin importar mayúsculas/espacios) y devuelve
+// solo los grupos que tienen más de una — para poder limpiarlos.
+export async function fetchCriaturasDuplicadas() {
+  const [criaturasRes, coleccionesRes] = await Promise.all([
+    supabase.from("criaturas").select("*"),
+    supabase.from("estudiante_criaturas").select("criatura_id, cantidad"),
+  ]);
+  if (criaturasRes.error) throw criaturasRes.error;
+  if (coleccionesRes.error) throw coleccionesRes.error;
+
+  const totalPorCriatura = {};
+  (coleccionesRes.data || []).forEach((c) => {
+    totalPorCriatura[c.criatura_id] = (totalPorCriatura[c.criatura_id] || 0) + c.cantidad;
+  });
+
+  const grupos = {};
+  (criaturasRes.data || []).forEach((c) => {
+    const clave = c.nombre.trim().toLowerCase();
+    grupos[clave] = grupos[clave] || [];
+    grupos[clave].push({ ...c, total_coleccionado: totalPorCriatura[c.id] || 0 });
+  });
+
+  return Object.values(grupos).filter((g) => g.length > 1);
+}
+
+// Fusiona duplicados: se queda con "idAConservar" y transfiere las colecciones
+// de los estudiantes que tenían las otras (sumando cantidades), antes de
+// borrarlas — así ningún estudiante pierde lo que ya coleccionó.
+export async function fusionarCriaturasDuplicadas(idAConservar, idsAEliminar) {
+  for (const idEliminar of idsAEliminar) {
+    const { data: colecciones } = await supabase.from("estudiante_criaturas").select("*").eq("criatura_id", idEliminar);
+    for (const col of colecciones || []) {
+      const { data: existente } = await supabase.from("estudiante_criaturas").select("*").eq("estudiante_id", col.estudiante_id).eq("criatura_id", idAConservar).maybeSingle();
+      if (existente) {
+        await supabase.from("estudiante_criaturas").update({ cantidad: existente.cantidad + col.cantidad }).eq("id", existente.id);
+      } else {
+        await supabase.from("estudiante_criaturas").insert({ estudiante_id: col.estudiante_id, criatura_id: idAConservar, cantidad: col.cantidad });
+      }
+    }
+    await supabase.from("criaturas").delete().eq("id", idEliminar);
+  }
+}
+
 export async function fetchAlbumConfig() {
   const { data, error } = await supabase.from("album_config").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
