@@ -108,6 +108,7 @@ function QuickGamify({ estudiante, onAplicado }) {
     { key: "pilares", label: "Pilares" },
     { key: "conviv_pos", label: "Convivencial +" },
     { key: "conviv_neg", label: "Convivencial −" },
+    { key: "asistencia", label: "Asistencia" },
   ];
 
   const listaActual = catalogo.filter((a) => a.tab === tab && a.activo);
