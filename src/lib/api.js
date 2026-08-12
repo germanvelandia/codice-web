@@ -521,6 +521,25 @@ export async function fetchTodasLasClases(materiaId, gradoId, periodo) {
   return { clases, unidades };
 }
 
+// Crea una unidad y, adentro, todas las clases que vengan en la lista —
+// usado por el importador de planes generados externamente con IA.
+export async function crearUnidadConClases(datosUnidad, clases) {
+  const unidad = await crearPlaneacion({ tipo: "unidad", ...datosUnidad });
+  for (let i = 0; i < clases.length; i++) {
+    const c = clases[i];
+    await crearPlaneacion({
+      tipo: "clase", unidad_id: unidad.id, orden: i,
+      titulo: c.titulo || `Clase ${i + 1}`,
+      duracion_minutos: c.duracion_minutos || null,
+      momento_inicio: c.momento_inicio || null,
+      momento_desarrollo: c.momento_desarrollo || null,
+      momento_cierre: c.momento_cierre || null,
+      indicador_desempeno: c.indicador_desempeno || null,
+    });
+  }
+  return unidad;
+}
+
 export async function fetchUnidades(materiaId, gradoId, periodo) {
   const nivel = String(gradoId || "").slice(0, -2) || String(gradoId || "");
   const { data, error } = await supabase
