@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import * as api from "../lib/api";
 import { ActasModal } from "./Actas";
 import { InclusionBadge } from "./Estudiantes";
+import { agruparPorNivel, nivelYCurso } from "../lib/gamification";
 
 const CODIGOS = [
   { code: "P", label: "Presente", color: "bg-emerald-500", light: "bg-emerald-50 text-emerald-700" },
@@ -15,13 +16,19 @@ function hoyISO() {
   return d.toISOString().slice(0, 10);
 }
 
-function TotalesPorGrado() {
+function TotalesPorGrado({ grados }) {
   const [totales, setTotales] = useState([]);
   const [totalesEstudiante, setTotalesEstudiante] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
   const [detalle, setDetalle] = useState("grado"); // "grado" | "estudiante"
+  const [nivelFiltro, setNivelFiltro] = useState("Todos");
+  const [cursoFiltro, setCursoFiltro] = useState("Todos");
+  const [busqueda, setBusqueda] = useState("");
+
+  const niveles = useMemo(() => agruparPorNivel(grados), [grados]);
+  const cursosDelNivel = nivelFiltro === "Todos" ? [] : (niveles.find((n) => n.nivel === nivelFiltro)?.cursos || []);
 
   const cargar = () => {
     setCargando(true);
@@ -48,6 +55,23 @@ function TotalesPorGrado() {
           <button onClick={() => setDetalle("estudiante")} className={`text-xs px-3 py-1.5 rounded-full ${detalle === "estudiante" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Por estudiante</button>
         </div>
       </div>
+
+      {detalle === "estudiante" && (
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <select value={nivelFiltro} onChange={(e) => { setNivelFiltro(e.target.value); setCursoFiltro("Todos"); }} className="text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none">
+            <option value="Todos">Todos los grados</option>
+            {niveles.map((n) => <option key={n.nivel} value={n.nivel}>Grado {n.nivel}°</option>)}
+          </select>
+          {nivelFiltro !== "Todos" && (
+            <select value={cursoFiltro} onChange={(e) => setCursoFiltro(e.target.value)} className="text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none">
+              <option value="Todos">Todos los cursos de {nivelFiltro}°</option>
+              {cursosDelNivel.map((c) => <option key={c.id} value={c.id}>Curso {c.id}</option>)}
+            </select>
+          )}
+          <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="🔍 Buscar estudiante…"
+            className="text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none w-48" />
+        </div>
+      )}
 
       {cargando ? (
         <div className="text-sm text-slate-400">Cargando…</div>
@@ -87,8 +111,13 @@ function TotalesPorGrado() {
             </table>
           </div>
         )
-      ) : totalesEstudiante.length === 0 ? (
-        <div className="text-sm text-slate-400 bg-white rounded-2xl p-6 text-center border border-dashed border-slate-200">No hay estudiantes activos.</div>
+      ) : (() => {
+        const totalesEstudianteFiltrados = totalesEstudiante
+          .filter((t) => nivelFiltro === "Todos" || nivelYCurso(t.grado).nivel === nivelFiltro)
+          .filter((t) => cursoFiltro === "Todos" || String(t.grado) === String(cursoFiltro))
+          .filter((t) => !busqueda.trim() || t.nombre.toLowerCase().includes(busqueda.trim().toLowerCase()));
+        return totalesEstudianteFiltrados.length === 0 ? (
+        <div className="text-sm text-slate-400 bg-white rounded-2xl p-6 text-center border border-dashed border-slate-200">No hay estudiantes que coincidan con el filtro.</div>
       ) : (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-x-auto">
           <table className="w-full text-sm">
@@ -105,7 +134,7 @@ function TotalesPorGrado() {
               </tr>
             </thead>
             <tbody>
-              {totalesEstudiante.map((t) => {
+              {totalesEstudianteFiltrados.map((t) => {
                 const pctAsistencia = t.total > 0 ? Math.round((t.P / t.total) * 100) : null;
                 return (
                   <tr key={t.estudianteId} className="odd:bg-white even:bg-slate-50">
@@ -123,7 +152,8 @@ function TotalesPorGrado() {
             </tbody>
           </table>
         </div>
-      )}
+      );
+      })()}
     </div>
   );
 }
@@ -213,7 +243,7 @@ export function VistaAsistencia({ grados }) {
       </div>
 
       {vista === "totales" ? (
-        <TotalesPorGrado />
+        <TotalesPorGrado grados={grados} />
       ) : (
         <>
       <div className="flex flex-wrap gap-2 mb-3 items-center">
