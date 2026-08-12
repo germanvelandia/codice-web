@@ -362,4 +362,4 @@ export function VistaGamificacionExtra({ grados }) {
       {tab === "cosmeticos" && <PanelCosmeticos />}
     </div>
   );
-}
+} 
