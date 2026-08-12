@@ -1391,6 +1391,42 @@ export async function guardarValorSemanal(campos) {
   if (error) throw error;
 }
 
+/* ---------------- Anuncios (tablero de mensajes) ---------------- */
+export async function fetchAnuncios() {
+  const [anunciosRes, profesoresRes] = await Promise.all([
+    supabase.from("anuncios").select("*").order("fijado", { ascending: false }).order("creado_en", { ascending: false }),
+    supabase.from("profesores").select("id, nombre"),
+  ]);
+  if (anunciosRes.error) throw anunciosRes.error;
+  if (profesoresRes.error) throw profesoresRes.error;
+  const nombrePorId = {}; (profesoresRes.data || []).forEach((p) => { nombrePorId[p.id] = p.nombre; });
+  return (anunciosRes.data || []).map((a) => ({ ...a, autor_nombre: nombrePorId[a.docente_id] || "Docente" }));
+}
+
+// Para el estudiante: los generales (sin grado) + los de su grado específico
+export async function fetchAnunciosParaGrado(gradoId) {
+  const { data, error } = await supabase.from("anuncios").select("*").or(`grado_id.is.null,grado_id.eq.${gradoId}`)
+    .order("fijado", { ascending: false }).order("creado_en", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearAnuncio(campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("anuncios").insert({ ...campos, docente_id: userData?.user?.id || null });
+  if (error) throw error;
+}
+
+export async function editarAnuncio(id, cambios) {
+  const { error } = await supabase.from("anuncios").update(cambios).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarAnuncio(id) {
+  const { error } = await supabase.from("anuncios").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
