@@ -739,6 +739,157 @@ function UnidadCard({ unidad, institucion, materiaNombre, materias, gradoId, gra
   );
 }
 
+const PROMPT_PLANTILLA = `Actúa como un experto en diseño curricular colombiano, siguiendo el modelo de secuencias didácticas de Ángel Díaz-Barriga (apertura, desarrollo, cierre).
+
+Necesito un plan de clases para:
+- Materia: [COMPLETAR]
+- Grado: [COMPLETAR]
+- Tema/Unidad: [COMPLETAR]
+- Número de clases: [COMPLETAR, ej: 4]
+- Objetivo general: [COMPLETAR, opcional]
+
+Devolveme ÚNICAMENTE un JSON válido (sin texto antes ni después, sin bloques de código \`\`\`), con esta estructura exacta:
+
+{
+  "titulo": "Título de la unidad",
+  "objetivo": "Objetivo de aprendizaje general de la unidad",
+  "clases": [
+    {
+      "titulo": "Título de la clase 1",
+      "duracion_minutos": 60,
+      "momento_inicio": "Actividad de apertura, recuperación de saberes previos o pregunta detonadora...",
+      "momento_desarrollo": "Actividades de desarrollo, aplicación de la información en un caso o problema...",
+      "momento_cierre": "Actividad de cierre, síntesis o reconstrucción de lo aprendido...",
+      "indicador_desempeno": "Indicador de desempeño observable de esta clase"
+    }
+  ]
+}`;
+
+function ImportarPlanIAModal({ materiaId, materias, gradoId, periodo, onCerrar, onImportado }) {
+  const [alcance, setAlcance] = useState("grado");
+  const [materiasExtra, setMateriasExtra] = useState([]);
+  const [texto, setTexto] = useState("");
+  const [copiado, setCopiado] = useState(false);
+  const [previa, setPrevia] = useState(null);
+  const [errorParseo, setErrorParseo] = useState("");
+  const [importando, setImportando] = useState(false);
+
+  const { nivel } = nivelYCurso(gradoId);
+  const otrasMaterias = materias.filter((m) => m.id !== materiaId);
+  const toggleMateriaExtra = (id) => setMateriasExtra((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+
+  const copiarPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(PROMPT_PLANTILLA);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2000);
+    } catch (e) {
+      alert("No se pudo copiar automáticamente — seleccioná el texto y copialo manualmente.");
+    }
+  };
+
+  const analizar = () => {
+    setErrorParseo("");
+    setPrevia(null);
+    let limpio = texto.trim();
+    // por si la IA igual lo mandó envuelto en ```json ... ```
+    limpio = limpio.replace(/^```json/i, "").replace(/^```/, "").replace(/```$/, "").trim();
+    try {
+      const json = JSON.parse(limpio);
+      if (!json.titulo || !Array.isArray(json.clases)) {
+        setErrorParseo("El JSON no tiene el formato esperado (falta 'titulo' o 'clases').");
+        return;
+      }
+      setPrevia(json);
+    } catch (e) {
+      setErrorParseo("No pude leer eso como JSON válido. Revisá que hayas pegado la respuesta completa, sin texto extra antes o después.");
+    }
+  };
+
+  const importar = async () => {
+    setImportando(true);
+    try {
+      const gradoIdAGuardar = alcance === "grado" ? nivel : gradoId;
+      await api.crearUnidadConClases(
+        { materia_id: materiaId, materias_extra: materiasExtra, grado_id: gradoIdAGuardar, periodo, titulo: previa.titulo, objetivo: previa.objetivo || null, orden: 999 },
+        previa.clases
+      );
+      onImportado();
+    } catch (e) {
+      alert("Error al importar: " + e.message);
+    }
+    setImportando(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onCerrar}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">✨ Importar plan generado por IA</h3>
+          <button onClick={onCerrar} className="text-slate-400">✕</button>
+        </div>
+
+        <div className="bg-violet-50 rounded-xl p-3 mb-4">
+          <div className="text-xs font-semibold text-slate-600 mb-1">Paso 1 — Copiá este mensaje y pegalo en tu IA de confianza (Claude, ChatGPT, etc.)</div>
+          <p className="text-[11px] text-slate-500 mb-2">Completá los corchetes [COMPLETAR] con tu materia, grado y tema antes de mandarlo.</p>
+          <pre className="text-[10px] bg-white rounded-lg p-2 whitespace-pre-wrap max-h-32 overflow-y-auto border border-slate-200">{PROMPT_PLANTILLA}</pre>
+          <button onClick={copiarPrompt} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white mt-2">
+            {copiado ? "✔ Copiado" : "📋 Copiar mensaje"}
+          </button>
+        </div>
+
+        <div className="mb-4">
+          <div className="text-xs font-semibold text-slate-600 mb-1">Paso 2 — Pegá acá la respuesta (el JSON) que te dio la IA</div>
+          <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={6} placeholder='{ "titulo": "...", "clases": [...] }'
+            className="w-full text-xs font-mono rounded-lg px-3 py-2 border border-slate-200 outline-none" />
+          <button onClick={analizar} disabled={!texto.trim()} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white mt-2 disabled:opacity-50">
+            Analizar
+          </button>
+          {errorParseo && <p className="text-xs text-rose-500 mt-2">{errorParseo}</p>}
+        </div>
+
+        {previa && (
+          <div className="border border-emerald-200 bg-emerald-50 rounded-xl p-3 mb-4">
+            <div className="text-xs font-semibold text-emerald-700 mb-1">Vista previa — se va a crear:</div>
+            <div className="text-sm font-bold text-slate-800">{previa.titulo}</div>
+            {previa.objetivo && <div className="text-xs text-slate-500 mt-0.5">{previa.objetivo}</div>}
+            <div className="text-xs text-slate-600 mt-2">{previa.clases.length} clase(s):</div>
+            <ul className="text-xs text-slate-500 list-disc list-inside">
+              {previa.clases.map((c, i) => <li key={i}>{c.titulo || `Clase ${i + 1}`}</li>)}
+            </ul>
+
+            {otrasMaterias.length > 0 && (
+              <div className="mt-3">
+                <label className="text-[11px] text-slate-500 block mb-1">Combinar con otra(s) materia(s) (opcional)</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {otrasMaterias.map((m) => (
+                    <button key={m.id} onClick={() => toggleMateriaExtra(m.id)}
+                      className={`text-xs px-3 py-1 rounded-full border ${materiasExtra.includes(m.id) ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>
+                      {m.nombre}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="mt-3">
+              <label className="text-[11px] text-slate-500 block mb-1">Esta planeación aplica a</label>
+              <div className="flex gap-1 rounded-full bg-white p-1 w-fit border border-slate-200">
+                <button onClick={() => setAlcance("grado")} className={`text-xs px-3 py-1.5 rounded-full ${alcance === "grado" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🏫 Todo el grado {nivel}°</button>
+                <button onClick={() => setAlcance("curso")} className={`text-xs px-3 py-1.5 rounded-full ${alcance === "curso" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📍 Solo curso {gradoId}</button>
+              </div>
+            </div>
+
+            <button disabled={importando} onClick={importar} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-emerald-500 text-white mt-3 disabled:opacity-60">
+              {importando ? "Importando…" : "✔ Crear esta unidad con sus clases"}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function NuevaUnidadForm({ materiaId, materias, gradoId, periodo, orden, onCancelar, onCreada }) {
   const [titulo, setTitulo] = useState("");
   const [objetivo, setObjetivo] = useState("");
@@ -1110,6 +1261,7 @@ export function VistaPlaneaciones({ grados }) {
   const [pendientesAbierto, setPendientesAbierto] = useState(false);
   const [estandaresAbierto, setEstandaresAbierto] = useState(false);
   const [vista, setVista] = useState("unidades"); // "unidades" | "calendario"
+  const [importarIAAbierto, setImportarIAAbierto] = useState(false);
 
   useEffect(() => {
     api.fetchMaterias().then((data) => { setMaterias(data); if (data[0]) setMateriaId(data[0].id); });
@@ -1167,6 +1319,7 @@ export function VistaPlaneaciones({ grados }) {
           <button onClick={() => setVista("unidades")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "unidades" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📋 Por unidad</button>
           <button onClick={() => setVista("calendario")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "calendario" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📅 Calendario</button>
         </div>
+        <button onClick={() => setImportarIAAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-violet-300 text-violet-600">✨ Importar plan (IA)</button>
         <button onClick={() => setFormAbierto((v) => !v)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white ml-auto">
           {formAbierto ? "Cerrar" : "+ Nueva unidad/tema"}
         </button>
@@ -1199,6 +1352,10 @@ export function VistaPlaneaciones({ grados }) {
         <PendientesModal materiaId={materiaId} materiaNombre={materias.find((m) => m.id === materiaId)?.nombre || ""} onClose={() => setPendientesAbierto(false)} />
       )}
       {estandaresAbierto && <GestionarEstandaresModal onClose={() => setEstandaresAbierto(false)} />}
+      {importarIAAbierto && (
+        <ImportarPlanIAModal materiaId={materiaId} materias={materias} gradoId={gradoId} periodo={periodo}
+          onCerrar={() => setImportarIAAbierto(false)} onImportado={() => { setImportarIAAbierto(false); cargar(); }} />
+      )}
     </div>
   );
 }
