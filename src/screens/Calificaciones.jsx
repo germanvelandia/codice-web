@@ -768,6 +768,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
   const [notaMasivaAbierta, setNotaMasivaAbierta] = useState(false);
   const [reinoFiltro, setReinoFiltro] = useState("Todos");
   const [soloPerdiendo, setSoloPerdiendo] = useState(false);
+  const [busqueda, setBusqueda] = useState("");
   const [seleccionando, setSeleccionando] = useState(false);
   const [seleccionadas, setSeleccionadas] = useState([]);
   const [finalesGuardados, setFinalesGuardados] = useState([]);
@@ -847,9 +848,12 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
   };
 
   const estudiantesVisiblesPorReino = estudiantes.filter((s) => reinoFiltro === "Todos" || (s.reino_actual || s.reino_original) === reinoFiltro);
-  const estudiantesVisibles = soloPerdiendo
+  const estudiantesVisiblesPerdiendo = soloPerdiendo
     ? estudiantesVisiblesPorReino.filter((s) => { const n = notaFinal(s.id); return n !== null && n !== undefined && n < config.nota_minima; })
     : estudiantesVisiblesPorReino;
+  const estudiantesVisibles = busqueda.trim()
+    ? estudiantesVisiblesPerdiendo.filter((s) => s.nombre.toLowerCase().includes(busqueda.trim().toLowerCase()))
+    : estudiantesVisiblesPerdiendo;
 
   const esManual = (estudianteId) => {
     const manual = notaManual(estudianteId);
@@ -908,6 +912,8 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
     <div>
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 mb-3">
         <div className="flex flex-wrap items-center gap-2 mb-2">
+          <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="🔍 Buscar estudiante…"
+            className="text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none w-48" />
           <select value={reinoFiltro} onChange={(e) => setReinoFiltro(e.target.value)} className="text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none">
             {reinos.map((r) => <option key={r} value={r}>{r === "Todos" ? "Todos los grupos" : r}</option>)}
           </select>
@@ -1072,6 +1078,7 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
   const [editandoCelda, setEditandoCelda] = useState(null); // { estudianteId, periodo }
   const [valorTemp, setValorTemp] = useState("");
   const [soloPerdiendo, setSoloPerdiendo] = useState(false);
+  const [busqueda, setBusqueda] = useState("");
 
   const cargar = async () => {
     setCargando(true);
@@ -1134,6 +1141,8 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
   return (
     <div>
       <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
+        <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="🔍 Buscar estudiante…"
+          className="text-xs rounded-full px-3 py-2 border border-slate-200 outline-none w-44 shrink-0" />
         <button onClick={() => setSoloPerdiendo((v) => !v)}
           className={`text-xs font-semibold px-3 py-2 rounded-full border shrink-0 ${soloPerdiendo ? "bg-rose-500 text-white border-rose-500" : "border-rose-200 text-rose-600"}`}>
           🔴 {soloPerdiendo ? "Viendo solo quienes van perdiendo" : "Ver solo quienes van perdiendo"}
@@ -1160,6 +1169,7 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
             <tbody>
               {estudiantes
                 .filter((s) => !soloPerdiendo || periodos.some((p) => { const n = notaGuardada(s.id, p); return n !== null && n < config.nota_minima; }))
+                .filter((s) => !busqueda.trim() || s.nombre.toLowerCase().includes(busqueda.trim().toLowerCase()))
                 .map((s, i) => {
                 const prom = promedioAnual(s.id);
                 const bandaProm = bandaDesempeno(prom, config);
