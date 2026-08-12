@@ -851,6 +851,9 @@ function EntradaCodiceCard({ entrada }) {
     <div className="bg-slate-50 rounded-xl p-3">
       <div className="flex items-center justify-between mb-1">
         <div className="text-[11px] text-slate-400">{entrada.fecha}{entrada.materia_nombre ? ` · ${entrada.materia_nombre}` : ""}</div>
+        {entrada.nota !== null && entrada.nota !== undefined && (
+          <span className="text-[10px] font-bold text-white bg-emerald-500 px-2 py-0.5 rounded-full">Nota: {entrada.nota}</span>
+        )}
       </div>
       {entrada.titulo && <div className="text-sm font-bold text-slate-800 mb-1">{entrada.titulo}</div>}
       <div className="text-xs text-slate-600 leading-relaxed whitespace-pre-line">{entrada.contenido}</div>
