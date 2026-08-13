@@ -7,6 +7,12 @@ export function InstitucionModal({ onClose }) {
   const [anio, setAnio] = useState("");
   const [logoUrl, setLogoUrl] = useState(null);
   const [imagenMenuUrl, setImagenMenuUrl] = useState(null);
+  const [resolucion, setResolucion] = useState("");
+  const [codigoIcfes, setCodigoIcfes] = useState("");
+  const [codigoDane, setCodigoDane] = useState("");
+  const [direccion, setDireccion] = useState("");
+  const [telefono, setTelefono] = useState("");
+  const [correo, setCorreo] = useState("");
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
 
@@ -17,6 +23,12 @@ export function InstitucionModal({ onClose }) {
       setAnio(data.anio || "");
       setLogoUrl(data.logo_url || null);
       setImagenMenuUrl(data.imagen_menu_url || null);
+      setResolucion(data.resolucion || "");
+      setCodigoIcfes(data.codigo_icfes || "");
+      setCodigoDane(data.codigo_dane || "");
+      setDireccion(data.direccion || "");
+      setTelefono(data.telefono || "");
+      setCorreo(data.correo || "");
       setCargando(false);
     });
   }, []);
@@ -34,7 +46,11 @@ export function InstitucionModal({ onClose }) {
   const guardar = async () => {
     setGuardando(true);
     try {
-      await api.guardarInstitucion({ nombre: nombre.trim() || "Institución Educativa", ciclo: ciclo.trim(), anio: anio.trim(), logo_url: logoUrl, imagen_menu_url: imagenMenuUrl });
+      await api.guardarInstitucion({
+        nombre: nombre.trim() || "Institución Educativa", ciclo: ciclo.trim(), anio: anio.trim(), logo_url: logoUrl, imagen_menu_url: imagenMenuUrl,
+        resolucion: resolucion.trim() || null, codigo_icfes: codigoIcfes.trim() || null, codigo_dane: codigoDane.trim() || null,
+        direccion: direccion.trim() || null, telefono: telefono.trim() || null, correo: correo.trim() || null,
+      });
       onClose();
     } catch (e) {
       alert("Error al guardar: " + e.message);
@@ -97,6 +113,35 @@ export function InstitucionModal({ onClose }) {
               <div className="flex flex-col gap-1">
                 <input type="file" accept="image/*" onChange={(e) => { if (e.target.files[0]) subirImagen(e.target.files[0], setImagenMenuUrl); }} className="text-xs" />
                 {imagenMenuUrl && <button onClick={() => setImagenMenuUrl(null)} className="text-xs text-rose-500 text-left">Quitar imagen del menú</button>}
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100 pt-3 mt-1">
+              <p className="text-xs text-slate-500 font-semibold mb-2">Datos oficiales (para documentos formales como el formato de remisión)</p>
+              <label className="text-xs text-slate-500 block mb-1">Resolución de licencia de funcionamiento</label>
+              <input value={resolucion} onChange={(e) => setResolucion(e.target.value)} placeholder="Ej: Resolución No. 4601 de Noviembre 16 de 2007"
+                className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none" />
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                <div>
+                  <label className="text-xs text-slate-500 block mb-1">Código ICFES</label>
+                  <input value={codigoIcfes} onChange={(e) => setCodigoIcfes(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 block mb-1">Código DANE</label>
+                  <input value={codigoDane} onChange={(e) => setCodigoDane(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" />
+                </div>
+              </div>
+              <label className="text-xs text-slate-500 block mb-1">Dirección</label>
+              <input value={direccion} onChange={(e) => setDireccion(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none" />
+              <div className="grid grid-cols-2 gap-2 mb-4">
+                <div>
+                  <label className="text-xs text-slate-500 block mb-1">Teléfono</label>
+                  <input value={telefono} onChange={(e) => setTelefono(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 block mb-1">Correo</label>
+                  <input value={correo} onChange={(e) => setCorreo(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" />
+                </div>
               </div>
             </div>
 
