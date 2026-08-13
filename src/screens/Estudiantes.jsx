@@ -7,6 +7,7 @@ import { initials, nextLevel, reinoColor, reinoInfo, sugerirApellidos, colorGrad
 // (REINO_COLORS ahora se importa directo desde gamification.js, ver arriba)
 import * as api from "../lib/api";
 import { ActasModal } from "./Actas";
+import { RemisionModal } from "./Remision";
 import { DirectorioModal } from "./Directorio";
 
 function LevelBar({ xp }) {
@@ -799,6 +800,7 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, rein
   const [actasAbiertas, setActasAbiertas] = useState(false);
   const [inclusionAbierta, setInclusionAbierta] = useState(false);
   const [codiceAbierto, setCodiceAbierto] = useState(false);
+  const [remisionAbierta, setRemisionAbierta] = useState(false);
   const [trasladoAbierto, setTrasladoAbierto] = useState(false);
   const [documentoAbierto, setDocumentoAbierto] = useState(false);
   const [menuAbierto, setMenuAbierto] = useState(false);
@@ -901,6 +903,7 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, rein
                   {estudiante.piar || estudiante.dua ? "🧩 Inclusión" : "+ Inclusión"}
                 </button>
                 <button onClick={() => { setMenuAbierto(false); setCodiceAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📖 Ver Códice</button>
+                <button onClick={() => { setMenuAbierto(false); setRemisionAbierta(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📨 Remisión a Orientación</button>
                 <button onClick={() => { setMenuAbierto(false); setActasAbiertas(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📋 Actas</button>
                 <button onClick={() => { setMenuAbierto(false); setDocumentoAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">🪪 Documento</button>
                 <div className="border-t border-slate-100 my-1" />
@@ -914,6 +917,7 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, rein
       {actasAbiertas && <ActasModal estudiante={estudiante} onClose={() => setActasAbiertas(false)} />}
       {inclusionAbierta && <InclusionModal estudiante={estudiante} onClose={() => setInclusionAbierta(false)} onGuardado={() => setInclusionAbierta(false)} />}
       {codiceAbierto && <CodiceDocenteModal estudiante={estudiante} onClose={() => setCodiceAbierto(false)} />}
+      {remisionAbierta && <RemisionModal estudiante={estudiante} onClose={() => setRemisionAbierta(false)} />}
       {trasladoAbierto && (
         <TrasladoModal estudiante={estudiante} grados={grados} gradoActual={gradoActual} onClose={() => setTrasladoAbierto(false)} onTrasladado={onTrasladado} />
       )}
