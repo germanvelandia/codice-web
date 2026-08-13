@@ -1914,6 +1914,36 @@ export async function eliminarAccionGamificacion(id) {
   if (error) throw error;
 }
 
+/* ---------------- Biblioteca (enlaces por grado completo) ---------------- */
+export async function fetchBibliotecaRecursos() {
+  const { data, error } = await supabase.from("biblioteca_recursos").select("*").order("nivel").order("creado_en", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+// Para el estudiante: solo lo de su propio grado (nivel)
+export async function fetchBibliotecaPorNivel(nivel) {
+  const { data, error } = await supabase.from("biblioteca_recursos").select("*").eq("nivel", nivel).order("categoria").order("creado_en", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearRecursoBiblioteca(campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("biblioteca_recursos").insert({ ...campos, docente_id: userData?.user?.id || null });
+  if (error) throw error;
+}
+
+export async function editarRecursoBiblioteca(id, cambios) {
+  const { error } = await supabase.from("biblioteca_recursos").update(cambios).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarRecursoBiblioteca(id) {
+  const { error } = await supabase.from("biblioteca_recursos").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
