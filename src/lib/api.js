@@ -1944,6 +1944,30 @@ export async function eliminarRecursoBiblioteca(id) {
   if (error) throw error;
 }
 
+/* ---------------- Formato de Remisión de Estudiantes ---------------- */
+export async function fetchRemisiones(estudianteId) {
+  const { data, error } = await supabase.from("remisiones_estudiantes").select("*").eq("estudiante_id", estudianteId).order("fecha_remision", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearRemision(estudianteId, campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("remisiones_estudiantes").insert({ estudiante_id: estudianteId, docente_id: userData?.user?.id || null, ...campos }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function editarRemision(id, campos) {
+  const { error } = await supabase.from("remisiones_estudiantes").update(campos).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarRemision(id) {
+  const { error } = await supabase.from("remisiones_estudiantes").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
