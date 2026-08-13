@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "./lib/supabaseClient";
 import * as api from "./lib/api";
-import { nextLevel } from "./lib/gamification";
+import { nextLevel, nivelYCurso } from "./lib/gamification";
 import { bandaDesempeno, notaFinalPonderada } from "./lib/calificaciones";
 import { VistaGrados, VistaReinos, VistaEstudiantes } from "./screens/Estudiantes";
 import { VistaAsistencia } from "./screens/Asistencia";
@@ -17,6 +17,7 @@ import { VistaCalificaciones } from "./screens/Calificaciones";
 import { VistaReportes } from "./screens/Reportes";
 import { VistaHorario } from "./screens/Horario";
 import { VistaPlaneaciones } from "./screens/Planeaciones";
+import { VistaBiblioteca } from "./screens/Biblioteca";
 import { VistaEvaluaciones } from "./screens/Evaluaciones";
 import { VistaProyectosForja } from "./screens/TareasCalificables";
 import { VistaInicio } from "./screens/Inicio";
@@ -892,6 +893,7 @@ const MENU_CODICE = [
   { key: "proyectos", label: "Proyectos", icono: "📜" },
   { key: "forja", label: "Forja", icono: "🔨" },
   { key: "codice", label: "Códice", icono: "📖" },
+  { key: "biblioteca", label: "Biblioteca", icono: "📚" },
   { key: "notas", label: "Notas", icono: "📝" },
   { key: "ranking", label: "Ranking", icono: "📊" },
   { key: "salonhonor", label: "Salón de Honor", icono: "🏆" },
@@ -1265,6 +1267,60 @@ function CosmeticosEstudiante({ estudianteId, monedas, onMonedasActualizadas }) 
   );
 }
 
+const CATEGORIAS_BIBLIOTECA = {
+  enlace: { label: "Enlace", emoji: "🔗", color: "#8B5CF6" },
+  documento: { label: "Documento", emoji: "📄", color: "#3B82F6" },
+  video: { label: "Video", emoji: "🎬", color: "#EF4444" },
+  libro: { label: "Libro", emoji: "📖", color: "#F59E0B" },
+  audio: { label: "Audio", emoji: "🎧", color: "#22C55E" },
+};
+
+function BibliotecaEstudiante({ gradoId }) {
+  const [recursos, setRecursos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const { nivel } = nivelYCurso(gradoId);
+
+  useEffect(() => { api.fetchBibliotecaPorNivel(nivel).then((d) => { setRecursos(d); setCargando(false); }); }, [nivel]);
+
+  if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
+  if (recursos.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-3xl mb-2">📚</div>
+        <p className="text-sm text-slate-400">Todavía no hay nada en la biblioteca.</p>
+      </div>
+    );
+  }
+
+  const porCategoria = Object.entries(CATEGORIAS_BIBLIOTECA)
+    .map(([key, info]) => ({ key, ...info, items: recursos.filter((r) => r.categoria === key) }))
+    .filter((c) => c.items.length > 0);
+
+  return (
+    <div>
+      <h3 className="font-bold text-slate-800 mb-1">📚 Biblioteca</h3>
+      <p className="text-xs text-slate-400 mb-4">Recursos y enlaces para tu grado.</p>
+      <div className="space-y-5">
+        {porCategoria.map((cat) => (
+          <div key={cat.key}>
+            <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2">{cat.emoji} {cat.label}s</div>
+            <div className="rounded-xl p-3 flex gap-2 flex-wrap items-end" style={{ background: "linear-gradient(180deg, transparent 85%, #D6B98C 85%, #D6B98C 100%)" }}>
+              {cat.items.map((r) => (
+                <a key={r.id} href={r.url} target="_blank" rel="noreferrer"
+                  className="rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow px-2 pt-3 pb-2 block"
+                  style={{ width: 84, minHeight: 110, background: cat.color }} title={r.descripcion || r.titulo}>
+                  <div className="text-lg mb-1">{cat.emoji}</div>
+                  <div className="text-[9px] font-bold text-white leading-tight break-words">{r.titulo}</div>
+                </a>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function PortalEstudiante() {
   const [codigo, setCodigo] = useState("");
   const [datos, setDatos] = useState(null);
@@ -1383,6 +1439,10 @@ function PortalEstudiante() {
             <CodiceEstudiante estudianteId={estudianteInfo.id} />
           )}
 
+          {vista === "biblioteca" && estudianteInfo && (
+            <BibliotecaEstudiante gradoId={estudianteInfo.grado_id} />
+          )}
+
           {vista === "notas" && estudianteInfo && (
             <MisNotas estudianteId={estudianteInfo.id} />
           )}
@@ -1495,7 +1555,8 @@ const MENU_PANEL = [
   { key: "calificaciones", label: "Códice", icono: "📖" },
   { key: "evaluaciones", label: "Misiones", icono: "⚔️" },
   { key: "proyectosforja", label: "La Forja", icono: "🔨" },
-  { key: "planeaciones", label: "Biblioteca", icono: "📚" },
+  { key: "planeaciones", label: "Planeaciones", icono: "📝" },
+  { key: "biblioteca", label: "Biblioteca", icono: "📚" },
   { key: "horario", label: "Agenda", icono: "🗓️" },
   { key: "herramientas", label: "Herramientas", icono: "🛠️" },
   { key: "roles", label: "Roles", icono: "🎭" },
@@ -1714,6 +1775,7 @@ function Panel({ session }) {
         {tab === "reportes" && grados.length > 0 && <VistaReportes grados={grados} />}
         {tab === "horario" && grados.length > 0 && <VistaHorario grados={grados} />}
         {tab === "planeaciones" && grados.length > 0 && <VistaPlaneaciones grados={grados} />}
+        {tab === "biblioteca" && grados.length > 0 && <VistaBiblioteca grados={grados} />}
         {tab === "evaluaciones" && grados.length > 0 && <VistaEvaluaciones grados={grados} />}
         {tab === "proyectosforja" && grados.length > 0 && <VistaProyectosForja grados={grados} />}
       </div>
