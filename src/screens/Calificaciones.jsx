@@ -5,10 +5,21 @@ import {
   CONFIG_DEFAULT, periodosDe, bandaDesempeno, notaAutomatica, notaFinalPonderada,
   calcularEstadisticas, GAM_CATEGORIAS_OPCIONES,
 } from "../lib/calificaciones";
-import { buscarEstudiantePorNombre } from "../lib/gamification";
-import { agruparPorNivel, nivelYCurso } from "../lib/gamification";
+import { buscarEstudiantePorNombre, agruparPorNivel, nivelYCurso, initials } from "../lib/gamification";
 import { ActasModal } from "./Actas";
 import { InclusionBadge } from "./Estudiantes";
+
+function MiniAvatarCal({ estudiante, size = 22 }) {
+  if (estudiante.foto_url) {
+    return <img src={estudiante.foto_url} alt={estudiante.nombre} className="rounded-full object-cover shrink-0 inline-block align-middle mr-1.5" style={{ width: size, height: size }} />;
+  }
+  return (
+    <div className="rounded-full flex items-center justify-center font-bold shrink-0 bg-violet-100 text-violet-600 inline-flex align-middle mr-1.5"
+      style={{ width: size, height: size, fontSize: size * 0.4 }}>
+      {initials(estudiante.nombre)}
+    </div>
+  );
+}
 
 function BarraMateria({ materias, materiaActualId, setMateriaActualId, onCambio }) {
   const [creando, setCreando] = useState(false);
@@ -1001,7 +1012,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
                   <tr key={s.id} ref={destacado ? (el) => el?.scrollIntoView({ behavior: "smooth", block: "center" }) : null}
                     className={destacado ? "bg-amber-100" : "odd:bg-white even:bg-slate-50"}
                     style={destacado ? { boxShadow: "inset 0 0 0 2px #F59E0B" } : undefined}>
-                    <td className="sticky left-0 bg-inherit text-left px-3 py-2 font-medium text-slate-700">{s.nombre} <InclusionBadge estudiante={s} size="text-xs" /></td>
+                    <td className="sticky left-0 bg-inherit text-left px-3 py-2 font-medium text-slate-700"><MiniAvatarCal estudiante={s} />{s.nombre} <InclusionBadge estudiante={s} size="text-xs" /></td>
                     {actividadesOrdenadas.map((a) => {
                       const v = valorDeActividad(a, s.id);
                       const b = bandaDesempeno(v, config);
@@ -1175,7 +1186,7 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
                 const bandaProm = bandaDesempeno(prom, config);
                 return (
                   <tr key={s.id} className="odd:bg-white even:bg-slate-50">
-                    <td className="text-left px-3 py-2 font-medium text-slate-700">{s.nombre} <InclusionBadge estudiante={s} size="text-xs" /></td>
+                    <td className="text-left px-3 py-2 font-medium text-slate-700"><MiniAvatarCal estudiante={s} />{s.nombre} <InclusionBadge estudiante={s} size="text-xs" /></td>
                     {periodos.map((p) => {
                       const n = notaGuardada(s.id, p);
                       const b = bandaDesempeno(n, config);
