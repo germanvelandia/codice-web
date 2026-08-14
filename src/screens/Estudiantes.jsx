@@ -1418,6 +1418,123 @@ function PlanillaBlancoModal({ estudiantes, gradoId, onClose }) {
   );
 }
 
+// Limpia el nombre de archivo para intentar emparejarlo con un estudiante:
+// saca la extensión, cambia guiones/subrayados por espacios, quita números sueltos.
+function nombreDesdeArchivo(filename) {
+  return filename
+    .replace(/\.[^/.]+$/, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\d+/g, " ")
+    .trim();
+}
+
+function SubirFotosMasivoModal({ estudiantes, onClose, onGuardado }) {
+  const [filas, setFilas] = useState([]); // { archivo, previewUrl, nombreArchivo, estudianteId }
+  const [guardando, setGuardando] = useState(false);
+  const [progreso, setProgreso] = useState(0);
+
+  const elegirArchivos = (files) => {
+    const nuevas = Array.from(files).map((file) => {
+      const nombreLimpio = nombreDesdeArchivo(file.name);
+      const match = buscarEstudiantePorNombre(nombreLimpio, estudiantes);
+      return { archivo: file, previewUrl: URL.createObjectURL(file), nombreArchivo: file.name, estudianteId: match?.id || "" };
+    });
+    setFilas(nuevas);
+  };
+
+  const cambiarEstudiante = (i, estudianteId) => {
+    setFilas((prev) => prev.map((f, idx) => idx === i ? { ...f, estudianteId } : f));
+  };
+
+  const quitarFila = (i) => setFilas((prev) => prev.filter((_, idx) => idx !== i));
+
+  const emparejadas = filas.filter((f) => f.estudianteId);
+  const sinEmparejar = filas.filter((f) => !f.estudianteId);
+
+  const leerComoDataUrl = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => resolve(e.target.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  const guardarTodas = async () => {
+    setGuardando(true);
+    setProgreso(0);
+    let hechos = 0;
+    for (const fila of emparejadas) {
+      if (fila.archivo.size > 500 * 1024) {
+        hechos++; setProgreso(hechos);
+        continue; // se salta las muy pesadas, no bloquea el resto
+      }
+      try {
+        const dataUrl = await leerComoDataUrl(fila.archivo);
+        await api.guardarFotoEstudiante(fila.estudianteId, dataUrl);
+      } catch (e) {
+        // sigue con las demás aunque una falle
+      }
+      hechos++; setProgreso(hechos);
+    }
+    setGuardando(false);
+    onGuardado();
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={guardando ? undefined : onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">📷 Subir fotos masivo</h3>
+          {!guardando && <button onClick={onClose} className="text-slate-400">✕</button>}
+        </div>
+
+        {filas.length === 0 ? (
+          <div>
+            <p className="text-xs text-slate-500 mb-3">
+              Elegí todas las fotos a la vez (de una carpeta) — la app intenta emparejar cada archivo con un estudiante de este grado
+              según el nombre del archivo. Consejo: nombrá los archivos como el nombre del estudiante (ej: "Juan Perez.jpg") para que
+              el emparejado automático funcione mejor.
+            </p>
+            <input type="file" accept="image/*" multiple onChange={(e) => e.target.files.length && elegirArchivos(e.target.files)}
+              className="text-sm" />
+          </div>
+        ) : (
+          <>
+            <p className="text-xs text-slate-500 mb-3">
+              {emparejadas.length} emparejada(s) automáticamente, {sinEmparejar.length} sin emparejar todavía — revisá y corregí antes de guardar.
+            </p>
+            <div className="space-y-2 mb-4">
+              {filas.map((f, i) => (
+                <div key={i} className={`flex items-center gap-2 rounded-lg p-2 ${f.estudianteId ? "bg-emerald-50" : "bg-amber-50"}`}>
+                  <img src={f.previewUrl} alt="" className="w-10 h-10 rounded-full object-cover shrink-0 border border-white" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[11px] text-slate-400 truncate">{f.nombreArchivo}</div>
+                    <select value={f.estudianteId} onChange={(e) => cambiarEstudiante(i, e.target.value ? parseInt(e.target.value, 10) : "")}
+                      className="w-full text-xs rounded-lg px-2 py-1 border border-slate-200 outline-none bg-white">
+                      <option value="">— Sin emparejar (no se va a guardar) —</option>
+                      {estudiantes.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
+                    </select>
+                  </div>
+                  <button onClick={() => quitarFila(i)} className="text-slate-300 hover:text-rose-500 text-xs shrink-0">✕</button>
+                </div>
+              ))}
+            </div>
+            {guardando ? (
+              <div className="text-center text-sm text-violet-600 font-semibold">Guardando… {progreso}/{emparejadas.length}</div>
+            ) : (
+              <div className="flex justify-end gap-2">
+                <button onClick={onClose} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
+                <button disabled={emparejadas.length === 0} onClick={guardarTodas} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">
+                  Guardar {emparejadas.length} foto(s)
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVerGrupos }) {
   const [estudiantes, setEstudiantes] = useState([]);
   const [roles, setRoles] = useState([]);
@@ -1431,6 +1548,7 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
   const [planillaBlancoAbierta, setPlanillaBlancoAbierta] = useState(false);
   const [ordenAbierto, setOrdenAbierto] = useState(false);
   const [directorioAbierto, setDirectorioAbierto] = useState(false);
+  const [fotosMasivoAbierto, setFotosMasivoAbierto] = useState(false);
 
   const cargar = async () => {
     setCargando(true);
@@ -1509,6 +1627,7 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
             <button onClick={() => setCodigosAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🔑 Ver códigos de acceso</button>
             <button onClick={() => setOrdenAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🔤 Organizar orden alfabético</button>
             <button onClick={() => setDirectorioAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">👪 Directorio de acudientes</button>
+            <button onClick={() => setFotosMasivoAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">📷 Subir fotos masivo</button>
             <button onClick={() => setPlanillaBlancoAbierta(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🖨️ Planilla en blanco</button>
             <button onClick={() => setImportarAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700">📥 Importar varios</button>
           </div>
@@ -1546,6 +1665,9 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
       )}
       {directorioAbierto && (
         <DirectorioModal gradoId={gradoId} onClose={() => setDirectorioAbierto(false)} />
+      )}
+      {fotosMasivoAbierto && (
+        <SubirFotosMasivoModal estudiantes={estudiantes} onClose={() => setFotosMasivoAbierto(false)} onGuardado={() => { setFotosMasivoAbierto(false); cargar(); }} />
       )}
 
       <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar estudiante…"
