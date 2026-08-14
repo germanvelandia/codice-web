@@ -66,11 +66,95 @@ function LogroForm({ logro, onCancelar, onGuardado }) {
   );
 }
 
+function DuplicadosLogrosModal({ onClose, onCambio }) {
+  const [grupos, setGrupos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [fusionando, setFusionando] = useState(null);
+  const [limpiandoTodo, setLimpiandoTodo] = useState(false);
+
+  const cargar = () => { setCargando(true); api.fetchLogrosDuplicados().then((g) => { setGrupos(g); setCargando(false); }); };
+  useEffect(() => { cargar(); }, []);
+
+  const fusionar = async (grupo, idAConservar) => {
+    setFusionando(idAConservar);
+    try {
+      const idsAEliminar = grupo.filter((l) => l.id !== idAConservar).map((l) => l.id);
+      await api.fusionarLogrosDuplicados(idAConservar, idsAEliminar);
+      cargar();
+      onCambio();
+    } catch (e) {
+      alert("Error al fusionar: " + e.message);
+    }
+    setFusionando(null);
+  };
+
+  const limpiarTodo = async () => {
+    if (!confirm(`¿Limpiar los ${grupos.length} grupo(s) de duplicados de una sola vez? En cada uno se conserva automáticamente la versión que más estudiantes tengan desbloqueada.`)) return;
+    setLimpiandoTodo(true);
+    try {
+      const r = await api.limpiarTodosLosDuplicadosLogros();
+      alert(`Listo — se fusionaron ${r.fusionadas} versión(es) duplicada(s) en ${r.grupos} grupo(s).`);
+      cargar();
+      onCambio();
+    } catch (e) {
+      alert("Error al limpiar: " + e.message);
+    }
+    setLimpiandoTodo(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">🧹 Logros duplicados</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-500 mb-3">
+          Elegí cuál versión conservar de cada nombre repetido, o dejá que la app lo resuelva sola. Los estudiantes que ya lo tenían
+          desbloqueado pasan a quedar con la que quede — nadie pierde su insignia.
+        </p>
+        {!cargando && grupos.length > 0 && (
+          <button disabled={limpiandoTodo} onClick={limpiarTodo} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-emerald-500 text-white disabled:opacity-60 mb-3">
+            {limpiandoTodo ? "Limpiando…" : `🧹 Limpiar los ${grupos.length} grupo(s) automáticamente`}
+          </button>
+        )}
+        {cargando ? (
+          <div className="text-sm text-slate-400">Cargando…</div>
+        ) : grupos.length === 0 ? (
+          <div className="text-sm text-slate-400 text-center py-4">No hay duplicados. 🎉</div>
+        ) : (
+          <div className="space-y-4">
+            {grupos.map((grupo, i) => (
+              <div key={i} className="border border-slate-100 rounded-xl p-3">
+                <div className="text-sm font-semibold text-slate-700 mb-2">"{grupo[0].nombre}" — {grupo.length} versiones</div>
+                <div className="space-y-1.5">
+                  {grupo.map((l) => (
+                    <div key={l.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
+                      <div className="flex items-center gap-2 text-xs text-slate-600">
+                        <span className="text-lg">{l.emoji}</span>
+                        <span>ID {l.id} · {l.total_desbloqueado} estudiante(s) la tienen</span>
+                      </div>
+                      <button disabled={fusionando !== null} onClick={() => fusionar(grupo, l.id)} className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-violet-500 text-white disabled:opacity-50">
+                        {fusionando === l.id ? "Fusionando…" : "Conservar esta"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function VistaLogros() {
   const [logros, setLogros] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [formAbierto, setFormAbierto] = useState(false);
   const [editando, setEditando] = useState(null);
+  const [duplicadosAbierto, setDuplicadosAbierto] = useState(false);
 
   const cargar = () => { setCargando(true); api.fetchLogrosCatalogo().then((d) => { setLogros(d); setCargando(false); }); };
   useEffect(() => { cargar(); }, []);
@@ -85,14 +169,18 @@ export function VistaLogros() {
           <h2 className="text-xl font-bold text-slate-800">🏅 Insignias / Logros</h2>
           <p className="text-sm text-slate-400">Se desbloquean solos cuando el estudiante cumple el hito — no hace falta otorgarlos a mano.</p>
         </div>
-        <button onClick={() => { setEditando(null); setFormAbierto((v) => !v); }} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">
-          {formAbierto ? "Cerrar" : "+ Nuevo logro"}
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setDuplicadosAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-amber-200 text-amber-600">🧹 Duplicados</button>
+          <button onClick={() => { setEditando(null); setFormAbierto((v) => !v); }} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">
+            {formAbierto ? "Cerrar" : "+ Nuevo logro"}
+          </button>
+        </div>
       </div>
 
       {formAbierto && (
         <LogroForm logro={editando} onCancelar={() => setFormAbierto(false)} onGuardado={() => { setFormAbierto(false); setEditando(null); cargar(); }} />
       )}
+      {duplicadosAbierto && <DuplicadosLogrosModal onClose={() => setDuplicadosAbierto(false)} onCambio={cargar} />}
 
       {cargando ? (
         <div className="text-sm text-slate-400">Cargando…</div>
