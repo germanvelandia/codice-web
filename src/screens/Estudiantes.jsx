@@ -855,6 +855,16 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
     reader.readAsDataURL(file);
   };
 
+  const quitarFoto = async () => {
+    if (!confirm("¿Quitar la foto de este estudiante?")) return;
+    try {
+      await api.guardarFotoEstudiante(estudiante.id, null);
+      onFotoActualizada(estudiante.id, null);
+    } catch (err) {
+      alert("Error al quitar la foto: " + err.message);
+    }
+  };
+
   return (
     <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
       <div className="flex items-start gap-3 mb-2">
@@ -873,6 +883,11 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
             <span className="text-white text-[8px]">{subiendoFoto ? "…" : "📷"}</span>
             <input type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files[0]) subirFoto(e.target.files[0]); }} />
           </label>
+          {estudiante.foto_url && (
+            <button onClick={quitarFoto} className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 flex items-center justify-center" title="Quitar foto">
+              <span className="text-white text-[8px]">✕</span>
+            </button>
+          )}
         </div>
         <div className="min-w-0 flex-1">
           {editandoNombre ? (
