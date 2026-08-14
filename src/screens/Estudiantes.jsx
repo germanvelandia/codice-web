@@ -825,6 +825,82 @@ export function FotoLightbox({ url, nombre, onClose }) {
   );
 }
 
+const CATEGORIA_INFO = {
+  academico: { label: "Académico", color: "#3B82F6", emoji: "📘" },
+  convivencial: { label: "Convivencial", color: "#F59E0B", emoji: "🤝" },
+  general: { label: "General", color: "#8B5CF6", emoji: "⚡" },
+  respeto: { label: "Respeto", color: "#22C55E", emoji: "🌱" },
+  responsabilidad: { label: "Responsabilidad", color: "#22C55E", emoji: "✅" },
+  confiabilidad: { label: "Confiabilidad", color: "#22C55E", emoji: "🤲" },
+  justicia: { label: "Justicia", color: "#22C55E", emoji: "⚖️" },
+  solidaridad: { label: "Solidaridad", color: "#22C55E", emoji: "💛" },
+  ciudadania: { label: "Ciudadanía", color: "#22C55E", emoji: "🏛️" },
+};
+
+function HistorialGamificacionModal({ estudiante, onClose }) {
+  const [historial, setHistorial] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [filtro, setFiltro] = useState("todas");
+
+  useEffect(() => { api.fetchHistorialGamificacion(estudiante.id).then((d) => { setHistorial(d); setCargando(false); }); }, [estudiante.id]);
+
+  const visibles = filtro === "todas" ? historial : historial.filter((h) => h.categoria === filtro);
+  const categoriasPresentes = Array.from(new Set(historial.map((h) => h.categoria)));
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">📜 Historial de comportamiento — {estudiante.nombre}</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+
+        {categoriasPresentes.length > 0 && (
+          <div className="flex gap-1 mb-3 flex-wrap">
+            <button onClick={() => setFiltro("todas")} className={`text-xs px-3 py-1.5 rounded-full ${filtro === "todas" ? "bg-violet-500 text-white" : "bg-violet-50 text-violet-600"}`}>Todas</button>
+            {categoriasPresentes.map((c) => {
+              const info = CATEGORIA_INFO[c] || { label: c, color: "#94A3B8", emoji: "•" };
+              return (
+                <button key={c} onClick={() => setFiltro(c)} className={`text-xs px-3 py-1.5 rounded-full ${filtro === c ? "text-white" : ""}`}
+                  style={filtro === c ? { background: info.color } : { background: `${info.color}18`, color: info.color }}>
+                  {info.emoji} {info.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {cargando ? (
+          <div className="text-sm text-slate-400">Cargando…</div>
+        ) : visibles.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-4">Todavía no hay acciones registradas para este estudiante.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {visibles.map((h) => {
+              const info = CATEGORIA_INFO[h.categoria] || { label: h.categoria, color: "#94A3B8", emoji: "•" };
+              return (
+                <div key={h.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold text-slate-700">{h.etiqueta}</div>
+                    <div className="text-[10px] text-slate-400">
+                      {new Date(h.creado_en).toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" })}
+                      <span style={{ color: info.color }}> · {info.emoji} {info.label}</span>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0 text-[11px]">
+                    <div className={h.xp >= 0 ? "text-emerald-600 font-semibold" : "text-rose-500 font-semibold"}>{h.xp > 0 ? "+" : ""}{h.xp} XP</div>
+                    <div className="text-slate-400">{h.vida > 0 ? "+" : ""}{h.vida} vida</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFotoActualizada, reinos, catalogoReinos, onCambiarReino, roles, onCambiarRol, onCodigoGenerado, grados, gradoActual, onTrasladado }) {
   const [actasAbiertas, setActasAbiertas] = useState(false);
   const [inclusionAbierta, setInclusionAbierta] = useState(false);
@@ -832,6 +908,7 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
   const [remisionAbierta, setRemisionAbierta] = useState(false);
   const [resumenAbierto, setResumenAbierto] = useState(false);
   const [observadorAbierto, setObservadorAbierto] = useState(false);
+  const [historialAbierto, setHistorialAbierto] = useState(false);
   const [trasladoAbierto, setTrasladoAbierto] = useState(false);
   const [documentoAbierto, setDocumentoAbierto] = useState(false);
   const [menuAbierto, setMenuAbierto] = useState(false);
@@ -980,6 +1057,7 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
                 <button onClick={() => { setMenuAbierto(false); setRemisionAbierta(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📨 Remisión a Orientación</button>
                 <button onClick={() => { setMenuAbierto(false); setResumenAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📊 Resumen del estudiante</button>
                 <button onClick={() => { setMenuAbierto(false); setObservadorAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📋 Observador del Estudiante</button>
+                <button onClick={() => { setMenuAbierto(false); setHistorialAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📜 Historial de comportamiento</button>
                 <button onClick={() => { setMenuAbierto(false); setActasAbiertas(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📋 Actas</button>
                 <button onClick={() => { setMenuAbierto(false); setDocumentoAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">🪪 Documento</button>
                 <div className="border-t border-slate-100 my-1" />
@@ -996,6 +1074,7 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
       {remisionAbierta && <RemisionModal estudiante={estudiante} onClose={() => setRemisionAbierta(false)} />}
       {resumenAbierto && <ResumenEstudianteModal estudiante={estudiante} onClose={() => setResumenAbierto(false)} />}
       {observadorAbierto && <ObservadorModal estudiante={estudiante} onClose={() => setObservadorAbierto(false)} />}
+      {historialAbierto && <HistorialGamificacionModal estudiante={estudiante} onClose={() => setHistorialAbierto(false)} />}
       {trasladoAbierto && (
         <TrasladoModal estudiante={estudiante} grados={grados} gradoActual={gradoActual} onClose={() => setTrasladoAbierto(false)} onTrasladado={onTrasladado} />
       )}
