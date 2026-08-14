@@ -385,6 +385,42 @@ function SelectorComportamiento({ categoria, valorId, onSeleccionar, onUsarPlant
   );
 }
 
+function AnotacionesReferencia({ estudianteId, onCopiar }) {
+  const [anotaciones, setAnotaciones] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [abierto, setAbierto] = useState(false);
+
+  useEffect(() => {
+    api.fetchAnotaciones(estudianteId).then((d) => { setAnotaciones(d); setCargando(false); });
+  }, [estudianteId]);
+
+  if (cargando || anotaciones.length === 0) return null;
+
+  return (
+    <div className="mb-3">
+      <button onClick={() => setAbierto((v) => !v)} className="text-xs font-semibold text-violet-500">
+        {abierto ? "▲" : "▼"} Ver tus anotaciones privadas de este estudiante ({anotaciones.length}) — como referencia
+      </button>
+      {abierto && (
+        <div className="mt-2 space-y-1.5">
+          <p className="text-[11px] text-amber-600 bg-amber-50 rounded-lg p-2">
+            🔒 Estas anotaciones son privadas tuyas. No se agregan solas al acta — copiá al texto solo la que quieras que quede en este documento (que sí se comparte).
+          </p>
+          {anotaciones.map((a) => (
+            <div key={a.id} className="bg-slate-50 rounded-lg p-2 text-xs">
+              <div className="flex justify-between items-start gap-2">
+                <span className="text-slate-400">{a.fecha} · {a.categoria === "academico" ? "📘 Académico" : "🤝 Convivencial"}</span>
+                <button onClick={() => onCopiar(a.contenido)} className="text-[11px] font-semibold text-violet-500 shrink-0">📋 Copiar al acta</button>
+              </div>
+              <p className="text-slate-600 mt-1 whitespace-pre-line">{a.contenido}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NuevaActaForm({ estudianteId, onCancelar, onGuardada }) {
   const [tipo, setTipo] = useState("Convivencial");
   const [fecha, setFecha] = useState(hoyISO());
@@ -469,6 +505,8 @@ function NuevaActaForm({ estudianteId, onCancelar, onGuardada }) {
         className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
       <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={3} placeholder="Descripción de la situación"
         className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
+
+      <AnotacionesReferencia estudianteId={estudianteId} onCopiar={(texto) => setDescripcion((prev) => prev ? `${prev}\n\n${texto}` : texto)} />
 
       {(tipo === "Nivelación" || tipo === "Académico") && (
         <div className="mb-2">
