@@ -36,6 +36,14 @@ export async function crearGrado(id) {
   if (error) throw error;
 }
 
+export async function eliminarGrado(id) {
+  const { count, error: e1 } = await supabase.from("estudiantes").select("id", { count: "exact", head: true }).eq("grado_id", id);
+  if (e1) throw e1;
+  if (count > 0) throw new Error(`Todavía hay ${count} estudiante(s) en este curso. Trasladalos a otro curso o desactivalos antes de eliminarlo.`);
+  const { error } = await supabase.from("grados").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function guardarColorGrado(id, color) {
   const { error } = await supabase.from("grados").update({ color }).eq("id", id);
   if (error) throw error;
