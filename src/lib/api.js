@@ -1417,6 +1417,21 @@ export async function fusionarCriaturasDuplicadas(idAConservar, idsAEliminar) {
   }
 }
 
+// Limpia TODOS los grupos de duplicados de una sola vez — en cada grupo se
+// queda automáticamente con la versión que más estudiantes tengan coleccionada
+// (para perder lo menos posible), y fusiona el resto.
+export async function limpiarTodosLosDuplicadosCriaturas() {
+  const grupos = await fetchCriaturasDuplicadas();
+  let totalFusionadas = 0;
+  for (const grupo of grupos) {
+    const conservar = [...grupo].sort((a, b) => b.total_coleccionado - a.total_coleccionado || a.id - b.id)[0];
+    const idsAEliminar = grupo.filter((c) => c.id !== conservar.id).map((c) => c.id);
+    await fusionarCriaturasDuplicadas(conservar.id, idsAEliminar);
+    totalFusionadas += idsAEliminar.length;
+  }
+  return { grupos: grupos.length, fusionadas: totalFusionadas };
+}
+
 export async function fetchAlbumConfig() {
   const { data, error } = await supabase.from("album_config").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
@@ -1956,6 +1971,20 @@ export async function fusionarCosmeticosDuplicados(idAConservar, idsAEliminar) {
     await supabase.from("progreso").update({ titulo_equipado_id: idAConservar }).eq("titulo_equipado_id", idEliminar);
     await supabase.from("cosmeticos_catalogo").delete().eq("id", idEliminar);
   }
+}
+
+// Limpia TODOS los grupos de duplicados de cosméticos de una sola vez — se
+// queda automáticamente con la versión que más estudiantes tengan.
+export async function limpiarTodosLosDuplicadosCosmeticos() {
+  const grupos = await fetchCosmeticosDuplicados();
+  let totalFusionadas = 0;
+  for (const grupo of grupos) {
+    const conservar = [...grupo].sort((a, b) => b.total_poseido - a.total_poseido || a.id - b.id)[0];
+    const idsAEliminar = grupo.filter((c) => c.id !== conservar.id).map((c) => c.id);
+    await fusionarCosmeticosDuplicados(conservar.id, idsAEliminar);
+    totalFusionadas += idsAEliminar.length;
+  }
+  return { grupos: grupos.length, fusionadas: totalFusionadas };
 }
 
 /* ---------------- Catálogo de acciones de gamificación (editable) ---------------- */
