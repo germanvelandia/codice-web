@@ -2393,6 +2393,12 @@ export async function setValor(actividadId, estudianteId, valor) {
   if (error) throw error;
 }
 
+export async function fetchHistorialGamificacion(estudianteId) {
+  const { data, error } = await supabase.from("historial_gamificacion").select("*").eq("estudiante_id", estudianteId).order("creado_en", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
 export async function fetchXpPorCategoria(estudianteIds, categorias) {
   if (estudianteIds.length === 0 || categorias.length === 0) return {};
   const { data, error } = await supabase
