@@ -393,6 +393,11 @@ export async function eliminarDocente(profesorId) {
 }
 
 /* ---------------- Procesos de inclusión (PIAR / DUA) ---------------- */
+export async function guardarFotoEstudiante(estudianteId, fotoUrl) {
+  const { error } = await supabase.from("estudiantes").update({ foto_url: fotoUrl }).eq("id", estudianteId);
+  if (error) throw error;
+}
+
 export async function guardarInclusion(estudianteId, cambios) {
   const { error } = await supabase.from("estudiantes").update(cambios).eq("id", estudianteId);
   if (error) throw error;
