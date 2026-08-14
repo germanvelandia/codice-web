@@ -433,6 +433,11 @@ function NuevaActaForm({ estudianteId, onCancelar, onGuardada }) {
   const [implicaciones, setImplicaciones] = useState("");
   const [reincidente, setReincidente] = useState(false);
   const [incluirAsistencia, setIncluirAsistencia] = useState(false);
+  const [tipoEvento, setTipoEvento] = useState("Convivencial");
+  const [tipificacionFalta, setTipificacionFalta] = useState("");
+  const [descargoEstudiante, setDescargoEstudiante] = useState("");
+  const [evaluacionCompromiso, setEvaluacionCompromiso] = useState("");
+  const [remitidoA, setRemitidoA] = useState("");
   const [guardando, setGuardando] = useState(false);
 
   const seleccionarConv = (o) => { setComportamientoConv(o); setImplicaciones(o.implicaciones_legales || ""); };
@@ -447,6 +452,10 @@ function NuevaActaForm({ estudianteId, onCancelar, onGuardada }) {
         tipo, fecha, motivo: motivo.trim(), descripcion: descripcion.trim() || null,
         compromisos_academicos: compromisosAcademicos.trim() || null,
         compromisos_convivenciales: compromisosConvivenciales.trim() || null,
+        tipo_evento: tipoEvento, tipificacion_falta: tipificacionFalta || null,
+        descargo_estudiante: descargoEstudiante.trim() || null,
+        evaluacion_compromiso: evaluacionCompromiso || null,
+        remitido_a: remitidoA || null,
       };
       if (tipo === "Convivencial") {
         campos.categoria_falta = comportamientoConv.id;
@@ -533,6 +542,56 @@ function NuevaActaForm({ estudianteId, onCancelar, onGuardada }) {
         <input type="checkbox" checked={incluirAsistencia} onChange={(e) => setIncluirAsistencia(e.target.checked)} />
         Incluir resumen de asistencia como sustento
       </label>
+
+      <div className="border-t border-slate-200 pt-3 mb-2">
+        <p className="text-[11px] text-slate-400 mb-2">Campos opcionales — se usan para armar el "Observador del Estudiante" completo.</p>
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">Tipo de evento</label>
+            <select value={tipoEvento} onChange={(e) => setTipoEvento(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white">
+              <option>Académico</option>
+              <option>Convivencial</option>
+              <option>Felicitación</option>
+              <option>Citación a acudiente</option>
+              <option>Apoyo y orientación</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">Tipificación (Ley 1620)</label>
+            <select value={tipificacionFalta} onChange={(e) => setTipificacionFalta(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white">
+              <option value="">No aplica</option>
+              <option value="Tipo I">Tipo I (leve/formativa)</option>
+              <option value="Tipo II">Tipo II (grave)</option>
+              <option value="Tipo III">Tipo III (delito/violencia extrema)</option>
+            </select>
+          </div>
+        </div>
+        <label className="text-xs text-slate-500 block mb-1">Versión / descargo del estudiante</label>
+        <textarea value={descargoEstudiante} onChange={(e) => setDescargoEstudiante(e.target.value)} rows={2}
+          placeholder="Espacio para que el estudiante exprese su versión de los hechos"
+          className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">Evaluación del compromiso</label>
+            <select value={evaluacionCompromiso} onChange={(e) => setEvaluacionCompromiso(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white">
+              <option value="">Sin verificar todavía</option>
+              <option value="cumplio">Cumplió</option>
+              <option value="en_proceso">En proceso</option>
+              <option value="no_cumplio">No cumplió</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">Remitido a</label>
+            <select value={remitidoA} onChange={(e) => setRemitidoA(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white">
+              <option value="">No remitido</option>
+              <option value="Orientación Escolar">Orientación Escolar</option>
+              <option value="Coordinación de Convivencia">Coordinación de Convivencia</option>
+              <option value="Comité de Convivencia Escolar">Comité de Convivencia Escolar</option>
+              <option value="Entidad externa (ICBF, Comisaría, etc.)">Entidad externa (ICBF, Comisaría, etc.)</option>
+            </select>
+          </div>
+        </div>
+      </div>
 
       <div className="flex justify-end gap-2">
         <button onClick={onCancelar} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
