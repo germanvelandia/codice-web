@@ -1817,6 +1817,16 @@ export function VistaGrados({ onElegirGrado }) {
     cargar();
   };
 
+  const eliminar = async (gradoId) => {
+    if (!confirm(`¿Eliminar el curso ${gradoId}? Solo se puede si ya no tiene estudiantes.`)) return;
+    try {
+      await api.eliminarGrado(gradoId);
+      cargar();
+    } catch (e) {
+      alert(e.message);
+    }
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
@@ -1839,6 +1849,8 @@ export function VistaGrados({ onElegirGrado }) {
               <div key={g.id} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 text-center hover:shadow-md relative">
                 <button onClick={(e) => { e.stopPropagation(); setEditandoColorDe(editandoColorDe === g.id ? null : g.id); }}
                   className="absolute top-2 right-2 w-4 h-4 rounded-full border border-white shadow" style={{ background: color }} title="Cambiar color" />
+                <button onClick={(e) => { e.stopPropagation(); eliminar(g.id); }}
+                  className="absolute top-2 left-2 text-xs text-slate-300 hover:text-rose-500" title="Eliminar este curso">🗑</button>
                 <button onClick={() => onElegirGrado(g.id)} className="w-full">
                   <div className="text-2xl font-bold" style={{ color }}>{g.id}</div>
                   <div className="text-xs text-slate-400 mt-1">Grado</div>
