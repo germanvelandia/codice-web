@@ -7,11 +7,18 @@ import {
 } from "../lib/calificaciones";
 import { buscarEstudiantePorNombre, agruparPorNivel, nivelYCurso, initials } from "../lib/gamification";
 import { ActasModal } from "./Actas";
-import { InclusionBadge } from "./Estudiantes";
+import { InclusionBadge, FotoLightbox } from "./Estudiantes";
 
 function MiniAvatarCal({ estudiante, size = 22 }) {
+  const [ampliada, setAmpliada] = useState(false);
   if (estudiante.foto_url) {
-    return <img src={estudiante.foto_url} alt={estudiante.nombre} className="rounded-full object-cover shrink-0 inline-block align-middle mr-1.5" style={{ width: size, height: size }} />;
+    return (
+      <>
+        <img src={estudiante.foto_url} alt={estudiante.nombre} onClick={() => setAmpliada(true)}
+          className="rounded-full object-cover shrink-0 inline-block align-middle mr-1.5 cursor-pointer" style={{ width: size, height: size }} />
+        {ampliada && <FotoLightbox url={estudiante.foto_url} nombre={estudiante.nombre} onClose={() => setAmpliada(false)} />}
+      </>
+    );
   }
   return (
     <div className="rounded-full flex items-center justify-center font-bold shrink-0 bg-violet-100 text-violet-600 inline-flex align-middle mr-1.5"
