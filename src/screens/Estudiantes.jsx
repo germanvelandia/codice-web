@@ -8,6 +8,8 @@ import { initials, nextLevel, reinoColor, reinoInfo, sugerirApellidos, colorGrad
 import * as api from "../lib/api";
 import { ActasModal } from "./Actas";
 import { RemisionModal } from "./Remision";
+import { ResumenEstudianteModal } from "./Resumen";
+import { ObservadorModal } from "./Observador";
 import { DirectorioModal } from "./Directorio";
 
 function LevelBar({ xp }) {
@@ -762,12 +764,15 @@ function TrasladoModal({ estudiante, grados, gradoActual, onClose, onTrasladado 
 
 function DocumentoModal({ estudiante, onClose, onGuardado }) {
   const [documento, setDocumento] = useState(estudiante.documento || "");
+  const [tipoDocumento, setTipoDocumento] = useState(estudiante.tipo_documento || "RC");
+  const [fechaNacimiento, setFechaNacimiento] = useState(estudiante.fecha_nacimiento || "");
+  const [eps, setEps] = useState(estudiante.eps || "");
   const [guardando, setGuardando] = useState(false);
 
   const guardar = async () => {
     setGuardando(true);
     try {
-      await api.guardarDocumento(estudiante.id, documento);
+      await api.guardarDocumento(estudiante.id, documento, { tipo_documento: tipoDocumento, fecha_nacimiento: fechaNacimiento || null, eps: eps.trim() || null });
       onGuardado(documento.trim() || null);
       onClose();
     } catch (e) {
@@ -780,13 +785,27 @@ function DocumentoModal({ estudiante, onClose, onGuardado }) {
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl">
         <div className="flex justify-between items-center mb-3">
-          <h3 className="font-bold text-slate-800">🪪 Documento — {estudiante.nombre}</h3>
+          <h3 className="font-bold text-slate-800">🪪 Identificación — {estudiante.nombre}</h3>
           <button onClick={onClose} className="text-slate-400">✕</button>
         </div>
         <p className="text-xs text-slate-500 mb-3">
           Se guarda completo, pero en las actas oficiales solo se muestran los últimos 4 dígitos.
         </p>
-        <input value={documento} onChange={(e) => setDocumento(e.target.value)} placeholder="Número de documento"
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <select value={tipoDocumento} onChange={(e) => setTipoDocumento(e.target.value)} className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none">
+            <option value="RC">RC</option>
+            <option value="TI">TI</option>
+            <option value="CC">CC</option>
+            <option value="CE">CE</option>
+            <option value="PPT">PPT</option>
+          </select>
+          <input value={documento} onChange={(e) => setDocumento(e.target.value)} placeholder="Número de documento"
+            className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" />
+        </div>
+        <label className="text-xs text-slate-500 block mb-1">Fecha de nacimiento</label>
+        <input type="date" value={fechaNacimiento} onChange={(e) => setFechaNacimiento(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none" />
+        <label className="text-xs text-slate-500 block mb-1">EPS</label>
+        <input value={eps} onChange={(e) => setEps(e.target.value)} placeholder="Nombre de la EPS"
           className="w-full text-sm rounded-lg px-3 py-2 mb-4 border border-slate-200 outline-none" />
         <button disabled={guardando} onClick={guardar} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
           {guardando ? "Guardando…" : "Guardar"}
@@ -811,6 +830,8 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
   const [inclusionAbierta, setInclusionAbierta] = useState(false);
   const [codiceAbierto, setCodiceAbierto] = useState(false);
   const [remisionAbierta, setRemisionAbierta] = useState(false);
+  const [resumenAbierto, setResumenAbierto] = useState(false);
+  const [observadorAbierto, setObservadorAbierto] = useState(false);
   const [trasladoAbierto, setTrasladoAbierto] = useState(false);
   const [documentoAbierto, setDocumentoAbierto] = useState(false);
   const [menuAbierto, setMenuAbierto] = useState(false);
@@ -957,6 +978,8 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
                 </button>
                 <button onClick={() => { setMenuAbierto(false); setCodiceAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📖 Ver Códice</button>
                 <button onClick={() => { setMenuAbierto(false); setRemisionAbierta(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📨 Remisión a Orientación</button>
+                <button onClick={() => { setMenuAbierto(false); setResumenAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📊 Resumen del estudiante</button>
+                <button onClick={() => { setMenuAbierto(false); setObservadorAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📋 Observador del Estudiante</button>
                 <button onClick={() => { setMenuAbierto(false); setActasAbiertas(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📋 Actas</button>
                 <button onClick={() => { setMenuAbierto(false); setDocumentoAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">🪪 Documento</button>
                 <div className="border-t border-slate-100 my-1" />
@@ -971,6 +994,8 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
       {inclusionAbierta && <InclusionModal estudiante={estudiante} onClose={() => setInclusionAbierta(false)} onGuardado={() => setInclusionAbierta(false)} />}
       {codiceAbierto && <CodiceDocenteModal estudiante={estudiante} onClose={() => setCodiceAbierto(false)} />}
       {remisionAbierta && <RemisionModal estudiante={estudiante} onClose={() => setRemisionAbierta(false)} />}
+      {resumenAbierto && <ResumenEstudianteModal estudiante={estudiante} onClose={() => setResumenAbierto(false)} />}
+      {observadorAbierto && <ObservadorModal estudiante={estudiante} onClose={() => setObservadorAbierto(false)} />}
       {trasladoAbierto && (
         <TrasladoModal estudiante={estudiante} grados={grados} gradoActual={gradoActual} onClose={() => setTrasladoAbierto(false)} onTrasladado={onTrasladado} />
       )}
