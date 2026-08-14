@@ -883,7 +883,7 @@ function HistorialGamificacionModal({ estudiante, onClose }) {
                   <div className="min-w-0">
                     <div className="text-xs font-semibold text-slate-700">{h.etiqueta}</div>
                     <div className="text-[10px] text-slate-400">
-                      {new Date(h.creado_en).toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" })}
+                      {new Date(h.ts).toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" })}
                       <span style={{ color: info.color }}> · {info.emoji} {info.label}</span>
                     </div>
                   </div>
