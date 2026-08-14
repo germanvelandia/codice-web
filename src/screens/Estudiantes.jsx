@@ -1047,19 +1047,19 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
             <>
               <div className="fixed inset-0 z-10" onClick={() => setMenuAbierto(false)} />
               <div className="absolute left-0 bottom-full mb-1 bg-white rounded-xl shadow-lg border border-slate-100 py-1 w-48 z-20">
-                {grados && grados.length > 1 && (
-                  <button onClick={() => { setMenuAbierto(false); setTrasladoAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">🔀 Trasladar de grado</button>
-                )}
+                <button onClick={() => { setMenuAbierto(false); setActasAbiertas(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📋 Actas</button>
+                <button onClick={() => { setMenuAbierto(false); setDocumentoAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">🪪 Documento</button>
+                <button onClick={() => { setMenuAbierto(false); setHistorialAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📜 Historial de comportamiento</button>
                 <button onClick={() => { setMenuAbierto(false); setInclusionAbierta(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">
                   {estudiante.piar || estudiante.dua ? "🧩 Inclusión" : "+ Inclusión"}
                 </button>
-                <button onClick={() => { setMenuAbierto(false); setCodiceAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📖 Ver Códice</button>
+                <button onClick={() => { setMenuAbierto(false); setObservadorAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📋 Observador del Estudiante</button>
                 <button onClick={() => { setMenuAbierto(false); setRemisionAbierta(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📨 Remisión a Orientación</button>
                 <button onClick={() => { setMenuAbierto(false); setResumenAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📊 Resumen del estudiante</button>
-                <button onClick={() => { setMenuAbierto(false); setObservadorAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📋 Observador del Estudiante</button>
-                <button onClick={() => { setMenuAbierto(false); setHistorialAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📜 Historial de comportamiento</button>
-                <button onClick={() => { setMenuAbierto(false); setActasAbiertas(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📋 Actas</button>
-                <button onClick={() => { setMenuAbierto(false); setDocumentoAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">🪪 Documento</button>
+                {grados && grados.length > 1 && (
+                  <button onClick={() => { setMenuAbierto(false); setTrasladoAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">🔀 Trasladar de grado</button>
+                )}
+                <button onClick={() => { setMenuAbierto(false); setCodiceAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📖 Ver Códice</button>
                 <div className="border-t border-slate-100 my-1" />
                 <button onClick={() => { setMenuAbierto(false); onQuitar(estudiante.id); }} className="w-full text-left text-xs px-3 py-2 hover:bg-rose-50 text-rose-500">🗑 Quitar de la lista</button>
               </div>
