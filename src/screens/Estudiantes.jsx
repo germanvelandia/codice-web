@@ -796,6 +796,16 @@ function DocumentoModal({ estudiante, onClose, onGuardado }) {
   );
 }
 
+export function FotoLightbox({ url, nombre, onClose }) {
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-6" style={{ background: "rgba(0,0,0,0.75)" }} onClick={onClose}>
+      <img src={url} alt={nombre} className="rounded-2xl shadow-2xl" style={{ maxWidth: "min(80vw, 420px)", maxHeight: "80vh", objectFit: "contain" }} />
+      <button onClick={onClose} className="absolute top-4 right-4 text-white text-2xl">✕</button>
+    </div>,
+    document.body
+  );
+}
+
 function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFotoActualizada, reinos, catalogoReinos, onCambiarReino, roles, onCambiarRol, onCodigoGenerado, grados, gradoActual, onTrasladado }) {
   const [actasAbiertas, setActasAbiertas] = useState(false);
   const [inclusionAbierta, setInclusionAbierta] = useState(false);
@@ -838,6 +848,7 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
   };
 
   const [subiendoFoto, setSubiendoFoto] = useState(false);
+  const [fotoAmpliada, setFotoAmpliada] = useState(false);
 
   const subirFoto = (file) => {
     if (file.size > 500 * 1024) { alert("La foto es muy grande. Usa una de menos de 500 KB."); return; }
@@ -870,7 +881,8 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
       <div className="flex items-start gap-3 mb-2">
         <div className="relative shrink-0">
           {estudiante.foto_url ? (
-            <img src={estudiante.foto_url} alt={estudiante.nombre} className="w-10 h-10 object-cover rounded-full border border-slate-100" />
+            <img src={estudiante.foto_url} alt={estudiante.nombre} onClick={() => setFotoAmpliada(true)}
+              className="w-10 h-10 object-cover rounded-full border border-slate-100 cursor-pointer" />
           ) : infoReino.logo_url ? (
             <img src={infoReino.logo_url} alt="" className="w-10 h-10 object-contain rounded-full border border-slate-100" />
           ) : (
@@ -964,6 +976,9 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
       )}
       {documentoAbierto && (
         <DocumentoModal estudiante={estudiante} onClose={() => setDocumentoAbierto(false)} onGuardado={onTrasladado} />
+      )}
+      {fotoAmpliada && estudiante.foto_url && (
+        <FotoLightbox url={estudiante.foto_url} nombre={estudiante.nombre} onClose={() => setFotoAmpliada(false)} />
       )}
     </div>
   );
