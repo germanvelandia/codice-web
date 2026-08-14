@@ -36,6 +36,67 @@ export async function crearGrado(id) {
   if (error) throw error;
 }
 
+/* ---------------- Promoción de fin de año ---------------- */
+// Trae todos los cursos con la cantidad de estudiantes activos en cada uno,
+// para armar la pantalla de promoción.
+export async function fetchGradosConConteo() {
+  const [gradosRes, estudiantesRes] = await Promise.all([
+    fetchGrados(),
+    supabase.from("estudiantes").select("id, grado_id").eq("activo", true),
+  ]);
+  const conteo = {};
+  (estudiantesRes.data || []).forEach((e) => { conteo[e.grado_id] = (conteo[e.grado_id] || 0) + 1; });
+  return gradosRes.map((g) => ({ ...g, cantidadEstudiantes: conteo[g.id] || 0 }));
+}
+
+// Vista previa: para cada mapeo {origen, destino}, devuelve la lista de
+// estudiantes que se moverían — no cambia nada todavía.
+export async function fetchPreviaPromocion(mapa) {
+  const resultado = [];
+  for (const { origen, destino, graduacion } of mapa) {
+    const { data } = await supabase.from("estudiantes").select("id, nombre").eq("grado_id", origen).eq("activo", true).order("nombre");
+    resultado.push({ origen, destino, graduacion, estudiantes: data || [] });
+  }
+  return resultado;
+}
+
+// Ejecuta la promoción real: mueve a cada estudiante de su curso de origen
+// al de destino (o lo marca inactivo si es graduación), sin borrar ningún
+// dato histórico de notas/asistencia — esos quedan tal cual estaban.
+export async function ejecutarPromocion(mapa, reiniciarProgreso) {
+  const { data: userData } = await supabase.auth.getUser();
+  const detalle = [];
+
+  for (const { origen, destino, graduacion } of mapa) {
+    const { data: estudiantes } = await supabase.from("estudiantes").select("id, nombre").eq("grado_id", origen).eq("activo", true);
+    if (!estudiantes || estudiantes.length === 0) continue;
+
+    if (graduacion) {
+      const ids = estudiantes.map((e) => e.id);
+      await supabase.from("estudiantes").update({ activo: false }).in("id", ids);
+      estudiantes.forEach((e) => detalle.push({ estudiante_id: e.id, nombre: e.nombre, grado_anterior: origen, grado_nuevo: "graduado" }));
+    } else {
+      await crearGrado(destino); // asegura que el curso destino exista
+      const ids = estudiantes.map((e) => e.id);
+      await supabase.from("estudiantes").update({ grado_id: destino }).in("id", ids);
+      estudiantes.forEach((e) => detalle.push({ estudiante_id: e.id, nombre: e.nombre, grado_anterior: origen, grado_nuevo: destino }));
+
+      if (reiniciarProgreso) {
+        await Promise.all(ids.map((id) => supabase.from("progreso").upsert({ estudiante_id: id, xp: 0, vida: 100, monedas: 0 })));
+      }
+    }
+  }
+
+  await supabase.from("promociones_historial").insert({ docente_id: userData?.user?.id || null, detalle, reinicio_progreso: !!reiniciarProgreso });
+  return detalle;
+}
+
+export async function fetchHistorialPromociones() {
+  const { data, error } = await supabase.from("promociones_historial").select("*").order("creado_en", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
 export async function eliminarGrado(id) {
   const { count, error: e1 } = await supabase.from("estudiantes").select("id", { count: "exact", head: true }).eq("grado_id", id);
   if (e1) throw e1;
