@@ -2394,7 +2394,7 @@ export async function setValor(actividadId, estudianteId, valor) {
 }
 
 export async function fetchHistorialGamificacion(estudianteId) {
-  const { data, error } = await supabase.from("historial_gamificacion").select("*").eq("estudiante_id", estudianteId).order("creado_en", { ascending: false });
+  const { data, error } = await supabase.from("historial_gamificacion").select("*").eq("estudiante_id", estudianteId).order("ts", { ascending: false });
   if (error) throw error;
   return data || [];
 }
