@@ -1,12 +1,19 @@
 import React, { useEffect, useMemo, useState } from "react";
 import * as api from "../lib/api";
 import { ActasModal } from "./Actas";
-import { InclusionBadge } from "./Estudiantes";
+import { InclusionBadge, FotoLightbox } from "./Estudiantes";
 import { agruparPorNivel, nivelYCurso, initials } from "../lib/gamification";
 
 function MiniAvatar({ estudiante, size = 28 }) {
+  const [ampliada, setAmpliada] = useState(false);
   if (estudiante.foto_url) {
-    return <img src={estudiante.foto_url} alt={estudiante.nombre} className="rounded-full object-cover shrink-0" style={{ width: size, height: size }} />;
+    return (
+      <>
+        <img src={estudiante.foto_url} alt={estudiante.nombre} onClick={() => setAmpliada(true)}
+          className="rounded-full object-cover shrink-0 cursor-pointer" style={{ width: size, height: size }} />
+        {ampliada && <FotoLightbox url={estudiante.foto_url} nombre={estudiante.nombre} onClose={() => setAmpliada(false)} />}
+      </>
+    );
   }
   return (
     <div className="rounded-full flex items-center justify-center font-bold shrink-0 bg-violet-100 text-violet-600"
