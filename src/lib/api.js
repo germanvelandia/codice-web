@@ -1968,6 +1968,29 @@ export async function eliminarRemision(id) {
   if (error) throw error;
 }
 
+/* ---------------- Anotaciones privadas del docente ---------------- */
+export async function fetchAnotaciones(estudianteId) {
+  const { data, error } = await supabase.from("anotaciones_estudiantes").select("*").eq("estudiante_id", estudianteId).order("fecha", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearAnotacion(estudianteId, campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("anotaciones_estudiantes").insert({ estudiante_id: estudianteId, docente_id: userData?.user?.id, ...campos });
+  if (error) throw error;
+}
+
+export async function editarAnotacion(id, campos) {
+  const { error } = await supabase.from("anotaciones_estudiantes").update(campos).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarAnotacion(id) {
+  const { error } = await supabase.from("anotaciones_estudiantes").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
