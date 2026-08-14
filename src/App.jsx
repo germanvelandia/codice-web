@@ -1322,6 +1322,59 @@ function BibliotecaEstudiante({ gradoId }) {
   );
 }
 
+const CATEGORIA_INFO_ESTUDIANTE = {
+  academico: { label: "Académico", color: "#3B82F6", emoji: "📘" },
+  convivencial: { label: "Convivencial", color: "#F59E0B", emoji: "🤝" },
+  general: { label: "General", color: "#8B5CF6", emoji: "⚡" },
+  respeto: { label: "Respeto", color: "#22C55E", emoji: "🌱" },
+  responsabilidad: { label: "Responsabilidad", color: "#22C55E", emoji: "✅" },
+  confiabilidad: { label: "Confiabilidad", color: "#22C55E", emoji: "🤲" },
+  justicia: { label: "Justicia", color: "#22C55E", emoji: "⚖️" },
+  solidaridad: { label: "Solidaridad", color: "#22C55E", emoji: "💛" },
+  ciudadania: { label: "Ciudadanía", color: "#22C55E", emoji: "🏛️" },
+};
+
+function HistorialEstudiante({ estudianteId }) {
+  const [historial, setHistorial] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [verTodo, setVerTodo] = useState(false);
+
+  useEffect(() => { api.fetchHistorialGamificacion(estudianteId).then((d) => { setHistorial(d); setCargando(false); }); }, [estudianteId]);
+
+  if (cargando) return null;
+  if (historial.length === 0) return null;
+
+  const visibles = verTodo ? historial : historial.slice(0, 6);
+
+  return (
+    <div className="mt-5 pt-4 border-t border-slate-100">
+      <div className="text-xs font-semibold text-slate-600 mb-2">📜 Historial reciente</div>
+      <div className="space-y-1.5">
+        {visibles.map((h) => {
+          const info = CATEGORIA_INFO_ESTUDIANTE[h.categoria] || { label: h.categoria, color: "#94A3B8", emoji: "•" };
+          return (
+            <div key={h.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
+              <div className="min-w-0">
+                <div className="text-xs font-semibold text-slate-700">{h.etiqueta}</div>
+                <div className="text-[10px] text-slate-400">
+                  {new Date(h.creado_en).toLocaleDateString("es-CO", { day: "numeric", month: "short" })}
+                  <span style={{ color: info.color }}> · {info.emoji} {info.label}</span>
+                </div>
+              </div>
+              <div className={`text-xs font-semibold shrink-0 ${h.xp >= 0 ? "text-emerald-600" : "text-rose-500"}`}>{h.xp > 0 ? "+" : ""}{h.xp} XP</div>
+            </div>
+          );
+        })}
+      </div>
+      {historial.length > 6 && (
+        <button onClick={() => setVerTodo((v) => !v)} className="text-[11px] text-violet-500 mt-2">
+          {verTodo ? "Ver menos" : `Ver todo (${historial.length})`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function PortalEstudiante() {
   const [codigo, setCodigo] = useState("");
   const [datos, setDatos] = useState(null);
@@ -1478,6 +1531,7 @@ function PortalEstudiante() {
               <div className="mt-5 pt-4 border-t border-slate-100">
                 <CosmeticosEstudiante estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} />
               </div>
+              <HistorialEstudiante estudianteId={estudianteInfo.id} />
             </div>
           )}
 
