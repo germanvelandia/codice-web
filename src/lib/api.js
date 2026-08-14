@@ -913,18 +913,14 @@ export async function fetchDictadosPendientes(materiaId) {
 // Ajusta las monedas de un estudiante directamente (sumar o restar), sin pasar
 // por una acción de XP — usado por la Ruleta de Monedas y el Banco.
 export async function ajustarMonedas(estudianteId, delta) {
-  const { data: actual } = await supabase.from("progreso").select("*").eq("estudiante_id", estudianteId).maybeSingle();
-  const nuevasMonedas = Math.max(0, (actual?.monedas || 0) + delta);
-  const { error } = await supabase.from("progreso").upsert({
-    estudiante_id: estudianteId, xp: actual?.xp || 0, vida: actual?.vida ?? 100, monedas: nuevasMonedas,
-  });
+  const { data, error } = await supabase.rpc("ajustar_progreso", { p_estudiante_id: estudianteId, p_delta_monedas: delta });
   if (error) throw error;
-  return nuevasMonedas;
+  return data?.[0]?.monedas ?? 0;
 }
 
 export async function ajustarMonedasMasivo(estudianteIds, delta) {
   const resultados = {};
-  for (const id of estudianteIds) { resultados[id] = await ajustarMonedas(id, delta); }
+  await Promise.all(estudianteIds.map(async (id) => { resultados[id] = await ajustarMonedas(id, delta); }));
   return resultados;
 }
 
@@ -1776,19 +1772,15 @@ export async function completarMicroMision(mision, estudianteId) {
 }
 
 export async function ajustarXp(estudianteId, delta) {
-  const { data: actual } = await supabase.from("progreso").select("*").eq("estudiante_id", estudianteId).maybeSingle();
-  const nuevoXp = Math.max(0, (actual?.xp || 0) + delta);
-  const { error } = await supabase.from("progreso").upsert({ estudiante_id: estudianteId, xp: nuevoXp, vida: actual?.vida ?? 100, monedas: actual?.monedas || 0 });
+  const { data, error } = await supabase.rpc("ajustar_progreso", { p_estudiante_id: estudianteId, p_delta_xp: delta });
   if (error) throw error;
-  return nuevoXp;
+  return data?.[0]?.xp ?? 0;
 }
 
 export async function ajustarVida(estudianteId, delta) {
-  const { data: actual } = await supabase.from("progreso").select("*").eq("estudiante_id", estudianteId).maybeSingle();
-  const nuevaVida = Math.max(0, Math.min(100, (actual?.vida ?? 100) + delta));
-  const { error } = await supabase.from("progreso").upsert({ estudiante_id: estudianteId, xp: actual?.xp || 0, vida: nuevaVida, monedas: actual?.monedas || 0 });
+  const { data, error } = await supabase.rpc("ajustar_progreso", { p_estudiante_id: estudianteId, p_delta_vida: delta });
   if (error) throw error;
-  return nuevaVida;
+  return data?.[0]?.vida ?? 0;
 }
 
 /* ---------------- Personalización cosmética ---------------- */
@@ -2423,9 +2415,7 @@ export async function fetchTotalesAsistenciaPorEstudiante(fechaDesde, fechaHasta
 }
 
 export async function marcarTodosPresentes(estudianteIds, fecha, materiaId = null) {
-  for (const id of estudianteIds) {
-    await marcarAsistencia(id, fecha, "P", null, materiaId);
-  }
+  await Promise.all(estudianteIds.map((id) => marcarAsistencia(id, fecha, "P", null, materiaId)));
 }
 
 export async function fetchEstadisticasAsistencia(estudianteId) {
@@ -2462,23 +2452,14 @@ export async function fetchAsistenciaConsolidadaEstudiante(estudianteId) {
 }
 
 export async function registrarAccion(estudianteId, accion) {
-  await supabase.from("historial_gamificacion").insert({
-    estudiante_id: estudianteId,
-    etiqueta: accion.label,
-    xp: accion.xp,
-    vida: accion.vida,
-    categoria: accion.categoria,
-  });
-  const { data: actual } = await supabase.from("progreso").select("*").eq("estudiante_id", estudianteId).maybeSingle();
-  const nuevoXp = Math.max(0, (actual?.xp || 0) + accion.xp);
-  const nuevaVida = Math.max(0, Math.min(100, (actual?.vida ?? 100) + accion.vida));
-  const nuevasMonedas = (actual?.monedas || 0) + (accion.xp > 0 ? 1 : 0);
-  const { error } = await supabase.from("progreso").upsert({
-    estudiante_id: estudianteId,
-    xp: nuevoXp,
-    vida: nuevaVida,
-    monedas: nuevasMonedas,
-  });
-  if (error) throw error;
-  return { xp: nuevoXp, vida: nuevaVida, monedas: nuevasMonedas };
+  const deltaMonedas = accion.xp > 0 ? 1 : 0;
+  const [, rpcRes] = await Promise.all([
+    supabase.from("historial_gamificacion").insert({
+      estudiante_id: estudianteId, etiqueta: accion.label, xp: accion.xp, vida: accion.vida, categoria: accion.categoria,
+    }),
+    supabase.rpc("ajustar_progreso", { p_estudiante_id: estudianteId, p_delta_xp: accion.xp, p_delta_vida: accion.vida, p_delta_monedas: deltaMonedas }),
+  ]);
+  if (rpcRes.error) throw rpcRes.error;
+  const fila = rpcRes.data?.[0];
+  return { xp: fila?.xp ?? 0, vida: fila?.vida ?? 0, monedas: fila?.monedas ?? 0 };
 }
