@@ -796,7 +796,7 @@ function DocumentoModal({ estudiante, onClose, onGuardado }) {
   );
 }
 
-function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, reinos, catalogoReinos, onCambiarReino, roles, onCambiarRol, onCodigoGenerado, grados, gradoActual, onTrasladado }) {
+function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFotoActualizada, reinos, catalogoReinos, onCambiarReino, roles, onCambiarRol, onCodigoGenerado, grados, gradoActual, onTrasladado }) {
   const [actasAbiertas, setActasAbiertas] = useState(false);
   const [inclusionAbierta, setInclusionAbierta] = useState(false);
   const [codiceAbierto, setCodiceAbierto] = useState(false);
@@ -837,17 +837,43 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, rein
     setEditandoNombre(false);
   };
 
+  const [subiendoFoto, setSubiendoFoto] = useState(false);
+
+  const subirFoto = (file) => {
+    if (file.size > 500 * 1024) { alert("La foto es muy grande. Usa una de menos de 500 KB."); return; }
+    setSubiendoFoto(true);
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        await api.guardarFotoEstudiante(estudiante.id, e.target.result);
+        onFotoActualizada(estudiante.id, e.target.result);
+      } catch (err) {
+        alert("Error al guardar la foto: " + err.message);
+      }
+      setSubiendoFoto(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
     <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
       <div className="flex items-start gap-3 mb-2">
-        {infoReino.logo_url ? (
-          <img src={infoReino.logo_url} alt="" className="w-10 h-10 object-contain rounded-full shrink-0 border border-slate-100" />
-        ) : (
-          <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
-            style={{ background: `${infoReino.color}22`, color: infoReino.color }}>
-            {initials(estudiante.nombre)}
-          </div>
-        )}
+        <div className="relative shrink-0">
+          {estudiante.foto_url ? (
+            <img src={estudiante.foto_url} alt={estudiante.nombre} className="w-10 h-10 object-cover rounded-full border border-slate-100" />
+          ) : infoReino.logo_url ? (
+            <img src={infoReino.logo_url} alt="" className="w-10 h-10 object-contain rounded-full border border-slate-100" />
+          ) : (
+            <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold"
+              style={{ background: `${infoReino.color}22`, color: infoReino.color }}>
+              {initials(estudiante.nombre)}
+            </div>
+          )}
+          <label className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-violet-500 flex items-center justify-center cursor-pointer" title="Subir foto">
+            <span className="text-white text-[8px]">{subiendoFoto ? "…" : "📷"}</span>
+            <input type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files[0]) subirFoto(e.target.files[0]); }} />
+          </label>
+        </div>
         <div className="min-w-0 flex-1">
           {editandoNombre ? (
             <div className="flex items-center gap-1">
@@ -1296,6 +1322,10 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
     setEstudiantes((prev) => prev.map((s) => (s.id === id ? { ...s, progreso: [nuevo] } : s)));
   };
 
+  const actualizarFotoLocal = (id, fotoUrl) => {
+    setEstudiantes((prev) => prev.map((s) => (s.id === id ? { ...s, foto_url: fotoUrl } : s)));
+  };
+
   const actualizarCodigoLocal = (id, codigo) => {
     setEstudiantes((prev) => prev.map((s) => (s.id === id ? { ...s, codigo_acceso: codigo } : s)));
   };
@@ -1394,7 +1424,7 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
       ) : (
         <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
           {visibles.map((s) => (
-            <TarjetaEstudiante key={s.id} estudiante={s} reinos={reinos} catalogoReinos={catalogoReinos} onQuitar={quitar} onRenombrar={renombrar} onCambiarReino={cambiarReino} onAplicado={actualizarProgresoLocal} roles={roles} onCambiarRol={cambiarRol} onCodigoGenerado={actualizarCodigoLocal} grados={grados} gradoActual={gradoId} onTrasladado={cargar} />
+            <TarjetaEstudiante key={s.id} estudiante={s} reinos={reinos} catalogoReinos={catalogoReinos} onQuitar={quitar} onRenombrar={renombrar} onCambiarReino={cambiarReino} onAplicado={actualizarProgresoLocal} onFotoActualizada={actualizarFotoLocal} roles={roles} onCambiarRol={cambiarRol} onCodigoGenerado={actualizarCodigoLocal} grados={grados} gradoActual={gradoId} onTrasladado={cargar} />
           ))}
         </div>
       )}
