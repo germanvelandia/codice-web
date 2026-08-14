@@ -175,6 +175,7 @@ function DuplicadosModal({ onClose, onCambio }) {
   const [grupos, setGrupos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [fusionando, setFusionando] = useState(null);
+  const [limpiandoTodo, setLimpiandoTodo] = useState(false);
 
   const cargar = () => { setCargando(true); api.fetchCriaturasDuplicadas().then((g) => { setGrupos(g); setCargando(false); }); };
   useEffect(() => { cargar(); }, []);
@@ -192,6 +193,20 @@ function DuplicadosModal({ onClose, onCambio }) {
     setFusionando(null);
   };
 
+  const limpiarTodo = async () => {
+    if (!confirm(`¿Limpiar los ${grupos.length} grupo(s) de duplicados de una sola vez? En cada uno se conserva automáticamente la versión que más estudiantes tengan.`)) return;
+    setLimpiandoTodo(true);
+    try {
+      const r = await api.limpiarTodosLosDuplicadosCriaturas();
+      alert(`Listo — se fusionaron ${r.fusionadas} carta(s) duplicada(s) en ${r.grupos} grupo(s).`);
+      cargar();
+      onCambio();
+    } catch (e) {
+      alert("Error al limpiar: " + e.message);
+    }
+    setLimpiandoTodo(false);
+  };
+
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
@@ -200,9 +215,14 @@ function DuplicadosModal({ onClose, onCambio }) {
           <button onClick={onClose} className="text-slate-400">✕</button>
         </div>
         <p className="text-xs text-slate-500 mb-3">
-          Elegí cuál versión querés conservar de cada nombre repetido. Las colecciones de los estudiantes que tenían la otra se
-          suman a la que elijas — nadie pierde lo que ya coleccionó.
+          Elegí cuál versión querés conservar de cada nombre repetido, o dejá que la app lo resuelva sola. Las colecciones de los
+          estudiantes que tenían la otra se suman a la que quede — nadie pierde lo que ya coleccionó.
         </p>
+        {!cargando && grupos.length > 0 && (
+          <button disabled={limpiandoTodo} onClick={limpiarTodo} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-emerald-500 text-white disabled:opacity-60 mb-3">
+            {limpiandoTodo ? "Limpiando…" : `🧹 Limpiar los ${grupos.length} grupo(s) automáticamente`}
+          </button>
+        )}
         {cargando ? (
           <div className="text-sm text-slate-400">Cargando…</div>
         ) : grupos.length === 0 ? (
