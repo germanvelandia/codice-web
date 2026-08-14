@@ -57,13 +57,16 @@ function AnotacionForm({ estudianteId, anotacion, onCancelar, onGuardado }) {
   const [categoria, setCategoria] = useState(anotacion?.categoria || "academico");
   const [contenido, setContenido] = useState(anotacion?.contenido || "");
   const [fecha, setFecha] = useState(anotacion?.fecha || new Date().toISOString().slice(0, 10));
+  const [url, setUrl] = useState(anotacion?.url || "");
   const [guardando, setGuardando] = useState(false);
 
   const guardar = async () => {
     if (!contenido.trim()) { alert("Escribí la anotación."); return; }
+    let urlLimpia = url.trim();
+    if (urlLimpia && !/^https?:\/\//i.test(urlLimpia)) urlLimpia = "https://" + urlLimpia;
     setGuardando(true);
     try {
-      const campos = { categoria, contenido: contenido.trim(), fecha };
+      const campos = { categoria, contenido: contenido.trim(), fecha, url: urlLimpia || null };
       if (anotacion) await api.editarAnotacion(anotacion.id, campos);
       else await api.crearAnotacion(estudianteId, campos);
       onGuardado();
@@ -85,6 +88,9 @@ function AnotacionForm({ estudianteId, anotacion, onCancelar, onGuardado }) {
         ))}
       </div>
       <textarea value={contenido} onChange={(e) => setContenido(e.target.value)} rows={4} placeholder="Escribí tu anotación privada…"
+        className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
+      <label className="text-[11px] text-slate-500 block mb-1">Enlace (opcional — ej: foto o escaneo de una anotación en papel)</label>
+      <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Ej: drive.google.com/..."
         className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
       <label className="text-[11px] text-slate-500 block mb-1">Fecha</label>
       <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none bg-white" />
@@ -157,6 +163,11 @@ function PanelAnotacionesEstudiante({ estudiante, onVolver }) {
                   </div>
                 </div>
                 <p className="text-sm text-slate-600 mt-2 whitespace-pre-line">{a.contenido}</p>
+                {a.url && (
+                  <a href={a.url} target="_blank" rel="noreferrer" className="inline-block text-xs font-semibold text-violet-500 mt-2">
+                    🔗 Ver enlace adjunto
+                  </a>
+                )}
               </div>
             );
           })}
