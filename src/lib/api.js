@@ -1660,6 +1660,59 @@ export async function fetchLogrosEstudiante(estudianteId) {
   return data || [];
 }
 
+// Agrupa el catálogo de logros por nombre y devuelve solo los grupos con más
+// de uno — para poder limpiarlos, igual que ya hacemos con criaturas y cosméticos.
+export async function fetchLogrosDuplicados() {
+  const [catalogoRes, desbloqueadosRes] = await Promise.all([
+    supabase.from("logros_catalogo").select("*"),
+    supabase.from("estudiante_logros").select("logro_id"),
+  ]);
+  if (catalogoRes.error) throw catalogoRes.error;
+  if (desbloqueadosRes.error) throw desbloqueadosRes.error;
+
+  const totalPorLogro = {};
+  (desbloqueadosRes.data || []).forEach((l) => { totalPorLogro[l.logro_id] = (totalPorLogro[l.logro_id] || 0) + 1; });
+
+  const grupos = {};
+  (catalogoRes.data || []).forEach((l) => {
+    const clave = l.nombre.trim().toLowerCase();
+    grupos[clave] = grupos[clave] || [];
+    grupos[clave].push({ ...l, total_desbloqueado: totalPorLogro[l.id] || 0 });
+  });
+
+  return Object.values(grupos).filter((g) => g.length > 1);
+}
+
+// Fusiona duplicados de logros: se queda con "idAConservar" y transfiere
+// quién ya lo tenía desbloqueado desde las otras versiones, antes de borrarlas
+// — así ningún estudiante pierde una insignia que ya se ganó.
+export async function fusionarLogrosDuplicados(idAConservar, idsAEliminar) {
+  for (const idEliminar of idsAEliminar) {
+    const { data: desbloqueos } = await supabase.from("estudiante_logros").select("*").eq("logro_id", idEliminar);
+    for (const d of desbloqueos || []) {
+      const { data: yaLoTiene } = await supabase.from("estudiante_logros").select("id").eq("estudiante_id", d.estudiante_id).eq("logro_id", idAConservar).maybeSingle();
+      if (!yaLoTiene) {
+        await supabase.from("estudiante_logros").insert({ estudiante_id: d.estudiante_id, logro_id: idAConservar, desbloqueado_en: d.desbloqueado_en });
+      }
+    }
+    await supabase.from("logros_catalogo").delete().eq("id", idEliminar);
+  }
+}
+
+// Limpia TODOS los grupos de duplicados de logros de una sola vez — se queda
+// automáticamente con la versión que más estudiantes tengan desbloqueada.
+export async function limpiarTodosLosDuplicadosLogros() {
+  const grupos = await fetchLogrosDuplicados();
+  let totalFusionadas = 0;
+  for (const grupo of grupos) {
+    const conservar = [...grupo].sort((a, b) => b.total_desbloqueado - a.total_desbloqueado || a.id - b.id)[0];
+    const idsAEliminar = grupo.filter((l) => l.id !== conservar.id).map((l) => l.id);
+    await fusionarLogrosDuplicados(conservar.id, idsAEliminar);
+    totalFusionadas += idsAEliminar.length;
+  }
+  return { grupos: grupos.length, fusionadas: totalFusionadas };
+}
+
 // Revisa los hitos actuales del estudiante contra el catálogo activo y
 // desbloquea automáticamente los que ya cumple y todavía no tenía.
 // Devuelve los logros NUEVOS desbloqueados en esta pasada (para festejarlos).
