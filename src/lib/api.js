@@ -253,13 +253,13 @@ export async function asignarRol(estudianteId, rolId) {
 
 /* ---------------- Actas de seguimiento ---------------- */
 export async function fetchActasPorEstudiante(estudianteId) {
-  const { data, error } = await supabase
-    .from("actas")
-    .select("*, profesores(nombre)")
-    .eq("estudiante_id", estudianteId)
-    .order("fecha", { ascending: false });
+  const [{ data, error }, profesoresRes] = await Promise.all([
+    supabase.from("actas").select("*").eq("estudiante_id", estudianteId).order("fecha", { ascending: false }),
+    supabase.from("profesores").select("id, nombre"),
+  ]);
   if (error) throw error;
-  return data || [];
+  const nombrePorId = {}; (profesoresRes.data || []).forEach((p) => { nombrePorId[p.id] = p.nombre; });
+  return (data || []).map((a) => ({ ...a, profesores: a.registrado_por ? { nombre: nombrePorId[a.registrado_por] || null } : null }));
 }
 
 export async function crearActa(estudianteId, campos) {
@@ -349,11 +349,12 @@ export async function sincronizarEstadoActaNivelacion(estudianteId, materiaId, p
 
 /* ---------------- Catálogo de comportamientos (convivenciales y académicos) ---------------- */
 export async function fetchComportamientos(categoria) {
-  let query = supabase.from("comportamientos").select("*, profesores(nombre)").order("nombre");
+  let query = supabase.from("comportamientos").select("*").order("nombre");
   if (categoria) query = query.eq("categoria", categoria);
-  const { data, error } = await query;
+  const [{ data, error }, profesoresRes] = await Promise.all([query, supabase.from("profesores").select("id, nombre")]);
   if (error) throw error;
-  return data || [];
+  const nombrePorId = {}; (profesoresRes.data || []).forEach((p) => { nombrePorId[p.id] = p.nombre; });
+  return (data || []).map((c) => ({ ...c, profesores: c.docente_id ? { nombre: nombrePorId[c.docente_id] || null } : null }));
 }
 
 export async function crearComportamiento(campos) {
