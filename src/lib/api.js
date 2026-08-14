@@ -157,8 +157,8 @@ export async function guardarApellidos(id, apellidos) {
   if (error) throw error;
 }
 
-export async function guardarDocumento(id, documento) {
-  const { error } = await supabase.from("estudiantes").update({ documento: documento.trim() || null }).eq("id", id);
+export async function guardarDocumento(id, documento, extra = {}) {
+  const { error } = await supabase.from("estudiantes").update({ documento: documento.trim() || null, ...extra }).eq("id", id);
   if (error) throw error;
 }
 
@@ -2056,6 +2056,63 @@ export async function editarAnotacion(id, campos) {
 export async function eliminarAnotacion(id) {
   const { error } = await supabase.from("anotaciones_estudiantes").delete().eq("id", id);
   if (error) throw error;
+}
+
+export async function fetchAcudiente(estudianteId) {
+  const { data, error } = await supabase.from("acudientes").select("*").eq("estudiante_id", estudianteId).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+// Resumen imprimible de un estudiante: notas por periodo, sus propias
+// anotaciones (privadas), asistencia y gamificación — todo junto.
+export async function fetchResumenEstudiante(estudianteId) {
+  const [estudianteRes, notasRes, anotaciones, asistencia, progresoRes, logrosRes] = await Promise.all([
+    supabase.from("estudiantes").select("*").eq("id", estudianteId).maybeSingle(),
+    supabase.from("notas_finales_periodo").select("*, materias(nombre)").eq("estudiante_id", estudianteId),
+    fetchAnotaciones(estudianteId),
+    fetchEstadisticasAsistencia(estudianteId),
+    supabase.from("progreso").select("*").eq("estudiante_id", estudianteId).maybeSingle(),
+    fetchLogrosEstudiante(estudianteId),
+  ]);
+  if (estudianteRes.error) throw estudianteRes.error;
+
+  // Arma una tabla materia x periodo
+  const materiasMap = {};
+  const notasPorMateriaPeriodo = {};
+  (notasRes.data || []).forEach((n) => {
+    if (!materiasMap[n.materia_id]) materiasMap[n.materia_id] = n.materias?.nombre || `Materia ${n.materia_id}`;
+    notasPorMateriaPeriodo[n.materia_id] = notasPorMateriaPeriodo[n.materia_id] || {};
+    notasPorMateriaPeriodo[n.materia_id][n.periodo] = n.nota;
+  });
+  const periodos = Array.from(new Set((notasRes.data || []).map((n) => n.periodo))).sort();
+  const materias = Object.entries(materiasMap).map(([id, nombre]) => ({ id, nombre })).sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+  return {
+    estudiante: estudianteRes.data,
+    materias, periodos, notasPorMateriaPeriodo,
+    anotaciones, asistencia,
+    progreso: progresoRes.data || { xp: 0, vida: 100, monedas: 0 },
+    logros: logrosRes,
+  };
+}
+
+// Datos para el Observador del Estudiante: identificación completa +
+// matriz cronológica de actas (situaciones registradas).
+export async function fetchObservadorData(estudianteId) {
+  const [estudianteRes, acudiente, actas, institucion] = await Promise.all([
+    supabase.from("estudiantes").select("*").eq("id", estudianteId).maybeSingle(),
+    fetchAcudiente(estudianteId),
+    fetchActasPorEstudiante(estudianteId),
+    fetchInstitucion(),
+  ]);
+  if (estudianteRes.error) throw estudianteRes.error;
+  return {
+    estudiante: estudianteRes.data,
+    acudiente,
+    actas: [...actas].sort((a, b) => (a.fecha || "").localeCompare(b.fecha || "")),
+    institucion,
+  };
 }
 
 export async function fetchInstitucion() {
