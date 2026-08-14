@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import * as api from "../lib/api";
+import { VistaPromocion } from "./Promocion";
 
 function MiCuenta({ miPerfil }) {
   const [nueva, setNueva] = useState("");
@@ -133,7 +134,7 @@ export function AdministracionModal({ onClose }) {
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="bg-slate-50 rounded-2xl p-5 w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-xl">
+      <div onClick={(e) => e.stopPropagation()} className="bg-slate-50 rounded-2xl p-5 w-full max-w-3xl max-h-[85vh] overflow-y-auto shadow-xl">
         <div className="flex justify-between items-center mb-4">
           <h3 className="font-bold text-slate-800">Docentes y cuenta</h3>
           <button onClick={onClose} className="text-slate-400">✕</button>
@@ -149,6 +150,12 @@ export function AdministracionModal({ onClose }) {
               <p className="text-xs text-slate-400 mb-2">Solo un administrador puede cambiar el rol de otros docentes. Tú ves este listado en modo lectura.</p>
             )}
             <ListaDocentes miPerfil={miPerfil} onCambio={cargarPerfil} />
+
+            {miPerfil?.es_admin && (
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mt-4">
+                <VistaPromocion />
+              </div>
+            )}
           </>
         )}
       </div>
