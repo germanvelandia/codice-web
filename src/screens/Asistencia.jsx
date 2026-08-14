@@ -2,7 +2,19 @@ import React, { useEffect, useMemo, useState } from "react";
 import * as api from "../lib/api";
 import { ActasModal } from "./Actas";
 import { InclusionBadge } from "./Estudiantes";
-import { agruparPorNivel, nivelYCurso } from "../lib/gamification";
+import { agruparPorNivel, nivelYCurso, initials } from "../lib/gamification";
+
+function MiniAvatar({ estudiante, size = 28 }) {
+  if (estudiante.foto_url) {
+    return <img src={estudiante.foto_url} alt={estudiante.nombre} className="rounded-full object-cover shrink-0" style={{ width: size, height: size }} />;
+  }
+  return (
+    <div className="rounded-full flex items-center justify-center font-bold shrink-0 bg-violet-100 text-violet-600"
+      style={{ width: size, height: size, fontSize: size * 0.38 }}>
+      {initials(estudiante.nombre)}
+    </div>
+  );
+}
 
 const CODIGOS = [
   { code: "P", label: "Presente", color: "bg-emerald-500", light: "bg-emerald-50 text-emerald-700" },
@@ -291,9 +303,12 @@ export function VistaAsistencia({ grados }) {
             return (
               <div key={s.id} className="px-4 py-3">
                 <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium text-slate-800">{s.nombre} <InclusionBadge estudiante={s} size="text-xs" /></div>
-                    <div className="text-xs text-slate-400">{s.reino_actual || s.reino_original}{registro?.observacion ? ` · 📝 ${registro.observacion}` : ""}</div>
+                  <div className="min-w-0 flex items-center gap-2">
+                    <MiniAvatar estudiante={s} />
+                    <div>
+                      <div className="text-sm font-medium text-slate-800">{s.nombre} <InclusionBadge estudiante={s} size="text-xs" /></div>
+                      <div className="text-xs text-slate-400">{s.reino_actual || s.reino_original}{registro?.observacion ? ` · 📝 ${registro.observacion}` : ""}</div>
+                    </div>
                   </div>
                   <div className="flex items-center gap-1.5">
                     {CODIGOS.map((c) => {
