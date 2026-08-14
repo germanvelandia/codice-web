@@ -18,6 +18,7 @@ import { VistaReportes } from "./screens/Reportes";
 import { VistaHorario } from "./screens/Horario";
 import { VistaPlaneaciones } from "./screens/Planeaciones";
 import { VistaBiblioteca } from "./screens/Biblioteca";
+import { VistaAnotaciones } from "./screens/Anotaciones";
 import { VistaEvaluaciones } from "./screens/Evaluaciones";
 import { VistaProyectosForja } from "./screens/TareasCalificables";
 import { VistaInicio } from "./screens/Inicio";
@@ -1557,6 +1558,7 @@ const MENU_PANEL = [
   { key: "proyectosforja", label: "La Forja", icono: "🔨" },
   { key: "planeaciones", label: "Planeaciones", icono: "📝" },
   { key: "biblioteca", label: "Biblioteca", icono: "📚" },
+  { key: "anotaciones", label: "Anotaciones", icono: "🗒️" },
   { key: "horario", label: "Agenda", icono: "🗓️" },
   { key: "herramientas", label: "Herramientas", icono: "🛠️" },
   { key: "roles", label: "Roles", icono: "🎭" },
@@ -1776,6 +1778,7 @@ function Panel({ session }) {
         {tab === "horario" && grados.length > 0 && <VistaHorario grados={grados} />}
         {tab === "planeaciones" && grados.length > 0 && <VistaPlaneaciones grados={grados} />}
         {tab === "biblioteca" && grados.length > 0 && <VistaBiblioteca grados={grados} />}
+        {tab === "anotaciones" && <VistaAnotaciones />}
         {tab === "evaluaciones" && grados.length > 0 && <VistaEvaluaciones grados={grados} />}
         {tab === "proyectosforja" && grados.length > 0 && <VistaProyectosForja grados={grados} />}
       </div>
