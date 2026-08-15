@@ -1126,6 +1126,16 @@ export async function eliminarTareaCalificable(id) {
   if (error) throw error;
 }
 
+// Da la recompensa en monedas de una tarea a un estudiante puntual — protegido
+// para que, si volvés a tocar el botón (o re-calificás), no se dupliquen.
+export async function darMonedasPorTarea(tareaId, estudianteId, monedas) {
+  const { data: entrega } = await supabase.from("tarea_entregas").select("monedas_entregadas").eq("tarea_id", tareaId).eq("estudiante_id", estudianteId).maybeSingle();
+  if (entrega?.monedas_entregadas) return { yaEntregadas: true };
+  await ajustarMonedas(estudianteId, monedas);
+  await supabase.from("tarea_entregas").update({ monedas_entregadas: true }).eq("tarea_id", tareaId).eq("estudiante_id", estudianteId);
+  return { yaEntregadas: false };
+}
+
 export async function fetchEntregasDeTarea(tareaId) {
   const [entregasRes, estudiantesRes] = await Promise.all([
     supabase.from("tarea_entregas").select("*").eq("tarea_id", tareaId),
