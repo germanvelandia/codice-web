@@ -215,7 +215,7 @@ export async function consultarPortalEstudiante(codigo) {
 
 // Usado por el flujo de evaluaciones para saber el id/grado del estudiante a partir de su código
 export async function fetchEstudiantePorCodigo(codigo) {
-  const { data, error } = await supabase.from("estudiantes").select("id, nombre, grado_id, reino_actual, reino_original").eq("codigo_acceso", codigo.trim().toUpperCase()).maybeSingle();
+  const { data, error } = await supabase.from("estudiantes").select("id, nombre, grado_id, reino_actual, reino_original, foto_url").eq("codigo_acceso", codigo.trim().toUpperCase()).maybeSingle();
   if (error) throw error;
   return data;
 }
