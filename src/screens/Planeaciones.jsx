@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import * as api from "../lib/api";
 import { agruparPorNivel, nivelYCurso } from "../lib/gamification";
 import { periodosDe } from "../lib/calificaciones";
+import { EditorTexto, TextoEnriquecido } from "../components/RichText";
 
 const ICONO_RECURSO = { drive: "📁", docs: "📄", forms: "📝", otro: "🔗" };
 const LABEL_RECURSO = { drive: "Google Drive", docs: "Google Docs", forms: "Google Forms", otro: "Enlace" };
@@ -435,19 +436,19 @@ function ClasesLista({ unidadId, grados }) {
                   {c.momento_inicio && (
                     <div className="bg-amber-50 rounded-lg p-2">
                       <div className="text-[9px] font-bold text-amber-600 uppercase mb-0.5">Actividades de apertura</div>
-                      <div className="text-[11px] text-slate-600 whitespace-pre-line">{c.momento_inicio}</div>
+                      <TextoEnriquecido html={c.momento_inicio} className="text-[11px] text-slate-600" />
                     </div>
                   )}
                   {c.momento_desarrollo && (
                     <div className="bg-violet-50 rounded-lg p-2">
                       <div className="text-[9px] font-bold text-violet-600 uppercase mb-0.5">Actividades de desarrollo</div>
-                      <div className="text-[11px] text-slate-600 whitespace-pre-line">{c.momento_desarrollo}</div>
+                      <TextoEnriquecido html={c.momento_desarrollo} className="text-[11px] text-slate-600" />
                     </div>
                   )}
                   {c.momento_cierre && (
                     <div className="bg-emerald-50 rounded-lg p-2">
                       <div className="text-[9px] font-bold text-emerald-600 uppercase mb-0.5">Actividades de cierre</div>
-                      <div className="text-[11px] text-slate-600 whitespace-pre-line">{c.momento_cierre}</div>
+                      <TextoEnriquecido html={c.momento_cierre} className="text-[11px] text-slate-600" />
                     </div>
                   )}
                 </div>
@@ -476,16 +477,12 @@ function ClasesLista({ unidadId, grados }) {
             <input type="number" value={duracion} onChange={(e) => setDuracion(e.target.value)} placeholder="Min." className="w-16 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
           </div>
           {modo === "agil" ? (
-            <textarea value={descripcionAgil} onChange={(e) => setDescripcionAgil(e.target.value)} rows={3} placeholder="¿Qué se va a hacer en esta clase? (una sola descripción libre)"
-              className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+            <EditorTexto value={descripcionAgil} onChange={setDescripcionAgil} minHeight={90} placeholder="¿Qué se va a hacer en esta clase?" />
           ) : (
             <>
-              <textarea value={inicio} onChange={(e) => setInicio(e.target.value)} rows={2} placeholder="Actividades de apertura (recuperar saberes previos, plantear un problema o pregunta detonadora…)"
-                className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-              <textarea value={desarrollo} onChange={(e) => setDesarrollo(e.target.value)} rows={2} placeholder="Actividades de desarrollo (interacción con la nueva información, aplicación en un caso o problema…)"
-                className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-              <textarea value={cierre} onChange={(e) => setCierre(e.target.value)} rows={2} placeholder="Actividades de cierre (síntesis, reconstrucción de lo aprendido…)"
-                className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+              <EditorTexto value={inicio} onChange={setInicio} minHeight={70} placeholder="Actividades de apertura (recuperar saberes previos, plantear un problema o pregunta detonadora…)" />
+              <EditorTexto value={desarrollo} onChange={setDesarrollo} minHeight={70} placeholder="Actividades de desarrollo (interacción con la nueva información, aplicación en un caso o problema…)" />
+              <EditorTexto value={cierre} onChange={setCierre} minHeight={70} placeholder="Actividades de cierre (síntesis, reconstrucción de lo aprendido…)" />
               <input value={indicador} onChange={(e) => setIndicador(e.target.value)} placeholder="Indicador de desempeño (opcional)"
                 className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
             </>
@@ -582,9 +579,9 @@ function PlaneacionPrintView({ unidad, institucion, materiaNombre, gradoId, onCe
                 {c.fecha && <span style={{ fontWeight: 400, color: "#64748B" }}> · {c.fecha}</span>}
                 {c.duracion_minutos && <span style={{ fontWeight: 400, color: "#64748B" }}> · {c.duracion_minutos} min</span>}
               </div>
-              {c.momento_inicio && <div style={{ fontSize: 11, marginTop: 4 }}><b>Actividades de apertura:</b> {c.momento_inicio}</div>}
-              {c.momento_desarrollo && <div style={{ fontSize: 11, marginTop: 2 }}><b>Actividades de desarrollo:</b> {c.momento_desarrollo}</div>}
-              {c.momento_cierre && <div style={{ fontSize: 11, marginTop: 2 }}><b>Actividades de cierre:</b> {c.momento_cierre}</div>}
+              {c.momento_inicio && <div style={{ fontSize: 11, marginTop: 4 }}><b>Actividades de apertura:</b> <span dangerouslySetInnerHTML={{ __html: c.momento_inicio }} /></div>}
+              {c.momento_desarrollo && <div style={{ fontSize: 11, marginTop: 2 }}><b>Actividades de desarrollo:</b> <span dangerouslySetInnerHTML={{ __html: c.momento_desarrollo }} /></div>}
+              {c.momento_cierre && <div style={{ fontSize: 11, marginTop: 2 }}><b>Actividades de cierre:</b> <span dangerouslySetInnerHTML={{ __html: c.momento_cierre }} /></div>}
               {c.indicador_desempeno && <div style={{ fontSize: 11, marginTop: 2 }}><b>Indicador de desempeño:</b> {c.indicador_desempeno}</div>}
             </div>
           ))}
@@ -1090,7 +1087,7 @@ function CalendarioClases({ materiaId, gradoId, periodo, onAbrirUnidad }) {
               <button key={c.id} onClick={() => onAbrirUnidad(c.unidad_id)} className="w-full text-left bg-white rounded-xl border border-slate-100 p-3 hover:border-violet-200">
                 <div className="text-sm font-semibold text-slate-800">{c.titulo}</div>
                 <div className="text-[11px] text-violet-500">{c.unidad_titulo}</div>
-                {c.momento_desarrollo && <div className="text-[11px] text-slate-500 mt-1 line-clamp-2">{c.momento_desarrollo}</div>}
+                {c.momento_desarrollo && <TextoEnriquecido html={c.momento_desarrollo} className="text-[11px] text-slate-500 mt-1 line-clamp-2" />}
               </button>
             ))}
           </div>
