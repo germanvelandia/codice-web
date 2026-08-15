@@ -83,4 +83,4 @@ export function TextoEnriquecido({ html, className = "" }) {
     <div className={`leading-relaxed ${className}`} style={{ wordBreak: "break-word", whiteSpace: pareceHtml ? "normal" : "pre-line" }}
       dangerouslySetInnerHTML={{ __html: html }} />
   );
-}
+} 
