@@ -67,6 +67,15 @@ export function EditorTexto({ value, onChange, minHeight = 130, placeholder = ""
 
 // Muestra el HTML guardado por el editor. Si el contenido es texto plano viejo
 // (de antes de tener el editor), preserva los saltos de línea igual que antes.
+// Para usos puntuales donde se necesita el texto sin formato (ej: una
+// referencia breve dentro de una oración) — saca las etiquetas HTML.
+export function textoPlano(html) {
+  if (!html) return "";
+  const div = document.createElement("div");
+  div.innerHTML = html;
+  return div.textContent || div.innerText || "";
+}
+
 export function TextoEnriquecido({ html, className = "" }) {
   if (!html) return null;
   const pareceHtml = /<[a-z][\s\S]*>/i.test(html);
