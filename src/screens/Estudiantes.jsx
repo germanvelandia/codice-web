@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabaseClient";
 import { initials, nextLevel, reinoColor, reinoInfo, sugerirApellidos, colorGrado, REINO_COLORS, buscarEstudiantePorNombre } from "../lib/gamification";
+import { EditorTexto, TextoEnriquecido } from "../components/RichText";
 
 // (REINO_COLORS ahora se importa directo desde gamification.js, ver arriba)
 import * as api from "../lib/api";
@@ -544,7 +545,7 @@ function EntradaCodiceDocente({ entrada, onCambio }) {
       </div>
       {entrada.titulo && <div className="text-sm font-bold text-slate-800 mb-1">{entrada.titulo}</div>}
       {entrada.tarea_titulo && <div className="text-[11px] text-violet-500 mb-1">🔗 Vinculada a: {entrada.tarea_titulo}</div>}
-      <div className="text-xs text-slate-600 leading-relaxed whitespace-pre-line mb-2">{entrada.contenido}</div>
+      <TextoEnriquecido html={entrada.contenido} className="text-xs text-slate-600 mb-2" />
       {!cargando && comentarios.length > 0 && (
         <div className="space-y-1.5 mb-2">
           {comentarios.map((c) => (
@@ -612,8 +613,7 @@ function NuevaEntradaCodiceDocenteForm({ estudianteId, onCancelar, onCreada }) {
       </select>
       <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título (opcional)"
         className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
-      <textarea value={contenido} onChange={(e) => setContenido(e.target.value)} rows={3} placeholder="Escribí la entrada — por ejemplo, recordarle una actividad o dejarle una reflexión guía"
-        className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
+      <div className="mb-2"><EditorTexto value={contenido} onChange={setContenido} minHeight={90} placeholder="Escribí la entrada — por ejemplo, recordarle una actividad o dejarle una reflexión guía" /></div>
       <div className="flex justify-end gap-2">
         <button onClick={onCancelar} className="text-xs text-slate-500 px-2 py-1.5">Cancelar</button>
         <button disabled={guardando} onClick={guardar} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
