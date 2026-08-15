@@ -963,14 +963,18 @@ function EntradaCodiceCard({ entrada }) {
   };
 
   return (
-    <div className="bg-slate-50 rounded-xl p-3">
+    <div className={`rounded-xl p-3 ${entrada.autor_docente_id ? "bg-violet-50 border border-violet-100" : "bg-slate-50"}`}>
       <div className="flex items-center justify-between mb-1">
-        <div className="text-[11px] text-slate-400">{entrada.fecha}{entrada.materia_nombre ? ` · ${entrada.materia_nombre}` : ""}</div>
+        <div className="text-[11px] text-slate-400">
+          {entrada.fecha}{entrada.materia_nombre ? ` · ${entrada.materia_nombre}` : ""}
+          {entrada.autor_docente_id && <span className="ml-1.5 text-violet-600 font-semibold">· ✍️ De tu docente</span>}
+        </div>
         {entrada.nota !== null && entrada.nota !== undefined && (
           <span className="text-[10px] font-bold text-white bg-emerald-500 px-2 py-0.5 rounded-full">Nota: {entrada.nota}</span>
         )}
       </div>
       {entrada.titulo && <div className="text-sm font-bold text-slate-800 mb-1">{entrada.titulo}</div>}
+      {entrada.tarea_titulo && <div className="text-[11px] text-violet-500 mb-1">🔗 Vinculada a: {entrada.tarea_titulo}</div>}
       <div className="text-xs text-slate-600 leading-relaxed whitespace-pre-line">{entrada.contenido}</div>
       <button onClick={verComentarios} className="text-[11px] text-violet-500 mt-2">
         {expandido ? "Ocultar comentarios" : "💬 Ver comentarios del docente"}
