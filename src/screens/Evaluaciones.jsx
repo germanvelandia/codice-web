@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import * as api from "../lib/api";
 import { agruparPorNivel, nivelYCurso } from "../lib/gamification";
 import { periodosDe } from "../lib/calificaciones";
+import { EditorTexto, TextoEnriquecido } from "../components/RichText";
 
 const TIPOS_PREGUNTA = [
   { key: "opcion_multiple", label: "Opción múltiple" },
@@ -284,8 +285,9 @@ function NuevaEvaluacionForm({ materiaId, gradoId, periodo, categorias, evaluaci
       <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título de la evaluación"
         className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
       <label className="text-xs text-slate-500 block mb-1">Propósito / introducción (opcional)</label>
-      <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2} placeholder="Ej: Esta prueba busca identificar tus conocimientos previos sobre…"
-        className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
+      <div className="mb-2">
+        <EditorTexto value={descripcion} onChange={setDescripcion} minHeight={100} placeholder="Ej: Esta prueba busca identificar tus conocimientos previos sobre…" />
+      </div>
 
       <label className="text-xs text-slate-500 block mb-1">Indicaciones (una por línea — se muestran como lista al estudiante)</label>
       <div className="space-y-1.5 mb-2">
@@ -453,7 +455,7 @@ function EvaluacionCard({ evaluacion, materias, grados, categorias, onCambio }) 
               {evaluacion.estado === "publicada" ? "Publicada" : "Borrador"}
             </span>
           </div>
-          {evaluacion.descripcion && <p className="text-xs text-slate-500 mt-1">{evaluacion.descripcion}</p>}
+          {evaluacion.descripcion && <TextoEnriquecido html={evaluacion.descripcion} className="text-xs text-slate-500 mt-1" />}
           <p className="text-[11px] text-slate-400 mt-1">
             {evaluacion.fecha_apertura || evaluacion.fecha_cierre ? `${evaluacion.fecha_apertura || "…"} → ${evaluacion.fecha_cierre || "…"} · ` : ""}
             {evaluacion.intentos_permitidos ? `${evaluacion.intentos_permitidos} intento(s)` : "Intentos ilimitados"}
