@@ -23,7 +23,7 @@ import { VistaConsignasCodice } from "./screens/ConsignasCodice";
 import { VistaEvaluaciones } from "./screens/Evaluaciones";
 import { VistaProyectosForja } from "./screens/TareasCalificables";
 import { VistaInicio } from "./screens/Inicio";
-import { TextoEnriquecido } from "./components/RichText";
+import { EditorTexto, TextoEnriquecido, textoPlano } from "./components/RichText";
 import { InstitucionModal } from "./screens/Institucion";
 import { AdministracionModal } from "./screens/Administracion";
 
@@ -642,6 +642,7 @@ function MicroMisionesEstudiante({ estudianteId, onCambio }) {
           <div key={m.id} className={`flex items-center justify-between rounded-lg px-3 py-2 ${m.completada ? "bg-emerald-50" : "bg-slate-50"}`}>
             <div className="min-w-0">
               <div className="text-xs font-semibold text-slate-700">{m.tipo === "diaria" ? "☀️" : "📅"} {m.titulo}</div>
+              {m.descripcion && <TextoEnriquecido html={m.descripcion} className="text-[11px] text-slate-500" />}
               <div className="text-[10px] text-slate-400">🪙{m.recompensa_monedas} · ⭐{m.recompensa_xp}</div>
             </div>
             {m.completada ? (
@@ -977,7 +978,7 @@ function EntradaCodiceCard({ entrada }) {
       </div>
       {entrada.titulo && <div className="text-sm font-bold text-slate-800 mb-1">{entrada.titulo}</div>}
       {entrada.tarea_titulo && <div className="text-[11px] text-violet-500 mb-1">🔗 Vinculada a: {entrada.tarea_titulo}</div>}
-      <div className="text-xs text-slate-600 leading-relaxed whitespace-pre-line">{entrada.contenido}</div>
+      <TextoEnriquecido html={entrada.contenido} className="text-xs text-slate-600" />
       <button onClick={verComentarios} className="text-[11px] text-violet-500 mt-2">
         {expandido ? "Ocultar comentarios" : "💬 Ver comentarios del docente"}
       </button>
@@ -1052,7 +1053,7 @@ function CodiceEstudiante({ estudianteId, gradoId }) {
             <div key={c.id} className="bg-amber-50 border border-amber-200 rounded-xl p-3">
               <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wide">📢 Consigna de tu docente</div>
               <div className="text-sm font-bold text-slate-800 mt-0.5">{c.titulo}</div>
-              <p className="text-xs text-slate-600 italic mt-1">"{c.pregunta}"</p>
+              <TextoEnriquecido html={c.pregunta} className="text-xs text-slate-600 italic mt-1" />
               <button onClick={() => responderConsigna(c)} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-500 text-white mt-2">Responder</button>
             </div>
           ))}
@@ -1061,15 +1062,14 @@ function CodiceEstudiante({ estudianteId, gradoId }) {
 
       {escribiendo ? (
         <div className="bg-violet-50 rounded-xl p-3 mb-3">
-          {consignaIdActual && <p className="text-[11px] text-violet-600 font-semibold mb-2">Respondiendo la consigna: "{consignas.find((c) => c.id === consignaIdActual)?.pregunta}"</p>}
+          {consignaIdActual && <p className="text-[11px] text-violet-600 font-semibold mb-2">Respondiendo la consigna: "{textoPlano(consignas.find((c) => c.id === consignaIdActual)?.pregunta)}"</p>}
           <select value={materiaId} onChange={(e) => setMateriaId(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none">
             <option value="">Sin materia específica</option>
             {materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
           </select>
           <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título (opcional)"
             className="w-full text-sm rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none" />
-          <textarea value={contenido} onChange={(e) => setContenido(e.target.value)} rows={4} placeholder="¿Qué aprendiste hoy? ¿Qué te costó entender? ¿Qué reflexión te queda?"
-            className="w-full text-sm rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none" />
+          <div className="mb-2"><EditorTexto value={contenido} onChange={setContenido} minHeight={110} placeholder="¿Qué aprendiste hoy? ¿Qué te costó entender? ¿Qué reflexión te queda?" /></div>
           <div className="flex justify-end gap-2">
             <button onClick={() => { setEscribiendo(false); setConsignaIdActual(null); }} className="text-xs text-slate-400 px-2 py-1">Cancelar</button>
             <button disabled={guardando} onClick={guardar} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
@@ -1148,7 +1148,7 @@ function AnunciosEstudiante({ gradoId }) {
               {a.fijado && <span className="text-xs">📌</span>}
               <div className="text-sm font-bold text-slate-800">{a.titulo}</div>
             </div>
-            <p className="text-xs text-slate-600 mt-1 whitespace-pre-line leading-relaxed">{a.contenido}</p>
+            <TextoEnriquecido html={a.contenido} className="text-xs text-slate-600 mt-1" />
             <p className="text-[10px] text-slate-400 mt-2">{new Date(a.creado_en).toLocaleDateString("es-CO", { day: "numeric", month: "long" })}</p>
           </div>
         ))}
@@ -1218,7 +1218,7 @@ function DesafioReinoEstudiante({ gradoId, miReino }) {
         return (
           <div key={d.id} className="bg-violet-50 rounded-xl p-3 mb-2">
             <div className="text-sm font-bold text-slate-800">{d.titulo}</div>
-            {d.descripcion && <div className="text-[11px] text-slate-500 mt-0.5">{d.descripcion}</div>}
+            {d.descripcion && <TextoEnriquecido html={d.descripcion} className="text-[11px] text-slate-500 mt-0.5" />}
             <div className="space-y-1.5 mt-2">
               {filas.slice(0, 4).map((f) => (
                 <div key={f.reino}>
@@ -1345,7 +1345,7 @@ function BibliotecaEstudiante({ gradoId }) {
               {cat.items.map((r) => (
                 <a key={r.id} href={r.url} target="_blank" rel="noreferrer"
                   className="rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow px-2 pt-3 pb-2 block"
-                  style={{ width: 84, minHeight: 110, background: cat.color }} title={r.descripcion || r.titulo}>
+                  style={{ width: 84, minHeight: 110, background: cat.color }} title={textoPlano(r.descripcion) || r.titulo}>
                   <div className="text-lg mb-1">{cat.emoji}</div>
                   <div className="text-[9px] font-bold text-white leading-tight break-words">{r.titulo}</div>
                 </a>
