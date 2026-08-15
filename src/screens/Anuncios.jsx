@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import * as api from "../lib/api";
+import { EditorTexto, TextoEnriquecido } from "../components/RichText";
 
 function AnuncioForm({ grados, anuncio, onCancelar, onGuardado }) {
   const [titulo, setTitulo] = useState(anuncio?.titulo || "");
@@ -26,8 +27,7 @@ function AnuncioForm({ grados, anuncio, onCancelar, onGuardado }) {
     <div className="bg-violet-50 rounded-2xl p-4 mb-4">
       <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título del anuncio"
         className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
-      <textarea value={contenido} onChange={(e) => setContenido(e.target.value)} rows={4} placeholder="Escribí el mensaje para los estudiantes…"
-        className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
+      <div className="mb-2"><EditorTexto value={contenido} onChange={setContenido} minHeight={110} placeholder="Escribí el mensaje para los estudiantes…" /></div>
       <div className="grid grid-cols-2 gap-2 mb-2">
         <div>
           <label className="text-[10px] text-slate-500 block mb-1">Dirigido a</label>
@@ -97,7 +97,7 @@ export function VistaAnuncios({ grados }) {
                     <h4 className="font-bold text-slate-800">{a.titulo}</h4>
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-50 text-violet-600">{a.grado_id ? `Grado ${a.grado_id}` : "Todos los grados"}</span>
                   </div>
-                  <p className="text-xs text-slate-500 mt-1 whitespace-pre-line">{a.contenido}</p>
+                  <TextoEnriquecido html={a.contenido} className="text-xs text-slate-500 mt-1" />
                   <p className="text-[10px] text-slate-400 mt-1.5">{a.autor_nombre} · {new Date(a.creado_en).toLocaleDateString("es-CO")}</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
