@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import * as api from "../lib/api";
 import { agruparPorNivel, nivelYCurso } from "../lib/gamification";
 import { periodosDe } from "../lib/calificaciones";
+import { EditorTexto, TextoEnriquecido } from "../components/RichText";
 
 function TareaForm({ tipo, materiaId, gradoId, periodo, categorias, tarea, onCancelar, onCreada }) {
   const [titulo, setTitulo] = useState(tarea?.titulo || "");
@@ -36,8 +37,10 @@ function TareaForm({ tipo, materiaId, gradoId, periodo, categorias, tarea, onCan
     <div className="bg-violet-50 rounded-2xl p-4 mb-3">
       <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder={tipo === "proyecto" ? "Título del proyecto" : "Título del taller/entregable"}
         className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
-      <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2} placeholder="Instrucciones para el estudiante (opcional)"
-        className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
+      <label className="text-xs text-slate-500 block mb-1">Instrucciones para el estudiante (opcional)</label>
+      <div className="mb-2">
+        <EditorTexto value={descripcion} onChange={setDescripcion} minHeight={110} placeholder="Instrucciones para el estudiante…" />
+      </div>
       <label className="text-xs text-slate-500 block mb-1">Enlace para el estudiante (opcional — formulario, material, actividad externa…)</label>
       <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Ej: docs.google.com/forms/..."
         className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none bg-white" />
@@ -317,7 +320,7 @@ function TareaCard({ tarea, categorias, materias, grados, onCambio }) {
       <div className="flex justify-between items-start">
         <div>
           <h4 className="font-bold text-slate-800">{tarea.titulo}</h4>
-          {tarea.descripcion && <p className="text-xs text-slate-500 mt-1">{tarea.descripcion}</p>}
+          {tarea.descripcion && <TextoEnriquecido html={tarea.descripcion} className="text-xs text-slate-500 mt-1" />}
           {tarea.fecha_entrega && <p className="text-[11px] text-slate-400 mt-1">Entrega: {tarea.fecha_entrega}</p>}
           {tarea.url && <a href={tarea.url} target="_blank" rel="noreferrer" className="text-[11px] text-violet-500 mt-1 block truncate">🔗 {tarea.url}</a>}
           {tarea.recompensa_monedas > 0 && <span className="inline-block text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full mt-1">🪙 {tarea.recompensa_monedas} al entregar</span>}
