@@ -1326,6 +1326,7 @@ export function VistaPlaneaciones({ grados }) {
   const [estandaresAbierto, setEstandaresAbierto] = useState(false);
   const [vista, setVista] = useState("unidades"); // "unidades" | "calendario"
   const [importarIAAbierto, setImportarIAAbierto] = useState(false);
+  const [soloVigente, setSoloVigente] = useState(true);
 
   useEffect(() => {
     api.fetchMaterias().then((data) => { setMaterias(data); if (data[0]) setMateriaId(data[0].id); });
@@ -1337,8 +1338,22 @@ export function VistaPlaneaciones({ grados }) {
   // la misma que se define en Calificaciones → Escala y periodos.
   useEffect(() => {
     if (!materiaId) return;
-    api.fetchNotasConfig(materiaId).then(setConfig);
+    api.fetchNotasConfig(materiaId).then((cfg) => {
+      setConfig(cfg);
+      if (cfg?.periodo_actual) setPeriodo(cfg.periodo_actual);
+    });
   }, [materiaId]);
+
+  const marcarPeriodoVigente = async () => {
+    await api.guardarNotasConfig(materiaId, { ...config, periodo_actual: periodo });
+    setConfig((prev) => ({ ...prev, periodo_actual: periodo }));
+  };
+
+  useEffect(() => {
+    if (soloVigente && config.periodo_actual && parseInt(periodo, 10) < parseInt(config.periodo_actual, 10)) {
+      setPeriodo(config.periodo_actual);
+    }
+  }, [soloVigente]);
 
   const listaPeriodos = periodosDe(config);
   useEffect(() => {
@@ -1375,8 +1390,17 @@ export function VistaPlaneaciones({ grados }) {
           {cursosDelNivel.map((g) => <option key={g.id} value={g.id}>Curso {g.id}</option>)}
         </select>
         <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
-          {listaPeriodos.map((p) => <option key={p} value={p}>Periodo {p}</option>)}
+          {listaPeriodos
+            .filter((p) => !soloVigente || parseInt(p, 10) >= parseInt(config.periodo_actual || "1", 10))
+            .map((p) => <option key={p} value={p}>Periodo {p}{p === config.periodo_actual ? " (vigente)" : ""}</option>)}
         </select>
+        {periodo !== config.periodo_actual && (
+          <button onClick={marcarPeriodoVigente} title="Marcar este periodo como el vigente para esta materia" className="text-xs px-2.5 py-1.5 rounded-full bg-violet-100 text-violet-700 shrink-0">📌 Marcar como vigente</button>
+        )}
+        <label className="flex items-center gap-1.5 text-xs text-slate-500 shrink-0">
+          <input type="checkbox" checked={soloVigente} onChange={(e) => setSoloVigente(e.target.checked)} />
+          Ocultar periodos anteriores
+        </label>
         <button onClick={() => setPendientesAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-amber-200 text-amber-600">📋 Pendientes</button>
         <button onClick={() => setEstandaresAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🗂️ Gestionar DBA/Competencias</button>
         <div className="flex gap-1 rounded-full bg-white p-1 border border-slate-200">
