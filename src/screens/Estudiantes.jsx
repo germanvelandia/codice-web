@@ -537,9 +537,13 @@ function EntradaCodiceDocente({ entrada, onCambio }) {
   };
 
   return (
-    <div className="bg-slate-50 rounded-xl p-3">
-      <div className="text-[11px] text-slate-400 mb-1">{entrada.fecha}{entrada.materia_nombre ? ` · ${entrada.materia_nombre}` : ""}</div>
+    <div className={`rounded-xl p-3 ${entrada.autor_docente_id ? "bg-violet-50 border border-violet-100" : "bg-slate-50"}`}>
+      <div className="text-[11px] text-slate-400 mb-1">
+        {entrada.fecha}{entrada.materia_nombre ? ` · ${entrada.materia_nombre}` : ""}
+        {entrada.autor_docente_id && <span className="ml-1.5 text-violet-600 font-semibold">· ✍️ Escrita por vos</span>}
+      </div>
       {entrada.titulo && <div className="text-sm font-bold text-slate-800 mb-1">{entrada.titulo}</div>}
+      {entrada.tarea_titulo && <div className="text-[11px] text-violet-500 mb-1">🔗 Vinculada a: {entrada.tarea_titulo}</div>}
       <div className="text-xs text-slate-600 leading-relaxed whitespace-pre-line mb-2">{entrada.contenido}</div>
       {!cargando && comentarios.length > 0 && (
         <div className="space-y-1.5 mb-2">
@@ -575,9 +579,55 @@ function EntradaCodiceDocente({ entrada, onCambio }) {
   );
 }
 
+function NuevaEntradaCodiceDocenteForm({ estudianteId, onCancelar, onCreada }) {
+  const [titulo, setTitulo] = useState("");
+  const [contenido, setContenido] = useState("");
+  const [materiaId, setMateriaId] = useState("");
+  const [materias, setMaterias] = useState([]);
+  const [guardando, setGuardando] = useState(false);
+
+  useEffect(() => { api.fetchMaterias().then(setMaterias); }, []);
+
+  const guardar = async () => {
+    if (!contenido.trim()) { alert("Escribí el contenido de la entrada."); return; }
+    setGuardando(true);
+    try {
+      await api.crearEntradaCodiceDocente(estudianteId, {
+        titulo: titulo.trim() || null, contenido: contenido.trim(),
+        materia_id: materiaId ? parseInt(materiaId, 10) : null,
+      });
+      onCreada();
+    } catch (e) {
+      alert("Error al guardar: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  return (
+    <div className="bg-violet-50 rounded-xl p-3 mb-3">
+      <p className="text-[11px] text-slate-500 mb-2">Esta entrada la va a ver el estudiante en su propio Códice, marcada como escrita por vos.</p>
+      <select value={materiaId} onChange={(e) => setMateriaId(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none bg-white">
+        <option value="">Sin materia específica</option>
+        {materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+      </select>
+      <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título (opcional)"
+        className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
+      <textarea value={contenido} onChange={(e) => setContenido(e.target.value)} rows={3} placeholder="Escribí la entrada — por ejemplo, recordarle una actividad o dejarle una reflexión guía"
+        className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
+      <div className="flex justify-end gap-2">
+        <button onClick={onCancelar} className="text-xs text-slate-500 px-2 py-1.5">Cancelar</button>
+        <button disabled={guardando} onClick={guardar} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+          {guardando ? "Guardando…" : "Agregar al Códice del estudiante"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function CodiceDocenteModal({ estudiante, onClose }) {
   const [entradas, setEntradas] = useState([]);
   const [cargando, setCargando] = useState(true);
+  const [formAbierto, setFormAbierto] = useState(false);
 
   const cargar = () => api.fetchEntradasCodice(estudiante.id).then((d) => { setEntradas(d); setCargando(false); });
   useEffect(() => { cargar(); }, [estudiante.id]);
@@ -589,10 +639,17 @@ function CodiceDocenteModal({ estudiante, onClose }) {
           <h3 className="font-bold text-slate-800">📖 Códice de {estudiante.nombre}</h3>
           <button onClick={onClose} className="text-slate-400">✕</button>
         </div>
+
+        {formAbierto ? (
+          <NuevaEntradaCodiceDocenteForm estudianteId={estudiante.id} onCancelar={() => setFormAbierto(false)} onCreada={() => { setFormAbierto(false); cargar(); }} />
+        ) : (
+          <button onClick={() => setFormAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white mb-3">+ Nueva entrada</button>
+        )}
+
         {cargando ? (
           <div className="text-sm text-slate-400">Cargando…</div>
         ) : entradas.length === 0 ? (
-          <p className="text-sm text-slate-400 text-center py-4">Este estudiante todavía no escribió ninguna entrada.</p>
+          <p className="text-sm text-slate-400 text-center py-4">Este estudiante todavía no tiene ninguna entrada.</p>
         ) : (
           <div className="space-y-2">
             {entradas.map((e) => <EntradaCodiceDocente key={e.id} entrada={{ ...e, grado_id: estudiante.grado_id }} onCambio={cargar} />)}
