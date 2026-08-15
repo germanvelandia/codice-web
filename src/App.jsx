@@ -889,18 +889,18 @@ function ProximamentePanel({ nombre }) {
 }
 
 const MENU_CODICE = [
+  { key: "album", label: "Álbum", icono: "🎴" },
+  { key: "biblioteca", label: "Biblioteca", icono: "📚" },
+  { key: "codice", label: "Códice", icono: "📖" },
+  { key: "forja", label: "Forja", icono: "🔨" },
   { key: "inicio", label: "Inicio", icono: "🏠" },
   { key: "misiones", label: "Misiones", icono: "⚔️" },
-  { key: "proyectos", label: "Proyectos", icono: "📜" },
-  { key: "forja", label: "Forja", icono: "🔨" },
-  { key: "codice", label: "Códice", icono: "📖" },
-  { key: "biblioteca", label: "Biblioteca", icono: "📚" },
   { key: "notas", label: "Notas", icono: "📝" },
-  { key: "ranking", label: "Ranking", icono: "📊" },
-  { key: "salonhonor", label: "Salón de Honor", icono: "🏆" },
-  { key: "recompensas", label: "Recompensas", icono: "🎁" },
-  { key: "album", label: "Álbum", icono: "🎴" },
   { key: "perfil", label: "Perfil", icono: "👤" },
+  { key: "proyectos", label: "Proyectos", icono: "📜" },
+  { key: "ranking", label: "Ranking", icono: "📊" },
+  { key: "recompensas", label: "Recompensas", icono: "🎁" },
+  { key: "salonhonor", label: "Salón de Honor", icono: "🏆" },
 ];
 
 function MenuCodice({ activo, onCambiar, monedas, gradoId }) {
@@ -1435,8 +1435,12 @@ function PortalEstudiante() {
           {vista === "inicio" && (
             <>
               <div className="text-center mb-4">
-                <div className="mx-auto mb-1.5 flex items-center justify-center rounded-full" style={{ width: 56, height: 56, border: equipados.marco ? `4px solid ${equipados.marco.valor}` : "4px solid transparent", background: "#F5F3FF" }}>
-                  <span className="text-2xl">🎓</span>
+                <div className="mx-auto mb-1.5 flex items-center justify-center rounded-full overflow-hidden" style={{ width: 56, height: 56, border: equipados.marco ? `4px solid ${equipados.marco.valor}` : "4px solid transparent", background: "#F5F3FF" }}>
+                  {estudianteInfo?.foto_url ? (
+                    <img src={estudianteInfo.foto_url} alt={datos.nombre} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-2xl">🎓</span>
+                  )}
                 </div>
                 <div className="text-lg font-bold text-slate-800">{datos.nombre}</div>
                 {equipados.titulo && <div className="text-[11px] font-semibold text-violet-500">✨ {equipados.titulo.valor}</div>}
