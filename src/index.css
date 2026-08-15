@@ -53,4 +53,12 @@ html, body, #root {
     break-inside: avoid;
     page-break-inside: avoid;
   }
-} 
+}
+
+/* Placeholder para el editor de texto enriquecido (contentEditable no soporta
+   el atributo placeholder nativo como los input/textarea) */
+.rich-text-editable:empty::before {
+  content: attr(data-placeholder);
+  color: #94a3b8;
+  pointer-events: none;
+}
