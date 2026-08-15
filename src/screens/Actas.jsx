@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import * as api from "../lib/api";
 import { FALTAS_MANUAL, NIVELACION_COMPROMISOS_DEFAULT } from "../lib/actasTemplates";
 import { inicialesConPuntos, documentoEnmascarado } from "../lib/gamification";
+import { EditorTexto, TextoEnriquecido, textoPlano } from "../components/RichText";
 
 function hoyISO() {
   return new Date().toISOString().slice(0, 10);
@@ -82,18 +83,18 @@ export function ActasModal({ estudiante, onClose }) {
                     <button onClick={() => eliminar(a.id)} className="text-xs text-slate-400 hover:text-rose-500">✕</button>
                   </div>
                 </div>
-                {a.descripcion && <p className="text-xs text-slate-600 mt-2">{a.descripcion}</p>}
+                {a.descripcion && <TextoEnriquecido html={a.descripcion} className="text-xs text-slate-600 mt-2" />}
                 {a.tipo_falta && (
                   <div className="text-xs text-amber-600 mt-2">Falta {a.tipo_falta} ({a.articulo}) · Plazo: {a.plazo_dias} días hábiles</div>
                 )}
                 {a.implicaciones_legales && (
-                  <div className="text-xs text-slate-600 mt-2 bg-amber-50 rounded-lg p-2"><b>Implicaciones legales:</b> {a.implicaciones_legales}</div>
+                  <div className="text-xs text-slate-600 mt-2 bg-amber-50 rounded-lg p-2"><b>Implicaciones legales:</b> <TextoEnriquecido html={a.implicaciones_legales} className="inline" /></div>
                 )}
                 {a.compromisos_academicos && (
-                  <div className="text-xs text-slate-600 mt-2"><b>Compromisos académicos:</b> {a.compromisos_academicos}</div>
+                  <div className="text-xs text-slate-600 mt-2"><b>Compromisos académicos:</b> <TextoEnriquecido html={a.compromisos_academicos} className="inline" /></div>
                 )}
                 {a.compromisos_convivenciales && (
-                  <div className="text-xs text-slate-600 mt-2"><b>Compromisos convivenciales:</b> {a.compromisos_convivenciales}</div>
+                  <div className="text-xs text-slate-600 mt-2"><b>Compromisos convivenciales:</b> <TextoEnriquecido html={a.compromisos_convivenciales} className="inline" /></div>
                 )}
                 {a.compromisos && (
                   <div className="text-xs text-slate-600 mt-2"><b>Compromisos:</b> {a.compromisos}</div>
@@ -116,10 +117,12 @@ export function ActasModal({ estudiante, onClose }) {
 }
 
 function seccion(titulo, contenido, opts = {}) {
+  const texto = contenido || "";
+  const pareceHtml = /<[a-z][\s\S]*>/i.test(texto);
   return (
     <div className="print-avoid-break" style={{ marginBottom: 16, background: opts.bg || "transparent", padding: opts.bg ? 12 : 0, borderRadius: opts.bg ? 6 : 0, borderLeft: opts.accent ? `3px solid ${opts.accent}` : "none" }}>
       <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.6, color: opts.accent || "#1e293b" }}>{titulo}</div>
-      <div style={{ fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-line" }}>{contenido}</div>
+      <div style={{ fontSize: 13, lineHeight: 1.5, whiteSpace: pareceHtml ? "normal" : "pre-line" }} dangerouslySetInnerHTML={{ __html: texto }} />
     </div>
   );
 }
@@ -213,7 +216,7 @@ function ActaPrintView({ estudiante, acta, institucion, actasRelacionadas }) {
       {/* Aspecto convivencial — siempre visible, con lo que haya registrado en esta acta */}
       {seccion(
         a.tipo_falta ? `Aspecto convivencial — Falta ${a.tipo_falta} (${a.articulo})` : "Aspecto convivencial",
-        (a.tipo_falta ? `Plazo de respuesta: ${a.plazo_dias} días hábiles.\n\n` : "") +
+        (a.tipo_falta ? `Plazo de respuesta: ${a.plazo_dias} días hábiles.<br><br>` : "") +
           (a.compromisos_convivenciales || "Sin observaciones convivenciales registradas en esta acta."),
         { bg: "#FFF3F8", accent: "#DB2777" }
       )}
@@ -363,9 +366,8 @@ function SelectorComportamiento({ categoria, valorId, onSeleccionar, onUsarPlant
                 className="w-28 text-xs rounded-lg px-3 py-2 border border-slate-200 outline-none" />
             </div>
           )}
-          <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={3}
-            placeholder={categoria === "convivencial" ? "Implicaciones legales de este comportamiento…" : "Plan / compromisos de esta plantilla académica…"}
-            className="w-full text-xs rounded-lg px-3 py-2 border border-slate-200 outline-none" />
+          <EditorTexto value={texto} onChange={setTexto} minHeight={70}
+            placeholder={categoria === "convivencial" ? "Implicaciones legales de este comportamiento…" : "Plan / compromisos de esta plantilla académica…"} />
           <div className="flex justify-end gap-2">
             <button onClick={() => setCreando(false)} className="text-xs text-slate-500 px-2 py-1.5">Cancelar</button>
             <button disabled={guardando} onClick={crear} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
@@ -500,8 +502,7 @@ function NuevaActaForm({ estudianteId, onCancelar, onGuardada }) {
           {comportamientoConv && (
             <div className="mt-3">
               <label className="text-xs text-slate-500 block mb-1">Implicaciones legales (precargadas según el comportamiento elegido — puedes ajustarlas)</label>
-              <textarea value={implicaciones} onChange={(e) => setImplicaciones(e.target.value)} rows={3}
-                className="w-full text-xs rounded-lg px-3 py-2 border border-amber-200 bg-amber-50 outline-none" />
+              <EditorTexto value={implicaciones} onChange={setImplicaciones} minHeight={70} />
             </div>
           )}
         </div>
@@ -512,10 +513,9 @@ function NuevaActaForm({ estudianteId, onCancelar, onGuardada }) {
       </div>
       <input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Motivo del acta"
         className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
-      <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={3} placeholder="Descripción de la situación"
-        className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
+      <div className="mb-2"><EditorTexto value={descripcion} onChange={setDescripcion} minHeight={90} placeholder="Descripción de la situación" /></div>
 
-      <AnotacionesReferencia estudianteId={estudianteId} onCopiar={(texto) => setDescripcion((prev) => prev ? `${prev}\n\n${texto}` : texto)} />
+      <AnotacionesReferencia estudianteId={estudianteId} onCopiar={(texto) => setDescripcion((prev) => prev ? `${prev}<br><br>${texto.replace(/\n/g, "<br>")}` : texto.replace(/\n/g, "<br>"))} />
 
       {(tipo === "Nivelación" || tipo === "Académico") && (
         <div className="mb-2">
@@ -523,18 +523,16 @@ function NuevaActaForm({ estudianteId, onCancelar, onGuardada }) {
           <SelectorComportamiento categoria="academico" valorId={comportamientoAcad?.id} onSeleccionar={seleccionarAcad}
             onUsarPlantilla={(texto) => setCompromisosAcademicos(texto)} />
           <label className="text-xs text-slate-500 block mb-1 mt-1">Compromisos académicos {tipo === "Nivelación" && "(para superar la pérdida de la materia)"}</label>
-          <textarea value={compromisosAcademicos} onChange={(e) => setCompromisosAcademicos(e.target.value)} rows={3}
-            placeholder="Ej: Entregar plan de recuperación semanal, sustentar los temas pendientes..."
-            className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
+          <EditorTexto value={compromisosAcademicos} onChange={setCompromisosAcademicos} minHeight={90}
+            placeholder="Ej: Entregar plan de recuperación semanal, sustentar los temas pendientes..." />
         </div>
       )}
 
       {tipo === "Convivencial" && (
         <div className="mb-2">
           <label className="text-xs text-slate-500 block mb-1">Compromisos convivenciales {reincidente && "(dado el incumplimiento constante)"}</label>
-          <textarea value={compromisosConvivenciales} onChange={(e) => setCompromisosConvivenciales(e.target.value)} rows={2}
-            placeholder="Ej: Presentarse puntualmente, respetar el conducto regular, evitar conflictos con compañeros..."
-            className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
+          <EditorTexto value={compromisosConvivenciales} onChange={setCompromisosConvivenciales} minHeight={70}
+            placeholder="Ej: Presentarse puntualmente, respetar el conducto regular, evitar conflictos con compañeros..." />
         </div>
       )}
 
@@ -567,9 +565,7 @@ function NuevaActaForm({ estudianteId, onCancelar, onGuardada }) {
           </div>
         </div>
         <label className="text-xs text-slate-500 block mb-1">Versión / descargo del estudiante</label>
-        <textarea value={descargoEstudiante} onChange={(e) => setDescargoEstudiante(e.target.value)} rows={2}
-          placeholder="Espacio para que el estudiante exprese su versión de los hechos"
-          className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
+        <div className="mb-2"><EditorTexto value={descargoEstudiante} onChange={setDescargoEstudiante} minHeight={70} placeholder="Espacio para que el estudiante exprese su versión de los hechos" /></div>
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="text-xs text-slate-500 block mb-1">Evaluación del compromiso</label>
