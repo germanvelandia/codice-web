@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import * as api from "../lib/api";
 import { agruparPorNivel } from "../lib/gamification";
+import { EditorTexto, TextoEnriquecido } from "../components/RichText";
 
 function RespuestasConsignaModal({ consigna, onClose }) {
   const [respuestas, setRespuestas] = useState([]);
@@ -15,7 +16,7 @@ function RespuestasConsignaModal({ consigna, onClose }) {
           <h3 className="font-bold text-slate-800">Respuestas — {consigna.titulo}</h3>
           <button onClick={onClose} className="text-slate-400">✕</button>
         </div>
-        <p className="text-xs text-slate-500 italic mb-3">"{consigna.pregunta}"</p>
+        <TextoEnriquecido html={consigna.pregunta} className="text-xs text-slate-500 italic mb-3" />
         {cargando ? (
           <div className="text-sm text-slate-400">Cargando…</div>
         ) : respuestas.length === 0 ? (
@@ -73,8 +74,7 @@ function ConsignaForm({ grados, consigna, onCancelar, onGuardada }) {
       </select>
       <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título corto (ej: Reflexión semana 3)"
         className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
-      <textarea value={pregunta} onChange={(e) => setPregunta(e.target.value)} rows={3} placeholder="Escribí la pregunta o consigna que van a responder…"
-        className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none bg-white" />
+      <div className="mb-3"><EditorTexto value={pregunta} onChange={setPregunta} minHeight={90} placeholder="Escribí la pregunta o consigna que van a responder…" /></div>
       <div className="flex justify-end gap-2">
         <button onClick={onCancelar} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
         <button disabled={guardando} onClick={guardar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
@@ -129,7 +129,7 @@ export function VistaConsignasCodice({ grados }) {
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-50 text-violet-600">Grado {c.nivel}°{c.materia_nombre ? ` · ${c.materia_nombre}` : ""}</span>
                     <span className={`text-[10px] px-2 py-0.5 rounded-full ${c.activa ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{c.activa ? "Activa" : "Inactiva"}</span>
                   </div>
-                  <p className="text-xs text-slate-500 italic mt-1">"{c.pregunta}"</p>
+                  <TextoEnriquecido html={c.pregunta} className="text-xs text-slate-500 italic mt-1" />
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <button onClick={() => setVerRespuestasDe(c)} className="text-xs text-slate-400 hover:text-violet-600" title="Ver respuestas">👀</button>
