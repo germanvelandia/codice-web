@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import * as api from "../lib/api";
+import { EditorTexto, TextoEnriquecido } from "../components/RichText";
 
 const CATEGORIAS = [
   { key: "academico", label: "Académico", emoji: "📘", color: "#3B82F6" },
@@ -87,8 +88,7 @@ function AnotacionForm({ estudianteId, anotacion, onCancelar, onGuardado }) {
           </button>
         ))}
       </div>
-      <textarea value={contenido} onChange={(e) => setContenido(e.target.value)} rows={4} placeholder="Escribí tu anotación privada…"
-        className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
+      <div className="mb-2"><EditorTexto value={contenido} onChange={setContenido} minHeight={110} placeholder="Escribí tu anotación privada…" /></div>
       <label className="text-[11px] text-slate-500 block mb-1">Enlace (opcional — ej: foto o escaneo de una anotación en papel)</label>
       <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Ej: drive.google.com/..."
         className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
@@ -162,7 +162,7 @@ function PanelAnotacionesEstudiante({ estudiante, onVolver }) {
                     <button onClick={() => eliminar(a)} className="text-xs text-slate-400 hover:text-rose-500">🗑</button>
                   </div>
                 </div>
-                <p className="text-sm text-slate-600 mt-2 whitespace-pre-line">{a.contenido}</p>
+                <TextoEnriquecido html={a.contenido} className="text-sm text-slate-600 mt-2" />
                 {a.url && (
                   <a href={a.url} target="_blank" rel="noreferrer" className="inline-block text-xs font-semibold text-violet-500 mt-2">
                     🔗 Ver enlace adjunto
