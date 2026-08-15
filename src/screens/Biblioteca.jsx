@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import * as api from "../lib/api";
 import { agruparPorNivel } from "../lib/gamification";
+import { EditorTexto } from "../components/RichText";
 
 const CATEGORIAS = [
   { key: "enlace", label: "Enlace", emoji: "🔗", color: "#8B5CF6" },
@@ -58,8 +59,7 @@ function RecursoForm({ nivel, recurso, onCancelar, onGuardado }) {
         className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
       <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Enlace (URL)"
         className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
-      <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2} placeholder="Descripción (opcional)"
-        className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
+      <div className="mb-2"><EditorTexto value={descripcion} onChange={setDescripcion} minHeight={70} placeholder="Descripción (opcional)" /></div>
       <label className="text-[10px] text-slate-500 block mb-1">Tipo</label>
       <div className="flex flex-wrap gap-1.5 mb-3">
         {CATEGORIAS.map((c) => (
@@ -139,4 +139,4 @@ export function VistaBiblioteca({ grados }) {
       )}
     </div>
   );
-} 
+}
