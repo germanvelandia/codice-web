@@ -1103,6 +1103,19 @@ export async function crearTareaCalificable(campos) {
   return data;
 }
 
+// Copia un proyecto/forja a otro curso (y opcionalmente otra materia/periodo),
+// como una tarea nueva sin entregas ni calificaciones — para no mezclar
+// el progreso de un curso con el de otro.
+export async function copiarTareaCalificable(tareaId, materiaDestinoId, gradoDestinoId, periodoDestino, categoriaDestinoId) {
+  const { data: original, error: e1 } = await supabase.from("tareas_calificables").select("*").eq("id", tareaId).single();
+  if (e1) throw e1;
+  return crearTareaCalificable({
+    tipo: original.tipo, materia_id: materiaDestinoId, grado_id: gradoDestinoId, periodo: periodoDestino,
+    categoria_id: categoriaDestinoId, titulo: original.titulo, descripcion: original.descripcion,
+    fecha_entrega: null, url: original.url || null,
+  });
+}
+
 export async function editarTareaCalificable(id, cambios) {
   const { error } = await supabase.from("tareas_calificables").update(cambios).eq("id", id);
   if (error) throw error;
