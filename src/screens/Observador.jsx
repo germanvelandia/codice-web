@@ -105,14 +105,17 @@ function ObservadorPrintView({ datos, onCerrado }) {
                 <span>{TIPO_EVENTO_ICONO[a.tipo_evento] || ""} {a.tipo_evento || a.tipo}{a.tipificacion_falta ? ` · ${a.tipificacion_falta}` : ""}</span>
               </div>
               <div style={{ marginBottom: 3 }}><b>Motivo:</b> {a.motivo}</div>
-              {a.descripcion && <div style={{ marginBottom: 3 }}><b>Descripción de los hechos:</b> {a.descripcion}</div>}
-              {a.descargo_estudiante && <div style={{ marginBottom: 3 }}><b>Versión / descargo del estudiante:</b> {a.descargo_estudiante}</div>}
+              {a.descripcion && <div style={{ marginBottom: 3 }}><b>Descripción de los hechos:</b> <span dangerouslySetInnerHTML={{ __html: a.descripcion }} /></div>}
+              {a.descargo_estudiante && <div style={{ marginBottom: 3 }}><b>Versión / descargo del estudiante:</b> <span dangerouslySetInnerHTML={{ __html: a.descargo_estudiante }} /></div>}
               {(a.compromisos_academicos || a.compromisos_convivenciales) && (
                 <div style={{ marginBottom: 3 }}>
-                  <b>Estrategia pedagógica / compromisos:</b> {[a.compromisos_academicos, a.compromisos_convivenciales].filter(Boolean).join(" — ")}
+                  <b>Estrategia pedagógica / compromisos:</b>{" "}
+                  {a.compromisos_academicos && <span dangerouslySetInnerHTML={{ __html: a.compromisos_academicos }} />}
+                  {a.compromisos_academicos && a.compromisos_convivenciales && " — "}
+                  {a.compromisos_convivenciales && <span dangerouslySetInnerHTML={{ __html: a.compromisos_convivenciales }} />}
                 </div>
               )}
-              {a.implicaciones_legales && <div style={{ marginBottom: 3, color: "#7c2d12" }}><b>Implicaciones:</b> {a.implicaciones_legales}</div>}
+              {a.implicaciones_legales && <div style={{ marginBottom: 3, color: "#7c2d12" }}><b>Implicaciones:</b> <span dangerouslySetInnerHTML={{ __html: a.implicaciones_legales }} /></div>}
               <div style={{ fontSize: 9, color: "#555", marginTop: 4 }}>
                 Seguimiento: {a.evaluacion_compromiso ? EVALUACION_LABEL[a.evaluacion_compromiso] : "Sin verificar"}
                 {a.remitido_a ? ` · Remitido a: ${a.remitido_a}` : ""}
