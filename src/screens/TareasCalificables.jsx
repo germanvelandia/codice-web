@@ -75,6 +75,9 @@ function CalificarModal({ tarea, onClose, onCambio }) {
   const [notaTemp, setNotaTemp] = useState("");
   const [comentarioTemp, setComentarioTemp] = useState("");
   const [dandoMonedas, setDandoMonedas] = useState(null);
+  const [codiceAbiertoPara, setCodiceAbiertoPara] = useState(null);
+  const [codiceTexto, setCodiceTexto] = useState("");
+  const [guardandoCodice, setGuardandoCodice] = useState(false);
 
   const cargar = () => { setCargando(true); api.fetchEntregasDeTarea(tarea.id).then((d) => { setEntregas(d); setCargando(false); }); };
   useEffect(() => { cargar(); }, [tarea.id]);
@@ -104,6 +107,22 @@ function CalificarModal({ tarea, onClose, onCambio }) {
     setDandoMonedas(null);
   };
 
+  const dejarEnCodice = async (estudianteId) => {
+    if (!codiceTexto.trim()) { alert("Escribí algo para dejar en el Códice."); return; }
+    setGuardandoCodice(true);
+    try {
+      await api.crearEntradaCodiceDocente(estudianteId, {
+        titulo: tarea.titulo, contenido: codiceTexto.trim(), materia_id: tarea.materia_id, tarea_id: tarea.id,
+      });
+      setCodiceAbiertoPara(null);
+      setCodiceTexto("");
+      alert("Quedó agregado al Códice del estudiante.");
+    } catch (e) {
+      alert("Error al guardar: " + e.message);
+    }
+    setGuardandoCodice(false);
+  };
+
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
@@ -117,35 +136,54 @@ function CalificarModal({ tarea, onClose, onCambio }) {
         ) : (
           <div className="space-y-1.5">
             {entregas.map((e) => (
-              <div key={e.estudiante_id} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2 flex-wrap gap-1.5">
-                <span className="text-xs font-semibold text-slate-700">{e.estudiante_nombre}</span>
-                <div className="flex items-center gap-1.5">
-                  {editandoId === e.estudiante_id ? (
-                    <div className="flex items-center gap-1.5">
-                      <input type="text" inputMode="decimal" value={notaTemp} onChange={(ev) => setNotaTemp(ev.target.value)} placeholder="Nota"
-                        className="w-16 text-xs text-center rounded px-2 py-1 border border-slate-200 outline-none" />
-                      <input type="text" value={comentarioTemp} onChange={(ev) => setComentarioTemp(ev.target.value)} placeholder="Comentario (opcional)"
-                        className="w-32 text-xs rounded px-2 py-1 border border-slate-200 outline-none" />
-                      <button onClick={() => guardarNota(e.estudiante_id)} className="text-xs px-2 py-1 rounded bg-violet-500 text-white">✔</button>
-                      <button onClick={() => setEditandoId(null)} className="text-xs text-slate-400">✕</button>
-                    </div>
-                  ) : (
-                    <button onClick={() => { setEditandoId(e.estudiante_id); setNotaTemp(e.nota ?? ""); setComentarioTemp(e.comentario || ""); }}
-                      className="text-xs px-2 py-1 rounded-full" style={{ background: e.nota !== null ? "#DCFCE7" : "#F1F5F9", color: e.nota !== null ? "#15803D" : "#64748B" }}>
-                      {e.nota !== null ? `Nota: ${e.nota}` : "Sin calificar"}
-                    </button>
-                  )}
-                  {tarea.recompensa_monedas > 0 && e.nota !== null && (
-                    e.monedas_entregadas ? (
-                      <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-2 py-1 rounded-full">🪙 Entregadas</span>
+              <div key={e.estudiante_id} className="bg-slate-50 rounded-lg px-3 py-2">
+                <div className="flex items-center justify-between flex-wrap gap-1.5">
+                  <span className="text-xs font-semibold text-slate-700">{e.estudiante_nombre}</span>
+                  <div className="flex items-center gap-1.5">
+                    {editandoId === e.estudiante_id ? (
+                      <div className="flex items-center gap-1.5">
+                        <input type="text" inputMode="decimal" value={notaTemp} onChange={(ev) => setNotaTemp(ev.target.value)} placeholder="Nota"
+                          className="w-16 text-xs text-center rounded px-2 py-1 border border-slate-200 outline-none" />
+                        <input type="text" value={comentarioTemp} onChange={(ev) => setComentarioTemp(ev.target.value)} placeholder="Comentario (opcional)"
+                          className="w-32 text-xs rounded px-2 py-1 border border-slate-200 outline-none" />
+                        <button onClick={() => guardarNota(e.estudiante_id)} className="text-xs px-2 py-1 rounded bg-violet-500 text-white">✔</button>
+                        <button onClick={() => setEditandoId(null)} className="text-xs text-slate-400">✕</button>
+                      </div>
                     ) : (
-                      <button disabled={dandoMonedas === e.estudiante_id} onClick={() => darMonedas(e.estudiante_id)}
-                        className="text-[10px] font-semibold text-white bg-amber-500 px-2 py-1 rounded-full disabled:opacity-50">
-                        {dandoMonedas === e.estudiante_id ? "…" : `🪙 Dar ${tarea.recompensa_monedas}`}
+                      <button onClick={() => { setEditandoId(e.estudiante_id); setNotaTemp(e.nota ?? ""); setComentarioTemp(e.comentario || ""); }}
+                        className="text-xs px-2 py-1 rounded-full" style={{ background: e.nota !== null ? "#DCFCE7" : "#F1F5F9", color: e.nota !== null ? "#15803D" : "#64748B" }}>
+                        {e.nota !== null ? `Nota: ${e.nota}` : "Sin calificar"}
                       </button>
-                    )
-                  )}
+                    )}
+                    {tarea.recompensa_monedas > 0 && e.nota !== null && (
+                      e.monedas_entregadas ? (
+                        <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-2 py-1 rounded-full">🪙 Entregadas</span>
+                      ) : (
+                        <button disabled={dandoMonedas === e.estudiante_id} onClick={() => darMonedas(e.estudiante_id)}
+                          className="text-[10px] font-semibold text-white bg-amber-500 px-2 py-1 rounded-full disabled:opacity-50">
+                          {dandoMonedas === e.estudiante_id ? "…" : `🪙 Dar ${tarea.recompensa_monedas}`}
+                        </button>
+                      )
+                    )}
+                    <button onClick={() => { setCodiceAbiertoPara(codiceAbiertoPara === e.estudiante_id ? null : e.estudiante_id); setCodiceTexto(""); }}
+                      className="text-[10px] font-semibold text-violet-600 bg-violet-100 px-2 py-1 rounded-full">
+                      📖 Códice
+                    </button>
+                  </div>
                 </div>
+                {codiceAbiertoPara === e.estudiante_id && (
+                  <div className="mt-2 bg-white rounded-lg p-2 border border-violet-100">
+                    <textarea value={codiceTexto} onChange={(ev) => setCodiceTexto(ev.target.value)} rows={2}
+                      placeholder={`Escribí algo sobre "${tarea.titulo}" para dejar en su Códice…`}
+                      className="w-full text-xs rounded-lg px-2 py-1.5 mb-1.5 border border-slate-200 outline-none" />
+                    <div className="flex justify-end gap-2">
+                      <button onClick={() => setCodiceAbiertoPara(null)} className="text-[11px] text-slate-400">Cancelar</button>
+                      <button disabled={guardandoCodice} onClick={() => dejarEnCodice(e.estudiante_id)} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+                        {guardandoCodice ? "Guardando…" : "Agregar al Códice"}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
             {entregas.length === 0 && <p className="text-xs text-slate-400">Todavía nadie tiene registro. Se irán agregando cuando califiques a cada estudiante.</p>}
