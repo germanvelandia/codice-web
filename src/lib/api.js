@@ -2232,6 +2232,53 @@ export async function fetchObservadorData(estudianteId) {
   };
 }
 
+/* ---------------- Consignas del Códice (pregunta general para todo un grado) ---------------- */
+export async function fetchConsignasCodice() {
+  const [consignasRes, materiasRes] = await Promise.all([
+    supabase.from("codice_consignas").select("*").order("creado_en", { ascending: false }),
+    supabase.from("materias").select("id, nombre"),
+  ]);
+  if (consignasRes.error) throw consignasRes.error;
+  const nombrePorId = {}; (materiasRes.data || []).forEach((m) => { nombrePorId[m.id] = m.nombre; });
+  return (consignasRes.data || []).map((c) => ({ ...c, materia_nombre: c.materia_id ? nombrePorId[c.materia_id] : null }));
+}
+
+export async function crearConsignaCodice(campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("codice_consignas").insert({ ...campos, docente_id: userData?.user?.id || null });
+  if (error) throw error;
+}
+
+export async function editarConsignaCodice(id, cambios) {
+  const { error } = await supabase.from("codice_consignas").update(cambios).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarConsignaCodice(id) {
+  const { error } = await supabase.from("codice_consignas").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// Para el estudiante: consignas activas de su grado (nivel completo)
+export async function fetchConsignasActivasParaGrado(gradoId) {
+  const nivel = String(gradoId || "").slice(0, -2) || String(gradoId || "");
+  const { data, error } = await supabase.from("codice_consignas").select("*").eq("nivel", nivel).eq("activa", true).order("creado_en", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+// Para el docente: quiénes ya respondieron una consigna puntual
+export async function fetchRespuestasConsigna(consignaId) {
+  const [entradasRes, estudiantesRes] = await Promise.all([
+    supabase.from("codice_entradas").select("*").eq("consigna_id", consignaId),
+    supabase.from("estudiantes").select("id, nombre, grado_id").eq("activo", true),
+  ]);
+  if (entradasRes.error) throw entradasRes.error;
+  if (estudiantesRes.error) throw estudiantesRes.error;
+  const nombrePorId = {}; (estudiantesRes.data || []).forEach((e) => { nombrePorId[e.id] = e; });
+  return (entradasRes.data || []).map((e) => ({ ...e, estudiante_nombre: nombrePorId[e.estudiante_id]?.nombre || "Estudiante", grado_id: nombrePorId[e.estudiante_id]?.grado_id }));
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
