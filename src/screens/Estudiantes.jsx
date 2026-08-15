@@ -948,20 +948,16 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
   const [subiendoFoto, setSubiendoFoto] = useState(false);
   const [fotoAmpliada, setFotoAmpliada] = useState(false);
 
-  const subirFoto = (file) => {
-    if (file.size > 500 * 1024) { alert("La foto es muy grande. Usa una de menos de 500 KB."); return; }
+  const subirFoto = async (file) => {
     setSubiendoFoto(true);
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        await api.guardarFotoEstudiante(estudiante.id, e.target.result);
-        onFotoActualizada(estudiante.id, e.target.result);
-      } catch (err) {
-        alert("Error al guardar la foto: " + err.message);
-      }
-      setSubiendoFoto(false);
-    };
-    reader.readAsDataURL(file);
+    try {
+      const dataUrlChica = await redimensionarImagen(file);
+      await api.guardarFotoEstudiante(estudiante.id, dataUrlChica);
+      onFotoActualizada(estudiante.id, dataUrlChica);
+    } catch (err) {
+      alert("Error al guardar la foto: " + err.message);
+    }
+    setSubiendoFoto(false);
   };
 
   const quitarFoto = async () => {
@@ -1420,6 +1416,35 @@ function PlanillaBlancoModal({ estudiantes, gradoId, onClose }) {
 
 // Limpia el nombre de archivo para intentar emparejarlo con un estudiante:
 // saca la extensión, cambia guiones/subrayados por espacios, quita números sueltos.
+// Redimensiona y comprime una imagen antes de guardarla — así el avatar
+// ocupa unos pocos KB en vez de cientos, y el listado de estudiantes carga
+// mucho más rápido (antes se traía la foto a tamaño completo de cada uno).
+function redimensionarImagen(file, maxDim = 200, calidad = 0.72) {
+  return new Promise((resolve, reject) => {
+    const lector = new FileReader();
+    lector.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > height) {
+          if (width > maxDim) { height = Math.round(height * (maxDim / width)); width = maxDim; }
+        } else {
+          if (height > maxDim) { width = Math.round(width * (maxDim / height)); height = maxDim; }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", calidad));
+      };
+      img.onerror = () => reject(new Error("No se pudo procesar la imagen."));
+      img.src = e.target.result;
+    };
+    lector.onerror = () => reject(new Error("No se pudo leer el archivo."));
+    lector.readAsDataURL(file);
+  });
+}
+
 function nombreDesdeArchivo(filename) {
   return filename
     .replace(/\.[^/.]+$/, "")
@@ -1451,25 +1476,14 @@ function SubirFotosMasivoModal({ estudiantes, onClose, onGuardado }) {
   const emparejadas = filas.filter((f) => f.estudianteId);
   const sinEmparejar = filas.filter((f) => !f.estudianteId);
 
-  const leerComoDataUrl = (file) => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => resolve(e.target.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-
   const guardarTodas = async () => {
     setGuardando(true);
     setProgreso(0);
     let hechos = 0;
     for (const fila of emparejadas) {
-      if (fila.archivo.size > 500 * 1024) {
-        hechos++; setProgreso(hechos);
-        continue; // se salta las muy pesadas, no bloquea el resto
-      }
       try {
-        const dataUrl = await leerComoDataUrl(fila.archivo);
-        await api.guardarFotoEstudiante(fila.estudianteId, dataUrl);
+        const dataUrlChica = await redimensionarImagen(fila.archivo);
+        await api.guardarFotoEstudiante(fila.estudianteId, dataUrlChica);
       } catch (e) {
         // sigue con las demás aunque una falle
       }
