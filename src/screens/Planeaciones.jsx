@@ -1203,6 +1203,67 @@ function FilaEstandar({ e, onCambio }) {
   );
 }
 
+function CargaMasivaEstandares({ tipo, onCargado }) {
+  const [texto, setTexto] = useState("");
+  const [cargando, setCargando] = useState(false);
+  const [abierto, setAbierto] = useState(false);
+
+  const lineas = texto.split("\n").map((l) => l.trim()).filter(Boolean);
+
+  const parsearLinea = (linea) => {
+    // Acepta "CÓDIGO: descripción", "CÓDIGO - descripción", o solo descripción sin código
+    const match = linea.match(/^([A-Za-zÁÉÍÓÚñÑ0-9.]+)\s*[:\-–]\s*(.+)$/);
+    if (match) return { codigo: match[1].trim(), descripcion: match[2].trim() };
+    return { codigo: null, descripcion: linea };
+  };
+
+  const cargarTodos = async () => {
+    if (lineas.length === 0) return;
+    setCargando(true);
+    let hechos = 0;
+    for (const linea of lineas) {
+      const { codigo, descripcion } = parsearLinea(linea);
+      if (!descripcion) continue;
+      try {
+        await api.crearEstandar({ tipo, codigo, descripcion });
+        hechos++;
+      } catch (e) {
+        // sigue con las demás aunque una falle
+      }
+    }
+    setCargando(false);
+    setTexto("");
+    setAbierto(false);
+    alert(`Se cargaron ${hechos} de ${lineas.length} líneas.`);
+    onCargado();
+  };
+
+  if (!abierto) {
+    return <button onClick={() => setAbierto(true)} className="text-xs font-semibold text-violet-500 mb-3">+ Cargar varios de una vez</button>;
+  }
+
+  return (
+    <div className="bg-violet-50 rounded-xl p-3 mb-3">
+      <p className="text-[11px] text-slate-500 mb-2">
+        Pegá uno por línea. Podés poner el código y la descripción separados por "<b>:</b>" o "<b>-</b>" (ej: <i>DBA1: Reconoce estructuras narrativas</i>),
+        o solo la descripción si no tiene código.
+      </p>
+      <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={6}
+        placeholder={"DBA1: Reconoce estructuras narrativas...\nDBA2: Comprende textos argumentativos...\nSolo una descripción sin código también sirve"}
+        className="w-full text-xs font-mono rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
+      <div className="flex justify-between items-center">
+        <span className="text-[11px] text-slate-400">{lineas.length} línea(s) detectada(s)</span>
+        <div className="flex gap-2">
+          <button onClick={() => setAbierto(false)} className="text-xs text-slate-500 px-2 py-1.5">Cancelar</button>
+          <button disabled={cargando || lineas.length === 0} onClick={cargarTodos} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-50">
+            {cargando ? "Cargando…" : `Cargar ${lineas.length} línea(s)`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function GestionarEstandaresModal({ onClose }) {
   const [dba, setDba] = useState([]);
   const [competencias, setCompetencias] = useState([]);
@@ -1233,6 +1294,9 @@ function GestionarEstandaresModal({ onClose }) {
           <button onClick={() => setTab("dba")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "dba" ? "bg-blue-500 text-white" : "text-slate-600"}`}>DBA ({dba.length})</button>
           <button onClick={() => setTab("competencia")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "competencia" ? "bg-teal-500 text-white" : "text-slate-600"}`}>Competencias ({competencias.length})</button>
         </div>
+
+        <CargaMasivaEstandares tipo={tab} onCargado={cargar} />
+
         {cargando ? (
           <div className="text-sm text-slate-400">Cargando…</div>
         ) : lista.length === 0 ? (
