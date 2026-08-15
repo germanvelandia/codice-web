@@ -23,6 +23,7 @@ import { VistaConsignasCodice } from "./screens/ConsignasCodice";
 import { VistaEvaluaciones } from "./screens/Evaluaciones";
 import { VistaProyectosForja } from "./screens/TareasCalificables";
 import { VistaInicio } from "./screens/Inicio";
+import { TextoEnriquecido } from "./components/RichText";
 import { InstitucionModal } from "./screens/Institucion";
 import { AdministracionModal } from "./screens/Administracion";
 
@@ -138,7 +139,7 @@ function TomarEvaluacion({ evaluacion, estudianteId, onCerrar }) {
             <h3 className="font-bold text-slate-800 mb-2">⚔️ {evaluacion.titulo}</h3>
             {(evaluacion.descripcion || (evaluacion.indicaciones && evaluacion.indicaciones.length > 0) || evaluacion.tiempo_limite_minutos) && (
               <div className="bg-violet-50 rounded-2xl p-4 mb-4">
-                {evaluacion.descripcion && <p className="text-xs text-slate-600 leading-relaxed mb-3">{evaluacion.descripcion}</p>}
+                {evaluacion.descripcion && <TextoEnriquecido html={evaluacion.descripcion} className="text-xs text-slate-600 mb-3" />}
                 {evaluacion.indicaciones && evaluacion.indicaciones.length > 0 && (
                   <>
                     <div className="text-[11px] font-bold text-violet-700 uppercase tracking-wide mb-1.5">Indicaciones</div>
@@ -210,7 +211,7 @@ function TarjetaEvaluacionEstudiante({ evaluacion, estudianteId }) {
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="text-sm font-bold text-slate-800">⚔️ {evaluacion.titulo}</div>
-          {evaluacion.descripcion && <div className="text-xs text-slate-500 mt-1 leading-relaxed">{evaluacion.descripcion}</div>}
+          {evaluacion.descripcion && <TextoEnriquecido html={evaluacion.descripcion} className="text-xs text-slate-500 mt-1" />}
         </div>
         {publicado ? (
           <span className="text-xs font-bold text-white bg-emerald-500 px-2.5 py-1 rounded-full shrink-0">{publicado.puntaje_obtenido}/{publicado.puntaje_maximo}</span>
@@ -787,7 +788,7 @@ function TareaCalificableEstudiante({ tarea, estudianteId, icono = "📄" }) {
         <div className="min-w-0">
           <div className="text-sm font-bold text-slate-800">{icono} {tarea.titulo}</div>
           {tarea.materias?.nombre && <div className="text-[11px] text-violet-500 font-semibold mt-0.5">{tarea.materias.nombre}</div>}
-          {tarea.descripcion && <div className="text-xs text-slate-500 mt-1 leading-relaxed">{tarea.descripcion}</div>}
+          {tarea.descripcion && <TextoEnriquecido html={tarea.descripcion} className="text-xs text-slate-500 mt-1" />}
         </div>
         {calificado ? (
           <span className="text-xs font-bold text-white bg-emerald-500 px-2.5 py-1 rounded-full shrink-0">{entrega.nota}</span>
