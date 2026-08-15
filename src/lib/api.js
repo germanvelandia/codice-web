@@ -1521,18 +1521,30 @@ export async function abrirSobre(estudianteId) {
 
 /* ---------------- Códice personal (diario de reflexiones del estudiante) ---------------- */
 export async function fetchEntradasCodice(estudianteId) {
-  const [entradasRes, materiasRes] = await Promise.all([
+  const [entradasRes, materiasRes, tareasRes] = await Promise.all([
     supabase.from("codice_entradas").select("*").eq("estudiante_id", estudianteId).order("fecha", { ascending: false }),
     supabase.from("materias").select("id, nombre"),
+    supabase.from("tareas_calificables").select("id, titulo"),
   ]);
   if (entradasRes.error) throw entradasRes.error;
   if (materiasRes.error) throw materiasRes.error;
   const nombrePorId = {}; (materiasRes.data || []).forEach((m) => { nombrePorId[m.id] = m.nombre; });
-  return (entradasRes.data || []).map((e) => ({ ...e, materia_nombre: e.materia_id ? nombrePorId[e.materia_id] : null }));
+  const tareaPorId = {}; (tareasRes.data || []).forEach((t) => { tareaPorId[t.id] = t.titulo; });
+  return (entradasRes.data || []).map((e) => ({ ...e, materia_nombre: e.materia_id ? nombrePorId[e.materia_id] : null, tarea_titulo: e.tarea_id ? tareaPorId[e.tarea_id] : null }));
 }
 
 export async function crearEntradaCodice(estudianteId, campos) {
   const { data, error } = await supabase.from("codice_entradas").insert({ estudiante_id: estudianteId, ...campos }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+// El docente deja una entrada directo en el Códice del estudiante (distinto
+// de comentar una entrada ya escrita por el estudiante) — opcionalmente
+// vinculada a un Proyecto/Forja puntual.
+export async function crearEntradaCodiceDocente(estudianteId, campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("codice_entradas").insert({ estudiante_id: estudianteId, autor_docente_id: userData?.user?.id || null, ...campos }).select().single();
   if (error) throw error;
   return data;
 }
