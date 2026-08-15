@@ -19,6 +19,7 @@ import { VistaHorario } from "./screens/Horario";
 import { VistaPlaneaciones } from "./screens/Planeaciones";
 import { VistaBiblioteca } from "./screens/Biblioteca";
 import { VistaAnotaciones } from "./screens/Anotaciones";
+import { VistaConsignasCodice } from "./screens/ConsignasCodice";
 import { VistaEvaluaciones } from "./screens/Evaluaciones";
 import { VistaProyectosForja } from "./screens/TareasCalificables";
 import { VistaInicio } from "./screens/Inicio";
@@ -997,25 +998,41 @@ function EntradaCodiceCard({ entrada }) {
   );
 }
 
-function CodiceEstudiante({ estudianteId }) {
+function CodiceEstudiante({ estudianteId, gradoId }) {
   const [entradas, setEntradas] = useState([]);
   const [materias, setMaterias] = useState([]);
+  const [consignas, setConsignas] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [escribiendo, setEscribiendo] = useState(false);
   const [titulo, setTitulo] = useState("");
   const [contenido, setContenido] = useState("");
   const [materiaId, setMateriaId] = useState("");
+  const [consignaIdActual, setConsignaIdActual] = useState(null);
   const [guardando, setGuardando] = useState(false);
 
   const cargar = () => api.fetchEntradasCodice(estudianteId).then((d) => { setEntradas(d); setCargando(false); });
-  useEffect(() => { cargar(); api.fetchMaterias().then(setMaterias); }, [estudianteId]);
+  useEffect(() => {
+    cargar();
+    api.fetchMaterias().then(setMaterias);
+    if (gradoId) api.fetchConsignasActivasParaGrado(gradoId).then(setConsignas);
+  }, [estudianteId, gradoId]);
+
+  const idsRespondidas = new Set(entradas.filter((e) => e.consigna_id).map((e) => e.consigna_id));
+
+  const responderConsigna = (consigna) => {
+    setConsignaIdActual(consigna.id);
+    setTitulo(consigna.titulo);
+    setMateriaId(consigna.materia_id || "");
+    setContenido("");
+    setEscribiendo(true);
+  };
 
   const guardar = async () => {
     if (!contenido.trim()) return;
     setGuardando(true);
     try {
-      await api.crearEntradaCodice(estudianteId, { titulo: titulo.trim() || null, contenido: contenido.trim(), materia_id: materiaId ? parseInt(materiaId, 10) : null });
-      setTitulo(""); setContenido(""); setMateriaId(""); setEscribiendo(false);
+      await api.crearEntradaCodice(estudianteId, { titulo: titulo.trim() || null, contenido: contenido.trim(), materia_id: materiaId ? parseInt(materiaId, 10) : null, consigna_id: consignaIdActual });
+      setTitulo(""); setContenido(""); setMateriaId(""); setConsignaIdActual(null); setEscribiendo(false);
       cargar();
     } catch (e) {
       alert("Error al guardar: " + e.message);
@@ -1028,8 +1045,22 @@ function CodiceEstudiante({ estudianteId }) {
       <h3 className="font-bold text-slate-800 mb-1">📖 Mi Códice</h3>
       <p className="text-xs text-slate-400 mb-3">Tu diario personal de aprendizajes — anotá qué entendiste, qué te costó, o cualquier reflexión sobre tus clases.</p>
 
+      {consignas.filter((c) => !idsRespondidas.has(c.id)).length > 0 && (
+        <div className="space-y-2 mb-4">
+          {consignas.filter((c) => !idsRespondidas.has(c.id)).map((c) => (
+            <div key={c.id} className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+              <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wide">📢 Consigna de tu docente</div>
+              <div className="text-sm font-bold text-slate-800 mt-0.5">{c.titulo}</div>
+              <p className="text-xs text-slate-600 italic mt-1">"{c.pregunta}"</p>
+              <button onClick={() => responderConsigna(c)} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-500 text-white mt-2">Responder</button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {escribiendo ? (
         <div className="bg-violet-50 rounded-xl p-3 mb-3">
+          {consignaIdActual && <p className="text-[11px] text-violet-600 font-semibold mb-2">Respondiendo la consigna: "{consignas.find((c) => c.id === consignaIdActual)?.pregunta}"</p>}
           <select value={materiaId} onChange={(e) => setMateriaId(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none">
             <option value="">Sin materia específica</option>
             {materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
@@ -1039,14 +1070,14 @@ function CodiceEstudiante({ estudianteId }) {
           <textarea value={contenido} onChange={(e) => setContenido(e.target.value)} rows={4} placeholder="¿Qué aprendiste hoy? ¿Qué te costó entender? ¿Qué reflexión te queda?"
             className="w-full text-sm rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none" />
           <div className="flex justify-end gap-2">
-            <button onClick={() => setEscribiendo(false)} className="text-xs text-slate-400 px-2 py-1">Cancelar</button>
+            <button onClick={() => { setEscribiendo(false); setConsignaIdActual(null); }} className="text-xs text-slate-400 px-2 py-1">Cancelar</button>
             <button disabled={guardando} onClick={guardar} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
               {guardando ? "Guardando…" : "Guardar entrada"}
             </button>
           </div>
         </div>
       ) : (
-        <button onClick={() => setEscribiendo(true)} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white mb-3">
+        <button onClick={() => { setConsignaIdActual(null); setTitulo(""); setMateriaId(""); setEscribiendo(true); }} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white mb-3">
           ✎ Nueva entrada
         </button>
       )}
@@ -1498,7 +1529,7 @@ function PortalEstudiante() {
           )}
 
           {vista === "codice" && estudianteInfo && (
-            <CodiceEstudiante estudianteId={estudianteInfo.id} />
+            <CodiceEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />
           )}
 
           {vista === "biblioteca" && estudianteInfo && (
@@ -1819,6 +1850,7 @@ function Panel({ session }) {
               <button onClick={() => setSubTabHerramientas("logros")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "logros" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Logros</button>
               <button onClick={() => setSubTabHerramientas("salonhonor")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "salonhonor" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Salón de Honor</button>
               <button onClick={() => setSubTabHerramientas("gamext")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "gamext" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Desafíos/Misiones/Cosméticos</button>
+              <button onClick={() => setSubTabHerramientas("consignas")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "consignas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Consignas del Códice</button>
               <button onClick={() => setSubTabHerramientas("temporizador")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "temporizador" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Temporizador</button>
               <button onClick={() => setSubTabHerramientas("otras")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "otras" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Otras herramientas</button>
             </div>
@@ -1830,6 +1862,7 @@ function Panel({ session }) {
             {subTabHerramientas === "logros" && <VistaLogros />}
             {subTabHerramientas === "salonhonor" && <VistaSalonHonor />}
             {subTabHerramientas === "gamext" && <VistaGamificacionExtra grados={grados} />}
+            {subTabHerramientas === "consignas" && <VistaConsignasCodice grados={grados} />}
             {subTabHerramientas === "temporizador" && <VistaTemporizador />}
             {subTabHerramientas === "otras" && <VistaHerramientas grados={grados} />}
           </>
