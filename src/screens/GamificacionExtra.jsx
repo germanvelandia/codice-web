@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import * as api from "../lib/api";
 import { agruparPorNivel, nivelYCurso, colorGrado } from "../lib/gamification";
+import { EditorTexto, TextoEnriquecido } from "../components/RichText";
 
 /* ---------------- Desafíos de equipo ---------------- */
 function NuevoDesafioForm({ gradoId, onCancelar, onCreado }) {
@@ -27,8 +28,7 @@ function NuevoDesafioForm({ gradoId, onCancelar, onCreado }) {
     <div className="bg-violet-50 rounded-2xl p-4 mb-3">
       <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título del desafío (ej: Carrera hacia los 200 XP)"
         className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
-      <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2} placeholder="Descripción (opcional)"
-        className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
+      <div className="mb-2"><EditorTexto value={descripcion} onChange={setDescripcion} minHeight={70} placeholder="Descripción (opcional)" /></div>
       <div className="grid grid-cols-3 gap-2 mb-3">
         <div>
           <label className="text-[10px] text-slate-500 block mb-1">Se mide en</label>
@@ -71,7 +71,7 @@ function DesafioCard({ desafio, onCambio }) {
       <div className="flex justify-between items-start">
         <div>
           <h4 className="font-bold text-slate-800">⚔️ {desafio.titulo}</h4>
-          {desafio.descripcion && <p className="text-xs text-slate-500 mt-1">{desafio.descripcion}</p>}
+          {desafio.descripcion && <TextoEnriquecido html={desafio.descripcion} className="text-xs text-slate-500 mt-1" />}
           <p className="text-[11px] text-slate-400 mt-1">Meta: {desafio.meta} {desafio.tipo === "xp" ? "XP" : "monedas"} por equipo{desafio.fecha_fin ? ` · Termina ${desafio.fecha_fin}` : ""}</p>
         </div>
         <button onClick={eliminar} className="text-xs text-slate-400 hover:text-rose-500">🗑</button>
@@ -163,8 +163,7 @@ function MicroMisionForm({ mision, onCancelar, onGuardado }) {
     <div className="bg-violet-50 rounded-2xl p-4 mb-3">
       <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título (ej: Participá hoy en clase)"
         className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
-      <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2} placeholder="Descripción (opcional)"
-        className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
+      <div className="mb-2"><EditorTexto value={descripcion} onChange={setDescripcion} minHeight={70} placeholder="Descripción (opcional)" /></div>
       <div className="grid grid-cols-3 gap-2 mb-3">
         <div>
           <label className="text-[10px] text-slate-500 block mb-1">Se renueva</label>
@@ -223,7 +222,7 @@ function PanelMicroMisiones() {
             <div key={m.id} className={`bg-white rounded-2xl border p-3 flex justify-between items-start ${m.activo ? "border-slate-100" : "border-slate-100 opacity-50"}`}>
               <div>
                 <div className="text-sm font-semibold text-slate-800">{m.tipo === "diaria" ? "☀️" : "📅"} {m.titulo}</div>
-                {m.descripcion && <div className="text-xs text-slate-500 mt-0.5">{m.descripcion}</div>}
+                {m.descripcion && <TextoEnriquecido html={m.descripcion} className="text-xs text-slate-500 mt-0.5" />}
                 <div className="text-[11px] text-slate-400 mt-1">{m.tipo === "diaria" ? "Diaria" : "Semanal"} · 🪙{m.recompensa_monedas} · ⭐{m.recompensa_xp}</div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
