@@ -176,9 +176,10 @@ function CalificarModal({ tarea, onClose, onCambio }) {
                 </div>
                 {codiceAbiertoPara === e.estudiante_id && (
                   <div className="mt-2 bg-white rounded-lg p-2 border border-violet-100">
-                    <textarea value={codiceTexto} onChange={(ev) => setCodiceTexto(ev.target.value)} rows={2}
-                      placeholder={`Escribí algo sobre "${tarea.titulo}" para dejar en su Códice…`}
-                      className="w-full text-xs rounded-lg px-2 py-1.5 mb-1.5 border border-slate-200 outline-none" />
+                    <div className="mb-1.5">
+                      <EditorTexto value={codiceTexto} onChange={setCodiceTexto} minHeight={60}
+                        placeholder={`Escribí algo sobre "${tarea.titulo}" para dejar en su Códice…`} />
+                    </div>
                     <div className="flex justify-end gap-2">
                       <button onClick={() => setCodiceAbiertoPara(null)} className="text-[11px] text-slate-400">Cancelar</button>
                       <button disabled={guardandoCodice} onClick={() => dejarEnCodice(e.estudiante_id)} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-violet-500 text-white disabled:opacity-60">
