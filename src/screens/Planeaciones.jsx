@@ -379,6 +379,7 @@ function DictadoControl({ claseId, grados }) {
 function ClasesLista({ unidadId, grados }) {
   const [clases, setClases] = useState([]);
   const [agregando, setAgregando] = useState(false);
+  const [editandoId, setEditandoId] = useState(null);
   const [modo, setModo] = useState("agil"); // "agil" | "completo"
   const [titulo, setTitulo] = useState("");
   const [fecha, setFecha] = useState("");
@@ -393,20 +394,46 @@ function ClasesLista({ unidadId, grados }) {
   useEffect(() => { cargar(); }, [unidadId]);
 
   const limpiar = () => {
-    setTitulo(""); setFecha(""); setDuracion(""); setDescripcionAgil(""); setInicio(""); setDesarrollo(""); setCierre(""); setIndicador(""); setAgregando(false);
+    setTitulo(""); setFecha(""); setDuracion(""); setDescripcionAgil(""); setInicio(""); setDesarrollo(""); setCierre(""); setIndicador("");
+    setAgregando(false); setEditandoId(null); setModo("agil");
   };
 
-  const agregar = async () => {
+  const empezarEdicionClase = (c) => {
+    setEditandoId(c.id);
+    setTitulo(c.titulo || "");
+    setFecha(c.fecha || "");
+    setDuracion(c.duracion_minutos || "");
+    if (c.momento_inicio || c.momento_cierre) {
+      setModo("completo");
+      setInicio(c.momento_inicio || "");
+      setDesarrollo(c.momento_desarrollo || "");
+      setCierre(c.momento_cierre || "");
+      setIndicador(c.indicador_desempeno || "");
+      setDescripcionAgil("");
+    } else {
+      setModo("agil");
+      setDescripcionAgil(c.momento_desarrollo || "");
+      setInicio(""); setDesarrollo(""); setCierre(""); setIndicador("");
+    }
+    setAgregando(true);
+  };
+
+  const guardar = async () => {
     if (!titulo.trim()) return;
+    const campos = {
+      titulo: titulo.trim(), fecha: fecha || null,
+      duracion_minutos: duracion ? parseInt(duracion, 10) : null,
+      momento_inicio: modo === "agil" ? null : (inicio.trim() || null),
+      momento_desarrollo: modo === "agil" ? (descripcionAgil.trim() || null) : (desarrollo.trim() || null),
+      momento_cierre: modo === "agil" ? null : (cierre.trim() || null),
+      indicador_desempeno: modo === "agil" ? null : (indicador.trim() || null),
+    };
     try {
-      await api.crearPlaneacion({
-        tipo: "clase", unidad_id: unidadId, titulo: titulo.trim(), fecha: fecha || null, orden: clases.length,
-        duracion_minutos: duracion ? parseInt(duracion, 10) : null,
-        momento_inicio: modo === "agil" ? null : (inicio.trim() || null),
-        momento_desarrollo: modo === "agil" ? (descripcionAgil.trim() || null) : (desarrollo.trim() || null),
-        momento_cierre: modo === "agil" ? null : (cierre.trim() || null),
-        indicador_desempeno: modo === "agil" ? null : (indicador.trim() || null),
-      });
+      if (editandoId) {
+        await api.editarPlaneacion(editandoId, campos);
+      } else {
+        await api.crearPlaneacion({ tipo: "clase", unidad_id: unidadId, orden: clases.length, ...campos });
+      }
       limpiar();
       cargar();
     } catch (e) {
@@ -429,7 +456,10 @@ function ClasesLista({ unidadId, grados }) {
                   {c.fecha && <span className="text-slate-400"> · {c.fecha}</span>}
                   {c.duracion_minutos && <span className="text-slate-400"> · {c.duracion_minutos} min</span>}
                 </div>
-                <button onClick={() => quitar(c.id)} className="text-slate-300 hover:text-rose-500 text-xs">✕</button>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button onClick={() => empezarEdicionClase(c)} className="text-slate-300 hover:text-violet-600 text-xs">✏️</button>
+                  <button onClick={() => quitar(c.id)} className="text-slate-300 hover:text-rose-500 text-xs">✕</button>
+                </div>
               </div>
               {(c.momento_inicio || c.momento_desarrollo || c.momento_cierre) && (
                 <div className="grid sm:grid-cols-3 gap-2 mt-2">
@@ -466,6 +496,7 @@ function ClasesLista({ unidadId, grados }) {
       )}
       {agregando ? (
         <div className="bg-violet-50 rounded-lg p-3 space-y-2">
+          {editandoId && <div className="text-[11px] font-semibold text-violet-600">Editando "{titulo || "esta clase"}"</div>}
           <div className="flex gap-1 rounded-full bg-white p-1 w-fit border border-slate-200">
             <button onClick={() => setModo("agil")} className={`text-[11px] px-3 py-1 rounded-full ${modo === "agil" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🚀 Ágil</button>
             <button onClick={() => setModo("completo")} className={`text-[11px] px-3 py-1 rounded-full ${modo === "completo" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📋 Completo (inicio/desarrollo/cierre)</button>
@@ -489,7 +520,7 @@ function ClasesLista({ unidadId, grados }) {
           )}
           <div className="flex justify-end gap-2">
             <button onClick={limpiar} className="text-xs text-slate-400">Cancelar</button>
-            <button onClick={agregar} className="text-xs px-3 py-1.5 rounded-lg bg-violet-500 text-white">Agregar clase</button>
+            <button onClick={guardar} className="text-xs px-3 py-1.5 rounded-lg bg-violet-500 text-white">{editandoId ? "Guardar cambios" : "Agregar clase"}</button>
           </div>
         </div>
       ) : (
