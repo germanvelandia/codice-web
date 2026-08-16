@@ -1151,7 +1151,7 @@ export async function copiarPlanillaCompleta(materiaId, gradoOrigen, gradoDestin
 
   for (const a of actividades) {
     try {
-      await crearActividad({ nombre: a.nombre, categoria_id: a.categoria_id, materia_id: materiaId, grado_id: gradoDestino, periodo });
+      await crearActividad({ nombre: a.nombre, descripcion: a.descripcion || null, categoria_id: a.categoria_id, materia_id: materiaId, grado_id: gradoDestino, periodo });
       actividadesCopiadas++;
     } catch (e) {
       advertencias.push(`Columna "${a.nombre}": ${e.message}`);
