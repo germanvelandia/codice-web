@@ -588,6 +588,142 @@ function NotaMasivaModal({ actividades, estudiantesVisibles, reinoFiltro, valorD
   );
 }
 
+function CopiarPlanillaOtroCursoModal({ materiaId, gradoId, grados, periodo, periodos, onClose, onCopiado }) {
+  const niveles = agruparPorNivel(grados);
+  const { nivel: nivelActual } = nivelYCurso(gradoId);
+  const [nivel, setNivel] = useState(nivelActual);
+  const [destinosElegidos, setDestinosElegidos] = useState([]);
+  const [periodoOrigen, setPeriodoOrigen] = useState(periodo);
+  const [previa, setPrevia] = useState(null);
+  const [cargandoPrevia, setCargandoPrevia] = useState(false);
+  const [copiando, setCopiando] = useState(false);
+  const [resultado, setResultado] = useState(null);
+
+  const cursosDelNivel = (niveles.find((n) => n.nivel === nivel)?.cursos || []).filter((g) => g.id !== gradoId);
+  useEffect(() => { setDestinosElegidos([]); setPrevia(null); }, [nivel]);
+
+  const toggleDestino = (id) => {
+    setDestinosElegidos((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+    setPrevia(null);
+  };
+
+  const verPrevia = async () => {
+    if (destinosElegidos.length === 0) { alert("Elegí al menos un curso destino."); return; }
+    setCargandoPrevia(true);
+    const [evaluaciones, tareas, actividades] = await Promise.all([
+      api.fetchEvaluaciones(materiaId, gradoId, periodoOrigen),
+      api.fetchTareasCalificables(materiaId, gradoId, periodoOrigen),
+      api.fetchActividades(materiaId, gradoId, periodoOrigen),
+    ]);
+    setPrevia({ evaluaciones, tareas, actividades });
+    setCargandoPrevia(false);
+  };
+
+  const copiar = async () => {
+    setCopiando(true);
+    try {
+      const resultados = [];
+      for (const destinoId of destinosElegidos) {
+        const r = await api.copiarPlanillaCompleta(materiaId, gradoId, destinoId, periodoOrigen);
+        resultados.push({ curso: destinoId, ...r });
+      }
+      setResultado(resultados);
+      onCopiado();
+    } catch (e) {
+      alert("Error al copiar: " + e.message);
+    }
+    setCopiando(false);
+  };
+
+  const totalPrevia = previa ? previa.evaluaciones.length + previa.tareas.length + previa.actividades.length : 0;
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-md max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">📋 Copiar planilla completa a otros cursos</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+
+        {resultado ? (
+          <div>
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 mb-3">
+              <p className="text-sm font-semibold text-emerald-700">✔ Listo</p>
+              {resultado.map((r) => (
+                <p key={r.curso} className="text-xs text-emerald-600 mt-1">
+                  <b>Curso {r.curso}:</b> {r.evaluacionesCopiadas} Misión(es), {r.tareasCopiadas} Proyecto(s)/Forja, {r.actividadesCopiadas} columna(s) manual(es) — de {r.totalOrigen} en total.
+                </p>
+              ))}
+            </div>
+            {resultado.some((r) => r.advertencias.length > 0) && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-3 text-xs text-amber-700">
+                <p className="font-semibold mb-1">Algunas no se pudieron copiar:</p>
+                {resultado.map((r) => r.advertencias.length > 0 && (
+                  <div key={r.curso}><b>Curso {r.curso}:</b><ul className="list-disc list-inside">{r.advertencias.map((a, i) => <li key={i}>{a}</li>)}</ul></div>
+                ))}
+              </div>
+            )}
+            <button onClick={onClose} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white">Listo</button>
+          </div>
+        ) : (
+          <>
+            <p className="text-xs text-slate-500 mb-3">
+              Copia todas las Misiones, Proyectos/Forja y columnas manuales de este curso a uno o varios cursos a la vez — sin fechas de entrega ni notas
+              de estudiantes, para que las ajustes antes de usarlas.
+            </p>
+
+            <label className="text-xs text-slate-500 block mb-1">Periodo a copiar</label>
+            <select value={periodoOrigen} onChange={(e) => { setPeriodoOrigen(e.target.value); setPrevia(null); }} className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none">
+              {periodos.map((p) => <option key={p} value={p}>Periodo {p}</option>)}
+            </select>
+
+            <label className="text-xs text-slate-500 block mb-1">Grado</label>
+            <select value={nivel} onChange={(e) => setNivel(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none">
+              {niveles.map((n) => <option key={n.nivel} value={n.nivel}>Grado {n.nivel}°</option>)}
+            </select>
+
+            <label className="text-xs text-slate-500 block mb-1">Cursos destino (elegí uno o varios)</label>
+            {cursosDelNivel.length === 0 ? (
+              <p className="text-xs text-slate-400 mb-3">No hay otro curso en este grado.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2 mb-3">
+                {cursosDelNivel.map((g) => (
+                  <button key={g.id} onClick={() => toggleDestino(g.id)}
+                    className={`text-xs px-3 py-1.5 rounded-full border ${destinosElegidos.includes(g.id) ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>
+                    {destinosElegidos.includes(g.id) ? "✓ " : ""}Curso {g.id}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {!previa ? (
+              <button disabled={cargandoPrevia || destinosElegidos.length === 0} onClick={verPrevia} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-50">
+                {cargandoPrevia ? "Cargando…" : "Ver qué se va a copiar →"}
+              </button>
+            ) : totalPrevia === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-3">Este curso no tiene ninguna columna en el periodo {periodoOrigen} todavía.</p>
+            ) : (
+              <>
+                <div className="bg-slate-50 rounded-xl p-3 mb-3 text-xs text-slate-600 max-h-40 overflow-y-auto">
+                  {previa.evaluaciones.length > 0 && <p className="font-semibold mt-1">⚔️ Misiones ({previa.evaluaciones.length})</p>}
+                  {previa.evaluaciones.map((e) => <div key={e.id}>· {e.titulo}</div>)}
+                  {previa.tareas.length > 0 && <p className="font-semibold mt-1">📜 Proyectos/Forja ({previa.tareas.length})</p>}
+                  {previa.tareas.map((t) => <div key={t.id}>· {t.titulo}</div>)}
+                  {previa.actividades.length > 0 && <p className="font-semibold mt-1">📝 Columnas manuales ({previa.actividades.length})</p>}
+                  {previa.actividades.map((a) => <div key={a.id}>· {a.nombre}</div>)}
+                </div>
+                <button disabled={copiando} onClick={copiar} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+                  {copiando ? "Copiando…" : `Copiar ${totalPrevia} columna(s) a ${destinosElegidos.length} curso(s)`}
+                </button>
+              </>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function CopiarColumnasModal({ materiaDestinoId, gradoId, periodos, categoriasDestino, materias, estudiantes, onClose, onCopiado }) {
   const [materiaOrigenId, setMateriaOrigenId] = useState("");
   const [periodoOrigen, setPeriodoOrigen] = useState(periodos[0] || "1");
@@ -775,7 +911,7 @@ function colorCategoria(nombre) {
   return PALETA_CATEGORIAS[Math.abs(hash) % PALETA_CATEGORIAS.length];
 }
 
-function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo, materias, onCambioCategorias, estudianteDestacadoId }) {
+function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados, periodo, materias, onCambioCategorias, estudianteDestacadoId }) {
   const [actividades, setActividades] = useState([]);
   const [valores, setValores] = useState({});
   const [xpMapa, setXpMapa] = useState({});
@@ -793,6 +929,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
   const [editandoFinal, setEditandoFinal] = useState(null); // estudianteId
   const [valorFinalTemp, setValorFinalTemp] = useState("");
   const [copiarColumnasAbierto, setCopiarColumnasAbierto] = useState(false);
+  const [copiarPlanillaAbierto, setCopiarPlanillaAbierto] = useState(false);
   const [menuHerramientasAbierto, setMenuHerramientasAbierto] = useState(false);
 
   const cargar = async () => {
@@ -961,6 +1098,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
                   <div className="fixed inset-0 z-10" onClick={() => setMenuHerramientasAbierto(false)} />
                   <div className="absolute left-0 top-full mt-1 bg-white rounded-xl shadow-lg border border-slate-100 py-1 w-64 z-20">
                     <button onClick={() => { setMenuHerramientasAbierto(false); setCopiarColumnasAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📑 Copiar columnas de otra materia</button>
+                    <button onClick={() => { setMenuHerramientasAbierto(false); setCopiarPlanillaAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📋 Copiar planilla a otro curso</button>
                     <button onClick={() => { setMenuHerramientasAbierto(false); setImportarMoodleAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📥 Importar de Moodle/Excel</button>
                     <div className="border-t border-slate-100 my-1" />
                     <button onClick={() => { setMenuHerramientasAbierto(false); setSeleccionando(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-rose-50 text-rose-500">🗑 Borrar varias columnas</button>
@@ -1082,6 +1220,10 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, periodo
       {copiarColumnasAbierto && (
         <CopiarColumnasModal materiaDestinoId={materiaId} gradoId={gradoId} periodos={periodosDe(config)} categoriasDestino={categorias} materias={materias} estudiantes={estudiantes}
           onClose={() => setCopiarColumnasAbierto(false)} onCopiado={cargar} />
+      )}
+      {copiarPlanillaAbierto && (
+        <CopiarPlanillaOtroCursoModal materiaId={materiaId} gradoId={gradoId} grados={grados} periodo={periodo} periodos={periodosDe(config)}
+          onClose={() => setCopiarPlanillaAbierto(false)} onCopiado={() => {}} />
       )}
     </div>
   );
@@ -1502,7 +1644,7 @@ export function VistaCalificaciones({ grados, destinoBusqueda }) {
           </div>
 
           {subVista === "planilla" && (
-            <Planilla materiaId={materiaActualId} config={config} categorias={categorias} estudiantes={estudiantes} gradoId={gradoId} periodo={periodo} materias={materias} onCambioCategorias={cargarConfigYCategorias} estudianteDestacadoId={destinoBusqueda?.estudianteId} />
+            <Planilla materiaId={materiaActualId} config={config} categorias={categorias} estudiantes={estudiantes} gradoId={gradoId} grados={grados} periodo={periodo} materias={materias} onCambioCategorias={cargarConfigYCategorias} estudianteDestacadoId={destinoBusqueda?.estudianteId} />
           )}
           {subVista === "boletin" && (
             <Boletin materiaId={materiaActualId} config={config} categorias={categorias} estudiantes={estudiantes} gradoId={gradoId} guardarActual={guardarNotasFinalesActual} />
