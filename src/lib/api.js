@@ -1116,6 +1116,55 @@ export async function copiarTareaCalificable(tareaId, materiaDestinoId, gradoDes
   });
 }
 
+// Copia TODA la estructura de columnas de la Planilla (Misiones + Proyectos +
+// Forja + columnas manuales) de un curso a otro, de una sola vez — sin fecha
+// de entrega ni notas de estudiantes, para que el docente las ajuste antes de usarlas.
+export async function copiarPlanillaCompleta(materiaId, gradoOrigen, gradoDestino, periodo) {
+  const [evaluaciones, tareas, actividades] = await Promise.all([
+    fetchEvaluaciones(materiaId, gradoOrigen, periodo),
+    fetchTareasCalificables(materiaId, gradoOrigen, periodo),
+    fetchActividades(materiaId, gradoOrigen, periodo),
+  ]);
+
+  let evaluacionesCopiadas = 0;
+  let tareasCopiadas = 0;
+  let actividadesCopiadas = 0;
+  const advertencias = [];
+
+  for (const ev of evaluaciones) {
+    try {
+      await copiarEvaluacion(ev.id, materiaId, gradoDestino, periodo);
+      evaluacionesCopiadas++;
+    } catch (e) {
+      advertencias.push(`Misión "${ev.titulo}": ${e.message}`);
+    }
+  }
+
+  for (const t of tareas) {
+    try {
+      await copiarTareaCalificable(t.id, materiaId, gradoDestino, periodo, t.categoria_id);
+      tareasCopiadas++;
+    } catch (e) {
+      advertencias.push(`${t.tipo === "proyecto" ? "Proyecto" : "Forja"} "${t.titulo}": ${e.message}`);
+    }
+  }
+
+  for (const a of actividades) {
+    try {
+      await crearActividad({ nombre: a.nombre, categoria_id: a.categoria_id, materia_id: materiaId, grado_id: gradoDestino, periodo });
+      actividadesCopiadas++;
+    } catch (e) {
+      advertencias.push(`Columna "${a.nombre}": ${e.message}`);
+    }
+  }
+
+  return {
+    evaluacionesCopiadas, tareasCopiadas, actividadesCopiadas,
+    totalOrigen: evaluaciones.length + tareas.length + actividades.length,
+    advertencias,
+  };
+}
+
 export async function editarTareaCalificable(id, cambios) {
   const { error } = await supabase.from("tareas_calificables").update(cambios).eq("id", id);
   if (error) throw error;
