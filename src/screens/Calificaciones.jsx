@@ -8,6 +8,7 @@ import {
 import { buscarEstudiantePorNombre, agruparPorNivel, nivelYCurso, initials } from "../lib/gamification";
 import { ActasModal } from "./Actas";
 import { InclusionBadge, FotoLightbox } from "./Estudiantes";
+import { EditorTexto, TextoEnriquecido, textoPlano } from "../components/RichText";
 
 function MiniAvatarCal({ estudiante, size = 22 }) {
   const [ampliada, setAmpliada] = useState(false);
@@ -197,6 +198,8 @@ function PanelCategorias({ materiaId, categorias, onCambio }) {
 
 function ActividadModal({ materiaId, gradoId, periodo, categorias, editar, onClose, onGuardada }) {
   const [nombre, setNombre] = useState(editar?.nombre || "");
+  const [fecha, setFecha] = useState(editar?.fecha || "");
+  const [descripcion, setDescripcion] = useState(editar?.descripcion || "");
   const [categoriaId, setCategoriaId] = useState(editar?.categoria_id || categorias[0]?.id || "");
   const [tipo, setTipo] = useState(editar?.es_automatica ? "auto" : "manual");
   const [gamCategoria, setGamCategoria] = useState(editar?.gam_categoria || "academico");
@@ -205,7 +208,8 @@ function ActividadModal({ materiaId, gradoId, periodo, categorias, editar, onClo
   const guardar = async () => {
     if (!nombre.trim() || !categoriaId) return;
     const campos = {
-      nombre: nombre.trim(), categoria_id: categoriaId, materia_id: materiaId, grado_id: gradoId, periodo,
+      nombre: nombre.trim(), fecha: fecha || null, descripcion: descripcion || null,
+      categoria_id: categoriaId, materia_id: materiaId, grado_id: gradoId, periodo,
       es_automatica: tipo === "auto", gam_categoria: tipo === "auto" ? gamCategoria : null, xp_meta: tipo === "auto" ? xpMeta : null,
     };
     if (editar) await api.editarActividad(editar.id, campos);
@@ -233,6 +237,10 @@ function ActividadModal({ materiaId, gradoId, periodo, categorias, editar, onClo
         </div>
         <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre (ej: Taller 1)"
           className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none" />
+        <label className="text-xs text-slate-500 block mb-1">Fecha de trabajo/calificación (opcional)</label>
+        <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none" />
+        <label className="text-xs text-slate-500 block mb-1">Descripción breve — qué se hizo (opcional)</label>
+        <div className="mb-2"><EditorTexto value={descripcion} onChange={setDescripcion} minHeight={70} placeholder="Ej: Taller sobre ecuaciones de primer grado, trabajo en parejas" /></div>
         <select value={categoriaId} onChange={(e) => setCategoriaId(parseInt(e.target.value, 10))} className="w-full text-sm rounded-lg px-2 py-2 mb-2 border border-slate-200 outline-none">
           {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre} ({c.porcentaje}%)</option>)}
         </select>
@@ -1130,12 +1138,13 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
                 {actividadesOrdenadas.map((a) => (
                   <th key={a.id} className={`sticky top-0 z-10 px-3 py-2 border-b border-slate-100 min-w-[110px] ${seleccionando && seleccionadas.includes(a.id) ? "bg-rose-50" : ""}`}
                     style={!seleccionando ? { background: `${colorPorActividad[a.id]}14` } : {}}>
-                    <div className="flex items-center justify-center gap-1">
+                    <div className="flex items-center justify-center gap-1" title={[a.fecha, a.descripcion ? textoPlano(a.descripcion) : null].filter(Boolean).join(" — ") || undefined}>
                       {seleccionando && (
                         <input type="checkbox" checked={seleccionadas.includes(a.id)} onChange={() => toggleSeleccion(a.id)} />
                       )}
                       {a.es_automatica && <span title="Automática">⚡</span>}
                       <span>{a.nombre}</span>
+                      {a.fecha && <span className="text-[9px] text-slate-400 font-normal">({a.fecha.slice(5)})</span>}
                       {!seleccionando && (
                         <>
                           <button onClick={() => { setActividadEditar(a); setModalAbierto(true); }} className="text-slate-400">✎</button>
