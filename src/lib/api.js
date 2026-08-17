@@ -158,8 +158,9 @@ export async function guardarApellidos(id, apellidos) {
 }
 
 export async function guardarDocumento(id, documento, extra = {}) {
-  const { error } = await supabase.from("estudiantes").update({ documento: documento.trim() || null, ...extra }).eq("id", id);
+  const { data, error } = await supabase.from("estudiantes").update({ documento: documento.trim() || null, ...extra }).eq("id", id).select("id");
   if (error) throw error;
+  if (!data || data.length === 0) throw new Error(`No se encontró ningún estudiante con id ${id} para actualizar (o el guardado quedó bloqueado silenciosamente).`);
 }
 
 // Traslada un estudiante a otro grado. Notas, asistencia, actas, progreso y
@@ -523,11 +524,12 @@ export async function fetchAcudientesPorGrado(gradoId) {
 }
 
 export async function guardarAcudiente(estudianteId, campos) {
-  const { error } = await supabase.from("acudientes").upsert(
+  const { data, error } = await supabase.from("acudientes").upsert(
     { estudiante_id: estudianteId, ...campos },
     { onConflict: "estudiante_id" }
-  );
+  ).select("estudiante_id");
   if (error) throw error;
+  if (!data || data.length === 0) throw new Error(`El guardado del acudiente del estudiante ${estudianteId} no devolvió confirmación (posible bloqueo silencioso).`);
 }
 
 /* ---------------- Horario de clases ---------------- */
@@ -2275,32 +2277,18 @@ export async function fetchResumenEstudiante(estudianteId) {
 // Datos para el Observador del Estudiante: identificación completa +
 // matriz cronológica de actas (situaciones registradas).
 export async function fetchObservadorData(estudianteId) {
-  const [estudianteRes, acudiente, actas, institucion, notasRes] = await Promise.all([
+  const [estudianteRes, acudiente, actas, institucion] = await Promise.all([
     supabase.from("estudiantes").select("*").eq("id", estudianteId).maybeSingle(),
     fetchAcudiente(estudianteId),
     fetchActasPorEstudiante(estudianteId),
     fetchInstitucion(),
-    supabase.from("notas_finales_periodo").select("*, materias(nombre)").eq("estudiante_id", estudianteId),
   ]);
   if (estudianteRes.error) throw estudianteRes.error;
-
-  // Arma la tabla de rendimiento materia x periodo, para la hoja complementaria
-  const materiasMap = {};
-  const notasPorMateriaPeriodo = {};
-  (notasRes.data || []).forEach((n) => {
-    if (!materiasMap[n.materia_id]) materiasMap[n.materia_id] = n.materias?.nombre || `Materia ${n.materia_id}`;
-    notasPorMateriaPeriodo[n.materia_id] = notasPorMateriaPeriodo[n.materia_id] || {};
-    notasPorMateriaPeriodo[n.materia_id][n.periodo] = n.nota;
-  });
-  const periodosRendimiento = Array.from(new Set((notasRes.data || []).map((n) => n.periodo))).sort();
-  const materiasRendimiento = Object.entries(materiasMap).map(([id, nombre]) => ({ id, nombre })).sort((a, b) => a.nombre.localeCompare(b.nombre));
-
   return {
     estudiante: estudianteRes.data,
     acudiente,
     actas: [...actas].sort((a, b) => (a.fecha || "").localeCompare(b.fecha || "")),
     institucion,
-    materiasRendimiento, periodosRendimiento, notasPorMateriaPeriodo,
   };
 }
 
