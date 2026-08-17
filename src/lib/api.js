@@ -2353,6 +2353,114 @@ export async function fetchRespuestasConsigna(consignaId) {
   return (entradasRes.data || []).map((e) => ({ ...e, estudiante_nombre: nombrePorId[e.estudiante_id]?.nombre || "Estudiante", grado_id: nombrePorId[e.estudiante_id]?.grado_id }));
 }
 
+/* ---------------- 🎡 Preguntados (trivia con ruleta) ---------------- */
+export async function fetchTriviaCategorias() {
+  const [catRes, materiasRes] = await Promise.all([
+    supabase.from("trivia_categorias").select("*").eq("activa", true).order("id"),
+    supabase.from("materias").select("id, nombre"),
+  ]);
+  if (catRes.error) throw catRes.error;
+  const nombrePorId = {}; (materiasRes.data || []).forEach((m) => { nombrePorId[m.id] = m.nombre; });
+  return (catRes.data || []).map((c) => ({ ...c, materia_nombre: c.materia_id ? nombrePorId[c.materia_id] : null }));
+}
+
+export async function crearTriviaCategoria(campos) {
+  const { error } = await supabase.from("trivia_categorias").insert(campos);
+  if (error) throw error;
+}
+
+export async function editarTriviaCategoria(id, cambios) {
+  const { error } = await supabase.from("trivia_categorias").update(cambios).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarTriviaCategoria(id) {
+  const { error } = await supabase.from("trivia_categorias").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function fetchTriviaPreguntas(categoriaId) {
+  const { data, error } = await supabase.from("trivia_preguntas").select("*").eq("categoria_id", categoriaId).order("creado_en", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearTriviaPregunta(campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("trivia_preguntas").insert({ ...campos, docente_id: userData?.user?.id || null });
+  if (error) throw error;
+}
+
+export async function editarTriviaPregunta(id, cambios) {
+  const { error } = await supabase.from("trivia_preguntas").update(cambios).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarTriviaPregunta(id) {
+  const { error } = await supabase.from("trivia_preguntas").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// Trae una pregunta al azar de la categoría, evitando (cuando se pueda) las
+// últimas 5 que el estudiante ya respondió en esa categoría.
+export async function fetchPreguntaTriviaAleatoria(categoriaId, estudianteId) {
+  const [{ data: todas, error }, recientesRes] = await Promise.all([
+    supabase.from("trivia_preguntas").select("*").eq("categoria_id", categoriaId).eq("activa", true),
+    supabase.from("trivia_respuestas").select("pregunta_id").eq("estudiante_id", estudianteId).eq("categoria_id", categoriaId).order("creado_en", { ascending: false }).limit(5),
+  ]);
+  if (error) throw error;
+  if (!todas || todas.length === 0) return null;
+  const recientesIds = new Set((recientesRes.data || []).map((r) => r.pregunta_id));
+  const disponibles = todas.filter((p) => !recientesIds.has(p.id));
+  const pool = disponibles.length > 0 ? disponibles : todas;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+// Registra la respuesta, aplica XP/monedas, y calcula si corresponde otorgar
+// la corona de esa categoría (3 aciertos seguidos, sin haber fallado antes en la racha actual).
+export async function responderTrivia(estudianteId, pregunta, opcionElegida) {
+  const acierto = opcionElegida === pregunta.correcta;
+  await supabase.from("trivia_respuestas").insert({
+    estudiante_id: estudianteId, pregunta_id: pregunta.id, categoria_id: pregunta.categoria_id, acierto,
+  });
+
+  let corona = false;
+  if (acierto) {
+    await ajustarXp(estudianteId, 5);
+    await ajustarMonedas(estudianteId, 2);
+
+    // Racha actual: últimas respuestas en esta categoría, contadas desde la más reciente hasta el primer fallo
+    const { data: ultimas } = await supabase.from("trivia_respuestas").select("acierto").eq("estudiante_id", estudianteId).eq("categoria_id", pregunta.categoria_id).order("creado_en", { ascending: false }).limit(3);
+    const racha = (ultimas || []).every((r) => r.acierto) && (ultimas || []).length >= 3;
+    if (racha) {
+      const { data: yaTiene } = await supabase.from("trivia_coronas").select("id").eq("estudiante_id", estudianteId).eq("categoria_id", pregunta.categoria_id).maybeSingle();
+      if (!yaTiene) {
+        await supabase.from("trivia_coronas").insert({ estudiante_id: estudianteId, categoria_id: pregunta.categoria_id });
+        await ajustarMonedas(estudianteId, 15);
+        corona = true;
+      }
+    }
+  }
+  return { acierto, corona };
+}
+
+export async function fetchCoronasEstudiante(estudianteId) {
+  const { data, error } = await supabase.from("trivia_coronas").select("categoria_id").eq("estudiante_id", estudianteId);
+  if (error) throw error;
+  return (data || []).map((c) => c.categoria_id);
+}
+
+// Para el docente: cuántas coronas tiene cada estudiante de un curso, para un mini-ranking
+export async function fetchRankingCoronas(gradoId) {
+  const [estudiantes, coronasRes] = await Promise.all([
+    fetchEstudiantesPorGrado(gradoId),
+    supabase.from("trivia_coronas").select("estudiante_id"),
+  ]);
+  const conteo = {};
+  (coronasRes.data || []).forEach((c) => { conteo[c.estudiante_id] = (conteo[c.estudiante_id] || 0) + 1; });
+  return estudiantes.map((e) => ({ ...e, coronas: conteo[e.id] || 0 })).sort((a, b) => b.coronas - a.coronas);
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
