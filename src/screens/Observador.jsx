@@ -119,44 +119,35 @@ function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre" }) {
         </table>
       </div>
 
-      {/* 3. Matriz de registro */}
-      <div style={{ fontWeight: "bold", marginBottom: 4 }}>2. MATRIZ DE REGISTRO DE SITUACIONES Y SEGUIMIENTO</div>
-      {actas.length === 0 ? (
-        <p style={{ marginBottom: 12 }}>Sin situaciones registradas.</p>
-      ) : (
-        <div style={{ marginBottom: 12 }}>
-          {actas.map((a, i) => (
-            <div key={a.id} style={{ border: "1px solid #000", padding: 8, marginBottom: 8, pageBreakInside: "avoid" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "bold", marginBottom: 4 }}>
-                <span>#{i + 1} — {a.fecha}</span>
-                <span>{TIPO_EVENTO_ICONO[a.tipo_evento] || ""} {a.tipo_evento || a.tipo}{a.tipificacion_falta ? ` · ${a.tipificacion_falta}` : ""}</span>
-              </div>
-              <div style={{ marginBottom: 3 }}><b>Motivo:</b> {a.motivo}</div>
-              {a.descripcion && <div style={{ marginBottom: 3 }}><b>Descripción de los hechos:</b> <span dangerouslySetInnerHTML={{ __html: a.descripcion }} /></div>}
-              {a.descargo_estudiante && <div style={{ marginBottom: 3 }}><b>Versión / descargo del estudiante:</b> <span dangerouslySetInnerHTML={{ __html: a.descargo_estudiante }} /></div>}
-              {(a.compromisos_academicos || a.compromisos_convivenciales) && (
-                <div style={{ marginBottom: 3 }}>
-                  <b>Estrategia pedagógica / compromisos:</b>{" "}
-                  {a.compromisos_academicos && <span dangerouslySetInnerHTML={{ __html: a.compromisos_academicos }} />}
-                  {a.compromisos_academicos && a.compromisos_convivenciales && " — "}
-                  {a.compromisos_convivenciales && <span dangerouslySetInnerHTML={{ __html: a.compromisos_convivenciales }} />}
-                </div>
-              )}
-              {a.implicaciones_legales && <div style={{ marginBottom: 3, color: "#7c2d12" }}><b>Implicaciones:</b> <span dangerouslySetInnerHTML={{ __html: a.implicaciones_legales }} /></div>}
-              <div style={{ fontSize: 9, color: "#555", marginTop: 4 }}>
-                Seguimiento: {a.evaluacion_compromiso ? EVALUACION_LABEL[a.evaluacion_compromiso] : "Sin verificar"}
-                {a.remitido_a ? ` · Remitido a: ${a.remitido_a}` : ""}
-                {a.profesores?.nombre ? ` · Registrado por: ${a.profesores.nombre}` : ""}
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}>
-                <div style={{ borderTop: "1px solid #000", width: "30%", textAlign: "center", fontSize: 9, paddingTop: 2 }}>Firma Estudiante</div>
-                <div style={{ borderTop: "1px solid #000", width: "30%", textAlign: "center", fontSize: 9, paddingTop: 2 }}>Firma Docente/Orientador</div>
-                <div style={{ borderTop: "1px solid #000", width: "30%", textAlign: "center", fontSize: 9, paddingTop: 2 }}>Firma Acudiente</div>
-              </div>
-            </div>
-          ))}
+      {/* 2. Matriz de registro — en blanco, para completar a mano */}
+      <div style={{ fontWeight: "bold", marginBottom: 4 }}>2. MATRIZ DE REGISTRO DE SITUACIONES Y SEGUIMIENTO (por completar a mano)</div>
+      {periodosLista.map((i) => (
+        <div key={i} style={{ marginBottom: 10, pageBreakInside: "avoid" }}>
+          <div style={{ fontSize: 9.5, fontWeight: "bold", marginBottom: 2, color: "#555" }}>{etiquetaPeriodoConfigurable(sistemaPeriodos, i)}</div>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                <th style={{ border: "1px solid #000", padding: 3, fontSize: 9, width: "12%" }}>Fecha</th>
+                <th style={{ border: "1px solid #000", padding: 3, fontSize: 9, width: "16%" }}>Tipo</th>
+                <th style={{ border: "1px solid #000", padding: 3, fontSize: 9 }}>Descripción de la situación</th>
+                <th style={{ border: "1px solid #000", padding: 3, fontSize: 9, width: "20%" }}>Compromiso</th>
+                <th style={{ border: "1px solid #000", padding: 3, fontSize: 9, width: "12%" }}>Firma</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[0, 1, 2].map((f) => (
+                <tr key={f}>
+                  <td style={{ border: "1px solid #000", height: 18 }}></td>
+                  <td style={{ border: "1px solid #000", height: 18 }}></td>
+                  <td style={{ border: "1px solid #000", height: 18 }}></td>
+                  <td style={{ border: "1px solid #000", height: 18 }}></td>
+                  <td style={{ border: "1px solid #000", height: 18 }}></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      )}
+      ))}
 
       {/* 5. Firmas finales */}
       <div style={{ fontWeight: "bold", marginBottom: 8, marginTop: 20 }}>FIRMAS DE CIERRE DE PERIODO</div>
