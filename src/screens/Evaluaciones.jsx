@@ -10,13 +10,15 @@ const TIPOS_PREGUNTA = [
   { key: "respuesta_corta", label: "Respuesta corta (manual)" },
 ];
 
-function NuevaPreguntaForm({ evaluacionId, orden, onCreada }) {
-  const [tipo, setTipo] = useState("opcion_multiple");
-  const [enunciado, setEnunciado] = useState("");
-  const [puntos, setPuntos] = useState(1);
-  const [opciones, setOpciones] = useState(["", ""]);
-  const [correcta, setCorrecta] = useState(0);
-  const [vfCorrecta, setVfCorrecta] = useState("Verdadero");
+function NuevaPreguntaForm({ evaluacionId, orden, pregunta, onCreada, onCancelar }) {
+  const [tipo, setTipo] = useState(pregunta?.tipo || "opcion_multiple");
+  const [enunciado, setEnunciado] = useState(pregunta?.enunciado || "");
+  const [puntos, setPuntos] = useState(pregunta?.puntos || 1);
+  const [opciones, setOpciones] = useState(pregunta?.tipo === "opcion_multiple" ? (pregunta.opciones || []).map((o) => o.texto) : ["", ""]);
+  const [correcta, setCorrecta] = useState(pregunta?.tipo === "opcion_multiple" ? Math.max(0, (pregunta.opciones || []).findIndex((o) => o.correcta)) : 0);
+  const [vfCorrecta, setVfCorrecta] = useState(
+    pregunta?.tipo === "verdadero_falso" ? ((pregunta.opciones || []).find((o) => o.correcta)?.texto || "Verdadero") : "Verdadero"
+  );
   const [guardando, setGuardando] = useState(false);
 
   const guardar = async () => {
@@ -34,7 +36,12 @@ function NuevaPreguntaForm({ evaluacionId, orden, onCreada }) {
     }
     setGuardando(true);
     try {
-      await api.crearPregunta({ evaluacion_id: evaluacionId, orden, tipo, enunciado: enunciado.trim(), puntos: parseFloat(puntos) || 1, opciones: opcionesFinal });
+      const campos = { tipo, enunciado: enunciado.trim(), puntos: parseFloat(puntos) || 1, opciones: opcionesFinal };
+      if (pregunta) {
+        await api.editarPregunta(pregunta.id, campos);
+      } else {
+        await api.crearPregunta({ evaluacion_id: evaluacionId, orden, ...campos });
+      }
       onCreada();
     } catch (e) {
       alert("Error al guardar: " + e.message);
@@ -82,24 +89,46 @@ function NuevaPreguntaForm({ evaluacionId, orden, onCreada }) {
         <p className="text-[11px] text-slate-500 mb-2">Esta pregunta no se autocalifica — vos revisás y asignás el puntaje manualmente en los resultados.</p>
       )}
 
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        {onCancelar && <button onClick={onCancelar} className="text-xs text-slate-500 px-2 py-1.5">Cancelar</button>}
         <button disabled={guardando} onClick={guardar} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
-          {guardando ? "Guardando…" : "Agregar pregunta"}
+          {guardando ? "Guardando…" : pregunta ? "Guardar cambios" : "Agregar pregunta"}
         </button>
       </div>
     </div>
   );
 }
 
-function PreguntasEditor({ evaluacionId }) {
+function PreguntasEditor({ evaluacionId, materiaId }) {
   const [preguntas, setPreguntas] = useState([]);
   const [formAbierto, setFormAbierto] = useState(false);
+  const [editando, setEditando] = useState(null);
+  const [aleatorioAbierto, setAleatorioAbierto] = useState(false);
+  const [temas, setTemas] = useState([]);
+  const [temaElegido, setTemaElegido] = useState("");
+  const [cantidad, setCantidad] = useState(10);
+  const [cargandoAleatorio, setCargandoAleatorio] = useState(false);
 
   const cargar = () => api.fetchPreguntasDocente(evaluacionId).then(setPreguntas);
   useEffect(() => { cargar(); }, [evaluacionId]);
+  useEffect(() => { if (materiaId) api.fetchTemasBanco(materiaId).then(setTemas); }, [materiaId]);
 
   const quitar = async (id) => { if (!confirm("¿Eliminar esta pregunta?")) return; await api.eliminarPregunta(id); cargar(); };
   const totalPuntos = preguntas.reduce((a, p) => a + Number(p.puntos), 0);
+
+  const traerAleatorias = async () => {
+    setCargandoAleatorio(true);
+    try {
+      const r = await api.agregarPreguntasAleatoriasDesdeBanco(evaluacionId, materiaId, temaElegido || null, parseInt(cantidad, 10) || 10, preguntas.length);
+      if (r.disponibles === 0) alert("No hay preguntas en el banco para esta materia" + (temaElegido ? ` y tema "${temaElegido}"` : "") + ".");
+      else alert(`Se agregaron ${r.agregadas} pregunta(s) al azar (de ${r.disponibles} disponibles en el banco).`);
+      setAleatorioAbierto(false);
+      cargar();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setCargandoAleatorio(false);
+  };
 
   return (
     <div className="mt-2">
@@ -107,30 +136,62 @@ function PreguntasEditor({ evaluacionId }) {
       {preguntas.length > 0 && (
         <div className="space-y-1.5 mb-2">
           {preguntas.map((p, i) => (
-            <div key={p.id} className="bg-white border border-slate-100 rounded-lg p-2.5">
-              <div className="flex justify-between items-start">
-                <div className="text-xs text-slate-700">
-                  <b>{i + 1}.</b> {p.enunciado} <span className="text-slate-400">({p.puntos} pts · {TIPOS_PREGUNTA.find((t) => t.key === p.tipo)?.label})</span>
+            editando?.id === p.id ? (
+              <NuevaPreguntaForm key={p.id} evaluacionId={evaluacionId} pregunta={p}
+                onCancelar={() => setEditando(null)} onCreada={() => { setEditando(null); cargar(); }} />
+            ) : (
+              <div key={p.id} className="bg-white border border-slate-100 rounded-lg p-2.5">
+                <div className="flex justify-between items-start">
+                  <div className="text-xs text-slate-700">
+                    <b>{i + 1}.</b> {p.enunciado} <span className="text-slate-400">({p.puntos} pts · {TIPOS_PREGUNTA.find((t) => t.key === p.tipo)?.label})</span>
+                  </div>
+                  <div className="flex gap-1.5 shrink-0 ml-2">
+                    <button onClick={() => setEditando(p)} className="text-slate-300 hover:text-violet-600 text-xs">✏️</button>
+                    <button onClick={() => quitar(p.id)} className="text-slate-300 hover:text-rose-500 text-xs">✕</button>
+                  </div>
                 </div>
-                <button onClick={() => quitar(p.id)} className="text-slate-300 hover:text-rose-500 text-xs shrink-0 ml-2">✕</button>
+                {p.tipo !== "respuesta_corta" && (
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {(p.opciones || []).map((o, j) => (
+                      <span key={j} className={`text-[10px] px-2 py-0.5 rounded-full ${o.correcta ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                        {o.correcta ? "✓ " : ""}{o.texto}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
-              {p.tipo !== "respuesta_corta" && (
-                <div className="mt-1 flex flex-wrap gap-1.5">
-                  {(p.opciones || []).map((o, j) => (
-                    <span key={j} className={`text-[10px] px-2 py-0.5 rounded-full ${o.correcta ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
-                      {o.correcta ? "✓ " : ""}{o.texto}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
+            )
           ))}
         </div>
       )}
-      {formAbierto ? (
-        <NuevaPreguntaForm evaluacionId={evaluacionId} orden={preguntas.length} onCreada={() => { setFormAbierto(false); cargar(); }} />
-      ) : (
-        <button onClick={() => setFormAbierto(true)} className="text-[11px] text-violet-500">+ Agregar pregunta</button>
+
+      {aleatorioAbierto && (
+        <div className="bg-amber-50 rounded-xl p-3 mb-2">
+          <p className="text-[11px] text-amber-700 mb-2">Elige N preguntas al azar del banco de esta materia y las agrega tal cual (podés editarlas después).</p>
+          <div className="flex gap-2 mb-2">
+            <select value={temaElegido} onChange={(e) => setTemaElegido(e.target.value)} className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
+              <option value="">Todos los temas de la materia</option>
+              {temas.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <input type="number" min="1" value={cantidad} onChange={(e) => setCantidad(e.target.value)} className="w-16 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setAleatorioAbierto(false)} className="text-xs text-slate-500 px-2 py-1">Cancelar</button>
+            <button disabled={cargandoAleatorio} onClick={traerAleatorias} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-500 text-white disabled:opacity-60">
+              {cargandoAleatorio ? "Agregando…" : "Agregar al azar"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex gap-3">
+        {formAbierto ? null : <button onClick={() => setFormAbierto(true)} className="text-[11px] text-violet-500">+ Agregar pregunta</button>}
+        {materiaId && !aleatorioAbierto && <button onClick={() => setAleatorioAbierto(true)} className="text-[11px] text-amber-600">🗂️ N preguntas al azar del banco</button>}
+      </div>
+      {formAbierto && (
+        <div className="mt-2">
+          <NuevaPreguntaForm evaluacionId={evaluacionId} orden={preguntas.length} onCreada={() => { setFormAbierto(false); cargar(); }} onCancelar={() => setFormAbierto(false)} />
+        </div>
       )}
     </div>
   );
@@ -476,7 +537,7 @@ function EvaluacionCard({ evaluacion, materias, grados, categorias, onCambio }) 
         </div>
       </div>
 
-      {expandida && <PreguntasEditor evaluacionId={evaluacion.id} />}
+      {expandida && <PreguntasEditor evaluacionId={evaluacion.id} materiaId={evaluacion.materia_id} />}
       {resultadosAbiertos && <ResultadosEvaluacion evaluacion={evaluacion} onCerrar={() => setResultadosAbiertos(false)} />}
       {copiando && <CopiarEvaluacionModal evaluacion={evaluacion} materias={materias} grados={grados} onClose={() => setCopiando(false)} onCopiada={onCambio} />}
     </div>
