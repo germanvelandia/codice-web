@@ -18,20 +18,38 @@ const TIPO_EVENTO_ICONO = {
 
 const EVALUACION_LABEL = { cumplio: "Cumplió", en_proceso: "En proceso", no_cumplio: "No cumplió" };
 
-// Con 3 periodos usa "Trimestre I/II/III" (lo más común); con otra cantidad,
-// usa "Periodo N" genérico.
-function etiquetaPeriodo(p, cantidadPeriodos) {
-  if (cantidadPeriodos === 3) {
-    const numeros = ["I", "II", "III"];
-    const idx = parseInt(p, 10) - 1;
-    if (idx >= 0 && idx < 3) return `Trimestre ${numeros[idx]}`;
-  }
-  return `Periodo ${p}`;
+const SISTEMAS_PERIODO = {
+  bimestre: { nombre: "Bimestre", cantidad: 4 },
+  trimestre: { nombre: "Trimestre", cantidad: 3 },
+  semestre: { nombre: "Semestre", cantidad: 2 },
+};
+
+const NUMEROS_ROMANOS = ["I", "II", "III", "IV", "V", "VI"];
+
+function etiquetaPeriodoConfigurable(sistema, indice) {
+  const info = SISTEMAS_PERIODO[sistema] || SISTEMAS_PERIODO.trimestre;
+  return `${info.nombre} ${NUMEROS_ROMANOS[indice] || indice + 1}`;
 }
 
-function BloqueObservador({ datos, primero }) {
-  const { estudiante, acudiente, actas, institucion, materiasRendimiento, periodosRendimiento, notasPorMateriaPeriodo } = datos;
+// Plan de estudios completo — se usa tal cual, sin depender de qué materias
+// estén cargadas en el sistema, para que la hoja salga siempre completa.
+const MATERIAS_PLAN_ESTUDIOS = [
+  "Matemáticas (incluyendo geometría)",
+  "Español y PILEO",
+  "Ciencias Naturales y Educación Ambiental",
+  "Ciencias Sociales (Historia, Geografía y Constitución)",
+  "Inglés",
+  "Educación Ética y en Valores Humanos",
+  "Educación Física, Recreación y Deportes",
+  "Artes y Danzas",
+  "Tecnología e Informática",
+];
+
+function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre" }) {
+  const { estudiante, acudiente, actas, institucion } = datos;
   const anioActual = new Date().getFullYear();
+  const infoSistema = SISTEMAS_PERIODO[sistemaPeriodos] || SISTEMAS_PERIODO.trimestre;
+  const periodosLista = Array.from({ length: infoSistema.cantidad }, (_, i) => i);
 
   return (
     <div className="print-avoid-break" style={{ maxWidth: 800, margin: "0 auto", padding: 24, fontFamily: "Arial, sans-serif", fontSize: 10.5, color: "#111", pageBreakBefore: primero ? "auto" : "always" }}>
@@ -151,51 +169,82 @@ function BloqueObservador({ datos, primero }) {
         Este documento tiene fines formativos y de seguimiento integral, en el marco del debido proceso establecido en el Manual de Convivencia y la Ley 1620 de 2013.
       </div>
 
-      {/* Hoja complementaria: rendimiento académico + firmas */}
+      {/* Hoja complementaria: seguimiento por periodo, para completar a mano */}
       <div style={{ pageBreakBefore: "always", paddingTop: 20 }}>
         <div style={{ textAlign: "center", borderBottom: "2px solid #000", paddingBottom: 8, marginBottom: 14 }}>
           <div style={{ fontWeight: "bold", fontSize: 13 }}>{institucion?.nombre || "INSTITUCIÓN EDUCATIVA"}</div>
-          <div style={{ fontWeight: "bold", marginTop: 4 }}>HOJA COMPLEMENTARIA — RENDIMIENTO ACADÉMICO</div>
-          <div>{estudiante.nombre} · Curso {estudiante.grado_id}</div>
+          <div style={{ fontWeight: "bold", marginTop: 4 }}>HOJA COMPLEMENTARIA — SEGUIMIENTO POR {infoSistema.nombre.toUpperCase()}</div>
+          <div>{estudiante.nombre} · Curso {estudiante.grado_id} · Año lectivo {anioActual}</div>
         </div>
 
-        {materiasRendimiento.length === 0 ? (
-          <p style={{ marginBottom: 16 }}>Sin notas registradas todavía.</p>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 20 }}>
+        <p style={{ fontSize: 9, marginBottom: 6, color: "#555" }}>
+          Marque con X la casilla correspondiente si el estudiante <b>reprobó</b> la asignatura en ese {infoSistema.nombre.toLowerCase()}.
+        </p>
+        <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
+          <thead>
+            <tr>
+              <th style={{ border: "1px solid #000", padding: 5, textAlign: "left" }}>Asignatura</th>
+              {periodosLista.map((i) => (
+                <th key={i} style={{ border: "1px solid #000", padding: 5, width: 60 }}>{etiquetaPeriodoConfigurable(sistemaPeriodos, i)}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {MATERIAS_PLAN_ESTUDIOS.map((m) => (
+              <tr key={m}>
+                <td style={{ border: "1px solid #000", padding: 5 }}>{m}</td>
+                {periodosLista.map((i) => (
+                  <td key={i} style={{ border: "1px solid #000", padding: 5, height: 22 }}></td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {periodosLista.map((i) => (
+          <div key={i} style={{ pageBreakInside: "avoid", marginBottom: 18, border: "1px solid #000", padding: 8 }}>
+            <div style={{ fontWeight: "bold", marginBottom: 6 }}>{etiquetaPeriodoConfigurable(sistemaPeriodos, i)}</div>
+            <div style={{ fontSize: 9.5, fontWeight: "bold", marginBottom: 2 }}>Observaciones académicas:</div>
+            <div style={{ borderBottom: "1px solid #999", height: 16 }}></div>
+            <div style={{ borderBottom: "1px solid #999", height: 16 }}></div>
+            <div style={{ fontSize: 9.5, fontWeight: "bold", marginTop: 6, marginBottom: 2 }}>Observaciones convivenciales:</div>
+            <div style={{ borderBottom: "1px solid #999", height: 16 }}></div>
+            <div style={{ borderBottom: "1px solid #999", height: 16 }}></div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 20 }}>
+              <div style={{ borderTop: "1px solid #000", width: "30%", textAlign: "center", fontSize: 9, paddingTop: 2 }}>Firma Padre de Familia</div>
+              <div style={{ borderTop: "1px solid #000", width: "30%", textAlign: "center", fontSize: 9, paddingTop: 2 }}>Firma Estudiante</div>
+              <div style={{ borderTop: "1px solid #000", width: "30%", textAlign: "center", fontSize: 9, paddingTop: 2 }}>Firma Director de Curso</div>
+            </div>
+          </div>
+        ))}
+
+        <div style={{ pageBreakInside: "avoid" }}>
+          <div style={{ fontWeight: "bold", marginBottom: 6, marginTop: 10 }}>ESPACIO PARA NIVELACIONES</div>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                <th style={{ border: "1px solid #000", padding: 5, textAlign: "left" }}>Materia</th>
-                {periodosRendimiento.map((p) => (
-                  <th key={p} style={{ border: "1px solid #000", padding: 5 }}>{etiquetaPeriodo(p, periodosRendimiento.length)}</th>
-                ))}
+                <th style={{ border: "1px solid #000", padding: 5, textAlign: "left" }}>Asignatura</th>
+                <th style={{ border: "1px solid #000", padding: 5, width: 90 }}>Aprobó</th>
+                <th style={{ border: "1px solid #000", padding: 5, width: 90 }}>No aprobó</th>
               </tr>
             </thead>
             <tbody>
-              {materiasRendimiento.map((m) => (
-                <tr key={m.id}>
-                  <td style={{ border: "1px solid #000", padding: 5 }}>{m.nombre}</td>
-                  {periodosRendimiento.map((p) => (
-                    <td key={p} style={{ border: "1px solid #000", padding: 5, textAlign: "center" }}>{notasPorMateriaPeriodo[m.id]?.[p] ?? "—"}</td>
-                  ))}
+              {MATERIAS_PLAN_ESTUDIOS.map((m) => (
+                <tr key={m}>
+                  <td style={{ border: "1px solid #000", padding: 5 }}>{m}</td>
+                  <td style={{ border: "1px solid #000", padding: 5, textAlign: "center" }}>( &nbsp; )</td>
+                  <td style={{ border: "1px solid #000", padding: 5, textAlign: "center" }}>( &nbsp; )</td>
                 </tr>
               ))}
             </tbody>
           </table>
-        )}
-
-        <div style={{ fontWeight: "bold", marginBottom: 30, marginTop: 30 }}>FIRMAS DE RECIBIDO</div>
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 40 }}>
-          <div style={{ borderTop: "1px solid #000", width: "30%", textAlign: "center", paddingTop: 4 }}>Firma del Padre de Familia / Acudiente</div>
-          <div style={{ borderTop: "1px solid #000", width: "30%", textAlign: "center", paddingTop: 4 }}>Firma del Estudiante</div>
-          <div style={{ borderTop: "1px solid #000", width: "30%", textAlign: "center", paddingTop: 4 }}>Firma del Director de Grado</div>
         </div>
       </div>
     </div>
   );
 }
 
-function ObservadorPrintView({ datos, onCerrado }) {
+function ObservadorPrintView({ datos, sistemaPeriodos, onCerrado }) {
   useEffect(() => {
     const id = setTimeout(() => window.print(), 150);
     const onAfter = () => onCerrado();
@@ -205,14 +254,14 @@ function ObservadorPrintView({ datos, onCerrado }) {
 
   const contenido = (
     <div className="print-only">
-      <BloqueObservador datos={datos} primero={true} />
+      <BloqueObservador datos={datos} primero={true} sistemaPeriodos={sistemaPeriodos} />
     </div>
   );
 
   return createPortal(contenido, document.body);
 }
 
-function ObservadorMasivoPrintView({ listaDatos, onCerrado }) {
+function ObservadorMasivoPrintView({ listaDatos, sistemaPeriodos, onCerrado }) {
   useEffect(() => {
     const id = setTimeout(() => window.print(), 200);
     const onAfter = () => onCerrado();
@@ -223,7 +272,7 @@ function ObservadorMasivoPrintView({ listaDatos, onCerrado }) {
   const contenido = (
     <div className="print-only">
       {listaDatos.map((datos, i) => (
-        <BloqueObservador key={datos.estudiante.id} datos={datos} primero={i === 0} />
+        <BloqueObservador key={datos.estudiante.id} datos={datos} primero={i === 0} sistemaPeriodos={sistemaPeriodos} />
       ))}
     </div>
   );
@@ -231,10 +280,26 @@ function ObservadorMasivoPrintView({ listaDatos, onCerrado }) {
   return createPortal(contenido, document.body);
 }
 
+function SelectorSistemaPeriodos({ valor, onChange }) {
+  return (
+    <div className="mb-3">
+      <label className="text-xs text-slate-500 block mb-1">Sistema de periodos de la hoja complementaria</label>
+      <div className="flex gap-1 rounded-full bg-slate-100 p-1 w-fit">
+        {Object.entries(SISTEMAS_PERIODO).map(([key, info]) => (
+          <button key={key} onClick={() => onChange(key)} className={`text-xs px-3 py-1.5 rounded-full ${valor === key ? "bg-violet-500 text-white" : "text-slate-600"}`}>
+            {info.nombre} ({info.cantidad})
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function ObservadorPorGradoModal({ gradoId, onClose }) {
   const [cargando, setCargando] = useState(true);
   const [listaDatos, setListaDatos] = useState([]);
   const [imprimiendo, setImprimiendo] = useState(false);
+  const [sistemaPeriodos, setSistemaPeriodos] = useState("trimestre");
 
   useEffect(() => {
     api.fetchObservadorDataGrado(gradoId).then(({ datos }) => { setListaDatos(datos); setCargando(false); });
@@ -256,13 +321,14 @@ export function ObservadorPorGradoModal({ gradoId, onClose }) {
               Genera el Observador completo (identificación, matriz de situaciones, y hoja de rendimiento con firmas) para
               cada uno de los {listaDatos.length} estudiante(s) activos de este curso, uno seguido del otro — cada uno arranca en hoja nueva.
             </p>
-            <div className="bg-slate-50 rounded-xl p-3 mb-4 max-h-48 overflow-y-auto">
+            <div className="bg-slate-50 rounded-xl p-3 mb-3 max-h-48 overflow-y-auto">
               {listaDatos.map((d) => (
                 <div key={d.estudiante.id} className="text-xs text-slate-600 py-0.5">
                   {d.estudiante.nombre} {d.acudiente ? "" : <span className="text-amber-500">(sin acudiente)</span>}
                 </div>
               ))}
             </div>
+            <SelectorSistemaPeriodos valor={sistemaPeriodos} onChange={setSistemaPeriodos} />
             <button disabled={listaDatos.length === 0} onClick={() => setImprimiendo(true)} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-50">
               🖨️ Imprimir {listaDatos.length} Observador(es)
             </button>
@@ -270,7 +336,7 @@ export function ObservadorPorGradoModal({ gradoId, onClose }) {
         )}
       </div>
 
-      {imprimiendo && <ObservadorMasivoPrintView listaDatos={listaDatos} onCerrado={() => setImprimiendo(false)} />}
+      {imprimiendo && <ObservadorMasivoPrintView listaDatos={listaDatos} sistemaPeriodos={sistemaPeriodos} onCerrado={() => setImprimiendo(false)} />}
     </div>
   );
 }
@@ -279,6 +345,7 @@ export function ObservadorModal({ estudiante, onClose }) {
   const [datos, setDatos] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [imprimiendo, setImprimiendo] = useState(false);
+  const [sistemaPeriodos, setSistemaPeriodos] = useState("trimestre");
 
   useEffect(() => { api.fetchObservadorData(estudiante.id).then((d) => { setDatos(d); setCargando(false); }); }, [estudiante.id]);
 
@@ -307,6 +374,7 @@ export function ObservadorModal({ estudiante, onClose }) {
                 ⚠️ Este estudiante no tiene datos de acudiente cargados — esa sección del documento va a salir vacía. Podés completarlos desde Directorio de acudientes.
               </p>
             )}
+            <SelectorSistemaPeriodos valor={sistemaPeriodos} onChange={setSistemaPeriodos} />
             <button onClick={() => setImprimiendo(true)} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white">
               🖨️ Generar / Imprimir Observador
             </button>
@@ -314,7 +382,7 @@ export function ObservadorModal({ estudiante, onClose }) {
         )}
       </div>
 
-      {imprimiendo && <ObservadorPrintView datos={datos} onCerrado={() => setImprimiendo(false)} />}
+      {imprimiendo && <ObservadorPrintView datos={datos} sistemaPeriodos={sistemaPeriodos} onCerrado={() => setImprimiendo(false)} />}
     </div>
   );
 }
