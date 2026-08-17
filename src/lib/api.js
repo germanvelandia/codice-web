@@ -473,6 +473,15 @@ export async function guardarInclusion(estudianteId, cambios) {
   if (error) throw error;
 }
 
+// Trae a TODOS los estudiantes en proceso de inclusión (PIAR o DUA), sin
+// importar el curso — para no tener que ir buscando uno por uno.
+export async function fetchEstudiantesEnInclusion() {
+  const { data, error } = await supabase.from("estudiantes").select("*")
+    .eq("activo", true).or("piar.eq.true,dua.eq.true").order("nombre");
+  if (error) throw error;
+  return data || [];
+}
+
 export async function fetchSeguimientosInclusion(estudianteId) {
   const { data, error } = await supabase
     .from("seguimiento_inclusion")
