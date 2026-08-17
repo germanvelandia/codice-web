@@ -793,6 +793,11 @@ export async function crearPregunta(campos) {
   if (error) throw error;
 }
 
+export async function editarPregunta(id, campos) {
+  const { error } = await supabase.from("evaluacion_preguntas").update(campos).eq("id", id);
+  if (error) throw error;
+}
+
 export async function eliminarPregunta(id) {
   const { error } = await supabase.from("evaluacion_preguntas").delete().eq("id", id);
   if (error) throw error;
@@ -2459,6 +2464,77 @@ export async function fetchRankingCoronas(gradoId) {
   const conteo = {};
   (coronasRes.data || []).forEach((c) => { conteo[c.estudiante_id] = (conteo[c.estudiante_id] || 0) + 1; });
   return estudiantes.map((e) => ({ ...e, coronas: conteo[e.id] || 0 })).sort((a, b) => b.coronas - a.coronas);
+}
+
+/* ---------------- 🗂️ Banco de preguntas (reutilizable en Misiones) ---------------- */
+export async function fetchBancoPreguntas(materiaId, tema) {
+  let query = supabase.from("banco_preguntas").select("*").order("creado_en", { ascending: false });
+  if (materiaId) query = query.eq("materia_id", materiaId);
+  if (tema) query = query.eq("tema", tema);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function fetchTemasBanco(materiaId) {
+  let query = supabase.from("banco_preguntas").select("tema");
+  if (materiaId) query = query.eq("materia_id", materiaId);
+  const { data, error } = await query;
+  if (error) throw error;
+  return Array.from(new Set((data || []).map((r) => r.tema).filter(Boolean))).sort();
+}
+
+export async function crearPreguntaBanco(campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("banco_preguntas").insert({ ...campos, docente_id: userData?.user?.id || null });
+  if (error) throw error;
+}
+
+export async function editarPreguntaBanco(id, campos) {
+  const { error } = await supabase.from("banco_preguntas").update(campos).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarPreguntaBanco(id) {
+  const { error } = await supabase.from("banco_preguntas").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// Importación masiva desde Excel — filas ya parseadas en JS, cada una con
+// { enunciado, opcionA..D, correcta (A/B/C/D), tema }.
+export async function importarPreguntasBanco(materiaId, filas) {
+  let cargadas = 0;
+  const errores = [];
+  for (const f of filas) {
+    try {
+      const opciones = [
+        { texto: f.opcionA, correcta: f.correcta === "A" },
+        { texto: f.opcionB, correcta: f.correcta === "B" },
+        { texto: f.opcionC, correcta: f.correcta === "C" },
+        { texto: f.opcionD, correcta: f.correcta === "D" },
+      ].filter((o) => o.texto && o.texto.trim());
+      if (opciones.length < 2 || !opciones.some((o) => o.correcta)) { errores.push(`"${f.enunciado?.slice(0, 40)}...": faltan opciones o respuesta correcta`); continue; }
+      await crearPreguntaBanco({ materia_id: materiaId, tema: f.tema || null, enunciado: f.enunciado, opciones, dificultad: f.dificultad || null });
+      cargadas++;
+    } catch (e) {
+      errores.push(`"${f.enunciado?.slice(0, 40)}...": ${e.message}`);
+    }
+  }
+  return { cargadas, total: filas.length, errores };
+}
+
+// Elige N preguntas al azar del banco (con el filtro de materia/tema que se
+// pida) y las crea como preguntas reales de la evaluación indicada.
+export async function agregarPreguntasAleatoriasDesdeBanco(evaluacionId, materiaId, tema, cantidad, ordenInicial) {
+  const disponibles = await fetchBancoPreguntas(materiaId, tema || null);
+  if (disponibles.length === 0) return { agregadas: 0, disponibles: 0 };
+  const mezcladas = [...disponibles].sort(() => Math.random() - 0.5);
+  const elegidas = mezcladas.slice(0, cantidad);
+  let orden = ordenInicial;
+  for (const p of elegidas) {
+    await crearPregunta({ evaluacion_id: evaluacionId, orden: orden++, tipo: "opcion_multiple", enunciado: p.enunciado, puntos: 1, opciones: p.opciones });
+  }
+  return { agregadas: elegidas.length, disponibles: disponibles.length };
 }
 
 export async function fetchInstitucion() {
