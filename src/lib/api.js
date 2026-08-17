@@ -2275,19 +2275,47 @@ export async function fetchResumenEstudiante(estudianteId) {
 // Datos para el Observador del Estudiante: identificación completa +
 // matriz cronológica de actas (situaciones registradas).
 export async function fetchObservadorData(estudianteId) {
-  const [estudianteRes, acudiente, actas, institucion] = await Promise.all([
+  const [estudianteRes, acudiente, actas, institucion, notasRes] = await Promise.all([
     supabase.from("estudiantes").select("*").eq("id", estudianteId).maybeSingle(),
     fetchAcudiente(estudianteId),
     fetchActasPorEstudiante(estudianteId),
     fetchInstitucion(),
+    supabase.from("notas_finales_periodo").select("*, materias(nombre)").eq("estudiante_id", estudianteId),
   ]);
   if (estudianteRes.error) throw estudianteRes.error;
+
+  // Arma la tabla de rendimiento materia x periodo, para la hoja complementaria
+  const materiasMap = {};
+  const notasPorMateriaPeriodo = {};
+  (notasRes.data || []).forEach((n) => {
+    if (!materiasMap[n.materia_id]) materiasMap[n.materia_id] = n.materias?.nombre || `Materia ${n.materia_id}`;
+    notasPorMateriaPeriodo[n.materia_id] = notasPorMateriaPeriodo[n.materia_id] || {};
+    notasPorMateriaPeriodo[n.materia_id][n.periodo] = n.nota;
+  });
+  const periodosRendimiento = Array.from(new Set((notasRes.data || []).map((n) => n.periodo))).sort();
+  const materiasRendimiento = Object.entries(materiasMap).map(([id, nombre]) => ({ id, nombre })).sort((a, b) => a.nombre.localeCompare(b.nombre));
+
   return {
     estudiante: estudianteRes.data,
     acudiente,
     actas: [...actas].sort((a, b) => (a.fecha || "").localeCompare(b.fecha || "")),
     institucion,
+    materiasRendimiento, periodosRendimiento, notasPorMateriaPeriodo,
   };
+}
+
+// Trae los datos del Observador para TODOS los estudiantes activos de un
+// curso de una sola vez — para imprimirlos todos juntos.
+export async function fetchObservadorDataGrado(gradoId) {
+  const estudiantes = await fetchEstudiantesPorGrado(gradoId);
+  const activos = estudiantes.filter((e) => e.activo !== false).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  const institucion = await fetchInstitucion();
+  const datos = [];
+  for (const est of activos) {
+    const d = await fetchObservadorData(est.id);
+    datos.push(d);
+  }
+  return { datos, institucion };
 }
 
 /* ---------------- Consignas del Códice (pregunta general para todo un grado) ---------------- */
