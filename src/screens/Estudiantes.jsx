@@ -1606,6 +1606,214 @@ function SubirFotosMasivoModal({ estudiantes, onClose, onGuardado }) {
   );
 }
 
+const COLUMNAS_PLANTILLA_DIRECTORIO = [
+  "Nombre del Estudiante", "Tipo de Documento (RC/TI/CC/CE/PPT)", "Número de Documento", "Fecha de Nacimiento (AAAA-MM-DD)", "EPS",
+  "Nombre del Padre", "Teléfono del Padre", "Nombre de la Madre", "Teléfono de la Madre",
+  "Contacto de Emergencia", "Teléfono de Emergencia", "Parentesco del Contacto de Emergencia", "Dirección de Residencia",
+];
+
+function descargarPlantillaDirectorio(estudiantes) {
+  const filas = [COLUMNAS_PLANTILLA_DIRECTORIO];
+  // Precarga los nombres reales del curso, para que el docente solo tenga que completar el resto
+  estudiantes.forEach((e) => filas.push([e.nombre, "", "", "", "", "", "", "", "", "", "", "", ""]));
+  const hoja = XLSX.utils.aoa_to_sheet(filas);
+  hoja["!cols"] = COLUMNAS_PLANTILLA_DIRECTORIO.map(() => ({ wch: 22 }));
+  const libro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(libro, hoja, "Directorio");
+  XLSX.writeFile(libro, "plantilla_directorio_codice.xlsx");
+}
+
+function ImportarDatosPersonalesModal({ estudiantes, onClose, onGuardado }) {
+  const [paso, setPaso] = useState(1); // 1: elegir archivo, 2: revisar, 3: resultado
+  const [filas, setFilas] = useState([]); // { nombreArchivo, estudianteId, campos:{...} }
+  const [procesando, setProcesando] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [progreso, setProgreso] = useState(0);
+  const [resultado, setResultado] = useState(null);
+
+  const procesarDesdeArray = (arr) => {
+    if (arr.length < 2) { alert("No se encontraron suficientes filas."); return; }
+    const heads = arr[0].map((h) => String(h || "").trim());
+    const idx = (nombreColumna) => heads.findIndex((h) => h.toLowerCase().startsWith(nombreColumna.toLowerCase()));
+    const iNombre = 0; // siempre la primera columna
+    const iTipoDoc = idx("Tipo de Documento");
+    const iDocumento = idx("Número de Documento");
+    const iFechaNac = idx("Fecha de Nacimiento");
+    const iEps = idx("EPS");
+    const iPadre = idx("Nombre del Padre");
+    const iTelPadre = idx("Teléfono del Padre");
+    const iMadre = idx("Nombre de la Madre");
+    const iTelMadre = idx("Teléfono de la Madre");
+    const iEmergNombre = idx("Contacto de Emergencia");
+    const iEmergTel = idx("Teléfono de Emergencia");
+    const iEmergParentesco = idx("Parentesco");
+    const iDireccion = idx("Dirección");
+
+    const datos = arr.slice(1).filter((r) => r.length > 0 && r.some((c) => c !== "" && c !== undefined) && String(r[iNombre] || "").trim());
+    const limpio = (v) => (v === undefined || v === null ? "" : String(v).trim());
+
+    const procesadas = datos.map((r) => {
+      const nombreFila = limpio(r[iNombre]);
+      const match = buscarEstudiantePorNombre(nombreFila, estudiantes);
+      return {
+        nombreArchivo: nombreFila,
+        estudianteId: match?.id || "",
+        campos: {
+          tipo_documento: iTipoDoc >= 0 ? limpio(r[iTipoDoc]) : "",
+          documento: iDocumento >= 0 ? limpio(r[iDocumento]) : "",
+          fecha_nacimiento: iFechaNac >= 0 ? limpio(r[iFechaNac]) : "",
+          eps: iEps >= 0 ? limpio(r[iEps]) : "",
+          nombre_padre: iPadre >= 0 ? limpio(r[iPadre]) : "",
+          telefono_padre: iTelPadre >= 0 ? limpio(r[iTelPadre]) : "",
+          nombre_madre: iMadre >= 0 ? limpio(r[iMadre]) : "",
+          telefono_madre: iTelMadre >= 0 ? limpio(r[iTelMadre]) : "",
+          contacto_emergencia_nombre: iEmergNombre >= 0 ? limpio(r[iEmergNombre]) : "",
+          contacto_emergencia_telefono: iEmergTel >= 0 ? limpio(r[iEmergTel]) : "",
+          contacto_emergencia_relacion: iEmergParentesco >= 0 ? limpio(r[iEmergParentesco]) : "",
+          direccion: iDireccion >= 0 ? limpio(r[iDireccion]) : "",
+        },
+      };
+    });
+    setFilas(procesadas);
+    setPaso(2);
+  };
+
+  const procesarArchivo = (file) => {
+    setProcesando(true);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setTimeout(() => {
+        try {
+          const wb = XLSX.read(e.target.result, { type: "binary" });
+          const hoja = wb.Sheets[wb.SheetNames[0]];
+          const arr = XLSX.utils.sheet_to_json(hoja, { header: 1 });
+          procesarDesdeArray(arr);
+        } catch (err) {
+          alert("No se pudo leer el archivo. Asegurate de usar la plantilla descargada.");
+        }
+        setProcesando(false);
+      }, 50);
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const cambiarEstudiante = (i, estudianteId) => {
+    setFilas((prev) => prev.map((f, idx) => idx === i ? { ...f, estudianteId } : f));
+  };
+
+  const quitarFila = (i) => setFilas((prev) => prev.filter((_, idx) => idx !== i));
+
+  const emparejadas = filas.filter((f) => f.estudianteId);
+
+  const guardarTodo = async () => {
+    setGuardando(true);
+    setProgreso(0);
+    let hechos = 0;
+    let errores = 0;
+    for (const fila of emparejadas) {
+      try {
+        const c = fila.campos;
+        await api.guardarDocumento(fila.estudianteId, c.documento || "", {
+          tipo_documento: c.tipo_documento || "RC",
+          fecha_nacimiento: c.fecha_nacimiento || null,
+          eps: c.eps || null,
+        });
+        await api.guardarAcudiente(fila.estudianteId, {
+          nombre_padre: c.nombre_padre || null, telefono_padre: c.telefono_padre || null,
+          nombre_madre: c.nombre_madre || null, telefono_madre: c.telefono_madre || null,
+          contacto_emergencia_nombre: c.contacto_emergencia_nombre || null,
+          contacto_emergencia_telefono: c.contacto_emergencia_telefono || null,
+          contacto_emergencia_relacion: c.contacto_emergencia_relacion || null,
+          direccion: c.direccion || null,
+        });
+        hechos++;
+      } catch (e) {
+        errores++;
+      }
+      setProgreso(hechos + errores);
+    }
+    setResultado({ hechos, errores, total: emparejadas.length });
+    setGuardando(false);
+    onGuardado();
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={guardando ? undefined : onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">📥 Importar directorio y datos personales</h3>
+          {!guardando && <button onClick={onClose} className="text-slate-400">✕</button>}
+        </div>
+
+        {paso === 1 && (
+          <div>
+            <p className="text-xs text-slate-500 mb-3">
+              Descargá la plantilla (ya viene con los nombres de este curso precargados), completala en Excel con los datos de cada estudiante,
+              y subila de vuelta acá. La app va a reconocer a cada estudiante por su nombre.
+            </p>
+            <button onClick={() => descargarPlantillaDirectorio(estudiantes)} className="w-full text-sm font-semibold py-2.5 rounded-lg border border-violet-200 text-violet-600 mb-3">
+              📄 Descargar plantilla ({estudiantes.length} estudiante{estudiantes.length !== 1 ? "s" : ""} de este curso)
+            </button>
+            <label className="text-xs text-slate-500 block mb-1">Subir la plantilla ya completada</label>
+            <input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => e.target.files[0] && procesarArchivo(e.target.files[0])} className="text-sm" disabled={procesando} />
+            {procesando && <p className="text-xs text-violet-500 mt-2">Procesando…</p>}
+          </div>
+        )}
+
+        {paso === 2 && (
+          <>
+            <p className="text-xs text-slate-500 mb-3">
+              {emparejadas.length} de {filas.length} fila(s) emparejadas automáticamente con un estudiante. Revisá y corregí antes de guardar —
+              las filas sin emparejar no se van a guardar.
+            </p>
+            <div className="space-y-2 mb-4 max-h-96 overflow-y-auto">
+              {filas.map((f, i) => (
+                <div key={i} className={`rounded-lg p-2 ${f.estudianteId ? "bg-emerald-50" : "bg-amber-50"}`}>
+                  <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[11px] text-slate-400 truncate">Fila: "{f.nombreArchivo}"</div>
+                      <select value={f.estudianteId} onChange={(e) => cambiarEstudiante(i, e.target.value ? parseInt(e.target.value, 10) : "")}
+                        className="w-full text-xs rounded-lg px-2 py-1 border border-slate-200 outline-none bg-white">
+                        <option value="">— Sin emparejar (no se va a guardar) —</option>
+                        {estudiantes.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
+                      </select>
+                    </div>
+                    <button onClick={() => quitarFila(i)} className="text-slate-300 hover:text-rose-500 text-xs shrink-0">✕</button>
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-1 pl-0.5">
+                    {[f.campos.documento && `Doc: ${f.campos.documento}`, f.campos.nombre_padre && `Padre: ${f.campos.nombre_padre}`, f.campos.nombre_madre && `Madre: ${f.campos.nombre_madre}`, f.campos.direccion && `Dir: ${f.campos.direccion}`]
+                      .filter(Boolean).join(" · ") || "Sin datos adicionales en esta fila"}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {guardando ? (
+              <div className="text-center text-sm text-violet-600 font-semibold">Guardando… {progreso}/{emparejadas.length}</div>
+            ) : (
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setPaso(1)} className="text-xs text-slate-500 px-3 py-2">← Volver</button>
+                <button disabled={emparejadas.length === 0} onClick={guardarTodo} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">
+                  Guardar {emparejadas.length} estudiante(s)
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
+        {resultado && (
+          <div className="mt-3 bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+            <p className="text-sm font-semibold text-emerald-700">✔ Listo</p>
+            <p className="text-xs text-emerald-600 mt-1">
+              Se guardaron {resultado.hechos} de {resultado.total} estudiante(s){resultado.errores > 0 ? ` (${resultado.errores} con error)` : ""}.
+            </p>
+            <button onClick={onClose} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white mt-2">Cerrar</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVerGrupos }) {
   const [estudiantes, setEstudiantes] = useState([]);
   const [roles, setRoles] = useState([]);
@@ -1620,6 +1828,7 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
   const [ordenAbierto, setOrdenAbierto] = useState(false);
   const [directorioAbierto, setDirectorioAbierto] = useState(false);
   const [fotosMasivoAbierto, setFotosMasivoAbierto] = useState(false);
+  const [importarDatosAbierto, setImportarDatosAbierto] = useState(false);
 
   const cargar = async () => {
     setCargando(true);
@@ -1699,6 +1908,7 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
             <button onClick={() => setOrdenAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🔤 Organizar orden alfabético</button>
             <button onClick={() => setDirectorioAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">👪 Directorio de acudientes</button>
             <button onClick={() => setFotosMasivoAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">📷 Subir fotos masivo</button>
+            <button onClick={() => setImportarDatosAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">📥 Importar directorio y datos</button>
             <button onClick={() => setPlanillaBlancoAbierta(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🖨️ Planilla en blanco</button>
             <button onClick={() => setImportarAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700">📥 Importar varios</button>
           </div>
@@ -1739,6 +1949,9 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
       )}
       {fotosMasivoAbierto && (
         <SubirFotosMasivoModal estudiantes={estudiantes} onClose={() => setFotosMasivoAbierto(false)} onGuardado={() => { setFotosMasivoAbierto(false); cargar(); }} />
+      )}
+      {importarDatosAbierto && (
+        <ImportarDatosPersonalesModal estudiantes={estudiantes} onClose={() => setImportarDatosAbierto(false)} onGuardado={cargar} />
       )}
 
       <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar estudiante…"
