@@ -18,19 +18,23 @@ const TIPO_EVENTO_ICONO = {
 
 const EVALUACION_LABEL = { cumplio: "Cumplió", en_proceso: "En proceso", no_cumplio: "No cumplió" };
 
-function ObservadorPrintView({ datos, onCerrado }) {
-  useEffect(() => {
-    const id = setTimeout(() => window.print(), 150);
-    const onAfter = () => onCerrado();
-    window.addEventListener("afterprint", onAfter);
-    return () => { clearTimeout(id); window.removeEventListener("afterprint", onAfter); };
-  }, []);
+// Con 3 periodos usa "Trimestre I/II/III" (lo más común); con otra cantidad,
+// usa "Periodo N" genérico.
+function etiquetaPeriodo(p, cantidadPeriodos) {
+  if (cantidadPeriodos === 3) {
+    const numeros = ["I", "II", "III"];
+    const idx = parseInt(p, 10) - 1;
+    if (idx >= 0 && idx < 3) return `Trimestre ${numeros[idx]}`;
+  }
+  return `Periodo ${p}`;
+}
 
-  const { estudiante, acudiente, actas, institucion } = datos;
+function BloqueObservador({ datos, primero }) {
+  const { estudiante, acudiente, actas, institucion, materiasRendimiento, periodosRendimiento, notasPorMateriaPeriodo } = datos;
   const anioActual = new Date().getFullYear();
 
-  const contenido = (
-    <div className="print-only" style={{ maxWidth: 800, margin: "0 auto", padding: 24, fontFamily: "Arial, sans-serif", fontSize: 10.5, color: "#111" }}>
+  return (
+    <div className="print-avoid-break" style={{ maxWidth: 800, margin: "0 auto", padding: 24, fontFamily: "Arial, sans-serif", fontSize: 10.5, color: "#111", pageBreakBefore: primero ? "auto" : "always" }}>
 
       {/* 1. Encabezado institucional */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, borderBottom: "2px solid #000", paddingBottom: 8, marginBottom: 10 }}>
@@ -146,10 +150,129 @@ function ObservadorPrintView({ datos, onCerrado }) {
       <div style={{ fontSize: 8.5, borderTop: "1px solid #999", paddingTop: 6, marginTop: 20, color: "#333" }}>
         Este documento tiene fines formativos y de seguimiento integral, en el marco del debido proceso establecido en el Manual de Convivencia y la Ley 1620 de 2013.
       </div>
+
+      {/* Hoja complementaria: rendimiento académico + firmas */}
+      <div style={{ pageBreakBefore: "always", paddingTop: 20 }}>
+        <div style={{ textAlign: "center", borderBottom: "2px solid #000", paddingBottom: 8, marginBottom: 14 }}>
+          <div style={{ fontWeight: "bold", fontSize: 13 }}>{institucion?.nombre || "INSTITUCIÓN EDUCATIVA"}</div>
+          <div style={{ fontWeight: "bold", marginTop: 4 }}>HOJA COMPLEMENTARIA — RENDIMIENTO ACADÉMICO</div>
+          <div>{estudiante.nombre} · Curso {estudiante.grado_id}</div>
+        </div>
+
+        {materiasRendimiento.length === 0 ? (
+          <p style={{ marginBottom: 16 }}>Sin notas registradas todavía.</p>
+        ) : (
+          <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 20 }}>
+            <thead>
+              <tr>
+                <th style={{ border: "1px solid #000", padding: 5, textAlign: "left" }}>Materia</th>
+                {periodosRendimiento.map((p) => (
+                  <th key={p} style={{ border: "1px solid #000", padding: 5 }}>{etiquetaPeriodo(p, periodosRendimiento.length)}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {materiasRendimiento.map((m) => (
+                <tr key={m.id}>
+                  <td style={{ border: "1px solid #000", padding: 5 }}>{m.nombre}</td>
+                  {periodosRendimiento.map((p) => (
+                    <td key={p} style={{ border: "1px solid #000", padding: 5, textAlign: "center" }}>{notasPorMateriaPeriodo[m.id]?.[p] ?? "—"}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        <div style={{ fontWeight: "bold", marginBottom: 30, marginTop: 30 }}>FIRMAS DE RECIBIDO</div>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 40 }}>
+          <div style={{ borderTop: "1px solid #000", width: "30%", textAlign: "center", paddingTop: 4 }}>Firma del Padre de Familia / Acudiente</div>
+          <div style={{ borderTop: "1px solid #000", width: "30%", textAlign: "center", paddingTop: 4 }}>Firma del Estudiante</div>
+          <div style={{ borderTop: "1px solid #000", width: "30%", textAlign: "center", paddingTop: 4 }}>Firma del Director de Grado</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ObservadorPrintView({ datos, onCerrado }) {
+  useEffect(() => {
+    const id = setTimeout(() => window.print(), 150);
+    const onAfter = () => onCerrado();
+    window.addEventListener("afterprint", onAfter);
+    return () => { clearTimeout(id); window.removeEventListener("afterprint", onAfter); };
+  }, []);
+
+  const contenido = (
+    <div className="print-only">
+      <BloqueObservador datos={datos} primero={true} />
     </div>
   );
 
   return createPortal(contenido, document.body);
+}
+
+function ObservadorMasivoPrintView({ listaDatos, onCerrado }) {
+  useEffect(() => {
+    const id = setTimeout(() => window.print(), 200);
+    const onAfter = () => onCerrado();
+    window.addEventListener("afterprint", onAfter);
+    return () => { clearTimeout(id); window.removeEventListener("afterprint", onAfter); };
+  }, []);
+
+  const contenido = (
+    <div className="print-only">
+      {listaDatos.map((datos, i) => (
+        <BloqueObservador key={datos.estudiante.id} datos={datos} primero={i === 0} />
+      ))}
+    </div>
+  );
+
+  return createPortal(contenido, document.body);
+}
+
+export function ObservadorPorGradoModal({ gradoId, onClose }) {
+  const [cargando, setCargando] = useState(true);
+  const [listaDatos, setListaDatos] = useState([]);
+  const [imprimiendo, setImprimiendo] = useState(false);
+
+  useEffect(() => {
+    api.fetchObservadorDataGrado(gradoId).then(({ datos }) => { setListaDatos(datos); setCargando(false); });
+  }, [gradoId]);
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4 no-print" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">📋 Observadores del curso {gradoId}</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+
+        {cargando ? (
+          <div className="text-sm text-slate-400">Cargando {listaDatos.length ? `(${listaDatos.length})` : ""}…</div>
+        ) : (
+          <>
+            <p className="text-xs text-slate-500 mb-3">
+              Genera el Observador completo (identificación, matriz de situaciones, y hoja de rendimiento con firmas) para
+              cada uno de los {listaDatos.length} estudiante(s) activos de este curso, uno seguido del otro — cada uno arranca en hoja nueva.
+            </p>
+            <div className="bg-slate-50 rounded-xl p-3 mb-4 max-h-48 overflow-y-auto">
+              {listaDatos.map((d) => (
+                <div key={d.estudiante.id} className="text-xs text-slate-600 py-0.5">
+                  {d.estudiante.nombre} {d.acudiente ? "" : <span className="text-amber-500">(sin acudiente)</span>}
+                </div>
+              ))}
+            </div>
+            <button disabled={listaDatos.length === 0} onClick={() => setImprimiendo(true)} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-50">
+              🖨️ Imprimir {listaDatos.length} Observador(es)
+            </button>
+          </>
+        )}
+      </div>
+
+      {imprimiendo && <ObservadorMasivoPrintView listaDatos={listaDatos} onCerrado={() => setImprimiendo(false)} />}
+    </div>
+  );
 }
 
 export function ObservadorModal({ estudiante, onClose }) {
