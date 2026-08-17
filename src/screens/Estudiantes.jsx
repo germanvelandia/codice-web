@@ -10,7 +10,7 @@ import * as api from "../lib/api";
 import { ActasModal } from "./Actas";
 import { RemisionModal } from "./Remision";
 import { ResumenEstudianteModal } from "./Resumen";
-import { ObservadorModal } from "./Observador";
+import { ObservadorModal, ObservadorPorGradoModal } from "./Observador";
 import { DirectorioModal } from "./Directorio";
 
 function LevelBar({ xp }) {
@@ -1862,6 +1862,7 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
   const [directorioAbierto, setDirectorioAbierto] = useState(false);
   const [fotosMasivoAbierto, setFotosMasivoAbierto] = useState(false);
   const [importarDatosAbierto, setImportarDatosAbierto] = useState(false);
+  const [observadoresGradoAbierto, setObservadoresGradoAbierto] = useState(false);
 
   const cargar = async () => {
     setCargando(true);
@@ -1942,6 +1943,7 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
             <button onClick={() => setDirectorioAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">👪 Directorio de acudientes</button>
             <button onClick={() => setFotosMasivoAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">📷 Subir fotos masivo</button>
             <button onClick={() => setImportarDatosAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">📥 Importar directorio y datos</button>
+            <button onClick={() => setObservadoresGradoAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🖨️ Observadores del curso</button>
             <button onClick={() => setPlanillaBlancoAbierta(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🖨️ Planilla en blanco</button>
             <button onClick={() => setImportarAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700">📥 Importar varios</button>
           </div>
@@ -1985,6 +1987,9 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
       )}
       {importarDatosAbierto && (
         <ImportarDatosPersonalesModal estudiantes={estudiantes} onClose={() => setImportarDatosAbierto(false)} onGuardado={cargar} />
+      )}
+      {observadoresGradoAbierto && (
+        <ObservadorPorGradoModal gradoId={gradoId} onClose={() => setObservadoresGradoAbierto(false)} />
       )}
 
       <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar estudiante…"
