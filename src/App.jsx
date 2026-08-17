@@ -1712,73 +1712,72 @@ function BuscadorEstudiantesGlobal({ onSeleccionar }) {
 }
 
 function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstitucion, onSalir, onBuscarEstudiante }) {
+  const [menuAbierto, setMenuAbierto] = useState(false);
+
+  const elegir = (key) => {
+    onCambiar(key);
+    setMenuAbierto(false);
+  };
+
   return (
-    <>
-      {/* Escritorio: barra lateral fija */}
-      <div className="hidden md:flex md:flex-col md:w-60 md:shrink-0 md:h-screen md:sticky md:top-0"
-        style={{ background: "linear-gradient(180deg, #1e1b30 0%, #14101f 100%)", borderRight: "2px solid #8B5CF6" }}>
-        <button onClick={() => onCambiar("inicio")} className="text-center py-5" style={{ background: "linear-gradient(180deg, #2d2450 0%, #1e1b30 100%)", borderBottom: "2px solid #7c3aed55" }}>
+    <div className="md:sticky md:top-0 md:z-20" style={{ background: "linear-gradient(180deg, #1e1b30 0%, #14101f 100%)", borderBottom: "2px solid #8B5CF6" }}>
+      {/* Fila superior: logo, buscador, accesos rápidos */}
+      <div className="flex items-center justify-between gap-3 px-4 py-3 flex-wrap">
+        <button onClick={() => elegir("inicio")} className="flex items-center gap-2 shrink-0">
           {institucion?.imagen_menu_url ? (
-            <img src={institucion.imagen_menu_url} alt="Logo" className="mx-auto rounded-xl object-cover" style={{ width: 56, height: 56 }} />
+            <img src={institucion.imagen_menu_url} alt="Logo" className="rounded-lg object-cover" style={{ width: 32, height: 32 }} />
           ) : (
-            <div className="text-2xl">🧭</div>
+            <span className="text-xl">🧭</span>
           )}
-          <div className="text-violet-200 text-sm font-bold tracking-[0.2em] mt-1.5" style={{ fontFamily: "Georgia, serif" }}>CÓDICE</div>
+          <span className="text-violet-200 text-base font-bold tracking-[0.15em]" style={{ fontFamily: "Georgia, serif" }}>CÓDICE</span>
         </button>
-        <div className="px-3 pt-3">
+
+        <div className="flex-1 min-w-[160px] max-w-md order-3 md:order-none">
           <BuscadorEstudiantesGlobal onSeleccionar={onBuscarEstudiante} />
         </div>
-        <div className="flex-1 overflow-y-auto py-2">
-          {MENU_PANEL.map((m) => (
-            <button key={m.key} onClick={() => onCambiar(m.key)}
-              className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors"
-              style={{
-                background: activo === m.key ? "rgba(139,92,246,0.25)" : "transparent",
-                borderLeft: activo === m.key ? "3px solid #C4B5FD" : "3px solid transparent",
-              }}>
-              <span className="text-base">{m.icono}</span>
-              <span className={`text-xs font-semibold tracking-wide ${activo === m.key ? "text-violet-100" : "text-violet-300/70"}`}>{m.label}</span>
-            </button>
-          ))}
-        </div>
-        <div className="p-3 border-t border-violet-900/60 space-y-1.5">
-          <button onClick={onAdmin} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-violet-300/80 hover:bg-white/5 text-xs"><span>👤</span> Docentes y mi cuenta</button>
-          <button onClick={onInstitucion} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-violet-300/80 hover:bg-white/5 text-xs"><span>⚙️</span> Institución</button>
-          <button onClick={onSalir} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-violet-300/80 hover:bg-white/5 text-xs"><span>🚪</span> Cerrar sesión</button>
-          <div className="text-[10px] text-violet-400/60 px-2 pt-1 truncate">{email}</div>
+
+        <div className="flex items-center gap-3 shrink-0">
+          <button onClick={onAdmin} className="text-base" title="Docentes y mi cuenta">👤</button>
+          <button onClick={onInstitucion} className="text-base" title="Institución">⚙️</button>
+          <button onClick={onSalir} className="text-base hidden md:inline" title="Cerrar sesión">🚪</button>
+          {/* Móvil: botón hamburguesa para desplegar el menú completo */}
+          <button onClick={() => setMenuAbierto((v) => !v)} className="md:hidden text-violet-200 text-lg" title="Menú">
+            {menuAbierto ? "✕" : "☰"}
+          </button>
         </div>
       </div>
 
-      {/* Móvil: barra superior con scroll horizontal */}
-      <div className="md:hidden" style={{ background: "linear-gradient(180deg, #1e1b30 0%, #14101f 100%)" }}>
-        <div className="flex items-center justify-between px-4 py-3">
-          <button onClick={() => onCambiar("inicio")} className="flex items-center gap-2">
-            {institucion?.imagen_menu_url ? (
-              <img src={institucion.imagen_menu_url} alt="Logo" className="rounded-lg object-cover" style={{ width: 24, height: 24 }} />
-            ) : (
-              <span className="text-lg">🧭</span>
-            )}
-            <span className="text-violet-200 text-sm font-bold tracking-[0.15em]" style={{ fontFamily: "Georgia, serif" }}>CÓDICE</span>
+      {/* Escritorio: todas las opciones en fila, envolviendo si hace falta */}
+      <div className="hidden md:flex flex-wrap gap-1 px-3 pb-2">
+        {MENU_PANEL.map((m) => (
+          <button key={m.key} onClick={() => elegir(m.key)}
+            className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap flex items-center gap-1.5"
+            style={{ background: activo === m.key ? "rgba(139,92,246,0.35)" : "transparent", color: activo === m.key ? "#EDE9FE" : "#A78BFA" }}>
+            <span>{m.icono}</span> {m.label}
           </button>
-          <div className="flex items-center gap-3">
-            <button onClick={onAdmin} className="text-base">👤</button>
-            <button onClick={onInstitucion} className="text-base">⚙️</button>
-          </div>
-        </div>
-        <div className="px-3 pb-2">
-          <BuscadorEstudiantesGlobal onSeleccionar={onBuscarEstudiante} />
-        </div>
-        <div className="flex gap-1 overflow-x-auto px-2 pb-2">
+        ))}
+      </div>
+
+      {/* Móvil: menú desplegable en grilla — nada queda fuera de pantalla */}
+      {menuAbierto && (
+        <div className="md:hidden px-3 pb-3 grid grid-cols-3 gap-1.5">
           {MENU_PANEL.map((m) => (
-            <button key={m.key} onClick={() => onCambiar(m.key)}
-              className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap shrink-0"
-              style={{ background: activo === m.key ? "rgba(139,92,246,0.35)" : "transparent", color: activo === m.key ? "#EDE9FE" : "#A78BFA" }}>
-              {m.icono} {m.label}
+            <button key={m.key} onClick={() => elegir(m.key)}
+              className="text-[11px] px-2 py-2.5 rounded-xl flex flex-col items-center gap-1"
+              style={{ background: activo === m.key ? "rgba(139,92,246,0.35)" : "rgba(255,255,255,0.05)", color: activo === m.key ? "#EDE9FE" : "#A78BFA" }}>
+              <span className="text-base">{m.icono}</span>
+              <span className="text-center leading-tight">{m.label}</span>
             </button>
           ))}
+          <button onClick={onSalir} className="text-[11px] px-2 py-2.5 rounded-xl flex flex-col items-center gap-1 text-rose-300" style={{ background: "rgba(255,255,255,0.05)" }}>
+            <span className="text-base">🚪</span>
+            <span>Cerrar sesión</span>
+          </button>
         </div>
-      </div>
-    </>
+      )}
+
+      <div className="hidden md:block text-[10px] text-violet-400/60 px-4 pb-1.5 truncate">{email}</div>
+    </div>
   );
 }
 
@@ -1812,7 +1811,7 @@ function Panel({ session }) {
   };
 
   return (
-    <div className="min-h-screen bg-violet-50 md:flex">
+    <div className="min-h-screen bg-violet-50">
       <SidebarPanel activo={tab} onCambiar={irA} email={session.user.email} institucion={institucion}
         onAdmin={() => setAdministracionAbierta(true)} onInstitucion={() => setInstitucionAbierta(true)}
         onSalir={() => supabase.auth.signOut()} onBuscarEstudiante={irACalificacionesDesdeBusqueda} />
@@ -1820,7 +1819,7 @@ function Panel({ session }) {
       {institucionAbierta && <InstitucionModal onClose={() => { setInstitucionAbierta(false); cargarInstitucion(); }} />}
       {administracionAbierta && <AdministracionModal onClose={() => setAdministracionAbierta(false)} />}
 
-      <div className="p-6 max-w-6xl mx-auto md:flex-1 md:min-w-0">
+      <div className="p-6 max-w-6xl mx-auto">
         {tab === "inicio" && <VistaInicio onIrA={irA} />}
         {tab === "estudiantes" && (
           <>
