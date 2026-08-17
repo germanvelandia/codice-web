@@ -376,4 +376,4 @@ export function ObservadorModal({ estudiante, onClose }) {
       {imprimiendo && <ObservadorPrintView datos={datos} sistemaPeriodos={sistemaPeriodos} onCerrado={() => setImprimiendo(false)} />}
     </div>
   );
-}
+} 
