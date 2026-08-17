@@ -2575,6 +2575,32 @@ export async function agregarPreguntasAleatoriasDesdeBanco(evaluacionId, materia
   return { agregadas: elegidas.length, disponibles: disponibles.length };
 }
 
+// Copia preguntas del banco (de la materia ligada a la categoría) hacia
+// Preguntados, convirtiendo el formato — así el mismo banco alimenta las
+// evaluaciones Y el juego. No duplica: salta las que ya tengan el mismo enunciado.
+export async function importarBancoATrivia(categoriaId, materiaId, tema) {
+  const [banco, existentes] = await Promise.all([
+    fetchBancoPreguntas(materiaId, tema || null),
+    fetchTriviaPreguntas(categoriaId),
+  ]);
+  const enunciadosExistentes = new Set(existentes.map((p) => p.pregunta.trim().toLowerCase()));
+
+  let importadas = 0;
+  for (const b of banco) {
+    if (enunciadosExistentes.has(b.enunciado.trim().toLowerCase())) continue;
+    const correctaIdx = b.opciones.findIndex((o) => o.correcta);
+    if (correctaIdx < 0) continue;
+    await crearTriviaPregunta({
+      categoria_id: categoriaId,
+      pregunta: b.enunciado,
+      opciones: b.opciones.map((o) => o.texto),
+      correcta: correctaIdx,
+    });
+    importadas++;
+  }
+  return { importadas, total: banco.length };
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
