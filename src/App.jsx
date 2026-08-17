@@ -3,7 +3,7 @@ import { supabase } from "./lib/supabaseClient";
 import * as api from "./lib/api";
 import { nextLevel, nivelYCurso } from "./lib/gamification";
 import { bandaDesempeno, notaFinalPonderada } from "./lib/calificaciones";
-import { VistaGrados, VistaReinos, VistaEstudiantes } from "./screens/Estudiantes";
+import { VistaGrados, VistaReinos, VistaEstudiantes, FotoLightbox } from "./screens/Estudiantes";
 import { VistaAsistencia } from "./screens/Asistencia";
 import { VistaRuleta, VistaRuletaMonedas, VistaTemporizador, VistaHerramientas } from "./screens/Herramientas";
 import { VistaBanco } from "./screens/Banco";
@@ -22,7 +22,7 @@ import { VistaAnotaciones } from "./screens/Anotaciones";
 import { VistaConsignasCodice } from "./screens/ConsignasCodice";
 import { VistaEvaluaciones } from "./screens/Evaluaciones";
 import { VistaProyectosForja } from "./screens/TareasCalificables";
-import { VistaInicio } from "./screens/Inicio";
+import { VistaInicio, ContenidoLightbox } from "./screens/Inicio";
 import { EditorTexto, TextoEnriquecido, textoPlano } from "./components/RichText";
 import { InstitucionModal } from "./screens/Institucion";
 import { AdministracionModal } from "./screens/Administracion";
@@ -1098,17 +1098,18 @@ function CodiceEstudiante({ estudianteId, gradoId }) {
 
 function ValorSemanaEstudiante() {
   const [valor, setValor] = useState(null);
+  const [ampliado, setAmpliado] = useState(false);
   useEffect(() => { api.fetchValorSemanal().then(setValor); }, []);
   if (!valor || (!valor.nombre && !valor.imagen_url && !valor.html_contenido)) return null;
 
   return (
     <div className="bg-violet-50 rounded-2xl p-3 mb-4 flex items-center gap-3">
       {valor.html_contenido ? (
-        <div className="shrink-0 rounded-xl overflow-hidden" style={{ maxWidth: 110 }} dangerouslySetInnerHTML={{ __html: valor.html_contenido }} />
+        <div className="shrink-0 rounded-xl overflow-hidden cursor-pointer" style={{ maxWidth: 110 }} onClick={() => setAmpliado(true)} dangerouslySetInnerHTML={{ __html: valor.html_contenido }} />
       ) : (
         <div className="rounded-xl overflow-hidden shrink-0" style={{ width: 56, height: 56, background: "white" }}>
           {valor.imagen_url ? (
-            <img src={valor.imagen_url} alt={valor.nombre || "Valor de la semana"} className="w-full h-full object-contain" />
+            <img src={valor.imagen_url} alt={valor.nombre || "Valor de la semana"} onClick={() => setAmpliado(true)} className="w-full h-full object-contain cursor-pointer" />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-2xl">🌟</div>
           )}
@@ -1119,6 +1120,8 @@ function ValorSemanaEstudiante() {
         <div className="text-sm font-bold text-slate-800 truncate">{valor.nombre}</div>
         {valor.descripcion && <div className="text-[11px] text-slate-500 mt-0.5">{valor.descripcion}</div>}
       </div>
+      {ampliado && valor.html_contenido && <ContenidoLightbox html={valor.html_contenido} onClose={() => setAmpliado(false)} />}
+      {ampliado && !valor.html_contenido && valor.imagen_url && <FotoLightbox url={valor.imagen_url} nombre={valor.nombre || "Valor de la semana"} onClose={() => setAmpliado(false)} />}
     </div>
   );
 }
