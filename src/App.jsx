@@ -94,9 +94,8 @@ function TomarEvaluacion({ evaluacion, estudianteId, onCerrar }) {
   useEffect(() => {
     (async () => {
       try {
-        const id = await api.iniciarIntento(evaluacion.id, estudianteId);
+        const { intentoId: id, preguntas: p } = await api.iniciarIntentoConAleatorias(evaluacion, estudianteId);
         setIntentoId(id);
-        const p = await api.obtenerPreguntasParaEstudiante(evaluacion.id);
         setPreguntas(p);
       } catch (e) {
         setErrorInicio(e.message);
