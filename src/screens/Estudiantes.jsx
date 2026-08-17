@@ -1606,6 +1606,22 @@ function SubirFotosMasivoModal({ estudiantes, onClose, onGuardado }) {
   );
 }
 
+// Excel a veces guarda las fechas como un número interno (días desde 1900) en
+// vez de texto — esto lo detecta y lo convierte a "AAAA-MM-DD" real.
+function normalizarFechaExcel(valor) {
+  if (!valor) return null;
+  const texto = String(valor).trim();
+  if (!texto) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) return texto; // ya viene en formato correcto
+  const numero = Number(texto);
+  if (!isNaN(numero) && numero > 20000 && numero < 60000) {
+    // Número de serie de Excel (días desde 1899-12-30)
+    const fecha = new Date(Math.round((numero - 25569) * 86400 * 1000));
+    if (!isNaN(fecha.getTime())) return fecha.toISOString().slice(0, 10);
+  }
+  return null; // formato irreconocible — mejor dejarlo vacío que romper el guardado
+}
+
 const COLUMNAS_PLANTILLA_DIRECTORIO = [
   "Nombre del Estudiante", "Tipo de Documento (RC/TI/CC/CE/PPT)", "Número de Documento", "Fecha de Nacimiento (AAAA-MM-DD)", "EPS",
   "Nombre del Padre", "Teléfono del Padre", "Nombre de la Madre", "Teléfono de la Madre",
@@ -1710,14 +1726,23 @@ function ImportarDatosPersonalesModal({ estudiantes, onClose, onGuardado }) {
     setProgreso(0);
     let hechos = 0;
     let errores = 0;
+    const detalleErrores = [];
     for (const fila of emparejadas) {
+      const c = fila.campos;
+      let fallo = false;
+
       try {
-        const c = fila.campos;
         await api.guardarDocumento(fila.estudianteId, c.documento || "", {
           tipo_documento: c.tipo_documento || "RC",
-          fecha_nacimiento: c.fecha_nacimiento || null,
+          fecha_nacimiento: normalizarFechaExcel(c.fecha_nacimiento),
           eps: c.eps || null,
         });
+      } catch (e) {
+        fallo = true;
+        detalleErrores.push(`${fila.nombreArchivo} (documento/fecha/EPS): ${e.message}`);
+      }
+
+      try {
         await api.guardarAcudiente(fila.estudianteId, {
           nombre_padre: c.nombre_padre || null, telefono_padre: c.telefono_padre || null,
           nombre_madre: c.nombre_madre || null, telefono_madre: c.telefono_madre || null,
@@ -1726,13 +1751,15 @@ function ImportarDatosPersonalesModal({ estudiantes, onClose, onGuardado }) {
           contacto_emergencia_relacion: c.contacto_emergencia_relacion || null,
           direccion: c.direccion || null,
         });
-        hechos++;
       } catch (e) {
-        errores++;
+        fallo = true;
+        detalleErrores.push(`${fila.nombreArchivo} (acudientes): ${e.message}`);
       }
+
+      if (fallo) errores++; else hechos++;
       setProgreso(hechos + errores);
     }
-    setResultado({ hechos, errores, total: emparejadas.length });
+    setResultado({ hechos, errores, total: emparejadas.length, detalleErrores });
     setGuardando(false);
     onGuardado();
   };
@@ -1806,6 +1833,12 @@ function ImportarDatosPersonalesModal({ estudiantes, onClose, onGuardado }) {
             <p className="text-xs text-emerald-600 mt-1">
               Se guardaron {resultado.hechos} de {resultado.total} estudiante(s){resultado.errores > 0 ? ` (${resultado.errores} con error)` : ""}.
             </p>
+            {resultado.detalleErrores?.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 mt-2 text-[11px] text-amber-700 max-h-32 overflow-y-auto">
+                <p className="font-semibold mb-1">Detalle de lo que falló:</p>
+                <ul className="list-disc list-inside">{resultado.detalleErrores.map((e, i) => <li key={i}>{e}</li>)}</ul>
+              </div>
+            )}
             <button onClick={onClose} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white mt-2">Cerrar</button>
           </div>
         )}
