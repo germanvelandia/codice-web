@@ -793,6 +793,44 @@ export async function crearPregunta(campos) {
   if (error) throw error;
 }
 
+// Crea la pregunta en la evaluación, y opcionalmente una copia en el banco
+// de preguntas, para que quede disponible también para otras evaluaciones.
+export async function crearPreguntaConBanco(campos, guardarEnBanco, materiaId, tema) {
+  await crearPregunta(campos);
+  if (guardarEnBanco && materiaId && campos.tipo !== "respuesta_corta") {
+    await crearPreguntaBanco({ materia_id: materiaId, tema: tema || null, enunciado: campos.enunciado, opciones: campos.opciones });
+  }
+}
+
+// Empieza el intento de siempre (sin tocar la función existente), y si la
+// evaluación tiene preguntas aleatorias configuradas, le sortea un
+// subconjunto propio a este intento puntual — estable durante todo el intento.
+export async function iniciarIntentoConAleatorias(evaluacion, estudianteId) {
+  const intentoId = await iniciarIntento(evaluacion.id, estudianteId);
+
+  if (!evaluacion.preguntas_aleatorias_cantidad) {
+    const preguntas = await obtenerPreguntasParaEstudiante(evaluacion.id);
+    return { intentoId, preguntas };
+  }
+
+  // ¿Ya tiene preguntas asignadas este intento? (por si recarga la página)
+  const { data: yaAsignadas } = await supabase.from("evaluacion_intento_preguntas").select("pregunta_id, orden").eq("intento_id", intentoId).order("orden");
+  const todas = await obtenerPreguntasParaEstudiante(evaluacion.id);
+
+  if (yaAsignadas && yaAsignadas.length > 0) {
+    const porId = {}; todas.forEach((p) => { porId[p.id] = p; });
+    const preguntas = yaAsignadas.map((a) => porId[a.pregunta_id]).filter(Boolean);
+    return { intentoId, preguntas };
+  }
+
+  const cantidad = Math.min(evaluacion.preguntas_aleatorias_cantidad, todas.length);
+  const elegidas = [...todas].sort(() => Math.random() - 0.5).slice(0, cantidad);
+  await supabase.from("evaluacion_intento_preguntas").insert(
+    elegidas.map((p, i) => ({ intento_id: intentoId, pregunta_id: p.id, orden: i }))
+  );
+  return { intentoId, preguntas: elegidas };
+}
+
 export async function editarPregunta(id, campos) {
   const { error } = await supabase.from("evaluacion_preguntas").update(campos).eq("id", id);
   if (error) throw error;
