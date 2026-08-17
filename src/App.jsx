@@ -909,27 +909,38 @@ const MENU_CODICE = [
 
 function MenuCodice({ activo, onCambiar, monedas, gradoId }) {
   const [ultimoAnuncio, setUltimoAnuncio] = useState(null);
+  const [menuAbierto, setMenuAbierto] = useState(false);
 
   useEffect(() => {
     if (!gradoId) return;
     api.fetchAnunciosParaGrado(gradoId).then((lista) => setUltimoAnuncio(lista[0] || null));
   }, [gradoId]);
 
+  const elegir = (key) => {
+    onCambiar(key);
+    setMenuAbierto(false);
+  };
+
   return (
     <div className="rounded-2xl overflow-hidden mb-4" style={{ background: "linear-gradient(180deg, #1e1b30 0%, #14101f 100%)", border: "2px solid #8B5CF6" }}>
-      <div className="text-center py-3" style={{ background: "linear-gradient(180deg, #2d2450 0%, #1e1b30 100%)", borderBottom: "2px solid #7c3aed55" }}>
-        <div className="text-2xl">🧭</div>
-        <div className="text-violet-200 text-xs font-bold tracking-[0.2em] mt-0.5" style={{ fontFamily: "Georgia, serif" }}>CÓDICE</div>
+      <div className="flex items-center justify-between gap-3 px-4 py-3" style={{ background: "linear-gradient(180deg, #2d2450 0%, #1e1b30 100%)", borderBottom: "2px solid #7c3aed55" }}>
+        <button onClick={() => elegir("inicio")} className="flex items-center gap-2">
+          <span className="text-xl">🧭</span>
+          <span className="text-violet-200 text-sm font-bold tracking-[0.2em]" style={{ fontFamily: "Georgia, serif" }}>CÓDICE</span>
+        </button>
+        {monedas !== undefined && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-base">🪙</span>
+            <span className="text-sm font-bold text-amber-300">{monedas}</span>
+          </div>
+        )}
+        <button onClick={() => setMenuAbierto((v) => !v)} className="md:hidden text-violet-200 text-lg" title="Menú">
+          {menuAbierto ? "✕" : "☰"}
+        </button>
       </div>
-      {monedas !== undefined && (
-        <div className="flex items-center justify-center gap-1.5 py-2" style={{ background: "rgba(245,158,11,0.12)", borderBottom: "1px solid rgba(139,92,246,0.15)" }}>
-          <span className="text-base">🪙</span>
-          <span className="text-sm font-bold text-amber-300">{monedas}</span>
-          <span className="text-[10px] text-amber-200/70 uppercase tracking-wide">monedas</span>
-        </div>
-      )}
+
       {ultimoAnuncio && (
-        <button onClick={() => onCambiar("mensajes")} className="w-full text-left px-3 py-2.5" style={{ background: "rgba(139,92,246,0.15)", borderBottom: "1px solid rgba(139,92,246,0.15)" }}>
+        <button onClick={() => elegir("mensajes")} className="w-full text-left px-3 py-2.5" style={{ background: "rgba(139,92,246,0.15)", borderBottom: "1px solid rgba(139,92,246,0.15)" }}>
           <div className="flex items-center gap-1.5 mb-0.5">
             <span className="text-xs">{ultimoAnuncio.fijado ? "📌" : "✉️"}</span>
             <span className="text-[10px] font-bold text-violet-200 uppercase tracking-wide">Último mensaje</span>
@@ -938,21 +949,31 @@ function MenuCodice({ activo, onCambiar, monedas, gradoId }) {
           <div className="text-[11px] text-violet-300 truncate">{ultimoAnuncio.contenido}</div>
         </button>
       )}
-      <div>
+
+      {/* Escritorio: opciones en fila, envolviendo si hace falta */}
+      <div className="hidden md:flex flex-wrap gap-1 px-3 py-2">
         {MENU_CODICE.map((m) => (
-          <button key={m.key} onClick={() => onCambiar(m.key)}
-            className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors"
-            style={{
-              background: activo === m.key ? "rgba(139,92,246,0.25)" : "transparent",
-              borderLeft: activo === m.key ? "3px solid #C4B5FD" : "3px solid transparent",
-              borderBottom: "1px solid rgba(139,92,246,0.15)",
-            }}>
-            <span className="text-lg">{m.icono}</span>
-            <span className={`text-xs font-semibold tracking-wide uppercase ${activo === m.key ? "text-violet-100" : "text-violet-300/70"}`}>{m.label}</span>
-            {activo === m.key && <span className="ml-auto text-violet-300">›</span>}
+          <button key={m.key} onClick={() => elegir(m.key)}
+            className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap flex items-center gap-1.5"
+            style={{ background: activo === m.key ? "rgba(139,92,246,0.35)" : "transparent", color: activo === m.key ? "#EDE9FE" : "#A78BFA" }}>
+            <span>{m.icono}</span> {m.label}
           </button>
         ))}
       </div>
+
+      {/* Móvil: menú desplegable en grilla — nada queda fuera de pantalla */}
+      {menuAbierto && (
+        <div className="md:hidden px-3 py-3 grid grid-cols-3 gap-1.5">
+          {MENU_CODICE.map((m) => (
+            <button key={m.key} onClick={() => elegir(m.key)}
+              className="text-[11px] px-2 py-2.5 rounded-xl flex flex-col items-center gap-1"
+              style={{ background: activo === m.key ? "rgba(139,92,246,0.35)" : "rgba(255,255,255,0.05)", color: activo === m.key ? "#EDE9FE" : "#A78BFA" }}>
+              <span className="text-base">{m.icono}</span>
+              <span className="text-center leading-tight">{m.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1453,7 +1474,7 @@ function PortalEstudiante() {
     const pctAsis = totalAsis > 0 ? Math.round((Number(datos.presentes) / totalAsis) * 100) : null;
 
     return (
-      <div className="md:flex md:gap-5 md:items-start">
+      <div>
         {nuevosLogros.length > 0 && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }} onClick={() => setNuevosLogros((prev) => prev.slice(1))}>
             <div onClick={(e) => e.stopPropagation()} className="rounded-3xl p-6 text-center max-w-xs" style={{ background: "linear-gradient(160deg, #2d2450, #1e1b30)", border: "2px solid #F59E0B" }}>
@@ -1467,11 +1488,9 @@ function PortalEstudiante() {
             </div>
           </div>
         )}
-        <div className="md:w-60 md:shrink-0">
-          <MenuCodice activo={vista} onCambiar={setVista} monedas={datos.monedas} gradoId={datos.grado_id} />
-        </div>
+        <MenuCodice activo={vista} onCambiar={setVista} monedas={datos.monedas} gradoId={datos.grado_id} />
 
-        <div className="bg-white rounded-2xl shadow-lg p-6 md:flex-1">
+        <div className="bg-white rounded-2xl shadow-lg p-6">
           {vista === "inicio" && (
             <>
               <div className="text-center mb-4">
