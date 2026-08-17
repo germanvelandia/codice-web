@@ -1,12 +1,25 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import * as api from "../lib/api";
+import { FotoLightbox } from "./Estudiantes";
 
 const DIAS_NOMBRE = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 const TIPO_EVENTO_COLOR = { institucional: "#8B5CF6", academico: "#7C3AED", convivencial: "#DB2777", festivo: "#F59E0B", otro: "#64748B" };
 
+export function ContenidoLightbox({ html, onClose }) {
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-6" style={{ background: "rgba(0,0,0,0.75)" }} onClick={onClose}>
+      <div style={{ maxWidth: "min(85vw, 500px)", maxHeight: "85vh", overflow: "auto" }} className="bg-white rounded-2xl shadow-2xl p-2" onClick={(e) => e.stopPropagation()} dangerouslySetInnerHTML={{ __html: html }} />
+      <button onClick={onClose} className="absolute top-4 right-4 text-white text-2xl">✕</button>
+    </div>,
+    document.body
+  );
+}
+
 function ValorSemanaCard() {
   const [valor, setValor] = useState(null);
   const [editando, setEditando] = useState(false);
+  const [ampliado, setAmpliado] = useState(false);
   const [nombre, setNombre] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [imagenUrl, setImagenUrl] = useState(null);
@@ -87,11 +100,11 @@ function ValorSemanaCard() {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-4 flex items-center gap-4">
       {valor.html_contenido ? (
-        <div className="shrink-0 rounded-xl overflow-hidden" style={{ maxWidth: 140 }} dangerouslySetInnerHTML={{ __html: valor.html_contenido }} />
+        <div className="shrink-0 rounded-xl overflow-hidden cursor-pointer" style={{ maxWidth: 140 }} onClick={() => setAmpliado(true)} dangerouslySetInnerHTML={{ __html: valor.html_contenido }} />
       ) : (
         <div className="rounded-xl overflow-hidden shrink-0" style={{ width: 72, height: 72, background: "#F5F3FF" }}>
           {valor.imagen_url ? (
-            <img src={valor.imagen_url} alt={valor.nombre || "Valor de la semana"} className="w-full h-full object-contain" />
+            <img src={valor.imagen_url} alt={valor.nombre || "Valor de la semana"} onClick={() => setAmpliado(true)} className="w-full h-full object-contain cursor-pointer" />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-3xl">🌟</div>
           )}
@@ -103,6 +116,8 @@ function ValorSemanaCard() {
         {valor.descripcion && <div className="text-xs text-slate-500 mt-0.5">{valor.descripcion}</div>}
       </div>
       <button onClick={() => setEditando(true)} className="text-xs text-slate-400 hover:text-violet-600 shrink-0">✏️</button>
+      {ampliado && valor.html_contenido && <ContenidoLightbox html={valor.html_contenido} onClose={() => setAmpliado(false)} />}
+      {ampliado && !valor.html_contenido && valor.imagen_url && <FotoLightbox url={valor.imagen_url} nombre={valor.nombre || "Valor de la semana"} onClose={() => setAmpliado(false)} />}
     </div>
   );
 }
