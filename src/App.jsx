@@ -21,6 +21,7 @@ import { VistaBiblioteca } from "./screens/Biblioteca";
 import { VistaAnotaciones } from "./screens/Anotaciones";
 import { VistaInclusionGeneral } from "./screens/InclusionGeneral";
 import { VistaConsignasCodice } from "./screens/ConsignasCodice";
+import { VistaTriviaAdmin } from "./screens/TriviaAdmin";
 import { VistaEvaluaciones } from "./screens/Evaluaciones";
 import { VistaProyectosForja } from "./screens/TareasCalificables";
 import { VistaInicio, ContenidoLightbox } from "./screens/Inicio";
@@ -901,6 +902,7 @@ const MENU_CODICE = [
   { key: "misiones", label: "Misiones", icono: "⚔️" },
   { key: "notas", label: "Notas", icono: "📝" },
   { key: "perfil", label: "Perfil", icono: "👤" },
+  { key: "preguntados", label: "Preguntados", icono: "🎡" },
   { key: "proyectos", label: "Proyectos", icono: "📜" },
   { key: "ranking", label: "Ranking", icono: "📊" },
   { key: "recompensas", label: "Recompensas", icono: "🎁" },
@@ -1436,6 +1438,174 @@ function HistorialEstudiante({ estudianteId }) {
   );
 }
 
+function PreguntadosEstudiante({ estudianteId }) {
+  const [categorias, setCategorias] = useState([]);
+  const [coronas, setCoronas] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [girando, setGirando] = useState(false);
+  const [rotacion, setRotacion] = useState(0);
+  const [categoriaElegida, setCategoriaElegida] = useState(null);
+  const [pregunta, setPregunta] = useState(null);
+  const [respondida, setRespondida] = useState(null); // { opcion, acierto, corona }
+  const [cargandoPregunta, setCargandoPregunta] = useState(false);
+
+  const cargar = () => {
+    Promise.all([api.fetchTriviaCategorias(), api.fetchCoronasEstudiante(estudianteId)]).then(([cats, cor]) => {
+      setCategorias(cats); setCoronas(cor); setCargando(false);
+    });
+  };
+  useEffect(() => { cargar(); }, [estudianteId]);
+
+  const girar = () => {
+    if (categorias.length === 0) return;
+    setGirando(true);
+    setCategoriaElegida(null);
+    setPregunta(null);
+    setRespondida(null);
+    const elegidaIdx = Math.floor(Math.random() * categorias.length);
+    const vueltasExtra = 4 * 360;
+    const anguloPorSector = 360 / categorias.length;
+    // Apunta al centro del sector elegido, en la parte de arriba de la ruleta
+    const anguloFinal = 360 - (elegidaIdx * anguloPorSector + anguloPorSector / 2);
+    setRotacion((prev) => prev + vueltasExtra + anguloFinal - (prev % 360));
+
+    setTimeout(async () => {
+      setGirando(false);
+      const cat = categorias[elegidaIdx];
+      setCategoriaElegida(cat);
+      setCargandoPregunta(true);
+      const p = await api.fetchPreguntaTriviaAleatoria(cat.id, estudianteId);
+      setPregunta(p);
+      setCargandoPregunta(false);
+    }, 3200);
+  };
+
+  const responder = async (opcionIdx) => {
+    if (respondida) return;
+    const r = await api.responderTrivia(estudianteId, pregunta, opcionIdx);
+    setRespondida({ opcion: opcionIdx, ...r });
+    if (r.corona) setCoronas((prev) => [...prev, pregunta.categoria_id]);
+  };
+
+  if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
+
+  if (categorias.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-3xl mb-2">🎡</div>
+        <p className="text-sm text-slate-400">Tu docente todavía no armó las categorías de Preguntados.</p>
+      </div>
+    );
+  }
+
+  const anguloPorSector = 360 / categorias.length;
+
+  return (
+    <div>
+      <h3 className="font-bold text-slate-800 mb-1 text-center">🎡 Preguntados</h3>
+      <p className="text-xs text-slate-400 mb-4 text-center">Girá la ruleta, respondé, y ganá la corona de cada categoría acertando 3 seguidas.</p>
+
+      {/* La ruleta */}
+      <div className="relative mx-auto mb-4" style={{ width: 220, height: 220 }}>
+        <div className="absolute left-1/2 -translate-x-1/2 z-10" style={{ top: -6 }}>
+          <div style={{ width: 0, height: 0, borderLeft: "10px solid transparent", borderRight: "10px solid transparent", borderTop: "16px solid #1e1b30" }} />
+        </div>
+        <svg viewBox="0 0 200 200" width={220} height={220} style={{ transition: girando ? "transform 3.1s cubic-bezier(0.17, 0.67, 0.12, 0.99)" : "none", transform: `rotate(${rotacion}deg)` }}>
+          {categorias.map((c, i) => {
+            const a0 = (i * anguloPorSector - 90) * (Math.PI / 180);
+            const a1 = ((i + 1) * anguloPorSector - 90) * (Math.PI / 180);
+            const x0 = 100 + 95 * Math.cos(a0), y0 = 100 + 95 * Math.sin(a0);
+            const x1 = 100 + 95 * Math.cos(a1), y1 = 100 + 95 * Math.sin(a1);
+            const grande = anguloPorSector > 180 ? 1 : 0;
+            const amitad = (i * anguloPorSector + anguloPorSector / 2 - 90) * (Math.PI / 180);
+            const tx = 100 + 62 * Math.cos(amitad), ty = 100 + 62 * Math.sin(amitad);
+            return (
+              <g key={c.id}>
+                <path d={`M100,100 L${x0},${y0} A95,95 0 ${grande} 1 ${x1},${y1} Z`} fill={c.color} stroke="#1e1b30" strokeWidth="1.5" />
+                <text x={tx} y={ty} fontSize="16" textAnchor="middle" dominantBaseline="middle">{c.emoji}</text>
+              </g>
+            );
+          })}
+          <circle cx="100" cy="100" r="16" fill="#1e1b30" />
+        </svg>
+      </div>
+
+      {!categoriaElegida && (
+        <button disabled={girando} onClick={girar} className="block mx-auto text-sm font-semibold px-6 py-2.5 rounded-full bg-violet-500 text-white disabled:opacity-60">
+          {girando ? "Girando…" : "🎡 Girar la ruleta"}
+        </button>
+      )}
+
+      {categoriaElegida && (
+        <div className="max-w-sm mx-auto">
+          <div className="text-center mb-3">
+            <span className="text-xs font-bold px-3 py-1 rounded-full text-white" style={{ background: categoriaElegida.color }}>{categoriaElegida.emoji} {categoriaElegida.nombre}</span>
+          </div>
+
+          {cargandoPregunta ? (
+            <div className="text-sm text-slate-400 text-center">Cargando pregunta…</div>
+          ) : !pregunta ? (
+            <div className="text-center">
+              <p className="text-sm text-slate-400 mb-3">Todavía no hay preguntas cargadas en esta categoría.</p>
+              <button onClick={() => setCategoriaElegida(null)} className="text-xs font-semibold text-violet-500">← Girar de nuevo</button>
+            </div>
+          ) : (
+            <div className="bg-slate-50 rounded-2xl p-4">
+              <p className="text-sm font-semibold text-slate-800 mb-3">{pregunta.pregunta}</p>
+              <div className="space-y-1.5">
+                {pregunta.opciones.map((o, i) => {
+                  let estilo = "bg-white text-slate-600 border border-slate-200";
+                  if (respondida) {
+                    if (i === pregunta.correcta) estilo = "bg-emerald-500 text-white";
+                    else if (i === respondida.opcion) estilo = "bg-rose-500 text-white";
+                  }
+                  return (
+                    <button key={i} disabled={!!respondida} onClick={() => responder(i)} className={`w-full text-left text-sm px-3 py-2 rounded-lg ${estilo}`}>
+                      {o}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {respondida && (
+                <div className="mt-3 text-center">
+                  {respondida.corona ? (
+                    <p className="text-sm font-bold text-amber-500">👑 ¡Corona de {categoriaElegida.nombre}! +15 monedas extra</p>
+                  ) : respondida.acierto ? (
+                    <p className="text-sm font-semibold text-emerald-600">¡Correcto! +5 XP, +2 monedas</p>
+                  ) : (
+                    <p className="text-sm font-semibold text-rose-500">Fallaste — se corta la racha en esta categoría</p>
+                  )}
+                  <button onClick={() => { setCategoriaElegida(null); setPregunta(null); setRespondida(null); }} className="mt-2 text-xs font-semibold text-violet-500">Girar de nuevo →</button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Vitrina de coronas */}
+      <div className="mt-6 pt-4 border-t border-slate-100">
+        <div className="text-xs font-semibold text-slate-600 mb-2">Tus coronas ({coronas.length}/{categorias.length})</div>
+        <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+          {categorias.map((c) => {
+            const tiene = coronas.includes(c.id);
+            return (
+              <div key={c.id} className="rounded-xl p-2 text-center" style={{ background: tiene ? c.color : "#F1F5F9", opacity: tiene ? 1 : 0.5 }}>
+                <div className="text-lg">{tiene ? "👑" : c.emoji}</div>
+                <div className={`text-[9px] font-semibold truncate ${tiene ? "text-white" : "text-slate-400"}`}>{c.nombre}</div>
+              </div>
+            );
+          })}
+        </div>
+        {coronas.length === categorias.length && categorias.length > 0 && (
+          <p className="text-center text-xs font-bold text-amber-500 mt-3">🏆 ¡Completaste todas las coronas!</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function PortalEstudiante() {
   const [codigo, setCodigo] = useState("");
   const [datos, setDatos] = useState(null);
@@ -1566,6 +1736,10 @@ function PortalEstudiante() {
 
           {vista === "recompensas" && estudianteInfo && (
             <BancoEstudiante estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} />
+          )}
+
+          {vista === "preguntados" && estudianteInfo && (
+            <PreguntadosEstudiante estudianteId={estudianteInfo.id} />
           )}
 
           {vista === "album" && estudianteInfo && (
@@ -1875,6 +2049,7 @@ function Panel({ session }) {
               <button onClick={() => setSubTabHerramientas("salonhonor")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "salonhonor" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Salón de Honor</button>
               <button onClick={() => setSubTabHerramientas("gamext")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "gamext" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Desafíos/Misiones/Cosméticos</button>
               <button onClick={() => setSubTabHerramientas("consignas")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "consignas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Consignas del Códice</button>
+              <button onClick={() => setSubTabHerramientas("trivia")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "trivia" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🎡 Preguntados</button>
               <button onClick={() => setSubTabHerramientas("temporizador")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "temporizador" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Temporizador</button>
               <button onClick={() => setSubTabHerramientas("otras")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "otras" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Otras herramientas</button>
             </div>
@@ -1887,6 +2062,7 @@ function Panel({ session }) {
             {subTabHerramientas === "salonhonor" && <VistaSalonHonor />}
             {subTabHerramientas === "gamext" && <VistaGamificacionExtra grados={grados} />}
             {subTabHerramientas === "consignas" && <VistaConsignasCodice grados={grados} />}
+            {subTabHerramientas === "trivia" && <VistaTriviaAdmin />}
             {subTabHerramientas === "temporizador" && <VistaTemporizador />}
             {subTabHerramientas === "otras" && <VistaHerramientas grados={grados} />}
           </>
