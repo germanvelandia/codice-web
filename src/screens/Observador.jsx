@@ -45,7 +45,11 @@ function ObservadorPrintView({ datos, onCerrado }) {
 
       {/* 2. Datos de identificación */}
       <div style={{ fontWeight: "bold", marginBottom: 4 }}>1. DATOS DE IDENTIFICACIÓN DEL ESTUDIANTE</div>
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 12 }}>
+      <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+        {estudiante.foto_url && (
+          <img src={estudiante.foto_url} alt={estudiante.nombre} style={{ width: 90, height: 90, objectFit: "cover", borderRadius: 6, border: "1px solid #000", flexShrink: 0 }} />
+        )}
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <tbody>
           <tr>
             <td style={{ border: "1px solid #000", padding: 4, fontWeight: "bold", width: "22%" }}>Nombres y apellidos</td>
@@ -90,7 +94,8 @@ function ObservadorPrintView({ datos, onCerrado }) {
             </td>
           </tr>
         </tbody>
-      </table>
+        </table>
+      </div>
 
       {/* 3. Matriz de registro */}
       <div style={{ fontWeight: "bold", marginBottom: 4 }}>2. MATRIZ DE REGISTRO DE SITUACIONES Y SEGUIMIENTO</div>
