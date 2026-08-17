@@ -10,7 +10,7 @@ const TIPOS_PREGUNTA = [
   { key: "respuesta_corta", label: "Respuesta corta (manual)" },
 ];
 
-function NuevaPreguntaForm({ evaluacionId, orden, pregunta, onCreada, onCancelar }) {
+function NuevaPreguntaForm({ evaluacionId, orden, pregunta, materiaId, onCreada, onCancelar }) {
   const [tipo, setTipo] = useState(pregunta?.tipo || "opcion_multiple");
   const [enunciado, setEnunciado] = useState(pregunta?.enunciado || "");
   const [puntos, setPuntos] = useState(pregunta?.puntos || 1);
@@ -19,6 +19,8 @@ function NuevaPreguntaForm({ evaluacionId, orden, pregunta, onCreada, onCancelar
   const [vfCorrecta, setVfCorrecta] = useState(
     pregunta?.tipo === "verdadero_falso" ? ((pregunta.opciones || []).find((o) => o.correcta)?.texto || "Verdadero") : "Verdadero"
   );
+  const [guardarEnBanco, setGuardarEnBanco] = useState(false);
+  const [temaBanco, setTemaBanco] = useState("");
   const [guardando, setGuardando] = useState(false);
 
   const guardar = async () => {
@@ -40,7 +42,7 @@ function NuevaPreguntaForm({ evaluacionId, orden, pregunta, onCreada, onCancelar
       if (pregunta) {
         await api.editarPregunta(pregunta.id, campos);
       } else {
-        await api.crearPregunta({ evaluacion_id: evaluacionId, orden, ...campos });
+        await api.crearPreguntaConBanco({ evaluacion_id: evaluacionId, orden, ...campos }, guardarEnBanco, materiaId, temaBanco);
       }
       onCreada();
     } catch (e) {
@@ -87,6 +89,19 @@ function NuevaPreguntaForm({ evaluacionId, orden, pregunta, onCreada, onCancelar
 
       {tipo === "respuesta_corta" && (
         <p className="text-[11px] text-slate-500 mb-2">Esta pregunta no se autocalifica — vos revisás y asignás el puntaje manualmente en los resultados.</p>
+      )}
+
+      {!pregunta && materiaId && tipo !== "respuesta_corta" && (
+        <div className="mb-2">
+          <label className="flex items-center gap-2 text-[11px] text-slate-600">
+            <input type="checkbox" checked={guardarEnBanco} onChange={(e) => setGuardarEnBanco(e.target.checked)} />
+            También guardar esta pregunta en el banco de preguntas (para reusarla en otras evaluaciones)
+          </label>
+          {guardarEnBanco && (
+            <input value={temaBanco} onChange={(e) => setTemaBanco(e.target.value)} placeholder="Tema en el banco (opcional, ej: Álgebra)"
+              className="w-full text-xs rounded-lg px-2 py-1.5 mt-1.5 border border-slate-200 outline-none bg-white" />
+          )}
+        </div>
       )}
 
       <div className="flex justify-end gap-2">
@@ -190,7 +205,7 @@ function PreguntasEditor({ evaluacionId, materiaId }) {
       </div>
       {formAbierto && (
         <div className="mt-2">
-          <NuevaPreguntaForm evaluacionId={evaluacionId} orden={preguntas.length} onCreada={() => { setFormAbierto(false); cargar(); }} onCancelar={() => setFormAbierto(false)} />
+          <NuevaPreguntaForm evaluacionId={evaluacionId} orden={preguntas.length} materiaId={materiaId} onCreada={() => { setFormAbierto(false); cargar(); }} onCancelar={() => setFormAbierto(false)} />
         </div>
       )}
     </div>
@@ -310,6 +325,8 @@ function NuevaEvaluacionForm({ materiaId, gradoId, periodo, categorias, evaluaci
   const [intentos, setIntentos] = useState(evaluacion?.intentos_permitidos ? String(evaluacion.intentos_permitidos) : evaluacion ? "ilimitado" : "1");
   const [tiempoLimite, setTiempoLimite] = useState(evaluacion?.tiempo_limite_minutos ? String(evaluacion.tiempo_limite_minutos) : "");
   const [categoriaId, setCategoriaId] = useState(evaluacion?.categoria_id ? String(evaluacion.categoria_id) : "");
+  const [aleatoriasActivo, setAleatoriasActivo] = useState(!!evaluacion?.preguntas_aleatorias_cantidad);
+  const [aleatoriasCantidad, setAleatoriasCantidad] = useState(evaluacion?.preguntas_aleatorias_cantidad || 10);
   const [guardando, setGuardando] = useState(false);
 
   const cambiarIndicacion = (i, valor) => setIndicaciones((prev) => prev.map((x, idx) => idx === i ? valor : x));
@@ -327,6 +344,7 @@ function NuevaEvaluacionForm({ materiaId, gradoId, periodo, categorias, evaluaci
         intentos_permitidos: intentos === "ilimitado" ? null : parseInt(intentos, 10),
         tiempo_limite_minutos: tiempoLimite ? parseInt(tiempoLimite, 10) : null,
         categoria_id: categoriaId ? parseInt(categoriaId, 10) : null,
+        preguntas_aleatorias_cantidad: aleatoriasActivo ? (parseInt(aleatoriasCantidad, 10) || null) : null,
       };
       if (evaluacion) {
         await api.editarEvaluacion(evaluacion.id, campos);
@@ -393,6 +411,18 @@ function NuevaEvaluacionForm({ materiaId, gradoId, periodo, categorias, evaluaci
           <input type="number" value={tiempoLimite} onChange={(e) => setTiempoLimite(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
         </div>
       </div>
+      <label className="flex items-center gap-2 text-xs text-slate-600 mb-2 bg-amber-50 rounded-lg p-2.5">
+        <input type="checkbox" checked={aleatoriasActivo} onChange={(e) => setAleatoriasActivo(e.target.checked)} />
+        Preguntas aleatorias por estudiante (cada uno recibe un subconjunto al azar, en vez de todos las mismas)
+      </label>
+      {aleatoriasActivo && (
+        <div className="mb-2">
+          <label className="text-xs text-slate-500 block mb-1">¿Cuántas preguntas debe responder cada estudiante?</label>
+          <input type="number" min="1" value={aleatoriasCantidad} onChange={(e) => setAleatoriasCantidad(e.target.value)}
+            className="w-24 text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
+          <p className="text-[11px] text-slate-400 mt-1">Cargá más preguntas de las que necesita cada uno (ej: 20 preguntas totales para que cada estudiante responda 10 al azar).</p>
+        </div>
+      )}
       <div className="flex justify-end gap-2">
         <button onClick={onCancelar} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
         <button disabled={guardando} onClick={guardar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
@@ -521,6 +551,7 @@ function EvaluacionCard({ evaluacion, materias, grados, categorias, onCambio }) 
             {evaluacion.fecha_apertura || evaluacion.fecha_cierre ? `${evaluacion.fecha_apertura || "…"} → ${evaluacion.fecha_cierre || "…"} · ` : ""}
             {evaluacion.intentos_permitidos ? `${evaluacion.intentos_permitidos} intento(s)` : "Intentos ilimitados"}
             {evaluacion.tiempo_limite_minutos ? ` · ${evaluacion.tiempo_limite_minutos} min` : ""}
+            {evaluacion.preguntas_aleatorias_cantidad ? ` · 🎲 ${evaluacion.preguntas_aleatorias_cantidad} al azar por estudiante` : ""}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
