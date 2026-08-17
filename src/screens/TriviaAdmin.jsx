@@ -100,17 +100,57 @@ function PreguntasDeCategoria({ categoria, onVolver }) {
   const [cargando, setCargando] = useState(true);
   const [formAbierto, setFormAbierto] = useState(false);
   const [editando, setEditando] = useState(null);
+  const [importarBancoAbierto, setImportarBancoAbierto] = useState(false);
+  const [temasBanco, setTemasBanco] = useState([]);
+  const [temaElegido, setTemaElegido] = useState("");
+  const [importandoBanco, setImportandoBanco] = useState(false);
 
   const cargar = () => { setCargando(true); api.fetchTriviaPreguntas(categoria.id).then((d) => { setPreguntas(d); setCargando(false); }); };
   useEffect(() => { cargar(); }, [categoria.id]);
+  useEffect(() => { if (categoria.materia_id) api.fetchTemasBanco(categoria.materia_id).then(setTemasBanco); }, [categoria.materia_id]);
 
   const eliminar = async (p) => { if (!confirm("¿Eliminar esta pregunta?")) return; await api.eliminarTriviaPregunta(p.id); cargar(); };
+
+  const importarDelBanco = async () => {
+    setImportandoBanco(true);
+    try {
+      const r = await api.importarBancoATrivia(categoria.id, categoria.materia_id, temaElegido || null);
+      alert(`Se importaron ${r.importadas} pregunta(s) nueva(s) del banco (de ${r.total} revisadas — las repetidas se saltan solas).`);
+      setImportarBancoAbierto(false);
+      cargar();
+    } catch (e) {
+      alert("Error al importar: " + e.message);
+    }
+    setImportandoBanco(false);
+  };
 
   return (
     <div>
       <button onClick={onVolver} className="text-sm text-violet-500 mb-3">← Volver a categorías</button>
       <h3 className="font-bold text-slate-800 mb-1">{categoria.emoji} {categoria.nombre}</h3>
       <p className="text-xs text-slate-400 mb-3">{preguntas.length} pregunta(s) — hacen falta al menos 3-4 para que la ruleta no repita siempre lo mismo.</p>
+
+      {categoria.materia_id && (
+        importarBancoAbierto ? (
+          <div className="bg-amber-50 rounded-xl p-3 mb-3">
+            <p className="text-[11px] text-amber-700 mb-2">Trae las preguntas del banco de "{categoria.materia_nombre}" hacia esta categoría (no duplica las que ya estén).</p>
+            <select value={temaElegido} onChange={(e) => setTemaElegido(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none bg-white">
+              <option value="">Todos los temas</option>
+              {temasBanco.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setImportarBancoAbierto(false)} className="text-xs text-slate-500 px-2 py-1">Cancelar</button>
+              <button disabled={importandoBanco} onClick={importarDelBanco} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-500 text-white disabled:opacity-60">
+                {importandoBanco ? "Importando…" : "Importar"}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button onClick={() => setImportarBancoAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-amber-200 text-amber-600 mb-3">
+            🗂️ Importar del Banco de Preguntas
+          </button>
+        )
+      )}
 
       {formAbierto ? (
         <PreguntaForm categoriaId={categoria.id} pregunta={editando} onCancelar={() => { setFormAbierto(false); setEditando(null); }} onGuardada={() => { setFormAbierto(false); setEditando(null); cargar(); }} />
