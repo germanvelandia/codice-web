@@ -34,14 +34,14 @@ function etiquetaPeriodoConfigurable(sistema, indice) {
 // Plan de estudios completo — se usa tal cual, sin depender de qué materias
 // estén cargadas en el sistema, para que la hoja salga siempre completa.
 const MATERIAS_PLAN_ESTUDIOS = [
-  "Matemáticas (incluyendo geometría)",
-  "Español y PILEO",
+  "Artes y Danzas",
   "Ciencias Naturales y Educación Ambiental",
   "Ciencias Sociales (Historia, Geografía y Constitución)",
-  "Inglés",
   "Educación Ética y en Valores Humanos",
   "Educación Física, Recreación y Deportes",
-  "Artes y Danzas",
+  "Español y PILEO",
+  "Inglés",
+  "Matemáticas (incluyendo geometría)",
   "Tecnología e Informática",
 ];
 
@@ -119,117 +119,110 @@ function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre" }) {
         </table>
       </div>
 
-      {/* 2. Matriz de registro — en blanco, para completar a mano */}
+      {/* 2. Matriz de registro — en blanco, para completar a mano. Una sola tabla
+          con columna "Periodo" en vez de repetir la tabla por cada uno, para
+          que entre todo el documento en 2 páginas. */}
       <div style={{ fontWeight: "bold", marginBottom: 4 }}>2. MATRIZ DE REGISTRO DE SITUACIONES Y SEGUIMIENTO (por completar a mano)</div>
-      {periodosLista.map((i) => (
-        <div key={i} style={{ marginBottom: 10, pageBreakInside: "avoid" }}>
-          <div style={{ fontSize: 9.5, fontWeight: "bold", marginBottom: 2, color: "#555" }}>{etiquetaPeriodoConfigurable(sistemaPeriodos, i)}</div>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                <th style={{ border: "1px solid #000", padding: 3, fontSize: 9, width: "12%" }}>Fecha</th>
-                <th style={{ border: "1px solid #000", padding: 3, fontSize: 9, width: "16%" }}>Tipo</th>
-                <th style={{ border: "1px solid #000", padding: 3, fontSize: 9 }}>Descripción de la situación</th>
-                <th style={{ border: "1px solid #000", padding: 3, fontSize: 9, width: "20%" }}>Compromiso</th>
-                <th style={{ border: "1px solid #000", padding: 3, fontSize: 9, width: "12%" }}>Firma</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[0, 1, 2].map((f) => (
-                <tr key={f}>
-                  <td style={{ border: "1px solid #000", height: 18 }}></td>
-                  <td style={{ border: "1px solid #000", height: 18 }}></td>
-                  <td style={{ border: "1px solid #000", height: 18 }}></td>
-                  <td style={{ border: "1px solid #000", height: 18 }}></td>
-                  <td style={{ border: "1px solid #000", height: 18 }}></td>
-                </tr>
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 12, fontSize: 9.5 }}>
+        <thead>
+          <tr>
+            <th style={{ border: "1px solid #000", padding: 3, width: "13%" }}>Periodo</th>
+            <th style={{ border: "1px solid #000", padding: 3, width: "10%" }}>Fecha</th>
+            <th style={{ border: "1px solid #000", padding: 3, width: "14%" }}>Tipo</th>
+            <th style={{ border: "1px solid #000", padding: 3 }}>Descripción de la situación</th>
+            <th style={{ border: "1px solid #000", padding: 3, width: "18%" }}>Compromiso</th>
+            <th style={{ border: "1px solid #000", padding: 3, width: "11%" }}>Firma</th>
+          </tr>
+        </thead>
+        <tbody>
+          {periodosLista.map((i) => [0, 1].map((f) => (
+            <tr key={`${i}-${f}`}>
+              {f === 0 && <td rowSpan={2} style={{ border: "1px solid #000", padding: 3, fontWeight: "bold", textAlign: "center", verticalAlign: "middle" }}>{etiquetaPeriodoConfigurable(sistemaPeriodos, i)}</td>}
+              <td style={{ border: "1px solid #000", height: 16 }}></td>
+              <td style={{ border: "1px solid #000", height: 16 }}></td>
+              <td style={{ border: "1px solid #000", height: 16 }}></td>
+              <td style={{ border: "1px solid #000", height: 16 }}></td>
+              <td style={{ border: "1px solid #000", height: 16 }}></td>
+            </tr>
+          )))}
+        </tbody>
+      </table>
+
+      {/* Hoja complementaria: seguimiento por periodo, en la misma tanda de páginas */}
+      <div style={{ fontWeight: "bold", marginBottom: 4, marginTop: 8 }}>3. RENDIMIENTO ACADÉMICO POR {infoSistema.nombre.toUpperCase()} (marcar con X si reprobó)</div>
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 10, fontSize: 9.5 }}>
+        <thead>
+          <tr>
+            <th style={{ border: "1px solid #000", padding: 3, textAlign: "left" }}>Asignatura</th>
+            {periodosLista.map((i) => (
+              <th key={i} style={{ border: "1px solid #000", padding: 3, width: 50 }}>{etiquetaPeriodoConfigurable(sistemaPeriodos, i)}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {MATERIAS_PLAN_ESTUDIOS.map((m) => (
+            <tr key={m}>
+              <td style={{ border: "1px solid #000", padding: 3 }}>{m}</td>
+              {periodosLista.map((i) => (
+                <td key={i} style={{ border: "1px solid #000", padding: 3, height: 16 }}></td>
               ))}
-            </tbody>
-          </table>
-        </div>
-      ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
 
-      {/* 5. Firmas finales */}
-      <div style={{ fontWeight: "bold", marginBottom: 8, marginTop: 20 }}>FIRMAS DE CIERRE DE PERIODO</div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 30 }}>
-        <div style={{ borderTop: "1px solid #000", width: "40%", textAlign: "center", paddingTop: 4 }}>Firma Director(a) de Grupo</div>
-        <div style={{ borderTop: "1px solid #000", width: "40%", textAlign: "center", paddingTop: 4 }}>Firma Coordinador(a)</div>
-      </div>
+      {/* Observaciones + firmas, una sola tabla con una fila por periodo */}
+      <div style={{ fontWeight: "bold", marginBottom: 4 }}>4. OBSERVACIONES Y FIRMAS POR {infoSistema.nombre.toUpperCase()}</div>
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 12, fontSize: 9 }}>
+        <thead>
+          <tr>
+            <th style={{ border: "1px solid #000", padding: 3, width: "10%" }}>Periodo</th>
+            <th style={{ border: "1px solid #000", padding: 3 }}>Observaciones académicas</th>
+            <th style={{ border: "1px solid #000", padding: 3 }}>Observaciones convivenciales</th>
+            <th style={{ border: "1px solid #000", padding: 3, width: "13%" }}>Firma Padre</th>
+            <th style={{ border: "1px solid #000", padding: 3, width: "13%" }}>Firma Estudiante</th>
+            <th style={{ border: "1px solid #000", padding: 3, width: "13%" }}>Firma Director</th>
+          </tr>
+        </thead>
+        <tbody>
+          {periodosLista.map((i) => (
+            <tr key={i}>
+              <td style={{ border: "1px solid #000", padding: 3, fontWeight: "bold", textAlign: "center" }}>{etiquetaPeriodoConfigurable(sistemaPeriodos, i)}</td>
+              <td style={{ border: "1px solid #000", height: 30 }}></td>
+              <td style={{ border: "1px solid #000", height: 30 }}></td>
+              <td style={{ border: "1px solid #000", height: 30 }}></td>
+              <td style={{ border: "1px solid #000", height: 30 }}></td>
+              <td style={{ border: "1px solid #000", height: 30 }}></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
 
-      <div style={{ fontSize: 8.5, borderTop: "1px solid #999", paddingTop: 6, marginTop: 20, color: "#333" }}>
-        Este documento tiene fines formativos y de seguimiento integral, en el marco del debido proceso establecido en el Manual de Convivencia y la Ley 1620 de 2013.
-      </div>
-
-      {/* Hoja complementaria: seguimiento por periodo, para completar a mano */}
-      <div style={{ pageBreakBefore: "always", paddingTop: 20 }}>
-        <div style={{ textAlign: "center", borderBottom: "2px solid #000", paddingBottom: 8, marginBottom: 14 }}>
-          <div style={{ fontWeight: "bold", fontSize: 13 }}>{institucion?.nombre || "INSTITUCIÓN EDUCATIVA"}</div>
-          <div style={{ fontWeight: "bold", marginTop: 4 }}>HOJA COMPLEMENTARIA — SEGUIMIENTO POR {infoSistema.nombre.toUpperCase()}</div>
-          <div>{estudiante.nombre} · Curso {estudiante.grado_id} · Año lectivo {anioActual}</div>
-        </div>
-
-        <p style={{ fontSize: 9, marginBottom: 6, color: "#555" }}>
-          Marque con X la casilla correspondiente si el estudiante <b>reprobó</b> la asignatura en ese {infoSistema.nombre.toLowerCase()}.
-        </p>
-        <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
+      {/* Nivelaciones */}
+      <div style={{ pageBreakInside: "avoid" }}>
+        <div style={{ fontWeight: "bold", marginBottom: 4 }}>5. ESPACIO PARA NIVELACIONES</div>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 9.5 }}>
           <thead>
             <tr>
-              <th style={{ border: "1px solid #000", padding: 5, textAlign: "left" }}>Asignatura</th>
-              {periodosLista.map((i) => (
-                <th key={i} style={{ border: "1px solid #000", padding: 5, width: 60 }}>{etiquetaPeriodoConfigurable(sistemaPeriodos, i)}</th>
-              ))}
+              <th style={{ border: "1px solid #000", padding: 3, textAlign: "left" }}>Asignatura</th>
+              <th style={{ border: "1px solid #000", padding: 3, width: 80 }}>Aprobó</th>
+              <th style={{ border: "1px solid #000", padding: 3, width: 80 }}>No aprobó</th>
             </tr>
           </thead>
           <tbody>
             {MATERIAS_PLAN_ESTUDIOS.map((m) => (
               <tr key={m}>
-                <td style={{ border: "1px solid #000", padding: 5 }}>{m}</td>
-                {periodosLista.map((i) => (
-                  <td key={i} style={{ border: "1px solid #000", padding: 5, height: 22 }}></td>
-                ))}
+                <td style={{ border: "1px solid #000", padding: 3 }}>{m}</td>
+                <td style={{ border: "1px solid #000", padding: 3, textAlign: "center" }}>( &nbsp; )</td>
+                <td style={{ border: "1px solid #000", padding: 3, textAlign: "center" }}>( &nbsp; )</td>
               </tr>
             ))}
           </tbody>
         </table>
+      </div>
 
-        {periodosLista.map((i) => (
-          <div key={i} style={{ pageBreakInside: "avoid", marginBottom: 18, border: "1px solid #000", padding: 8 }}>
-            <div style={{ fontWeight: "bold", marginBottom: 6 }}>{etiquetaPeriodoConfigurable(sistemaPeriodos, i)}</div>
-            <div style={{ fontSize: 9.5, fontWeight: "bold", marginBottom: 2 }}>Observaciones académicas:</div>
-            <div style={{ borderBottom: "1px solid #999", height: 16 }}></div>
-            <div style={{ borderBottom: "1px solid #999", height: 16 }}></div>
-            <div style={{ fontSize: 9.5, fontWeight: "bold", marginTop: 6, marginBottom: 2 }}>Observaciones convivenciales:</div>
-            <div style={{ borderBottom: "1px solid #999", height: 16 }}></div>
-            <div style={{ borderBottom: "1px solid #999", height: 16 }}></div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 20 }}>
-              <div style={{ borderTop: "1px solid #000", width: "30%", textAlign: "center", fontSize: 9, paddingTop: 2 }}>Firma Padre de Familia</div>
-              <div style={{ borderTop: "1px solid #000", width: "30%", textAlign: "center", fontSize: 9, paddingTop: 2 }}>Firma Estudiante</div>
-              <div style={{ borderTop: "1px solid #000", width: "30%", textAlign: "center", fontSize: 9, paddingTop: 2 }}>Firma Director de Curso</div>
-            </div>
-          </div>
-        ))}
-
-        <div style={{ pageBreakInside: "avoid" }}>
-          <div style={{ fontWeight: "bold", marginBottom: 6, marginTop: 10 }}>ESPACIO PARA NIVELACIONES</div>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                <th style={{ border: "1px solid #000", padding: 5, textAlign: "left" }}>Asignatura</th>
-                <th style={{ border: "1px solid #000", padding: 5, width: 90 }}>Aprobó</th>
-                <th style={{ border: "1px solid #000", padding: 5, width: 90 }}>No aprobó</th>
-              </tr>
-            </thead>
-            <tbody>
-              {MATERIAS_PLAN_ESTUDIOS.map((m) => (
-                <tr key={m}>
-                  <td style={{ border: "1px solid #000", padding: 5 }}>{m}</td>
-                  <td style={{ border: "1px solid #000", padding: 5, textAlign: "center" }}>( &nbsp; )</td>
-                  <td style={{ border: "1px solid #000", padding: 5, textAlign: "center" }}>( &nbsp; )</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <div style={{ fontSize: 8, borderTop: "1px solid #999", paddingTop: 4, marginTop: 10, color: "#333" }}>
+        Este documento tiene fines formativos y de seguimiento integral, en el marco del debido proceso establecido en el Manual de Convivencia y la Ley 1620 de 2013.
       </div>
     </div>
   );
@@ -376,4 +369,4 @@ export function ObservadorModal({ estudiante, onClose }) {
       {imprimiendo && <ObservadorPrintView datos={datos} sistemaPeriodos={sistemaPeriodos} onCerrado={() => setImprimiendo(false)} />}
     </div>
   );
-} 
+}
