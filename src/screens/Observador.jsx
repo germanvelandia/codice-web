@@ -171,8 +171,8 @@ function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre" }) {
         </tbody>
       </table>
 
-      {/* Observaciones + firmas, una sola tabla con una fila por periodo */}
-      <div style={{ fontWeight: "bold", marginBottom: 4 }}>4. OBSERVACIONES Y FIRMAS POR {infoSistema.nombre.toUpperCase()}</div>
+      {/* Observaciones + firmas, una sola tabla con una fila por periodo — en página nueva */}
+      <div style={{ fontWeight: "bold", marginBottom: 4, pageBreakBefore: "always", paddingTop: 6 }}>4. OBSERVACIONES Y FIRMAS POR {infoSistema.nombre.toUpperCase()}</div>
       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 12, fontSize: 9 }}>
         <thead>
           <tr>
@@ -219,6 +219,13 @@ function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre" }) {
             ))}
           </tbody>
         </table>
+      </div>
+
+      <div style={{ fontWeight: "bold", marginBottom: 8, marginTop: 24 }}>FIRMAS DE CIERRE</div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 30 }}>
+        <div style={{ borderTop: "1px solid #000", width: "30%", textAlign: "center", paddingTop: 4 }}>Firma Director(a) de Curso</div>
+        <div style={{ borderTop: "1px solid #000", width: "30%", textAlign: "center", paddingTop: 4 }}>Firma Coordinación Académica</div>
+        <div style={{ borderTop: "1px solid #000", width: "30%", textAlign: "center", paddingTop: 4 }}>Firma Coordinación Convivencial</div>
       </div>
 
       <div style={{ fontSize: 8, borderTop: "1px solid #999", paddingTop: 4, marginTop: 10, color: "#333" }}>
