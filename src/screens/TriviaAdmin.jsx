@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import * as api from "../lib/api";
+import { agruparPorNivel } from "../lib/gamification";
 
 const COLORES_CATEGORIA = ["#0EA5E9", "#22C55E", "#EC4899", "#F59E0B", "#8B5CF6", "#EF4444", "#14B8A6", "#6366F1"];
 
@@ -95,7 +96,7 @@ function PreguntaForm({ categoriaId, pregunta, onCancelar, onGuardada }) {
   );
 }
 
-function PreguntasDeCategoria({ categoria, onVolver }) {
+function PreguntasDeCategoria({ categoria, grados, onVolver }) {
   const [preguntas, setPreguntas] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [formAbierto, setFormAbierto] = useState(false);
@@ -103,18 +104,20 @@ function PreguntasDeCategoria({ categoria, onVolver }) {
   const [importarBancoAbierto, setImportarBancoAbierto] = useState(false);
   const [temasBanco, setTemasBanco] = useState([]);
   const [temaElegido, setTemaElegido] = useState("");
+  const [nivelElegido, setNivelElegido] = useState("");
   const [importandoBanco, setImportandoBanco] = useState(false);
+  const niveles = agruparPorNivel(grados || []);
 
   const cargar = () => { setCargando(true); api.fetchTriviaPreguntas(categoria.id).then((d) => { setPreguntas(d); setCargando(false); }); };
   useEffect(() => { cargar(); }, [categoria.id]);
-  useEffect(() => { if (categoria.materia_id) api.fetchTemasBanco(categoria.materia_id).then(setTemasBanco); }, [categoria.materia_id]);
+  useEffect(() => { if (categoria.materia_id) api.fetchTemasBanco(categoria.materia_id, nivelElegido || null).then(setTemasBanco); }, [categoria.materia_id, nivelElegido]);
 
   const eliminar = async (p) => { if (!confirm("¿Eliminar esta pregunta?")) return; await api.eliminarTriviaPregunta(p.id); cargar(); };
 
   const importarDelBanco = async () => {
     setImportandoBanco(true);
     try {
-      const r = await api.importarBancoATrivia(categoria.id, categoria.materia_id, temaElegido || null);
+      const r = await api.importarBancoATrivia(categoria.id, categoria.materia_id, temaElegido || null, nivelElegido || null);
       alert(`Se importaron ${r.importadas} pregunta(s) nueva(s) del banco (de ${r.total} revisadas — las repetidas se saltan solas).`);
       setImportarBancoAbierto(false);
       cargar();
@@ -134,6 +137,10 @@ function PreguntasDeCategoria({ categoria, onVolver }) {
         importarBancoAbierto ? (
           <div className="bg-amber-50 rounded-xl p-3 mb-3">
             <p className="text-[11px] text-amber-700 mb-2">Trae las preguntas del banco de "{categoria.materia_nombre}" hacia esta categoría (no duplica las que ya estén).</p>
+            <select value={nivelElegido} onChange={(e) => { setNivelElegido(e.target.value); setTemaElegido(""); }} className="w-full text-xs rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none bg-white">
+              <option value="">Todos los grados</option>
+              {niveles.map((n) => <option key={n.nivel} value={n.nivel}>Grado {n.nivel}°</option>)}
+            </select>
             <select value={temaElegido} onChange={(e) => setTemaElegido(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none bg-white">
               <option value="">Todos los temas</option>
               {temasBanco.map((t) => <option key={t} value={t}>{t}</option>)}
@@ -188,7 +195,7 @@ function PreguntasDeCategoria({ categoria, onVolver }) {
   );
 }
 
-export function VistaTriviaAdmin() {
+export function VistaTriviaAdmin({ grados }) {
   const [categorias, setCategorias] = useState([]);
   const [materias, setMaterias] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -202,7 +209,7 @@ export function VistaTriviaAdmin() {
   const eliminar = async (c) => { if (!confirm(`¿Eliminar la categoría "${c.nombre}"? También se borran sus preguntas.`)) return; await api.eliminarTriviaCategoria(c.id); cargar(); };
 
   if (categoriaAbierta) {
-    return <PreguntasDeCategoria categoria={categoriaAbierta} onVolver={() => { setCategoriaAbierta(null); cargar(); }} />;
+    return <PreguntasDeCategoria categoria={categoriaAbierta} grados={grados} onVolver={() => { setCategoriaAbierta(null); cargar(); }} />;
   }
 
   return (
