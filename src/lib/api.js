@@ -795,10 +795,10 @@ export async function crearPregunta(campos) {
 
 // Crea la pregunta en la evaluación, y opcionalmente una copia en el banco
 // de preguntas, para que quede disponible también para otras evaluaciones.
-export async function crearPreguntaConBanco(campos, guardarEnBanco, materiaId, tema) {
+export async function crearPreguntaConBanco(campos, guardarEnBanco, materiaId, tema, nivel) {
   await crearPregunta(campos);
   if (guardarEnBanco && materiaId && campos.tipo !== "respuesta_corta") {
-    await crearPreguntaBanco({ materia_id: materiaId, tema: tema || null, enunciado: campos.enunciado, opciones: campos.opciones });
+    await crearPreguntaBanco({ materia_id: materiaId, nivel: nivel || null, tema: tema || null, enunciado: campos.enunciado, opciones: campos.opciones });
   }
 }
 
@@ -2505,18 +2505,28 @@ export async function fetchRankingCoronas(gradoId) {
 }
 
 /* ---------------- 🗂️ Banco de preguntas (reutilizable en Misiones) ---------------- */
-export async function fetchBancoPreguntas(materiaId, tema) {
+export async function fetchBancoPreguntas(materiaId, tema, nivel) {
   let query = supabase.from("banco_preguntas").select("*").order("creado_en", { ascending: false });
   if (materiaId) query = query.eq("materia_id", materiaId);
   if (tema) query = query.eq("tema", tema);
+  if (nivel) query = query.eq("nivel", nivel);
   const { data, error } = await query;
   if (error) throw error;
   return data || [];
 }
 
-export async function fetchTemasBanco(materiaId) {
+export async function fetchNivelesBanco(materiaId) {
+  let query = supabase.from("banco_preguntas").select("nivel");
+  if (materiaId) query = query.eq("materia_id", materiaId);
+  const { data, error } = await query;
+  if (error) throw error;
+  return Array.from(new Set((data || []).map((r) => r.nivel).filter(Boolean))).sort();
+}
+
+export async function fetchTemasBanco(materiaId, nivel) {
   let query = supabase.from("banco_preguntas").select("tema");
   if (materiaId) query = query.eq("materia_id", materiaId);
+  if (nivel) query = query.eq("nivel", nivel);
   const { data, error } = await query;
   if (error) throw error;
   return Array.from(new Set((data || []).map((r) => r.tema).filter(Boolean))).sort();
@@ -2540,7 +2550,7 @@ export async function eliminarPreguntaBanco(id) {
 
 // Importación masiva desde Excel — filas ya parseadas en JS, cada una con
 // { enunciado, opcionA..D, correcta (A/B/C/D), tema }.
-export async function importarPreguntasBanco(materiaId, filas) {
+export async function importarPreguntasBanco(materiaId, filas, nivel) {
   let cargadas = 0;
   const errores = [];
   for (const f of filas) {
@@ -2552,7 +2562,7 @@ export async function importarPreguntasBanco(materiaId, filas) {
         { texto: f.opcionD, correcta: f.correcta === "D" },
       ].filter((o) => o.texto && o.texto.trim());
       if (opciones.length < 2 || !opciones.some((o) => o.correcta)) { errores.push(`"${f.enunciado?.slice(0, 40)}...": faltan opciones o respuesta correcta`); continue; }
-      await crearPreguntaBanco({ materia_id: materiaId, tema: f.tema || null, enunciado: f.enunciado, opciones, dificultad: f.dificultad || null });
+      await crearPreguntaBanco({ materia_id: materiaId, nivel: f.nivel || nivel || null, tema: f.tema || null, enunciado: f.enunciado, opciones, dificultad: f.dificultad || null });
       cargadas++;
     } catch (e) {
       errores.push(`"${f.enunciado?.slice(0, 40)}...": ${e.message}`);
@@ -2563,8 +2573,8 @@ export async function importarPreguntasBanco(materiaId, filas) {
 
 // Elige N preguntas al azar del banco (con el filtro de materia/tema que se
 // pida) y las crea como preguntas reales de la evaluación indicada.
-export async function agregarPreguntasAleatoriasDesdeBanco(evaluacionId, materiaId, tema, cantidad, ordenInicial) {
-  const disponibles = await fetchBancoPreguntas(materiaId, tema || null);
+export async function agregarPreguntasAleatoriasDesdeBanco(evaluacionId, materiaId, tema, nivel, cantidad, ordenInicial) {
+  const disponibles = await fetchBancoPreguntas(materiaId, tema || null, nivel || null);
   if (disponibles.length === 0) return { agregadas: 0, disponibles: 0 };
   const mezcladas = [...disponibles].sort(() => Math.random() - 0.5);
   const elegidas = mezcladas.slice(0, cantidad);
@@ -2578,9 +2588,9 @@ export async function agregarPreguntasAleatoriasDesdeBanco(evaluacionId, materia
 // Copia preguntas del banco (de la materia ligada a la categoría) hacia
 // Preguntados, convirtiendo el formato — así el mismo banco alimenta las
 // evaluaciones Y el juego. No duplica: salta las que ya tengan el mismo enunciado.
-export async function importarBancoATrivia(categoriaId, materiaId, tema) {
+export async function importarBancoATrivia(categoriaId, materiaId, tema, nivel) {
   const [banco, existentes] = await Promise.all([
-    fetchBancoPreguntas(materiaId, tema || null),
+    fetchBancoPreguntas(materiaId, tema || null, nivel || null),
     fetchTriviaPreguntas(categoriaId),
   ]);
   const enunciadosExistentes = new Set(existentes.map((p) => p.pregunta.trim().toLowerCase()));
