@@ -10,8 +10,8 @@ function ImportarExcelModal({ materiaId, niveles, onClose, onImportado }) {
 
   const descargarPlantilla = () => {
     const filas = [
-      ["Grado (opcional, si no lo pones se usa el elegido abajo)", "Tema", "Enunciado", "Opción A", "Opción B", "Opción C", "Opción D", "Correcta (A/B/C/D)", "Dificultad (facil/media/dificil)"],
-      ["8", "Álgebra", "¿Cuál es el resultado de 2x + 3 = 7?", "x=1", "x=2", "x=3", "x=4", "B", "facil"],
+      ["Grado (opcional, si no lo pones se usa el elegido abajo)", "Tema", "Enunciado", "Opción A", "Opción B", "Opción C", "Opción D", "Correcta (A/B/C/D)", "Dificultad (facil/media/dificil)", "Retroalimentación (opcional)"],
+      ["8", "Álgebra", "¿Cuál es el resultado de 2x + 3 = 7?", "x=1", "x=2", "x=3", "x=4", "B", "facil", "Se despeja x restando 3 y dividiendo entre 2: (7-3)/2 = 2"],
     ];
     const hoja = XLSX.utils.aoa_to_sheet(filas);
     hoja["!cols"] = filas[0].map(() => ({ wch: 22 }));
@@ -38,6 +38,7 @@ function ImportarExcelModal({ materiaId, niveles, onClose, onImportado }) {
           opcionD: (f["Opción D"] || f["Opcion D"] || "").toString().trim(),
           correcta: (f["Correcta (A/B/C/D)"] || f["Correcta"] || "").toString().trim().toUpperCase(),
           dificultad: (f["Dificultad (facil/media/dificil)"] || f["Dificultad"] || "").toString().trim().toLowerCase() || null,
+          retroalimentacion: (f["Retroalimentación (opcional)"] || f["Retroalimentacion"] || "").toString().trim() || null,
         })).filter((f) => f.enunciado);
 
         if (normalizadas.length === 0) { alert("No se encontraron filas con enunciado. Revisá que uses la plantilla."); setProcesando(false); return; }
@@ -106,6 +107,7 @@ function PreguntaBancoForm({ materiaId, niveles, pregunta, onCancelar, onGuardad
   const [opciones, setOpciones] = useState(pregunta?.opciones?.map((o) => o.texto) || ["", "", "", ""]);
   const [correcta, setCorrecta] = useState(pregunta ? pregunta.opciones.findIndex((o) => o.correcta) : 0);
   const [dificultad, setDificultad] = useState(pregunta?.dificultad || "");
+  const [retroalimentacion, setRetroalimentacion] = useState(pregunta?.retroalimentacion || "");
   const [guardando, setGuardando] = useState(false);
 
   const cambiarOpcion = (i, v) => setOpciones((prev) => prev.map((o, idx) => idx === i ? v : o));
@@ -118,7 +120,7 @@ function PreguntaBancoForm({ materiaId, niveles, pregunta, onCancelar, onGuardad
       const campos = {
         nivel: nivel || null, tema: tema.trim() || null, enunciado: enunciado.trim(), dificultad: dificultad || null,
         opciones: opciones.map((texto, i) => ({ texto: texto.trim(), correcta: i === correcta })).filter((o) => o.texto),
-        materia_id: materiaId,
+        materia_id: materiaId, retroalimentacion: retroalimentacion.trim() || null,
       };
       if (pregunta) await api.editarPreguntaBanco(pregunta.id, campos);
       else await api.crearPreguntaBanco(campos);
@@ -153,6 +155,9 @@ function PreguntaBancoForm({ materiaId, niveles, pregunta, onCancelar, onGuardad
             className="flex-1 text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none bg-white" />
         </div>
       ))}
+      <label className="text-xs text-slate-500 block mb-1 mt-1">Retroalimentación (opcional — explicación de por qué es esa la respuesta)</label>
+      <textarea value={retroalimentacion} onChange={(e) => setRetroalimentacion(e.target.value)} rows={2} placeholder="Ej: La respuesta es B porque…"
+        className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
       <div className="flex justify-end gap-2 mt-2">
         <button onClick={onCancelar} className="text-xs text-slate-500 px-3 py-1.5">Cancelar</button>
         <button disabled={guardando} onClick={guardar} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
@@ -256,6 +261,9 @@ export function VistaBancoPreguntas({ grados = [] }) {
                     </span>
                   ))}
                 </div>
+                {p.retroalimentacion && (
+                  <p className="text-[11px] text-slate-400 mt-2 italic">💡 {p.retroalimentacion}</p>
+                )}
               </div>
             ))}
           </div>
