@@ -16,6 +16,9 @@ export function VistaReportes({ grados }) {
   const [configsPorMateria, setConfigsPorMateria] = useState({});
   const [actaEstudiante, setActaEstudiante] = useState(null);
   const [generandoActas, setGenerandoActas] = useState(false);
+  const [vistaActiva, setVistaActiva] = useState("notas"); // "notas" | "accesos"
+  const [accesos, setAccesos] = useState([]);
+  const [cargandoAccesos, setCargandoAccesos] = useState(false);
 
   useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
   useEffect(() => {
@@ -25,6 +28,25 @@ export function VistaReportes({ grados }) {
       setEstudianteId(data[0]?.id || null);
     });
   }, [gradoId]);
+
+  useEffect(() => {
+    if (!gradoId || vistaActiva !== "accesos") return;
+    setCargandoAccesos(true);
+    api.fetchReporteAccesos(gradoId).then((d) => { setAccesos(d); setCargandoAccesos(false); });
+  }, [gradoId, vistaActiva]);
+
+  const exportarAccesosExcel = () => {
+    const filas = accesos.map((e) => ({
+      Estudiante: e.nombre,
+      "Total de accesos": e.totalAccesos,
+      "Último acceso": e.ultimoAcceso ? new Date(e.ultimoAcceso).toLocaleString("es-CO") : "Nunca entró",
+    }));
+    const hoja = XLSX.utils.json_to_sheet(filas);
+    hoja["!cols"] = [{ wch: 30 }, { wch: 16 }, { wch: 22 }];
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, "Accesos");
+    XLSX.writeFile(libro, `accesos_curso_${gradoId}.xlsx`);
+  };
 
   const cargarTransversal = async () => {
     if (!gradoId) return;
@@ -181,6 +203,62 @@ export function VistaReportes({ grados }) {
       <h2 className="text-xl font-bold text-slate-800 mb-1">Reportes</h2>
       <p className="text-sm text-slate-400 mb-4">Exporta los resultados a Excel — por grado completo o por estudiante.</p>
 
+      <div className="flex gap-1 rounded-full bg-slate-100 p-1 w-fit mb-4">
+        <button onClick={() => setVistaActiva("notas")} className={`text-xs px-3 py-1.5 rounded-full ${vistaActiva === "notas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📊 Notas</button>
+        <button onClick={() => setVistaActiva("accesos")} className={`text-xs px-3 py-1.5 rounded-full ${vistaActiva === "accesos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🔑 Accesos a la plataforma</button>
+      </div>
+
+      {vistaActiva === "accesos" ? (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-4">
+          <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+            <div>
+              <div className="font-semibold text-slate-700">Quiénes entraron a CÓDICE</div>
+              <p className="text-xs text-slate-400">Cada vez que un estudiante entra con su código, queda registrado acá.</p>
+            </div>
+            <div className="flex gap-2 items-center">
+              <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none">
+                {grados.map((g) => <option key={g.id} value={g.id}>Grado {g.id}</option>)}
+              </select>
+              <button disabled={accesos.length === 0} onClick={exportarAccesosExcel} className="text-sm font-semibold px-4 py-2 rounded-full bg-violet-500 text-white disabled:opacity-60">
+                📊 Exportar Excel
+              </button>
+            </div>
+          </div>
+
+          {cargandoAccesos ? (
+            <div className="text-sm text-slate-400">Cargando…</div>
+          ) : (
+            <>
+              <p className="text-xs text-slate-400 mb-2">
+                {accesos.filter((e) => e.totalAccesos > 0).length} de {accesos.length} estudiante(s) entraron alguna vez.
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-slate-50">
+                      <th className="text-left px-3 py-2">Estudiante</th>
+                      <th className="px-3 py-2">Total de accesos</th>
+                      <th className="text-left px-3 py-2">Último acceso</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {accesos.map((e) => (
+                      <tr key={e.id} className={`border-t border-slate-100 ${e.totalAccesos === 0 ? "bg-rose-50/50" : ""}`}>
+                        <td className="px-3 py-2">{e.nombre}</td>
+                        <td className="text-center px-3 py-2">{e.totalAccesos}</td>
+                        <td className="px-3 py-2">
+                          {e.ultimoAcceso ? new Date(e.ultimoAcceso).toLocaleString("es-CO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : <span className="text-rose-500 font-semibold">Nunca entró</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      ) : (
+      <>
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-4">
         <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
           <div>
@@ -276,6 +354,8 @@ export function VistaReportes({ grados }) {
         </div>
         <p className="text-xs text-slate-400 mt-2">Incluye 4 hojas: Resumen (gamificación), Asistencia por materia (resumen), Asistencia detallada (fecha, materia y tipo) y Actas de seguimiento.</p>
       </div>
+      </>
+      )}
 
       {actaEstudiante && <ActasModal estudiante={actaEstudiante} onClose={() => setActaEstudiante(null)} />}
     </div>
