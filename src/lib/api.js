@@ -2548,6 +2548,22 @@ export async function eliminarPreguntaBanco(id) {
   if (error) throw error;
 }
 
+export async function eliminarPreguntasBancoMasivo(ids) {
+  const { error } = await supabase.from("banco_preguntas").delete().in("id", ids);
+  if (error) throw error;
+}
+
+// Traslada preguntas seleccionadas a otra materia/grado/tema de una sola vez —
+// solo cambia los campos que se le pasen (los que se dejan undefined no se tocan).
+export async function trasladarPreguntasBanco(ids, cambios) {
+  const set = {};
+  if (cambios.materia_id !== undefined) set.materia_id = cambios.materia_id;
+  if (cambios.nivel !== undefined) set.nivel = cambios.nivel;
+  if (cambios.tema !== undefined) set.tema = cambios.tema;
+  const { error } = await supabase.from("banco_preguntas").update(set).in("id", ids);
+  if (error) throw error;
+}
+
 // Importación masiva desde Excel — filas ya parseadas en JS, cada una con
 // { enunciado, opcionA..D, correcta (A/B/C/D), tema }.
 export async function importarPreguntasBanco(materiaId, filas, nivel) {
