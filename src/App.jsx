@@ -2063,8 +2063,8 @@ function Panel({ session }) {
             {subTabHerramientas === "salonhonor" && <VistaSalonHonor />}
             {subTabHerramientas === "gamext" && <VistaGamificacionExtra grados={grados} />}
             {subTabHerramientas === "consignas" && <VistaConsignasCodice grados={grados} />}
-            {subTabHerramientas === "trivia" && <VistaTriviaAdmin />}
-            {subTabHerramientas === "bancopreguntas" && <VistaBancoPreguntas />}
+            {subTabHerramientas === "trivia" && <VistaTriviaAdmin grados={grados} />}
+            {subTabHerramientas === "bancopreguntas" && <VistaBancoPreguntas grados={grados} />}
             {subTabHerramientas === "temporizador" && <VistaTemporizador />}
             {subTabHerramientas === "otras" && <VistaHerramientas grados={grados} />}
           </>
