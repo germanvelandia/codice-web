@@ -1628,6 +1628,7 @@ function PortalEstudiante() {
         const info = await api.fetchEstudiantePorCodigo(codigo);
         setEstudianteInfo(info);
         if (info) {
+          api.registrarAcceso(info.id);
           api.verificarYOtorgarLogros(info.id).then((nuevos) => { if (nuevos.length > 0) setNuevosLogros(nuevos); });
           api.fetchEquipadosEstudiante(info.id).then(setEquipados);
         }
