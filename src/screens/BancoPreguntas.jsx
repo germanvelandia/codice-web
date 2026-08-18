@@ -1,15 +1,17 @@
 import React, { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
 import * as api from "../lib/api";
+import { agruparPorNivel } from "../lib/gamification";
 
-function ImportarExcelModal({ materiaId, onClose, onImportado }) {
+function ImportarExcelModal({ materiaId, niveles, onClose, onImportado }) {
+  const [nivelPorDefecto, setNivelPorDefecto] = useState("");
   const [procesando, setProcesando] = useState(false);
   const [resultado, setResultado] = useState(null);
 
   const descargarPlantilla = () => {
     const filas = [
-      ["Tema", "Enunciado", "Opción A", "Opción B", "Opción C", "Opción D", "Correcta (A/B/C/D)", "Dificultad (facil/media/dificil)"],
-      ["Álgebra", "¿Cuál es el resultado de 2x + 3 = 7?", "x=1", "x=2", "x=3", "x=4", "B", "facil"],
+      ["Grado (opcional, si no lo pones se usa el elegido abajo)", "Tema", "Enunciado", "Opción A", "Opción B", "Opción C", "Opción D", "Correcta (A/B/C/D)", "Dificultad (facil/media/dificil)"],
+      ["8", "Álgebra", "¿Cuál es el resultado de 2x + 3 = 7?", "x=1", "x=2", "x=3", "x=4", "B", "facil"],
     ];
     const hoja = XLSX.utils.aoa_to_sheet(filas);
     hoja["!cols"] = filas[0].map(() => ({ wch: 22 }));
@@ -27,6 +29,7 @@ function ImportarExcelModal({ materiaId, onClose, onImportado }) {
         const hoja = wb.Sheets[wb.SheetNames[0]];
         const filas = XLSX.utils.sheet_to_json(hoja, { defval: "" });
         const normalizadas = filas.map((f) => ({
+          nivel: (f["Grado (opcional, si no lo pones se usa el elegido abajo)"] || f["Grado"] || "").toString().trim(),
           tema: (f["Tema"] || "").toString().trim(),
           enunciado: (f["Enunciado"] || "").toString().trim(),
           opcionA: (f["Opción A"] || f["Opcion A"] || "").toString().trim(),
@@ -39,7 +42,7 @@ function ImportarExcelModal({ materiaId, onClose, onImportado }) {
 
         if (normalizadas.length === 0) { alert("No se encontraron filas con enunciado. Revisá que uses la plantilla."); setProcesando(false); return; }
 
-        const r = await api.importarPreguntasBanco(materiaId, normalizadas);
+        const r = await api.importarPreguntasBanco(materiaId, normalizadas, nivelPorDefecto || null);
         setResultado(r);
         onImportado();
       } catch (err) {
@@ -76,7 +79,13 @@ function ImportarExcelModal({ materiaId, onClose, onImportado }) {
           <>
             <p className="text-xs text-slate-500 mb-3">
               Descargá la plantilla, completá una fila por pregunta (tema, enunciado, las 4 opciones, y cuál es la correcta), y subila.
+              Si todas las preguntas del archivo son del mismo grado, elegilo acá abajo — así no hace falta ponerlo fila por fila.
             </p>
+            <label className="text-xs text-slate-500 block mb-1">Grado por defecto (opcional)</label>
+            <select value={nivelPorDefecto} onChange={(e) => setNivelPorDefecto(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none">
+              <option value="">Sin grado específico</option>
+              {niveles.map((n) => <option key={n.nivel} value={n.nivel}>Grado {n.nivel}°</option>)}
+            </select>
             <button onClick={descargarPlantilla} className="w-full text-sm font-semibold py-2.5 rounded-lg border border-violet-200 text-violet-600 mb-3">
               📄 Descargar plantilla
             </button>
@@ -90,7 +99,8 @@ function ImportarExcelModal({ materiaId, onClose, onImportado }) {
   );
 }
 
-function PreguntaBancoForm({ materiaId, pregunta, onCancelar, onGuardada }) {
+function PreguntaBancoForm({ materiaId, niveles, pregunta, onCancelar, onGuardada }) {
+  const [nivel, setNivel] = useState(pregunta?.nivel || "");
   const [tema, setTema] = useState(pregunta?.tema || "");
   const [enunciado, setEnunciado] = useState(pregunta?.enunciado || "");
   const [opciones, setOpciones] = useState(pregunta?.opciones?.map((o) => o.texto) || ["", "", "", ""]);
@@ -106,7 +116,7 @@ function PreguntaBancoForm({ materiaId, pregunta, onCancelar, onGuardada }) {
     setGuardando(true);
     try {
       const campos = {
-        tema: tema.trim() || null, enunciado: enunciado.trim(), dificultad: dificultad || null,
+        nivel: nivel || null, tema: tema.trim() || null, enunciado: enunciado.trim(), dificultad: dificultad || null,
         opciones: opciones.map((texto, i) => ({ texto: texto.trim(), correcta: i === correcta })).filter((o) => o.texto),
         materia_id: materiaId,
       };
@@ -121,10 +131,14 @@ function PreguntaBancoForm({ materiaId, pregunta, onCancelar, onGuardada }) {
 
   return (
     <div className="bg-violet-50 rounded-xl p-3 mb-3">
-      <div className="grid grid-cols-2 gap-2 mb-2">
+      <div className="grid grid-cols-3 gap-2 mb-2">
+        <select value={nivel} onChange={(e) => setNivel(e.target.value)} className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white">
+          <option value="">Sin grado</option>
+          {niveles.map((n) => <option key={n.nivel} value={n.nivel}>Grado {n.nivel}°</option>)}
+        </select>
         <input value={tema} onChange={(e) => setTema(e.target.value)} placeholder="Tema (ej: Álgebra)" className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
         <select value={dificultad} onChange={(e) => setDificultad(e.target.value)} className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white">
-          <option value="">Dificultad (opcional)</option>
+          <option value="">Dificultad</option>
           <option value="facil">Fácil</option>
           <option value="media">Media</option>
           <option value="dificil">Difícil</option>
@@ -149,7 +163,7 @@ function PreguntaBancoForm({ materiaId, pregunta, onCancelar, onGuardada }) {
   );
 }
 
-export function VistaBancoPreguntas() {
+export function VistaBancoPreguntas({ grados = [] }) {
   const [materias, setMaterias] = useState([]);
   const [materiaId, setMateriaId] = useState("");
   const [preguntas, setPreguntas] = useState([]);
@@ -158,6 +172,8 @@ export function VistaBancoPreguntas() {
   const [editando, setEditando] = useState(null);
   const [importarAbierto, setImportarAbierto] = useState(false);
   const [filtroTema, setFiltroTema] = useState("");
+  const [filtroNivel, setFiltroNivel] = useState("");
+  const niveles = agruparPorNivel(grados);
 
   useEffect(() => {
     api.fetchMaterias().then((ms) => { setMaterias(ms); if (ms[0]) setMateriaId(ms[0].id); });
@@ -166,9 +182,9 @@ export function VistaBancoPreguntas() {
   const cargar = () => {
     if (!materiaId) return;
     setCargando(true);
-    api.fetchBancoPreguntas(materiaId).then((d) => { setPreguntas(d); setCargando(false); });
+    api.fetchBancoPreguntas(materiaId, null, filtroNivel || null).then((d) => { setPreguntas(d); setCargando(false); });
   };
-  useEffect(() => { cargar(); }, [materiaId]);
+  useEffect(() => { cargar(); }, [materiaId, filtroNivel]);
 
   const eliminar = async (p) => { if (!confirm("¿Eliminar esta pregunta del banco?")) return; await api.eliminarPreguntaBanco(p.id); cargar(); };
 
@@ -183,13 +199,17 @@ export function VistaBancoPreguntas() {
     <div>
       <h3 className="font-bold text-slate-800 mb-1">🗂️ Banco de preguntas</h3>
       <p className="text-xs text-slate-400 mb-3">
-        Cargá muchas preguntas tipo ICFES por materia. Después, al crear una Misión, podés pedir "N preguntas al azar de este banco"
-        en vez de escribirlas una por una.
+        Cargá muchas preguntas tipo ICFES por materia y grado, para no mezclar los temas entre cursos. Después, al crear una Misión,
+        podés pedir "N preguntas al azar de este banco" en vez de escribirlas una por una.
       </p>
 
       <div className="flex flex-wrap gap-2 mb-3">
         <select value={materiaId} onChange={(e) => setMateriaId(parseInt(e.target.value, 10))} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
           {materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+        </select>
+        <select value={filtroNivel} onChange={(e) => setFiltroNivel(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
+          <option value="">Todos los grados</option>
+          {niveles.map((n) => <option key={n.nivel} value={n.nivel}>Grado {n.nivel}°</option>)}
         </select>
         {temas.length > 0 && (
           <select value={filtroTema} onChange={(e) => setFiltroTema(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
@@ -204,13 +224,13 @@ export function VistaBancoPreguntas() {
       </div>
 
       {formAbierto && (
-        <PreguntaBancoForm materiaId={materiaId} pregunta={editando} onCancelar={() => { setFormAbierto(false); setEditando(null); }} onGuardada={() => { setFormAbierto(false); setEditando(null); cargar(); }} />
+        <PreguntaBancoForm materiaId={materiaId} niveles={niveles} pregunta={editando} onCancelar={() => { setFormAbierto(false); setEditando(null); }} onGuardada={() => { setFormAbierto(false); setEditando(null); cargar(); }} />
       )}
 
       {cargando ? (
         <div className="text-sm text-slate-400">Cargando…</div>
       ) : visibles.length === 0 ? (
-        <p className="text-sm text-slate-400 text-center py-6">Todavía no hay preguntas en esta materia.</p>
+        <p className="text-sm text-slate-400 text-center py-6">Todavía no hay preguntas acá — probá cambiar el grado o el tema del filtro.</p>
       ) : (
         <>
           <p className="text-xs text-slate-400 mb-2">{visibles.length} pregunta(s)</p>
@@ -219,6 +239,7 @@ export function VistaBancoPreguntas() {
               <div key={p.id} className="bg-white rounded-xl border border-slate-100 p-3">
                 <div className="flex justify-between items-start gap-2">
                   <div>
+                    {p.nivel && <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 mr-1.5">Grado {p.nivel}°</span>}
                     {p.tema && <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-50 text-violet-600 mr-1.5">{p.tema}</span>}
                     {p.dificultad && <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{p.dificultad}</span>}
                     <p className="text-sm text-slate-700 mt-1">{p.enunciado}</p>
@@ -241,7 +262,7 @@ export function VistaBancoPreguntas() {
         </>
       )}
 
-      {importarAbierto && <ImportarExcelModal materiaId={materiaId} onClose={() => setImportarAbierto(false)} onImportado={cargar} />}
+      {importarAbierto && <ImportarExcelModal materiaId={materiaId} niveles={niveles} onClose={() => setImportarAbierto(false)} onImportado={cargar} />}
     </div>
   );
 }
