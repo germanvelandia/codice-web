@@ -2627,6 +2627,43 @@ export async function importarBancoATrivia(categoriaId, materiaId, tema, nivel) 
   return { importadas, total: banco.length };
 }
 
+/* ---------------- 🔑 Registro de accesos de estudiantes ---------------- */
+// Se llama cada vez que un estudiante entra con su código. No frena el
+// login si falla — es solo un registro, no algo crítico para poder entrar.
+export async function registrarAcceso(estudianteId) {
+  try {
+    await supabase.from("accesos_estudiante").insert({ estudiante_id: estudianteId });
+  } catch (e) {
+    // silencioso — nunca debe bloquear el ingreso del estudiante
+  }
+}
+
+// Reporte por curso: último acceso y cantidad total de cada estudiante.
+export async function fetchReporteAccesos(gradoId) {
+  const [estudiantes, accesosRes] = await Promise.all([
+    fetchEstudiantesPorGrado(gradoId),
+    supabase.from("accesos_estudiante").select("estudiante_id, fecha"),
+  ]);
+  const porEstudiante = {};
+  (accesosRes.data || []).forEach((a) => {
+    if (!porEstudiante[a.estudiante_id]) porEstudiante[a.estudiante_id] = { total: 0, ultimo: null };
+    porEstudiante[a.estudiante_id].total++;
+    if (!porEstudiante[a.estudiante_id].ultimo || a.fecha > porEstudiante[a.estudiante_id].ultimo) {
+      porEstudiante[a.estudiante_id].ultimo = a.fecha;
+    }
+  });
+  return estudiantes.map((e) => ({
+    ...e,
+    totalAccesos: porEstudiante[e.id]?.total || 0,
+    ultimoAcceso: porEstudiante[e.id]?.ultimo || null,
+  })).sort((a, b) => {
+    if (!a.ultimoAcceso && !b.ultimoAcceso) return a.nombre.localeCompare(b.nombre);
+    if (!a.ultimoAcceso) return 1;
+    if (!b.ultimoAcceso) return -1;
+    return b.ultimoAcceso.localeCompare(a.ultimoAcceso);
+  });
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
