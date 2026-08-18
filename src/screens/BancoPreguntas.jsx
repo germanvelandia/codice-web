@@ -168,6 +168,78 @@ function PreguntaBancoForm({ materiaId, niveles, pregunta, onCancelar, onGuardad
   );
 }
 
+function TrasladarPreguntasModal({ ids, materias, niveles, onClose, onTrasladado }) {
+  const [cambiarMateria, setCambiarMateria] = useState(false);
+  const [materiaDestino, setMateriaDestino] = useState(materias[0]?.id || "");
+  const [cambiarNivel, setCambiarNivel] = useState(false);
+  const [nivelDestino, setNivelDestino] = useState("");
+  const [cambiarTema, setCambiarTema] = useState(false);
+  const [temaDestino, setTemaDestino] = useState("");
+  const [guardando, setGuardando] = useState(false);
+
+  const trasladar = async () => {
+    if (!cambiarMateria && !cambiarNivel && !cambiarTema) { alert("Elegí al menos un campo para cambiar."); return; }
+    setGuardando(true);
+    try {
+      const cambios = {};
+      if (cambiarMateria) cambios.materia_id = parseInt(materiaDestino, 10);
+      if (cambiarNivel) cambios.nivel = nivelDestino || null;
+      if (cambiarTema) cambios.tema = temaDestino.trim() || null;
+      await api.trasladarPreguntasBanco(ids, cambios);
+      onTrasladado();
+    } catch (e) {
+      alert("Error al trasladar: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">↗️ Trasladar {ids.length} pregunta(s)</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-500 mb-3">Marcá solo lo que quieras cambiar — lo que no marques queda igual.</p>
+
+        <label className="flex items-center gap-2 text-xs text-slate-600 mb-1">
+          <input type="checkbox" checked={cambiarMateria} onChange={(e) => setCambiarMateria(e.target.checked)} /> Cambiar materia
+        </label>
+        {cambiarMateria && (
+          <select value={materiaDestino} onChange={(e) => setMateriaDestino(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none">
+            {materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+          </select>
+        )}
+
+        <label className="flex items-center gap-2 text-xs text-slate-600 mb-1 mt-2">
+          <input type="checkbox" checked={cambiarNivel} onChange={(e) => setCambiarNivel(e.target.checked)} /> Cambiar grado
+        </label>
+        {cambiarNivel && (
+          <select value={nivelDestino} onChange={(e) => setNivelDestino(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none">
+            <option value="">Sin grado específico</option>
+            {niveles.map((n) => <option key={n.nivel} value={n.nivel}>Grado {n.nivel}°</option>)}
+          </select>
+        )}
+
+        <label className="flex items-center gap-2 text-xs text-slate-600 mb-1 mt-2">
+          <input type="checkbox" checked={cambiarTema} onChange={(e) => setCambiarTema(e.target.checked)} /> Cambiar tema
+        </label>
+        {cambiarTema && (
+          <input value={temaDestino} onChange={(e) => setTemaDestino(e.target.value)} placeholder="Nuevo tema"
+            className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none" />
+        )}
+
+        <div className="flex justify-end gap-2 mt-3">
+          <button onClick={onClose} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
+          <button disabled={guardando} onClick={trasladar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+            {guardando ? "Trasladando…" : "Trasladar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function VistaBancoPreguntas({ grados = [] }) {
   const [materias, setMaterias] = useState([]);
   const [materiaId, setMateriaId] = useState("");
@@ -178,6 +250,9 @@ export function VistaBancoPreguntas({ grados = [] }) {
   const [importarAbierto, setImportarAbierto] = useState(false);
   const [filtroTema, setFiltroTema] = useState("");
   const [filtroNivel, setFiltroNivel] = useState("");
+  const [seleccionando, setSeleccionando] = useState(false);
+  const [seleccionadas, setSeleccionadas] = useState([]);
+  const [trasladarAbierto, setTrasladarAbierto] = useState(false);
   const niveles = agruparPorNivel(grados);
 
   useEffect(() => {
@@ -189,9 +264,20 @@ export function VistaBancoPreguntas({ grados = [] }) {
     setCargando(true);
     api.fetchBancoPreguntas(materiaId, null, filtroNivel || null).then((d) => { setPreguntas(d); setCargando(false); });
   };
-  useEffect(() => { cargar(); }, [materiaId, filtroNivel]);
+  useEffect(() => { cargar(); setSeleccionadas([]); }, [materiaId, filtroNivel]);
 
   const eliminar = async (p) => { if (!confirm("¿Eliminar esta pregunta del banco?")) return; await api.eliminarPreguntaBanco(p.id); cargar(); };
+
+  const toggleSeleccion = (id) => setSeleccionadas((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  const seleccionarTodasVisibles = (visibles) => setSeleccionadas(visibles.map((p) => p.id));
+
+  const eliminarSeleccionadas = async () => {
+    if (!confirm(`¿Eliminar ${seleccionadas.length} pregunta(s) seleccionada(s)?`)) return;
+    await api.eliminarPreguntasBancoMasivo(seleccionadas);
+    setSeleccionadas([]);
+    setSeleccionando(false);
+    cargar();
+  };
 
   const temas = Array.from(new Set(preguntas.map((p) => p.tema).filter(Boolean))).sort();
   const visibles = filtroTema ? preguntas.filter((p) => p.tema === filtroTema) : preguntas;
@@ -226,7 +312,25 @@ export function VistaBancoPreguntas({ grados = [] }) {
         <button onClick={() => { setEditando(null); setFormAbierto((v) => !v); }} className="text-xs font-semibold px-3 py-2 rounded-full bg-violet-500 text-white">
           {formAbierto ? "Cerrar" : "+ Nueva pregunta"}
         </button>
+        <button onClick={() => { setSeleccionando((v) => !v); setSeleccionadas([]); }} className={`text-xs font-semibold px-3 py-2 rounded-full border ${seleccionando ? "bg-slate-700 text-white border-slate-700" : "border-slate-200 text-slate-600"}`}>
+          {seleccionando ? "✕ Cancelar selección" : "☑️ Seleccionar"}
+        </button>
       </div>
+
+      {seleccionando && visibles.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 bg-slate-50 rounded-xl p-2.5 mb-3">
+          <span className="text-xs text-slate-500">{seleccionadas.length} seleccionada(s)</span>
+          <button onClick={() => seleccionarTodasVisibles(visibles)} className="text-xs text-violet-500">Seleccionar todas ({visibles.length})</button>
+          <button onClick={() => setSeleccionadas([])} className="text-xs text-slate-400">Ninguna</button>
+          <div className="flex-1" />
+          <button disabled={seleccionadas.length === 0} onClick={() => setTrasladarAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-amber-500 text-white disabled:opacity-40">
+            ↗️ Trasladar
+          </button>
+          <button disabled={seleccionadas.length === 0} onClick={eliminarSeleccionadas} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-rose-500 text-white disabled:opacity-40">
+            🗑 Eliminar
+          </button>
+        </div>
+      )}
 
       {formAbierto && (
         <PreguntaBancoForm materiaId={materiaId} niveles={niveles} pregunta={editando} onCancelar={() => { setFormAbierto(false); setEditando(null); }} onGuardada={() => { setFormAbierto(false); setEditando(null); cargar(); }} />
@@ -241,18 +345,25 @@ export function VistaBancoPreguntas({ grados = [] }) {
           <p className="text-xs text-slate-400 mb-2">{visibles.length} pregunta(s)</p>
           <div className="space-y-2">
             {visibles.map((p) => (
-              <div key={p.id} className="bg-white rounded-xl border border-slate-100 p-3">
+              <div key={p.id} className={`bg-white rounded-xl border p-3 ${seleccionando && seleccionadas.includes(p.id) ? "border-violet-400 bg-violet-50/40" : "border-slate-100"}`}>
                 <div className="flex justify-between items-start gap-2">
-                  <div>
-                    {p.nivel && <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 mr-1.5">Grado {p.nivel}°</span>}
-                    {p.tema && <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-50 text-violet-600 mr-1.5">{p.tema}</span>}
-                    {p.dificultad && <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{p.dificultad}</span>}
-                    <p className="text-sm text-slate-700 mt-1">{p.enunciado}</p>
+                  <div className="flex items-start gap-2 min-w-0">
+                    {seleccionando && (
+                      <input type="checkbox" checked={seleccionadas.includes(p.id)} onChange={() => toggleSeleccion(p.id)} className="mt-1 shrink-0" />
+                    )}
+                    <div>
+                      {p.nivel && <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 mr-1.5">Grado {p.nivel}°</span>}
+                      {p.tema && <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-50 text-violet-600 mr-1.5">{p.tema}</span>}
+                      {p.dificultad && <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{p.dificultad}</span>}
+                      <p className="text-sm text-slate-700 mt-1">{p.enunciado}</p>
+                    </div>
                   </div>
-                  <div className="flex gap-1.5 shrink-0">
-                    <button onClick={() => { setEditando(p); setFormAbierto(true); }} className="text-xs text-slate-400 hover:text-violet-600">✏️</button>
-                    <button onClick={() => eliminar(p)} className="text-xs text-slate-400 hover:text-rose-500">🗑</button>
-                  </div>
+                  {!seleccionando && (
+                    <div className="flex gap-1.5 shrink-0">
+                      <button onClick={() => { setEditando(p); setFormAbierto(true); }} className="text-xs text-slate-400 hover:text-violet-600">✏️</button>
+                      <button onClick={() => eliminar(p)} className="text-xs text-slate-400 hover:text-rose-500">🗑</button>
+                    </div>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   {p.opciones.map((o, i) => (
@@ -271,6 +382,11 @@ export function VistaBancoPreguntas({ grados = [] }) {
       )}
 
       {importarAbierto && <ImportarExcelModal materiaId={materiaId} niveles={niveles} onClose={() => setImportarAbierto(false)} onImportado={cargar} />}
+      {trasladarAbierto && (
+        <TrasladarPreguntasModal ids={seleccionadas} materias={materias} niveles={niveles}
+          onClose={() => setTrasladarAbierto(false)}
+          onTrasladado={() => { setTrasladarAbierto(false); setSeleccionadas([]); setSeleccionando(false); cargar(); }} />
+      )}
     </div>
   );
 }
