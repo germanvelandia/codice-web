@@ -322,9 +322,9 @@ export function VistaInicio({ onIrA }) {
           ) : (
             <div className="space-y-1.5">
               {resumen.clasesHoy.map((h) => (
-                <div key={h.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-2.5 py-1.5 text-xs">
-                  <span className="font-semibold text-slate-700">{h.materias?.nombre || h.nombre_actividad || "—"}{h.grado_id ? ` · ${h.grado_id}` : ""}</span>
-                  <span className="text-slate-400">{h.hora_inicio?.slice(0, 5)}–{h.hora_fin?.slice(0, 5)}</span>
+                <div key={h.id} className="flex items-center justify-between gap-2 bg-slate-50 rounded-lg px-2.5 py-1.5 text-xs">
+                  <span className="font-semibold text-slate-700 truncate min-w-0 flex-1">{h.materias?.nombre || h.nombre_actividad || "—"}{h.grado_id ? ` · ${h.grado_id}` : ""}</span>
+                  <span className="text-slate-400 shrink-0">{h.hora_inicio?.slice(0, 5)}–{h.hora_fin?.slice(0, 5)}</span>
                 </div>
               ))}
             </div>
@@ -340,7 +340,7 @@ export function VistaInicio({ onIrA }) {
               {resumen.eventosHoy.map((e) => (
                 <div key={e.id} className="flex items-center gap-2 bg-slate-50 rounded-lg px-2.5 py-1.5 text-xs">
                   <span className="w-2 h-2 rounded-full shrink-0" style={{ background: TIPO_EVENTO_COLOR[e.tipo] || "#64748B" }} />
-                  <span className="font-semibold text-slate-700 truncate">{e.titulo}</span>
+                  <span className="font-semibold text-slate-700 truncate min-w-0 flex-1">{e.titulo}</span>
                 </div>
               ))}
             </div>
