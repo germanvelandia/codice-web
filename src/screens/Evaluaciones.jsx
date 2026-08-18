@@ -21,6 +21,7 @@ function NuevaPreguntaForm({ evaluacionId, orden, pregunta, materiaId, gradoId, 
   );
   const [guardarEnBanco, setGuardarEnBanco] = useState(false);
   const [temaBanco, setTemaBanco] = useState("");
+  const [retroalimentacion, setRetroalimentacion] = useState(pregunta?.retroalimentacion || "");
   const [guardando, setGuardando] = useState(false);
 
   const guardar = async () => {
@@ -38,7 +39,7 @@ function NuevaPreguntaForm({ evaluacionId, orden, pregunta, materiaId, gradoId, 
     }
     setGuardando(true);
     try {
-      const campos = { tipo, enunciado: enunciado.trim(), puntos: parseFloat(puntos) || 1, opciones: opcionesFinal };
+      const campos = { tipo, enunciado: enunciado.trim(), puntos: parseFloat(puntos) || 1, opciones: opcionesFinal, retroalimentacion: retroalimentacion.trim() || null };
       if (pregunta) {
         await api.editarPregunta(pregunta.id, campos);
       } else {
@@ -90,6 +91,14 @@ function NuevaPreguntaForm({ evaluacionId, orden, pregunta, materiaId, gradoId, 
 
       {tipo === "respuesta_corta" && (
         <p className="text-[11px] text-slate-500 mb-2">Esta pregunta no se autocalifica — vos revisás y asignás el puntaje manualmente en los resultados.</p>
+      )}
+
+      {tipo !== "respuesta_corta" && (
+        <div className="mb-2">
+          <label className="text-[11px] text-slate-500 block mb-1">Retroalimentación (opcional — explicación de por qué es esa la respuesta)</label>
+          <textarea value={retroalimentacion} onChange={(e) => setRetroalimentacion(e.target.value)} rows={2} placeholder="Ej: La respuesta es B porque…"
+            className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
+        </div>
       )}
 
       {!pregunta && materiaId && tipo !== "respuesta_corta" && (
@@ -176,6 +185,7 @@ function PreguntasEditor({ evaluacionId, materiaId, gradoId }) {
                     ))}
                   </div>
                 )}
+                {p.retroalimentacion && <p className="text-[11px] text-slate-400 mt-1.5 italic">💡 {p.retroalimentacion}</p>}
               </div>
             )
           ))}
