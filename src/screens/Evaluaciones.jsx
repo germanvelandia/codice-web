@@ -10,7 +10,7 @@ const TIPOS_PREGUNTA = [
   { key: "respuesta_corta", label: "Respuesta corta (manual)" },
 ];
 
-function NuevaPreguntaForm({ evaluacionId, orden, pregunta, materiaId, onCreada, onCancelar }) {
+function NuevaPreguntaForm({ evaluacionId, orden, pregunta, materiaId, gradoId, onCreada, onCancelar }) {
   const [tipo, setTipo] = useState(pregunta?.tipo || "opcion_multiple");
   const [enunciado, setEnunciado] = useState(pregunta?.enunciado || "");
   const [puntos, setPuntos] = useState(pregunta?.puntos || 1);
@@ -42,7 +42,8 @@ function NuevaPreguntaForm({ evaluacionId, orden, pregunta, materiaId, onCreada,
       if (pregunta) {
         await api.editarPregunta(pregunta.id, campos);
       } else {
-        await api.crearPreguntaConBanco({ evaluacion_id: evaluacionId, orden, ...campos }, guardarEnBanco, materiaId, temaBanco);
+        const { nivel } = nivelYCurso(gradoId || "");
+        await api.crearPreguntaConBanco({ evaluacion_id: evaluacionId, orden, ...campos }, guardarEnBanco, materiaId, temaBanco, nivel);
       }
       onCreada();
     } catch (e) {
@@ -114,7 +115,7 @@ function NuevaPreguntaForm({ evaluacionId, orden, pregunta, materiaId, onCreada,
   );
 }
 
-function PreguntasEditor({ evaluacionId, materiaId }) {
+function PreguntasEditor({ evaluacionId, materiaId, gradoId }) {
   const [preguntas, setPreguntas] = useState([]);
   const [formAbierto, setFormAbierto] = useState(false);
   const [editando, setEditando] = useState(null);
@@ -123,10 +124,11 @@ function PreguntasEditor({ evaluacionId, materiaId }) {
   const [temaElegido, setTemaElegido] = useState("");
   const [cantidad, setCantidad] = useState(10);
   const [cargandoAleatorio, setCargandoAleatorio] = useState(false);
+  const { nivel } = nivelYCurso(gradoId || "");
 
   const cargar = () => api.fetchPreguntasDocente(evaluacionId).then(setPreguntas);
   useEffect(() => { cargar(); }, [evaluacionId]);
-  useEffect(() => { if (materiaId) api.fetchTemasBanco(materiaId).then(setTemas); }, [materiaId]);
+  useEffect(() => { if (materiaId) api.fetchTemasBanco(materiaId, nivel || null).then(setTemas); }, [materiaId, nivel]);
 
   const quitar = async (id) => { if (!confirm("¿Eliminar esta pregunta?")) return; await api.eliminarPregunta(id); cargar(); };
   const totalPuntos = preguntas.reduce((a, p) => a + Number(p.puntos), 0);
@@ -134,8 +136,8 @@ function PreguntasEditor({ evaluacionId, materiaId }) {
   const traerAleatorias = async () => {
     setCargandoAleatorio(true);
     try {
-      const r = await api.agregarPreguntasAleatoriasDesdeBanco(evaluacionId, materiaId, temaElegido || null, parseInt(cantidad, 10) || 10, preguntas.length);
-      if (r.disponibles === 0) alert("No hay preguntas en el banco para esta materia" + (temaElegido ? ` y tema "${temaElegido}"` : "") + ".");
+      const r = await api.agregarPreguntasAleatoriasDesdeBanco(evaluacionId, materiaId, temaElegido || null, nivel || null, parseInt(cantidad, 10) || 10, preguntas.length);
+      if (r.disponibles === 0) alert(`No hay preguntas en el banco para esta materia${nivel ? `, grado ${nivel}°` : ""}${temaElegido ? ` y tema "${temaElegido}"` : ""}.`);
       else alert(`Se agregaron ${r.agregadas} pregunta(s) al azar (de ${r.disponibles} disponibles en el banco).`);
       setAleatorioAbierto(false);
       cargar();
@@ -182,7 +184,9 @@ function PreguntasEditor({ evaluacionId, materiaId }) {
 
       {aleatorioAbierto && (
         <div className="bg-amber-50 rounded-xl p-3 mb-2">
-          <p className="text-[11px] text-amber-700 mb-2">Elige N preguntas al azar del banco de esta materia y las agrega tal cual (podés editarlas después).</p>
+          <p className="text-[11px] text-amber-700 mb-2">
+            Elige N preguntas al azar del banco de esta materia{nivel ? `, solo del grado ${nivel}°` : ""} y las agrega tal cual (podés editarlas después).
+          </p>
           <div className="flex gap-2 mb-2">
             <select value={temaElegido} onChange={(e) => setTemaElegido(e.target.value)} className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
               <option value="">Todos los temas de la materia</option>
@@ -205,7 +209,7 @@ function PreguntasEditor({ evaluacionId, materiaId }) {
       </div>
       {formAbierto && (
         <div className="mt-2">
-          <NuevaPreguntaForm evaluacionId={evaluacionId} orden={preguntas.length} materiaId={materiaId} onCreada={() => { setFormAbierto(false); cargar(); }} onCancelar={() => setFormAbierto(false)} />
+          <NuevaPreguntaForm evaluacionId={evaluacionId} orden={preguntas.length} materiaId={materiaId} gradoId={gradoId} onCreada={() => { setFormAbierto(false); cargar(); }} onCancelar={() => setFormAbierto(false)} />
         </div>
       )}
     </div>
@@ -568,7 +572,7 @@ function EvaluacionCard({ evaluacion, materias, grados, categorias, onCambio }) 
         </div>
       </div>
 
-      {expandida && <PreguntasEditor evaluacionId={evaluacion.id} materiaId={evaluacion.materia_id} />}
+      {expandida && <PreguntasEditor evaluacionId={evaluacion.id} materiaId={evaluacion.materia_id} gradoId={evaluacion.grado_id} />}
       {resultadosAbiertos && <ResultadosEvaluacion evaluacion={evaluacion} onCerrar={() => setResultadosAbiertos(false)} />}
       {copiando && <CopiarEvaluacionModal evaluacion={evaluacion} materias={materias} grados={grados} onClose={() => setCopiando(false)} onCopiada={onCambio} />}
     </div>
