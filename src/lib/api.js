@@ -798,7 +798,7 @@ export async function crearPregunta(campos) {
 export async function crearPreguntaConBanco(campos, guardarEnBanco, materiaId, tema, nivel) {
   await crearPregunta(campos);
   if (guardarEnBanco && materiaId && campos.tipo !== "respuesta_corta") {
-    await crearPreguntaBanco({ materia_id: materiaId, nivel: nivel || null, tema: tema || null, enunciado: campos.enunciado, opciones: campos.opciones });
+    await crearPreguntaBanco({ materia_id: materiaId, nivel: nivel || null, tema: tema || null, enunciado: campos.enunciado, opciones: campos.opciones, retroalimentacion: campos.retroalimentacion || null });
   }
 }
 
@@ -2562,7 +2562,7 @@ export async function importarPreguntasBanco(materiaId, filas, nivel) {
         { texto: f.opcionD, correcta: f.correcta === "D" },
       ].filter((o) => o.texto && o.texto.trim());
       if (opciones.length < 2 || !opciones.some((o) => o.correcta)) { errores.push(`"${f.enunciado?.slice(0, 40)}...": faltan opciones o respuesta correcta`); continue; }
-      await crearPreguntaBanco({ materia_id: materiaId, nivel: f.nivel || nivel || null, tema: f.tema || null, enunciado: f.enunciado, opciones, dificultad: f.dificultad || null });
+      await crearPreguntaBanco({ materia_id: materiaId, nivel: f.nivel || nivel || null, tema: f.tema || null, enunciado: f.enunciado, opciones, dificultad: f.dificultad || null, retroalimentacion: f.retroalimentacion || null });
       cargadas++;
     } catch (e) {
       errores.push(`"${f.enunciado?.slice(0, 40)}...": ${e.message}`);
@@ -2580,7 +2580,7 @@ export async function agregarPreguntasAleatoriasDesdeBanco(evaluacionId, materia
   const elegidas = mezcladas.slice(0, cantidad);
   let orden = ordenInicial;
   for (const p of elegidas) {
-    await crearPregunta({ evaluacion_id: evaluacionId, orden: orden++, tipo: "opcion_multiple", enunciado: p.enunciado, puntos: 1, opciones: p.opciones });
+    await crearPregunta({ evaluacion_id: evaluacionId, orden: orden++, tipo: "opcion_multiple", enunciado: p.enunciado, puntos: 1, opciones: p.opciones, retroalimentacion: p.retroalimentacion || null });
   }
   return { agregadas: elegidas.length, disponibles: disponibles.length };
 }
