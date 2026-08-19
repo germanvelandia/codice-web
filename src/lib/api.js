@@ -484,13 +484,19 @@ export async function fetchEstudiantesEnInclusion() {
 }
 
 export async function fetchSeguimientosInclusion(estudianteId) {
-  const { data, error } = await supabase
-    .from("seguimiento_inclusion")
-    .select("*, profesores(nombre), materias(nombre)")
-    .eq("estudiante_id", estudianteId)
-    .order("fecha", { ascending: false });
-  if (error) throw error;
-  return data || [];
+  const [seguimientosRes, profesoresRes, materiasRes] = await Promise.all([
+    supabase.from("seguimiento_inclusion").select("*").eq("estudiante_id", estudianteId).order("fecha", { ascending: false }),
+    supabase.from("profesores").select("id, nombre"),
+    supabase.from("materias").select("id, nombre"),
+  ]);
+  if (seguimientosRes.error) throw seguimientosRes.error;
+  const nombreProfPorId = {}; (profesoresRes.data || []).forEach((p) => { nombreProfPorId[p.id] = p.nombre; });
+  const nombreMatPorId = {}; (materiasRes.data || []).forEach((m) => { nombreMatPorId[m.id] = m.nombre; });
+  return (seguimientosRes.data || []).map((s) => ({
+    ...s,
+    profesores: s.docente_id ? { nombre: nombreProfPorId[s.docente_id] || null } : null,
+    materias: s.materia_id ? { nombre: nombreMatPorId[s.materia_id] || null } : null,
+  }));
 }
 
 export async function crearSeguimientoInclusion(estudianteId, materiaId, tipo, observacion) {
@@ -2662,6 +2668,34 @@ export async function fetchReporteAccesos(gradoId) {
     if (!b.ultimoAcceso) return -1;
     return b.ultimoAcceso.localeCompare(a.ultimoAcceso);
   });
+}
+
+// Trae a todos los estudiantes que hayan tenido alguna baja de vida por
+// comportamiento (de todos los cursos juntos), con el total perdido y la
+// cantidad de incidentes — para detectarlos sin ir curso por curso.
+export async function fetchEstudiantesConBajasVida() {
+  const [historialRes, estudiantesRes] = await Promise.all([
+    supabase.from("historial_gamificacion").select("estudiante_id, etiqueta, vida, categoria, ts").lt("vida", 0).order("ts", { ascending: false }),
+    supabase.from("estudiantes").select("id, nombre, grado_id, foto_url").eq("activo", true),
+  ]);
+  if (historialRes.error) throw historialRes.error;
+  const estudiantePorId = {}; (estudiantesRes.data || []).forEach((e) => { estudiantePorId[e.id] = e; });
+
+  const porEstudiante = {};
+  (historialRes.data || []).forEach((h) => {
+    if (!estudiantePorId[h.estudiante_id]) return; // estudiante inactivo/trasladado
+    if (!porEstudiante[h.estudiante_id]) porEstudiante[h.estudiante_id] = { totalPerdida: 0, incidentes: 0, ultimo: null, recientes: [] };
+    const acc = porEstudiante[h.estudiante_id];
+    acc.totalPerdida += Math.abs(h.vida);
+    acc.incidentes += 1;
+    if (!acc.ultimo || h.ts > acc.ultimo) acc.ultimo = h.ts;
+    if (acc.recientes.length < 5) acc.recientes.push(h);
+  });
+
+  return Object.entries(porEstudiante).map(([estudianteId, acc]) => ({
+    ...estudiantePorId[estudianteId],
+    ...acc,
+  })).sort((a, b) => b.totalPerdida - a.totalPerdida);
 }
 
 export async function fetchInstitucion() {
