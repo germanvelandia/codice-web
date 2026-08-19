@@ -894,7 +894,7 @@ const CATEGORIA_INFO = {
   ciudadania: { label: "Ciudadanía", color: "#22C55E", emoji: "🏛️" },
 };
 
-function HistorialGamificacionModal({ estudiante, onClose }) {
+export function HistorialGamificacionModal({ estudiante, onClose }) {
   const [historial, setHistorial] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [filtro, setFiltro] = useState("todas");
