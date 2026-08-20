@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
 import * as api from "../lib/api";
-import { agruparPorNivel } from "../lib/gamification";
 
 const PERIODOS = ["1", "2", "3", "4"];
 
-function ImportarNotasModal({ gradoId, materiaId, materiaNombre, periodo, estudiantes, onClose, onImportado }) {
+function ImportarNotasModal({ gradoId, materiaNombre, periodo, estudiantes, onClose, onImportado }) {
   const [procesando, setProcesando] = useState(false);
   const [resultado, setResultado] = useState(null);
 
@@ -32,7 +31,7 @@ function ImportarNotasModal({ gradoId, materiaId, materiaNombre, periodo, estudi
 
         if (normalizadas.length === 0) { alert("No se encontraron filas con nombre y nota. Revisá que uses la plantilla."); setProcesando(false); return; }
 
-        const r = await api.importarNotasDireccionCurso(gradoId, materiaId, periodo, normalizadas, estudiantes);
+        const r = await api.importarNotasDireccionCurso(gradoId, materiaNombre, periodo, normalizadas, estudiantes);
         setResultado(r);
         onImportado();
       } catch (err) {
@@ -83,29 +82,25 @@ function ImportarNotasModal({ gradoId, materiaId, materiaNombre, periodo, estudi
   );
 }
 
-// Adivina la materia y el periodo a partir del texto del encabezado de una
-// columna del boletín del colegio (ej: "MATEMATICAS P1", "Español - Periodo 2").
-function adivinarMapeo(encabezado, materias) {
-  const texto = String(encabezado || "").toLowerCase();
-  const periodoMatch = texto.match(/[1-4]\b/);
-  const periodo = periodoMatch ? periodoMatch[0] : "";
-  let mejorMateria = null;
-  let mejorPuntaje = 0;
-  for (const m of materias) {
-    const nombreMat = m.nombre.toLowerCase();
-    if (texto.includes(nombreMat) || nombreMat.includes(texto.replace(/[^a-záéíóúñ ]/g, "").trim())) {
-      const puntaje = nombreMat.length;
-      if (puntaje > mejorPuntaje) { mejorPuntaje = puntaje; mejorMateria = m.id; }
-    }
+// Adivina la materia y el periodo directo del texto del encabezado de una
+// columna del boletín del colegio (ej: "MATEMATICAS P1", "Ética y Religión - Periodo 2",
+// "INGLES_3"). No depende de ningún catálogo — usa el nombre tal cual venga.
+function adivinarMapeo(encabezado) {
+  const texto = String(encabezado || "").trim();
+  if (!texto) return { materiaNombre: "", periodo: "" };
+  const match = texto.match(/^(.*?)[\s._-]*(?:per(?:iodo)?)?\.?\s*([1-4])\s*$/i);
+  if (match) {
+    const nombre = match[1].replace(/[-_.]+$/, "").trim();
+    return { materiaNombre: nombre || texto, periodo: match[2] };
   }
-  return { materiaId: mejorMateria, periodo };
+  return { materiaNombre: texto, periodo: "" };
 }
 
-function ImportarBoletinModal({ gradoId, estudiantes, materias, onClose, onImportado }) {
+function ImportarBoletinModal({ gradoId, estudiantes, onClose, onImportado }) {
   const [paso, setPaso] = useState(1); // 1: subir archivo, 2: mapear columnas, 3: resultado
   const [encabezados, setEncabezados] = useState([]);
   const [filasCrudo, setFilasCrudo] = useState([]);
-  const [mapeo, setMapeo] = useState({}); // { indiceColumna: { materiaId, periodo } }
+  const [mapeo, setMapeo] = useState({}); // { indiceColumna: { materiaNombre, periodo } }
   const [procesando, setProcesando] = useState(false);
   const [resultado, setResultado] = useState(null);
 
@@ -125,8 +120,7 @@ function ImportarBoletinModal({ gradoId, estudiantes, materias, onClose, onImpor
 
         const mapeoInicial = {};
         for (let i = 1; i < heads.length; i++) {
-          const adivinado = adivinarMapeo(heads[i], materias);
-          if (adivinado.materiaId && adivinado.periodo) mapeoInicial[i] = adivinado;
+          mapeoInicial[i] = adivinarMapeo(heads[i]);
         }
         setMapeo(mapeoInicial);
         setPaso(2);
@@ -139,10 +133,10 @@ function ImportarBoletinModal({ gradoId, estudiantes, materias, onClose, onImpor
   };
 
   const actualizarMapeo = (indice, campo, valor) => {
-    setMapeo((prev) => ({ ...prev, [indice]: { ...(prev[indice] || { materiaId: "", periodo: "" }), [campo]: valor } }));
+    setMapeo((prev) => ({ ...prev, [indice]: { ...(prev[indice] || { materiaNombre: "", periodo: "" }), [campo]: valor } }));
   };
 
-  const columnasReconocidas = Object.values(mapeo).filter((m) => m && m.materiaId && m.periodo).length;
+  const columnasReconocidas = Object.values(mapeo).filter((m) => m && m.materiaNombre.trim() && m.periodo).length;
 
   const confirmarImportacion = async () => {
     setProcesando(true);
@@ -169,7 +163,8 @@ function ImportarBoletinModal({ gradoId, estudiantes, materias, onClose, onImpor
           <div>
             <p className="text-xs text-slate-500 mb-3">
               Subí tal cual el archivo Excel que te entrega el colegio (con todas las materias y periodos como columnas) — la primera columna
-              tiene que ser el nombre del estudiante. Después vas a poder revisar y corregir qué columna corresponde a cada materia y periodo.
+              tiene que ser el nombre del estudiante. Las materias NO necesitan estar registradas en la plataforma — se usan tal cual las trae
+              el archivo del colegio.
             </p>
             <input type="file" accept=".xlsx,.xls" onChange={(e) => e.target.files[0] && procesarArchivo(e.target.files[0])} disabled={procesando} className="text-sm" />
             {procesando && <p className="text-xs text-violet-500 mt-2">Procesando…</p>}
@@ -179,25 +174,23 @@ function ImportarBoletinModal({ gradoId, estudiantes, materias, onClose, onImpor
         {paso === 2 && (
           <div>
             <p className="text-xs text-slate-500 mb-3">
-              Revisá que cada columna quede asignada a la materia y periodo correctos — traté de adivinarlo solo, pero corregí lo que haga falta.
-              Las columnas que dejes sin materia/periodo (ej: "Promedio" o "Puesto" del colegio) se ignoran.
+              Revisá el nombre de materia y el periodo que le detecté a cada columna — traté de leerlo directo del encabezado de tu archivo,
+              corregí lo que haga falta. Dejá el periodo vacío en las columnas que quieras ignorar (ej: "Promedio" o "Puesto" que ya trae el colegio).
             </p>
             <div className="space-y-1.5 mb-4 max-h-96 overflow-y-auto">
               {encabezados.slice(1).map((h, idx) => {
                 const i = idx + 1;
-                const m = mapeo[i] || { materiaId: "", periodo: "" };
+                const m = mapeo[i] || { materiaNombre: "", periodo: "" };
+                const reconocida = m.materiaNombre.trim() && m.periodo;
                 return (
-                  <div key={i} className={`flex items-center gap-2 rounded-lg p-2 ${m.materiaId && m.periodo ? "bg-emerald-50" : "bg-slate-50"}`}>
-                    <span className="text-[11px] text-slate-500 w-40 truncate shrink-0" title={h}>{h || `Columna ${i + 1}`}</span>
-                    <select value={m.materiaId} onChange={(e) => actualizarMapeo(i, "materiaId", e.target.value ? parseInt(e.target.value, 10) : "")}
-                      className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
-                      <option value="">— Ignorar esta columna —</option>
-                      {materias.map((mat) => <option key={mat.id} value={mat.id}>{mat.nombre}</option>)}
-                    </select>
+                  <div key={i} className={`flex items-center gap-2 rounded-lg p-2 ${reconocida ? "bg-emerald-50" : "bg-slate-50"}`}>
+                    <span className="text-[10px] text-slate-400 w-28 truncate shrink-0" title={h}>Excel: "{h}"</span>
+                    <input value={m.materiaNombre} onChange={(e) => actualizarMapeo(i, "materiaNombre", e.target.value)} placeholder="Nombre de la materia"
+                      className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
                     <select value={m.periodo} onChange={(e) => actualizarMapeo(i, "periodo", e.target.value)}
                       className="w-24 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
-                      <option value="">Periodo</option>
-                      {PERIODOS.map((p) => <option key={p} value={p}>P{p}</option>)}
+                      <option value="">Ignorar</option>
+                      {PERIODOS.map((p) => <option key={p} value={p}>Periodo {p}</option>)}
                     </select>
                   </div>
                 );
@@ -246,12 +239,11 @@ function recomendacionPara(resumen, materiasBajas) {
 export function VistaDireccionCurso({ grados }) {
   const [gradoId, setGradoId] = useState(grados[0]?.id || "");
   const [estudiantes, setEstudiantes] = useState([]);
-  const [materias, setMaterias] = useState([]);
   const [notas, setNotas] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [periodoVista, setPeriodoVista] = useState("promedio");
   const [notaMinima, setNotaMinima] = useState(3.5);
-  const [importando, setImportando] = useState(null);
+  const [importando, setImportando] = useState(null); // { materiaNombre, periodo }
   const [importarBoletinAbierto, setImportarBoletinAbierto] = useState(false);
   const [agregarMateriaAbierto, setAgregarMateriaAbierto] = useState(false);
   const [materiaAAgregar, setMateriaAAgregar] = useState("");
@@ -259,7 +251,6 @@ export function VistaDireccionCurso({ grados }) {
   const [vistaAnalisis, setVistaAnalisis] = useState(false);
 
   useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
-  useEffect(() => { api.fetchMaterias().then(setMaterias); }, []);
 
   const cargar = () => {
     if (!gradoId) return;
@@ -272,50 +263,46 @@ export function VistaDireccionCurso({ grados }) {
   };
   useEffect(() => { cargar(); }, [gradoId]);
 
-  const materiasConNotas = Array.from(new Set(notas.map((n) => n.materia_id)))
-    .map((id) => ({ id, nombre: notas.find((n) => n.materia_id === id)?.materia_nombre }))
-    .sort((a, b) => a.nombre.localeCompare(b.nombre));
+  const materiasConNotas = Array.from(new Set(notas.map((n) => n.materia_nombre))).sort();
 
   const periodosConDatos = Array.from(new Set(notas.map((n) => n.periodo))).sort();
 
-  const notaCeldaCompleta = (estudianteId, materiaId, periodo) => {
+  const notaCeldaCompleta = (estudianteId, materiaNombre, periodo) => {
     if (periodo === "promedio") {
-      const propias = notas.filter((n) => n.estudiante_id === estudianteId && n.materia_id === materiaId);
+      const propias = notas.filter((n) => n.estudiante_id === estudianteId && n.materia_nombre === materiaNombre);
       if (propias.length === 0) return null;
       const promedio = propias.reduce((a, n) => a + Number(n.nota), 0) / propias.length;
       return { nota: promedio, en_nivelacion: propias.some((n) => n.en_nivelacion), id: null };
     }
-    return notas.find((n) => n.estudiante_id === estudianteId && n.materia_id === materiaId && n.periodo === periodo) || null;
+    return notas.find((n) => n.estudiante_id === estudianteId && n.materia_nombre === materiaNombre && n.periodo === periodo) || null;
   };
 
-  const promedioMateria = (estudianteId, materiaId) => {
-    const propias = notas.filter((n) => n.estudiante_id === estudianteId && n.materia_id === materiaId);
+  const promedioMateria = (estudianteId, materiaNombre) => {
+    const propias = notas.filter((n) => n.estudiante_id === estudianteId && n.materia_nombre === materiaNombre);
     if (propias.length === 0) return null;
     return propias.reduce((a, n) => a + Number(n.nota), 0) / propias.length;
   };
 
   const resumenEstudiante = (estudianteId) => {
-    const porMateria = materiasConNotas.map((m) => ({ materia: m.nombre, valor: periodoVista === "promedio" ? promedioMateria(estudianteId, m.id) : notaCeldaCompleta(estudianteId, m.id, periodoVista)?.nota ?? null }));
+    const porMateria = materiasConNotas.map((m) => ({ materia: m, valor: periodoVista === "promedio" ? promedioMateria(estudianteId, m) : notaCeldaCompleta(estudianteId, m, periodoVista)?.nota ?? null }));
     const conValor = porMateria.filter((x) => x.valor !== null && x.valor !== undefined);
     const perdidas = conValor.filter((x) => x.valor < notaMinima).map((x) => x.materia);
     const promedio = conValor.length ? conValor.reduce((a, x) => a + x.valor, 0) / conValor.length : null;
     return { promedio, perdidas: perdidas.length, materiasBajas: perdidas, total: conValor.length };
   };
 
-  const toggleNivelacion = async (celda, estudianteId, materiaId, periodo) => {
+  const toggleNivelacion = async (celda, periodo) => {
     if (periodo === "promedio") { alert('Para marcar nivelación, elegí un periodo puntual arriba (no "Promedio de todos los periodos").'); return; }
     if (!celda || !celda.id) return;
     await api.toggleNivelacionNota(celda.id, !celda.en_nivelacion);
     cargar();
   };
 
-  const eliminarMateriaDelCurso = async (materiaId, materiaNombre) => {
+  const eliminarMateriaDelCurso = async (materiaNombre) => {
     if (!confirm(`¿Eliminar TODAS las notas cargadas de "${materiaNombre}" en este curso? Esto no se puede deshacer.`)) return;
-    await api.eliminarNotasMateriaDireccionCurso(gradoId, materiaId, null);
+    await api.eliminarNotasMateriaDireccionCurso(gradoId, materiaNombre, null);
     cargar();
   };
-
-  const materiasDisponiblesParaAgregar = materias.filter((m) => !materiasConNotas.some((mc) => mc.id === m.id));
 
   const ranking = estudiantes
     .map((e) => ({ ...e, ...resumenEstudiante(e.id) }))
@@ -324,10 +311,10 @@ export function VistaDireccionCurso({ grados }) {
     .map((e, i) => ({ ...e, puesto: i + 1 }));
 
   const promedioPorMateria = materiasConNotas.map((m) => {
-    const valores = estudiantes.map((e) => periodoVista === "promedio" ? promedioMateria(e.id, m.id) : notaCeldaCompleta(e.id, m.id, periodoVista)?.nota ?? null).filter((v) => v !== null && v !== undefined);
+    const valores = estudiantes.map((e) => periodoVista === "promedio" ? promedioMateria(e.id, m) : notaCeldaCompleta(e.id, m, periodoVista)?.nota ?? null).filter((v) => v !== null && v !== undefined);
     const promedio = valores.length ? valores.reduce((a, v) => a + v, 0) / valores.length : null;
     const perdidasCount = valores.filter((v) => v < notaMinima).length;
-    return { nombre: m.nombre, promedio, perdidasCount, totalEvaluados: valores.length };
+    return { nombre: m, promedio, perdidasCount, totalEvaluados: valores.length };
   }).sort((a, b) => (a.promedio ?? 99) - (b.promedio ?? 99));
 
   return (
@@ -353,8 +340,7 @@ export function VistaDireccionCurso({ grados }) {
         <button onClick={() => setImportarBoletinAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-rose-500 text-white">
           📥 Importar boletín del colegio
         </button>
-        <button onClick={() => { setAgregarMateriaAbierto((v) => !v); setMateriaAAgregar(materiasDisponiblesParaAgregar[0]?.id || ""); }}
-          className="text-xs font-semibold px-3 py-2 rounded-full border border-violet-200 text-violet-600">
+        <button onClick={() => setAgregarMateriaAbierto((v) => !v)} className="text-xs font-semibold px-3 py-2 rounded-full border border-violet-200 text-violet-600">
           + Cargar una materia
         </button>
         {materiasConNotas.length > 0 && (
@@ -367,20 +353,17 @@ export function VistaDireccionCurso({ grados }) {
 
       {agregarMateriaAbierto && (
         <div className="bg-violet-50 rounded-xl p-3 mb-4">
-          <p className="text-xs text-slate-500 mb-2">Elegí la materia (del catálogo — no crea una nueva) y el periodo cuyas notas vas a subir con la plantilla simple.</p>
+          <p className="text-xs text-slate-500 mb-2">Escribí el nombre de la materia tal cual la querés ver (no hace falta que exista en tu catálogo) y el periodo cuyas notas vas a subir.</p>
           <div className="flex flex-wrap gap-2 items-center">
-            <select value={materiaAAgregar} onChange={(e) => setMateriaAAgregar(e.target.value)} className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white">
-              {materiasDisponiblesParaAgregar.length === 0 && <option value="">— Todas ya están cargadas —</option>}
-              {materiasDisponiblesParaAgregar.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
-              {materias.filter((m) => materiasConNotas.some((mc) => mc.id === m.id)).map((m) => <option key={m.id} value={m.id}>{m.nombre} (ya tiene notas)</option>)}
-            </select>
+            <input value={materiaAAgregar} onChange={(e) => setMateriaAAgregar(e.target.value)} placeholder="Ej: Matemáticas"
+              className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
             <select value={periodoAAgregar} onChange={(e) => setPeriodoAAgregar(e.target.value)} className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white">
               {PERIODOS.map((p) => <option key={p} value={p}>Periodo {p}</option>)}
             </select>
-            <button disabled={!materiaAAgregar} onClick={() => {
-              const m = materias.find((x) => x.id === parseInt(materiaAAgregar, 10));
-              setImportando({ materiaId: m.id, materiaNombre: m.nombre, periodo: periodoAAgregar });
+            <button disabled={!materiaAAgregar.trim()} onClick={() => {
+              setImportando({ materiaNombre: materiaAAgregar.trim(), periodo: periodoAAgregar });
               setAgregarMateriaAbierto(false);
+              setMateriaAAgregar("");
             }} className="text-xs font-semibold px-3 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">
               Continuar →
             </button>
@@ -462,11 +445,11 @@ export function VistaDireccionCurso({ grados }) {
               <tr className="bg-slate-50">
                 <th className="text-left px-3 py-2 sticky left-0 bg-slate-50">Estudiante</th>
                 {materiasConNotas.map((m) => (
-                  <th key={m.id} className="px-3 py-2">
-                    <div>{m.nombre}</div>
-                    <button onClick={() => eliminarMateriaDelCurso(m.id, m.nombre)} className="text-[9px] text-rose-400 font-normal">🗑 quitar</button>
+                  <th key={m} className="px-3 py-2">
+                    <div>{m}</div>
+                    <button onClick={() => eliminarMateriaDelCurso(m)} className="text-[9px] text-rose-400 font-normal">🗑 quitar</button>
                     <div>
-                      <button onClick={() => setImportando({ materiaId: m.id, materiaNombre: m.nombre, periodo: periodoVista === "promedio" ? "1" : periodoVista })}
+                      <button onClick={() => setImportando({ materiaNombre: m, periodo: periodoVista === "promedio" ? "1" : periodoVista })}
                         className="text-[9px] text-violet-500 font-normal">📥 recargar</button>
                     </div>
                   </th>
@@ -482,12 +465,12 @@ export function VistaDireccionCurso({ grados }) {
                   <tr key={e.id} className="border-t border-slate-100">
                     <td className="px-3 py-2 sticky left-0 bg-white font-medium text-slate-700">{e.nombre}</td>
                     {materiasConNotas.map((m) => {
-                      const celda = notaCeldaCompleta(e.id, m.id, periodoVista);
+                      const celda = notaCeldaCompleta(e.id, m, periodoVista);
                       const v = celda?.nota;
                       const esBaja = v !== null && v !== undefined && v < notaMinima;
                       const enNivelacion = celda?.en_nivelacion;
                       return (
-                        <td key={m.id} onClick={() => toggleNivelacion(celda, e.id, m.id, periodoVista)}
+                        <td key={m} onClick={() => toggleNivelacion(celda, periodoVista)}
                           className={`text-center px-3 py-2 cursor-pointer ${enNivelacion ? "bg-amber-100 text-amber-700 font-semibold" : esBaja ? "bg-rose-50 text-rose-600 font-semibold" : v !== null && v !== undefined ? "text-slate-600" : "text-slate-300"}`}
                           title={periodoVista === "promedio" ? "Elegí un periodo puntual arriba para marcar nivelación" : "Tocá para marcar/desmarcar en nivelación"}>
                           {v !== null && v !== undefined ? v.toFixed(1) : "—"}
@@ -505,11 +488,11 @@ export function VistaDireccionCurso({ grados }) {
       )}
 
       {importando && (
-        <ImportarNotasModal gradoId={gradoId} materiaId={importando.materiaId} materiaNombre={importando.materiaNombre} periodo={importando.periodo}
+        <ImportarNotasModal gradoId={gradoId} materiaNombre={importando.materiaNombre} periodo={importando.periodo}
           estudiantes={estudiantes} onClose={() => setImportando(null)} onImportado={cargar} />
       )}
       {importarBoletinAbierto && (
-        <ImportarBoletinModal gradoId={gradoId} estudiantes={estudiantes} materias={materias} onClose={() => setImportarBoletinAbierto(false)} onImportado={cargar} />
+        <ImportarBoletinModal gradoId={gradoId} estudiantes={estudiantes} onClose={() => setImportarBoletinAbierto(false)} onImportado={cargar} />
       )}
     </div>
   );
