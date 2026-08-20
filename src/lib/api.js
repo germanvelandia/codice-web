@@ -2699,29 +2699,26 @@ export async function fetchEstudiantesConBajasVida() {
 }
 
 /* ---------------- 🎓 Dirección de Curso (consolidado por Excel) ---------------- */
-// Trae todas las notas cargadas para un curso (todas las materias y
-// periodos juntos), para armar la tabla consolidada.
+// Trae todas las notas cargadas para un curso — la materia queda como texto
+// libre (tal cual venga del boletín del colegio), no depende de que esté
+// registrada en el catálogo de materias del docente.
 export async function fetchNotasDireccionCurso(gradoId) {
-  const [notasRes, materiasRes] = await Promise.all([
-    supabase.from("director_curso_notas").select("*").eq("grado_id", gradoId),
-    supabase.from("materias").select("id, nombre"),
-  ]);
-  if (notasRes.error) throw notasRes.error;
-  const nombrePorId = {}; (materiasRes.data || []).forEach((m) => { nombrePorId[m.id] = m.nombre; });
-  return (notasRes.data || []).map((n) => ({ ...n, materia_nombre: nombrePorId[n.materia_id] || `Materia ${n.materia_id}` }));
+  const { data, error } = await supabase.from("director_curso_notas").select("*").eq("grado_id", gradoId);
+  if (error) throw error;
+  return data || [];
 }
 
-export async function guardarNotaDireccionCurso(gradoId, materiaId, estudianteId, periodo, nota) {
+export async function guardarNotaDireccionCurso(gradoId, materiaNombre, estudianteId, periodo, nota) {
   const { data: userData } = await supabase.auth.getUser();
   const { error } = await supabase.from("director_curso_notas").upsert(
-    { grado_id: gradoId, materia_id: materiaId, estudiante_id: estudianteId, periodo, nota, docente_id: userData?.user?.id || null, actualizado_en: new Date().toISOString() },
-    { onConflict: "grado_id,materia_id,estudiante_id,periodo" }
+    { grado_id: gradoId, materia_nombre: materiaNombre, estudiante_id: estudianteId, periodo, nota, docente_id: userData?.user?.id || null, actualizado_en: new Date().toISOString() },
+    { onConflict: "grado_id,materia_nombre,estudiante_id,periodo" }
   );
   if (error) throw error;
 }
 
-export async function eliminarNotasMateriaDireccionCurso(gradoId, materiaId, periodo) {
-  let query = supabase.from("director_curso_notas").delete().eq("grado_id", gradoId).eq("materia_id", materiaId);
+export async function eliminarNotasMateriaDireccionCurso(gradoId, materiaNombre, periodo) {
+  let query = supabase.from("director_curso_notas").delete().eq("grado_id", gradoId).eq("materia_nombre", materiaNombre);
   if (periodo) query = query.eq("periodo", periodo);
   const { error } = await query;
   if (error) throw error;
@@ -2729,7 +2726,7 @@ export async function eliminarNotasMateriaDireccionCurso(gradoId, materiaId, per
 
 // Importa un Excel (Estudiante | Nota) para una materia y periodo puntual,
 // emparejando por nombre — no crea asignaturas nuevas, solo carga notas.
-export async function importarNotasDireccionCurso(gradoId, materiaId, periodo, filas, estudiantes) {
+export async function importarNotasDireccionCurso(gradoId, materiaNombre, periodo, filas, estudiantes) {
   let cargadas = 0;
   const sinEmparejar = [];
   for (const f of filas) {
@@ -2737,7 +2734,7 @@ export async function importarNotasDireccionCurso(gradoId, materiaId, periodo, f
     if (!match) { sinEmparejar.push(f.nombre); continue; }
     const notaNum = parseFloat(String(f.nota).replace(",", "."));
     if (isNaN(notaNum)) continue;
-    await guardarNotaDireccionCurso(gradoId, materiaId, match.id, periodo, notaNum);
+    await guardarNotaDireccionCurso(gradoId, materiaNombre, match.id, periodo, notaNum);
     cargadas++;
   }
   return { cargadas, total: filas.length, sinEmparejar };
@@ -2750,8 +2747,8 @@ export async function toggleNivelacionNota(id, valor) {
 
 // Importa el boletín ANCHO que entrega el colegio: una fila por estudiante,
 // muchas columnas (una por cada materia+periodo). "columnas" es un mapa
-// { indiceColumna: { materiaId, periodo } | null } armado por el docente
-// después de revisar los encabezados — las columnas en null se ignoran.
+// { indiceColumna: { materiaNombre, periodo } | null } armado a partir de lo
+// que dice el propio encabezado del Excel — las columnas en null se ignoran.
 export async function importarBoletinAnchoDireccionCurso(gradoId, filasCrudo, encabezados, columnas, estudiantes) {
   let cargadas = 0;
   const sinEmparejar = new Set();
@@ -2763,12 +2760,12 @@ export async function importarBoletinAnchoDireccionCurso(gradoId, filasCrudo, en
 
     for (let i = 1; i < encabezados.length; i++) {
       const mapeo = columnas[i];
-      if (!mapeo || !mapeo.materiaId || !mapeo.periodo) continue;
+      if (!mapeo || !mapeo.materiaNombre || !mapeo.periodo) continue;
       const crudo = fila[i];
       if (crudo === undefined || crudo === "" || crudo === null) continue;
       const notaNum = parseFloat(String(crudo).replace(",", "."));
       if (isNaN(notaNum)) continue;
-      await guardarNotaDireccionCurso(gradoId, mapeo.materiaId, match.id, String(mapeo.periodo), notaNum);
+      await guardarNotaDireccionCurso(gradoId, mapeo.materiaNombre.trim(), match.id, String(mapeo.periodo), notaNum);
       cargadas++;
     }
   }
