@@ -1,5 +1,5 @@
 import { supabase } from "./supabaseClient";
-import { GRADOS_BASE, ordenarPorApellido } from "./gamification";
+import { GRADOS_BASE, ordenarPorApellido, buscarEstudiantePorNombre } from "./gamification";
 import { notaAutomatica, notaFinalPonderada } from "./calificaciones";
 import { NIVELACION_COMPROMISOS_DEFAULT } from "./actasTemplates";
 
@@ -2696,6 +2696,83 @@ export async function fetchEstudiantesConBajasVida() {
     ...estudiantePorId[estudianteId],
     ...acc,
   })).sort((a, b) => b.totalPerdida - a.totalPerdida);
+}
+
+/* ---------------- 🎓 Dirección de Curso (consolidado por Excel) ---------------- */
+// Trae todas las notas cargadas para un curso (todas las materias y
+// periodos juntos), para armar la tabla consolidada.
+export async function fetchNotasDireccionCurso(gradoId) {
+  const [notasRes, materiasRes] = await Promise.all([
+    supabase.from("director_curso_notas").select("*").eq("grado_id", gradoId),
+    supabase.from("materias").select("id, nombre"),
+  ]);
+  if (notasRes.error) throw notasRes.error;
+  const nombrePorId = {}; (materiasRes.data || []).forEach((m) => { nombrePorId[m.id] = m.nombre; });
+  return (notasRes.data || []).map((n) => ({ ...n, materia_nombre: nombrePorId[n.materia_id] || `Materia ${n.materia_id}` }));
+}
+
+export async function guardarNotaDireccionCurso(gradoId, materiaId, estudianteId, periodo, nota) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("director_curso_notas").upsert(
+    { grado_id: gradoId, materia_id: materiaId, estudiante_id: estudianteId, periodo, nota, docente_id: userData?.user?.id || null, actualizado_en: new Date().toISOString() },
+    { onConflict: "grado_id,materia_id,estudiante_id,periodo" }
+  );
+  if (error) throw error;
+}
+
+export async function eliminarNotasMateriaDireccionCurso(gradoId, materiaId, periodo) {
+  let query = supabase.from("director_curso_notas").delete().eq("grado_id", gradoId).eq("materia_id", materiaId);
+  if (periodo) query = query.eq("periodo", periodo);
+  const { error } = await query;
+  if (error) throw error;
+}
+
+// Importa un Excel (Estudiante | Nota) para una materia y periodo puntual,
+// emparejando por nombre — no crea asignaturas nuevas, solo carga notas.
+export async function importarNotasDireccionCurso(gradoId, materiaId, periodo, filas, estudiantes) {
+  let cargadas = 0;
+  const sinEmparejar = [];
+  for (const f of filas) {
+    const match = buscarEstudiantePorNombre(f.nombre, estudiantes);
+    if (!match) { sinEmparejar.push(f.nombre); continue; }
+    const notaNum = parseFloat(String(f.nota).replace(",", "."));
+    if (isNaN(notaNum)) continue;
+    await guardarNotaDireccionCurso(gradoId, materiaId, match.id, periodo, notaNum);
+    cargadas++;
+  }
+  return { cargadas, total: filas.length, sinEmparejar };
+}
+
+export async function toggleNivelacionNota(id, valor) {
+  const { error } = await supabase.from("director_curso_notas").update({ en_nivelacion: valor }).eq("id", id);
+  if (error) throw error;
+}
+
+// Importa el boletín ANCHO que entrega el colegio: una fila por estudiante,
+// muchas columnas (una por cada materia+periodo). "columnas" es un mapa
+// { indiceColumna: { materiaId, periodo } | null } armado por el docente
+// después de revisar los encabezados — las columnas en null se ignoran.
+export async function importarBoletinAnchoDireccionCurso(gradoId, filasCrudo, encabezados, columnas, estudiantes) {
+  let cargadas = 0;
+  const sinEmparejar = new Set();
+  for (const fila of filasCrudo) {
+    const nombreEstudiante = String(fila[0] || "").trim();
+    if (!nombreEstudiante) continue;
+    const match = buscarEstudiantePorNombre(nombreEstudiante, estudiantes);
+    if (!match) { sinEmparejar.add(nombreEstudiante); continue; }
+
+    for (let i = 1; i < encabezados.length; i++) {
+      const mapeo = columnas[i];
+      if (!mapeo || !mapeo.materiaId || !mapeo.periodo) continue;
+      const crudo = fila[i];
+      if (crudo === undefined || crudo === "" || crudo === null) continue;
+      const notaNum = parseFloat(String(crudo).replace(",", "."));
+      if (isNaN(notaNum)) continue;
+      await guardarNotaDireccionCurso(gradoId, mapeo.materiaId, match.id, String(mapeo.periodo), notaNum);
+      cargadas++;
+    }
+  }
+  return { cargadas, sinEmparejar: Array.from(sinEmparejar) };
 }
 
 export async function fetchInstitucion() {
