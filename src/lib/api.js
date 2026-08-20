@@ -2772,6 +2772,96 @@ export async function importarBoletinAnchoDireccionCurso(gradoId, filasCrudo, en
   return { cargadas, sinEmparejar: Array.from(sinEmparejar) };
 }
 
+// Consolida, por curso: identificación básica, % de asistencia, resumen
+// académico (de Dirección de Curso) y situaciones convivenciales — para el
+// panel central del Director de Curso, sin tener que ir pantalla por pantalla.
+export async function fetchPanelDireccionCurso(gradoId) {
+  const estudiantes = await fetchEstudiantesPorGrado(gradoId);
+  const idsEstudiantes = estudiantes.map((e) => e.id);
+  const [asistenciaRes, notas, actasRes, citacionesRes] = await Promise.all([
+    idsEstudiantes.length ? supabase.from("asistencia").select("estudiante_id, codigo").in("estudiante_id", idsEstudiantes) : { data: [] },
+    fetchNotasDireccionCurso(gradoId),
+    supabase.from("actas").select("id, estudiante_id, fecha, tipo, tipo_evento, evaluacion_compromiso"),
+    supabase.from("citaciones_padres").select("id, estudiante_id, estado, fecha_citacion"),
+  ]);
+
+  const asistenciaPorEstudiante = {};
+  (asistenciaRes.data || []).forEach((r) => {
+    if (!asistenciaPorEstudiante[r.estudiante_id]) asistenciaPorEstudiante[r.estudiante_id] = { P: 0, R: 0, FI: 0, FJ: 0, total: 0 };
+    asistenciaPorEstudiante[r.estudiante_id][r.codigo] = (asistenciaPorEstudiante[r.estudiante_id][r.codigo] || 0) + 1;
+    asistenciaPorEstudiante[r.estudiante_id].total += 1;
+  });
+
+  const idsDelCurso = new Set(estudiantes.map((e) => e.id));
+  const actasDelCurso = (actasRes.data || []).filter((a) => idsDelCurso.has(a.estudiante_id));
+  const citacionesDelCurso = (citacionesRes.data || []).filter((c) => idsDelCurso.has(c.estudiante_id));
+
+  const resultado = estudiantes.map((e) => {
+    const asis = asistenciaPorEstudiante[e.id];
+    const porcentajeAsistencia = asis && asis.total > 0 ? Math.round(((asis.P || 0) / asis.total) * 100) : null;
+    const propiasNotas = notas.filter((n) => n.estudiante_id === e.id);
+    const materiasUnicas = Array.from(new Set(propiasNotas.map((n) => n.materia_nombre)));
+    const promediosPorMateria = materiasUnicas.map((m) => {
+      const vals = propiasNotas.filter((n) => n.materia_nombre === m).map((n) => Number(n.nota));
+      return vals.reduce((a, v) => a + v, 0) / vals.length;
+    });
+    const promedioGeneral = promediosPorMateria.length ? promediosPorMateria.reduce((a, v) => a + v, 0) / promediosPorMateria.length : null;
+    const perdidas = promediosPorMateria.filter((v) => v < 3.5).length;
+    const actasEst = actasDelCurso.filter((a) => a.estudiante_id === e.id);
+    const compromisosPendientes = actasEst.filter((a) => a.evaluacion_compromiso === "en_proceso" || !a.evaluacion_compromiso).length;
+    const citacionesPendientes = citacionesDelCurso.filter((c) => c.estudiante_id === e.id && c.estado === "pendiente").length;
+
+    return {
+      ...e,
+      porcentajeAsistencia,
+      promedioGeneral,
+      perdidas,
+      totalSituaciones: actasEst.length,
+      compromisosPendientes,
+      citacionesPendientes,
+    };
+  });
+
+  const conAsistencia = resultado.filter((e) => e.porcentajeAsistencia !== null);
+  const conPromedio = resultado.filter((e) => e.promedioGeneral !== null);
+  const resumenGrupo = {
+    asistenciaPromedio: conAsistencia.length ? Math.round(conAsistencia.reduce((a, e) => a + e.porcentajeAsistencia, 0) / conAsistencia.length) : null,
+    promedioGrupo: conPromedio.length ? conPromedio.reduce((a, e) => a + e.promedioGeneral, 0) / conPromedio.length : null,
+    casosConvivenciales: actasDelCurso.length,
+    compromisosPendientes: resultado.reduce((a, e) => a + e.compromisosPendientes, 0),
+    citacionesPendientes: resultado.reduce((a, e) => a + e.citacionesPendientes, 0),
+  };
+
+  return { estudiantes: resultado, resumenGrupo };
+}
+
+/* ---------------- 📞 Citaciones a padres ---------------- */
+export async function fetchCitacionesPorCurso(gradoId) {
+  const estudiantes = await fetchEstudiantesPorGrado(gradoId);
+  const ids = estudiantes.map((e) => e.id);
+  if (ids.length === 0) return [];
+  const { data, error } = await supabase.from("citaciones_padres").select("*").in("estudiante_id", ids).order("fecha_citacion", { ascending: false });
+  if (error) throw error;
+  const nombrePorId = {}; estudiantes.forEach((e) => { nombrePorId[e.id] = e.nombre; });
+  return (data || []).map((c) => ({ ...c, estudiante_nombre: nombrePorId[c.estudiante_id] }));
+}
+
+export async function crearCitacion(estudianteId, campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("citaciones_padres").insert({ estudiante_id: estudianteId, docente_id: userData?.user?.id || null, ...campos });
+  if (error) throw error;
+}
+
+export async function editarCitacion(id, campos) {
+  const { error } = await supabase.from("citaciones_padres").update(campos).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarCitacion(id) {
+  const { error } = await supabase.from("citaciones_padres").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
