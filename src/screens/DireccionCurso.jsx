@@ -236,8 +236,277 @@ function recomendacionPara(resumen, materiasBajas) {
   return `Situación académica crítica (${resumen.perdidas} materias perdidas). Se recomienda remisión a Orientación Escolar, citación urgente a acudiente y plan de mejoramiento integral.`;
 }
 
-export function VistaDireccionCurso({ grados }) {
-  const [gradoId, setGradoId] = useState(grados[0]?.id || "");
+function PanelDireccionCurso({ gradoId, onVerNotas, onVerCitaciones }) {
+  const [datos, setDatos] = useState(null);
+  const [cargando, setCargando] = useState(true);
+  const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    if (!gradoId) return;
+    setCargando(true);
+    api.fetchPanelDireccionCurso(gradoId).then((d) => { setDatos(d); setCargando(false); });
+  }, [gradoId]);
+
+  if (cargando || !datos) return <div className="text-sm text-slate-400">Cargando…</div>;
+
+  const { estudiantes, resumenGrupo } = datos;
+  const visibles = estudiantes.filter((e) => !query.trim() || e.nombre.toLowerCase().includes(query.trim().toLowerCase()));
+
+  return (
+    <div>
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
+        <div className="bg-white rounded-2xl border border-slate-100 p-3 text-center">
+          <div className="text-xl font-bold text-violet-600">{resumenGrupo.asistenciaPromedio !== null ? `${resumenGrupo.asistenciaPromedio}%` : "—"}</div>
+          <div className="text-[10px] text-slate-400">Asistencia del grupo</div>
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-100 p-3 text-center">
+          <div className="text-xl font-bold text-violet-600">{resumenGrupo.promedioGrupo !== null ? resumenGrupo.promedioGrupo.toFixed(2) : "—"}</div>
+          <div className="text-[10px] text-slate-400">Promedio del grupo</div>
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-100 p-3 text-center">
+          <div className="text-xl font-bold text-rose-500">{resumenGrupo.casosConvivenciales}</div>
+          <div className="text-[10px] text-slate-400">Casos convivenciales</div>
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-100 p-3 text-center">
+          <div className="text-xl font-bold text-amber-500">{resumenGrupo.compromisosPendientes}</div>
+          <div className="text-[10px] text-slate-400">Compromisos pendientes</div>
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-100 p-3 text-center cursor-pointer hover:border-violet-200" onClick={onVerCitaciones}>
+          <div className="text-xl font-bold text-blue-500">{resumenGrupo.citacionesPendientes}</div>
+          <div className="text-[10px] text-slate-400">Citaciones pendientes</div>
+        </div>
+      </div>
+
+      <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="🔍 Buscar estudiante…"
+        className="text-sm rounded-full px-4 py-2 border border-slate-200 outline-none w-full max-w-sm mb-3" />
+
+      <div className="overflow-x-auto bg-white rounded-2xl shadow-sm border border-slate-100">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="bg-slate-50">
+              <th className="text-left px-3 py-2">Estudiante</th>
+              <th className="px-3 py-2">Asistencia</th>
+              <th className="px-3 py-2">Promedio</th>
+              <th className="px-3 py-2">Pérdidas</th>
+              <th className="px-3 py-2">Situaciones</th>
+              <th className="px-3 py-2">Compromisos</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visibles.map((e) => (
+              <tr key={e.id} className="border-t border-slate-100">
+                <td className="px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-slate-700">{e.nombre}</span>
+                    {e.piar && <span title="PIAR">🧩</span>}
+                    {e.dua && <span title="DUA">🧩</span>}
+                  </div>
+                </td>
+                <td className={`text-center px-3 py-2 font-semibold ${e.porcentajeAsistencia !== null && e.porcentajeAsistencia < 80 ? "text-rose-600" : "text-slate-600"}`}>
+                  {e.porcentajeAsistencia !== null ? `${e.porcentajeAsistencia}%` : "—"}
+                </td>
+                <td className="text-center px-3 py-2 font-semibold text-slate-700">{e.promedioGeneral !== null ? e.promedioGeneral.toFixed(1) : "—"}</td>
+                <td className={`text-center px-3 py-2 font-semibold ${e.perdidas > 0 ? "text-rose-600" : "text-emerald-600"}`}>{e.perdidas}</td>
+                <td className="text-center px-3 py-2">{e.totalSituaciones}</td>
+                <td className={`text-center px-3 py-2 ${e.compromisosPendientes > 0 ? "text-amber-600 font-semibold" : "text-slate-400"}`}>{e.compromisosPendientes}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="text-[11px] text-slate-400 mt-3">
+        Ficha completa (acudiente, EPS, PIAR/DUA, Observador, Actas) desde Estudiantes → "⋯ Más" en cada estudiante. Notas detalladas y análisis en la pestaña "Notas" de arriba.
+      </p>
+    </div>
+  );
+}
+
+function CitacionForm({ estudiantes, citacion, onCancelar, onGuardada }) {
+  const [estudianteId, setEstudianteId] = useState(citacion?.estudiante_id || estudiantes[0]?.id || "");
+  const [motivo, setMotivo] = useState(citacion?.motivo || "");
+  const [fecha, setFecha] = useState(citacion?.fecha_citacion || "");
+  const [hora, setHora] = useState(citacion?.hora_citacion || "");
+  const [guardando, setGuardando] = useState(false);
+
+  const guardar = async () => {
+    if (!estudianteId || !motivo.trim()) { alert("Elegí el estudiante y escribí el motivo."); return; }
+    setGuardando(true);
+    try {
+      const campos = { motivo: motivo.trim(), fecha_citacion: fecha || null, hora_citacion: hora || null };
+      if (citacion) await api.editarCitacion(citacion.id, campos);
+      else await api.crearCitacion(estudianteId, campos);
+      onGuardada();
+    } catch (e) {
+      alert("Error al guardar: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  return (
+    <div className="bg-violet-50 rounded-xl p-3 mb-3">
+      <label className="text-xs text-slate-500 block mb-1">Estudiante</label>
+      <select value={estudianteId} onChange={(e) => setEstudianteId(parseInt(e.target.value, 10))} disabled={!!citacion}
+        className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white disabled:opacity-60">
+        {estudiantes.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
+      </select>
+      <label className="text-xs text-slate-500 block mb-1">Motivo de la citación</label>
+      <textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={2} placeholder="Ej: Bajo rendimiento académico en varias materias…"
+        className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
+      <div className="grid grid-cols-2 gap-2 mb-2">
+        <div>
+          <label className="text-xs text-slate-500 block mb-1">Fecha propuesta</label>
+          <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
+        </div>
+        <div>
+          <label className="text-xs text-slate-500 block mb-1">Hora</label>
+          <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
+        </div>
+      </div>
+      <div className="flex justify-end gap-2">
+        <button onClick={onCancelar} className="text-xs text-slate-500 px-3 py-1.5">Cancelar</button>
+        <button disabled={guardando} onClick={guardar} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+          {guardando ? "Guardando…" : citacion ? "Guardar cambios" : "Generar citación"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AtenderCitacionModal({ citacion, onClose, onGuardada }) {
+  const [estado, setEstado] = useState(citacion.estado === "pendiente" ? "atendida" : citacion.estado);
+  const [notas, setNotas] = useState(citacion.notas_atencion || "");
+  const [acuerdos, setAcuerdos] = useState(citacion.acuerdos || "");
+  const [guardando, setGuardando] = useState(false);
+
+  const guardar = async () => {
+    setGuardando(true);
+    try {
+      await api.editarCitacion(citacion.id, { estado, notas_atencion: notas.trim() || null, acuerdos: acuerdos.trim() || null });
+      onGuardada();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  const imprimir = () => {
+    const ventana = window.open("", "_blank");
+    ventana.document.write(`
+      <html><head><title>Acta de atención — ${citacion.estudiante_nombre}</title></head>
+      <body style="font-family: Arial, sans-serif; padding: 30px; font-size: 13px;">
+        <h2 style="text-align:center;">ACTA DE ATENCIÓN A ACUDIENTE</h2>
+        <p><b>Estudiante:</b> ${citacion.estudiante_nombre}</p>
+        <p><b>Fecha:</b> ${citacion.fecha_citacion || "—"} ${citacion.hora_citacion || ""}</p>
+        <p><b>Motivo de la citación:</b><br/>${citacion.motivo}</p>
+        <p><b>Notas de la atención:</b><br/>${notas || "—"}</p>
+        <p><b>Acuerdos:</b><br/>${acuerdos || "—"}</p>
+        <div style="display:flex; justify-content:space-between; margin-top:60px;">
+          <div style="border-top:1px solid #000; width:40%; text-align:center; padding-top:4px;">Firma Padre de Familia / Acudiente</div>
+          <div style="border-top:1px solid #000; width:40%; text-align:center; padding-top:4px;">Firma Director(a) de Curso</div>
+        </div>
+        <script>window.print();</script>
+      </body></html>
+    `);
+    ventana.document.close();
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-md shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">📞 {citacion.estudiante_nombre}</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-500 mb-3"><b>Motivo:</b> {citacion.motivo}</p>
+
+        <label className="text-xs text-slate-500 block mb-1">Estado</label>
+        <select value={estado} onChange={(e) => setEstado(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none">
+          <option value="pendiente">Pendiente</option>
+          <option value="atendida">Atendida</option>
+          <option value="no_asistio">No asistió</option>
+        </select>
+        <label className="text-xs text-slate-500 block mb-1">Notas de la reunión</label>
+        <textarea value={notas} onChange={(e) => setNotas(e.target.value)} rows={3} className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none" />
+        <label className="text-xs text-slate-500 block mb-1">Acuerdos</label>
+        <textarea value={acuerdos} onChange={(e) => setAcuerdos(e.target.value)} rows={2} className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
+
+        <div className="flex justify-between gap-2">
+          <button onClick={imprimir} className="text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 text-slate-600">🖨️ Imprimir acta</button>
+          <button disabled={guardando} onClick={guardar} className="text-xs font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+            {guardando ? "Guardando…" : "Guardar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CitacionesDireccionCurso({ gradoId }) {
+  const [estudiantes, setEstudiantes] = useState([]);
+  const [citaciones, setCitaciones] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [formAbierto, setFormAbierto] = useState(false);
+  const [atendiendo, setAtendiendo] = useState(null);
+
+  const cargar = () => {
+    if (!gradoId) return;
+    setCargando(true);
+    Promise.all([api.fetchEstudiantesPorGrado(gradoId), api.fetchCitacionesPorCurso(gradoId)]).then(([est, cit]) => {
+      setEstudiantes(est.sort((a, b) => a.nombre.localeCompare(b.nombre)));
+      setCitaciones(cit);
+      setCargando(false);
+    });
+  };
+  useEffect(() => { cargar(); }, [gradoId]);
+
+  const eliminar = async (id) => { if (!confirm("¿Eliminar esta citación?")) return; await api.eliminarCitacion(id); cargar(); };
+
+  const ESTADO_LABEL = { pendiente: "🟡 Pendiente", atendida: "🟢 Atendida", no_asistio: "🔴 No asistió" };
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-3">
+        <p className="text-sm text-slate-500">Generá y llevá el registro de citaciones a padres de este curso.</p>
+        <button onClick={() => setFormAbierto((v) => !v)} className="text-xs font-semibold px-3 py-2 rounded-full bg-violet-500 text-white">
+          {formAbierto ? "Cerrar" : "+ Nueva citación"}
+        </button>
+      </div>
+
+      {formAbierto && (
+        <CitacionForm estudiantes={estudiantes} onCancelar={() => setFormAbierto(false)} onGuardada={() => { setFormAbierto(false); cargar(); }} />
+      )}
+
+      {cargando ? (
+        <div className="text-sm text-slate-400">Cargando…</div>
+      ) : citaciones.length === 0 ? (
+        <div className="text-sm text-slate-400 bg-white rounded-2xl p-6 text-center border border-dashed border-slate-200">Todavía no hay citaciones registradas para este curso.</div>
+      ) : (
+        <div className="space-y-2">
+          {citaciones.map((c) => (
+            <div key={c.id} className="bg-white rounded-xl border border-slate-100 p-3 flex justify-between items-start gap-2">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-slate-700">{c.estudiante_nombre}</div>
+                <div className="text-xs text-slate-500 mt-0.5">{c.motivo}</div>
+                <div className="text-[11px] text-slate-400 mt-1">
+                  {ESTADO_LABEL[c.estado]} {c.fecha_citacion ? `· ${c.fecha_citacion}${c.hora_citacion ? ` ${c.hora_citacion}` : ""}` : ""}
+                </div>
+              </div>
+              <div className="flex gap-1.5 shrink-0">
+                <button onClick={() => setAtendiendo(c)} className="text-xs text-violet-500 font-semibold">Gestionar</button>
+                <button onClick={() => eliminar(c.id)} className="text-xs text-slate-300 hover:text-rose-500">🗑</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {atendiendo && <AtenderCitacionModal citacion={atendiendo} onClose={() => setAtendiendo(null)} onGuardada={() => { setAtendiendo(null); cargar(); }} />}
+    </div>
+  );
+}
+
+function VistaNotasDireccionCurso({ grados, gradoId, setGradoId }) {
   const [estudiantes, setEstudiantes] = useState([]);
   const [notas, setNotas] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -249,8 +518,6 @@ export function VistaDireccionCurso({ grados }) {
   const [materiaAAgregar, setMateriaAAgregar] = useState("");
   const [periodoAAgregar, setPeriodoAAgregar] = useState("1");
   const [vistaAnalisis, setVistaAnalisis] = useState(false);
-
-  useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
 
   const cargar = () => {
     if (!gradoId) return;
@@ -319,15 +586,7 @@ export function VistaDireccionCurso({ grados }) {
 
   return (
     <div>
-      <div className="mb-4">
-        <h2 className="text-xl font-bold text-slate-800">🎓 Dirección de Curso</h2>
-        <p className="text-sm text-slate-400">Consolidá las notas de todas las materias del curso (las dictes vos o no) subiendo el boletín del colegio — promedios, pérdidas, puestos y recomendaciones de un vistazo.</p>
-      </div>
-
       <div className="flex flex-wrap gap-2 items-center mb-2">
-        <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
-          {grados.map((g) => <option key={g.id} value={g.id}>Curso {g.id}</option>)}
-        </select>
         <select value={periodoVista} onChange={(e) => setPeriodoVista(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
           <option value="promedio">Promedio de todos los periodos</option>
           {periodosConDatos.map((p) => <option key={p} value={p}>Solo Periodo {p}</option>)}
@@ -494,6 +753,37 @@ export function VistaDireccionCurso({ grados }) {
       {importarBoletinAbierto && (
         <ImportarBoletinModal gradoId={gradoId} estudiantes={estudiantes} onClose={() => setImportarBoletinAbierto(false)} onImportado={cargar} />
       )}
+    </div>
+  );
+}
+
+export function VistaDireccionCurso({ grados }) {
+  const [gradoId, setGradoId] = useState(grados[0]?.id || "");
+  const [vista, setVista] = useState("panel"); // "panel" | "notas" | "citaciones"
+
+  useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
+
+  return (
+    <div>
+      <div className="mb-4">
+        <h2 className="text-xl font-bold text-slate-800">🎓 Dirección de Curso</h2>
+        <p className="text-sm text-slate-400">Panel central del curso: asistencia, convivencia, notas y citaciones, todo en un solo lugar.</p>
+      </div>
+
+      <div className="flex flex-wrap gap-2 items-center mb-4">
+        <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
+          {grados.map((g) => <option key={g.id} value={g.id}>Curso {g.id}</option>)}
+        </select>
+        <div className="flex gap-1 rounded-full bg-slate-100 p-1">
+          <button onClick={() => setVista("panel")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "panel" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📊 Panel</button>
+          <button onClick={() => setVista("notas")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "notas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📝 Notas</button>
+          <button onClick={() => setVista("citaciones")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "citaciones" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📞 Citaciones</button>
+        </div>
+      </div>
+
+      {vista === "panel" && <PanelDireccionCurso gradoId={gradoId} onVerCitaciones={() => setVista("citaciones")} />}
+      {vista === "notas" && <VistaNotasDireccionCurso grados={grados} gradoId={gradoId} setGradoId={setGradoId} />}
+      {vista === "citaciones" && <CitacionesDireccionCurso gradoId={gradoId} />}
     </div>
   );
 }
