@@ -148,8 +148,34 @@ function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre" }) {
         </tbody>
       </table>
 
-      {/* Hoja complementaria: seguimiento por periodo, en la misma tanda de páginas */}
-      <div style={{ fontWeight: "bold", marginBottom: 4, marginTop: 8 }}>3. RENDIMIENTO ACADÉMICO POR {infoSistema.nombre.toUpperCase()} (marcar con X si reprobó)</div>
+      {/* Hoja nueva y aparte: anotaciones libres de cualquier docente sobre el estudiante */}
+      <div style={{ pageBreakBefore: "always", paddingTop: 6 }}>
+        <div style={{ fontWeight: "bold", marginBottom: 4 }}>4. HOJA DE ANOTACIONES DE DOCENTES (por completar a mano)</div>
+        <p style={{ fontSize: 9, marginBottom: 6, color: "#555" }}>
+          Espacio para que cualquier docente que tenga contacto con el estudiante registre observaciones — académicas o convivenciales — sin necesidad de generar un acta formal.
+        </p>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              <th style={{ border: "1px solid #000", padding: 3, fontSize: 9, width: "12%" }}>Fecha</th>
+              <th style={{ border: "1px solid #000", padding: 3, fontSize: 9, width: "22%" }}>Materia / Docente</th>
+              <th style={{ border: "1px solid #000", padding: 3, fontSize: 9 }}>Anotación</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: 14 }).map((_, i) => (
+              <tr key={i}>
+                <td style={{ border: "1px solid #000", height: 24 }}></td>
+                <td style={{ border: "1px solid #000", height: 24 }}></td>
+                <td style={{ border: "1px solid #000", height: 24 }}></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Rendimiento académico */}
+      <div style={{ fontWeight: "bold", marginBottom: 4, marginTop: 8, pageBreakBefore: "always", paddingTop: 6 }}>5. RENDIMIENTO ACADÉMICO POR {infoSistema.nombre.toUpperCase()} (marcar con X si reprobó)</div>
       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 10, fontSize: 9.5 }}>
         <thead>
           <tr>
@@ -171,8 +197,8 @@ function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre" }) {
         </tbody>
       </table>
 
-      {/* Observaciones + firmas, una sola tabla con una fila por periodo — en página nueva */}
-      <div style={{ fontWeight: "bold", marginBottom: 4, pageBreakBefore: "always", paddingTop: 6 }}>4. OBSERVACIONES Y FIRMAS POR {infoSistema.nombre.toUpperCase()}</div>
+      {/* Observaciones + firmas, una sola tabla con una fila por periodo */}
+      <div style={{ fontWeight: "bold", marginBottom: 4 }}>6. OBSERVACIONES Y FIRMAS POR {infoSistema.nombre.toUpperCase()}</div>
       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 12, fontSize: 9 }}>
         <thead>
           <tr>
@@ -200,7 +226,7 @@ function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre" }) {
 
       {/* Nivelaciones */}
       <div style={{ pageBreakInside: "avoid" }}>
-        <div style={{ fontWeight: "bold", marginBottom: 4 }}>5. ESPACIO PARA NIVELACIONES</div>
+        <div style={{ fontWeight: "bold", marginBottom: 4 }}>7. ESPACIO PARA NIVELACIONES</div>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 9.5 }}>
           <thead>
             <tr>
