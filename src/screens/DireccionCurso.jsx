@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
 import * as api from "../lib/api";
+import { ordenarPorApellido } from "../lib/gamification";
 
 const PERIODOS = ["1", "2", "3", "4"];
 
@@ -790,7 +791,7 @@ function CitacionesDireccionCurso({ gradoId, institucion }) {
     if (!gradoId) return;
     setCargando(true);
     Promise.all([api.fetchEstudiantesPorGrado(gradoId), api.fetchCitacionesPorCurso(gradoId)]).then(([est, cit]) => {
-      setEstudiantes(est.sort((a, b) => a.nombre.localeCompare(b.nombre)));
+      setEstudiantes(ordenarPorApellido(est));
       setCitaciones(cit);
       setCargando(false);
     });
@@ -821,9 +822,11 @@ function CitacionesDireccionCurso({ gradoId, institucion }) {
         <div className="text-sm text-slate-400 bg-white rounded-2xl p-6 text-center border border-dashed border-slate-200">Todavía no hay citaciones registradas para este curso.</div>
       ) : (
         <div className="space-y-4">
-          {Object.entries(
-            citaciones.reduce((acc, c) => { (acc[c.estudiante_id] = acc[c.estudiante_id] || []).push(c); return acc; }, {})
-          ).map(([estudianteId, lista]) => {
+          {estudiantes
+            .map((e) => ({ estudiante: e, lista: citaciones.filter((c) => c.estudiante_id === e.id) }))
+            .filter((g) => g.lista.length > 0)
+            .map(({ estudiante, lista }) => {
+            const estudianteId = estudiante.id;
             const noAsistio = lista.filter((c) => c.estado === "no_asistio").length;
             return (
               <div key={estudianteId} className="bg-white rounded-2xl border border-slate-100 p-3">
@@ -888,7 +891,7 @@ function VistaNotasDireccionCurso({ grados, gradoId, setGradoId, institucion }) 
     if (!gradoId) return;
     setCargando(true);
     Promise.all([api.fetchEstudiantesPorGrado(gradoId), api.fetchNotasDireccionCurso(gradoId), api.fetchEstadosMateriaCurso(gradoId)]).then(([est, n, es]) => {
-      setEstudiantes(est.sort((a, b) => a.nombre.localeCompare(b.nombre)));
+      setEstudiantes(ordenarPorApellido(est));
       setNotas(n);
       setEstados(es);
       setCargando(false);
