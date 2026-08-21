@@ -4,6 +4,22 @@ import * as api from "../lib/api";
 
 const PERIODOS = ["1", "2", "3", "4"];
 
+// Plan de asignaturas estándar, para no tener que escribir cada nombre a
+// mano — se pueden agregar con un toque desde "+ Cargar una materia".
+const MATERIAS_DIRECCION_FIJAS = [
+  "CIENCIAS NATURALES Y EDUCACIÓN AMBIENTAL",
+  "CIENCIAS SOCIALES",
+  "EDUCACIÓN ARTÍSTICA - MÚSICA",
+  "EDUCACIÓN ARTÍSTICA - TEATRO",
+  "EDUCACIÓN FÍSICA, RECREACIÓN Y DEPORTES",
+  "EDUCACIÓN RELIGIOSA Y MORAL",
+  "EDUCACIÓN ÉTICA Y EN VALORES HUMANOS",
+  "HUMANIDADES - LENGUA CASTELLANA",
+  "IDIOMA EXTRANJERO - INGLES",
+  "MATEMÁTICAS",
+  "TECNOLOGÍA E INFORMÁTICA",
+];
+
 function ImportarNotasModal({ gradoId, materiaNombre, periodo, estudiantes, onClose, onImportado }) {
   const [procesando, setProcesando] = useState(false);
   const [resultado, setResultado] = useState(null);
@@ -96,7 +112,7 @@ function adivinarMapeo(encabezado) {
   return { materiaNombre: texto, periodo: "" };
 }
 
-function ImportarBoletinModal({ gradoId, estudiantes, onClose, onImportado }) {
+function ImportarBoletinModal({ gradoId, estudiantes, periodosDisponibles, onClose, onImportado }) {
   const [paso, setPaso] = useState(1); // 1: subir archivo, 2: mapear columnas, 3: resultado
   const [encabezados, setEncabezados] = useState([]);
   const [filasCrudo, setFilasCrudo] = useState([]);
@@ -177,6 +193,9 @@ function ImportarBoletinModal({ gradoId, estudiantes, onClose, onImportado }) {
               Revisá el nombre de materia y el periodo que le detecté a cada columna — traté de leerlo directo del encabezado de tu archivo,
               corregí lo que haga falta. Dejá el periodo vacío en las columnas que quieras ignorar (ej: "Promedio" o "Puesto" que ya trae el colegio).
             </p>
+            <datalist id="materias-fijas-dc">
+              {MATERIAS_DIRECCION_FIJAS.map((m) => <option key={m} value={m} />)}
+            </datalist>
             <div className="space-y-1.5 mb-4 max-h-96 overflow-y-auto">
               {encabezados.slice(1).map((h, idx) => {
                 const i = idx + 1;
@@ -185,12 +204,12 @@ function ImportarBoletinModal({ gradoId, estudiantes, onClose, onImportado }) {
                 return (
                   <div key={i} className={`flex items-center gap-2 rounded-lg p-2 ${reconocida ? "bg-emerald-50" : "bg-slate-50"}`}>
                     <span className="text-[10px] text-slate-400 w-28 truncate shrink-0" title={h}>Excel: "{h}"</span>
-                    <input value={m.materiaNombre} onChange={(e) => actualizarMapeo(i, "materiaNombre", e.target.value)} placeholder="Nombre de la materia"
+                    <input value={m.materiaNombre} onChange={(e) => actualizarMapeo(i, "materiaNombre", e.target.value)} placeholder="Nombre de la materia" list="materias-fijas-dc"
                       className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
                     <select value={m.periodo} onChange={(e) => actualizarMapeo(i, "periodo", e.target.value)}
                       className="w-24 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
                       <option value="">Ignorar</option>
-                      {PERIODOS.map((p) => <option key={p} value={p}>Periodo {p}</option>)}
+                      {periodosDisponibles.map((p) => <option key={p} value={p}>Periodo {p}</option>)}
                     </select>
                   </div>
                 );
@@ -228,14 +247,14 @@ function ImportarBoletinModal({ gradoId, estudiantes, onClose, onImportado }) {
   );
 }
 
-function imprimirListadoClase(gradoId, estudiantes) {
+function imprimirListadoClase(gradoId, estudiantes, institucion) {
   const filas = estudiantes.map((e, i) => `<tr><td style="border:1px solid #000;padding:5px;text-align:center;">${i + 1}</td><td style="border:1px solid #000;padding:5px;">${e.nombre}</td><td style="border:1px solid #000;padding:5px;"></td></tr>`).join("");
   const ventana = window.open("", "_blank");
   ventana.document.write(`
     <html><head><title>Listado de clase — Curso ${gradoId}</title></head>
     <body style="font-family: Arial, sans-serif; padding: 30px; font-size: 13px;">
-      <h2 style="text-align:center;">LISTADO DE CLASE — DIRECCIÓN DE CURSO ${gradoId}</h2>
-      <table style="width:100%; border-collapse:collapse; margin-top:20px;">
+      ${htmlEncabezadoColegio(institucion, `LISTADO DE CLASE — DIRECCIÓN DE CURSO ${gradoId}`)}
+      <table style="width:100%; border-collapse:collapse; margin-top:10px;">
         <thead><tr>
           <th style="border:1px solid #000;padding:5px;width:6%;">#</th>
           <th style="border:1px solid #000;padding:5px;text-align:left;">Estudiante</th>
@@ -249,7 +268,7 @@ function imprimirListadoClase(gradoId, estudiantes) {
   ventana.document.close();
 }
 
-function imprimirCierrePeriodo(gradoId, estudiantes, materiasConNotas, obtenerCelda, notaMinima, periodoVista, estadoDe) {
+function imprimirCierrePeriodo(gradoId, estudiantes, materiasConNotas, obtenerCelda, notaMinima, periodoVista, estadoDe, institucion) {
   const etiquetaPeriodo = periodoVista === "promedio" ? "Promedio general" : `Periodo ${periodoVista}`;
   const encabezadoMaterias = materiasConNotas.map((m) => `<th style="border:1px solid #000;padding:4px;font-size:11px;">${m}</th>`).join("");
   const filas = estudiantes.map((e) => {
@@ -270,7 +289,7 @@ function imprimirCierrePeriodo(gradoId, estudiantes, materiasConNotas, obtenerCe
   ventana.document.write(`
     <html><head><title>Cierre de periodo — Curso ${gradoId}</title></head>
     <body style="font-family: Arial, sans-serif; padding: 20px; font-size: 12px;">
-      <h2 style="text-align:center;">CIERRE DE PERIODO — CURSO ${gradoId}</h2>
+      ${htmlEncabezadoColegio(institucion, `CIERRE DE PERIODO — CURSO ${gradoId}`)}
       <p style="text-align:center;">${etiquetaPeriodo} — X = perdida · ✓ = aprobada · R = recupero (según estado marcado; si no hay estado, se usa la nota vs. ${notaMinima})</p>
       <table style="width:100%; border-collapse:collapse; margin-top:15px;">
         <thead><tr><th style="border:1px solid #000;padding:4px;text-align:left;">Estudiante</th>${encabezadoMaterias}</tr></thead>
@@ -280,6 +299,20 @@ function imprimirCierrePeriodo(gradoId, estudiantes, materiasConNotas, obtenerCe
     </body></html>
   `);
   ventana.document.close();
+}
+
+// Encabezado del colegio, reutilizado en todas las impresiones de esta pantalla
+function htmlEncabezadoColegio(institucion, subtitulo) {
+  return `
+    <div style="display:flex; align-items:center; gap:12px; border-bottom:2px solid #000; padding-bottom:8px; margin-bottom:16px;">
+      ${institucion?.logo_url ? `<img src="${institucion.logo_url}" style="height:55px;" />` : ""}
+      <div style="flex:1; text-align:center;">
+        <div style="font-weight:bold; font-size:15px;">${institucion?.nombre || "INSTITUCIÓN EDUCATIVA"}</div>
+        ${institucion?.direccion ? `<div style="font-size:11px;">${institucion.direccion}${institucion?.telefono ? ` · Tel: ${institucion.telefono}` : ""}</div>` : ""}
+        ${subtitulo ? `<div style="font-weight:bold; margin-top:4px; font-size:12px;">${subtitulo}</div>` : ""}
+      </div>
+    </div>
+  `;
 }
 
 function recomendacionPara(resumen, materiasBajas) {
@@ -429,12 +462,12 @@ function CitacionForm({ estudiantes, citacion, onCancelar, onGuardada }) {
 
 // Ficha de citación — la notificación que se envía ANTES de la reunión
 // (distinta del acta, que se llena DESPUÉS con lo que se conversó).
-function imprimirFichaCitacion(citacion) {
+function imprimirFichaCitacion(citacion, institucion) {
   const ventana = window.open("", "_blank");
   ventana.document.write(`
     <html><head><title>Citación — ${citacion.estudiante_nombre}</title></head>
     <body style="font-family: Arial, sans-serif; padding: 30px; font-size: 13px;">
-      <h2 style="text-align:center;">CITACIÓN A ACUDIENTE</h2>
+      ${htmlEncabezadoColegio(institucion, "CITACIÓN A ACUDIENTE")}
       <p>Respetado(a) acudiente,</p>
       <p>Se le cita a una reunión con Dirección de Curso para tratar el siguiente asunto relacionado con el estudiante:</p>
       <p><b>Estudiante:</b> ${citacion.estudiante_nombre}</p>
@@ -452,7 +485,7 @@ function imprimirFichaCitacion(citacion) {
   ventana.document.close();
 }
 
-function AtenderCitacionModal({ citacion, onClose, onGuardada }) {
+function AtenderCitacionModal({ citacion, institucion, onClose, onGuardada }) {
   const [estado, setEstado] = useState(citacion.estado === "pendiente" ? "atendida" : citacion.estado);
   const [notas, setNotas] = useState(citacion.notas_atencion || "");
   const [acuerdos, setAcuerdos] = useState(citacion.acuerdos || "");
@@ -474,7 +507,7 @@ function AtenderCitacionModal({ citacion, onClose, onGuardada }) {
     ventana.document.write(`
       <html><head><title>Acta de atención — ${citacion.estudiante_nombre}</title></head>
       <body style="font-family: Arial, sans-serif; padding: 30px; font-size: 13px;">
-        <h2 style="text-align:center;">ACTA DE ATENCIÓN A ACUDIENTE</h2>
+        ${htmlEncabezadoColegio(institucion, "ACTA DE ATENCIÓN A ACUDIENTE")}
         <p><b>Estudiante:</b> ${citacion.estudiante_nombre}</p>
         <p><b>Fecha:</b> ${citacion.fecha_citacion || "—"} ${citacion.hora_citacion || ""}</p>
         <p><b>Motivo de la citación:</b><br/>${citacion.motivo}</p>
@@ -593,15 +626,15 @@ function NuevoHorarioForm({ jornadaId, orden, onCancelar, onCreado }) {
   );
 }
 
-function imprimirListadoHorario(jornada, horario, estudiantesDelHorario) {
+function imprimirListadoHorario(jornada, horario, estudiantesDelHorario, institucion) {
   const filas = estudiantesDelHorario.map((e) => `<tr><td style="border:1px solid #000;padding:4px;">${e.nombre}</td><td style="border:1px solid #000;padding:4px;">${e.asignacion?.tiene_reportes ? "Sí" : "No"}</td></tr>`).join("");
   const ventana = window.open("", "_blank");
   ventana.document.write(`
     <html><head><title>${jornada.nombre} — ${horario.etiqueta}</title></head>
     <body style="font-family: Arial, sans-serif; padding: 30px; font-size: 13px;">
-      <h2 style="text-align:center;">${jornada.nombre}</h2>
-      <p style="text-align:center;"><b>${horario.etiqueta}</b> — ${horario.hora_inicio || ""} a ${horario.hora_fin || ""}</p>
-      <table style="width:100%; border-collapse:collapse; margin-top:20px;">
+      ${htmlEncabezadoColegio(institucion, `${jornada.nombre} — ${horario.etiqueta}`)}
+      <p style="text-align:center;">${horario.hora_inicio || ""} a ${horario.hora_fin || ""}</p>
+      <table style="width:100%; border-collapse:collapse; margin-top:10px;">
         <thead><tr><th style="border:1px solid #000;padding:4px;">Estudiante</th><th style="border:1px solid #000;padding:4px;">¿Tiene reportes?</th></tr></thead>
         <tbody>${filas}</tbody>
       </table>
@@ -611,7 +644,7 @@ function imprimirListadoHorario(jornada, horario, estudiantesDelHorario) {
   ventana.document.close();
 }
 
-function JornadaDetalle({ jornada, gradoId, onVolver }) {
+function JornadaDetalle({ jornada, gradoId, institucion }) {
   const [horarios, setHorarios] = useState([]);
   const [estudiantes, setEstudiantes] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -630,15 +663,13 @@ function JornadaDetalle({ jornada, gradoId, onVolver }) {
   const conteoDelHorario = (horarioId) => estudiantes.filter((e) => e.asignacion?.horario_id === horarioId).length;
   const sinAsignar = estudiantes.filter((e) => !e.asignacion?.horario_id);
 
+  if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
+
   return (
     <div>
-      <button onClick={onVolver} className="text-sm text-violet-500 mb-3">← Volver a jornadas</button>
-      <h3 className="font-bold text-slate-800 mb-1">{jornada.nombre}</h3>
-      <p className="text-xs text-slate-400 mb-4">Periodo {jornada.periodo}{jornada.fecha ? ` · ${jornada.fecha}` : ""} · {estudiantes.length} estudiante(s)</p>
-
       <div className="mb-4">
         <div className="flex justify-between items-center mb-2">
-          <div className="text-sm font-semibold text-slate-700">Horarios / grupos de atención</div>
+          <div className="text-sm font-semibold text-slate-700">Horarios / grupos de atención — Periodo {jornada.periodo}</div>
           <button onClick={() => setFormHorarioAbierto((v) => !v)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">
             {formHorarioAbierto ? "Cerrar" : "+ Agregar horario"}
           </button>
@@ -646,10 +677,8 @@ function JornadaDetalle({ jornada, gradoId, onVolver }) {
         {formHorarioAbierto && (
           <NuevoHorarioForm jornadaId={jornada.id} orden={horarios.length} onCancelar={() => setFormHorarioAbierto(false)} onCreado={() => { setFormHorarioAbierto(false); cargar(); }} />
         )}
-        {cargando ? (
-          <div className="text-sm text-slate-400">Cargando…</div>
-        ) : horarios.length === 0 ? (
-          <p className="text-xs text-slate-400">Todavía no armaste ningún horario/grupo.</p>
+        {horarios.length === 0 ? (
+          <p className="text-xs text-slate-400">Todavía no armaste ningún horario/grupo para este periodo.</p>
         ) : (
           <div className="grid sm:grid-cols-2 gap-2">
             {horarios.map((h) => {
@@ -663,7 +692,7 @@ function JornadaDetalle({ jornada, gradoId, onVolver }) {
                       <div className="text-[11px] text-slate-400">{h.hora_inicio || "—"} a {h.hora_fin || "—"} · {cant}/{h.capacidad}</div>
                     </div>
                     <div className="flex gap-1.5">
-                      <button onClick={() => imprimirListadoHorario(jornada, h, estudiantes.filter((e) => e.asignacion?.horario_id === h.id))} className="text-xs text-slate-400 hover:text-violet-600">🖨️</button>
+                      <button onClick={() => imprimirListadoHorario(jornada, h, estudiantes.filter((e) => e.asignacion?.horario_id === h.id), institucion)} className="text-xs text-slate-400 hover:text-violet-600">🖨️</button>
                       <button onClick={() => eliminarHorario(h.id)} className="text-xs text-slate-400 hover:text-rose-500">🗑</button>
                     </div>
                   </div>
@@ -672,7 +701,7 @@ function JornadaDetalle({ jornada, gradoId, onVolver }) {
             })}
           </div>
         )}
-        {sinAsignar.length > 0 && !cargando && (
+        {sinAsignar.length > 0 && (
           <p className="text-[11px] text-amber-600 mt-2">⚠️ {sinAsignar.length} estudiante(s) todavía sin asignar a un horario.</p>
         )}
       </div>
@@ -717,52 +746,40 @@ function JornadaDetalle({ jornada, gradoId, onVolver }) {
   );
 }
 
-function JornadasDireccionCurso({ gradoId }) {
-  const [jornadas, setJornadas] = useState([]);
+// Una sola pantalla para toda la secuencia de entrega de informes del año:
+// las jornadas de cada periodo se crean solas (si no existen) al tocar la
+// pestaña — no hay que ir creando "jornadas" sueltas una por una.
+function JornadasDireccionCurso({ gradoId, institucion }) {
+  const [periodoActivo, setPeriodoActivo] = useState("1");
+  const [jornada, setJornada] = useState(null);
   const [cargando, setCargando] = useState(true);
-  const [formAbierto, setFormAbierto] = useState(false);
-  const [abierta, setAbierta] = useState(null);
 
-  const cargar = () => { setCargando(true); api.fetchJornadasPorCurso(gradoId).then((d) => { setJornadas(d); setCargando(false); }); };
-  useEffect(() => { cargar(); setAbierta(null); }, [gradoId]);
-
-  const eliminar = async (id) => { if (!confirm("¿Eliminar esta jornada completa, con sus horarios y asignaciones?")) return; await api.eliminarJornada(id); cargar(); };
-
-  if (abierta) return <JornadaDetalle jornada={abierta} gradoId={gradoId} onVolver={() => { setAbierta(null); cargar(); }} />;
+  useEffect(() => {
+    setCargando(true);
+    api.fetchOCrearJornada(gradoId, periodoActivo).then((j) => { setJornada(j); setCargando(false); });
+  }, [gradoId, periodoActivo]);
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-3">
-        <p className="text-sm text-slate-500">Organizá la entrega de informes por horarios/grupos, con checklist de informe y citación entregados.</p>
-        <button onClick={() => setFormAbierto((v) => !v)} className="text-xs font-semibold px-3 py-2 rounded-full bg-violet-500 text-white">
-          {formAbierto ? "Cerrar" : "+ Nueva jornada"}
-        </button>
+      <p className="text-sm text-slate-500 mb-3">Toda la secuencia de entrega de informes del año, en una sola pantalla — cambiá de periodo con las pestañas.</p>
+      <div className="flex gap-1 rounded-full bg-slate-100 p-1 w-fit mb-4">
+        {PERIODOS.map((p) => (
+          <button key={p} onClick={() => setPeriodoActivo(p)} className={`text-xs px-3 py-1.5 rounded-full ${periodoActivo === p ? "bg-violet-500 text-white" : "text-slate-600"}`}>
+            Periodo {p}
+          </button>
+        ))}
       </div>
 
-      {formAbierto && <NuevaJornadaForm gradoId={gradoId} onCancelar={() => setFormAbierto(false)} onCreada={() => { setFormAbierto(false); cargar(); }} />}
-
-      {cargando ? (
+      {cargando || !jornada ? (
         <div className="text-sm text-slate-400">Cargando…</div>
-      ) : jornadas.length === 0 ? (
-        <div className="text-sm text-slate-400 bg-white rounded-2xl p-6 text-center border border-dashed border-slate-200">Todavía no creaste ninguna jornada de entrega de informes.</div>
       ) : (
-        <div className="space-y-2">
-          {jornadas.map((j) => (
-            <div key={j.id} className="bg-white rounded-xl border border-slate-100 p-3 flex justify-between items-center">
-              <button onClick={() => setAbierta(j)} className="text-left">
-                <div className="text-sm font-semibold text-slate-700">{j.nombre}</div>
-                <div className="text-xs text-slate-400">Periodo {j.periodo}{j.fecha ? ` · ${j.fecha}` : ""}</div>
-              </button>
-              <button onClick={() => eliminar(j.id)} className="text-xs text-slate-300 hover:text-rose-500">🗑</button>
-            </div>
-          ))}
-        </div>
+        <JornadaDetalle jornada={jornada} gradoId={gradoId} institucion={institucion} />
       )}
     </div>
   );
 }
 
-function CitacionesDireccionCurso({ gradoId }) {
+function CitacionesDireccionCurso({ gradoId, institucion }) {
   const [estudiantes, setEstudiantes] = useState([]);
   const [citaciones, setCitaciones] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -827,7 +844,7 @@ function CitacionesDireccionCurso({ gradoId }) {
                         </div>
                       </div>
                       <div className="flex gap-1.5 shrink-0 items-center">
-                        <button onClick={() => imprimirFichaCitacion(c)} title="Imprimir ficha de citación (antes de la reunión)" className="text-xs text-slate-400 hover:text-violet-600">🎫</button>
+                        <button onClick={() => imprimirFichaCitacion(c, institucion)} title="Imprimir ficha de citación (antes de la reunión)" className="text-xs text-slate-400 hover:text-violet-600">🎫</button>
                         {c.estado === "pendiente" && (
                           <>
                             <button onClick={() => verificar(c.id, "atendida")} title="Marcar que sí asistió" className="text-xs text-emerald-500 font-semibold">✅</button>
@@ -846,12 +863,12 @@ function CitacionesDireccionCurso({ gradoId }) {
         </div>
       )}
 
-      {atendiendo && <AtenderCitacionModal citacion={atendiendo} onClose={() => setAtendiendo(null)} onGuardada={() => { setAtendiendo(null); cargar(); }} />}
+      {atendiendo && <AtenderCitacionModal citacion={atendiendo} institucion={institucion} onClose={() => setAtendiendo(null)} onGuardada={() => { setAtendiendo(null); cargar(); }} />}
     </div>
   );
 }
 
-function VistaNotasDireccionCurso({ grados, gradoId, setGradoId }) {
+function VistaNotasDireccionCurso({ grados, gradoId, setGradoId, institucion }) {
   const [estudiantes, setEstudiantes] = useState([]);
   const [notas, setNotas] = useState([]);
   const [estados, setEstados] = useState([]);
@@ -864,6 +881,8 @@ function VistaNotasDireccionCurso({ grados, gradoId, setGradoId }) {
   const [materiaAAgregar, setMateriaAAgregar] = useState("");
   const [periodoAAgregar, setPeriodoAAgregar] = useState("1");
   const [vistaAnalisis, setVistaAnalisis] = useState(false);
+  const [cantidadPeriodos, setCantidadPeriodos] = useState(4);
+  const periodosDisponibles = Array.from({ length: cantidadPeriodos }, (_, i) => String(i + 1));
 
   const cargar = () => {
     if (!gradoId) return;
@@ -877,7 +896,7 @@ function VistaNotasDireccionCurso({ grados, gradoId, setGradoId }) {
   };
   useEffect(() => { cargar(); }, [gradoId]);
 
-  const materiasConNotas = Array.from(new Set(notas.map((n) => n.materia_nombre))).sort();
+  const materiasConNotas = Array.from(new Set([...MATERIAS_DIRECCION_FIJAS, ...notas.map((n) => n.materia_nombre)])).sort();
 
   const periodosConDatos = Array.from(new Set(notas.map((n) => n.periodo))).sort();
 
@@ -955,6 +974,11 @@ function VistaNotasDireccionCurso({ grados, gradoId, setGradoId }) {
           <input type="number" step="0.1" min="0" max="5" value={notaMinima} onChange={(e) => setNotaMinima(parseFloat(e.target.value) || 3.5)}
             className="w-14 text-xs rounded px-1.5 py-0.5 border border-slate-200 outline-none" />
         </div>
+        <div className="flex items-center gap-1.5 text-xs text-slate-500 bg-white rounded-full px-3 py-2 border border-slate-200">
+          Cantidad de periodos:
+          <input type="number" min="1" max="6" value={cantidadPeriodos} onChange={(e) => setCantidadPeriodos(parseInt(e.target.value, 10) || 4)}
+            className="w-12 text-xs rounded px-1.5 py-0.5 border border-slate-200 outline-none" />
+        </div>
         <button onClick={() => setImportarBoletinAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-rose-500 text-white">
           📥 Importar boletín del colegio
         </button>
@@ -966,11 +990,11 @@ function VistaNotasDireccionCurso({ grados, gradoId, setGradoId }) {
             📊 {vistaAnalisis ? "Ver tabla" : "Ver análisis"}
           </button>
         )}
-        <button onClick={() => imprimirListadoClase(gradoId, estudiantes)} className="text-xs font-semibold px-3 py-2 rounded-full border border-slate-200 text-slate-600">
+        <button onClick={() => imprimirListadoClase(gradoId, estudiantes, institucion)} className="text-xs font-semibold px-3 py-2 rounded-full border border-slate-200 text-slate-600">
           🖨️ Listado de clase
         </button>
         {materiasConNotas.length > 0 && (
-          <button onClick={() => imprimirCierrePeriodo(gradoId, estudiantes, materiasConNotas, (est, mat) => notaCeldaCompleta(est, mat, periodoVista), notaMinima, periodoVista, estadoDe)}
+          <button onClick={() => imprimirCierrePeriodo(gradoId, estudiantes, materiasConNotas, (est, mat) => notaCeldaCompleta(est, mat, periodoVista), notaMinima, periodoVista, estadoDe, institucion)}
             className="text-xs font-semibold px-3 py-2 rounded-full border border-slate-200 text-slate-600">
             🖨️ Cierre de periodo (X)
           </button>
@@ -980,12 +1004,15 @@ function VistaNotasDireccionCurso({ grados, gradoId, setGradoId }) {
 
       {agregarMateriaAbierto && (
         <div className="bg-violet-50 rounded-xl p-3 mb-4">
-          <p className="text-xs text-slate-500 mb-2">Escribí el nombre de la materia tal cual la querés ver (no hace falta que exista en tu catálogo) y el periodo cuyas notas vas a subir.</p>
+          <p className="text-xs text-slate-500 mb-2">Escribí el nombre de la materia (o elegí una de la lista estándar) y el periodo cuyas notas vas a subir.</p>
+          <datalist id="materias-fijas-dc2">
+            {MATERIAS_DIRECCION_FIJAS.map((m) => <option key={m} value={m} />)}
+          </datalist>
           <div className="flex flex-wrap gap-2 items-center">
-            <input value={materiaAAgregar} onChange={(e) => setMateriaAAgregar(e.target.value)} placeholder="Ej: Matemáticas"
+            <input value={materiaAAgregar} onChange={(e) => setMateriaAAgregar(e.target.value)} placeholder="Ej: Matemáticas" list="materias-fijas-dc2"
               className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
             <select value={periodoAAgregar} onChange={(e) => setPeriodoAAgregar(e.target.value)} className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white">
-              {PERIODOS.map((p) => <option key={p} value={p}>Periodo {p}</option>)}
+              {periodosDisponibles.map((p) => <option key={p} value={p}>Periodo {p}</option>)}
             </select>
             <button disabled={!materiaAAgregar.trim()} onClick={() => {
               setImportando({ materiaNombre: materiaAAgregar.trim(), periodo: periodoAAgregar });
@@ -1110,6 +1137,12 @@ function VistaNotasDireccionCurso({ grados, gradoId, setGradoId }) {
                             <option value="reprobado">Reprobado</option>
                             <option value="recupero">Recupero</option>
                           </select>
+                          {estado === "recupero" && (
+                            <div className="flex gap-0.5 mt-0.5">
+                              <button onClick={() => guardarEstado(e.id, m, "aprobado")} title="¿Recuperó? Sí" className="flex-1 text-[9px] rounded bg-emerald-50 text-emerald-600 py-0.5">✅ Sí</button>
+                              <button onClick={() => guardarEstado(e.id, m, "reprobado")} title="¿Recuperó? No" className="flex-1 text-[9px] rounded bg-rose-50 text-rose-600 py-0.5">❌ No</button>
+                            </div>
+                          )}
                         </td>
                       );
                     })}
@@ -1127,7 +1160,7 @@ function VistaNotasDireccionCurso({ grados, gradoId, setGradoId }) {
           estudiantes={estudiantes} onClose={() => setImportando(null)} onImportado={cargar} />
       )}
       {importarBoletinAbierto && (
-        <ImportarBoletinModal gradoId={gradoId} estudiantes={estudiantes} onClose={() => setImportarBoletinAbierto(false)} onImportado={cargar} />
+        <ImportarBoletinModal gradoId={gradoId} estudiantes={estudiantes} periodosDisponibles={periodosDisponibles} onClose={() => setImportarBoletinAbierto(false)} onImportado={cargar} />
       )}
     </div>
   );
@@ -1136,8 +1169,10 @@ function VistaNotasDireccionCurso({ grados, gradoId, setGradoId }) {
 export function VistaDireccionCurso({ grados }) {
   const [gradoId, setGradoId] = useState(grados[0]?.id || "");
   const [vista, setVista] = useState("panel"); // "panel" | "notas" | "citaciones"
+  const [institucion, setInstitucion] = useState(null);
 
   useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
+  useEffect(() => { api.fetchInstitucion().then(setInstitucion); }, []);
 
   return (
     <div>
@@ -1159,9 +1194,9 @@ export function VistaDireccionCurso({ grados }) {
       </div>
 
       {vista === "panel" && <PanelDireccionCurso gradoId={gradoId} onVerCitaciones={() => setVista("citaciones")} />}
-      {vista === "notas" && <VistaNotasDireccionCurso grados={grados} gradoId={gradoId} setGradoId={setGradoId} />}
-      {vista === "citaciones" && <CitacionesDireccionCurso gradoId={gradoId} />}
-      {vista === "jornada" && <JornadasDireccionCurso gradoId={gradoId} />}
+      {vista === "notas" && <VistaNotasDireccionCurso grados={grados} gradoId={gradoId} setGradoId={setGradoId} institucion={institucion} />}
+      {vista === "citaciones" && <CitacionesDireccionCurso gradoId={gradoId} institucion={institucion} />}
+      {vista === "jornada" && <JornadasDireccionCurso gradoId={gradoId} institucion={institucion} />}
     </div>
   );
 }
