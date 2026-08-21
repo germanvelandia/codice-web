@@ -249,11 +249,16 @@ function imprimirListadoClase(gradoId, estudiantes) {
   ventana.document.close();
 }
 
-function imprimirCierrePeriodo(gradoId, estudiantes, materiasConNotas, obtenerCelda, notaMinima, periodoVista) {
+function imprimirCierrePeriodo(gradoId, estudiantes, materiasConNotas, obtenerCelda, notaMinima, periodoVista, estadoDe) {
   const etiquetaPeriodo = periodoVista === "promedio" ? "Promedio general" : `Periodo ${periodoVista}`;
   const encabezadoMaterias = materiasConNotas.map((m) => `<th style="border:1px solid #000;padding:4px;font-size:11px;">${m}</th>`).join("");
   const filas = estudiantes.map((e) => {
     const celdas = materiasConNotas.map((m) => {
+      const estadoManual = estadoDe ? estadoDe(e.id, m) : null;
+      if (estadoManual) {
+        const marca = estadoManual === "aprobado" ? "✓" : estadoManual === "reprobado" ? "X" : "R";
+        return `<td style="border:1px solid #000;padding:4px;text-align:center;font-weight:bold;">${marca}</td>`;
+      }
       const c = obtenerCelda(e.id, m);
       const v = c?.nota;
       if (v === null || v === undefined) return `<td style="border:1px solid #000;padding:4px;text-align:center;">—</td>`;
@@ -266,7 +271,7 @@ function imprimirCierrePeriodo(gradoId, estudiantes, materiasConNotas, obtenerCe
     <html><head><title>Cierre de periodo — Curso ${gradoId}</title></head>
     <body style="font-family: Arial, sans-serif; padding: 20px; font-size: 12px;">
       <h2 style="text-align:center;">CIERRE DE PERIODO — CURSO ${gradoId}</h2>
-      <p style="text-align:center;">${etiquetaPeriodo} — X = asignatura perdida (menor a ${notaMinima}) · ✓ = aprobada</p>
+      <p style="text-align:center;">${etiquetaPeriodo} — X = perdida · ✓ = aprobada · R = recupero (según estado marcado; si no hay estado, se usa la nota vs. ${notaMinima})</p>
       <table style="width:100%; border-collapse:collapse; margin-top:15px;">
         <thead><tr><th style="border:1px solid #000;padding:4px;text-align:left;">Estudiante</th>${encabezadoMaterias}</tr></thead>
         <tbody>${filas}</tbody>
@@ -849,6 +854,7 @@ function CitacionesDireccionCurso({ gradoId }) {
 function VistaNotasDireccionCurso({ grados, gradoId, setGradoId }) {
   const [estudiantes, setEstudiantes] = useState([]);
   const [notas, setNotas] = useState([]);
+  const [estados, setEstados] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [periodoVista, setPeriodoVista] = useState("promedio");
   const [notaMinima, setNotaMinima] = useState(3.5);
@@ -862,9 +868,10 @@ function VistaNotasDireccionCurso({ grados, gradoId, setGradoId }) {
   const cargar = () => {
     if (!gradoId) return;
     setCargando(true);
-    Promise.all([api.fetchEstudiantesPorGrado(gradoId), api.fetchNotasDireccionCurso(gradoId)]).then(([est, n]) => {
+    Promise.all([api.fetchEstudiantesPorGrado(gradoId), api.fetchNotasDireccionCurso(gradoId), api.fetchEstadosMateriaCurso(gradoId)]).then(([est, n, es]) => {
       setEstudiantes(est.sort((a, b) => a.nombre.localeCompare(b.nombre)));
       setNotas(n);
+      setEstados(es);
       setCargando(false);
     });
   };
@@ -889,6 +896,18 @@ function VistaNotasDireccionCurso({ grados, gradoId, setGradoId }) {
     if (propias.length === 0) return null;
     return propias.reduce((a, n) => a + Number(n.nota), 0) / propias.length;
   };
+
+  const estadoDe = (estudianteId, materiaNombre) => {
+    const e = estados.find((x) => x.estudiante_id === estudianteId && x.materia_nombre === materiaNombre);
+    return e?.estado || null;
+  };
+
+  const guardarEstado = async (estudianteId, materiaNombre, estado) => {
+    await api.guardarEstadoMateria(gradoId, materiaNombre, estudianteId, estado || null);
+    cargar();
+  };
+
+  const conteoReprobadasPorEstado = (estudianteId) => materiasConNotas.filter((m) => estadoDe(estudianteId, m) === "reprobado").length;
 
   const resumenEstudiante = (estudianteId) => {
     const porMateria = materiasConNotas.map((m) => ({ materia: m, valor: periodoVista === "promedio" ? promedioMateria(estudianteId, m) : notaCeldaCompleta(estudianteId, m, periodoVista)?.nota ?? null }));
@@ -951,7 +970,7 @@ function VistaNotasDireccionCurso({ grados, gradoId, setGradoId }) {
           🖨️ Listado de clase
         </button>
         {materiasConNotas.length > 0 && (
-          <button onClick={() => imprimirCierrePeriodo(gradoId, estudiantes, materiasConNotas, (est, mat) => notaCeldaCompleta(est, mat, periodoVista), notaMinima, periodoVista)}
+          <button onClick={() => imprimirCierrePeriodo(gradoId, estudiantes, materiasConNotas, (est, mat) => notaCeldaCompleta(est, mat, periodoVista), notaMinima, periodoVista, estadoDe)}
             className="text-xs font-semibold px-3 py-2 rounded-full border border-slate-200 text-slate-600">
             🖨️ Cierre de periodo (X)
           </button>
@@ -1062,13 +1081,12 @@ function VistaNotasDireccionCurso({ grados, gradoId, setGradoId }) {
                     </div>
                   </th>
                 ))}
-                <th className="px-3 py-2">Promedio</th>
-                <th className="px-3 py-2">Pérdidas</th>
+                <th className="px-3 py-2">Reprobadas</th>
               </tr>
             </thead>
             <tbody>
               {estudiantes.map((e) => {
-                const resumen = resumenEstudiante(e.id);
+                const reprobadas = conteoReprobadasPorEstado(e.id);
                 return (
                   <tr key={e.id} className="border-t border-slate-100">
                     <td className="px-3 py-2 sticky left-0 bg-white font-medium text-slate-700">{e.nombre}</td>
@@ -1077,16 +1095,25 @@ function VistaNotasDireccionCurso({ grados, gradoId, setGradoId }) {
                       const v = celda?.nota;
                       const esBaja = v !== null && v !== undefined && v < notaMinima;
                       const enNivelacion = celda?.en_nivelacion;
+                      const estado = estadoDe(e.id, m);
                       return (
-                        <td key={m} onClick={() => toggleNivelacion(celda, periodoVista)}
-                          className={`text-center px-3 py-2 cursor-pointer ${enNivelacion ? "bg-amber-100 text-amber-700 font-semibold" : esBaja ? "bg-rose-50 text-rose-600 font-semibold" : v !== null && v !== undefined ? "text-slate-600" : "text-slate-300"}`}
-                          title={periodoVista === "promedio" ? "Elegí un periodo puntual arriba para marcar nivelación" : "Tocá para marcar/desmarcar en nivelación"}>
-                          {v !== null && v !== undefined ? v.toFixed(1) : "—"}
+                        <td key={m} className="text-center px-2 py-1.5">
+                          <div onClick={() => toggleNivelacion(celda, periodoVista)}
+                            className={`cursor-pointer rounded px-1 mb-1 ${enNivelacion ? "bg-amber-100 text-amber-700 font-semibold" : esBaja ? "bg-rose-50 text-rose-600 font-semibold" : v !== null && v !== undefined ? "text-slate-600" : "text-slate-300"}`}
+                            title={periodoVista === "promedio" ? "Elegí un periodo puntual arriba para marcar nivelación" : "Tocá para marcar/desmarcar en nivelación"}>
+                            {v !== null && v !== undefined ? v.toFixed(1) : "—"}
+                          </div>
+                          <select value={estado || ""} onChange={(ev) => guardarEstado(e.id, m, ev.target.value)}
+                            className={`text-[10px] rounded px-1 py-0.5 border outline-none w-full ${estado === "aprobado" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : estado === "reprobado" ? "bg-rose-100 text-rose-700 border-rose-200" : estado === "recupero" ? "bg-amber-100 text-amber-700 border-amber-200" : "bg-white text-slate-400 border-slate-200"}`}>
+                            <option value="">— Estado —</option>
+                            <option value="aprobado">Aprobado</option>
+                            <option value="reprobado">Reprobado</option>
+                            <option value="recupero">Recupero</option>
+                          </select>
                         </td>
                       );
                     })}
-                    <td className="text-center px-3 py-2 font-semibold text-slate-700">{resumen.promedio !== null ? resumen.promedio.toFixed(1) : "—"}</td>
-                    <td className={`text-center px-3 py-2 font-semibold ${resumen.perdidas > 0 ? "text-rose-600" : "text-emerald-600"}`}>{resumen.perdidas}</td>
+                    <td className={`text-center px-3 py-2 font-semibold ${reprobadas > 0 ? "text-rose-600" : "text-emerald-600"}`}>{reprobadas}</td>
                   </tr>
                 );
               })}
