@@ -2878,6 +2878,15 @@ export async function crearJornada(gradoId, periodo, nombre, fecha) {
   return data;
 }
 
+// Trae la jornada de ese curso+periodo si ya existe, o la crea sola (nombre
+// automático) — para que Dirección de Curso sea una sola pantalla con
+// pestañas de periodo, sin tener que crear una jornada aparte cada vez.
+export async function fetchOCrearJornada(gradoId, periodo) {
+  const { data: existente } = await supabase.from("jornadas_entrega_informes").select("*").eq("grado_id", gradoId).eq("periodo", periodo).limit(1).maybeSingle();
+  if (existente) return existente;
+  return crearJornada(gradoId, periodo, `Entrega de informes — Periodo ${periodo}`, null);
+}
+
 export async function eliminarJornada(id) {
   const { error } = await supabase.from("jornadas_entrega_informes").delete().eq("id", id);
   if (error) throw error;
