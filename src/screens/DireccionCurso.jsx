@@ -373,6 +373,31 @@ function CitacionForm({ estudiantes, citacion, onCancelar, onGuardada }) {
   );
 }
 
+// Ficha de citación — la notificación que se envía ANTES de la reunión
+// (distinta del acta, que se llena DESPUÉS con lo que se conversó).
+function imprimirFichaCitacion(citacion) {
+  const ventana = window.open("", "_blank");
+  ventana.document.write(`
+    <html><head><title>Citación — ${citacion.estudiante_nombre}</title></head>
+    <body style="font-family: Arial, sans-serif; padding: 30px; font-size: 13px;">
+      <h2 style="text-align:center;">CITACIÓN A ACUDIENTE</h2>
+      <p>Respetado(a) acudiente,</p>
+      <p>Se le cita a una reunión con Dirección de Curso para tratar el siguiente asunto relacionado con el estudiante:</p>
+      <p><b>Estudiante:</b> ${citacion.estudiante_nombre}</p>
+      <p><b>Motivo:</b><br/>${citacion.motivo}</p>
+      <p><b>Fecha propuesta:</b> ${citacion.fecha_citacion || "Por confirmar"} ${citacion.hora_citacion || ""}</p>
+      <p>Agradecemos su puntual asistencia. En caso de no poder asistir, por favor comuníquese con la institución para reprogramar.</p>
+      <div style="margin-top:50px; border-top:1px dashed #999; padding-top:10px;">
+        <p style="font-size:11px; color:#555;">— Recorte y devuelva esta parte firmada —</p>
+        <p>Yo, ______________________________________, acudiente de <b>${citacion.estudiante_nombre}</b>, confirmo asistencia a la citación del ${citacion.fecha_citacion || "___"}.</p>
+        <div style="margin-top:30px; border-top:1px solid #000; width:250px; text-align:center; padding-top:4px;">Firma Acudiente</div>
+      </div>
+      <script>window.print();</script>
+    </body></html>
+  `);
+  ventana.document.close();
+}
+
 function AtenderCitacionModal({ citacion, onClose, onGuardada }) {
   const [estado, setEstado] = useState(citacion.estado === "pendiente" ? "atendida" : citacion.estado);
   const [notas, setNotas] = useState(citacion.notas_atencion || "");
@@ -461,6 +486,7 @@ function CitacionesDireccionCurso({ gradoId }) {
   useEffect(() => { cargar(); }, [gradoId]);
 
   const eliminar = async (id) => { if (!confirm("¿Eliminar esta citación?")) return; await api.eliminarCitacion(id); cargar(); };
+  const verificar = async (id, estado) => { await api.editarCitacion(id, { estado }); cargar(); };
 
   const ESTADO_LABEL = { pendiente: "🟡 Pendiente", atendida: "🟢 Atendida", no_asistio: "🔴 No asistió" };
 
@@ -482,22 +508,46 @@ function CitacionesDireccionCurso({ gradoId }) {
       ) : citaciones.length === 0 ? (
         <div className="text-sm text-slate-400 bg-white rounded-2xl p-6 text-center border border-dashed border-slate-200">Todavía no hay citaciones registradas para este curso.</div>
       ) : (
-        <div className="space-y-2">
-          {citaciones.map((c) => (
-            <div key={c.id} className="bg-white rounded-xl border border-slate-100 p-3 flex justify-between items-start gap-2">
-              <div className="min-w-0">
-                <div className="text-sm font-semibold text-slate-700">{c.estudiante_nombre}</div>
-                <div className="text-xs text-slate-500 mt-0.5">{c.motivo}</div>
-                <div className="text-[11px] text-slate-400 mt-1">
-                  {ESTADO_LABEL[c.estado]} {c.fecha_citacion ? `· ${c.fecha_citacion}${c.hora_citacion ? ` ${c.hora_citacion}` : ""}` : ""}
+        <div className="space-y-4">
+          {Object.entries(
+            citaciones.reduce((acc, c) => { (acc[c.estudiante_id] = acc[c.estudiante_id] || []).push(c); return acc; }, {})
+          ).map(([estudianteId, lista]) => {
+            const noAsistio = lista.filter((c) => c.estado === "no_asistio").length;
+            return (
+              <div key={estudianteId} className="bg-white rounded-2xl border border-slate-100 p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-sm font-semibold text-slate-700">{lista[0].estudiante_nombre}</div>
+                  <div className="flex gap-1.5">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{lista.length} citación(es)</span>
+                    {noAsistio > 0 && <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-semibold">{noAsistio} sin asistir</span>}
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  {lista.map((c) => (
+                    <div key={c.id} className="border-t border-slate-50 pt-1.5 flex justify-between items-start gap-2">
+                      <div className="min-w-0">
+                        <div className="text-xs text-slate-600">{c.motivo}</div>
+                        <div className="text-[11px] text-slate-400 mt-0.5">
+                          {ESTADO_LABEL[c.estado]} {c.fecha_citacion ? `· ${c.fecha_citacion}${c.hora_citacion ? ` ${c.hora_citacion}` : ""}` : ""}
+                        </div>
+                      </div>
+                      <div className="flex gap-1.5 shrink-0 items-center">
+                        <button onClick={() => imprimirFichaCitacion(c)} title="Imprimir ficha de citación (antes de la reunión)" className="text-xs text-slate-400 hover:text-violet-600">🎫</button>
+                        {c.estado === "pendiente" && (
+                          <>
+                            <button onClick={() => verificar(c.id, "atendida")} title="Marcar que sí asistió" className="text-xs text-emerald-500 font-semibold">✅</button>
+                            <button onClick={() => verificar(c.id, "no_asistio")} title="Marcar que no asistió" className="text-xs text-rose-500 font-semibold">❌</button>
+                          </>
+                        )}
+                        <button onClick={() => setAtendiendo(c)} className="text-xs text-violet-500 font-semibold">Gestionar</button>
+                        <button onClick={() => eliminar(c.id)} className="text-xs text-slate-300 hover:text-rose-500">🗑</button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-              <div className="flex gap-1.5 shrink-0">
-                <button onClick={() => setAtendiendo(c)} className="text-xs text-violet-500 font-semibold">Gestionar</button>
-                <button onClick={() => eliminar(c.id)} className="text-xs text-slate-300 hover:text-rose-500">🗑</button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
