@@ -53,6 +53,16 @@ html, body, #root {
     break-inside: avoid;
     page-break-inside: avoid;
   }
+
+  /* Hoja(s) marcadas con esta clase salen en horizontal, sin afectar
+     el resto del documento (que sigue en vertical). */
+  @page hoja-horizontal {
+    size: letter landscape;
+    margin: 14mm 16mm;
+  }
+  .print-horizontal {
+    page: hoja-horizontal;
+  }
 }
 
 /* Placeholder para el editor de texto enriquecido (contentEditable no soporta
