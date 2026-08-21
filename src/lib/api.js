@@ -2862,6 +2862,70 @@ export async function eliminarCitacion(id) {
   if (error) throw error;
 }
 
+/* ---------------- 🗓️ Jornada de Entrega de Informes ---------------- */
+export async function fetchJornadasPorCurso(gradoId) {
+  const { data, error } = await supabase.from("jornadas_entrega_informes").select("*").eq("grado_id", gradoId).order("fecha", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearJornada(gradoId, periodo, nombre, fecha) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("jornadas_entrega_informes")
+    .insert({ grado_id: gradoId, periodo, nombre, fecha: fecha || null, docente_id: userData?.user?.id || null })
+    .select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function eliminarJornada(id) {
+  const { error } = await supabase.from("jornadas_entrega_informes").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function fetchDetalleJornada(jornadaId, gradoId) {
+  const [horariosRes, asignacionesRes, estudiantes] = await Promise.all([
+    supabase.from("jornada_horarios").select("*").eq("jornada_id", jornadaId).order("orden"),
+    supabase.from("jornada_asignaciones").select("*").eq("jornada_id", jornadaId),
+    fetchEstudiantesPorGrado(gradoId),
+  ]);
+  if (horariosRes.error) throw horariosRes.error;
+  if (asignacionesRes.error) throw asignacionesRes.error;
+  const asigPorEstudiante = {}; (asignacionesRes.data || []).forEach((a) => { asigPorEstudiante[a.estudiante_id] = a; });
+  return {
+    horarios: horariosRes.data || [],
+    estudiantes: estudiantes.sort((a, b) => a.nombre.localeCompare(b.nombre)).map((e) => ({ ...e, asignacion: asigPorEstudiante[e.id] || null })),
+  };
+}
+
+export async function crearHorarioJornada(jornadaId, etiqueta, horaInicio, horaFin, capacidad, orden) {
+  const { error } = await supabase.from("jornada_horarios").insert({ jornada_id: jornadaId, etiqueta, hora_inicio: horaInicio || null, hora_fin: horaFin || null, capacidad: capacidad || 5, orden });
+  if (error) throw error;
+}
+
+export async function eliminarHorarioJornada(id) {
+  const { error } = await supabase.from("jornada_horarios").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// Asigna (o desasigna, con horarioId=null) un estudiante a un horario —
+// upsert, para poder cambiarlo con solo volver a llamar la función.
+export async function asignarEstudianteHorario(jornadaId, estudianteId, horarioId) {
+  const { error } = await supabase.from("jornada_asignaciones").upsert(
+    { jornada_id: jornadaId, estudiante_id: estudianteId, horario_id: horarioId },
+    { onConflict: "jornada_id,estudiante_id" }
+  );
+  if (error) throw error;
+}
+
+export async function actualizarChecklistJornada(jornadaId, estudianteId, cambios) {
+  const { error } = await supabase.from("jornada_asignaciones").upsert(
+    { jornada_id: jornadaId, estudiante_id: estudianteId, ...cambios },
+    { onConflict: "jornada_id,estudiante_id" }
+  );
+  if (error) throw error;
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
