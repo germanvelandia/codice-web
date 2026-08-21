@@ -2926,6 +2926,20 @@ export async function actualizarChecklistJornada(jornadaId, estudianteId, cambio
   if (error) throw error;
 }
 
+export async function fetchEstadosMateriaCurso(gradoId) {
+  const { data, error } = await supabase.from("director_curso_estado_materia").select("*").eq("grado_id", gradoId);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function guardarEstadoMateria(gradoId, materiaNombre, estudianteId, estado) {
+  const { error } = await supabase.from("director_curso_estado_materia").upsert(
+    { grado_id: gradoId, materia_nombre: materiaNombre, estudiante_id: estudianteId, estado, actualizado_en: new Date().toISOString() },
+    { onConflict: "grado_id,materia_nombre,estudiante_id" }
+  );
+  if (error) throw error;
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
