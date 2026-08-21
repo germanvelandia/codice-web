@@ -228,6 +228,55 @@ function ImportarBoletinModal({ gradoId, estudiantes, onClose, onImportado }) {
   );
 }
 
+function imprimirListadoClase(gradoId, estudiantes) {
+  const filas = estudiantes.map((e, i) => `<tr><td style="border:1px solid #000;padding:5px;text-align:center;">${i + 1}</td><td style="border:1px solid #000;padding:5px;">${e.nombre}</td><td style="border:1px solid #000;padding:5px;"></td></tr>`).join("");
+  const ventana = window.open("", "_blank");
+  ventana.document.write(`
+    <html><head><title>Listado de clase — Curso ${gradoId}</title></head>
+    <body style="font-family: Arial, sans-serif; padding: 30px; font-size: 13px;">
+      <h2 style="text-align:center;">LISTADO DE CLASE — DIRECCIÓN DE CURSO ${gradoId}</h2>
+      <table style="width:100%; border-collapse:collapse; margin-top:20px;">
+        <thead><tr>
+          <th style="border:1px solid #000;padding:5px;width:6%;">#</th>
+          <th style="border:1px solid #000;padding:5px;text-align:left;">Estudiante</th>
+          <th style="border:1px solid #000;padding:5px;width:35%;">Observaciones</th>
+        </tr></thead>
+        <tbody>${filas}</tbody>
+      </table>
+      <script>window.print();</script>
+    </body></html>
+  `);
+  ventana.document.close();
+}
+
+function imprimirCierrePeriodo(gradoId, estudiantes, materiasConNotas, obtenerCelda, notaMinima, periodoVista) {
+  const etiquetaPeriodo = periodoVista === "promedio" ? "Promedio general" : `Periodo ${periodoVista}`;
+  const encabezadoMaterias = materiasConNotas.map((m) => `<th style="border:1px solid #000;padding:4px;font-size:11px;">${m}</th>`).join("");
+  const filas = estudiantes.map((e) => {
+    const celdas = materiasConNotas.map((m) => {
+      const c = obtenerCelda(e.id, m);
+      const v = c?.nota;
+      if (v === null || v === undefined) return `<td style="border:1px solid #000;padding:4px;text-align:center;">—</td>`;
+      return `<td style="border:1px solid #000;padding:4px;text-align:center;font-weight:bold;">${v < notaMinima ? "X" : "✓"}</td>`;
+    }).join("");
+    return `<tr><td style="border:1px solid #000;padding:4px;">${e.nombre}</td>${celdas}</tr>`;
+  }).join("");
+  const ventana = window.open("", "_blank");
+  ventana.document.write(`
+    <html><head><title>Cierre de periodo — Curso ${gradoId}</title></head>
+    <body style="font-family: Arial, sans-serif; padding: 20px; font-size: 12px;">
+      <h2 style="text-align:center;">CIERRE DE PERIODO — CURSO ${gradoId}</h2>
+      <p style="text-align:center;">${etiquetaPeriodo} — X = asignatura perdida (menor a ${notaMinima}) · ✓ = aprobada</p>
+      <table style="width:100%; border-collapse:collapse; margin-top:15px;">
+        <thead><tr><th style="border:1px solid #000;padding:4px;text-align:left;">Estudiante</th>${encabezadoMaterias}</tr></thead>
+        <tbody>${filas}</tbody>
+      </table>
+      <script>window.print();</script>
+    </body></html>
+  `);
+  ventana.document.close();
+}
+
 function recomendacionPara(resumen, materiasBajas) {
   if (resumen.total === 0) return "Todavía no hay notas suficientes para generar una recomendación.";
   if (resumen.perdidas === 0 && resumen.promedio >= 4.3) return "Desempeño sobresaliente — considerar para reconocimiento o cuadro de honor.";
@@ -467,6 +516,247 @@ function AtenderCitacionModal({ citacion, onClose, onGuardada }) {
   );
 }
 
+function NuevaJornadaForm({ gradoId, onCancelar, onCreada }) {
+  const [nombre, setNombre] = useState("");
+  const [periodo, setPeriodo] = useState("1");
+  const [fecha, setFecha] = useState("");
+  const [guardando, setGuardando] = useState(false);
+
+  const crear = async () => {
+    if (!nombre.trim()) { alert("Ponele un nombre a la jornada (ej: Entrega de informes Periodo 1)."); return; }
+    setGuardando(true);
+    try {
+      const j = await api.crearJornada(gradoId, periodo, nombre.trim(), fecha);
+      onCreada(j);
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  return (
+    <div className="bg-violet-50 rounded-xl p-3 mb-3">
+      <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej: Entrega de informes — Periodo 1"
+        className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
+      <div className="flex gap-2 mb-2">
+        <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white">
+          {PERIODOS.map((p) => <option key={p} value={p}>Periodo {p}</option>)}
+        </select>
+        <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
+      </div>
+      <div className="flex justify-end gap-2">
+        <button onClick={onCancelar} className="text-xs text-slate-500 px-3 py-1.5">Cancelar</button>
+        <button disabled={guardando} onClick={crear} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+          {guardando ? "Creando…" : "Crear jornada"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function NuevoHorarioForm({ jornadaId, orden, onCancelar, onCreado }) {
+  const [etiqueta, setEtiqueta] = useState("");
+  const [horaInicio, setHoraInicio] = useState("");
+  const [horaFin, setHoraFin] = useState("");
+  const [capacidad, setCapacidad] = useState(5);
+  const [guardando, setGuardando] = useState(false);
+
+  const crear = async () => {
+    if (!etiqueta.trim()) { alert("Ponele un nombre al grupo/horario (ej: Grupo A)."); return; }
+    setGuardando(true);
+    try {
+      await api.crearHorarioJornada(jornadaId, etiqueta.trim(), horaInicio, horaFin, parseInt(capacidad, 10) || 5, orden);
+      onCreado();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  return (
+    <div className="bg-violet-50 rounded-xl p-2.5 mb-2 flex flex-wrap gap-2 items-center">
+      <input value={etiqueta} onChange={(e) => setEtiqueta(e.target.value)} placeholder="Grupo A" className="w-28 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
+      <input type="time" value={horaInicio} onChange={(e) => setHoraInicio(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
+      <span className="text-xs text-slate-400">a</span>
+      <input type="time" value={horaFin} onChange={(e) => setHoraFin(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
+      <input type="number" min="1" value={capacidad} onChange={(e) => setCapacidad(e.target.value)} title="Capacidad" className="w-14 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
+      <button onClick={onCancelar} className="text-xs text-slate-500">Cancelar</button>
+      <button disabled={guardando} onClick={crear} className="text-xs font-semibold px-2 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+        {guardando ? "…" : "Agregar"}
+      </button>
+    </div>
+  );
+}
+
+function imprimirListadoHorario(jornada, horario, estudiantesDelHorario) {
+  const filas = estudiantesDelHorario.map((e) => `<tr><td style="border:1px solid #000;padding:4px;">${e.nombre}</td><td style="border:1px solid #000;padding:4px;">${e.asignacion?.tiene_reportes ? "Sí" : "No"}</td></tr>`).join("");
+  const ventana = window.open("", "_blank");
+  ventana.document.write(`
+    <html><head><title>${jornada.nombre} — ${horario.etiqueta}</title></head>
+    <body style="font-family: Arial, sans-serif; padding: 30px; font-size: 13px;">
+      <h2 style="text-align:center;">${jornada.nombre}</h2>
+      <p style="text-align:center;"><b>${horario.etiqueta}</b> — ${horario.hora_inicio || ""} a ${horario.hora_fin || ""}</p>
+      <table style="width:100%; border-collapse:collapse; margin-top:20px;">
+        <thead><tr><th style="border:1px solid #000;padding:4px;">Estudiante</th><th style="border:1px solid #000;padding:4px;">¿Tiene reportes?</th></tr></thead>
+        <tbody>${filas}</tbody>
+      </table>
+      <script>window.print();</script>
+    </body></html>
+  `);
+  ventana.document.close();
+}
+
+function JornadaDetalle({ jornada, gradoId, onVolver }) {
+  const [horarios, setHorarios] = useState([]);
+  const [estudiantes, setEstudiantes] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [formHorarioAbierto, setFormHorarioAbierto] = useState(false);
+
+  const cargar = () => {
+    setCargando(true);
+    api.fetchDetalleJornada(jornada.id, gradoId).then((d) => { setHorarios(d.horarios); setEstudiantes(d.estudiantes); setCargando(false); });
+  };
+  useEffect(() => { cargar(); }, [jornada.id]);
+
+  const eliminarHorario = async (id) => { if (!confirm("¿Eliminar este horario/grupo? Los estudiantes asignados quedan sin grupo.")) return; await api.eliminarHorarioJornada(id); cargar(); };
+  const asignar = async (estudianteId, horarioId) => { await api.asignarEstudianteHorario(jornada.id, estudianteId, horarioId || null); cargar(); };
+  const marcarCheck = async (estudianteId, campo, valorActual) => { await api.actualizarChecklistJornada(jornada.id, estudianteId, { [campo]: !valorActual }); cargar(); };
+
+  const conteoDelHorario = (horarioId) => estudiantes.filter((e) => e.asignacion?.horario_id === horarioId).length;
+  const sinAsignar = estudiantes.filter((e) => !e.asignacion?.horario_id);
+
+  return (
+    <div>
+      <button onClick={onVolver} className="text-sm text-violet-500 mb-3">← Volver a jornadas</button>
+      <h3 className="font-bold text-slate-800 mb-1">{jornada.nombre}</h3>
+      <p className="text-xs text-slate-400 mb-4">Periodo {jornada.periodo}{jornada.fecha ? ` · ${jornada.fecha}` : ""} · {estudiantes.length} estudiante(s)</p>
+
+      <div className="mb-4">
+        <div className="flex justify-between items-center mb-2">
+          <div className="text-sm font-semibold text-slate-700">Horarios / grupos de atención</div>
+          <button onClick={() => setFormHorarioAbierto((v) => !v)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">
+            {formHorarioAbierto ? "Cerrar" : "+ Agregar horario"}
+          </button>
+        </div>
+        {formHorarioAbierto && (
+          <NuevoHorarioForm jornadaId={jornada.id} orden={horarios.length} onCancelar={() => setFormHorarioAbierto(false)} onCreado={() => { setFormHorarioAbierto(false); cargar(); }} />
+        )}
+        {cargando ? (
+          <div className="text-sm text-slate-400">Cargando…</div>
+        ) : horarios.length === 0 ? (
+          <p className="text-xs text-slate-400">Todavía no armaste ningún horario/grupo.</p>
+        ) : (
+          <div className="grid sm:grid-cols-2 gap-2">
+            {horarios.map((h) => {
+              const cant = conteoDelHorario(h.id);
+              const lleno = cant >= h.capacidad;
+              return (
+                <div key={h.id} className={`rounded-xl p-2.5 border ${lleno ? "bg-amber-50 border-amber-200" : "bg-white border-slate-100"}`}>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-700">{h.etiqueta}</div>
+                      <div className="text-[11px] text-slate-400">{h.hora_inicio || "—"} a {h.hora_fin || "—"} · {cant}/{h.capacidad}</div>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <button onClick={() => imprimirListadoHorario(jornada, h, estudiantes.filter((e) => e.asignacion?.horario_id === h.id))} className="text-xs text-slate-400 hover:text-violet-600">🖨️</button>
+                      <button onClick={() => eliminarHorario(h.id)} className="text-xs text-slate-400 hover:text-rose-500">🗑</button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {sinAsignar.length > 0 && !cargando && (
+          <p className="text-[11px] text-amber-600 mt-2">⚠️ {sinAsignar.length} estudiante(s) todavía sin asignar a un horario.</p>
+        )}
+      </div>
+
+      <div className="overflow-x-auto bg-white rounded-2xl shadow-sm border border-slate-100">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="bg-slate-50">
+              <th className="text-left px-3 py-2">Estudiante</th>
+              <th className="px-3 py-2">Horario / grupo</th>
+              <th className="px-3 py-2">¿Tiene reportes?</th>
+              <th className="px-3 py-2">Informe entregado</th>
+              <th className="px-3 py-2">Citación entregada</th>
+            </tr>
+          </thead>
+          <tbody>
+            {estudiantes.map((e) => (
+              <tr key={e.id} className="border-t border-slate-100">
+                <td className="px-3 py-2 font-medium text-slate-700">{e.nombre}</td>
+                <td className="px-3 py-2">
+                  <select value={e.asignacion?.horario_id || ""} onChange={(ev) => asignar(e.id, ev.target.value ? parseInt(ev.target.value, 10) : null)}
+                    className="text-xs rounded-lg px-2 py-1 border border-slate-200 outline-none bg-white">
+                    <option value="">— Sin asignar —</option>
+                    {horarios.map((h) => <option key={h.id} value={h.id}>{h.etiqueta}</option>)}
+                  </select>
+                </td>
+                <td className="text-center px-3 py-2">
+                  <input type="checkbox" checked={!!e.asignacion?.tiene_reportes} onChange={() => marcarCheck(e.id, "tiene_reportes", e.asignacion?.tiene_reportes)} />
+                </td>
+                <td className="text-center px-3 py-2">
+                  <input type="checkbox" checked={!!e.asignacion?.informe_entregado} onChange={() => marcarCheck(e.id, "informe_entregado", e.asignacion?.informe_entregado)} />
+                </td>
+                <td className="text-center px-3 py-2">
+                  <input type="checkbox" checked={!!e.asignacion?.citacion_entregada} onChange={() => marcarCheck(e.id, "citacion_entregada", e.asignacion?.citacion_entregada)} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function JornadasDireccionCurso({ gradoId }) {
+  const [jornadas, setJornadas] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [formAbierto, setFormAbierto] = useState(false);
+  const [abierta, setAbierta] = useState(null);
+
+  const cargar = () => { setCargando(true); api.fetchJornadasPorCurso(gradoId).then((d) => { setJornadas(d); setCargando(false); }); };
+  useEffect(() => { cargar(); setAbierta(null); }, [gradoId]);
+
+  const eliminar = async (id) => { if (!confirm("¿Eliminar esta jornada completa, con sus horarios y asignaciones?")) return; await api.eliminarJornada(id); cargar(); };
+
+  if (abierta) return <JornadaDetalle jornada={abierta} gradoId={gradoId} onVolver={() => { setAbierta(null); cargar(); }} />;
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-3">
+        <p className="text-sm text-slate-500">Organizá la entrega de informes por horarios/grupos, con checklist de informe y citación entregados.</p>
+        <button onClick={() => setFormAbierto((v) => !v)} className="text-xs font-semibold px-3 py-2 rounded-full bg-violet-500 text-white">
+          {formAbierto ? "Cerrar" : "+ Nueva jornada"}
+        </button>
+      </div>
+
+      {formAbierto && <NuevaJornadaForm gradoId={gradoId} onCancelar={() => setFormAbierto(false)} onCreada={() => { setFormAbierto(false); cargar(); }} />}
+
+      {cargando ? (
+        <div className="text-sm text-slate-400">Cargando…</div>
+      ) : jornadas.length === 0 ? (
+        <div className="text-sm text-slate-400 bg-white rounded-2xl p-6 text-center border border-dashed border-slate-200">Todavía no creaste ninguna jornada de entrega de informes.</div>
+      ) : (
+        <div className="space-y-2">
+          {jornadas.map((j) => (
+            <div key={j.id} className="bg-white rounded-xl border border-slate-100 p-3 flex justify-between items-center">
+              <button onClick={() => setAbierta(j)} className="text-left">
+                <div className="text-sm font-semibold text-slate-700">{j.nombre}</div>
+                <div className="text-xs text-slate-400">Periodo {j.periodo}{j.fecha ? ` · ${j.fecha}` : ""}</div>
+              </button>
+              <button onClick={() => eliminar(j.id)} className="text-xs text-slate-300 hover:text-rose-500">🗑</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CitacionesDireccionCurso({ gradoId }) {
   const [estudiantes, setEstudiantes] = useState([]);
   const [citaciones, setCitaciones] = useState([]);
@@ -657,6 +947,15 @@ function VistaNotasDireccionCurso({ grados, gradoId, setGradoId }) {
             📊 {vistaAnalisis ? "Ver tabla" : "Ver análisis"}
           </button>
         )}
+        <button onClick={() => imprimirListadoClase(gradoId, estudiantes)} className="text-xs font-semibold px-3 py-2 rounded-full border border-slate-200 text-slate-600">
+          🖨️ Listado de clase
+        </button>
+        {materiasConNotas.length > 0 && (
+          <button onClick={() => imprimirCierrePeriodo(gradoId, estudiantes, materiasConNotas, (est, mat) => notaCeldaCompleta(est, mat, periodoVista), notaMinima, periodoVista)}
+            className="text-xs font-semibold px-3 py-2 rounded-full border border-slate-200 text-slate-600">
+            🖨️ Cierre de periodo (X)
+          </button>
+        )}
       </div>
       <p className="text-[11px] text-slate-400 mb-4">🔴 Reprobado (menor a {notaMinima}) · 🟡 En nivelación (tocá una celda de un periodo puntual para marcarla)</p>
 
@@ -828,12 +1127,14 @@ export function VistaDireccionCurso({ grados }) {
           <button onClick={() => setVista("panel")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "panel" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📊 Panel</button>
           <button onClick={() => setVista("notas")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "notas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📝 Notas</button>
           <button onClick={() => setVista("citaciones")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "citaciones" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📞 Citaciones</button>
+          <button onClick={() => setVista("jornada")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "jornada" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🗓️ Jornada de Entrega</button>
         </div>
       </div>
 
       {vista === "panel" && <PanelDireccionCurso gradoId={gradoId} onVerCitaciones={() => setVista("citaciones")} />}
       {vista === "notas" && <VistaNotasDireccionCurso grados={grados} gradoId={gradoId} setGradoId={setGradoId} />}
       {vista === "citaciones" && <CitacionesDireccionCurso gradoId={gradoId} />}
+      {vista === "jornada" && <JornadasDireccionCurso gradoId={gradoId} />}
     </div>
   );
 }
