@@ -148,26 +148,45 @@ function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre" }) {
         </tbody>
       </table>
 
-      {/* Hoja nueva y aparte: anotaciones libres de cualquier docente sobre el estudiante */}
-      <div style={{ pageBreakBefore: "always", paddingTop: 6 }}>
+      {/* Hoja nueva y aparte: anotaciones libres de cualquier docente sobre el estudiante — en horizontal */}
+      <div className="print-horizontal" style={{ pageBreakBefore: "always", paddingTop: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, borderBottom: "2px solid #000", paddingBottom: 6, marginBottom: 8 }}>
+          {institucion?.logo_url && <img src={institucion.logo_url} alt="Logo" style={{ height: 40 }} />}
+          <div style={{ flex: 1, textAlign: "center" }}>
+            <div style={{ fontWeight: "bold", fontSize: 12 }}>{institucion?.nombre || "INSTITUCIÓN EDUCATIVA"}</div>
+            <div>OBSERVADOR DEL ESTUDIANTE — {estudiante.nombre} · Curso {estudiante.grado_id} · Año lectivo {anioActual}</div>
+          </div>
+        </div>
         <div style={{ fontWeight: "bold", marginBottom: 4 }}>4. HOJA DE ANOTACIONES DE DOCENTES (por completar a mano)</div>
-        <p style={{ fontSize: 9, marginBottom: 6, color: "#555" }}>
-          Espacio para que cualquier docente que tenga contacto con el estudiante registre observaciones — académicas o convivenciales — sin necesidad de generar un acta formal.
+        <p style={{ fontSize: 8.5, marginBottom: 6, color: "#555" }}>
+          Espacio para que cualquier docente que tenga contacto con el estudiante registre observaciones — marcando si es académica (A) o convivencial (C) — sin necesidad de generar un acta formal.
         </p>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 8 }}>
           <thead>
             <tr>
-              <th style={{ border: "1px solid #000", padding: 3, fontSize: 9, width: "12%" }}>Fecha</th>
-              <th style={{ border: "1px solid #000", padding: 3, fontSize: 9, width: "22%" }}>Materia / Docente</th>
-              <th style={{ border: "1px solid #000", padding: 3, fontSize: 9 }}>Anotación</th>
+              <th style={{ border: "1px solid #000", padding: 2, width: "7%" }}>Fecha</th>
+              <th style={{ border: "1px solid #000", padding: 2, width: "9%" }}>Materia</th>
+              <th style={{ border: "1px solid #000", padding: 2, width: "9%" }}>Docente</th>
+              <th style={{ border: "1px solid #000", padding: 2, width: "4%" }}>A</th>
+              <th style={{ border: "1px solid #000", padding: 2, width: "4%" }}>C</th>
+              <th style={{ border: "1px solid #000", padding: 2 }}>Anotación</th>
+              <th style={{ border: "1px solid #000", padding: 2, width: "12%" }}>Firma Docente</th>
+              <th style={{ border: "1px solid #000", padding: 2, width: "12%" }}>Firma Estudiante</th>
+              <th style={{ border: "1px solid #000", padding: 2, width: "13%" }}>Firma Padre de Familia</th>
             </tr>
           </thead>
           <tbody>
-            {Array.from({ length: 14 }).map((_, i) => (
+            {Array.from({ length: 24 }).map((_, i) => (
               <tr key={i}>
-                <td style={{ border: "1px solid #000", height: 24 }}></td>
-                <td style={{ border: "1px solid #000", height: 24 }}></td>
-                <td style={{ border: "1px solid #000", height: 24 }}></td>
+                <td style={{ border: "1px solid #000", height: 20 }}></td>
+                <td style={{ border: "1px solid #000", height: 20 }}></td>
+                <td style={{ border: "1px solid #000", height: 20 }}></td>
+                <td style={{ border: "1px solid #000", height: 20 }}></td>
+                <td style={{ border: "1px solid #000", height: 20 }}></td>
+                <td style={{ border: "1px solid #000", height: 20 }}></td>
+                <td style={{ border: "1px solid #000", height: 20 }}></td>
+                <td style={{ border: "1px solid #000", height: 20 }}></td>
+                <td style={{ border: "1px solid #000", height: 20 }}></td>
               </tr>
             ))}
           </tbody>
