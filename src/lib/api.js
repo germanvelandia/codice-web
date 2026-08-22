@@ -1230,6 +1230,11 @@ export async function editarTareaCalificable(id, cambios) {
   if (error) throw error;
 }
 
+export async function guardarRubricaTareaCalificable(tareaId, criterios) {
+  const { error } = await supabase.from("tareas_calificables").update({ rubrica: criterios }).eq("id", tareaId);
+  if (error) throw error;
+}
+
 export async function eliminarTareaCalificable(id) {
   const { error } = await supabase.from("tareas_calificables").delete().eq("id", id);
   if (error) throw error;
@@ -1258,9 +1263,9 @@ export async function fetchEntregasDeTarea(tareaId) {
 
 // Califica la entrega de un estudiante Y manda esa nota directo a la Planilla
 // de Calificaciones (crea o reutiliza la columna/actividad correspondiente).
-export async function calificarTarea(tarea, estudianteId, nota, comentario) {
+export async function calificarTarea(tarea, estudianteId, nota, comentario, rubricaResultado) {
   const { error: e1 } = await supabase.from("tarea_entregas").upsert(
-    { tarea_id: tarea.id, estudiante_id: estudianteId, estado: "calificado", nota, comentario: comentario || null, fecha_calificacion: new Date().toISOString() },
+    { tarea_id: tarea.id, estudiante_id: estudianteId, estado: "calificado", nota, comentario: comentario || null, rubrica_resultado: rubricaResultado || null, fecha_calificacion: new Date().toISOString() },
     { onConflict: "tarea_id,estudiante_id" }
   );
   if (e1) throw e1;
@@ -2946,6 +2951,61 @@ export async function guardarEstadoMateria(gradoId, materiaNombre, estudianteId,
     { grado_id: gradoId, materia_nombre: materiaNombre, estudiante_id: estudianteId, estado, actualizado_en: new Date().toISOString() },
     { onConflict: "grado_id,materia_nombre,estudiante_id" }
   );
+  if (error) throw error;
+}
+
+/* ---------------- 🧑‍🏫 Tutorías individuales ---------------- */
+export async function fetchTutoriasEstudiante(estudianteId) {
+  const { data, error } = await supabase.from("tutorias_individuales").select("*").eq("estudiante_id", estudianteId).order("fecha", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearTutoria(estudianteId, campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("tutorias_individuales").insert({ estudiante_id: estudianteId, docente_id: userData?.user?.id || null, ...campos });
+  if (error) throw error;
+}
+
+export async function editarTutoria(id, campos) {
+  const { error } = await supabase.from("tutorias_individuales").update(campos).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarTutoria(id) {
+  const { error } = await supabase.from("tutorias_individuales").delete().eq("id", id);
+  if (error) throw error;
+}
+
+/* ---------------- 📘 Guías de estudio ---------------- */
+export async function fetchGuiasEstudio(materiaId, gradoId, periodo) {
+  let query = supabase.from("guias_estudio").select("*").eq("materia_id", materiaId).eq("grado_id", gradoId);
+  if (periodo) query = query.eq("periodo", periodo);
+  const { data, error } = await query.order("creado_en", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+// Para el estudiante: todas las guías publicadas de su grado (de cualquier materia).
+export async function fetchGuiasEstudioParaGrado(gradoId) {
+  const { data, error } = await supabase.from("guias_estudio").select("*, materias(nombre)").eq("grado_id", gradoId).eq("publicada", true).order("creado_en", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearGuiaEstudio(campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("guias_estudio").insert({ ...campos, docente_id: userData?.user?.id || null });
+  if (error) throw error;
+}
+
+export async function editarGuiaEstudio(id, campos) {
+  const { error } = await supabase.from("guias_estudio").update(campos).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarGuiaEstudio(id) {
+  const { error } = await supabase.from("guias_estudio").delete().eq("id", id);
   if (error) throw error;
 }
 
