@@ -81,6 +81,8 @@ function CalificarModal({ tarea, onClose, onCambio }) {
   const [codiceAbiertoPara, setCodiceAbiertoPara] = useState(null);
   const [codiceTexto, setCodiceTexto] = useState("");
   const [guardandoCodice, setGuardandoCodice] = useState(false);
+  const [rubricando, setRubricando] = useState(null); // estudianteId
+  const [nivelesElegidos, setNivelesElegidos] = useState({}); // { criterioIdx: nivelIdx }
 
   const cargar = () => { setCargando(true); api.fetchEntregasDeTarea(tarea.id).then((d) => { setEntregas(d); setCargando(false); }); };
   useEffect(() => { cargar(); }, [tarea.id]);
@@ -91,6 +93,36 @@ function CalificarModal({ tarea, onClose, onCambio }) {
     try {
       await api.calificarTarea(tarea, estudianteId, valor, comentarioTemp);
       setEditandoId(null);
+      cargar();
+      onCambio();
+    } catch (e) {
+      alert("Error al calificar: " + e.message);
+    }
+  };
+
+  const abrirRubrica = (estudianteId, resultadoPrevio) => {
+    setRubricando(estudianteId);
+    setNivelesElegidos(resultadoPrevio || {});
+  };
+
+  const elegirNivel = (criterioIdx, nivelIdx) => setNivelesElegidos((prev) => ({ ...prev, [criterioIdx]: nivelIdx }));
+
+  const totalRubrica = () => {
+    let obtenidos = 0, maximos = 0;
+    tarea.rubrica.forEach((c, i) => {
+      const maxCriterio = Math.max(...c.niveles.map((n) => n.puntos));
+      maximos += maxCriterio;
+      const elegido = nivelesElegidos[i];
+      if (elegido !== undefined) obtenidos += c.niveles[elegido].puntos;
+    });
+    return { obtenidos, maximos, nota: maximos > 0 ? Math.round((obtenidos / maximos) * 5 * 10) / 10 : 0 };
+  };
+
+  const guardarConRubrica = async (estudianteId) => {
+    const { nota } = totalRubrica();
+    try {
+      await api.calificarTarea(tarea, estudianteId, nota, "", nivelesElegidos);
+      setRubricando(null);
       cargar();
       onCambio();
     } catch (e) {
@@ -143,6 +175,9 @@ function CalificarModal({ tarea, onClose, onCambio }) {
                 <div className="flex items-center justify-between flex-wrap gap-1.5">
                   <span className="text-xs font-semibold text-slate-700">{e.estudiante_nombre}</span>
                   <div className="flex items-center gap-1.5">
+                    {tarea.rubrica?.length > 0 && (
+                      <button onClick={() => abrirRubrica(e.estudiante_id, e.rubrica_resultado)} className="text-[11px] px-2 py-1 rounded-full border border-violet-200 text-violet-600">📊 Con rúbrica</button>
+                    )}
                     {editandoId === e.estudiante_id ? (
                       <div className="flex items-center gap-1.5">
                         <input type="text" inputMode="decimal" value={notaTemp} onChange={(ev) => setNotaTemp(ev.target.value)} placeholder="Nota"
@@ -185,6 +220,32 @@ function CalificarModal({ tarea, onClose, onCambio }) {
                       <button disabled={guardandoCodice} onClick={() => dejarEnCodice(e.estudiante_id)} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-violet-500 text-white disabled:opacity-60">
                         {guardandoCodice ? "Guardando…" : "Agregar al Códice"}
                       </button>
+                    </div>
+                  </div>
+                )}
+                {rubricando === e.estudiante_id && (
+                  <div className="mt-2 bg-white rounded-lg p-3 border border-violet-100 space-y-2">
+                    {tarea.rubrica.map((c, i) => (
+                      <div key={i}>
+                        <div className="text-[11px] font-semibold text-slate-600 mb-1">{c.criterio}</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {c.niveles.map((n, j) => (
+                            <button key={j} onClick={() => elegirNivel(i, j)}
+                              className={`text-[11px] px-2 py-1 rounded-full border ${nivelesElegidos[i] === j ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>
+                              {n.nombre} ({n.puntos})
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-100">
+                      <span className="text-xs text-slate-500">
+                        {totalRubrica().obtenidos}/{totalRubrica().maximos} pts → nota <b>{totalRubrica().nota}</b>
+                      </span>
+                      <div className="flex gap-2">
+                        <button onClick={() => setRubricando(null)} className="text-[11px] text-slate-400">Cancelar</button>
+                        <button onClick={() => guardarConRubrica(e.estudiante_id)} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-violet-500 text-white">Guardar nota</button>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -299,10 +360,94 @@ function CopiarTareaModal({ tarea, materias, grados, onClose, onCopiada }) {
   );
 }
 
+function RubricaTareaModal({ tarea, onClose, onGuardada }) {
+  const [criterios, setCriterios] = useState(
+    tarea.rubrica?.length ? tarea.rubrica : [{ criterio: "", niveles: [{ nombre: "Alto", puntos: 5 }, { nombre: "Medio", puntos: 3 }, { nombre: "Bajo", puntos: 1 }] }]
+  );
+  const [guardando, setGuardando] = useState(false);
+
+  const actualizarCriterio = (i, texto) => setCriterios((prev) => prev.map((c, idx) => idx === i ? { ...c, criterio: texto } : c));
+  const actualizarNivel = (i, j, campo, valor) => setCriterios((prev) => prev.map((c, idx) => idx === i
+    ? { ...c, niveles: c.niveles.map((n, k) => k === j ? { ...n, [campo]: campo === "puntos" ? parseFloat(valor) || 0 : valor } : n) }
+    : c));
+  const agregarCriterio = () => setCriterios((prev) => [...prev, { criterio: "", niveles: [{ nombre: "Alto", puntos: 5 }, { nombre: "Medio", puntos: 3 }, { nombre: "Bajo", puntos: 1 }] }]);
+  const quitarCriterio = (i) => setCriterios((prev) => prev.filter((_, idx) => idx !== i));
+
+  const guardar = async () => {
+    setGuardando(true);
+    try {
+      await api.guardarRubricaTareaCalificable(tarea.id, criterios.filter((c) => c.criterio.trim()));
+      onGuardada();
+    } catch (e) {
+      alert("Error al guardar: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  const quitarRubrica = async () => {
+    if (!confirm("¿Quitar la rúbrica de esta tarea? Vas a volver a calificar con nota manual.")) return;
+    setGuardando(true);
+    try {
+      await api.guardarRubricaTareaCalificable(tarea.id, null);
+      onGuardada();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">📊 Rúbrica — {tarea.titulo}</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-500 mb-3">
+          Definí los criterios y sus niveles con puntos. Al calificar, elegís el nivel de cada criterio y la nota se calcula sola (suma de puntos, ajustada a una escala de 1 a 5).
+        </p>
+
+        <div className="space-y-3 mb-4">
+          {criterios.map((c, i) => (
+            <div key={i} className="border border-slate-200 rounded-xl p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <input value={c.criterio} onChange={(e) => actualizarCriterio(i, e.target.value)} placeholder="Criterio a evaluar (ej: Ortografía)"
+                  className="flex-1 text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+                <button onClick={() => quitarCriterio(i)} className="text-slate-300 hover:text-rose-500">🗑</button>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {c.niveles.map((n, j) => (
+                  <div key={j} className="bg-slate-50 rounded-lg p-2">
+                    <input value={n.nombre} onChange={(e) => actualizarNivel(i, j, "nombre", e.target.value)}
+                      className="w-full text-xs font-semibold rounded px-1 py-1 border border-slate-200 outline-none mb-1" />
+                    <input type="number" value={n.puntos} onChange={(e) => actualizarNivel(i, j, "puntos", e.target.value)}
+                      className="w-full text-xs rounded px-1 py-1 border border-slate-200 outline-none" placeholder="Puntos" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          <button onClick={agregarCriterio} className="text-xs text-violet-500">+ Agregar criterio</button>
+        </div>
+
+        <div className="flex gap-2">
+          {tarea.rubrica?.length > 0 && (
+            <button disabled={guardando} onClick={quitarRubrica} className="text-xs font-semibold px-3 py-2.5 rounded-lg border border-rose-200 text-rose-500">Quitar rúbrica</button>
+          )}
+          <button disabled={guardando} onClick={guardar} className="flex-1 text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+            {guardando ? "Guardando…" : "Guardar rúbrica"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TareaCard({ tarea, categorias, materias, grados, onCambio }) {
   const [calificando, setCalificando] = useState(false);
   const [editando, setEditando] = useState(false);
   const [copiando, setCopiando] = useState(false);
+  const [rubricaAbierta, setRubricaAbierta] = useState(false);
   const eliminar = async () => {
     if (!confirm(`¿Eliminar "${tarea.titulo}"? Esto no borra la nota que ya se envió a Calificaciones.`)) return;
     await api.eliminarTareaCalificable(tarea.id);
@@ -325,9 +470,11 @@ function TareaCard({ tarea, categorias, materias, grados, onCambio }) {
           {tarea.fecha_entrega && <p className="text-[11px] text-slate-400 mt-1">Entrega: {tarea.fecha_entrega}</p>}
           {tarea.url && <a href={tarea.url} target="_blank" rel="noreferrer" className="text-[11px] text-violet-500 mt-1 block truncate">🔗 {tarea.url}</a>}
           {tarea.recompensa_monedas > 0 && <span className="inline-block text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full mt-1">🪙 {tarea.recompensa_monedas} al entregar</span>}
+          {tarea.rubrica?.length > 0 && <span className="inline-block text-[10px] font-semibold text-violet-700 bg-violet-50 px-2 py-0.5 rounded-full mt-1 ml-1">📊 Con rúbrica</span>}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button onClick={() => setCalificando(true)} className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-violet-500 text-white">Calificar</button>
+          <button onClick={() => setRubricaAbierta(true)} className="text-xs text-slate-400 hover:text-violet-600" title="Rúbrica de evaluación">📊</button>
           <button onClick={() => setEditando(true)} className="text-xs text-slate-400 hover:text-violet-600">✏️</button>
           <button onClick={() => setCopiando(true)} className="text-xs text-slate-400 hover:text-violet-600" title="Copiar a otro curso">📋</button>
           <button onClick={eliminar} className="text-xs text-slate-400 hover:text-rose-500">🗑</button>
@@ -335,6 +482,7 @@ function TareaCard({ tarea, categorias, materias, grados, onCambio }) {
       </div>
       {calificando && <CalificarModal tarea={tarea} onClose={() => setCalificando(false)} onCambio={onCambio} />}
       {copiando && <CopiarTareaModal tarea={tarea} materias={materias} grados={grados} onClose={() => setCopiando(false)} onCopiada={onCambio} />}
+      {rubricaAbierta && <RubricaTareaModal tarea={tarea} onClose={() => setRubricaAbierta(false)} onGuardada={() => { setRubricaAbierta(false); onCambio(); }} />}
     </div>
   );
 }
