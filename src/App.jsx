@@ -22,6 +22,7 @@ import { VistaAnotaciones } from "./screens/Anotaciones";
 import { VistaInclusionGeneral } from "./screens/InclusionGeneral";
 import { VistaBajasVida } from "./screens/BajasVida";
 import { VistaDireccionCurso } from "./screens/DireccionCurso";
+import { VistaGuiasEstudio, GuiasEstudiante } from "./screens/GuiasEstudio";
 import { VistaConsignasCodice } from "./screens/ConsignasCodice";
 import { VistaTriviaAdmin } from "./screens/TriviaAdmin";
 import { VistaBancoPreguntas } from "./screens/BancoPreguntas";
@@ -900,6 +901,7 @@ const MENU_CODICE = [
   { key: "biblioteca", label: "Biblioteca", icono: "📚" },
   { key: "codice", label: "Códice", icono: "📖" },
   { key: "forja", label: "Forja", icono: "🔨" },
+  { key: "guias", label: "Guías", icono: "📘" },
   { key: "inicio", label: "Inicio", icono: "🏠" },
   { key: "misiones", label: "Misiones", icono: "⚔️" },
   { key: "notas", label: "Notas", icono: "📝" },
@@ -1725,6 +1727,10 @@ function PortalEstudiante() {
             <ForjaEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />
           )}
 
+          {vista === "guias" && estudianteInfo && (
+            <GuiasEstudiante gradoId={estudianteInfo.grado_id} />
+          )}
+
           {vista === "codice" && estudianteInfo && (
             <CodiceEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />
           )}
@@ -1856,6 +1862,7 @@ const MENU_PANEL = [
   { key: "inclusion", label: "Inclusión", icono: "🧩" },
   { key: "bajasvida", label: "Bajas de Vida", icono: "📉" },
   { key: "direccioncurso", label: "Dirección de Curso", icono: "🎓" },
+  { key: "guiasestudio", label: "Guías de Estudio", icono: "📘" },
   { key: "horario", label: "Agenda", icono: "🗓️" },
   { key: "herramientas", label: "Herramientas", icono: "🛠️" },
   { key: "roles", label: "Roles", icono: "🎭" },
@@ -2084,6 +2091,7 @@ function Panel({ session }) {
         {tab === "inclusion" && <VistaInclusionGeneral />}
         {tab === "bajasvida" && <VistaBajasVida />}
         {tab === "direccioncurso" && <VistaDireccionCurso grados={grados} />}
+        {tab === "guiasestudio" && <VistaGuiasEstudio grados={grados} />}
         {tab === "evaluaciones" && grados.length > 0 && <VistaEvaluaciones grados={grados} />}
         {tab === "proyectosforja" && grados.length > 0 && <VistaProyectosForja grados={grados} />}
       </div>
