@@ -11,6 +11,7 @@ import { ActasModal } from "./Actas";
 import { RemisionModal } from "./Remision";
 import { ResumenEstudianteModal } from "./Resumen";
 import { ObservadorModal, ObservadorPorGradoModal } from "./Observador";
+import { TutoriasModal } from "./Tutorias";
 import { DirectorioModal } from "./Directorio";
 
 function LevelBar({ xp }) {
@@ -964,6 +965,7 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
   const [codiceAbierto, setCodiceAbierto] = useState(false);
   const [remisionAbierta, setRemisionAbierta] = useState(false);
   const [resumenAbierto, setResumenAbierto] = useState(false);
+  const [tutoriasAbierta, setTutoriasAbierta] = useState(false);
   const [observadorAbierto, setObservadorAbierto] = useState(false);
   const [historialAbierto, setHistorialAbierto] = useState(false);
   const [trasladoAbierto, setTrasladoAbierto] = useState(false);
@@ -1109,6 +1111,7 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
                 <button onClick={() => { setMenuAbierto(false); setObservadorAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📋 Observador del Estudiante</button>
                 <button onClick={() => { setMenuAbierto(false); setRemisionAbierta(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📨 Remisión a Orientación</button>
                 <button onClick={() => { setMenuAbierto(false); setResumenAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📊 Resumen del estudiante</button>
+                <button onClick={() => { setMenuAbierto(false); setTutoriasAbierta(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">🧑‍🏫 Tutoría individual</button>
                 {grados && grados.length > 1 && (
                   <button onClick={() => { setMenuAbierto(false); setTrasladoAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">🔀 Trasladar de grado</button>
                 )}
@@ -1126,6 +1129,7 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
       {codiceAbierto && <CodiceDocenteModal estudiante={estudiante} onClose={() => setCodiceAbierto(false)} />}
       {remisionAbierta && <RemisionModal estudiante={estudiante} onClose={() => setRemisionAbierta(false)} />}
       {resumenAbierto && <ResumenEstudianteModal estudiante={estudiante} onClose={() => setResumenAbierto(false)} />}
+      {tutoriasAbierta && <TutoriasModal estudiante={estudiante} onClose={() => setTutoriasAbierta(false)} />}
       {observadorAbierto && <ObservadorModal estudiante={estudiante} onClose={() => setObservadorAbierto(false)} />}
       {historialAbierto && <HistorialGamificacionModal estudiante={estudiante} onClose={() => setHistorialAbierto(false)} />}
       {trasladoAbierto && (
