@@ -60,7 +60,12 @@ export function AsistenciaDireccionCurso({ gradoId, institucion }) {
   const [resultadoMover, setResultadoMover] = useState(null);
 
   useEffect(() => { api.fetchMaterias().then((d) => { setMaterias(d); if (d[0]) setMateriaMover(d[0].id); }); }, []);
-  useEffect(() => { api.fetchOCrearMateriaDireccionCurso().then((m) => setMateriaDCId(m.id)); }, []);
+  const [errorMateriaDC, setErrorMateriaDC] = useState(null);
+  useEffect(() => {
+    api.fetchOCrearMateriaDireccionCurso()
+      .then((m) => setMateriaDCId(m.id))
+      .catch((e) => setErrorMateriaDC(e.message || JSON.stringify(e)));
+  }, []);
 
   const confirmarLimpieza = async () => {
     if (!confirm('Esto va a: 1) borrar duplicados que hayan quedado en la asistencia general de este curso, y 2) mover lo que sobreviva hacia la materia real "Dirección de Curso". ¿Continuar?')) return;
@@ -149,6 +154,13 @@ export function AsistenciaDireccionCurso({ gradoId, institucion }) {
         Asistencia al colegio en general (no de una materia puntual) — útil para llevar el control con los padres de familia, aunque el estudiante no tenga clase con vos.
         Ahora se guarda bajo la materia real "Dirección de Curso" (en vez de "sin materia"), para que no se te vuelva a duplicar el historial.
       </p>
+
+      {errorMateriaDC && (
+        <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 mb-4">
+          <p className="text-xs font-semibold text-rose-700 mb-1">⚠️ No se pudo crear/traer la materia "Dirección de Curso" — copiá este mensaje y pasámelo:</p>
+          <p className="text-[11px] font-mono text-rose-600 break-all">{errorMateriaDC}</p>
+        </div>
+      )}
 
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
         <p className="text-xs text-amber-700 mb-2">
