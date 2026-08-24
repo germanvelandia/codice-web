@@ -3104,15 +3104,22 @@ export async function fetchMaterias() {
   return data || [];
 }
 
+// Esta función faltaba por completo en el código — el botón de "crear
+// materia" en Calificaciones la llamaba, pero nunca se había escrito.
+export async function crearMateria(nombre) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("materias").insert({ nombre: nombre.trim(), profesor_id: userData?.user?.id || null }).select().single();
+  if (error) throw error;
+  return data;
+}
+
 // Trae la materia especial "Dirección de Curso" (la crea si todavía no
 // existe) — para usarla como materia real en vez de "sin materia" (null),
 // que en Postgres causaba duplicados al no tratar dos NULL como iguales.
 export async function fetchOCrearMateriaDireccionCurso() {
   const { data: existente } = await supabase.from("materias").select("*").eq("nombre", "Dirección de Curso").maybeSingle();
   if (existente) return existente;
-  const { data: creada, error } = await supabase.from("materias").insert({ nombre: "Dirección de Curso" }).select().single();
-  if (error) throw error;
-  return creada;
+  return crearMateria("Dirección de Curso");
 }
 
 // Limpia los duplicados que haya quedado en la asistencia GENERAL (sin
