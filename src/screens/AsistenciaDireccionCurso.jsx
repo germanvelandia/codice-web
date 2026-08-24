@@ -49,6 +49,9 @@ function imprimirReporteAsistencia(gradoId, fechaDesde, fechaHasta, totales, ins
 
 export function AsistenciaDireccionCurso({ gradoId, institucion }) {
   const [vista, setVista] = useState("marcar"); // "marcar" | "reporte" | "mover"
+  const [materiaDCId, setMateriaDCId] = useState(null); // "Dirección de Curso", en vez de null/sin-materia
+  const [limpiando, setLimpiando] = useState(false);
+  const [resultadoLimpieza, setResultadoLimpieza] = useState(null);
   const [materias, setMaterias] = useState([]);
   const [materiaMover, setMateriaMover] = useState("");
   const [fechaMoverDesde, setFechaMoverDesde] = useState(() => { const d = new Date(); d.setDate(1); return d.toISOString().slice(0, 10); });
@@ -57,6 +60,20 @@ export function AsistenciaDireccionCurso({ gradoId, institucion }) {
   const [resultadoMover, setResultadoMover] = useState(null);
 
   useEffect(() => { api.fetchMaterias().then((d) => { setMaterias(d); if (d[0]) setMateriaMover(d[0].id); }); }, []);
+  useEffect(() => { api.fetchOCrearMateriaDireccionCurso().then((m) => setMateriaDCId(m.id)); }, []);
+
+  const confirmarLimpieza = async () => {
+    if (!confirm('Esto va a: 1) borrar duplicados que hayan quedado en la asistencia general de este curso, y 2) mover lo que sobreviva hacia la materia real "Dirección de Curso". ¿Continuar?')) return;
+    setLimpiando(true);
+    try {
+      const r = await api.limpiarYMigrarAsistenciaGeneral(gradoId);
+      setResultadoLimpieza(r);
+      cargarDia();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setLimpiando(false);
+  };
 
   const confirmarMover = async () => {
     if (!materiaMover) return;
@@ -89,9 +106,9 @@ export function AsistenciaDireccionCurso({ gradoId, institucion }) {
   }, [gradoId]);
 
   const cargarDia = () => {
-    if (estudiantes.length === 0) return;
+    if (estudiantes.length === 0 || !materiaDCId) return;
     setCargando(true);
-    api.fetchAsistenciaFecha(estudiantes.map((e) => e.id), fecha, null).then((data) => {
+    api.fetchAsistenciaFecha(estudiantes.map((e) => e.id), fecha, materiaDCId).then((data) => {
       setRegistrosDia(data || {});
       setCargando(false);
     }).catch((e) => {
@@ -99,14 +116,14 @@ export function AsistenciaDireccionCurso({ gradoId, institucion }) {
       setCargando(false);
     });
   };
-  useEffect(() => { if (vista === "marcar") cargarDia(); }, [estudiantes, fecha, vista]);
+  useEffect(() => { if (vista === "marcar") cargarDia(); }, [estudiantes, fecha, vista, materiaDCId]);
 
   const marcar = async (estudianteId, codigo) => {
     setGuardandoId(estudianteId);
     const actual = registrosDia[estudianteId];
     try {
-      if (actual && actual.codigo === codigo) await api.quitarAsistencia(estudianteId, fecha, null);
-      else await api.marcarAsistencia(estudianteId, fecha, codigo, null, null);
+      if (actual && actual.codigo === codigo) await api.quitarAsistencia(estudianteId, fecha, materiaDCId);
+      else await api.marcarAsistencia(estudianteId, fecha, codigo, null, materiaDCId);
       cargarDia();
     } catch (e) {
       alert("Error: " + e.message);
@@ -115,13 +132,13 @@ export function AsistenciaDireccionCurso({ gradoId, institucion }) {
   };
 
   const marcarTodosPresentes = async () => {
-    await api.marcarTodosPresentes(estudiantes.map((e) => e.id), fecha, null);
+    await api.marcarTodosPresentes(estudiantes.map((e) => e.id), fecha, materiaDCId);
     cargarDia();
   };
 
   const cargarReporte = () => {
     setCargandoReporte(true);
-    api.fetchTotalesAsistenciaInstitucionalCurso(gradoId, fechaDesde, fechaHasta).then((d) => { setTotales(d); setCargandoReporte(false); })
+    api.fetchTotalesAsistenciaInstitucionalCurso(gradoId, fechaDesde, fechaHasta, materiaDCId).then((d) => { setTotales(d); setCargandoReporte(false); })
       .catch((e) => { alert("Error al cargar el reporte: " + e.message); setCargandoReporte(false); });
   };
   useEffect(() => { if (vista === "reporte") cargarReporte(); }, [gradoId, vista]);
@@ -130,7 +147,23 @@ export function AsistenciaDireccionCurso({ gradoId, institucion }) {
     <div>
       <p className="text-sm text-slate-500 mb-3">
         Asistencia al colegio en general (no de una materia puntual) — útil para llevar el control con los padres de familia, aunque el estudiante no tenga clase con vos.
+        Ahora se guarda bajo la materia real "Dirección de Curso" (en vez de "sin materia"), para que no se te vuelva a duplicar el historial.
       </p>
+
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
+        <p className="text-xs text-amber-700 mb-2">
+          <b>Un solo paso, una sola vez:</b> si venías marcando asistencia general desde antes de este cambio, puede haber quedado
+          historial duplicado. Este botón lo limpia y lo pasa a la materia real "Dirección de Curso" — después de correrlo una vez, no hace falta repetirlo.
+        </p>
+        <button disabled={limpiando} onClick={confirmarLimpieza} className="text-xs font-semibold px-3 py-2 rounded-lg bg-amber-500 text-white disabled:opacity-60">
+          {limpiando ? "Limpiando…" : "🧹 Limpiar duplicados y migrar historial"}
+        </button>
+        {resultadoLimpieza && (
+          <p className="text-xs text-emerald-700 mt-2">
+            ✔ Se eliminaron {resultadoLimpieza.duplicadosEliminados} duplicado(s) y se migraron {resultadoLimpieza.migrados} registro(s).
+          </p>
+        )}
+      </div>
 
       <div className="flex gap-1 rounded-full bg-slate-100 p-1 w-fit mb-4">
         <button onClick={() => setVista("marcar")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "marcar" ? "bg-violet-500 text-white" : "text-slate-600"}`}>✅ Marcar el día</button>
