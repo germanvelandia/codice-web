@@ -195,6 +195,15 @@ export function VistaAsistencia({ grados }) {
   useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
   useEffect(() => { api.fetchMaterias().then(setMaterias); api.fetchUsuarioActualId().then(setUsuarioId); }, []);
 
+  // Por defecto arranca en tu propia materia (no en "General"), para no
+  // marcar sin querer la asistencia de tu clase como si fuera general.
+  useEffect(() => {
+    if (materiaId === "" && usuarioId && materias.length > 0) {
+      const propia = materias.find((m) => m.docente_id === usuarioId && m.nombre !== "Dirección de Curso");
+      if (propia) setMateriaId(String(propia.id));
+    }
+  }, [materias, usuarioId]);
+
   const materiaActual = materias.find((m) => m.id === parseInt(materiaId, 10));
   const esMateriaPropia = materiaId === "" || (materiaActual && materiaActual.docente_id === usuarioId);
   const soloLectura = materiaId !== "" && !esMateriaPropia;
@@ -281,7 +290,7 @@ export function VistaAsistencia({ grados }) {
       <div className="flex flex-wrap gap-2 mb-4 items-center">
         <span className="text-xs uppercase tracking-wide text-slate-400">Materia:</span>
         <select value={materiaId} onChange={(e) => setMateriaId(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
-          <option value="">General (sin materia asociada)</option>
+          <option value="">⚠️ General (sin materia — usar solo para Dirección de Curso)</option>
           {materias.map((m) => (
             <option key={m.id} value={m.id}>
               {m.nombre}{m.docente_id !== usuarioId ? ` — ${m.profesores?.nombre || "otro docente"}` : " (mía)"}
