@@ -2101,4 +2101,3 @@ function Panel({ session }) {
     </div>
   );
 }
-}
