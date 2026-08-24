@@ -3401,6 +3401,31 @@ export async function calcularNotasFinalesPeriodo(materiaId, gradoId, periodo, e
 /* ---------------- Asistencia ---------------- */
 // materiaId: la materia/clase en la que se toma la asistencia. Usa null para
 // asistencia "general" (no asociada a una materia puntual).
+// Totales de asistencia INSTITUCIONAL (sin materia, materia_id = null) de
+// un curso puntual, en un rango de fechas — para el reporte de Dirección
+// de Curso, sin mezclar con la asistencia de clase de otros docentes.
+export async function fetchTotalesAsistenciaInstitucionalCurso(gradoId, fechaDesde, fechaHasta) {
+  const estudiantes = await fetchEstudiantesPorGrado(gradoId);
+  const ids = estudiantes.map((e) => e.id);
+  if (ids.length === 0) return [];
+
+  let query = supabase.from("asistencia").select("estudiante_id, codigo, fecha").in("estudiante_id", ids).is("materia_id", null);
+  if (fechaDesde) query = query.gte("fecha", fechaDesde);
+  if (fechaHasta) query = query.lte("fecha", fechaHasta);
+  const { data: registros, error } = await query;
+  if (error) throw error;
+
+  const totales = {};
+  estudiantes.forEach((e) => { totales[e.id] = { estudianteId: e.id, nombre: e.nombre, P: 0, R: 0, FI: 0, FJ: 0, total: 0 }; });
+  (registros || []).forEach((r) => {
+    if (!totales[r.estudiante_id]) return;
+    totales[r.estudiante_id][r.codigo] = (totales[r.estudiante_id][r.codigo] || 0) + 1;
+    totales[r.estudiante_id].total += 1;
+  });
+
+  return ordenarPorApellido(Object.values(totales));
+}
+
 export async function fetchAsistenciaFecha(estudianteIds, fecha, materiaId = null) {
   if (estudianteIds.length === 0) return {};
   let query = supabase.from("asistencia").select("*").eq("fecha", fecha).in("estudiante_id", estudianteIds);
