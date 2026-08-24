@@ -1874,7 +1874,7 @@ export async function verificarYOtorgarLogros(estudianteId) {
     supabase.from("criaturas").select("id").eq("activo", true).then((r) => r.data || []),
     supabase.from("codice_entradas").select("id", { count: "exact", head: true }).eq("estudiante_id", estudianteId).then((r) => r.count || 0),
     supabase.from("evaluacion_intentos").select("id", { count: "exact", head: true }).eq("estudiante_id", estudianteId).neq("estado", "en_progreso").then((r) => r.count || 0),
-    supabase.from("asistencia").select("id", { count: "exact", head: true }).eq("estudiante_id", estudianteId).eq("codigo", "P").then((r) => r.count || 0),
+    supabase.from("asistencia").select("*", { count: "exact", head: true }).eq("estudiante_id", estudianteId).eq("codigo", "P").then((r) => r.count || 0),
   ]);
 
   const cumple = (logro) => {
@@ -3140,11 +3140,12 @@ export async function limpiarYMigrarAsistenciaGeneral(gradoId) {
   const ids = estudiantes.map((e) => e.id);
   if (ids.length === 0) return { duplicadosEliminados: 0, migrados: 0, materiaId: materiaDC.id };
 
-  const { data: generales, error } = await supabase.from("asistencia").select("*").in("estudiante_id", ids).is("materia_id", null).order("id", { ascending: false });
+  const { data: generales, error } = await supabase.from("asistencia").select("*").in("estudiante_id", ids).is("materia_id", null);
   if (error) throw error;
 
-  // Agrupa por estudiante+fecha — de cada grupo se queda con el más
-  // reciente (id más alto) y borra el resto.
+  // Agrupa por estudiante+fecha (la tabla no tiene columna "id" propia, así
+  // que no hay forma de saber cuál duplicado es "el más reciente" — se
+  // conserva uno cualquiera del grupo y se borran los demás).
   const grupos = {};
   (generales || []).forEach((r) => {
     const clave = `${r.estudiante_id}_${r.fecha}`;
@@ -3153,22 +3154,21 @@ export async function limpiarYMigrarAsistenciaGeneral(gradoId) {
   });
 
   let duplicadosEliminados = 0;
-  const idsAConservar = [];
+  let migrados = 0;
   for (const clave of Object.keys(grupos)) {
     const fila = grupos[clave];
-    idsAConservar.push(fila[0].id); // ya viene ordenado por id desc, el [0] es el más reciente
-    if (fila.length > 1) {
-      const idsABorrar = fila.slice(1).map((f) => f.id);
-      const { error: eDel } = await supabase.from("asistencia").delete().in("id", idsABorrar);
-      if (!eDel) duplicadosEliminados += idsABorrar.length;
-    }
-  }
+    const conservar = fila[fila.length - 1];
+    if (fila.length > 1) duplicadosEliminados += fila.length - 1;
 
-  // Migra los que sobrevivieron hacia la materia real
-  let migrados = 0;
-  if (idsAConservar.length > 0) {
-    const { error: eUpd } = await supabase.from("asistencia").update({ materia_id: materiaDC.id }).in("id", idsAConservar);
-    if (!eUpd) migrados = idsAConservar.length;
+    // Borra TODAS las filas de ese estudiante+fecha sin materia, y deja una
+    // sola, ya migrada hacia la materia real "Dirección de Curso".
+    await supabase.from("asistencia").delete().eq("estudiante_id", conservar.estudiante_id).eq("fecha", conservar.fecha).is("materia_id", null);
+    const { error: eIns } = await supabase.from("asistencia").insert({
+      estudiante_id: conservar.estudiante_id, fecha: conservar.fecha, codigo: conservar.codigo,
+      observacion: conservar.observacion, materia_id: materiaDC.id, docente_id: conservar.docente_id,
+      xp_aplicado: conservar.xp_aplicado, vida_aplicada: conservar.vida_aplicada,
+    });
+    if (!eIns) migrados++;
   }
 
   return { duplicadosEliminados, migrados, materiaId: materiaDC.id };
@@ -3484,7 +3484,7 @@ export async function fetchAsistenciaDetalladaCurso(gradoId, fechaDesde, fechaHa
   if (ids.length === 0) return [];
   const nombrePorId = {}; estudiantes.forEach((e) => { nombrePorId[e.id] = e.nombre; });
 
-  let query = supabase.from("asistencia").select("id, estudiante_id, fecha, codigo, materia_id").in("estudiante_id", ids);
+  let query = supabase.from("asistencia").select("estudiante_id, fecha, codigo, materia_id").in("estudiante_id", ids);
   if (fechaDesde) query = query.gte("fecha", fechaDesde);
   if (fechaHasta) query = query.lte("fecha", fechaHasta);
   const { data, error } = await query.order("fecha", { ascending: false });
@@ -3493,8 +3493,12 @@ export async function fetchAsistenciaDetalladaCurso(gradoId, fechaDesde, fechaHa
   const materias = await fetchMaterias();
   const nombreMateriaPorId = {}; materias.forEach((m) => { nombreMateriaPorId[m.id] = m.nombre; });
 
+  // No hay columna "id" en esta tabla — su identificador real es
+  // estudiante+fecha+materia, así que armamos una clave sintética con eso
+  // para usar como key de lista y para poder borrar la fila correcta.
   return (data || []).map((r) => ({
     ...r,
+    id: `${r.estudiante_id}_${r.fecha}_${r.materia_id ?? "null"}`,
     estudianteNombre: nombrePorId[r.estudiante_id] || `Estudiante ${r.estudiante_id}`,
     materiaNombre: r.materia_id ? (nombreMateriaPorId[r.materia_id] || `Materia ${r.materia_id}`) : "— Sin materia (antiguo) —",
   }));
@@ -3551,9 +3555,13 @@ export async function marcarAsistencia(estudianteId, fecha, codigo, observacion,
 
   // Si ya había una marca previa para este día, revierte su efecto de
   // gamificación antes de aplicar el nuevo (evita que se acumule al corregir).
-  let queryPrevia = supabase.from("asistencia").select("id, xp_aplicado, vida_aplicada").eq("estudiante_id", estudianteId).eq("fecha", fecha);
+  // La tabla "asistencia" no tiene una columna "id" propia — su identificador
+  // real es la combinación estudiante+fecha+materia, así que la usamos tal
+  // cual, tanto para buscar como para actualizar.
+  let queryPrevia = supabase.from("asistencia").select("xp_aplicado, vida_aplicada").eq("estudiante_id", estudianteId).eq("fecha", fecha);
   queryPrevia = materiaId ? queryPrevia.eq("materia_id", materiaId) : queryPrevia.is("materia_id", null);
-  const { data: previa } = await queryPrevia.maybeSingle();
+  const { data: previa, error: errorPrevia } = await queryPrevia.maybeSingle();
+  if (errorPrevia) throw errorPrevia;
   if (previa && (previa.xp_aplicado || previa.vida_aplicada)) {
     if (previa.xp_aplicado) await ajustarXp(estudianteId, -previa.xp_aplicado);
     if (previa.vida_aplicada) await ajustarVida(estudianteId, -previa.vida_aplicada);
@@ -3567,8 +3575,10 @@ export async function marcarAsistencia(estudianteId, fecha, codigo, observacion,
   // (asistencia general, sin materia), Postgres no trata dos NULL como
   // iguales y terminaría insertando una fila nueva cada vez en vez de
   // corregir la existente (eso duplicaba los conteos en los reportes).
-  if (previa?.id) {
-    const { error } = await supabase.from("asistencia").update(campos).eq("id", previa.id);
+  if (previa) {
+    let queryUpdate = supabase.from("asistencia").update(campos).eq("estudiante_id", estudianteId).eq("fecha", fecha);
+    queryUpdate = materiaId ? queryUpdate.eq("materia_id", materiaId) : queryUpdate.is("materia_id", null);
+    const { error } = await queryUpdate;
     if (error) throw error;
   } else {
     const { error } = await supabase.from("asistencia").insert(campos);
@@ -3654,7 +3664,7 @@ export async function moverAsistenciaGeneralAMateria(gradoId, materiaId, fechaDe
   if (ids.length === 0) return { movidos: 0, saltados: 0, detalleSaltados: [] };
   const nombrePorId = {}; estudiantes.forEach((e) => { nombrePorId[e.id] = e.nombre; });
 
-  let queryGenerales = supabase.from("asistencia").select("id, estudiante_id, fecha").in("estudiante_id", ids).is("materia_id", null);
+  let queryGenerales = supabase.from("asistencia").select("estudiante_id, fecha").in("estudiante_id", ids).is("materia_id", null);
   if (fechaDesde) queryGenerales = queryGenerales.gte("fecha", fechaDesde);
   if (fechaHasta) queryGenerales = queryGenerales.lte("fecha", fechaHasta);
   const { data: generales, error: e1 } = await queryGenerales;
@@ -3672,7 +3682,8 @@ export async function moverAsistenciaGeneralAMateria(gradoId, materiaId, fechaDe
   for (const g of generales) {
     const clave = `${g.estudiante_id}_${g.fecha}`;
     if (yaExiste.has(clave)) { detalleSaltados.push(`${nombrePorId[g.estudiante_id] || g.estudiante_id} (${g.fecha}) — ya tenía un registro en esa materia`); continue; }
-    const { error } = await supabase.from("asistencia").update({ materia_id: materiaId }).eq("id", g.id);
+    const { error } = await supabase.from("asistencia").update({ materia_id: materiaId })
+      .eq("estudiante_id", g.estudiante_id).eq("fecha", g.fecha).is("materia_id", null);
     if (error) { detalleSaltados.push(`${nombrePorId[g.estudiante_id] || g.estudiante_id} (${g.fecha}) — ${error.message}`); continue; }
     movidos++;
   }
