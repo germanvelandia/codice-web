@@ -197,6 +197,91 @@ function NuevoHorarioForm({ jornadaId, orden, onCancelar, onCreado }) {
   );
 }
 
+// Textos preestablecidos para armar el acta rápido — son un punto de
+// partida genérico, hay que ajustarlos al Manual de Convivencia real de
+// cada institución antes de imprimir (son editables una vez insertados).
+const PLANTILLAS_COMPROMISO = [
+  { categoria: "Nivelación / tiempos de entrega", texto: "El estudiante y su acudiente se comprometen a presentar el plan de nivelación de las asignaturas pendientes en un plazo máximo de 15 días hábiles a partir de la firma de la presente acta, según lo establecido en el Manual de Convivencia." },
+  { categoria: "Compromiso académico periodo siguiente", texto: "El estudiante se compromete a mejorar su desempeño académico durante el periodo siguiente, cumpliendo oportunamente con las actividades, tareas y evaluaciones propuestas por cada docente." },
+  { categoria: "Cumplimiento convivencial", texto: "El estudiante se compromete a dar cumplimiento a las normas establecidas en el Manual de Convivencia Institucional, manteniendo un comportamiento respetuoso con la comunidad educativa." },
+  { categoria: "Puntualidad / llegada temprana", texto: "El estudiante se compromete a asistir puntualmente a la institución y a cada una de sus clases, evitando llegadas tarde e inasistencias injustificadas." },
+];
+
+function ActaCompromisoModal({ estudiante, jornada, institucion, onClose, onGuardada }) {
+  const [asignaturasPerdidas, setAsignaturasPerdidas] = useState(estudiante.asignacion?.asignaturas_perdidas || "");
+  const [compromisos, setCompromisos] = useState(estudiante.asignacion?.acta_compromiso || "");
+  const [guardando, setGuardando] = useState(false);
+
+  const insertarPlantilla = (texto) => setCompromisos((prev) => prev ? `${prev}\n\n${texto}` : texto);
+
+  const guardar = async () => {
+    setGuardando(true);
+    try {
+      await api.actualizarChecklistJornada(jornada.id, estudiante.id, { asignaturas_perdidas: asignaturasPerdidas || null, acta_compromiso: compromisos || null });
+      onGuardada();
+    } catch (e) {
+      alert("Error al guardar: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  const imprimir = () => {
+    const ventana = window.open("", "_blank");
+    ventana.document.write(`
+      <html><head><title>Acta de compromiso — ${estudiante.nombre}</title></head>
+      <body style="font-family: Arial, sans-serif; padding: 30px; font-size: 13px;">
+        ${htmlEncabezadoColegio(institucion, "ACTA DE COMPROMISO ACADÉMICO Y CONVIVENCIAL")}
+        <p><b>Estudiante:</b> ${estudiante.nombre} · Curso ${jornada.grado_id}</p>
+        <p><b>Periodo:</b> ${jornada.periodo} · <b>Fecha:</b> ${new Date().toLocaleDateString("es-CO")}</p>
+        <p><b>Asignaturas perdidas:</b><br/>${(asignaturasPerdidas || "—").replace(/\n/g, "<br/>")}</p>
+        <p><b>Compromisos:</b></p>
+        <div style="white-space:pre-line;">${compromisos || "—"}</div>
+        <div style="display:flex; justify-content:space-between; margin-top:60px;">
+          <div style="border-top:1px solid #000; width:28%; text-align:center; padding-top:4px;">Firma Estudiante</div>
+          <div style="border-top:1px solid #000; width:28%; text-align:center; padding-top:4px;">Firma Padre de Familia</div>
+          <div style="border-top:1px solid #000; width:28%; text-align:center; padding-top:4px;">Firma Director de Curso</div>
+        </div>
+        <script>window.print();</script>
+      </body></html>
+    `);
+    ventana.document.close();
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">📝 Acta de compromiso — {estudiante.nombre}</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+
+        <label className="text-xs text-slate-500 block mb-1">Asignaturas perdidas</label>
+        <textarea value={asignaturasPerdidas} onChange={(e) => setAsignaturasPerdidas(e.target.value)} rows={2} placeholder="Ej: Matemáticas, Ciencias Naturales"
+          className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
+
+        <label className="text-xs text-slate-500 block mb-1">Insertar recomendación (según Manual de Convivencia — revisá y ajustá el texto antes de imprimir)</label>
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {PLANTILLAS_COMPROMISO.map((p, i) => (
+            <button key={i} onClick={() => insertarPlantilla(p.texto)} className="text-[11px] px-2.5 py-1 rounded-full border border-violet-200 text-violet-600">
+              + {p.categoria}
+            </button>
+          ))}
+        </div>
+        <label className="text-xs text-slate-500 block mb-1">Compromisos (texto final del acta)</label>
+        <textarea value={compromisos} onChange={(e) => setCompromisos(e.target.value)} rows={8}
+          className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
+
+        <div className="flex justify-between gap-2">
+          <button onClick={imprimir} className="text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 text-slate-600">🖨️ Imprimir acta</button>
+          <button disabled={guardando} onClick={guardar} className="text-xs font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+            {guardando ? "Guardando…" : "Guardar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function imprimirListadoHorario(jornada, horario, estudiantesDelHorario, institucion) {
   const filas = estudiantesDelHorario.map((e) => `<tr><td style="border:1px solid #000;padding:4px;">${e.nombre}</td><td style="border:1px solid #000;padding:4px;">${e.asignacion?.tiene_reportes ? "Sí" : "No"}</td></tr>`).join("");
   const ventana = window.open("", "_blank");
@@ -232,6 +317,7 @@ function JornadaDetalle({ jornada, gradoId, institucion }) {
   const marcarCheck = async (estudianteId, campo, valorActual) => { await api.actualizarChecklistJornada(jornada.id, estudianteId, { [campo]: !valorActual }); cargar(); };
 
   const [marcandoTodos, setMarcandoTodos] = useState(null); // campo en proceso
+  const [actaAbiertaPara, setActaAbiertaPara] = useState(null);
   const marcarTodos = async (campo) => {
     const todosMarcados = estudiantes.every((e) => e.asignacion?.[campo]);
     const nuevoValor = !todosMarcados; // si ya estaban todos marcados, esto los desmarca a todos
@@ -328,6 +414,11 @@ function JornadaDetalle({ jornada, gradoId, institucion }) {
                 </td>
                 <td className="text-center px-3 py-2">
                   <input type="checkbox" checked={!!e.asignacion?.tiene_reportes} onChange={() => marcarCheck(e.id, "tiene_reportes", e.asignacion?.tiene_reportes)} />
+                  {e.asignacion?.tiene_reportes && (
+                    <button onClick={() => setActaAbiertaPara(e)} className="block mx-auto mt-0.5 text-[10px] font-semibold text-violet-500">
+                      {e.asignacion?.acta_compromiso ? "📝 Ver acta" : "📝 Generar acta"}
+                    </button>
+                  )}
                 </td>
                 <td className="text-center px-3 py-2">
                   <input type="checkbox" checked={!!e.asignacion?.informe_entregado} onChange={() => marcarCheck(e.id, "informe_entregado", e.asignacion?.informe_entregado)} />
@@ -340,6 +431,10 @@ function JornadaDetalle({ jornada, gradoId, institucion }) {
           </tbody>
         </table>
       </div>
+      {actaAbiertaPara && (
+        <ActaCompromisoModal estudiante={actaAbiertaPara} jornada={jornada} institucion={institucion}
+          onClose={() => setActaAbiertaPara(null)} onGuardada={() => { setActaAbiertaPara(null); cargar(); }} />
+      )}
     </div>
   );
 }
