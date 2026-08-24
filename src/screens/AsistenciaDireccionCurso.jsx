@@ -173,11 +173,12 @@ export function AsistenciaDireccionCurso({ gradoId, institucion }) {
   };
 
   const cargarReporte = () => {
+    if (!materiaDCId) return;
     setCargandoReporte(true);
     api.fetchTotalesAsistenciaInstitucionalCurso(gradoId, fechaDesde, fechaHasta, materiaDCId).then((d) => { setTotales(d); setCargandoReporte(false); })
       .catch((e) => { alert("Error al cargar el reporte: " + e.message); setCargandoReporte(false); });
   };
-  useEffect(() => { if (vista === "reporte") cargarReporte(); }, [gradoId, vista]);
+  useEffect(() => { if (vista === "reporte") cargarReporte(); }, [gradoId, vista, materiaDCId]);
 
   return (
     <div>
