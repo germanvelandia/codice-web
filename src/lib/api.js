@@ -3107,8 +3107,7 @@ export async function fetchMaterias() {
 // Esta función faltaba por completo en el código — el botón de "crear
 // materia" en Calificaciones la llamaba, pero nunca se había escrito.
 export async function crearMateria(nombre) {
-  const { data: userData } = await supabase.auth.getUser();
-  const { data, error } = await supabase.from("materias").insert({ nombre: nombre.trim(), profesor_id: userData?.user?.id || null }).select().single();
+  const { data, error } = await supabase.from("materias").insert({ nombre: nombre.trim() }).select().single();
   if (error) throw error;
   return data;
 }
