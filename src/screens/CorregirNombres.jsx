@@ -159,4 +159,4 @@ export function VistaCorregirNombres() {
       )}
     </div>
   );
-}
+} 
