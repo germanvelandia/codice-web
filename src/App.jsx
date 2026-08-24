@@ -21,6 +21,7 @@ import { VistaBiblioteca } from "./screens/Biblioteca";
 import { VistaAnotaciones } from "./screens/Anotaciones";
 import { VistaInclusionGeneral } from "./screens/InclusionGeneral";
 import { VistaBajasVida } from "./screens/BajasVida";
+import { VistaCorregirNombres } from "./screens/CorregirNombres";
 import { VistaDireccionCurso } from "./screens/DireccionCurso";
 import { VistaGuiasEstudio, GuiasEstudiante } from "./screens/GuiasEstudio";
 import { VistaConsignasCodice } from "./screens/ConsignasCodice";
@@ -1861,6 +1862,7 @@ const MENU_PANEL = [
   { key: "anotaciones", label: "Anotaciones", icono: "🗒️" },
   { key: "inclusion", label: "Inclusión", icono: "🧩" },
   { key: "bajasvida", label: "Bajas de Vida", icono: "📉" },
+  { key: "corregirnombres", label: "Corregir Nombres", icono: "🪪" },
   { key: "direccioncurso", label: "Dirección de Curso", icono: "🎓" },
   { key: "guiasestudio", label: "Guías de Estudio", icono: "📘" },
   { key: "horario", label: "Agenda", icono: "🗓️" },
@@ -2090,6 +2092,7 @@ function Panel({ session }) {
         {tab === "anotaciones" && <VistaAnotaciones />}
         {tab === "inclusion" && <VistaInclusionGeneral />}
         {tab === "bajasvida" && <VistaBajasVida />}
+        {tab === "corregirnombres" && <VistaCorregirNombres />}
         {tab === "direccioncurso" && <VistaDireccionCurso grados={grados} />}
         {tab === "guiasestudio" && <VistaGuiasEstudio grados={grados} />}
         {tab === "evaluaciones" && grados.length > 0 && <VistaEvaluaciones grados={grados} />}
@@ -2097,4 +2100,5 @@ function Panel({ session }) {
       </div>
     </div>
   );
+}
 }
