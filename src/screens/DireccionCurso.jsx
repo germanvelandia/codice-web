@@ -4,6 +4,21 @@ import * as api from "../lib/api";
 import { ordenarPorApellido } from "../lib/gamification";
 
 const PERIODOS = ["1", "2", "3", "4"];
+
+// Plan de asignaturas estándar del curso, para marcar con checkbox en vez
+// de escribirlas a mano.
+const MATERIAS_CHECKLIST = [
+  "Artes y Danzas",
+  "Ciencias Naturales y Educación Ambiental",
+  "Ciencias Sociales",
+  "Educación Ética y en Valores Humanos",
+  "Educación Física, Recreación y Deportes",
+  "Educación Religiosa y Moral",
+  "Humanidades - Lengua Castellana",
+  "Idioma Extranjero - Inglés",
+  "Matemáticas",
+  "Tecnología e Informática",
+];
 // Encabezado del colegio, reutilizado en todas las impresiones de esta pantalla
 function htmlEncabezadoColegio(institucion, subtitulo) {
   return `
@@ -200,24 +215,89 @@ function NuevoHorarioForm({ jornadaId, orden, onCancelar, onCreado }) {
 // Textos preestablecidos para armar el acta rápido — son un punto de
 // partida genérico, hay que ajustarlos al Manual de Convivencia real de
 // cada institución antes de imprimir (son editables una vez insertados).
-const PLANTILLAS_COMPROMISO = [
-  { categoria: "Nivelación / tiempos de entrega", texto: "El estudiante y su acudiente se comprometen a presentar el plan de nivelación de las asignaturas pendientes en un plazo máximo de 15 días hábiles a partir de la firma de la presente acta, según lo establecido en el Manual de Convivencia." },
-  { categoria: "Compromiso académico periodo siguiente", texto: "El estudiante se compromete a mejorar su desempeño académico durante el periodo siguiente, cumpliendo oportunamente con las actividades, tareas y evaluaciones propuestas por cada docente." },
+const PLANTILLAS_NIVELACION = [
+  { categoria: "Tiempos de entrega", texto: "El estudiante y su acudiente se comprometen a presentar el plan de nivelación de las asignaturas pendientes en un plazo máximo de 15 días hábiles a partir de la firma de la presente acta, según lo establecido en el Manual de Convivencia." },
+  { categoria: "Compromiso periodo siguiente", texto: "El estudiante se compromete a mejorar su desempeño académico durante el periodo siguiente, cumpliendo oportunamente con las actividades, tareas y evaluaciones propuestas por cada docente." },
+];
+const PLANTILLAS_CONVIVENCIAL = [
   { categoria: "Cumplimiento convivencial", texto: "El estudiante se compromete a dar cumplimiento a las normas establecidas en el Manual de Convivencia Institucional, manteniendo un comportamiento respetuoso con la comunidad educativa." },
   { categoria: "Puntualidad / llegada temprana", texto: "El estudiante se compromete a asistir puntualmente a la institución y a cada una de sus clases, evitando llegadas tarde e inasistencias injustificadas." },
 ];
 
-function ActaCompromisoModal({ estudiante, jornada, institucion, onClose, onGuardada }) {
-  const [asignaturasPerdidas, setAsignaturasPerdidas] = useState(estudiante.asignacion?.asignaturas_perdidas || "");
-  const [compromisos, setCompromisos] = useState(estudiante.asignacion?.acta_compromiso || "");
-  const [guardando, setGuardando] = useState(false);
+// Bloque HTML de un acta — reutilizado tanto para imprimir una sola como
+// para imprimir todas juntas en un solo documento.
+function htmlBloqueActa(estudiante, jornada, primero) {
+  const a = estudiante.asignacion || {};
+  const materias = (a.materias_perdidas && a.materias_perdidas.length > 0) ? a.materias_perdidas.join(", ") : (a.asignaturas_perdidas || "—");
+  return `
+    <div style="${primero ? "" : "page-break-before: always;"} padding-top: ${primero ? "0" : "10px"};">
+      <p><b>Estudiante:</b> ${estudiante.nombre} · <b>Grado:</b> ${jornada.grado_id}</p>
+      <p><b>Periodo:</b> ${jornada.periodo} · <b>Fecha:</b> ${new Date().toLocaleDateString("es-CO")}</p>
+      <p><b>Asignaturas perdidas:</b><br/>${materias}</p>
+      <p><b>Compromisos de nivelación académica:</b></p>
+      <div style="white-space:pre-line; margin-bottom:10px;">${a.compromiso_nivelacion || "—"}</div>
+      <p><b>Compromisos convivenciales:</b></p>
+      <div style="white-space:pre-line;">${a.compromiso_convivencial || "—"}</div>
+      <div style="display:flex; justify-content:space-between; margin-top:50px;">
+        <div style="border-top:1px solid #000; width:28%; text-align:center; padding-top:4px; font-size:11px;">Firma Padre de Familia</div>
+        <div style="border-top:1px solid #000; width:28%; text-align:center; padding-top:4px; font-size:11px;">Firma Estudiante</div>
+        <div style="border-top:1px solid #000; width:28%; text-align:center; padding-top:4px; font-size:11px;">Firma Dirección de Curso</div>
+      </div>
+    </div>
+  `;
+}
 
-  const insertarPlantilla = (texto) => setCompromisos((prev) => prev ? `${prev}\n\n${texto}` : texto);
+function imprimirActasUnificadas(jornada, institucion) {
+  const conReportes = jornada.estudiantesParaActas.filter((e) => e.asignacion?.tiene_reportes || (e.asignacion?.materias_perdidas?.length > 0));
+  if (conReportes.length === 0) { alert("No hay estudiantes con materias perdidas marcadas ni con reportes en esta jornada — todos están al día."); return; }
+  const ventana = window.open("", "_blank");
+  ventana.document.write(`
+    <html><head><title>Actas de compromiso — Curso ${jornada.grado_id}</title></head>
+    <body style="font-family: Arial, sans-serif; padding: 30px; font-size: 13px;">
+      ${conReportes.map((e, i) => `
+        ${i === 0 ? htmlEncabezadoColegio(institucion, "ACTA DE COMPROMISO ACADÉMICO Y CONVIVENCIAL") : ""}
+        ${htmlBloqueActa(e, jornada, i === 0)}
+      `).join("")}
+      <script>window.print();</script>
+    </body></html>
+  `);
+  ventana.document.close();
+}
+
+function ActaCompromisoModal({ estudiante, jornada, institucion, onClose, onGuardada }) {
+  const [materiasPerdidas, setMateriasPerdidas] = useState(estudiante.asignacion?.materias_perdidas || []);
+  const [compromisoNivelacion, setCompromisoNivelacion] = useState(estudiante.asignacion?.compromiso_nivelacion || "");
+  const [compromisoConvivencial, setCompromisoConvivencial] = useState(estudiante.asignacion?.compromiso_convivencial || "");
+  const [guardando, setGuardando] = useState(false);
+  const [plantillasCustom, setPlantillasCustom] = useState([]);
+  const [formPlantillaAbierto, setFormPlantillaAbierto] = useState(null); // "nivelacion" | "convivencial" | null
+  const [textoNuevaPlantilla, setTextoNuevaPlantilla] = useState("");
+
+  useEffect(() => { api.fetchPlantillasCompromiso().then(setPlantillasCustom); }, []);
+
+  const toggleMateria = (materia) => setMateriasPerdidas((prev) => prev.includes(materia) ? prev.filter((m) => m !== materia) : [...prev, materia]);
+
+  const insertarNivelacion = (texto) => setCompromisoNivelacion((prev) => prev ? `${prev}\n\n${texto}` : texto);
+  const insertarConvivencial = (texto) => setCompromisoConvivencial((prev) => prev ? `${prev}\n\n${texto}` : texto);
+
+  const guardarNuevaPlantilla = async () => {
+    if (!textoNuevaPlantilla.trim()) return;
+    await api.crearPlantillaCompromiso(formPlantillaAbierto, textoNuevaPlantilla.trim());
+    setTextoNuevaPlantilla("");
+    setFormPlantillaAbierto(null);
+    api.fetchPlantillasCompromiso().then(setPlantillasCustom);
+  };
+
+  const eliminarPlantilla = async (id) => { await api.eliminarPlantillaCompromiso(id); api.fetchPlantillasCompromiso().then(setPlantillasCustom); };
 
   const guardar = async () => {
     setGuardando(true);
     try {
-      await api.actualizarChecklistJornada(jornada.id, estudiante.id, { asignaturas_perdidas: asignaturasPerdidas || null, acta_compromiso: compromisos || null });
+      await api.actualizarChecklistJornada(jornada.id, estudiante.id, {
+        materias_perdidas: materiasPerdidas,
+        compromiso_nivelacion: compromisoNivelacion || null,
+        compromiso_convivencial: compromisoConvivencial || null,
+      });
       onGuardada();
     } catch (e) {
       alert("Error al guardar: " + e.message);
@@ -226,26 +306,21 @@ function ActaCompromisoModal({ estudiante, jornada, institucion, onClose, onGuar
   };
 
   const imprimir = () => {
+    const estudianteConDatos = { ...estudiante, asignacion: { materias_perdidas: materiasPerdidas, compromiso_nivelacion: compromisoNivelacion, compromiso_convivencial: compromisoConvivencial } };
     const ventana = window.open("", "_blank");
     ventana.document.write(`
       <html><head><title>Acta de compromiso — ${estudiante.nombre}</title></head>
       <body style="font-family: Arial, sans-serif; padding: 30px; font-size: 13px;">
         ${htmlEncabezadoColegio(institucion, "ACTA DE COMPROMISO ACADÉMICO Y CONVIVENCIAL")}
-        <p><b>Estudiante:</b> ${estudiante.nombre} · Curso ${jornada.grado_id}</p>
-        <p><b>Periodo:</b> ${jornada.periodo} · <b>Fecha:</b> ${new Date().toLocaleDateString("es-CO")}</p>
-        <p><b>Asignaturas perdidas:</b><br/>${(asignaturasPerdidas || "—").replace(/\n/g, "<br/>")}</p>
-        <p><b>Compromisos:</b></p>
-        <div style="white-space:pre-line;">${compromisos || "—"}</div>
-        <div style="display:flex; justify-content:space-between; margin-top:60px;">
-          <div style="border-top:1px solid #000; width:28%; text-align:center; padding-top:4px;">Firma Estudiante</div>
-          <div style="border-top:1px solid #000; width:28%; text-align:center; padding-top:4px;">Firma Padre de Familia</div>
-          <div style="border-top:1px solid #000; width:28%; text-align:center; padding-top:4px;">Firma Director de Curso</div>
-        </div>
+        ${htmlBloqueActa(estudianteConDatos, jornada, true)}
         <script>window.print();</script>
       </body></html>
     `);
     ventana.document.close();
   };
+
+  const plantillasNivelacion = [...PLANTILLAS_NIVELACION, ...plantillasCustom.filter((p) => p.categoria === "nivelacion")];
+  const plantillasConvivencial = [...PLANTILLAS_CONVIVENCIAL, ...plantillasCustom.filter((p) => p.categoria === "convivencial")];
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
@@ -256,19 +331,53 @@ function ActaCompromisoModal({ estudiante, jornada, institucion, onClose, onGuar
         </div>
 
         <label className="text-xs text-slate-500 block mb-1">Asignaturas perdidas</label>
-        <textarea value={asignaturasPerdidas} onChange={(e) => setAsignaturasPerdidas(e.target.value)} rows={2} placeholder="Ej: Matemáticas, Ciencias Naturales"
-          className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
-
-        <label className="text-xs text-slate-500 block mb-1">Insertar recomendación (según Manual de Convivencia — revisá y ajustá el texto antes de imprimir)</label>
-        <div className="flex flex-wrap gap-1.5 mb-2">
-          {PLANTILLAS_COMPROMISO.map((p, i) => (
-            <button key={i} onClick={() => insertarPlantilla(p.texto)} className="text-[11px] px-2.5 py-1 rounded-full border border-violet-200 text-violet-600">
-              + {p.categoria}
-            </button>
+        <div className="grid grid-cols-2 gap-1 mb-3 bg-slate-50 rounded-lg p-2">
+          {MATERIAS_CHECKLIST.map((m) => (
+            <label key={m} className="flex items-center gap-1.5 text-[11px] text-slate-600">
+              <input type="checkbox" checked={materiasPerdidas.includes(m)} onChange={() => toggleMateria(m)} /> {m}
+            </label>
           ))}
         </div>
-        <label className="text-xs text-slate-500 block mb-1">Compromisos (texto final del acta)</label>
-        <textarea value={compromisos} onChange={(e) => setCompromisos(e.target.value)} rows={8}
+
+        <label className="text-xs text-slate-500 block mb-1">Compromisos de nivelación académica</label>
+        <div className="flex flex-wrap gap-1.5 mb-1.5">
+          {plantillasNivelacion.map((p, i) => (
+            <span key={p.id || i} className="inline-flex items-center rounded-full border border-violet-200">
+              <button onClick={() => insertarNivelacion(p.texto)} className="text-[11px] px-2.5 py-1 text-violet-600">+ {p.categoria === "nivelacion" || p.categoria === "convivencial" ? (p.texto.slice(0, 28) + "…") : p.categoria}</button>
+              {p.id && <button onClick={() => eliminarPlantilla(p.id)} className="text-[10px] pr-2 text-rose-400">✕</button>}
+            </span>
+          ))}
+          <button onClick={() => setFormPlantillaAbierto(formPlantillaAbierto === "nivelacion" ? null : "nivelacion")} className="text-[11px] px-2.5 py-1 rounded-full bg-violet-500 text-white">+ Nueva</button>
+        </div>
+        {formPlantillaAbierto === "nivelacion" && (
+          <div className="flex gap-1.5 mb-2">
+            <input value={textoNuevaPlantilla} onChange={(e) => setTextoNuevaPlantilla(e.target.value)} placeholder="Texto de la nueva recomendación…"
+              className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+            <button onClick={guardarNuevaPlantilla} className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-violet-500 text-white">Guardar</button>
+          </div>
+        )}
+        <textarea value={compromisoNivelacion} onChange={(e) => setCompromisoNivelacion(e.target.value)} rows={4}
+          className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
+
+        <label className="text-xs text-slate-500 block mb-1">Compromisos convivenciales</label>
+        <div className="flex flex-wrap gap-1.5 mb-1.5">
+          {plantillasConvivencial.map((p, i) => (
+            <span key={p.id || i} className="inline-flex items-center rounded-full border border-violet-200">
+              <button onClick={() => insertarConvivencial(p.texto)} className="text-[11px] px-2.5 py-1 text-violet-600">+ {p.categoria === "nivelacion" || p.categoria === "convivencial" ? (p.texto.slice(0, 28) + "…") : p.categoria}</button>
+              {p.id && <button onClick={() => eliminarPlantilla(p.id)} className="text-[10px] pr-2 text-rose-400">✕</button>}
+            </span>
+          ))}
+          <button onClick={() => setFormPlantillaAbierto(formPlantillaAbierto === "convivencial" ? null : "convivencial")} className="text-[11px] px-2.5 py-1 rounded-full bg-violet-500 text-white">+ Nueva</button>
+        </div>
+        {formPlantillaAbierto === "convivencial" && (
+          <div className="flex gap-1.5 mb-2">
+            <input value={textoNuevaPlantilla} onChange={(e) => setTextoNuevaPlantilla(e.target.value)} placeholder="Texto de la nueva recomendación…"
+              className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+            <button onClick={guardarNuevaPlantilla} className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-violet-500 text-white">Guardar</button>
+          </div>
+        )}
+        <p className="text-[10px] text-slate-400 mb-1">Las plantillas por defecto son un punto de partida genérico — ajustalas o agregá las tuyas propias según tu Manual de Convivencia.</p>
+        <textarea value={compromisoConvivencial} onChange={(e) => setCompromisoConvivencial(e.target.value)} rows={4}
           className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
 
         <div className="flex justify-between gap-2">
@@ -318,6 +427,11 @@ function JornadaDetalle({ jornada, gradoId, institucion }) {
 
   const [marcandoTodos, setMarcandoTodos] = useState(null); // campo en proceso
   const [actaAbiertaPara, setActaAbiertaPara] = useState(null);
+  const [matrizAbierta, setMatrizAbierta] = useState(false);
+  const marcarMateriaMatriz = async (estudiante, materia) => {
+    await api.toggleMateriaPerdida(jornada.id, estudiante.id, estudiante.asignacion?.materias_perdidas, materia);
+    cargar();
+  };
   const marcarTodos = async (campo) => {
     const todosMarcados = estudiantes.every((e) => e.asignacion?.[campo]);
     const nuevoValor = !todosMarcados; // si ya estaban todos marcados, esto los desmarca a todos
@@ -375,6 +489,45 @@ function JornadaDetalle({ jornada, gradoId, institucion }) {
         )}
       </div>
 
+      <div className="mb-4">
+        <div className="flex justify-between items-center mb-2">
+          <div className="text-sm font-semibold text-slate-700">☑️ Asignaturas perdidas — todo el curso</div>
+          <button onClick={() => setMatrizAbierta((v) => !v)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-violet-200 text-violet-600">
+            {matrizAbierta ? "Cerrar grilla" : "Marcar asignaturas perdidas"}
+          </button>
+        </div>
+        {matrizAbierta && (
+          <div className="overflow-x-auto bg-white rounded-2xl shadow-sm border border-slate-100 mb-2">
+            <table className="w-full text-[10px]">
+              <thead>
+                <tr className="bg-slate-50">
+                  <th className="text-left px-2 py-2 sticky left-0 bg-slate-50">Estudiante</th>
+                  {MATERIAS_CHECKLIST.map((m) => <th key={m} className="px-1 py-2" style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}>{m}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {estudiantes.map((e) => (
+                  <tr key={e.id} className="border-t border-slate-100">
+                    <td className="px-2 py-1 sticky left-0 bg-white font-medium text-slate-700 whitespace-nowrap">{e.nombre}</td>
+                    {MATERIAS_CHECKLIST.map((m) => (
+                      <td key={m} className="text-center px-1 py-1">
+                        <input type="checkbox" checked={!!e.asignacion?.materias_perdidas?.includes(m)} onChange={() => marcarMateriaMatriz(e, m)} />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="flex justify-between items-center mb-2">
+        <div className="text-sm font-semibold text-slate-700">Checklist de entrega</div>
+        <button onClick={() => imprimirActasUnificadas({ ...jornada, estudiantesParaActas: estudiantes }, institucion)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-rose-500 text-white">
+          🖨️ Imprimir todas las actas ({estudiantes.filter((e) => e.asignacion?.tiene_reportes || e.asignacion?.materias_perdidas?.length > 0).length})
+        </button>
+      </div>
       <div className="overflow-x-auto bg-white rounded-2xl shadow-sm border border-slate-100">
         <table className="w-full text-xs">
           <thead>
@@ -414,9 +567,9 @@ function JornadaDetalle({ jornada, gradoId, institucion }) {
                 </td>
                 <td className="text-center px-3 py-2">
                   <input type="checkbox" checked={!!e.asignacion?.tiene_reportes} onChange={() => marcarCheck(e.id, "tiene_reportes", e.asignacion?.tiene_reportes)} />
-                  {e.asignacion?.tiene_reportes && (
+                  {(e.asignacion?.tiene_reportes || e.asignacion?.materias_perdidas?.length > 0) && (
                     <button onClick={() => setActaAbiertaPara(e)} className="block mx-auto mt-0.5 text-[10px] font-semibold text-violet-500">
-                      {e.asignacion?.acta_compromiso ? "📝 Ver acta" : "📝 Generar acta"}
+                      {e.asignacion?.compromiso_nivelacion || e.asignacion?.compromiso_convivencial ? "📝 Ver acta" : "📝 Generar acta"}
                     </button>
                   )}
                 </td>
