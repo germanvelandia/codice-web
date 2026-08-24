@@ -3009,6 +3009,34 @@ export async function eliminarGuiaEstudio(id) {
   if (error) throw error;
 }
 
+// Marca/desmarca una materia como perdida para un estudiante en esa jornada
+// — recibe el arreglo actual (ya cargado en pantalla) para no tener que
+// releer de la base antes de guardar.
+export async function toggleMateriaPerdida(jornadaId, estudianteId, materiasActuales, materiaNombre) {
+  const actual = materiasActuales || [];
+  const nuevo = actual.includes(materiaNombre) ? actual.filter((m) => m !== materiaNombre) : [...actual, materiaNombre];
+  await actualizarChecklistJornada(jornadaId, estudianteId, { materias_perdidas: nuevo });
+  return nuevo;
+}
+
+/* ---------------- Plantillas de recomendación (ampliables) ---------------- */
+export async function fetchPlantillasCompromiso() {
+  const { data, error } = await supabase.from("plantillas_compromiso_dc").select("*").order("creado_en");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearPlantillaCompromiso(categoria, texto) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("plantillas_compromiso_dc").insert({ categoria, texto, docente_id: userData?.user?.id || null });
+  if (error) throw error;
+}
+
+export async function eliminarPlantillaCompromiso(id) {
+  const { error } = await supabase.from("plantillas_compromiso_dc").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
