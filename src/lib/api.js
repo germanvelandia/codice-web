@@ -3037,6 +3037,46 @@ export async function eliminarPlantillaCompromiso(id) {
   if (error) throw error;
 }
 
+/* ---------------- Dirección de Curso — materias configurables por curso ---------------- */
+export async function fetchMateriasCurso(gradoId) {
+  const { data, error } = await supabase.from("direccion_curso_materias").select("*").eq("grado_id", gradoId).order("orden").order("id");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearMateriaCurso(gradoId, nombre, orden) {
+  const { error } = await supabase.from("direccion_curso_materias").insert({ grado_id: gradoId, nombre: nombre.trim(), orden: orden ?? 0 });
+  if (error) throw error;
+}
+
+// Renombra la materia Y mueve todas las notas ya guardadas con el nombre
+// viejo al nombre nuevo, para no perder el historial cargado.
+export async function renombrarMateriaCurso(id, gradoId, nombreViejo, nombreNuevo) {
+  const { error: e1 } = await supabase.from("direccion_curso_materias").update({ nombre: nombreNuevo.trim() }).eq("id", id);
+  if (e1) throw e1;
+  const { error: e2 } = await supabase.from("director_curso_notas").update({ materia_nombre: nombreNuevo.trim() }).eq("grado_id", gradoId).eq("materia_nombre", nombreViejo);
+  if (e2) throw e2;
+}
+
+// Elimina la materia de la lista Y todas las notas guardadas con ese nombre.
+export async function eliminarMateriaCurso(id, gradoId, nombre) {
+  const { error: e1 } = await supabase.from("director_curso_notas").delete().eq("grado_id", gradoId).eq("materia_nombre", nombre);
+  if (e1) throw e1;
+  const { error: e2 } = await supabase.from("direccion_curso_materias").delete().eq("id", id);
+  if (e2) throw e2;
+}
+
+export async function fetchConfigCurso(gradoId) {
+  const { data, error } = await supabase.from("direccion_curso_config").select("*").eq("grado_id", gradoId).maybeSingle();
+  if (error) throw error;
+  return data || { grado_id: gradoId, sistema_periodos: "trimestre" };
+}
+
+export async function guardarConfigCurso(gradoId, sistemaPeriodos) {
+  const { error } = await supabase.from("direccion_curso_config").upsert({ grado_id: gradoId, sistema_periodos: sistemaPeriodos }, { onConflict: "grado_id" });
+  if (error) throw error;
+}
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
