@@ -69,8 +69,10 @@ export function AsistenciaDireccionCurso({ gradoId, institucion }) {
     if (estudiantes.length === 0) return;
     setCargando(true);
     api.fetchAsistenciaFecha(estudiantes.map((e) => e.id), fecha, null).then((data) => {
-      const mapa = {}; (data || []).forEach((r) => { mapa[r.estudiante_id] = r; });
-      setRegistrosDia(mapa);
+      setRegistrosDia(data || {});
+      setCargando(false);
+    }).catch((e) => {
+      alert("Error al cargar la asistencia: " + e.message);
       setCargando(false);
     });
   };
@@ -96,7 +98,8 @@ export function AsistenciaDireccionCurso({ gradoId, institucion }) {
 
   const cargarReporte = () => {
     setCargandoReporte(true);
-    api.fetchTotalesAsistenciaInstitucionalCurso(gradoId, fechaDesde, fechaHasta).then((d) => { setTotales(d); setCargandoReporte(false); });
+    api.fetchTotalesAsistenciaInstitucionalCurso(gradoId, fechaDesde, fechaHasta).then((d) => { setTotales(d); setCargandoReporte(false); })
+      .catch((e) => { alert("Error al cargar el reporte: " + e.message); setCargandoReporte(false); });
   };
   useEffect(() => { if (vista === "reporte") cargarReporte(); }, [gradoId, vista]);
 
