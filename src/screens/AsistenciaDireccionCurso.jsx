@@ -48,7 +48,30 @@ function imprimirReporteAsistencia(gradoId, fechaDesde, fechaHasta, totales, ins
 }
 
 export function AsistenciaDireccionCurso({ gradoId, institucion }) {
-  const [vista, setVista] = useState("marcar"); // "marcar" | "reporte"
+  const [vista, setVista] = useState("marcar"); // "marcar" | "reporte" | "mover"
+  const [materias, setMaterias] = useState([]);
+  const [materiaMover, setMateriaMover] = useState("");
+  const [fechaMoverDesde, setFechaMoverDesde] = useState(() => { const d = new Date(); d.setDate(1); return d.toISOString().slice(0, 10); });
+  const [fechaMoverHasta, setFechaMoverHasta] = useState(hoyISO());
+  const [moviendo, setMoviendo] = useState(false);
+  const [resultadoMover, setResultadoMover] = useState(null);
+
+  useEffect(() => { api.fetchMaterias().then((d) => { setMaterias(d); if (d[0]) setMateriaMover(d[0].id); }); }, []);
+
+  const confirmarMover = async () => {
+    if (!materiaMover) return;
+    const materiaSel = materias.find((m) => m.id === parseInt(materiaMover, 10));
+    if (!confirm(`¿Mover toda la asistencia general del ${fechaMoverDesde} al ${fechaMoverHasta} hacia "${materiaSel?.nombre}"? Los días que ya tengan un registro propio en esa materia se van a saltar (no se pisan).`)) return;
+    setMoviendo(true);
+    try {
+      const r = await api.moverAsistenciaGeneralAMateria(gradoId, parseInt(materiaMover, 10), fechaMoverDesde, fechaMoverHasta);
+      setResultadoMover(r);
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setMoviendo(false);
+  };
+
   const [estudiantes, setEstudiantes] = useState([]);
   const [fecha, setFecha] = useState(hoyISO());
   const [registrosDia, setRegistrosDia] = useState({});
@@ -112,6 +135,7 @@ export function AsistenciaDireccionCurso({ gradoId, institucion }) {
       <div className="flex gap-1 rounded-full bg-slate-100 p-1 w-fit mb-4">
         <button onClick={() => setVista("marcar")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "marcar" ? "bg-violet-500 text-white" : "text-slate-600"}`}>✅ Marcar el día</button>
         <button onClick={() => setVista("reporte")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "reporte" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📊 Reporte</button>
+        <button onClick={() => setVista("mover")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "mover" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🔄 Mover a materia</button>
       </div>
 
       {vista === "marcar" ? (
@@ -183,6 +207,41 @@ export function AsistenciaDireccionCurso({ gradoId, institucion }) {
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {vista === "mover" && (
+        <div className="bg-white rounded-2xl border border-slate-100 p-4">
+          <p className="text-xs text-slate-500 mb-3">
+            Mueve la asistencia GENERAL (sin materia) de un rango de fechas hacia una materia puntual — por ejemplo, si marcaste asistencia
+            general un día pero en realidad correspondía a una clase concreta. Los días que ya tengan un registro propio en esa materia se saltan solos, no se pisan.
+          </p>
+          <div className="flex flex-wrap gap-2 items-center mb-3">
+            <select value={materiaMover} onChange={(e) => setMateriaMover(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none">
+              {materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+            </select>
+            <input type="date" value={fechaMoverDesde} onChange={(e) => setFechaMoverDesde(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none" />
+            <span className="text-xs text-slate-400">a</span>
+            <input type="date" value={fechaMoverHasta} onChange={(e) => setFechaMoverHasta(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none" />
+          </div>
+          <button disabled={moviendo || materias.length === 0} onClick={confirmarMover} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">
+            {moviendo ? "Moviendo…" : "🔄 Mover asistencia general a esta materia"}
+          </button>
+
+          {resultadoMover && (
+            <div className="mt-3">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 mb-2">
+                <p className="text-sm font-semibold text-emerald-700">✔ Listo</p>
+                <p className="text-xs text-emerald-600 mt-1">Se movieron {resultadoMover.movidos} registro(s). {resultadoMover.saltados} se saltaron.</p>
+              </div>
+              {resultadoMover.detalleSaltados.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 text-[11px] text-amber-700 max-h-32 overflow-y-auto">
+                  <p className="font-semibold mb-1">Detalle de lo saltado:</p>
+                  <ul className="list-disc list-inside">{resultadoMover.detalleSaltados.map((d, i) => <li key={i}>{d}</li>)}</ul>
+                </div>
+              )}
             </div>
           )}
         </div>
