@@ -3556,6 +3556,40 @@ export async function fetchTotalesAsistenciaPorEstudiante(fechaDesde, fechaHasta
   return Object.values(totales).sort((a, b) => a.grado.localeCompare(b.grado, undefined, { numeric: true }) || a.nombre.localeCompare(b.nombre));
 }
 
+// Mueve registros de asistencia GENERAL (sin materia) hacia una materia
+// puntual, en un rango de fechas — salta cualquiera que ya tenga un
+// registro propio en esa materia/fecha, para no pisarlo ni duplicar.
+export async function moverAsistenciaGeneralAMateria(gradoId, materiaId, fechaDesde, fechaHasta) {
+  const estudiantes = await fetchEstudiantesPorGrado(gradoId);
+  const ids = estudiantes.map((e) => e.id);
+  if (ids.length === 0) return { movidos: 0, saltados: 0, detalleSaltados: [] };
+  const nombrePorId = {}; estudiantes.forEach((e) => { nombrePorId[e.id] = e.nombre; });
+
+  let queryGenerales = supabase.from("asistencia").select("id, estudiante_id, fecha").in("estudiante_id", ids).is("materia_id", null);
+  if (fechaDesde) queryGenerales = queryGenerales.gte("fecha", fechaDesde);
+  if (fechaHasta) queryGenerales = queryGenerales.lte("fecha", fechaHasta);
+  const { data: generales, error: e1 } = await queryGenerales;
+  if (e1) throw e1;
+  if (!generales || generales.length === 0) return { movidos: 0, saltados: 0, detalleSaltados: [] };
+
+  const { data: existentes, error: e2 } = await supabase.from("asistencia").select("estudiante_id, fecha")
+    .in("estudiante_id", ids).eq("materia_id", materiaId)
+    .in("fecha", Array.from(new Set(generales.map((g) => g.fecha))));
+  if (e2) throw e2;
+  const yaExiste = new Set((existentes || []).map((r) => `${r.estudiante_id}_${r.fecha}`));
+
+  let movidos = 0;
+  const detalleSaltados = [];
+  for (const g of generales) {
+    const clave = `${g.estudiante_id}_${g.fecha}`;
+    if (yaExiste.has(clave)) { detalleSaltados.push(`${nombrePorId[g.estudiante_id] || g.estudiante_id} (${g.fecha}) — ya tenía un registro en esa materia`); continue; }
+    const { error } = await supabase.from("asistencia").update({ materia_id: materiaId }).eq("id", g.id);
+    if (error) { detalleSaltados.push(`${nombrePorId[g.estudiante_id] || g.estudiante_id} (${g.fecha}) — ${error.message}`); continue; }
+    movidos++;
+  }
+  return { movidos, saltados: detalleSaltados.length, detalleSaltados };
+}
+
 export async function marcarTodosPresentes(estudianteIds, fecha, materiaId = null) {
   await Promise.all(estudianteIds.map((id) => marcarAsistencia(id, fecha, "P", null, materiaId)));
 }
