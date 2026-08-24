@@ -3115,8 +3115,16 @@ export async function crearMateria(nombre) {
 // Trae la materia especial "Dirección de Curso" (la crea si todavía no
 // existe) — para usarla como materia real en vez de "sin materia" (null),
 // que en Postgres causaba duplicados al no tratar dos NULL como iguales.
+// Compara nombres ignorando mayúsculas, tildes y espacios de más — para
+// encontrar la materia aunque se haya escrito "direccion de curso",
+// "DIRECCIÓN DE CURSO ", etc.
+function normalizarNombre(s) {
+  return (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim().replace(/\s+/g, " ");
+}
+
 export async function fetchOCrearMateriaDireccionCurso() {
-  const { data: existente } = await supabase.from("materias").select("*").eq("nombre", "Dirección de Curso").maybeSingle();
+  const todas = await fetchMaterias();
+  const existente = todas.find((m) => normalizarNombre(m.nombre) === normalizarNombre("Dirección de Curso"));
   if (existente) return existente;
   return crearMateria("Dirección de Curso");
 }
@@ -3466,6 +3474,31 @@ export async function calcularNotasFinalesPeriodo(materiaId, gradoId, periodo, e
 // Totales de asistencia INSTITUCIONAL (sin materia, materia_id = null) de
 // un curso puntual, en un rango de fechas — para el reporte de Dirección
 // de Curso, sin mezclar con la asistencia de clase de otros docentes.
+// Listado detallado (fila por fila, con materia) de la asistencia de un
+// curso en un rango de fechas — para poder ver y borrar registros puntuales
+// que hayan quedado mal cargados (mezclados entre materias, duplicados, etc.).
+export async function fetchAsistenciaDetalladaCurso(gradoId, fechaDesde, fechaHasta) {
+  const estudiantes = await fetchEstudiantesPorGrado(gradoId);
+  const ids = estudiantes.map((e) => e.id);
+  if (ids.length === 0) return [];
+  const nombrePorId = {}; estudiantes.forEach((e) => { nombrePorId[e.id] = e.nombre; });
+
+  let query = supabase.from("asistencia").select("id, estudiante_id, fecha, codigo, materia_id").in("estudiante_id", ids);
+  if (fechaDesde) query = query.gte("fecha", fechaDesde);
+  if (fechaHasta) query = query.lte("fecha", fechaHasta);
+  const { data, error } = await query.order("fecha", { ascending: false });
+  if (error) throw error;
+
+  const materias = await fetchMaterias();
+  const nombreMateriaPorId = {}; materias.forEach((m) => { nombreMateriaPorId[m.id] = m.nombre; });
+
+  return (data || []).map((r) => ({
+    ...r,
+    estudianteNombre: nombrePorId[r.estudiante_id] || `Estudiante ${r.estudiante_id}`,
+    materiaNombre: r.materia_id ? (nombreMateriaPorId[r.materia_id] || `Materia ${r.materia_id}`) : "— Sin materia (antiguo) —",
+  }));
+}
+
 export async function fetchTotalesAsistenciaInstitucionalCurso(gradoId, fechaDesde, fechaHasta, materiaId = null) {
   const estudiantes = await fetchEstudiantesPorGrado(gradoId);
   const ids = estudiantes.map((e) => e.id);
