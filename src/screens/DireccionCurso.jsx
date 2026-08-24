@@ -231,6 +231,18 @@ function JornadaDetalle({ jornada, gradoId, institucion }) {
   const asignar = async (estudianteId, horarioId) => { await api.asignarEstudianteHorario(jornada.id, estudianteId, horarioId || null); cargar(); };
   const marcarCheck = async (estudianteId, campo, valorActual) => { await api.actualizarChecklistJornada(jornada.id, estudianteId, { [campo]: !valorActual }); cargar(); };
 
+  const [marcandoTodos, setMarcandoTodos] = useState(null); // campo en proceso
+  const marcarTodos = async (campo) => {
+    const todosMarcados = estudiantes.every((e) => e.asignacion?.[campo]);
+    const nuevoValor = !todosMarcados; // si ya estaban todos marcados, esto los desmarca a todos
+    setMarcandoTodos(campo);
+    for (const e of estudiantes) {
+      await api.actualizarChecklistJornada(jornada.id, e.id, { [campo]: nuevoValor });
+    }
+    setMarcandoTodos(null);
+    cargar();
+  };
+
   const conteoDelHorario = (horarioId) => estudiantes.filter((e) => e.asignacion?.horario_id === horarioId).length;
   const sinAsignar = estudiantes.filter((e) => !e.asignacion?.horario_id);
 
@@ -283,9 +295,24 @@ function JornadaDetalle({ jornada, gradoId, institucion }) {
             <tr className="bg-slate-50">
               <th className="text-left px-3 py-2">Estudiante</th>
               <th className="px-3 py-2">Horario / grupo</th>
-              <th className="px-3 py-2">¿Tiene reportes?</th>
-              <th className="px-3 py-2">Informe entregado</th>
-              <th className="px-3 py-2">Citación entregada</th>
+              <th className="px-3 py-2">
+                <div>¿Tiene reportes?</div>
+                <button onClick={() => marcarTodos("tiene_reportes")} disabled={marcandoTodos === "tiene_reportes"} className="text-[9px] font-normal text-violet-500">
+                  {marcandoTodos === "tiene_reportes" ? "…" : "☑️ Todos"}
+                </button>
+              </th>
+              <th className="px-3 py-2">
+                <div>Informe entregado</div>
+                <button onClick={() => marcarTodos("informe_entregado")} disabled={marcandoTodos === "informe_entregado"} className="text-[9px] font-normal text-violet-500">
+                  {marcandoTodos === "informe_entregado" ? "…" : "☑️ Todos"}
+                </button>
+              </th>
+              <th className="px-3 py-2">
+                <div>Citación entregada</div>
+                <button onClick={() => marcarTodos("citacion_entregada")} disabled={marcandoTodos === "citacion_entregada"} className="text-[9px] font-normal text-violet-500">
+                  {marcandoTodos === "citacion_entregada" ? "…" : "☑️ Todos"}
+                </button>
+              </th>
             </tr>
           </thead>
           <tbody>
