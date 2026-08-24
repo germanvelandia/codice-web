@@ -64,7 +64,10 @@ export function AsistenciaDireccionCurso({ gradoId, institucion }) {
   useEffect(() => {
     api.fetchOCrearMateriaDireccionCurso()
       .then((m) => setMateriaDCId(m.id))
-      .catch((e) => setErrorMateriaDC(e.message || JSON.stringify(e)));
+      .catch((e) => {
+        const detalle = [e.message, e.details, e.hint, e.code ? `(código: ${e.code})` : ""].filter(Boolean).join(" — ");
+        setErrorMateriaDC(detalle || JSON.stringify(e));
+      });
   }, []);
 
   const confirmarLimpieza = async () => {
