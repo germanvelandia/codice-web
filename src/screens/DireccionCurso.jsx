@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
 import * as api from "../lib/api";
 import { ordenarPorApellido } from "../lib/gamification";
+import { NotasDireccionCurso } from "./NotasDireccionCurso";
 
 const PERIODOS = ["1", "2", "3", "4"];
 
@@ -717,7 +718,7 @@ function CitacionesDireccionCurso({ gradoId, institucion }) {
 }
 export function VistaDireccionCurso({ grados }) {
   const [gradoId, setGradoId] = useState(grados[0]?.id || "");
-  const [vista, setVista] = useState("citaciones"); // "citaciones" | "jornada"
+  const [vista, setVista] = useState("notas"); // "notas" | "citaciones" | "jornada"
   const [institucion, setInstitucion] = useState(null);
 
   useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
@@ -727,7 +728,7 @@ export function VistaDireccionCurso({ grados }) {
     <div>
       <div className="mb-4">
         <h2 className="text-xl font-bold text-slate-800">🎓 Dirección de Curso</h2>
-        <p className="text-sm text-slate-400">Citaciones a padres y jornada de entrega de informes, todo en un solo lugar.</p>
+        <p className="text-sm text-slate-400">Notas consolidadas, citaciones a padres y jornada de entrega de informes, todo en un solo lugar.</p>
       </div>
 
       <div className="flex flex-wrap gap-2 items-center mb-4">
@@ -735,11 +736,13 @@ export function VistaDireccionCurso({ grados }) {
           {grados.map((g) => <option key={g.id} value={g.id}>Curso {g.id}</option>)}
         </select>
         <div className="flex gap-1 rounded-full bg-slate-100 p-1">
+          <button onClick={() => setVista("notas")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "notas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📝 Notas</button>
           <button onClick={() => setVista("citaciones")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "citaciones" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📞 Citaciones</button>
           <button onClick={() => setVista("jornada")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "jornada" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🗓️ Jornada de Entrega</button>
         </div>
       </div>
 
+      {vista === "notas" && <NotasDireccionCurso gradoId={gradoId} />}
       {vista === "citaciones" && <CitacionesDireccionCurso gradoId={gradoId} institucion={institucion} />}
       {vista === "jornada" && <JornadasDireccionCurso gradoId={gradoId} institucion={institucion} />}
     </div>
