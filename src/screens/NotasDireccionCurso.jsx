@@ -86,6 +86,7 @@ function ImportarPegarModal({ gradoId, materias, periodos, estudiantes, onClose,
   const confirmar = async () => {
     setGuardando(true);
     let cargadas = 0;
+    const errores = [];
     for (const f of filas) {
       if (!f.estudianteId) continue;
       for (const p of periodos) {
@@ -93,12 +94,16 @@ function ImportarPegarModal({ gradoId, materias, periodos, estudiantes, onClose,
         if (val === "" || val === undefined) continue;
         const num = parseFloat(String(val).replace(",", "."));
         if (isNaN(num)) continue;
-        await api.guardarNotaDireccionCurso(gradoId, materiaNombre, f.estudianteId, p, num);
-        cargadas++;
+        try {
+          await api.guardarNotaDireccionCurso(gradoId, materiaNombre, f.estudianteId, p, num);
+          cargadas++;
+        } catch (e) {
+          errores.push(`${f.nombreOriginal} (P${p}): ${e.message}`);
+        }
       }
     }
     setGuardando(false);
-    setResultado(cargadas);
+    setResultado({ cargadas, errores });
     onImportado();
   };
 
@@ -113,9 +118,15 @@ function ImportarPegarModal({ gradoId, materias, periodos, estudiantes, onClose,
         {resultado !== null ? (
           <div>
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 mb-3">
-              <p className="text-sm font-semibold text-emerald-700">✔ Listo</p>
-              <p className="text-xs text-emerald-600 mt-1">Se cargaron {resultado} nota(s).</p>
+              <p className="text-sm font-semibold text-emerald-700">{resultado.cargadas > 0 ? "✔ Listo" : "⚠️ No se cargó ninguna nota"}</p>
+              <p className="text-xs text-emerald-600 mt-1">Se cargaron {resultado.cargadas} nota(s).</p>
             </div>
+            {resultado.errores.length > 0 && (
+              <div className="bg-rose-50 border border-rose-200 rounded-lg p-2 text-[11px] text-rose-700 max-h-40 overflow-y-auto mb-3">
+                <p className="font-semibold mb-1">Detalle de lo que falló:</p>
+                <ul className="list-disc list-inside">{resultado.errores.map((e, i) => <li key={i}>{e}</li>)}</ul>
+              </div>
+            )}
             <button onClick={onClose} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white">Cerrar</button>
           </div>
         ) : paso === 1 ? (
@@ -205,6 +216,7 @@ function ImportarArchivoModal({ gradoId, materias, periodos, estudiantes, onClos
   const confirmar = async () => {
     setGuardando(true);
     let cargadas = 0;
+    const errores = [];
     for (const f of filas) {
       if (!f.estudianteId) continue;
       for (const p of periodos) {
@@ -212,12 +224,16 @@ function ImportarArchivoModal({ gradoId, materias, periodos, estudiantes, onClos
         if (val === "" || val === undefined) continue;
         const num = parseFloat(String(val).replace(",", "."));
         if (isNaN(num)) continue;
-        await api.guardarNotaDireccionCurso(gradoId, materiaNombre, f.estudianteId, p, num);
-        cargadas++;
+        try {
+          await api.guardarNotaDireccionCurso(gradoId, materiaNombre, f.estudianteId, p, num);
+          cargadas++;
+        } catch (e) {
+          errores.push(`${f.nombreOriginal} (P${p}): ${e.message}`);
+        }
       }
     }
     setGuardando(false);
-    setResultado(cargadas);
+    setResultado({ cargadas, errores });
     onImportado();
   };
 
@@ -232,9 +248,15 @@ function ImportarArchivoModal({ gradoId, materias, periodos, estudiantes, onClos
         {resultado !== null ? (
           <div>
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 mb-3">
-              <p className="text-sm font-semibold text-emerald-700">✔ Listo</p>
-              <p className="text-xs text-emerald-600 mt-1">Se cargaron {resultado} nota(s).</p>
+              <p className="text-sm font-semibold text-emerald-700">{resultado.cargadas > 0 ? "✔ Listo" : "⚠️ No se cargó ninguna nota"}</p>
+              <p className="text-xs text-emerald-600 mt-1">Se cargaron {resultado.cargadas} nota(s).</p>
             </div>
+            {resultado.errores.length > 0 && (
+              <div className="bg-rose-50 border border-rose-200 rounded-lg p-2 text-[11px] text-rose-700 max-h-40 overflow-y-auto mb-3">
+                <p className="font-semibold mb-1">Detalle de lo que falló:</p>
+                <ul className="list-disc list-inside">{resultado.errores.map((e, i) => <li key={i}>{e}</li>)}</ul>
+              </div>
+            )}
             <button onClick={onClose} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white">Cerrar</button>
           </div>
         ) : paso === 1 ? (
