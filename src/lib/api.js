@@ -3104,11 +3104,59 @@ export async function fetchMaterias() {
   return data || [];
 }
 
-export async function crearMateria(nombre) {
-  const { data: userData } = await supabase.auth.getUser();
-  const { data, error } = await supabase.from("materias").insert({ nombre, docente_id: userData.user.id }).select().single();
+// Trae la materia especial "Dirección de Curso" (la crea si todavía no
+// existe) — para usarla como materia real en vez de "sin materia" (null),
+// que en Postgres causaba duplicados al no tratar dos NULL como iguales.
+export async function fetchOCrearMateriaDireccionCurso() {
+  const { data: existente } = await supabase.from("materias").select("*").eq("nombre", "Dirección de Curso").maybeSingle();
+  if (existente) return existente;
+  const { data: creada, error } = await supabase.from("materias").insert({ nombre: "Dirección de Curso" }).select().single();
   if (error) throw error;
-  return data;
+  return creada;
+}
+
+// Limpia los duplicados que haya quedado en la asistencia GENERAL (sin
+// materia, materia_id null) de un curso, y migra lo que sobreviva hacia la
+// materia real "Dirección de Curso" — para dejar todo consistente y que
+// no vuelva a duplicarse.
+export async function limpiarYMigrarAsistenciaGeneral(gradoId) {
+  const materiaDC = await fetchOCrearMateriaDireccionCurso();
+  const estudiantes = await fetchEstudiantesPorGrado(gradoId);
+  const ids = estudiantes.map((e) => e.id);
+  if (ids.length === 0) return { duplicadosEliminados: 0, migrados: 0, materiaId: materiaDC.id };
+
+  const { data: generales, error } = await supabase.from("asistencia").select("*").in("estudiante_id", ids).is("materia_id", null).order("id", { ascending: false });
+  if (error) throw error;
+
+  // Agrupa por estudiante+fecha — de cada grupo se queda con el más
+  // reciente (id más alto) y borra el resto.
+  const grupos = {};
+  (generales || []).forEach((r) => {
+    const clave = `${r.estudiante_id}_${r.fecha}`;
+    if (!grupos[clave]) grupos[clave] = [];
+    grupos[clave].push(r);
+  });
+
+  let duplicadosEliminados = 0;
+  const idsAConservar = [];
+  for (const clave of Object.keys(grupos)) {
+    const fila = grupos[clave];
+    idsAConservar.push(fila[0].id); // ya viene ordenado por id desc, el [0] es el más reciente
+    if (fila.length > 1) {
+      const idsABorrar = fila.slice(1).map((f) => f.id);
+      const { error: eDel } = await supabase.from("asistencia").delete().in("id", idsABorrar);
+      if (!eDel) duplicadosEliminados += idsABorrar.length;
+    }
+  }
+
+  // Migra los que sobrevivieron hacia la materia real
+  let migrados = 0;
+  if (idsAConservar.length > 0) {
+    const { error: eUpd } = await supabase.from("asistencia").update({ materia_id: materiaDC.id }).in("id", idsAConservar);
+    if (!eUpd) migrados = idsAConservar.length;
+  }
+
+  return { duplicadosEliminados, migrados, materiaId: materiaDC.id };
 }
 
 export async function renombrarMateria(id, nombreNuevo) {
@@ -3412,12 +3460,13 @@ export async function calcularNotasFinalesPeriodo(materiaId, gradoId, periodo, e
 // Totales de asistencia INSTITUCIONAL (sin materia, materia_id = null) de
 // un curso puntual, en un rango de fechas — para el reporte de Dirección
 // de Curso, sin mezclar con la asistencia de clase de otros docentes.
-export async function fetchTotalesAsistenciaInstitucionalCurso(gradoId, fechaDesde, fechaHasta) {
+export async function fetchTotalesAsistenciaInstitucionalCurso(gradoId, fechaDesde, fechaHasta, materiaId = null) {
   const estudiantes = await fetchEstudiantesPorGrado(gradoId);
   const ids = estudiantes.map((e) => e.id);
   if (ids.length === 0) return [];
 
-  let query = supabase.from("asistencia").select("estudiante_id, codigo, fecha").in("estudiante_id", ids).is("materia_id", null);
+  let query = supabase.from("asistencia").select("estudiante_id, codigo, fecha").in("estudiante_id", ids);
+  query = materiaId ? query.eq("materia_id", materiaId) : query.is("materia_id", null);
   if (fechaDesde) query = query.gte("fecha", fechaDesde);
   if (fechaHasta) query = query.lte("fecha", fechaHasta);
   const { data: registros, error } = await query;
