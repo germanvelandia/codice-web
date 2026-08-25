@@ -596,6 +596,79 @@ function NotaMasivaModal({ actividades, estudiantesVisibles, reinoFiltro, valorD
   );
 }
 
+function ObservacionMasivaModal({ actividades, estudiantesVisibles, valorDeActividad, onClose, onAplicado }) {
+  const [actividadId, setActividadId] = useState(actividades[0]?.id || "");
+  const [notaElegida, setNotaElegida] = useState("");
+  const [texto, setTexto] = useState("");
+  const [aplicando, setAplicando] = useState(false);
+
+  const actividadElegida = actividades.find((a) => a.id === parseInt(actividadId, 10));
+
+  const gruposPorNota = {};
+  if (actividadElegida) {
+    estudiantesVisibles.forEach((s) => {
+      const v = valorDeActividad(actividadElegida, s.id);
+      if (v === null || v === undefined) return;
+      const clave = String(v);
+      (gruposPorNota[clave] = gruposPorNota[clave] || []).push(s);
+    });
+  }
+  const notasDisponibles = Object.keys(gruposPorNota).sort((a, b) => parseFloat(b) - parseFloat(a));
+
+  const aplicar = async () => {
+    if (!notaElegida) { alert("Elegí a qué grupo de nota aplicarlo."); return; }
+    if (!texto.trim()) { alert("Escribí la observación."); return; }
+    setAplicando(true);
+    try {
+      const destino = gruposPorNota[notaElegida] || [];
+      for (const s of destino) { await api.setObservacionValor(actividadId, s.id, texto.trim()); }
+      onAplicado(actividadId, destino.map((s) => s.id), texto.trim());
+      onClose();
+    } catch (e) {
+      alert("Error al aplicar: " + e.message);
+    }
+    setAplicando(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">📝 Observación masiva</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-500 mb-3">Dejá la misma observación a todos los que ya sacaron la misma nota en una actividad puntual.</p>
+
+        <label className="text-xs text-slate-500 block mb-1">Actividad</label>
+        <select value={actividadId} onChange={(e) => { setActividadId(parseInt(e.target.value, 10)); setNotaElegida(""); }} className="w-full text-sm rounded-lg px-2 py-2 mb-3 border border-slate-200 outline-none">
+          {actividades.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+        </select>
+
+        <label className="text-xs text-slate-500 block mb-1">Grupo de nota</label>
+        {notasDisponibles.length === 0 ? (
+          <p className="text-xs text-amber-600 bg-amber-50 rounded-lg p-2 mb-3">Todavía no hay ninguna nota puesta en esta actividad.</p>
+        ) : (
+          <select value={notaElegida} onChange={(e) => setNotaElegida(e.target.value)} className="w-full text-sm rounded-lg px-2 py-2 mb-3 border border-slate-200 outline-none">
+            <option value="">Elegí…</option>
+            {notasDisponibles.map((n) => <option key={n} value={n}>Nota {n} ({gruposPorNota[n].length} estudiante{gruposPorNota[n].length !== 1 ? "s" : ""})</option>)}
+          </select>
+        )}
+
+        <label className="text-xs text-slate-500 block mb-1">Observación</label>
+        <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={3} placeholder="Ej: Excelente manejo del tema, sigue así…"
+          className="w-full text-sm rounded-lg px-3 py-2 mb-4 border border-slate-200 outline-none" />
+
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
+          <button disabled={aplicando || notasDisponibles.length === 0} onClick={aplicar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+            {aplicando ? "Aplicando…" : "Aplicar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CopiarPlanillaOtroCursoModal({ materiaId, gradoId, grados, periodo, periodos, onClose, onCopiado }) {
   const niveles = agruparPorNivel(grados);
   const { nivel: nivelActual } = nivelYCurso(gradoId);
@@ -922,12 +995,14 @@ function colorCategoria(nombre) {
 function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados, periodo, materias, onCambioCategorias, estudianteDestacadoId }) {
   const [actividades, setActividades] = useState([]);
   const [valores, setValores] = useState({});
+  const [observaciones, setObservaciones] = useState({});
   const [xpMapa, setXpMapa] = useState({});
   const [cargando, setCargando] = useState(true);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [actividadEditar, setActividadEditar] = useState(null);
   const [importarMoodleAbierto, setImportarMoodleAbierto] = useState(false);
   const [notaMasivaAbierta, setNotaMasivaAbierta] = useState(false);
+  const [observacionMasivaAbierta, setObservacionMasivaAbierta] = useState(false);
   const [reinoFiltro, setReinoFiltro] = useState("Todos");
   const [soloPerdiendo, setSoloPerdiendo] = useState(false);
   const [busqueda, setBusqueda] = useState("");
@@ -946,8 +1021,13 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
     setActividades(acts);
     const valoresRows = await api.fetchValores(acts.map((a) => a.id));
     const valMap = {};
-    valoresRows.forEach((v) => { valMap[v.actividad_id] = valMap[v.actividad_id] || {}; valMap[v.actividad_id][v.estudiante_id] = v.valor; });
+    const obsMap = {};
+    valoresRows.forEach((v) => {
+      valMap[v.actividad_id] = valMap[v.actividad_id] || {}; valMap[v.actividad_id][v.estudiante_id] = v.valor;
+      if (v.observacion) { obsMap[v.actividad_id] = obsMap[v.actividad_id] || {}; obsMap[v.actividad_id][v.estudiante_id] = v.observacion; }
+    });
     setValores(valMap);
+    setObservaciones(obsMap);
     const categoriasGam = [...new Set(acts.filter((a) => a.es_automatica).map((a) => a.gam_categoria))];
     if (categoriasGam.length > 0) {
       const xp = await api.fetchXpPorCategoria(estudiantes.map((s) => s.id), categoriasGam);
@@ -986,6 +1066,14 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
     setValores((prev) => {
       const nuevo = { ...(prev[actividadId] || {}) };
       estudianteIds.forEach((id) => { nuevo[id] = valor; });
+      return { ...prev, [actividadId]: nuevo };
+    });
+  };
+
+  const aplicarObservacionMasiva = (actividadId, estudianteIds, texto) => {
+    setObservaciones((prev) => {
+      const nuevo = { ...(prev[actividadId] || {}) };
+      estudianteIds.forEach((id) => { nuevo[id] = texto; });
       return { ...prev, [actividadId]: nuevo };
     });
   };
@@ -1089,6 +1177,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={() => { setActividadEditar(null); setModalAbierto(true); }} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">+ Nueva actividad</button>
           <button onClick={() => setNotaMasivaAbierta(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🖊 Nota masiva</button>
+          <button onClick={() => setObservacionMasivaAbierta(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">📝 Observación masiva</button>
 
           {seleccionando ? (
             <>
@@ -1176,9 +1265,14 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
                       }
                       return (
                         <td key={a.id} className="text-center px-3 py-2" style={{ background: tinte }}>
-                          <input type="number" step="0.1" defaultValue={v ?? ""} onBlur={(e) => guardarValorManual(a.id, s.id, e.target.value)}
-                            style={v !== null && v !== undefined ? { color: b.color, borderColor: b.color, background: `${b.color}11`, fontWeight: 700 } : {}}
-                            className="w-14 text-center text-xs rounded px-1 py-1 border border-slate-200 outline-none" />
+                          <div className="flex items-center justify-center gap-0.5">
+                            <input type="number" step="0.1" defaultValue={v ?? ""} onBlur={(e) => guardarValorManual(a.id, s.id, e.target.value)}
+                              style={v !== null && v !== undefined ? { color: b.color, borderColor: b.color, background: `${b.color}11`, fontWeight: 700 } : {}}
+                              className="w-14 text-center text-xs rounded px-1 py-1 border border-slate-200 outline-none" />
+                            {observaciones[a.id]?.[s.id] && (
+                              <span title={observaciones[a.id][s.id]} className="text-[10px] cursor-help">📝</span>
+                            )}
+                          </div>
                         </td>
                       );
                     })}
@@ -1225,6 +1319,10 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
       {notaMasivaAbierta && (
         <NotaMasivaModal actividades={actividades} estudiantesVisibles={estudiantesVisibles} reinoFiltro={reinoFiltro} valorDeActividad={valorDeActividad}
           onClose={() => setNotaMasivaAbierta(false)} onAplicado={aplicarNotaMasiva} />
+      )}
+      {observacionMasivaAbierta && (
+        <ObservacionMasivaModal actividades={actividades} estudiantesVisibles={estudiantesVisibles} valorDeActividad={valorDeActividad}
+          onClose={() => setObservacionMasivaAbierta(false)} onAplicado={aplicarObservacionMasiva} />
       )}
       {copiarColumnasAbierto && (
         <CopiarColumnasModal materiaDestinoId={materiaId} gradoId={gradoId} periodos={periodosDe(config)} categoriasDestino={categorias} materias={materias} estudiantes={estudiantes}
