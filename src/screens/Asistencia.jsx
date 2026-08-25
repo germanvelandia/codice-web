@@ -63,7 +63,7 @@ function TotalesPorGrado({ grados }) {
     ]).then(([g, e]) => {
       setTotales(g); setTotalesEstudiante(e); setCargando(false);
       const nombreMateria = materias.find((m) => m.id === mId)?.nombre;
-      setDebugInfo(`🔧 Diagnóstico: materiaId enviado = ${mId === null ? "null (todas)" : mId} (${nombreMateria || "?"}) — total de registros de asistencia encontrados en TODO el colegio con ese filtro = ${e.reduce((a, x) => a + x.total, 0)}`);
+      setDebugInfo(`🔧 materiaId=${mId === null ? "null" : mId} (${nombreMateria || "?"}) — filas crudas devueltas por la consulta: ${e._debugFilasCrudas} — materia_id que aparecen en esas filas: [${(e._debugMateriasDistintas || []).join(", ")}]`);
     });
   };
   useEffect(() => { cargar(); }, []);
