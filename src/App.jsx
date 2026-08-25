@@ -6,6 +6,7 @@ import { bandaDesempeno, notaFinalPonderada } from "./lib/calificaciones";
 import { VistaGrados, VistaReinos, VistaEstudiantes, FotoLightbox } from "./screens/Estudiantes";
 import { VistaAsistencia } from "./screens/Asistencia";
 import { VistaRuleta, VistaRuletaMonedas, VistaTemporizador, VistaHerramientas } from "./screens/Herramientas";
+import { VistaAccionesMasivas } from "./screens/AccionesMasivas";
 import { VistaBanco } from "./screens/Banco";
 import { VistaAlbum, CartaCriatura } from "./screens/Album";
 import { VistaAnuncios } from "./screens/Anuncios";
@@ -2056,6 +2057,7 @@ function Panel({ session }) {
             <div className="flex gap-1 mb-6 rounded-full bg-white p-1 w-fit border border-slate-100 shadow-sm">
               <button onClick={() => setSubTabHerramientas("ruleta")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "ruleta" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Ruleta</button>
               <button onClick={() => setSubTabHerramientas("ruletamonedas")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "ruletamonedas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Ruleta de Monedas</button>
+              <button onClick={() => setSubTabHerramientas("accionesmasivas")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "accionesmasivas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🎯 Acciones Masivas</button>
               <button onClick={() => setSubTabHerramientas("banco")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "banco" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Banco</button>
               <button onClick={() => setSubTabHerramientas("album")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "album" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Álbum</button>
               <button onClick={() => setSubTabHerramientas("anuncios")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "anuncios" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Anuncios</button>
@@ -2070,6 +2072,7 @@ function Panel({ session }) {
             </div>
             {subTabHerramientas === "ruleta" && <VistaRuleta grados={grados} />}
             {subTabHerramientas === "ruletamonedas" && <VistaRuletaMonedas grados={grados} />}
+            {subTabHerramientas === "accionesmasivas" && <VistaAccionesMasivas grados={grados} />}
             {subTabHerramientas === "banco" && <VistaBanco />}
             {subTabHerramientas === "album" && <VistaAlbum />}
             {subTabHerramientas === "anuncios" && <VistaAnuncios grados={grados} />}
