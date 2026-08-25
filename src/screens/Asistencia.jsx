@@ -45,15 +45,20 @@ function TotalesPorGrado({ grados }) {
   const [nivelFiltro, setNivelFiltro] = useState("Todos");
   const [cursoFiltro, setCursoFiltro] = useState("Todos");
   const [busqueda, setBusqueda] = useState("");
+  const [materias, setMaterias] = useState([]);
+  const [materiaFiltro, setMateriaFiltro] = useState("");
 
   const niveles = useMemo(() => agruparPorNivel(grados), [grados]);
   const cursosDelNivel = nivelFiltro === "Todos" ? [] : (niveles.find((n) => n.nivel === nivelFiltro)?.cursos || []);
 
-  const cargar = () => {
+  useEffect(() => { api.fetchMaterias().then(setMaterias); }, []);
+
+  const cargar = (materiaOverride) => {
     setCargando(true);
+    const mId = (materiaOverride !== undefined ? materiaOverride : materiaFiltro) ? parseInt(materiaOverride !== undefined ? materiaOverride : materiaFiltro, 10) : null;
     Promise.all([
-      api.fetchTotalesAsistenciaPorGrado(fechaDesde || null, fechaHasta || null),
-      api.fetchTotalesAsistenciaPorEstudiante(fechaDesde || null, fechaHasta || null),
+      api.fetchTotalesAsistenciaPorGrado(fechaDesde || null, fechaHasta || null, mId),
+      api.fetchTotalesAsistenciaPorEstudiante(fechaDesde || null, fechaHasta || null, mId),
     ]).then(([g, e]) => { setTotales(g); setTotalesEstudiante(e); setCargando(false); });
   };
   useEffect(() => { cargar(); }, []);
@@ -61,13 +66,18 @@ function TotalesPorGrado({ grados }) {
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2 mb-3">
+        <label className="text-xs text-slate-500">Materia</label>
+        <select value={materiaFiltro} onChange={(e) => { setMateriaFiltro(e.target.value); cargar(e.target.value); }} className="text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none">
+          <option value="">Todas las materias</option>
+          {materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+        </select>
         <label className="text-xs text-slate-500">Desde</label>
         <input type="date" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)} className="text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
         <label className="text-xs text-slate-500">Hasta</label>
         <input type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} className="text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-        <button onClick={cargar} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">Aplicar</button>
-        {(fechaDesde || fechaHasta) && (
-          <button onClick={() => { setFechaDesde(""); setFechaHasta(""); setTimeout(cargar, 0); }} className="text-xs text-slate-400">Quitar filtro de fechas</button>
+        <button onClick={() => cargar()} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">Aplicar</button>
+        {(fechaDesde || fechaHasta || materiaFiltro) && (
+          <button onClick={() => { setFechaDesde(""); setFechaHasta(""); setMateriaFiltro(""); cargar(""); }} className="text-xs text-slate-400">Quitar filtros</button>
         )}
         <div className="flex gap-1 rounded-full bg-violet-50 p-1 ml-auto">
           <button onClick={() => setDetalle("grado")} className={`text-xs px-3 py-1.5 rounded-full ${detalle === "grado" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Por grado</button>
