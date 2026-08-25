@@ -23,12 +23,19 @@ export async function fetchUsuarioActualId() {
   return data?.user?.id || null;
 }
 
-export async function fetchGrados() {
-  const { data, error } = await supabase.from("grados").select("*");
+export async function fetchGrados(incluirOcultos = false) {
+  let query = supabase.from("grados").select("*");
+  if (!incluirOcultos) query = query.eq("oculto", false);
+  const { data, error } = await query;
   if (error) throw error;
   // Orden numérico (no alfabético): en texto "1001" queda antes que "801",
   // lo que hacía que los selectores de grado arrancaran siempre en 1001.
   return (data || []).sort((a, b) => parseInt(a.id, 10) - parseInt(b.id, 10));
+}
+
+export async function guardarOcultoGrado(id, oculto) {
+  const { error } = await supabase.from("grados").update({ oculto }).eq("id", id);
+  if (error) throw error;
 }
 
 export async function crearGrado(id) {
