@@ -307,7 +307,8 @@ function TareasLista({ planeacionId }) {
 
 const ESTADOS_DICTADO = [
   { key: "pendiente", label: "Pendiente", color: "#F59E0B" },
-  { key: "dictada", label: "Dictada", color: "#22C55E" },
+  { key: "dictada", label: "Dictada tal cual se planeó", color: "#22C55E" },
+  { key: "alterada", label: "Dictada, pero cambió sobre la marcha", color: "#F97316" },
   { key: "aplazada", label: "Aplazada", color: "#EF4444" },
 ];
 
@@ -317,10 +318,19 @@ function DictadoControl({ claseId, grados }) {
   const [gradoId, setGradoId] = useState("");
   const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
   const [estado, setEstado] = useState("dictada");
+  const [observacionAbiertaDe, setObservacionAbiertaDe] = useState(null);
+  const [observacionTemp, setObservacionTemp] = useState({});
 
   const cargar = () => api.fetchDictados(claseId).then(setDictados);
   useEffect(() => { cargar(); }, [claseId]);
   useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
+
+  const toggleAlerta = async (d) => { await api.editarDictado(d.id, { alerta: !d.alerta }); cargar(); };
+  const guardarObservacion = async (id) => {
+    await api.editarDictado(id, { observacion: (observacionTemp[id] ?? "").trim() || null });
+    setObservacionAbiertaDe(null);
+    cargar();
+  };
 
   const agregar = async () => {
     if (!gradoId) return;
@@ -338,20 +348,37 @@ function DictadoControl({ claseId, grados }) {
 
   return (
     <div className="mt-2 pt-2 border-t border-slate-100">
-      <div className="text-[10px] font-semibold text-slate-400 uppercase mb-1">Control por curso</div>
+      <div className="text-[10px] font-semibold text-slate-400 uppercase mb-1">Control por curso — lo que realmente pasó en el aula</div>
       {dictados.length > 0 && (
-        <div className="space-y-1 mb-1.5">
+        <div className="space-y-1.5 mb-1.5">
           {dictados.map((d) => {
             const info = ESTADOS_DICTADO.find((e) => e.key === d.estado);
             return (
-              <div key={d.id} className="flex items-center gap-2 text-[11px]">
-                <span className="font-semibold text-slate-600 w-16 shrink-0">Curso {d.grado_id}</span>
-                <span className="text-slate-400 w-24 shrink-0">{d.fecha || "sin fecha"}</span>
-                <select value={d.estado} onChange={(e) => cambiarEstado(d.id, e.target.value)}
-                  className="text-[10px] px-2 py-0.5 rounded-full border-0 outline-none" style={{ background: `${info.color}22`, color: info.color }}>
-                  {ESTADOS_DICTADO.map((e) => <option key={e.key} value={e.key}>{e.label}</option>)}
-                </select>
-                <button onClick={() => quitar(d.id)} className="text-slate-300 hover:text-rose-500">✕</button>
+              <div key={d.id} className={`rounded-lg p-1.5 ${d.alerta ? "bg-rose-50" : ""}`}>
+                <div className="flex items-center gap-2 text-[11px]">
+                  <span className="font-semibold text-slate-600 w-16 shrink-0">Curso {d.grado_id}</span>
+                  <span className="text-slate-400 w-24 shrink-0">{d.fecha || "sin fecha"}</span>
+                  <select value={d.estado} onChange={(e) => cambiarEstado(d.id, e.target.value)}
+                    className="text-[10px] px-2 py-0.5 rounded-full border-0 outline-none" style={{ background: `${info.color}22`, color: info.color }}>
+                    {ESTADOS_DICTADO.map((e) => <option key={e.key} value={e.key}>{e.label}</option>)}
+                  </select>
+                  <button onClick={() => toggleAlerta(d)} title="Marcar para revisar más adelante" className={`text-xs shrink-0 ${d.alerta ? "" : "opacity-30"}`}>⚠️</button>
+                  <button onClick={() => setObservacionAbiertaDe(observacionAbiertaDe === d.id ? null : d.id)} className="text-[10px] text-violet-500 shrink-0">
+                    {d.observacion ? "📝 Ver nota" : "+ Nota"}
+                  </button>
+                  <button onClick={() => quitar(d.id)} className="text-slate-300 hover:text-rose-500 ml-auto shrink-0">✕</button>
+                </div>
+                {observacionAbiertaDe === d.id && (
+                  <div className="mt-1 flex gap-1.5">
+                    <textarea value={observacionTemp[d.id] ?? d.observacion ?? ""} onChange={(e) => setObservacionTemp((prev) => ({ ...prev, [d.id]: e.target.value }))}
+                      rows={2} placeholder="¿Qué pasó realmente en esta clase? (ej: un imprevisto cambió la actividad planeada, no alcanzó el tiempo, etc.)"
+                      className="flex-1 text-[11px] rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+                    <button onClick={() => guardarObservacion(d.id)} className="text-[11px] px-2 py-1 rounded-lg bg-violet-500 text-white self-start">Guardar</button>
+                  </div>
+                )}
+                {d.observacion && observacionAbiertaDe !== d.id && (
+                  <p className="text-[10px] text-slate-500 mt-0.5 pl-[4.5rem]">📝 {d.observacion}</p>
+                )}
               </div>
             );
           })}
@@ -389,12 +416,14 @@ function ClasesLista({ unidadId, grados }) {
   const [desarrollo, setDesarrollo] = useState("");
   const [cierre, setCierre] = useState("");
   const [indicador, setIndicador] = useState("");
+  const [objetivo, setObjetivo] = useState("");
+  const [ajustes, setAjustes] = useState("");
 
   const cargar = () => api.fetchClases(unidadId).then(setClases);
   useEffect(() => { cargar(); }, [unidadId]);
 
   const limpiar = () => {
-    setTitulo(""); setFecha(""); setDuracion(""); setDescripcionAgil(""); setInicio(""); setDesarrollo(""); setCierre(""); setIndicador("");
+    setTitulo(""); setFecha(""); setDuracion(""); setDescripcionAgil(""); setInicio(""); setDesarrollo(""); setCierre(""); setIndicador(""); setObjetivo(""); setAjustes("");
     setAgregando(false); setEditandoId(null); setModo("agil");
   };
 
@@ -403,6 +432,8 @@ function ClasesLista({ unidadId, grados }) {
     setTitulo(c.titulo || "");
     setFecha(c.fecha || "");
     setDuracion(c.duracion_minutos || "");
+    setObjetivo(c.objetivo_aprendizaje || "");
+    setAjustes(c.ajustes_curriculares || "");
     if (c.momento_inicio || c.momento_cierre) {
       setModo("completo");
       setInicio(c.momento_inicio || "");
@@ -423,6 +454,8 @@ function ClasesLista({ unidadId, grados }) {
     const campos = {
       titulo: titulo.trim(), fecha: fecha || null,
       duracion_minutos: duracion ? parseInt(duracion, 10) : null,
+      objetivo_aprendizaje: objetivo.trim() || null,
+      ajustes_curriculares: ajustes.trim() || null,
       momento_inicio: modo === "agil" ? null : (inicio.trim() || null),
       momento_desarrollo: modo === "agil" ? (descripcionAgil.trim() || null) : (desarrollo.trim() || null),
       momento_cierre: modo === "agil" ? null : (cierre.trim() || null),
@@ -461,6 +494,7 @@ function ClasesLista({ unidadId, grados }) {
                   <button onClick={() => quitar(c.id)} className="text-slate-300 hover:text-rose-500 text-xs">✕</button>
                 </div>
               </div>
+              {c.objetivo_aprendizaje && <p className="text-[11px] text-violet-600 mt-1"><b>🎯 Objetivo:</b> {c.objetivo_aprendizaje}</p>}
               {(c.momento_inicio || c.momento_desarrollo || c.momento_cierre) && (
                 <div className="grid sm:grid-cols-3 gap-2 mt-2">
                   {c.momento_inicio && (
@@ -484,6 +518,12 @@ function ClasesLista({ unidadId, grados }) {
                 </div>
               )}
               {c.indicador_desempeno && <p className="text-[11px] text-slate-500 mt-1.5"><b>Indicador de desempeño:</b> {c.indicador_desempeno}</p>}
+              {c.ajustes_curriculares && (
+                <div className="bg-blue-50 rounded-lg p-2 mt-1.5">
+                  <div className="text-[9px] font-bold text-blue-600 uppercase mb-0.5">Ajustes razonables / adaptaciones</div>
+                  <TextoEnriquecido html={c.ajustes_curriculares} className="text-[11px] text-slate-600" />
+                </div>
+              )}
               <div className="flex flex-wrap gap-3 mt-1.5">
                 <SelectorEstandares planeacionId={c.id} tipo="dba" />
                 <SelectorEstandares planeacionId={c.id} tipo="competencia" />
@@ -502,20 +542,27 @@ function ClasesLista({ unidadId, grados }) {
             <button onClick={() => setModo("completo")} className={`text-[11px] px-3 py-1 rounded-full ${modo === "completo" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📋 Completo (inicio/desarrollo/cierre)</button>
           </div>
           <div className="flex gap-1.5">
-            <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título de la clase (sesión)"
+            <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Tema central de la clase (sesión)"
               className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
             <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
             <input type="number" value={duracion} onChange={(e) => setDuracion(e.target.value)} placeholder="Min." className="w-16 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
           </div>
+          <input value={objetivo} onChange={(e) => setObjetivo(e.target.value)} placeholder="Objetivo de aprendizaje — ¿qué sabrá o sabrá hacer el estudiante al terminar?"
+            className="w-full text-xs rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none" />
           {modo === "agil" ? (
             <EditorTexto value={descripcionAgil} onChange={setDescripcionAgil} minHeight={90} placeholder="¿Qué se va a hacer en esta clase?" />
           ) : (
             <>
-              <EditorTexto value={inicio} onChange={setInicio} minHeight={70} placeholder="Actividades de apertura (recuperar saberes previos, plantear un problema o pregunta detonadora…)" />
-              <EditorTexto value={desarrollo} onChange={setDesarrollo} minHeight={70} placeholder="Actividades de desarrollo (interacción con la nueva información, aplicación en un caso o problema…)" />
-              <EditorTexto value={cierre} onChange={setCierre} minHeight={70} placeholder="Actividades de cierre (síntesis, reconstrucción de lo aprendido…)" />
+              <EditorTexto value={inicio} onChange={setInicio} minHeight={80}
+                placeholder="INICIO (10-15%): activación y motivación (dinámica corta, pregunta retadora) · recuperación de saberes previos · presentación del objetivo a los estudiantes…" />
+              <EditorTexto value={desarrollo} onChange={setDesarrollo} minHeight={80}
+                placeholder="DESARROLLO (65-70%): estructuración/modelado (explicación con ejemplos) · práctica guiada (ejercicios en conjunto) · práctica autónoma (trabajo individual o colaborativo)…" />
+              <EditorTexto value={cierre} onChange={setCierre} minHeight={80}
+                placeholder="CIERRE (15%): síntesis de los puntos clave · evaluación formativa o boleto de salida · metacognición (¿cómo aprendimos hoy?)…" />
               <input value={indicador} onChange={(e) => setIndicador(e.target.value)} placeholder="Indicador de desempeño (opcional)"
-                className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+                className="w-full text-xs rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none" />
+              <label className="text-[10px] text-slate-500 block mb-1">Ajustes razonables / adaptaciones curriculares (opcional)</label>
+              <EditorTexto value={ajustes} onChange={setAjustes} minHeight={60} placeholder="Modificaciones planeadas para estudiantes con PIAR/DUA u otros ritmos de aprendizaje…" />
             </>
           )}
           <div className="flex justify-end gap-2">
