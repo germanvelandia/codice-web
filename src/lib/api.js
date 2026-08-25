@@ -3650,17 +3650,12 @@ export async function fetchTotalesAsistenciaPorGrado(fechaDesde, fechaHasta, mat
 // Igual que fetchTotalesAsistenciaPorGrado, pero desglosado por estudiante
 // (agrupado/ordenado por grado) en vez de solo el total agregado del grado.
 export async function fetchTotalesAsistenciaPorEstudiante(fechaDesde, fechaHasta, materiaId = null) {
-  let query = supabase.from("asistencia").select("estudiante_id, codigo, materia_id");
+  let query = supabase.from("asistencia").select("estudiante_id, codigo");
   if (fechaDesde) query = query.gte("fecha", fechaDesde);
   if (fechaHasta) query = query.lte("fecha", fechaHasta);
   if (materiaId) query = query.eq("materia_id", materiaId);
   const { data: registros, error } = await query;
   if (error) throw error;
-
-  // DEBUG temporal — para diagnosticar por qué el filtro de materia no
-  // parece afectar el resultado. Se saca en cuanto quede resuelto.
-  const materiasDistintasEnResultado = Array.from(new Set((registros || []).map((r) => r.materia_id)));
-  console.log("[DEBUG asistencia] materiaId pedido:", materiaId, "| filas devueltas:", (registros || []).length, "| materia_id distintos en esas filas:", materiasDistintasEnResultado);
 
   const { data: estudiantes, error: e2 } = await supabase.from("estudiantes").select("id, nombre, grado_id").eq("activo", true);
   if (e2) throw e2;
@@ -3675,10 +3670,7 @@ export async function fetchTotalesAsistenciaPorEstudiante(fechaDesde, fechaHasta
     totales[r.estudiante_id].total += 1;
   });
 
-  const resultado = Object.values(totales).sort((a, b) => a.grado.localeCompare(b.grado, undefined, { numeric: true }) || a.nombre.localeCompare(b.nombre));
-  resultado._debugFilasCrudas = (registros || []).length;
-  resultado._debugMateriasDistintas = materiasDistintasEnResultado;
-  return resultado;
+  return Object.values(totales).sort((a, b) => a.grado.localeCompare(b.grado, undefined, { numeric: true }) || a.nombre.localeCompare(b.nombre));
 }
 
 // Mueve registros de asistencia GENERAL (sin materia) hacia una materia
