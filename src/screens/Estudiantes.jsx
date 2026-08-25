@@ -2350,7 +2350,7 @@ export function VistaGrados({ onElegirGrado }) {
   const cargar = async () => {
     setCargando(true);
     await api.asegurarGradosBase();
-    const data = await api.fetchGrados();
+    const data = await api.fetchGrados(true);
     setGrados(data);
     setCargando(false);
   };
@@ -2369,8 +2369,13 @@ export function VistaGrados({ onElegirGrado }) {
     cargar();
   };
 
+  const toggleOculto = async (grado) => {
+    await api.guardarOcultoGrado(grado.id, !grado.oculto);
+    cargar();
+  };
+
   const eliminar = async (gradoId) => {
-    if (!confirm(`¿Eliminar el curso ${gradoId}? Solo se puede si ya no tiene estudiantes.`)) return;
+    if (!confirm(`¿Eliminar el curso ${gradoId}? Solo se puede si ya no tiene estudiantes. Si preferís no borrarlo, usá "Ocultar" en vez de esto.`)) return;
     try {
       await api.eliminarGrado(gradoId);
       cargar();
@@ -2390,7 +2395,7 @@ export function VistaGrados({ onElegirGrado }) {
           <button onClick={() => setImportarAbierto(true)} className="text-sm font-semibold px-4 py-2 rounded-lg border border-slate-200 text-slate-600">🗂️ Importar directorio</button>
         </div>
       </div>
-      <p className="text-xs text-slate-400 mb-3">El color de cada grado se usa automáticamente en el calendario de Horario y en otros lugares de la app. Tocá el círculo de color para cambiarlo.</p>
+      <p className="text-xs text-slate-400 mb-3">El color de cada grado se usa automáticamente en el calendario de Horario y en otros lugares de la app. Tocá el círculo de color para cambiarlo. Los cursos ocultos (atenuados) no aparecen en los selectores del resto de la app, pero siguen existiendo con todos sus datos — tocá "👁️ Mostrar" para recuperarlos.</p>
       {cargando ? (
         <div className="text-sm text-slate-400">Cargando…</div>
       ) : (
@@ -2398,14 +2403,18 @@ export function VistaGrados({ onElegirGrado }) {
           {grados.map((g) => {
             const color = colorGrado(g.id, grados);
             return (
-              <div key={g.id} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 text-center hover:shadow-md relative">
+              <div key={g.id} className={`bg-white rounded-2xl p-5 shadow-sm border border-slate-100 text-center hover:shadow-md relative ${g.oculto ? "opacity-50" : ""}`}>
                 <button onClick={(e) => { e.stopPropagation(); setEditandoColorDe(editandoColorDe === g.id ? null : g.id); }}
                   className="absolute top-2 right-2 w-4 h-4 rounded-full border border-white shadow" style={{ background: color }} title="Cambiar color" />
                 <button onClick={(e) => { e.stopPropagation(); eliminar(g.id); }}
                   className="absolute top-2 left-2 text-xs text-slate-300 hover:text-rose-500" title="Eliminar este curso">🗑</button>
                 <button onClick={() => onElegirGrado(g.id)} className="w-full">
                   <div className="text-2xl font-bold" style={{ color }}>{g.id}</div>
-                  <div className="text-xs text-slate-400 mt-1">Grado</div>
+                  <div className="text-xs text-slate-400 mt-1">Grado{g.oculto ? " · oculto" : ""}</div>
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); toggleOculto(g); }}
+                  className="mt-2 text-[11px] font-semibold px-2 py-1 rounded-full border border-slate-200 text-slate-500 hover:border-violet-300 hover:text-violet-600">
+                  {g.oculto ? "👁️ Mostrar" : "🙈 Ocultar"}
                 </button>
                 {editandoColorDe === g.id && (
                   <div className="absolute z-10 top-8 right-2 bg-white rounded-xl shadow-lg border border-slate-100 p-2 grid grid-cols-4 gap-1.5" onClick={(e) => e.stopPropagation()}>
