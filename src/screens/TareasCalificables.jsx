@@ -83,6 +83,9 @@ function CalificarModal({ tarea, onClose, onCambio }) {
   const [guardandoCodice, setGuardandoCodice] = useState(false);
   const [rubricando, setRubricando] = useState(null); // estudianteId
   const [nivelesElegidos, setNivelesElegidos] = useState({}); // { criterioIdx: nivelIdx }
+  const [notaMasiva, setNotaMasiva] = useState("");
+  const [comentarioMasivo, setComentarioMasivo] = useState("");
+  const [aplicandoMasivo, setAplicandoMasivo] = useState(false);
 
   const cargar = () => { setCargando(true); api.fetchEntregasDeTarea(tarea.id).then((d) => { setEntregas(d); setCargando(false); }); };
   useEffect(() => { cargar(); }, [tarea.id]);
@@ -98,6 +101,34 @@ function CalificarModal({ tarea, onClose, onCambio }) {
     } catch (e) {
       alert("Error al calificar: " + e.message);
     }
+  };
+
+  // Agrupa las entregas ya calificadas por su nota, para poder dejar el
+  // mismo comentario a todos los que sacaron lo mismo, de una sola vez.
+  const gruposPorNota = {};
+  entregas.forEach((e) => {
+    if (e.nota === null || e.nota === undefined) return;
+    const clave = String(e.nota);
+    (gruposPorNota[clave] = gruposPorNota[clave] || []).push(e);
+  });
+  const notasDisponibles = Object.keys(gruposPorNota).sort((a, b) => parseFloat(b) - parseFloat(a));
+
+  const aplicarComentarioMasivo = async () => {
+    if (!notaMasiva) { alert("Elegí a qué grupo de nota aplicarlo."); return; }
+    if (!comentarioMasivo.trim()) { alert("Escribí el comentario a aplicar."); return; }
+    setAplicandoMasivo(true);
+    try {
+      const grupo = gruposPorNota[notaMasiva] || [];
+      for (const e of grupo) {
+        await api.calificarTarea(tarea, e.estudiante_id, e.nota, comentarioMasivo.trim());
+      }
+      setComentarioMasivo("");
+      cargar();
+      onCambio();
+    } catch (e) {
+      alert("Error al aplicar el comentario: " + e.message);
+    }
+    setAplicandoMasivo(false);
   };
 
   const abrirRubrica = (estudianteId, resultadoPrevio) => {
@@ -166,6 +197,27 @@ function CalificarModal({ tarea, onClose, onCambio }) {
           <button onClick={onClose} className="text-slate-400">✕</button>
         </div>
         <p className="text-xs text-slate-500 mb-3">Al guardar una nota, se manda automáticamente a la columna "{tarea.titulo}" en la Planilla de Calificaciones.</p>
+
+        {notasDisponibles.length > 0 && (
+          <div className="bg-violet-50 rounded-xl p-3 mb-3">
+            <div className="text-[11px] font-semibold text-violet-700 mb-1.5">📝 Comentario masivo por nota</div>
+            <div className="flex gap-1.5 mb-2">
+              <select value={notaMasiva} onChange={(e) => setNotaMasiva(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
+                <option value="">Elegí un grupo…</option>
+                {notasDisponibles.map((n) => <option key={n} value={n}>Nota {n} ({gruposPorNota[n].length} estudiante{gruposPorNota[n].length !== 1 ? "s" : ""})</option>)}
+              </select>
+            </div>
+            <div className="flex gap-1.5">
+              <input value={comentarioMasivo} onChange={(e) => setComentarioMasivo(e.target.value)} placeholder="Comentario a aplicar a todo el grupo…"
+                className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
+              <button disabled={aplicandoMasivo} onClick={aplicarComentarioMasivo} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+                {aplicandoMasivo ? "Aplicando…" : "Aplicar"}
+              </button>
+            </div>
+            <p className="text-[10px] text-slate-400 mt-1">Esto reemplaza el comentario de cada estudiante del grupo elegido — la nota no cambia.</p>
+          </div>
+        )}
+
         {cargando ? (
           <div className="text-sm text-slate-400">Cargando…</div>
         ) : (
