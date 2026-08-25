@@ -3391,6 +3391,13 @@ export async function setValor(actividadId, estudianteId, valor) {
   if (error) throw error;
 }
 
+// Guarda una observación para una celda de la Planilla que YA tiene nota
+// puesta (no crea la fila si no existía antes).
+export async function setObservacionValor(actividadId, estudianteId, observacion) {
+  const { error } = await supabase.from("notas_valores").update({ observacion: observacion || null }).eq("actividad_id", actividadId).eq("estudiante_id", estudianteId);
+  if (error) throw error;
+}
+
 export async function fetchHistorialGamificacion(estudianteId) {
   const { data, error } = await supabase.from("historial_gamificacion").select("*").eq("estudiante_id", estudianteId).order("ts", { ascending: false });
   if (error) throw error;
