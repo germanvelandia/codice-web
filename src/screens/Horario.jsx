@@ -393,6 +393,8 @@ function NuevoEventoForm({ grados, onCancelar, onCreado }) {
   const [tipo, setTipo] = useState("institucional");
   const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
   const [fechaFin, setFechaFin] = useState("");
+  const [horaInicio, setHoraInicio] = useState("");
+  const [horaFin, setHoraFin] = useState("");
   const [gradoId, setGradoId] = useState("");
   const [guardando, setGuardando] = useState(false);
 
@@ -402,7 +404,7 @@ function NuevoEventoForm({ grados, onCancelar, onCreado }) {
     try {
       await api.crearEventoCronograma({
         titulo: titulo.trim(), descripcion: descripcion.trim() || null, tipo,
-        fecha, fecha_fin: fechaFin || null, grado_id: gradoId || null,
+        fecha, fecha_fin: fechaFin || null, hora_inicio: horaInicio || null, hora_fin: horaFin || null, grado_id: gradoId || null,
       });
       onCreado();
     } catch (e) {
@@ -428,7 +430,7 @@ function NuevoEventoForm({ grados, onCancelar, onCreado }) {
       <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2} placeholder="Descripción (opcional)"
         className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
 
-      <div className="grid grid-cols-3 gap-3 mb-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-2">
         <div>
           <label className="text-xs text-slate-500 block mb-1">Fecha</label>
           <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
@@ -443,6 +445,16 @@ function NuevoEventoForm({ grados, onCancelar, onCreado }) {
             <option value="">Todos los grados</option>
             {grados.map((g) => <option key={g.id} value={g.id}>Grado {g.id}</option>)}
           </select>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <div>
+          <label className="text-xs text-slate-500 block mb-1">Hora inicio (opcional)</label>
+          <input type="time" value={horaInicio} onChange={(e) => setHoraInicio(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
+        </div>
+        <div>
+          <label className="text-xs text-slate-500 block mb-1">Hora fin (opcional)</label>
+          <input type="time" value={horaFin} onChange={(e) => setHoraFin(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
         </div>
       </div>
 
@@ -566,7 +578,7 @@ function Cronograma({ grados }) {
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: `${info.color}22`, color: info.color }}>{info.label}</span>
-            <span className="text-xs text-slate-400">{e.fecha}{e.fecha_fin && e.fecha_fin !== e.fecha ? ` → ${e.fecha_fin}` : ""}{e.grado_id ? ` · Grado ${e.grado_id}` : " · Todos los grados"}</span>
+            <span className="text-xs text-slate-400">{e.fecha}{e.fecha_fin && e.fecha_fin !== e.fecha ? ` → ${e.fecha_fin}` : ""}{e.hora_inicio ? ` · ${e.hora_inicio}${e.hora_fin ? `–${e.hora_fin}` : ""}` : ""}{e.grado_id ? ` · Grado ${e.grado_id}` : " · Todos los grados"}</span>
           </div>
           <div className="text-sm font-semibold text-slate-800 mt-1">{e.titulo}</div>
           {e.descripcion && <div className="text-xs text-slate-500 mt-0.5">{e.descripcion}</div>}
