@@ -53,24 +53,18 @@ function TotalesPorGrado({ grados }) {
 
   useEffect(() => { api.fetchMaterias().then(setMaterias); }, []);
 
-  const [debugInfo, setDebugInfo] = useState("");
   const cargar = (materiaOverride) => {
     setCargando(true);
     const mId = (materiaOverride !== undefined ? materiaOverride : materiaFiltro) ? parseInt(materiaOverride !== undefined ? materiaOverride : materiaFiltro, 10) : null;
     Promise.all([
       api.fetchTotalesAsistenciaPorGrado(fechaDesde || null, fechaHasta || null, mId),
       api.fetchTotalesAsistenciaPorEstudiante(fechaDesde || null, fechaHasta || null, mId),
-    ]).then(([g, e]) => {
-      setTotales(g); setTotalesEstudiante(e); setCargando(false);
-      const nombreMateria = materias.find((m) => m.id === mId)?.nombre;
-      setDebugInfo(`🔧 materiaId=${mId === null ? "null" : mId} (${nombreMateria || "?"}) — filas crudas devueltas por la consulta: ${e._debugFilasCrudas} — materia_id que aparecen en esas filas: [${(e._debugMateriasDistintas || []).join(", ")}]`);
-    });
+    ]).then(([g, e]) => { setTotales(g); setTotalesEstudiante(e); setCargando(false); });
   };
   useEffect(() => { cargar(); }, []);
 
   return (
     <div>
-      {debugInfo && <div className="text-[11px] bg-amber-50 text-amber-700 rounded-lg px-2 py-1 mb-2">{debugInfo}</div>}
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <label className="text-xs text-slate-500">Materia</label>
         <select value={materiaFiltro} onChange={(e) => { setMateriaFiltro(e.target.value); cargar(e.target.value); }} className="text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none">
