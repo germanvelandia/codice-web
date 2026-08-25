@@ -3557,11 +3557,27 @@ export async function marcarAsistencia(estudianteId, fecha, codigo, observacion,
   // gamificación antes de aplicar el nuevo (evita que se acumule al corregir).
   // La tabla "asistencia" no tiene una columna "id" propia — su identificador
   // real es la combinación estudiante+fecha+materia, así que la usamos tal
-  // cual, tanto para buscar como para actualizar.
+  // cual, tanto para buscar como para actualizar. Se usa un select común (no
+  // .maybeSingle()) porque, si quedaron filas duplicadas de antes, esa
+  // función se rompe al encontrar más de una — acá simplemente se limpian
+  // las de más y se sigue con una sola.
   let queryPrevia = supabase.from("asistencia").select("xp_aplicado, vida_aplicada").eq("estudiante_id", estudianteId).eq("fecha", fecha);
   queryPrevia = materiaId ? queryPrevia.eq("materia_id", materiaId) : queryPrevia.is("materia_id", null);
-  const { data: previa, error: errorPrevia } = await queryPrevia.maybeSingle();
+  const { data: previas, error: errorPrevia } = await queryPrevia;
   if (errorPrevia) throw errorPrevia;
+
+  if (previas && previas.length > 1) {
+    // Había duplicados de antes — se borran todos, se revierte el efecto
+    // de cada uno, y se sigue como si no hubiera existido ninguno.
+    for (const p of previas) {
+      if (p.xp_aplicado) await ajustarXp(estudianteId, -p.xp_aplicado);
+      if (p.vida_aplicada) await ajustarVida(estudianteId, -p.vida_aplicada);
+    }
+    let queryLimpiar = supabase.from("asistencia").delete().eq("estudiante_id", estudianteId).eq("fecha", fecha);
+    queryLimpiar = materiaId ? queryLimpiar.eq("materia_id", materiaId) : queryLimpiar.is("materia_id", null);
+    await queryLimpiar;
+  }
+  const previa = previas && previas.length === 1 ? previas[0] : null;
   if (previa && (previa.xp_aplicado || previa.vida_aplicada)) {
     if (previa.xp_aplicado) await ajustarXp(estudianteId, -previa.xp_aplicado);
     if (previa.vida_aplicada) await ajustarVida(estudianteId, -previa.vida_aplicada);
