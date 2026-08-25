@@ -227,16 +227,25 @@ export function VistaAsistencia({ grados }) {
 
   const visibles = estudiantes.filter((s) => reinoFiltro === "Todos" || (s.reino_actual || s.reino_original) === reinoFiltro);
 
+  const mostrarError = (e) => {
+    const detalle = [e.message, e.details, e.hint, e.code ? `(código: ${e.code})` : ""].filter(Boolean).join(" — ");
+    alert("Error al guardar la asistencia:\n\n" + (detalle || JSON.stringify(e)));
+  };
+
   const marcar = async (estudianteId, codigo) => {
     if (soloLectura) return;
     const mIdNum = materiaId === "" ? null : parseInt(materiaId, 10);
     const actual = asistencia[estudianteId];
-    if (actual && actual.codigo === codigo) {
-      await api.quitarAsistencia(estudianteId, fecha, mIdNum);
-      setAsistencia((prev) => { const n = { ...prev }; delete n[estudianteId]; return n; });
-    } else {
-      await api.marcarAsistencia(estudianteId, fecha, codigo, actual?.observacion, mIdNum);
-      setAsistencia((prev) => ({ ...prev, [estudianteId]: { ...(prev[estudianteId] || {}), codigo, estudiante_id: estudianteId, fecha } }));
+    try {
+      if (actual && actual.codigo === codigo) {
+        await api.quitarAsistencia(estudianteId, fecha, mIdNum);
+        setAsistencia((prev) => { const n = { ...prev }; delete n[estudianteId]; return n; });
+      } else {
+        await api.marcarAsistencia(estudianteId, fecha, codigo, actual?.observacion, mIdNum);
+        setAsistencia((prev) => ({ ...prev, [estudianteId]: { ...(prev[estudianteId] || {}), codigo, estudiante_id: estudianteId, fecha } }));
+      }
+    } catch (e) {
+      mostrarError(e);
     }
   };
 
@@ -244,17 +253,25 @@ export function VistaAsistencia({ grados }) {
     if (soloLectura) return;
     const mIdNum = materiaId === "" ? null : parseInt(materiaId, 10);
     const actual = asistencia[estudianteId];
-    await api.marcarAsistencia(estudianteId, fecha, actual?.codigo || "P", notaTexto, mIdNum);
-    setAsistencia((prev) => ({ ...prev, [estudianteId]: { ...(prev[estudianteId] || {}), codigo: actual?.codigo || "P", observacion: notaTexto } }));
-    setNotaAbiertaId(null);
-    setNotaTexto("");
+    try {
+      await api.marcarAsistencia(estudianteId, fecha, actual?.codigo || "P", notaTexto, mIdNum);
+      setAsistencia((prev) => ({ ...prev, [estudianteId]: { ...(prev[estudianteId] || {}), codigo: actual?.codigo || "P", observacion: notaTexto } }));
+      setNotaAbiertaId(null);
+      setNotaTexto("");
+    } catch (e) {
+      mostrarError(e);
+    }
   };
 
   const marcarTodos = async () => {
     if (soloLectura) return;
     const mIdNum = materiaId === "" ? null : parseInt(materiaId, 10);
-    await api.marcarTodosPresentes(visibles.map((s) => s.id), fecha, mIdNum);
-    cargar();
+    try {
+      await api.marcarTodosPresentes(visibles.map((s) => s.id), fecha, mIdNum);
+      cargar();
+    } catch (e) {
+      mostrarError(e);
+    }
   };
 
   const conteoDia = { P: 0, R: 0, FI: 0, FJ: 0 };
