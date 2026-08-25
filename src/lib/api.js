@@ -365,6 +365,34 @@ export async function fetchComportamientos(categoria) {
   return (data || []).map((c) => ({ ...c, profesores: c.docente_id ? { nombre: nombrePorId[c.docente_id] || null } : null }));
 }
 
+// Aplica un comportamiento del catálogo a varios estudiantes a la vez —
+// crea un acta para cada uno (mismo formato que el formulario individual
+// de Actas), sin tener que repetirlo uno por uno.
+export async function aplicarComportamientoMasivo(estudianteIds, comportamiento, motivo, fecha) {
+  const tipo = comportamiento.categoria === "convivencial" ? "Convivencial" : "Académico";
+  const campos = { tipo, fecha: fecha || new Date().toISOString().slice(0, 10), motivo: (motivo || comportamiento.nombre).trim() };
+  if (comportamiento.categoria === "convivencial") {
+    campos.categoria_falta = comportamiento.id;
+    campos.tipo_falta = comportamiento.nombre;
+    campos.articulo = comportamiento.articulo || null;
+    campos.plazo_dias = comportamiento.plazo_dias || null;
+    campos.implicaciones_legales = comportamiento.implicaciones_legales || null;
+  } else {
+    campos.compromisos_academicos = comportamiento.plantilla || null;
+  }
+  let hechos = 0;
+  const errores = [];
+  for (const id of estudianteIds) {
+    try {
+      await crearActa(id, campos);
+      hechos++;
+    } catch (e) {
+      errores.push(e.message);
+    }
+  }
+  return { hechos, total: estudianteIds.length, errores };
+}
+
 export async function crearComportamiento(campos) {
   const { data: userData } = await supabase.auth.getUser();
   const { data, error } = await supabase
@@ -2076,10 +2104,22 @@ export async function ajustarXp(estudianteId, delta) {
   return data?.[0]?.xp ?? 0;
 }
 
+export async function ajustarXpMasivo(estudianteIds, delta) {
+  const resultados = {};
+  await Promise.all(estudianteIds.map(async (id) => { resultados[id] = await ajustarXp(id, delta); }));
+  return resultados;
+}
+
 export async function ajustarVida(estudianteId, delta) {
   const { data, error } = await supabase.rpc("ajustar_progreso", { p_estudiante_id: estudianteId, p_delta_vida: delta });
   if (error) throw error;
   return data?.[0]?.vida ?? 0;
+}
+
+export async function ajustarVidaMasivo(estudianteIds, delta) {
+  const resultados = {};
+  await Promise.all(estudianteIds.map(async (id) => { resultados[id] = await ajustarVida(id, delta); }));
+  return resultados;
 }
 
 /* ---------------- Personalización cosmética ---------------- */
