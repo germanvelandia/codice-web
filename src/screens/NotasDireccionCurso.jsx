@@ -402,12 +402,19 @@ export function NotasDireccionCurso({ gradoId }) {
     try {
       if (texto === "") {
         await api.eliminarNotaCeldaDireccionCurso(gradoId, materiaNombre, estudianteId, periodo);
+        setNotas((prev) => prev.filter((n) => !(n.estudiante_id === estudianteId && n.materia_nombre === materiaNombre && n.periodo === periodo)));
       } else {
         const num = parseFloat(texto);
-        if (isNaN(num)) { alert("Escribí un número válido."); cargar(); return; }
+        if (isNaN(num)) { alert("Escribí un número válido."); return; }
         await api.guardarNotaDireccionCurso(gradoId, materiaNombre, estudianteId, periodo, num);
+        setNotas((prev) => {
+          const existe = prev.some((n) => n.estudiante_id === estudianteId && n.materia_nombre === materiaNombre && n.periodo === periodo);
+          if (existe) {
+            return prev.map((n) => (n.estudiante_id === estudianteId && n.materia_nombre === materiaNombre && n.periodo === periodo) ? { ...n, nota: num } : n);
+          }
+          return [...prev, { estudiante_id: estudianteId, materia_nombre: materiaNombre, periodo, nota: num }];
+        });
       }
-      cargar();
     } catch (e) {
       alert("Error al guardar: " + e.message);
       cargar();
