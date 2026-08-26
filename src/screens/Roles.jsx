@@ -6,6 +6,9 @@ export function VistaRoles() {
   const [cargando, setCargando] = useState(true);
   const [nombre, setNombre] = useState("");
   const [descripcion, setDescripcion] = useState("");
+  const [editandoId, setEditandoId] = useState(null);
+  const [nombreEdicion, setNombreEdicion] = useState("");
+  const [descripcionEdicion, setDescripcionEdicion] = useState("");
 
   const cargar = async () => {
     setCargando(true);
@@ -20,6 +23,19 @@ export function VistaRoles() {
     await api.crearRol(nombre.trim(), descripcion.trim());
     setNombre("");
     setDescripcion("");
+    cargar();
+  };
+
+  const empezarEdicion = (r) => {
+    setEditandoId(r.id);
+    setNombreEdicion(r.nombre);
+    setDescripcionEdicion(r.descripcion || "");
+  };
+
+  const guardarEdicion = async () => {
+    if (!nombreEdicion.trim()) return;
+    await api.editarRol(editandoId, nombreEdicion.trim(), descripcionEdicion.trim());
+    setEditandoId(null);
     cargar();
   };
 
@@ -53,11 +69,31 @@ export function VistaRoles() {
         <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
           {roles.map((r) => (
             <div key={r.id} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
-              <div className="flex justify-between items-start">
-                <div className="font-semibold text-slate-800">{r.nombre}</div>
-                <button onClick={() => eliminar(r.id)} className="text-slate-400 hover:text-rose-500 text-xs">✕</button>
-              </div>
-              {r.descripcion && <div className="text-xs text-slate-400 mt-1">{r.descripcion}</div>}
+              {editandoId === r.id ? (
+                <div>
+                  <input value={nombreEdicion} onChange={(e) => setNombreEdicion(e.target.value)} autoFocus
+                    onKeyDown={(e) => { if (e.key === "Enter") guardarEdicion(); if (e.key === "Escape") setEditandoId(null); }}
+                    className="w-full text-sm font-semibold rounded-lg px-2 py-1.5 mb-1.5 border border-violet-300 outline-none" />
+                  <input value={descripcionEdicion} onChange={(e) => setDescripcionEdicion(e.target.value)} placeholder="Descripción (opcional)"
+                    onKeyDown={(e) => { if (e.key === "Enter") guardarEdicion(); if (e.key === "Escape") setEditandoId(null); }}
+                    className="w-full text-xs rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none" />
+                  <div className="flex justify-end gap-2">
+                    <button onClick={() => setEditandoId(null)} className="text-xs text-slate-400">Cancelar</button>
+                    <button onClick={guardarEdicion} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white">Guardar</button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="flex justify-between items-start">
+                    <div className="font-semibold text-slate-800">{r.nombre}</div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button onClick={() => empezarEdicion(r)} className="text-slate-400 hover:text-violet-600 text-xs" title="Modificar">✏️</button>
+                      <button onClick={() => eliminar(r.id)} className="text-slate-400 hover:text-rose-500 text-xs" title="Eliminar">✕</button>
+                    </div>
+                  </div>
+                  {r.descripcion && <div className="text-xs text-slate-400 mt-1">{r.descripcion}</div>}
+                </>
+              )}
             </div>
           ))}
         </div>
