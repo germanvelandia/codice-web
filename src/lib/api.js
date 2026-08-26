@@ -1362,6 +1362,46 @@ const NIVELES_DOCENTE = [
   { min: 600, nombre: "Maestro" }, { min: 1000, nombre: "Gran Maestro" },
 ];
 
+// Para cada clase de hoy del Horario (materia + curso), busca la próxima
+// "clase" pendiente de esa Unidad en Planeaciones — para poder marcarla
+// (dictada/alterada/aplazada) ahí mismo, desde Inicio, sin ir a buscarla.
+export async function fetchClasesPendientesDeHoy(paresHorario) {
+  if (!paresHorario || paresHorario.length === 0) return {};
+  const materiaIds = [...new Set(paresHorario.map((p) => p.materiaId).filter(Boolean))];
+  if (materiaIds.length === 0) return {};
+
+  const { data: unidades, error: e1 } = await supabase.from("planeaciones").select("id, materia_id, grado_id").eq("tipo", "unidad").in("materia_id", materiaIds);
+  if (e1) throw e1;
+  const unidadIds = (unidades || []).map((u) => u.id);
+  if (unidadIds.length === 0) return {};
+
+  const { data: clases, error: e2 } = await supabase.from("planeaciones").select("*").in("unidad_id", unidadIds).eq("tipo", "clase").order("orden");
+  if (e2) throw e2;
+  const claseIds = (clases || []).map((c) => c.id);
+
+  const { data: dictados, error: e3 } = claseIds.length > 0
+    ? await supabase.from("planeacion_dictados").select("*").in("clase_id", claseIds)
+    : { data: [] };
+  if (e3) throw e3;
+
+  const resultado = {};
+  paresHorario.forEach(({ materiaId, gradoId, horarioId }) => {
+    const nivel = String(gradoId || "").slice(0, -2);
+    const unidadesRelevantes = (unidades || []).filter((u) => u.materia_id === materiaId && (u.grado_id === gradoId || u.grado_id === nivel));
+    const unidadIdsRelevantes = new Set(unidadesRelevantes.map((u) => u.id));
+    const clasesRelevantes = (clases || []).filter((c) => unidadIdsRelevantes.has(c.unidad_id));
+    const pendiente = clasesRelevantes.find((c) => {
+      const d = (dictados || []).find((d) => d.clase_id === c.id && d.grado_id === gradoId);
+      return !d || d.estado === "pendiente";
+    });
+    if (pendiente) {
+      const dictadoExistente = (dictados || []).find((d) => d.clase_id === pendiente.id && d.grado_id === gradoId);
+      resultado[horarioId] = { clase: pendiente, dictado: dictadoExistente || null };
+    }
+  });
+  return resultado;
+}
+
 export async function fetchStatsDocente() {
   const { data: userData } = await supabase.auth.getUser();
   const docenteId = userData?.user?.id;
