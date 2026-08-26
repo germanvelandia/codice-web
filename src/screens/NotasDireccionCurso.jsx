@@ -332,6 +332,8 @@ export function NotasDireccionCurso({ gradoId }) {
   const [importarPegarAbierto, setImportarPegarAbierto] = useState(false);
   const [importarArchivoAbierto, setImportarArchivoAbierto] = useState(false);
   const [anchoCelda, setAnchoCelda] = useState(64);
+  const [cambiosPendientes, setCambiosPendientes] = useState({}); // { "estudianteId_materia_periodo": textoEscrito }
+  const [guardandoTodo, setGuardandoTodo] = useState(false);
 
   const periodos = periodosDe(config.sistema_periodos);
 
@@ -351,7 +353,13 @@ export function NotasDireccionCurso({ gradoId }) {
       setCargando(false);
     });
   };
-  useEffect(() => { cargar(); }, [gradoId]);
+  useEffect(() => {
+    setCambiosPendientes((prev) => {
+      if (Object.keys(prev).length > 0) alert("Cambiaste de curso con cambios sin guardar — esos cambios se descartaron.");
+      return {};
+    });
+    cargar();
+  }, [gradoId]);
 
   const cambiarSistema = async (sistema) => {
     setConfig((prev) => ({ ...prev, sistema_periodos: sistema }));
@@ -393,32 +401,55 @@ export function NotasDireccionCurso({ gradoId }) {
   };
 
   const notaDe = (estudianteId, materiaNombre, periodo) => {
+    const clave = claveCambio(estudianteId, materiaNombre, periodo);
+    if (clave in cambiosPendientes) {
+      const texto = cambiosPendientes[clave].trim().replace(",", ".");
+      if (texto === "") return null;
+      const num = parseFloat(texto);
+      return isNaN(num) ? null : num;
+    }
     const n = notas.find((x) => x.estudiante_id === estudianteId && x.materia_nombre === materiaNombre && x.periodo === periodo);
     return n ? n.nota : null;
   };
 
-  const guardarNotaCelda = async (estudianteId, materiaNombre, periodo, valorTexto) => {
-    const texto = valorTexto.trim().replace(",", ".");
-    try {
-      if (texto === "") {
-        await api.eliminarNotaCeldaDireccionCurso(gradoId, materiaNombre, estudianteId, periodo);
-        setNotas((prev) => prev.filter((n) => !(n.estudiante_id === estudianteId && n.materia_nombre === materiaNombre && n.periodo === periodo)));
-      } else {
-        const num = parseFloat(texto);
-        if (isNaN(num)) { alert("Escribí un número válido."); return; }
-        await api.guardarNotaDireccionCurso(gradoId, materiaNombre, estudianteId, periodo, num);
-        setNotas((prev) => {
-          const existe = prev.some((n) => n.estudiante_id === estudianteId && n.materia_nombre === materiaNombre && n.periodo === periodo);
-          if (existe) {
-            return prev.map((n) => (n.estudiante_id === estudianteId && n.materia_nombre === materiaNombre && n.periodo === periodo) ? { ...n, nota: num } : n);
-          }
-          return [...prev, { estudiante_id: estudianteId, materia_nombre: materiaNombre, periodo, nota: num }];
-        });
+  const claveCambio = (estudianteId, materiaNombre, periodo) => `${estudianteId}_${materiaNombre}_${periodo}`;
+
+  const anotarCambio = (estudianteId, materiaNombre, periodo, valorTexto) => {
+    setCambiosPendientes((prev) => ({ ...prev, [claveCambio(estudianteId, materiaNombre, periodo)]: valorTexto }));
+  };
+
+  const descartarCambios = () => setCambiosPendientes({});
+
+  const guardarTodosLosCambios = async () => {
+    const claves = Object.keys(cambiosPendientes);
+    if (claves.length === 0) return;
+    setGuardandoTodo(true);
+    const errores = [];
+    for (const clave of claves) {
+      const [estudianteId, materiaNombre, periodo] = clave.split("_");
+      const idEst = parseInt(estudianteId, 10);
+      const texto = cambiosPendientes[clave].trim().replace(",", ".");
+      try {
+        if (texto === "") {
+          await api.eliminarNotaCeldaDireccionCurso(gradoId, materiaNombre, idEst, periodo);
+          setNotas((prev) => prev.filter((n) => !(n.estudiante_id === idEst && n.materia_nombre === materiaNombre && n.periodo === periodo)));
+        } else {
+          const num = parseFloat(texto);
+          if (isNaN(num)) { errores.push(`${materiaNombre} P${periodo}: "${texto}" no es un número válido`); continue; }
+          await api.guardarNotaDireccionCurso(gradoId, materiaNombre, idEst, periodo, num);
+          setNotas((prev) => {
+            const existe = prev.some((n) => n.estudiante_id === idEst && n.materia_nombre === materiaNombre && n.periodo === periodo);
+            if (existe) return prev.map((n) => (n.estudiante_id === idEst && n.materia_nombre === materiaNombre && n.periodo === periodo) ? { ...n, nota: num } : n);
+            return [...prev, { estudiante_id: idEst, materia_nombre: materiaNombre, periodo, nota: num }];
+          });
+        }
+      } catch (e) {
+        errores.push(`${materiaNombre} P${periodo}: ${e.message}`);
       }
-    } catch (e) {
-      alert("Error al guardar: " + e.message);
-      cargar();
     }
+    setCambiosPendientes({});
+    setGuardandoTodo(false);
+    if (errores.length > 0) alert("Algunos cambios no se pudieron guardar:\n\n" + errores.join("\n"));
   };
 
   const resultadoMateria = (estudianteId, materiaNombre) => promedio(periodos.map((p) => notaDe(estudianteId, materiaNombre, p)));
@@ -457,8 +488,21 @@ export function NotasDireccionCurso({ gradoId }) {
         <button onClick={() => setImportarArchivoAbierto(true)} disabled={materias.length === 0} className="text-xs font-semibold px-3 py-2 rounded-full border border-violet-200 text-violet-600 disabled:opacity-40">
           📥 Subir archivo Moodle/Excel
         </button>
+        {Object.keys(cambiosPendientes).length > 0 && (
+          <>
+            <button disabled={guardandoTodo} onClick={guardarTodosLosCambios} className="text-xs font-semibold px-3 py-2 rounded-full bg-emerald-500 text-white disabled:opacity-60">
+              {guardandoTodo ? "Guardando…" : `💾 Guardar cambios (${Object.keys(cambiosPendientes).length})`}
+            </button>
+            <button disabled={guardandoTodo} onClick={descartarCambios} className="text-xs font-semibold px-3 py-2 rounded-full border border-slate-200 text-slate-500">
+              Descartar
+            </button>
+          </>
+        )}
       </div>
-      <p className="text-[11px] text-slate-400 mb-2">🔴 Bajo · 🟡 Básico · 🔵 Alto · 🟢 Superior (según la nota mínima configurada) — tocá cualquier nota para corregirla. Usá "Ancho de celdas" si algún número queda apretado.</p>
+      <p className="text-[11px] text-slate-400 mb-2">
+        🔴 Bajo · 🟡 Básico · 🔵 Alto · 🟢 Superior (según la nota mínima configurada) — tocá cualquier nota para corregirla. Usá "Ancho de celdas" si algún número queda apretado.
+        {Object.keys(cambiosPendientes).length > 0 && <span className="text-amber-600 font-semibold"> Tenés cambios sin guardar (borde naranja) — tocá "💾 Guardar cambios" para confirmarlos.</span>}
+      </p>
 
       {materias.length === 0 && !agregandoMateria && (
         <p className="text-xs text-amber-600 mb-2">Todavía no hay materias configuradas para este curso — agregá la primera con el botón (+) en la tabla de abajo.</p>
@@ -519,10 +563,11 @@ export function NotasDireccionCurso({ gradoId }) {
                     {periodos.map((p) => {
                       const v = notaDe(e.id, m.nombre, p);
                       const c = colorDesempeno(v, config.nota_minima);
+                      const tieneCambioPendiente = claveCambio(e.id, m.nombre, p) in cambiosPendientes;
                       return (
-                        <td key={p} className="border border-slate-200 p-0" style={{ background: c.bg, minWidth: anchoCelda, width: anchoCelda }}>
+                        <td key={p} className="border p-0" style={{ background: c.bg, minWidth: anchoCelda, width: anchoCelda, borderColor: tieneCambioPendiente ? "#F59E0B" : "#E2E8F0", borderWidth: tieneCambioPendiente ? 2 : 1 }}>
                           <input type="text" inputMode="decimal" defaultValue={v !== null ? v.toFixed(1) : ""} placeholder="—"
-                            onBlur={(ev) => guardarNotaCelda(e.id, m.nombre, p, ev.target.value)}
+                            onBlur={(ev) => anotarCambio(e.id, m.nombre, p, ev.target.value)}
                             onKeyDown={(ev) => { if (ev.key === "Enter") ev.target.blur(); }}
                             style={{ color: c.color }}
                             className="w-full text-center text-sm font-semibold bg-transparent outline-none px-1.5 py-2" />
