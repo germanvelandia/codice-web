@@ -540,4 +540,4 @@ export function NotasDireccionCurso({ gradoId }) {
       )}
     </div>
   );
-}
+} 
