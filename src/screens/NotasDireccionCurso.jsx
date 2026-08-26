@@ -20,6 +20,22 @@ function promedio(valores) {
   return nums.reduce((a, v) => a + v, 0) / nums.length;
 }
 
+// Color por desempeño (Bajo/Básico/Alto/Superior) — igual criterio que la
+// Planilla de Calificaciones: por debajo de la nota mínima es "Bajo", y el
+// resto del rango hasta 5.0 se reparte en tres tramos iguales.
+function colorDesempeno(valor, notaMinima) {
+  if (valor === null || valor === undefined || isNaN(valor)) return { color: "#94A3B8", bg: "transparent" };
+  const min = notaMinima ?? 3.5;
+  const max = 5.0;
+  if (valor < min) return { color: "#B91C1C", bg: "#FEF2F2" };
+  const rango = max - min;
+  if (rango <= 0) return { color: "#15803D", bg: "#F0FDF4" };
+  const proporcion = (valor - min) / rango;
+  if (proporcion < 1 / 3) return { color: "#B45309", bg: "#FFFBEB" };
+  if (proporcion < 2 / 3) return { color: "#1D4ED8", bg: "#EFF6FF" };
+  return { color: "#15803D", bg: "#F0FDF4" };
+}
+
 /* ---------------- Verificación de estudiantes (compartida por los dos importadores) ---------------- */
 function PantallaVerificacion({ filas, estudiantes, onCorregir, onConfirmar, onVolver, guardando }) {
   const sinEmparejar = filas.filter((f) => !f.estudianteId).length;
@@ -338,7 +354,12 @@ export function NotasDireccionCurso({ gradoId }) {
 
   const cambiarSistema = async (sistema) => {
     setConfig((prev) => ({ ...prev, sistema_periodos: sistema }));
-    await api.guardarConfigCurso(gradoId, sistema);
+    await api.guardarConfigCurso(gradoId, { sistema_periodos: sistema, nota_minima: config.nota_minima ?? 3.5 });
+  };
+
+  const cambiarNotaMinima = async (valor) => {
+    setConfig((prev) => ({ ...prev, nota_minima: valor }));
+    await api.guardarConfigCurso(gradoId, { sistema_periodos: config.sistema_periodos, nota_minima: valor });
   };
 
   const agregarMateria = async () => {
@@ -375,6 +396,23 @@ export function NotasDireccionCurso({ gradoId }) {
     return n ? n.nota : null;
   };
 
+  const guardarNotaCelda = async (estudianteId, materiaNombre, periodo, valorTexto) => {
+    const texto = valorTexto.trim().replace(",", ".");
+    try {
+      if (texto === "") {
+        await api.eliminarNotaCeldaDireccionCurso(gradoId, materiaNombre, estudianteId, periodo);
+      } else {
+        const num = parseFloat(texto);
+        if (isNaN(num)) { alert("Escribí un número válido."); cargar(); return; }
+        await api.guardarNotaDireccionCurso(gradoId, materiaNombre, estudianteId, periodo, num);
+      }
+      cargar();
+    } catch (e) {
+      alert("Error al guardar: " + e.message);
+      cargar();
+    }
+  };
+
   const resultadoMateria = (estudianteId, materiaNombre) => promedio(periodos.map((p) => notaDe(estudianteId, materiaNombre, p)));
 
   const resultadoGeneral = (estudianteId) => promedio(materias.map((m) => resultadoMateria(estudianteId, m.nombre)));
@@ -394,6 +432,11 @@ export function NotasDireccionCurso({ gradoId }) {
             ))}
           </div>
         </div>
+        <div className="flex items-center gap-1.5 text-xs text-slate-500 bg-white rounded-full px-3 py-2 border border-slate-200">
+          Nota mínima:
+          <input type="number" step="0.1" min="0" max="5" value={config.nota_minima ?? 3.5} onChange={(e) => cambiarNotaMinima(parseFloat(e.target.value) || 3.5)}
+            className="w-14 text-xs rounded px-1.5 py-0.5 border border-slate-200 outline-none" />
+        </div>
         <button onClick={() => setImportarPegarAbierto(true)} disabled={materias.length === 0} className="text-xs font-semibold px-3 py-2 rounded-full border border-violet-200 text-violet-600 disabled:opacity-40">
           📋 Pegar tabla
         </button>
@@ -401,6 +444,7 @@ export function NotasDireccionCurso({ gradoId }) {
           📥 Subir archivo Moodle/Excel
         </button>
       </div>
+      <p className="text-[11px] text-slate-400 mb-2">🔴 Bajo · 🟡 Básico · 🔵 Alto · 🟢 Superior (según la nota mínima configurada) — tocá cualquier nota para corregirla.</p>
 
       {materias.length === 0 && !agregandoMateria && (
         <p className="text-xs text-amber-600 mb-2">Todavía no hay materias configuradas para este curso — agregá la primera con el botón (+) en la tabla de abajo.</p>
@@ -460,7 +504,16 @@ export function NotasDireccionCurso({ gradoId }) {
                   <React.Fragment key={m.id}>
                     {periodos.map((p) => {
                       const v = notaDe(e.id, m.nombre, p);
-                      return <td key={p} className="border border-slate-200 px-1.5 py-1 text-center text-slate-600">{v !== null ? v.toFixed(1) : "—"}</td>;
+                      const c = colorDesempeno(v, config.nota_minima);
+                      return (
+                        <td key={p} className="border border-slate-200 p-0" style={{ background: c.bg }}>
+                          <input type="text" inputMode="decimal" defaultValue={v !== null ? v.toFixed(1) : ""} placeholder="—"
+                            onBlur={(ev) => guardarNotaCelda(e.id, m.nombre, p, ev.target.value)}
+                            onKeyDown={(ev) => { if (ev.key === "Enter") ev.target.blur(); }}
+                            style={{ color: c.color }}
+                            className="w-full text-center text-xs font-semibold bg-transparent outline-none px-1.5 py-1" />
+                        </td>
+                      );
                     })}
                     <td className="border border-slate-200 px-1.5 py-1 text-center font-semibold bg-slate-50">
                       {(() => { const r = resultadoMateria(e.id, m.nombre); return r !== null ? r.toFixed(1) : "—"; })()}
