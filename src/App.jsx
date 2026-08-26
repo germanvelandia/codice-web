@@ -76,14 +76,59 @@ function Centered({ children }) {
   );
 }
 
+// Fondo ambientado de castillo/aventura medieval — colinas, torres y
+// estandartes en SVG, puramente decorativo, detrás del formulario de acceso.
+function FondoCastillo() {
+  return (
+    <div className="fixed inset-0 -z-10 overflow-hidden" style={{ background: "linear-gradient(180deg, #7c3aed 0%, #a78bfa 35%, #ddd6fe 65%, #fef3c7 100%)" }}>
+      <svg viewBox="0 0 800 400" preserveAspectRatio="xMidYMax slice" className="absolute bottom-0 left-0 w-full h-full opacity-90">
+        {/* Sol/luna */}
+        <circle cx="670" cy="70" r="38" fill="#FDE68A" opacity="0.9" />
+        {/* Colinas traseras */}
+        <path d="M0,260 Q150,210 300,250 T600,240 T800,260 L800,400 L0,400 Z" fill="#5b21b6" opacity="0.55" />
+        {/* Colinas delanteras */}
+        <path d="M0,300 Q200,250 400,290 T800,290 L800,400 L0,400 Z" fill="#4c1d95" opacity="0.75" />
+        {/* Castillo central */}
+        <g transform="translate(300,190)">
+          <rect x="0" y="60" width="200" height="110" fill="#3730a3" />
+          <rect x="-20" y="30" width="45" height="140" fill="#312e81" />
+          <rect x="175" y="30" width="45" height="140" fill="#312e81" />
+          <polygon points="2.5,30 2.5,0 25,15" fill="#7c3aed" />
+          <polygon points="197.5,30 197.5,0 175,15" fill="#7c3aed" />
+          <rect x="85" y="100" width="30" height="70" fill="#1e1b4b" rx="15" />
+          <rect x="20" y="80" width="20" height="25" fill="#a78bfa" opacity="0.8" />
+          <rect x="160" y="80" width="20" height="25" fill="#a78bfa" opacity="0.8" />
+          {[0, 40, 80, 120, 160, 200].map((x) => (
+            <rect key={x} x={x - 8} y="52" width="16" height="12" fill="#3730a3" />
+          ))}
+        </g>
+        {/* Torres laterales pequeñas */}
+        <g transform="translate(90,240)">
+          <rect x="0" y="20" width="34" height="70" fill="#6d28d9" />
+          <polygon points="-4,20 38,20 17,0" fill="#a78bfa" />
+        </g>
+        <g transform="translate(660,250)">
+          <rect x="0" y="20" width="30" height="60" fill="#6d28d9" />
+          <polygon points="-4,20 34,20 15,0" fill="#a78bfa" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
 function AccessGate() {
   return (
-    <Centered>
-      <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-bold text-violet-600 text-center mb-1">CÓDICE</h1>
+    <div className="min-h-screen flex items-center justify-center relative">
+      <FondoCastillo />
+      <div className="w-full max-w-sm px-4">
+        <div className="text-center mb-3">
+          <div className="text-4xl mb-1">🏰</div>
+          <h1 className="text-3xl font-bold text-white tracking-[0.15em]" style={{ fontFamily: "Georgia, serif", textShadow: "0 2px 8px rgba(76,29,149,0.6)" }}>CÓDICE</h1>
+          <p className="text-violet-100 text-xs mt-1" style={{ textShadow: "0 1px 4px rgba(76,29,149,0.6)" }}>El reino del aprendizaje te espera</p>
+        </div>
         <LoginScreen />
       </div>
-    </Centered>
+    </div>
   );
 }
 
@@ -929,9 +974,56 @@ const MENU_CODICE = [
   { key: "salonhonor", label: "Salón de Honor", icono: "🏆" },
 ];
 
+// Íconos temáticos de castillo/aventura para cada destino del menú, en vez
+// del emoji genérico — puramente decorativo, la navegación real sigue
+// siendo la misma (la key de MENU_CODICE).
+const ICONO_MAPA = {
+  album: "🏯", biblioteca: "📚", codice: "📖", forja: "⚒️", guias: "🗺️",
+  inicio: "🏰", misiones: "⚔️", notas: "📜", perfil: "🛡️", preguntados: "🎡",
+  proyectos: "🏹", ranking: "👑", recompensas: "💎", salonhonor: "🏆",
+};
+
+// Camino serpenteante estilo "mapa de mundo" (torres conectadas por un
+// sendero), con las mismas opciones y la misma navegación de siempre.
+function MapaMundo({ activo, onElegir }) {
+  const COLS = 3;
+  const ANCHO = 360;
+  const ALTO_FILA = 105;
+  const posiciones = MENU_CODICE.map((m, i) => {
+    const fila = Math.floor(i / COLS);
+    const enFilaPar = fila % 2 === 0;
+    const colVisual = enFilaPar ? i % COLS : COLS - 1 - (i % COLS);
+    const x = 60 + colVisual * ((ANCHO - 120) / (COLS - 1));
+    const y = 55 + fila * ALTO_FILA;
+    return { ...m, x, y };
+  });
+  const alto = 55 + (Math.ceil(MENU_CODICE.length / COLS) - 1) * ALTO_FILA + 55;
+  const camino = posiciones.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
+
+  return (
+    <div className="relative overflow-x-hidden" style={{ background: "linear-gradient(180deg, #2d2450 0%, #1e1b30 55%, #14101f 100%)" }}>
+      <svg viewBox={`0 0 ${ANCHO} ${alto}`} width="100%" height={alto} style={{ display: "block" }}>
+        <path d={camino} fill="none" stroke="#7c3aed" strokeWidth="5" strokeDasharray="2,10" strokeLinecap="round" opacity="0.6" />
+        {posiciones.map((p) => {
+          const esActivo = activo === p.key;
+          return (
+            <g key={p.key} transform={`translate(${p.x},${p.y})`} style={{ cursor: "pointer" }} onClick={() => onElegir(p.key)}>
+              <circle r="30" fill={esActivo ? "#7c3aed" : "#312e81"} stroke={esActivo ? "#c4b5fd" : "#4c1d95"} strokeWidth="3" />
+              <circle r="30" fill="none" stroke="#a78bfa" strokeWidth={esActivo ? "0" : "1"} opacity="0.4" />
+              <text textAnchor="middle" y="10" fontSize="26">{ICONO_MAPA[p.key] || p.icono}</text>
+              <text textAnchor="middle" y="48" fontSize="10" fontWeight="700" fill={esActivo ? "#EDE9FE" : "#A78BFA"}>{p.label}</text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
 function MenuCodice({ activo, onCambiar, monedas, gradoId }) {
   const [ultimoAnuncio, setUltimoAnuncio] = useState(null);
   const [menuAbierto, setMenuAbierto] = useState(false);
+  const [modoMapa, setModoMapa] = useState(true);
 
   useEffect(() => {
     if (!gradoId) return;
@@ -956,9 +1048,14 @@ function MenuCodice({ activo, onCambiar, monedas, gradoId }) {
             <span className="text-sm font-bold text-amber-300">{monedas}</span>
           </div>
         )}
-        <button onClick={() => setMenuAbierto((v) => !v)} className="md:hidden text-violet-200 text-lg" title="Menú">
-          {menuAbierto ? "✕" : "☰"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setModoMapa((v) => !v)} className="text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ background: "rgba(139,92,246,0.25)", color: "#DDD6FE" }}>
+            {modoMapa ? "☰ Lista" : "🗺️ Mapa"}
+          </button>
+          <button onClick={() => setMenuAbierto((v) => !v)} className="md:hidden text-violet-200 text-lg" title="Menú">
+            {menuAbierto ? "✕" : "☰"}
+          </button>
+        </div>
       </div>
 
       {ultimoAnuncio && (
@@ -972,29 +1069,35 @@ function MenuCodice({ activo, onCambiar, monedas, gradoId }) {
         </button>
       )}
 
-      {/* Escritorio: opciones en fila, envolviendo si hace falta */}
-      <div className="hidden md:flex flex-wrap gap-1 px-3 py-2">
-        {MENU_CODICE.map((m) => (
-          <button key={m.key} onClick={() => elegir(m.key)}
-            className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap flex items-center gap-1.5"
-            style={{ background: activo === m.key ? "rgba(139,92,246,0.35)" : "transparent", color: activo === m.key ? "#EDE9FE" : "#A78BFA" }}>
-            <span>{m.icono}</span> {m.label}
-          </button>
-        ))}
-      </div>
+      {modoMapa ? (
+        <MapaMundo activo={activo} onElegir={elegir} />
+      ) : (
+        <>
+          {/* Escritorio: opciones en fila, envolviendo si hace falta */}
+          <div className="hidden md:flex flex-wrap gap-1 px-3 py-2">
+            {MENU_CODICE.map((m) => (
+              <button key={m.key} onClick={() => elegir(m.key)}
+                className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap flex items-center gap-1.5"
+                style={{ background: activo === m.key ? "rgba(139,92,246,0.35)" : "transparent", color: activo === m.key ? "#EDE9FE" : "#A78BFA" }}>
+                <span>{m.icono}</span> {m.label}
+              </button>
+            ))}
+          </div>
 
-      {/* Móvil: menú desplegable en grilla — nada queda fuera de pantalla */}
-      {menuAbierto && (
-        <div className="md:hidden px-3 py-3 grid grid-cols-3 gap-1.5">
-          {MENU_CODICE.map((m) => (
-            <button key={m.key} onClick={() => elegir(m.key)}
-              className="text-[11px] px-2 py-2.5 rounded-xl flex flex-col items-center gap-1"
-              style={{ background: activo === m.key ? "rgba(139,92,246,0.35)" : "rgba(255,255,255,0.05)", color: activo === m.key ? "#EDE9FE" : "#A78BFA" }}>
-              <span className="text-base">{m.icono}</span>
-              <span className="text-center leading-tight">{m.label}</span>
-            </button>
-          ))}
-        </div>
+          {/* Móvil: menú desplegable en grilla — nada queda fuera de pantalla */}
+          {menuAbierto && (
+            <div className="md:hidden px-3 py-3 grid grid-cols-3 gap-1.5">
+              {MENU_CODICE.map((m) => (
+                <button key={m.key} onClick={() => elegir(m.key)}
+                  className="text-[11px] px-2 py-2.5 rounded-xl flex flex-col items-center gap-1"
+                  style={{ background: activo === m.key ? "rgba(139,92,246,0.35)" : "rgba(255,255,255,0.05)", color: activo === m.key ? "#EDE9FE" : "#A78BFA" }}>
+                  <span className="text-base">{m.icono}</span>
+                  <span className="text-center leading-tight">{m.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
