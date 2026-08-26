@@ -226,12 +226,46 @@ export function VistaInicio({ onIrA }) {
   const [cargando, setCargando] = useState(true);
   const [nombreDocente, setNombreDocente] = useState("");
   const [codiceAbierto, setCodiceAbierto] = useState(false);
+  const [pendientesHoy, setPendientesHoy] = useState({});
+  const [marcandoId, setMarcandoId] = useState(null);
+  const [observacionAbiertaId, setObservacionAbiertaId] = useState(null);
+  const [observacionTemp, setObservacionTemp] = useState("");
 
   useEffect(() => {
     Promise.all([api.fetchStatsDocente(), api.fetchResumenDocente(), api.fetchMiPerfil()]).then(([s, r, perfil]) => {
       setStats(s); setResumen(r); setNombreDocente(perfil?.nombre || ""); setCargando(false);
+      const pares = (r?.clasesHoy || []).filter((h) => h.materia_id && h.grado_id).map((h) => ({ materiaId: h.materia_id, gradoId: h.grado_id, horarioId: h.id }));
+      if (pares.length > 0) api.fetchClasesPendientesDeHoy(pares).then(setPendientesHoy);
     });
   }, []);
+
+  const marcarEstado = async (horarioId, gradoId, estado) => {
+    const info = pendientesHoy[horarioId];
+    if (!info) return;
+    setMarcandoId(horarioId);
+    try {
+      if (info.dictado) {
+        await api.editarDictado(info.dictado.id, { estado, fecha: new Date().toISOString().slice(0, 10) });
+      } else {
+        await api.crearDictado(info.clase.id, gradoId, new Date().toISOString().slice(0, 10), estado);
+      }
+      const pares = (resumen?.clasesHoy || []).filter((h) => h.materia_id && h.grado_id).map((h) => ({ materiaId: h.materia_id, gradoId: h.grado_id, horarioId: h.id }));
+      const actualizado = await api.fetchClasesPendientesDeHoy(pares);
+      setPendientesHoy(actualizado);
+    } catch (e) {
+      alert("Error al marcar: " + e.message);
+    }
+    setMarcandoId(null);
+  };
+
+  const guardarObservacionRapida = async (horarioId) => {
+    const info = pendientesHoy[horarioId];
+    if (!info?.dictado) { alert("Marcá primero un estado (Dictada/Alterada/Aplazada) antes de agregar la nota."); return; }
+    await api.editarDictado(info.dictado.id, { observacion: observacionTemp.trim() || null });
+    setObservacionAbiertaId(null);
+    const pares = (resumen?.clasesHoy || []).filter((h) => h.materia_id && h.grado_id).map((h) => ({ materiaId: h.materia_id, gradoId: h.grado_id, horarioId: h.id }));
+    api.fetchClasesPendientesDeHoy(pares).then(setPendientesHoy);
+  };
 
   const hoy = new Date();
   const fechaLegible = hoy.toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
@@ -321,12 +355,39 @@ export function VistaInicio({ onIrA }) {
             <p className="text-xs text-slate-400">No tenés clases registradas para hoy en tu Horario.</p>
           ) : (
             <div className="space-y-1.5">
-              {resumen.clasesHoy.map((h) => (
-                <div key={h.id} className="flex items-start justify-between gap-2 bg-slate-50 rounded-lg px-2.5 py-1.5 text-xs">
-                  <span className="font-semibold text-slate-700">{h.materias?.nombre || h.nombre_actividad || "—"}{h.grado_id ? ` · ${h.grado_id}` : ""}</span>
-                  <span className="text-slate-400 shrink-0 whitespace-nowrap">{h.hora_inicio?.slice(0, 5)}–{h.hora_fin?.slice(0, 5)}</span>
-                </div>
-              ))}
+              {resumen.clasesHoy.map((h) => {
+                const info = pendientesHoy[h.id];
+                return (
+                  <div key={h.id} className="bg-slate-50 rounded-lg px-2.5 py-1.5 text-xs">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-semibold text-slate-700 min-w-0 break-words">{h.materias?.nombre || h.nombre_actividad || "—"}{h.grado_id ? ` · ${h.grado_id}` : ""}</span>
+                      <span className="text-slate-400 shrink-0 whitespace-nowrap">{h.hora_inicio?.slice(0, 5)}–{h.hora_fin?.slice(0, 5)}</span>
+                    </div>
+                    {info && (
+                      <div className="mt-1.5 pt-1.5 border-t border-slate-200">
+                        <div className="text-[11px] text-violet-600 font-medium mb-1">📝 {info.clase.titulo}</div>
+                        <div className="flex flex-wrap gap-1 items-center">
+                          <button disabled={marcandoId === h.id} onClick={() => marcarEstado(h.id, h.grado_id, "dictada")}
+                            className={`text-[10px] font-semibold px-2 py-1 rounded-full ${info.dictado?.estado === "dictada" ? "bg-emerald-500 text-white" : "bg-emerald-50 text-emerald-700"}`}>✔ Dictada</button>
+                          <button disabled={marcandoId === h.id} onClick={() => marcarEstado(h.id, h.grado_id, "alterada")}
+                            className={`text-[10px] font-semibold px-2 py-1 rounded-full ${info.dictado?.estado === "alterada" ? "bg-orange-500 text-white" : "bg-orange-50 text-orange-700"}`}>⚠ Cambió</button>
+                          <button disabled={marcandoId === h.id} onClick={() => marcarEstado(h.id, h.grado_id, "aplazada")}
+                            className={`text-[10px] font-semibold px-2 py-1 rounded-full ${info.dictado?.estado === "aplazada" ? "bg-rose-500 text-white" : "bg-rose-50 text-rose-700"}`}>✕ Aplazada</button>
+                          <button onClick={() => { setObservacionAbiertaId(observacionAbiertaId === h.id ? null : h.id); setObservacionTemp(info.dictado?.observacion || ""); }}
+                            className="text-[10px] text-slate-400">{info.dictado?.observacion ? "📝 Ver nota" : "+ Nota"}</button>
+                        </div>
+                        {observacionAbiertaId === h.id && (
+                          <div className="flex gap-1 mt-1">
+                            <input value={observacionTemp} onChange={(e) => setObservacionTemp(e.target.value)} placeholder="¿Qué pasó realmente en esta clase?"
+                              className="flex-1 text-[11px] rounded-lg px-2 py-1 border border-slate-200 outline-none" />
+                            <button onClick={() => guardarObservacionRapida(h.id)} className="text-[10px] px-2 py-1 rounded-lg bg-violet-500 text-white">Guardar</button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -340,7 +401,7 @@ export function VistaInicio({ onIrA }) {
               {resumen.eventosHoy.map((e) => (
                 <div key={e.id} className="flex items-start gap-2 bg-slate-50 rounded-lg px-2.5 py-1.5 text-xs">
                   <span className="w-2 h-2 rounded-full shrink-0 mt-1" style={{ background: TIPO_EVENTO_COLOR[e.tipo] || "#64748B" }} />
-                  <span className="font-semibold text-slate-700">{e.titulo}</span>
+                  <span className="font-semibold text-slate-700 min-w-0 break-words">{e.titulo}</span>
                 </div>
               ))}
             </div>
