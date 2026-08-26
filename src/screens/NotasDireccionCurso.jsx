@@ -515,14 +515,26 @@ export function NotasDireccionCurso({ gradoId }) {
                         </td>
                       );
                     })}
-                    <td className="border border-slate-200 px-1.5 py-1 text-center font-semibold bg-slate-50">
-                      {(() => { const r = resultadoMateria(e.id, m.nombre); return r !== null ? r.toFixed(1) : "—"; })()}
-                    </td>
+                    {(() => {
+                      const r = resultadoMateria(e.id, m.nombre);
+                      const c = colorDesempeno(r, config.nota_minima);
+                      return (
+                        <td className="border border-slate-200 px-1.5 py-1 text-center font-semibold" style={{ background: c.bg, color: c.color }}>
+                          {r !== null ? r.toFixed(1) : "—"}
+                        </td>
+                      );
+                    })()}
                   </React.Fragment>
                 ))}
-                <td className="border border-slate-200 px-2 py-1.5 text-center font-bold bg-violet-50 text-violet-700">
-                  {(() => { const r = resultadoGeneral(e.id); return r !== null ? r.toFixed(1) : "—"; })()}
-                </td>
+                {(() => {
+                  const r = resultadoGeneral(e.id);
+                  const c = colorDesempeno(r, config.nota_minima);
+                  return (
+                    <td className="border border-slate-200 px-2 py-1.5 text-center font-bold" style={{ background: c.bg, color: c.color }}>
+                      {r !== null ? r.toFixed(1) : "—"}
+                    </td>
+                  );
+                })()}
                 <td className="border border-slate-200"></td>
               </tr>
             ))}
@@ -540,4 +552,4 @@ export function NotasDireccionCurso({ gradoId }) {
       )}
     </div>
   );
-} 
+}
