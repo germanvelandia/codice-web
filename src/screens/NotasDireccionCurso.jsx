@@ -331,6 +331,7 @@ export function NotasDireccionCurso({ gradoId }) {
   const [nombreEdicion, setNombreEdicion] = useState("");
   const [importarPegarAbierto, setImportarPegarAbierto] = useState(false);
   const [importarArchivoAbierto, setImportarArchivoAbierto] = useState(false);
+  const [anchoCelda, setAnchoCelda] = useState(64);
 
   const periodos = periodosDe(config.sistema_periodos);
 
@@ -437,6 +438,12 @@ export function NotasDireccionCurso({ gradoId }) {
           <input type="number" step="0.1" min="0" max="5" value={config.nota_minima ?? 3.5} onChange={(e) => cambiarNotaMinima(parseFloat(e.target.value) || 3.5)}
             className="w-14 text-xs rounded px-1.5 py-0.5 border border-slate-200 outline-none" />
         </div>
+        <div className="flex items-center gap-1 text-xs text-slate-500 bg-white rounded-full px-3 py-2 border border-slate-200">
+          Ancho de celdas:
+          <button onClick={() => setAnchoCelda((v) => Math.max(48, v - 12))} className="w-5 h-5 rounded-full bg-slate-100 text-slate-600 font-bold">−</button>
+          <span className="w-6 text-center">{anchoCelda}</span>
+          <button onClick={() => setAnchoCelda((v) => Math.min(140, v + 12))} className="w-5 h-5 rounded-full bg-slate-100 text-slate-600 font-bold">+</button>
+        </div>
         <button onClick={() => setImportarPegarAbierto(true)} disabled={materias.length === 0} className="text-xs font-semibold px-3 py-2 rounded-full border border-violet-200 text-violet-600 disabled:opacity-40">
           📋 Pegar tabla
         </button>
@@ -444,7 +451,7 @@ export function NotasDireccionCurso({ gradoId }) {
           📥 Subir archivo Moodle/Excel
         </button>
       </div>
-      <p className="text-[11px] text-slate-400 mb-2">🔴 Bajo · 🟡 Básico · 🔵 Alto · 🟢 Superior (según la nota mínima configurada) — tocá cualquier nota para corregirla.</p>
+      <p className="text-[11px] text-slate-400 mb-2">🔴 Bajo · 🟡 Básico · 🔵 Alto · 🟢 Superior (según la nota mínima configurada) — tocá cualquier nota para corregirla. Usá "Ancho de celdas" si algún número queda apretado.</p>
 
       {materias.length === 0 && !agregandoMateria && (
         <p className="text-xs text-amber-600 mb-2">Todavía no hay materias configuradas para este curso — agregá la primera con el botón (+) en la tabla de abajo.</p>
@@ -472,7 +479,7 @@ export function NotasDireccionCurso({ gradoId }) {
                   )}
                 </th>
               ))}
-              <th rowSpan={2} className="border border-slate-200 bg-violet-50 px-2 py-2 align-bottom font-semibold text-violet-700">Resultado Final</th>
+              <th rowSpan={2} className="border border-slate-200 bg-violet-50 px-2 py-2 align-bottom font-semibold text-violet-700" style={{ minWidth: anchoCelda + 20, width: anchoCelda + 20 }}>Resultado Final</th>
               <th rowSpan={2} className="border border-slate-200 px-1 py-2 align-bottom">
                 {agregandoMateria ? (
                   <div className="flex flex-col gap-1 items-center">
@@ -490,8 +497,8 @@ export function NotasDireccionCurso({ gradoId }) {
             <tr>
               {materias.map((m) => (
                 <React.Fragment key={m.id}>
-                  {periodos.map((p) => <th key={p} className="border border-slate-200 bg-slate-50 px-1.5 py-1 font-normal text-[10px]">P{p}</th>)}
-                  <th className="border border-slate-200 bg-slate-100 px-1.5 py-1 font-semibold text-[10px]">Result.</th>
+                  {periodos.map((p) => <th key={p} className="border border-slate-200 bg-slate-50 px-1.5 py-1.5 font-normal text-[11px]" style={{ minWidth: anchoCelda, width: anchoCelda }}>P{p}</th>)}
+                  <th className="border border-slate-200 bg-slate-100 px-1.5 py-1.5 font-semibold text-[11px]" style={{ minWidth: anchoCelda + 10, width: anchoCelda + 10 }}>Result.</th>
                 </React.Fragment>
               ))}
             </tr>
@@ -506,12 +513,12 @@ export function NotasDireccionCurso({ gradoId }) {
                       const v = notaDe(e.id, m.nombre, p);
                       const c = colorDesempeno(v, config.nota_minima);
                       return (
-                        <td key={p} className="border border-slate-200 p-0" style={{ background: c.bg }}>
+                        <td key={p} className="border border-slate-200 p-0" style={{ background: c.bg, minWidth: anchoCelda, width: anchoCelda }}>
                           <input type="text" inputMode="decimal" defaultValue={v !== null ? v.toFixed(1) : ""} placeholder="—"
                             onBlur={(ev) => guardarNotaCelda(e.id, m.nombre, p, ev.target.value)}
                             onKeyDown={(ev) => { if (ev.key === "Enter") ev.target.blur(); }}
                             style={{ color: c.color }}
-                            className="w-full text-center text-xs font-semibold bg-transparent outline-none px-1.5 py-1" />
+                            className="w-full text-center text-sm font-semibold bg-transparent outline-none px-1.5 py-2" />
                         </td>
                       );
                     })}
@@ -519,7 +526,7 @@ export function NotasDireccionCurso({ gradoId }) {
                       const r = resultadoMateria(e.id, m.nombre);
                       const c = colorDesempeno(r, config.nota_minima);
                       return (
-                        <td className="border border-slate-200 px-1.5 py-1 text-center font-semibold" style={{ background: c.bg, color: c.color }}>
+                        <td className="border border-slate-200 px-1.5 py-2 text-center text-sm font-bold" style={{ background: c.bg, color: c.color, minWidth: anchoCelda + 10, width: anchoCelda + 10 }}>
                           {r !== null ? r.toFixed(1) : "—"}
                         </td>
                       );
@@ -530,7 +537,7 @@ export function NotasDireccionCurso({ gradoId }) {
                   const r = resultadoGeneral(e.id);
                   const c = colorDesempeno(r, config.nota_minima);
                   return (
-                    <td className="border border-slate-200 px-2 py-1.5 text-center font-bold" style={{ background: c.bg, color: c.color }}>
+                    <td className="border border-slate-200 px-2 py-2 text-center text-base font-bold" style={{ background: c.bg, color: c.color, minWidth: anchoCelda + 20, width: anchoCelda + 20 }}>
                       {r !== null ? r.toFixed(1) : "—"}
                     </td>
                   );
