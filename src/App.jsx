@@ -55,12 +55,17 @@ export default function App() {
 
   if (soloEstudiante) {
     return (
-      <Centered>
-        <div className="w-full max-w-sm md:max-w-3xl">
-          <h1 className="text-2xl font-bold text-violet-600 text-center mb-1">CÓDICE</h1>
+      <div className="min-h-screen flex items-center justify-center relative py-6">
+        <FondoCastillo />
+        <div className="w-full max-w-sm md:max-w-3xl px-4">
+          <div className="text-center mb-3">
+            <div className="text-4xl mb-1">🏰</div>
+            <h1 className="text-3xl font-bold text-white tracking-[0.15em]" style={{ fontFamily: "Georgia, serif", textShadow: "0 2px 8px rgba(76,29,149,0.6)" }}>CÓDICE</h1>
+            <p className="text-violet-100 text-xs mt-1" style={{ textShadow: "0 1px 4px rgba(76,29,149,0.6)" }}>Tu aventura de aprendizaje</p>
+          </div>
           <PortalEstudiante />
         </div>
-      </Centered>
+      </div>
     );
   }
 
@@ -78,6 +83,24 @@ function Centered({ children }) {
 
 // Fondo ambientado de castillo/aventura medieval — colinas, torres y
 // estandartes en SVG, puramente decorativo, detrás del formulario de acceso.
+// Silueta de castillo chico, reutilizable para armar un horizonte con
+// varios — recibe posición, escala y color para variar la profundidad.
+function Castillito({ x, y, escala = 1, color = "#4c1d95", opacity = 1 }) {
+  return (
+    <g transform={`translate(${x},${y}) scale(${escala})`} opacity={opacity}>
+      <rect x="0" y="35" width="70" height="45" fill={color} />
+      <rect x="-10" y="18" width="18" height="62" fill={color} />
+      <rect x="62" y="18" width="18" height="62" fill={color} />
+      <polygon points="-1,18 -1,4 8,12" fill={color} />
+      <polygon points="71,18 71,4 62,12" fill={color} />
+      {[0, 14, 28, 42, 56].map((dx) => (
+        <rect key={dx} x={dx} y="30" width="7" height="6" fill={color} />
+      ))}
+      <rect x="28" y="55" width="14" height="25" fill="#1e1b4b" />
+    </g>
+  );
+}
+
 function FondoCastillo() {
   return (
     <div className="fixed inset-0 -z-10 overflow-hidden" style={{ background: "linear-gradient(180deg, #7c3aed 0%, #a78bfa 35%, #ddd6fe 65%, #fef3c7 100%)" }}>
@@ -86,9 +109,13 @@ function FondoCastillo() {
         <circle cx="670" cy="70" r="38" fill="#FDE68A" opacity="0.9" />
         {/* Colinas traseras */}
         <path d="M0,260 Q150,210 300,250 T600,240 T800,260 L800,400 L0,400 Z" fill="#5b21b6" opacity="0.55" />
+        {/* Horizonte de castillos chicos, a lo lejos */}
+        <Castillito x={30} y={195} escala={0.75} color="#6d28d9" opacity={0.5} />
+        <Castillito x={520} y={200} escala={0.6} color="#6d28d9" opacity={0.45} />
+        <Castillito x={640} y={190} escala={0.8} color="#6d28d9" opacity={0.5} />
         {/* Colinas delanteras */}
         <path d="M0,300 Q200,250 400,290 T800,290 L800,400 L0,400 Z" fill="#4c1d95" opacity="0.75" />
-        {/* Castillo central */}
+        {/* Castillo central, principal */}
         <g transform="translate(300,190)">
           <rect x="0" y="60" width="200" height="110" fill="#3730a3" />
           <rect x="-20" y="30" width="45" height="140" fill="#312e81" />
@@ -102,7 +129,10 @@ function FondoCastillo() {
             <rect key={x} x={x - 8} y="52" width="16" height="12" fill="#3730a3" />
           ))}
         </g>
-        {/* Torres laterales pequeñas */}
+        {/* Castillos laterales, más cerca */}
+        <Castillito x={70} y={230} escala={1.1} color="#5b21b6" />
+        <Castillito x={630} y={235} escala={1} color="#5b21b6" />
+        {/* Torres solitarias pequeñas */}
         <g transform="translate(90,240)">
           <rect x="0" y="20" width="34" height="70" fill="#6d28d9" />
           <polygon points="-4,20 38,20 17,0" fill="#a78bfa" />
@@ -111,6 +141,7 @@ function FondoCastillo() {
           <rect x="0" y="20" width="30" height="60" fill="#6d28d9" />
           <polygon points="-4,20 34,20 15,0" fill="#a78bfa" />
         </g>
+
       </svg>
     </div>
   );
@@ -2036,6 +2067,31 @@ function BuscadorEstudiantesGlobal({ onSeleccionar }) {
   );
 }
 
+// Fondo "retro arcade" para el lado del docente — cuadrícula en píxeles,
+// franjas de scanline, y un horizonte bajo de castillos en 8-bit, sin
+// interferir con la lectura de las tarjetas blancas de contenido.
+function FondoArcadeDocente() {
+  return (
+    <div className="fixed inset-0 -z-10 overflow-hidden" style={{ background: "#1a1533" }}>
+      <div className="absolute inset-0" style={{
+        backgroundImage: "linear-gradient(rgba(124,58,237,0.18) 1px, transparent 1px), linear-gradient(90deg, rgba(124,58,237,0.18) 1px, transparent 1px)",
+        backgroundSize: "28px 28px",
+      }} />
+      <svg viewBox="0 0 800 120" preserveAspectRatio="xMidYMax slice" className="absolute bottom-0 left-0 w-full" style={{ height: 140, opacity: 0.5 }}>
+        <Castillito x={20} y={20} escala={0.6} color="#4c1d95" />
+        <Castillito x={140} y={35} escala={0.5} color="#5b21b6" />
+        <Castillito x={280} y={15} escala={0.7} color="#4c1d95" />
+        <Castillito x={440} y={30} escala={0.55} color="#5b21b6" />
+        <Castillito x={580} y={18} escala={0.65} color="#4c1d95" />
+        <Castillito x={710} y={32} escala={0.5} color="#5b21b6" />
+      </svg>
+      <div className="absolute inset-0" style={{
+        backgroundImage: "repeating-linear-gradient(0deg, rgba(0,0,0,0.12) 0px, rgba(0,0,0,0.12) 1px, transparent 1px, transparent 3px)",
+      }} />
+    </div>
+  );
+}
+
 function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstitucion, onSalir, onBuscarEstudiante }) {
   const [menuAbierto, setMenuAbierto] = useState(false);
 
@@ -2054,7 +2110,7 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
           ) : (
             <span className="text-xl">🧭</span>
           )}
-          <span className="text-violet-200 text-base font-bold tracking-[0.15em]" style={{ fontFamily: "Georgia, serif" }}>CÓDICE</span>
+          <span className="text-violet-200 text-base font-bold tracking-[0.15em]" style={{ fontFamily: "Georgia, serif", textShadow: "0 0 8px #a78bfa, 0 0 16px #7c3aed" }}>CÓDICE</span>
         </button>
 
         <div className="flex-1 min-w-[160px] max-w-md order-3 md:order-none">
@@ -2136,7 +2192,8 @@ function Panel({ session }) {
   };
 
   return (
-    <div className="min-h-screen bg-violet-50">
+    <div className="min-h-screen relative">
+      <FondoArcadeDocente />
       <SidebarPanel activo={tab} onCambiar={irA} email={session.user.email} institucion={institucion}
         onAdmin={() => setAdministracionAbierta(true)} onInstitucion={() => setInstitucionAbierta(true)}
         onSalir={() => supabase.auth.signOut()} onBuscarEstudiante={irACalificacionesDesdeBusqueda} />
