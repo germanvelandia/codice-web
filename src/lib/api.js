@@ -2821,6 +2821,15 @@ export async function eliminarNotasMateriaDireccionCurso(gradoId, materiaNombre,
   if (error) throw error;
 }
 
+// Borra la nota de un solo estudiante en una sola materia+periodo (una
+// celda puntual de la tabla), a diferencia de la anterior que borra toda
+// la materia de golpe.
+export async function eliminarNotaCeldaDireccionCurso(gradoId, materiaNombre, estudianteId, periodo) {
+  const { error } = await supabase.from("director_curso_notas").delete()
+    .eq("grado_id", gradoId).eq("materia_nombre", materiaNombre).eq("estudiante_id", estudianteId).eq("periodo", periodo);
+  if (error) throw error;
+}
+
 // Importa un Excel (Estudiante | Nota) para una materia y periodo puntual,
 // emparejando por nombre — no crea asignaturas nuevas, solo carga notas.
 export async function importarNotasDireccionCurso(gradoId, materiaNombre, periodo, filas, estudiantes) {
@@ -3161,11 +3170,11 @@ export async function eliminarMateriaCurso(id, gradoId, nombre) {
 export async function fetchConfigCurso(gradoId) {
   const { data, error } = await supabase.from("direccion_curso_config").select("*").eq("grado_id", gradoId).maybeSingle();
   if (error) throw error;
-  return data || { grado_id: gradoId, sistema_periodos: "trimestre" };
+  return data || { grado_id: gradoId, sistema_periodos: "trimestre", nota_minima: 3.5 };
 }
 
-export async function guardarConfigCurso(gradoId, sistemaPeriodos) {
-  const { error } = await supabase.from("direccion_curso_config").upsert({ grado_id: gradoId, sistema_periodos: sistemaPeriodos }, { onConflict: "grado_id" });
+export async function guardarConfigCurso(gradoId, cambios) {
+  const { error } = await supabase.from("direccion_curso_config").upsert({ grado_id: gradoId, ...cambios }, { onConflict: "grado_id" });
   if (error) throw error;
 }
 
