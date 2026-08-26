@@ -240,6 +240,11 @@ export async function crearRol(nombre, descripcion) {
   if (error) throw error;
 }
 
+export async function editarRol(id, nombre, descripcion) {
+  const { error } = await supabase.from("roles_clase").update({ nombre, descripcion: descripcion || null }).eq("id", id);
+  if (error) throw error;
+}
+
 export async function eliminarRol(id) {
   await supabase.from("roles_asignados").delete().eq("rol_id", id);
   const { error } = await supabase.from("roles_clase").delete().eq("id", id);
