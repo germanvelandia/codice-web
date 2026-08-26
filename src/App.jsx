@@ -426,9 +426,23 @@ function MisNotas({ estudianteId }) {
                         {f.enCurso && f.actividadesPeriodo.length > 0 && (
                           <div className="ml-2 mt-1 space-y-0.5">
                             {f.actividadesPeriodo.map((a) => (
-                              <div key={a.id} className="text-[11px] text-slate-500 flex justify-between">
-                                <span>{a.notas_actividades?.nombre}{a.notas_actividades?.notas_categorias?.nombre ? ` (${a.notas_actividades.notas_categorias.nombre})` : ""}</span>
-                                <span className="font-semibold">{a.valor}</span>
+                              <div key={a.id}>
+                                <div className="text-[11px] text-slate-500 flex justify-between">
+                                  <span>{a.notas_actividades?.nombre}{a.notas_actividades?.notas_categorias?.nombre ? ` (${a.notas_actividades.notas_categorias.nombre})` : ""}</span>
+                                  <span className="font-semibold">{a.valor}</span>
+                                </div>
+                                {a.observacion && (
+                                  <div className="text-[10px] text-violet-600 italic bg-violet-50 rounded-lg px-2 py-1 mt-0.5">📝 {a.observacion}</div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {!f.enCurso && f.actividadesPeriodo.some((a) => a.observacion) && (
+                          <div className="ml-2 mt-1 space-y-0.5">
+                            {f.actividadesPeriodo.filter((a) => a.observacion).map((a) => (
+                              <div key={a.id} className="text-[10px] text-violet-600 italic bg-violet-50 rounded-lg px-2 py-1">
+                                📝 <b>{a.notas_actividades?.nombre}:</b> {a.observacion}
                               </div>
                             ))}
                           </div>
