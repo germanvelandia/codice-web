@@ -485,6 +485,13 @@ export async function fetchMiPerfil() {
   return data;
 }
 
+export async function guardarMiNombre(nombre) {
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData?.user) return;
+  const { error } = await supabase.from("profesores").update({ nombre }).eq("id", userData.user.id);
+  if (error) throw error;
+}
+
 // Cambia la contraseña de la cuenta actualmente conectada. No existe (ni en
 // Supabase ni en ningún sistema serio) forma de leer o recuperar la
 // contraseña anterior de alguien: solo se puede establecer una nueva.
