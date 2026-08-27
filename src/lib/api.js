@@ -477,6 +477,30 @@ export async function fetchProfesoresConMaterias() {
   return data || [];
 }
 
+// Asignaturas personalizadas del Generador de Diplomas (además de las que
+// vienen fijas en la app).
+export async function fetchAsignaturasDiploma() {
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData?.user) return [];
+  const { data, error } = await supabase.from("diploma_asignaturas").select("*").eq("docente_id", userData.user.id).order("creado_en");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearAsignaturaDiploma(nombre, pilares, patronFondo) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("diploma_asignaturas")
+    .insert({ docente_id: userData?.user?.id, nombre, pilares, patron_fondo: patronFondo || "general" })
+    .select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function eliminarAsignaturaDiploma(id) {
+  const { error } = await supabase.from("diploma_asignaturas").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function fetchMiPerfil() {
   const { data: userData } = await supabase.auth.getUser();
   if (!userData?.user) return null;
