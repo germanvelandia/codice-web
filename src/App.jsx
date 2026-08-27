@@ -12,6 +12,7 @@ import { VistaAlbum, CartaCriatura } from "./screens/Album";
 import { VistaAnuncios } from "./screens/Anuncios";
 import { VistaLogros } from "./screens/Logros";
 import { VistaSalonHonor } from "./screens/SalonHonor";
+import { VistaDiplomas } from "./screens/Diplomas";
 import { VistaGamificacionExtra } from "./screens/GamificacionExtra";
 import { VistaRoles } from "./screens/Roles";
 import { VistaCalificaciones } from "./screens/Calificaciones";
@@ -2237,6 +2238,7 @@ function Panel({ session }) {
               <button onClick={() => setSubTabHerramientas("anuncios")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "anuncios" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Anuncios</button>
               <button onClick={() => setSubTabHerramientas("logros")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "logros" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Logros</button>
               <button onClick={() => setSubTabHerramientas("salonhonor")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "salonhonor" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Salón de Honor</button>
+              <button onClick={() => setSubTabHerramientas("diplomas")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "diplomas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🏅 Diplomas</button>
               <button onClick={() => setSubTabHerramientas("gamext")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "gamext" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Desafíos/Misiones/Cosméticos</button>
               <button onClick={() => setSubTabHerramientas("consignas")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "consignas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Consignas del Códice</button>
               <button onClick={() => setSubTabHerramientas("trivia")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "trivia" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🎡 Preguntados</button>
@@ -2252,6 +2254,7 @@ function Panel({ session }) {
             {subTabHerramientas === "anuncios" && <VistaAnuncios grados={grados} />}
             {subTabHerramientas === "logros" && <VistaLogros />}
             {subTabHerramientas === "salonhonor" && <VistaSalonHonor />}
+            {subTabHerramientas === "diplomas" && <VistaDiplomas grados={grados} />}
             {subTabHerramientas === "gamext" && <VistaGamificacionExtra grados={grados} />}
             {subTabHerramientas === "consignas" && <VistaConsignasCodice grados={grados} />}
             {subTabHerramientas === "trivia" && <VistaTriviaAdmin grados={grados} />}
