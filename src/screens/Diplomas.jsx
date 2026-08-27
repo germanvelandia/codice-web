@@ -152,6 +152,7 @@ export function VistaDiplomas({ grados }) {
   const [motivoEditable, setMotivoEditable] = useState(TIPOS_DIPLOMA[0].motivo);
   const [puntajes, setPuntajes] = useState([{ label: "", valor: "" }]);
   const [docenteNombre, setDocenteNombre] = useState("");
+  const [docenteRolEditable, setDocenteRolEditable] = useState("Director(a) de Curso");
   const [institucion, setInstitucion] = useState(null);
 
   useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
@@ -186,7 +187,7 @@ export function VistaDiplomas({ grados }) {
     const nombres = estudiantes.filter((s) => seleccionados.has(s.id)).map((s) => s.nombre);
     imprimirDiplomas(nombres, gradoId, {
       tituloDiploma: tituloEditable, subtitulo: subtituloEditable, badge: badgeEditable, motivo: motivoEditable,
-      puntajes, docenteRol: "Director(a) de Curso",
+      puntajes, docenteRol: docenteRolEditable,
     }, institucion, docenteNombre);
   };
 
@@ -239,6 +240,19 @@ export function VistaDiplomas({ grados }) {
         <input value={tituloEditable} onChange={(e) => setTituloEditable(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none" />
         <label className="text-xs text-slate-500 block mb-1">Motivo</label>
         <textarea value={motivoEditable} onChange={(e) => setMotivoEditable(e.target.value)} rows={2} className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
+
+        <div className="grid sm:grid-cols-2 gap-2 mb-3">
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">Nombre en la firma</label>
+            <input value={docenteNombre} onChange={(e) => setDocenteNombre(e.target.value)} placeholder="Ej: Lic. Germán Andrés Velandia D."
+              className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">Cargo (debajo del nombre)</label>
+            <input value={docenteRolEditable} onChange={(e) => setDocenteRolEditable(e.target.value)} placeholder="Ej: Docente de Ética y Valores Humanos"
+              className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" />
+          </div>
+        </div>
 
         <label className="text-xs text-slate-500 block mb-1">Puntajes destacados (opcional — se muestran como "pastillas" al final)</label>
         {puntajes.map((p, i) => (
