@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import * as api from "../lib/api";
-import { FALTAS_MANUAL, NIVELACION_COMPROMISOS_DEFAULT } from "../lib/actasTemplates";
 import { inicialesConPuntos, documentoEnmascarado } from "../lib/gamification";
 import { EditorTexto, TextoEnriquecido, textoPlano } from "../components/RichText";
 
@@ -284,55 +283,76 @@ function ActaPrintView({ estudiante, acta, institucion, actasRelacionadas }) {
   return createPortal(contenido, document.body);
 }
 
-// Convierte los 3 comportamientos predefinidos (leve/grave/gravísima) al mismo
-// formato que los que el docente cree en el catálogo, para poder mezclarlos en una sola lista.
-const CONVIVENCIALES_BASE = Object.entries(FALTAS_MANUAL).map(([key, f]) => ({
-  id: `base-${key}`, nombre: f.tipo, articulo: f.articulo, plazo_dias: f.plazoDias,
-  implicaciones_legales: f.implicaciones, esBase: true,
-}));
-
-const ACADEMICOS_BASE = [
-  { id: "base-nivelacion", nombre: "Recuperación estándar", plantilla: NIVELACION_COMPROMISOS_DEFAULT, esBase: true },
-];
-
 function SelectorComportamiento({ categoria, valorId, onSeleccionar, onUsarPlantilla }) {
-  const base = categoria === "convivencial" ? CONVIVENCIALES_BASE : ACADEMICOS_BASE;
-  const [personalizados, setPersonalizados] = useState([]);
+  const [opciones, setOpciones] = useState([]);
+  const [cargando, setCargando] = useState(true);
   const [creando, setCreando] = useState(false);
+  const [editandoId, setEditandoId] = useState(null);
   const [nombre, setNombre] = useState("");
   const [articulo, setArticulo] = useState("");
   const [plazoDias, setPlazoDias] = useState("");
   const [texto, setTexto] = useState("");
   const [guardando, setGuardando] = useState(false);
 
-  const cargar = () => api.fetchComportamientos(categoria).then((data) => setPersonalizados(data));
+  const cargar = async () => {
+    setCargando(true);
+    let data = await api.fetchComportamientos(categoria);
+    if (data.length === 0) {
+      // Primera vez que se usa esta categoría — siembra el catálogo genérico
+      // de fábrica (editable desde el primer momento, no fijo en el código).
+      await api.sembrarComportamientosBase();
+      data = await api.fetchComportamientos(categoria);
+    }
+    setOpciones(data);
+    setCargando(false);
+  };
   useEffect(() => { cargar(); }, [categoria]);
 
-  const opciones = [...base, ...personalizados];
+  const limpiarForm = () => { setNombre(""); setArticulo(""); setPlazoDias(""); setTexto(""); setCreando(false); setEditandoId(null); };
 
-  const crear = async () => {
+  const empezarEdicion = (o) => {
+    setEditandoId(o.id);
+    setCreando(true);
+    setNombre(o.nombre || "");
+    setArticulo(o.articulo || "");
+    setPlazoDias(o.plazo_dias || "");
+    setTexto(categoria === "convivencial" ? (o.implicaciones_legales || "") : (o.plantilla || ""));
+  };
+
+  const guardar = async () => {
     if (!nombre.trim()) return;
     setGuardando(true);
     try {
       const campos = categoria === "convivencial"
         ? { categoria, nombre: nombre.trim(), articulo: articulo.trim() || null, plazo_dias: plazoDias ? parseInt(plazoDias, 10) : null, implicaciones_legales: texto.trim() || null }
         : { categoria, nombre: nombre.trim(), plantilla: texto.trim() || null };
-      const nuevo = await api.crearComportamiento(campos);
+      if (editandoId) {
+        await api.editarComportamiento(editandoId, campos);
+      } else {
+        const nuevo = await api.crearComportamiento(campos);
+        onSeleccionar(nuevo);
+      }
       await cargar();
-      onSeleccionar(nuevo);
-      setCreando(false);
-      setNombre(""); setArticulo(""); setPlazoDias(""); setTexto("");
+      limpiarForm();
     } catch (e) {
-      alert("Error al crear: " + e.message);
+      alert("Error al guardar: " + e.message);
     }
     setGuardando(false);
   };
 
   const eliminar = async (id) => {
-    if (!confirm("¿Eliminar este comportamiento del catálogo? No afecta las actas ya creadas con él.")) return;
+    if (!confirm("¿Eliminar este comportamiento del catálogo? No afecta las actas ya creadas con él. (Podés usar \"Restablecer\" más abajo para volver a traer los genéricos de fábrica si te arrepentís.)")) return;
     await api.eliminarComportamiento(id);
     cargar();
   };
+
+  const restablecer = async () => {
+    if (!confirm(`¿Restablecer el catálogo ${categoria === "convivencial" ? "convivencial" : "académico"}? Esto borra TODO lo que agregaste en esta categoría (propio, no lo de otros docentes) y lo vuelve a dejar con los valores genéricos de fábrica. Útil si cambiaste de institución y el manual es distinto. Esta acción no se puede deshacer.`)) return;
+    await api.restablecerComportamientos(categoria);
+    cargar();
+  };
+
+  if (cargando) return <div className="text-xs text-slate-400 mb-2">Cargando catálogo…</div>;
 
   return (
     <div className="mb-2">
@@ -343,14 +363,18 @@ function SelectorComportamiento({ categoria, valorId, onSeleccionar, onUsarPlant
               className={`text-xs px-3 py-1.5 rounded-full ${valorId === o.id ? "bg-violet-500 text-white" : "bg-white text-slate-600 border border-slate-200"}`}>
               {o.nombre}{o.articulo ? ` (${o.articulo})` : ""}
             </button>
-            {!o.esBase && (
-              <button onClick={() => eliminar(o.id)} title="Eliminar del catálogo"
-                className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-slate-400 text-white text-[9px] leading-4 opacity-0 group-hover:opacity-100">✕</button>
-            )}
+            <div className="absolute -top-1.5 -right-1.5 flex gap-0.5 opacity-0 group-hover:opacity-100">
+              <button onClick={() => empezarEdicion(o)} title="Editar" className="w-4 h-4 rounded-full bg-violet-400 text-white text-[9px] leading-4">✏️</button>
+              <button onClick={() => eliminar(o.id)} title="Eliminar del catálogo" className="w-4 h-4 rounded-full bg-slate-400 text-white text-[9px] leading-4">✕</button>
+            </div>
           </div>
         ))}
-        <button onClick={() => setCreando((v) => !v)} className="text-xs px-3 py-1.5 rounded-full border border-dashed border-violet-300 text-violet-600">
+        <button onClick={() => { limpiarForm(); setCreando(true); }} className="text-xs px-3 py-1.5 rounded-full border border-dashed border-violet-300 text-violet-600">
           + Nuevo
+        </button>
+        <button onClick={restablecer} title="Borrar todo lo propio de esta categoría y volver a los valores genéricos de fábrica"
+          className="text-xs px-3 py-1.5 rounded-full border border-dashed border-rose-300 text-rose-500">
+          🗑️ Restablecer
         </button>
       </div>
 
@@ -369,9 +393,9 @@ function SelectorComportamiento({ categoria, valorId, onSeleccionar, onUsarPlant
           <EditorTexto value={texto} onChange={setTexto} minHeight={70}
             placeholder={categoria === "convivencial" ? "Implicaciones legales de este comportamiento…" : "Plan / compromisos de esta plantilla académica…"} />
           <div className="flex justify-end gap-2">
-            <button onClick={() => setCreando(false)} className="text-xs text-slate-500 px-2 py-1.5">Cancelar</button>
-            <button disabled={guardando} onClick={crear} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
-              {guardando ? "Guardando…" : "Agregar al catálogo y usar"}
+            <button onClick={limpiarForm} className="text-xs text-slate-500 px-2 py-1.5">Cancelar</button>
+            <button disabled={guardando} onClick={guardar} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+              {guardando ? "Guardando…" : editandoId ? "Guardar cambios" : "Agregar al catálogo y usar"}
             </button>
           </div>
         </div>
