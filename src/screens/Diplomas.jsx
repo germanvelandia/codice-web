@@ -69,6 +69,15 @@ const ASIGNATURAS = {
     ],
     fondoSvg: `<path d="M60 90 L120 90" stroke="%23dc2626" stroke-width="2" opacity="0.06" stroke-dasharray="4,6"/>`,
   },
+  ingles: {
+    label: "Inglés",
+    pilares: [
+      { icono: "🌐", color: "#2563eb", titulo: "Global Communication", sub: "Comunicación sin Fronteras" },
+      { icono: "🗣️", color: "#0891b2", titulo: "Fluency & Confidence", sub: "Expresión Oral" },
+      { icono: "📘", color: "#2563eb", titulo: "Language Mastery", sub: "Dominio del Idioma" },
+    ],
+    fondoSvg: `<text x="70" y="95" font-size="14" fill="%232563eb" opacity="0.06" font-family="Georgia">A</text><text x="100" y="80" font-size="10" fill="%230891b2" opacity="0.06" font-family="Georgia">Z</text>`,
+  },
   artistica: {
     label: "Educación Artística",
     pilares: [
@@ -98,8 +107,8 @@ function patronFondo(fondoSvg) {
   return `data:image/svg+xml,${svg.replace(/#/g, "%23").replace(/"/g, "'")}`;
 }
 
-function htmlDiploma({ institucion, estudianteNombre, gradoId, tituloDiploma, subtitulo, badge, motivo, puntajes, fecha, docenteNombre, docenteRol, asignaturaKey }) {
-  const asig = ASIGNATURAS[asignaturaKey] || ASIGNATURAS.general;
+function htmlDiploma({ institucion, estudianteNombre, gradoId, tituloDiploma, subtitulo, badge, motivo, puntajes, fecha, docenteNombre, docenteRol, asignatura }) {
+  const asig = asignatura || ASIGNATURAS.general;
   const [p1, p2, p3] = asig.pilares;
 
   const puntajesHtml = (puntajes || []).filter((p) => p.label.trim() && p.valor.trim())
@@ -232,6 +241,14 @@ export function VistaDiplomas({ grados }) {
   const [seleccionados, setSeleccionados] = useState(new Set());
   const [tipoKey, setTipoKey] = useState("excelencia");
   const [asignaturaKey, setAsignaturaKey] = useState("etica_religion");
+  const [personalizadas, setPersonalizadas] = useState([]);
+  const [creandoAsignatura, setCreandoAsignatura] = useState(false);
+  const [nuevaNombre, setNuevaNombre] = useState("");
+  const [nuevosPilares, setNuevosPilares] = useState([
+    { icono: "⭐", color: "#1e3a8a", titulo: "", sub: "" },
+    { icono: "⭐", color: "#d97706", titulo: "", sub: "" },
+    { icono: "⭐", color: "#1e3a8a", titulo: "", sub: "" },
+  ]);
   const [tituloEditable, setTituloEditable] = useState(TIPOS_DIPLOMA[0].titulo);
   const [subtituloEditable, setSubtituloEditable] = useState(TIPOS_DIPLOMA[0].subtitulo);
   const [badgeEditable, setBadgeEditable] = useState(TIPOS_DIPLOMA[0].badge);
@@ -245,7 +262,40 @@ export function VistaDiplomas({ grados }) {
   useEffect(() => {
     api.fetchInstitucion().then(setInstitucion);
     api.fetchMiPerfil().then((p) => setDocenteNombre(p?.nombre || ""));
+    api.fetchAsignaturasDiploma().then(setPersonalizadas);
   }, []);
+
+  const asignaturasCombinadas = { ...ASIGNATURAS };
+  personalizadas.forEach((p) => { asignaturasCombinadas[`custom_${p.id}`] = { label: p.nombre, pilares: p.pilares, fondoSvg: ASIGNATURAS[p.patron_fondo]?.fondoSvg || ASIGNATURAS.general.fondoSvg, esPersonalizada: true, idReal: p.id }; });
+
+  const actualizarPilarNuevo = (i, campo, valor) => setNuevosPilares((prev) => prev.map((p, idx) => idx === i ? { ...p, [campo]: valor } : p));
+
+  const guardarNuevaAsignatura = async () => {
+    if (!nuevaNombre.trim()) { alert("Ponele un nombre a la asignatura."); return; }
+    if (nuevosPilares.some((p) => !p.titulo.trim())) { alert("Completá el título de los 3 pilares."); return; }
+    try {
+      const nueva = await api.crearAsignaturaDiploma(nuevaNombre.trim(), nuevosPilares);
+      setPersonalizadas((prev) => [...prev, nueva]);
+      setAsignaturaKey(`custom_${nueva.id}`);
+      setCreandoAsignatura(false);
+      setNuevaNombre("");
+      setNuevosPilares([
+        { icono: "⭐", color: "#1e3a8a", titulo: "", sub: "" },
+        { icono: "⭐", color: "#d97706", titulo: "", sub: "" },
+        { icono: "⭐", color: "#1e3a8a", titulo: "", sub: "" },
+      ]);
+    } catch (e) {
+      alert("Error al guardar: " + e.message);
+    }
+  };
+
+  const borrarAsignaturaPersonalizada = async (id) => {
+    if (!confirm("¿Eliminar esta asignatura personalizada?")) return;
+    await api.eliminarAsignaturaDiploma(id);
+    setPersonalizadas((prev) => prev.filter((p) => p.id !== id));
+    if (asignaturaKey === `custom_${id}`) setAsignaturaKey("etica_religion");
+  };
+
   useEffect(() => {
     if (!gradoId) return;
     setCargando(true);
@@ -273,11 +323,11 @@ export function VistaDiplomas({ grados }) {
     const nombres = estudiantes.filter((s) => seleccionados.has(s.id)).map((s) => s.nombre);
     imprimirDiplomas(nombres, gradoId, {
       tituloDiploma: tituloEditable, subtitulo: subtituloEditable, badge: badgeEditable, motivo: motivoEditable,
-      puntajes, docenteRol: docenteRolEditable, asignaturaKey,
+      puntajes, docenteRol: docenteRolEditable, asignatura: asigActual,
     }, institucion, docenteNombre);
   };
 
-  const asigActual = ASIGNATURAS[asignaturaKey];
+  const asigActual = asignaturasCombinadas[asignaturaKey];
 
   return (
     <div>
@@ -308,12 +358,43 @@ export function VistaDiplomas({ grados }) {
       <div className="bg-white rounded-2xl border border-slate-100 p-4 mb-4">
         <label className="text-xs text-slate-500 block mb-1">Asignatura (define los 3 íconos de las esquinas y el fondo decorativo)</label>
         <div className="flex flex-wrap gap-1.5 mb-2">
-          {Object.entries(ASIGNATURAS).map(([key, a]) => (
-            <button key={key} onClick={() => setAsignaturaKey(key)} className={`text-[11px] px-2.5 py-1.5 rounded-full ${asignaturaKey === key ? "bg-violet-500 text-white" : "bg-slate-100 text-slate-600"}`}>
-              {a.pilares[0].icono} {a.label}
-            </button>
+          {Object.entries(asignaturasCombinadas).map(([key, a]) => (
+            <div key={key} className="relative group">
+              <button onClick={() => setAsignaturaKey(key)} className={`text-[11px] px-2.5 py-1.5 rounded-full ${asignaturaKey === key ? "bg-violet-500 text-white" : "bg-slate-100 text-slate-600"}`}>
+                {a.pilares[0].icono} {a.label}
+              </button>
+              {a.esPersonalizada && (
+                <button onClick={() => borrarAsignaturaPersonalizada(a.idReal)} title="Eliminar asignatura personalizada"
+                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] opacity-0 group-hover:opacity-100">✕</button>
+              )}
+            </div>
           ))}
+          <button onClick={() => setCreandoAsignatura((v) => !v)} className="text-[11px] px-2.5 py-1.5 rounded-full border border-dashed border-violet-300 text-violet-600">
+            + Nueva asignatura
+          </button>
         </div>
+
+        {creandoAsignatura && (
+          <div className="bg-violet-50 rounded-xl p-3 mb-3">
+            <label className="text-xs text-slate-500 block mb-1">Nombre de la asignatura</label>
+            <input value={nuevaNombre} onChange={(e) => setNuevaNombre(e.target.value)} placeholder="Ej: Física, Filosofía, Tecnología…"
+              className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
+            <p className="text-[11px] text-slate-500 mb-1.5">Definí los 3 pilares (ícono, un emoji; color; título corto; frase debajo):</p>
+            {nuevosPilares.map((p, i) => (
+              <div key={i} className="flex gap-1.5 mb-1.5">
+                <input value={p.icono} onChange={(e) => actualizarPilarNuevo(i, "icono", e.target.value)} placeholder="🔭" className="w-12 text-center text-sm rounded-lg px-1 py-1.5 border border-slate-200 outline-none bg-white" />
+                <input type="color" value={p.color} onChange={(e) => actualizarPilarNuevo(i, "color", e.target.value)} className="w-9 h-9 rounded-lg border border-slate-200 bg-white" />
+                <input value={p.titulo} onChange={(e) => actualizarPilarNuevo(i, "titulo", e.target.value)} placeholder="Título del pilar" className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
+                <input value={p.sub} onChange={(e) => actualizarPilarNuevo(i, "sub", e.target.value)} placeholder="Frase corta" className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
+              </div>
+            ))}
+            <div className="flex justify-end gap-2 mt-2">
+              <button onClick={() => setCreandoAsignatura(false)} className="text-xs text-slate-500 px-3 py-1.5">Cancelar</button>
+              <button onClick={guardarNuevaAsignatura} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white">Guardar asignatura</button>
+            </div>
+          </div>
+        )}
+
         {asigActual && (
           <div className="flex flex-wrap gap-1.5 mb-3">
             {asigActual.pilares.map((p, i) => (
