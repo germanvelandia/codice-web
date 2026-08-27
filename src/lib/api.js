@@ -3259,6 +3259,57 @@ export async function restablecerPlantillasCompromiso(categoria) {
   if (error) throw error;
 }
 
+/* ---------------- Plan de asignaturas (checklist de Dirección de Curso) ---------------- */
+const MATERIAS_CHECKLIST_SEED = [
+  "Artes y Danzas", "Ciencias Naturales y Educación Ambiental", "Ciencias Sociales",
+  "Educación Ética y en Valores Humanos", "Educación Física, Recreación y Deportes",
+  "Educación Religiosa y Moral", "Humanidades - Lengua Castellana", "Idioma Extranjero - Inglés",
+  "Matemáticas", "Tecnología e Informática",
+];
+
+export async function fetchMateriasChecklist() {
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData?.user) return [];
+  let { data, error } = await supabase.from("direccion_curso_materias_checklist").select("*").eq("docente_id", userData.user.id).order("orden");
+  if (error) throw error;
+  if (!data || data.length === 0) {
+    const filas = MATERIAS_CHECKLIST_SEED.map((nombre, i) => ({ docente_id: userData.user.id, nombre, orden: i }));
+    const { data: sembradas, error: e2 } = await supabase.from("direccion_curso_materias_checklist").insert(filas).select();
+    if (e2) throw e2;
+    data = sembradas;
+  }
+  return data;
+}
+
+export async function crearMateriaChecklist(nombre) {
+  const { data: userData } = await supabase.auth.getUser();
+  const existentes = await fetchMateriasChecklist();
+  const { data, error } = await supabase.from("direccion_curso_materias_checklist")
+    .insert({ docente_id: userData?.user?.id, nombre, orden: existentes.length })
+    .select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function editarMateriaChecklist(id, nombre) {
+  const { error } = await supabase.from("direccion_curso_materias_checklist").update({ nombre }).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarMateriaChecklist(id) {
+  const { error } = await supabase.from("direccion_curso_materias_checklist").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function restablecerMateriasChecklist() {
+  const { data: userData } = await supabase.auth.getUser();
+  const docenteId = userData?.user?.id || null;
+  await supabase.from("direccion_curso_materias_checklist").delete().eq("docente_id", docenteId);
+  const filas = MATERIAS_CHECKLIST_SEED.map((nombre, i) => ({ docente_id: docenteId, nombre, orden: i }));
+  const { error } = await supabase.from("direccion_curso_materias_checklist").insert(filas);
+  if (error) throw error;
+}
+
 /* ---------------- Dirección de Curso — materias configurables por curso ---------------- */
 export async function fetchMateriasCurso(gradoId) {
   const { data, error } = await supabase.from("direccion_curso_materias").select("*").eq("grado_id", gradoId).order("orden").order("id");
