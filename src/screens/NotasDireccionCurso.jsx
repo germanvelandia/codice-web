@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
 import * as api from "../lib/api";
-import { ordenarPorApellido, buscarEstudiantePorNombre } from "../lib/gamification";
+import { ordenarPorApellido, ordenarPorNombre, buscarEstudiantePorNombre } from "../lib/gamification";
 
 const SISTEMAS = {
   bimestre: { nombre: "Bimestre", cantidad: 4 },
@@ -332,6 +332,7 @@ export function NotasDireccionCurso({ gradoId }) {
   const [importarPegarAbierto, setImportarPegarAbierto] = useState(false);
   const [importarArchivoAbierto, setImportarArchivoAbierto] = useState(false);
   const [anchoCelda, setAnchoCelda] = useState(64);
+  const [ordenPor, setOrdenPor] = useState("apellido"); // "apellido" | "nombre"
   const [cambiosPendientes, setCambiosPendientes] = useState({}); // { "estudianteId_materia_periodo": textoEscrito }
   const [guardandoTodo, setGuardandoTodo] = useState(false);
 
@@ -456,11 +457,18 @@ export function NotasDireccionCurso({ gradoId }) {
 
   const resultadoGeneral = (estudianteId) => promedio(materias.map((m) => resultadoMateria(estudianteId, m.nombre)));
 
+  const estudiantesOrdenados = ordenPor === "apellido" ? estudiantes : ordenarPorNombre(estudiantes);
+
   if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
 
   return (
     <div>
       <div className="flex flex-wrap gap-2 items-center mb-3">
+        <div className="flex gap-1 rounded-full bg-slate-100 p-1">
+          <span className="text-[10px] text-slate-400 self-center px-1.5">Ordenar por:</span>
+          <button onClick={() => setOrdenPor("apellido")} className={`text-[11px] px-2.5 py-1 rounded-full ${ordenPor === "apellido" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Apellido</button>
+          <button onClick={() => setOrdenPor("nombre")} className={`text-[11px] px-2.5 py-1 rounded-full ${ordenPor === "nombre" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Nombre</button>
+        </div>
         <div className="flex items-center gap-1.5 text-xs text-slate-500 bg-white rounded-full px-3 py-2 border border-slate-200">
           Sistema:
           <div className="flex gap-1 rounded-full bg-slate-100 p-0.5">
@@ -555,7 +563,7 @@ export function NotasDireccionCurso({ gradoId }) {
             </tr>
           </thead>
           <tbody>
-            {estudiantes.map((e) => (
+            {estudiantesOrdenados.map((e) => (
               <tr key={e.id}>
                 <td className="sticky left-0 bg-white border border-slate-200 px-2 py-1.5 font-medium text-slate-700 whitespace-nowrap">{e.nombre}</td>
                 {materias.map((m) => (
