@@ -2229,7 +2229,7 @@ function Panel({ session }) {
         {tab === "asistencia" && grados.length > 0 && <VistaAsistencia grados={grados} />}
         {tab === "herramientas" && grados.length > 0 && (
           <>
-            <div className="flex gap-1 mb-6 rounded-full bg-white p-1 w-fit border border-slate-100 shadow-sm">
+            <div className="flex flex-wrap gap-1.5 mb-6 rounded-2xl bg-white p-2 w-full border border-slate-100 shadow-sm">
               <button onClick={() => setSubTabHerramientas("ruleta")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "ruleta" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Ruleta</button>
               <button onClick={() => setSubTabHerramientas("ruletamonedas")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "ruletamonedas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Ruleta de Monedas</button>
               <button onClick={() => setSubTabHerramientas("accionesmasivas")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "accionesmasivas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🎯 Acciones Masivas</button>
