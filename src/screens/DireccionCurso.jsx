@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
 import * as api from "../lib/api";
-import { ordenarPorApellido } from "../lib/gamification";
+import { ordenarPorApellido, ordenarPorNombre } from "../lib/gamification";
 import { NotasDireccionCurso } from "./NotasDireccionCurso";
 
 const PERIODOS = ["1", "2", "3", "4"];
@@ -506,13 +506,16 @@ function JornadaDetalle({ jornada, gradoId, institucion }) {
   const [cargando, setCargando] = useState(true);
   const [formHorarioAbierto, setFormHorarioAbierto] = useState(false);
   const [materiasChecklist, setMateriasChecklist] = useState([]);
+  const [ordenPor, setOrdenPor] = useState("apellido"); // "apellido" | "nombre"
 
   const cargar = () => {
     setCargando(true);
-    api.fetchDetalleJornada(jornada.id, gradoId).then((d) => { setHorarios(d.horarios); setEstudiantes(d.estudiantes); setCargando(false); });
+    api.fetchDetalleJornada(jornada.id, gradoId).then((d) => { setHorarios(d.horarios); setEstudiantes(ordenarPorApellido(d.estudiantes)); setCargando(false); });
   };
   useEffect(() => { cargar(); }, [jornada.id]);
   useEffect(() => { api.fetchMateriasChecklist().then(setMateriasChecklist); }, []);
+
+  const estudiantesOrdenados = ordenPor === "apellido" ? estudiantes : ordenarPorNombre(estudiantes);
 
   const eliminarHorario = async (id) => { if (!confirm("¿Eliminar este horario/grupo? Los estudiantes asignados quedan sin grupo.")) return; await api.eliminarHorarioJornada(id); cargar(); };
   const asignar = async (estudianteId, horarioId) => { await api.asignarEstudianteHorario(jornada.id, estudianteId, horarioId || null); cargar(); };
@@ -543,6 +546,13 @@ function JornadaDetalle({ jornada, gradoId, institucion }) {
 
   return (
     <div>
+      <div className="flex justify-end mb-2">
+        <div className="flex gap-1 rounded-full bg-slate-100 p-1">
+          <span className="text-[10px] text-slate-400 self-center px-1.5">Ordenar por:</span>
+          <button onClick={() => setOrdenPor("apellido")} className={`text-[11px] px-2.5 py-1 rounded-full ${ordenPor === "apellido" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Apellido</button>
+          <button onClick={() => setOrdenPor("nombre")} className={`text-[11px] px-2.5 py-1 rounded-full ${ordenPor === "nombre" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Nombre</button>
+        </div>
+      </div>
       <div className="mb-4">
         <div className="flex justify-between items-center mb-2">
           <div className="text-sm font-semibold text-slate-700">Horarios / grupos de atención — Periodo {jornada.periodo}</div>
@@ -568,7 +578,7 @@ function JornadaDetalle({ jornada, gradoId, institucion }) {
                       <div className="text-[11px] text-slate-400">{h.hora_inicio || "—"} a {h.hora_fin || "—"} · {cant}/{h.capacidad}</div>
                     </div>
                     <div className="flex gap-1.5">
-                      <button onClick={() => imprimirListadoHorario(jornada, h, estudiantes.filter((e) => e.asignacion?.horario_id === h.id), institucion)} className="text-xs text-slate-400 hover:text-violet-600">🖨️</button>
+                      <button onClick={() => imprimirListadoHorario(jornada, h, estudiantesOrdenados.filter((e) => e.asignacion?.horario_id === h.id), institucion)} className="text-xs text-slate-400 hover:text-violet-600">🖨️</button>
                       <button onClick={() => eliminarHorario(h.id)} className="text-xs text-slate-400 hover:text-rose-500">🗑</button>
                     </div>
                   </div>
@@ -599,7 +609,7 @@ function JornadaDetalle({ jornada, gradoId, institucion }) {
                 </tr>
               </thead>
               <tbody>
-                {estudiantes.map((e) => (
+                {estudiantesOrdenados.map((e) => (
                   <tr key={e.id} className="border-t border-slate-100">
                     <td className="px-2 py-1 sticky left-0 bg-white font-medium text-slate-700 whitespace-nowrap">{e.nombre}</td>
                     {materiasChecklist.map((m) => (
@@ -617,8 +627,8 @@ function JornadaDetalle({ jornada, gradoId, institucion }) {
 
       <div className="flex justify-between items-center mb-2">
         <div className="text-sm font-semibold text-slate-700">Checklist de entrega</div>
-        <button onClick={() => imprimirActasUnificadas({ ...jornada, estudiantesParaActas: estudiantes }, institucion)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-rose-500 text-white">
-          🖨️ Imprimir todas las actas ({estudiantes.filter((e) => e.asignacion?.tiene_reportes || e.asignacion?.materias_perdidas?.length > 0).length})
+        <button onClick={() => imprimirActasUnificadas({ ...jornada, estudiantesParaActas: estudiantesOrdenados }, institucion)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-rose-500 text-white">
+          🖨️ Imprimir todas las actas ({estudiantesOrdenados.filter((e) => e.asignacion?.tiene_reportes || e.asignacion?.materias_perdidas?.length > 0).length})
         </button>
       </div>
       <div className="overflow-x-auto bg-white rounded-2xl shadow-sm border border-slate-100">
@@ -648,7 +658,7 @@ function JornadaDetalle({ jornada, gradoId, institucion }) {
             </tr>
           </thead>
           <tbody>
-            {estudiantes.map((e) => (
+            {estudiantesOrdenados.map((e) => (
               <tr key={e.id} className="border-t border-slate-100">
                 <td className="px-3 py-2 font-medium text-slate-700">{e.nombre}</td>
                 <td className="px-3 py-2">
@@ -724,6 +734,7 @@ function CitacionesDireccionCurso({ gradoId, institucion }) {
   const [cargando, setCargando] = useState(true);
   const [formAbierto, setFormAbierto] = useState(false);
   const [atendiendo, setAtendiendo] = useState(null);
+  const [ordenPor, setOrdenPor] = useState("apellido"); // "apellido" | "nombre"
 
   const cargar = () => {
     if (!gradoId) return;
@@ -741,17 +752,26 @@ function CitacionesDireccionCurso({ gradoId, institucion }) {
 
   const ESTADO_LABEL = { pendiente: "🟡 Pendiente", atendida: "🟢 Atendida", no_asistio: "🔴 No asistió" };
 
+  const estudiantesOrdenados = ordenPor === "apellido" ? estudiantes : ordenarPorNombre(estudiantes);
+
   return (
     <div>
       <div className="flex justify-between items-center mb-3">
         <p className="text-sm text-slate-500">Generá y llevá el registro de citaciones a padres de este curso.</p>
-        <button onClick={() => setFormAbierto((v) => !v)} className="text-xs font-semibold px-3 py-2 rounded-full bg-violet-500 text-white">
-          {formAbierto ? "Cerrar" : "+ Nueva citación"}
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1 rounded-full bg-slate-100 p-1">
+            <span className="text-[10px] text-slate-400 self-center px-1.5">Ordenar por:</span>
+            <button onClick={() => setOrdenPor("apellido")} className={`text-[11px] px-2.5 py-1 rounded-full ${ordenPor === "apellido" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Apellido</button>
+            <button onClick={() => setOrdenPor("nombre")} className={`text-[11px] px-2.5 py-1 rounded-full ${ordenPor === "nombre" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Nombre</button>
+          </div>
+          <button onClick={() => setFormAbierto((v) => !v)} className="text-xs font-semibold px-3 py-2 rounded-full bg-violet-500 text-white">
+            {formAbierto ? "Cerrar" : "+ Nueva citación"}
+          </button>
+        </div>
       </div>
 
       {formAbierto && (
-        <CitacionForm estudiantes={estudiantes} onCancelar={() => setFormAbierto(false)} onGuardada={() => { setFormAbierto(false); cargar(); }} />
+        <CitacionForm estudiantes={estudiantesOrdenados} onCancelar={() => setFormAbierto(false)} onGuardada={() => { setFormAbierto(false); cargar(); }} />
       )}
 
       {cargando ? (
@@ -760,7 +780,7 @@ function CitacionesDireccionCurso({ gradoId, institucion }) {
         <div className="text-sm text-slate-400 bg-white rounded-2xl p-6 text-center border border-dashed border-slate-200">Todavía no hay citaciones registradas para este curso.</div>
       ) : (
         <div className="space-y-4">
-          {estudiantes
+          {estudiantesOrdenados
             .map((e) => ({ estudiante: e, lista: citaciones.filter((c) => c.estudiante_id === e.id) }))
             .filter((g) => g.lista.length > 0)
             .map(({ estudiante, lista }) => {
