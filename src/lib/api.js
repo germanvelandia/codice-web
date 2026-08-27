@@ -1,7 +1,7 @@
 import { supabase } from "./supabaseClient";
 import { GRADOS_BASE, ordenarPorApellido, buscarEstudiantePorNombre } from "./gamification";
 import { notaAutomatica, notaFinalPonderada } from "./calificaciones";
-import { NIVELACION_COMPROMISOS_DEFAULT } from "./actasTemplates";
+import { NIVELACION_COMPROMISOS_DEFAULT, FALTAS_MANUAL } from "./actasTemplates";
 
 export async function asegurarGradosBase() {
   const filas = GRADOS_BASE.map((id) => ({ id }));
@@ -412,6 +412,51 @@ export async function crearComportamiento(campos) {
 export async function eliminarComportamiento(id) {
   const { error } = await supabase.from("comportamientos").delete().eq("id", id);
   if (error) throw error;
+}
+
+export async function editarComportamiento(id, campos) {
+  const { error } = await supabase.from("comportamientos").update(campos).eq("id", id);
+  if (error) throw error;
+}
+
+// Crea en la base los 3 comportamientos convivenciales genéricos
+// (Leve/Grave/Gravísima, según FALTAS_MANUAL) y la plantilla académica
+// estándar — como filas normales, editables y eliminables como cualquier
+// otra. Solo siembra lo que falte (no duplica si ya existen).
+export async function sembrarComportamientosBase() {
+  const { data: userData } = await supabase.auth.getUser();
+  const docenteId = userData?.user?.id || null;
+  const existentes = await fetchComportamientos();
+  const filas = [];
+  if (!existentes.some((c) => c.categoria === "convivencial")) {
+    Object.values(FALTAS_MANUAL).forEach((f) => {
+      filas.push({ docente_id: docenteId, categoria: "convivencial", nombre: f.tipo, articulo: f.articulo, plazo_dias: f.plazoDias, implicaciones_legales: f.implicaciones });
+    });
+  }
+  if (!existentes.some((c) => c.categoria === "academico")) {
+    filas.push({ docente_id: docenteId, categoria: "academico", nombre: "Recuperación estándar", plantilla: NIVELACION_COMPROMISOS_DEFAULT });
+  }
+  if (filas.length > 0) {
+    const { error } = await supabase.from("comportamientos").insert(filas);
+    if (error) throw error;
+  }
+}
+
+// Borra TODO el catálogo de una categoría (propio del docente) y lo vuelve
+// a sembrar con los valores genéricos de fábrica — para cuando cambia el
+// manual de convivencia (ej: cambio de institución).
+export async function restablecerComportamientos(categoria) {
+  const { data: userData } = await supabase.auth.getUser();
+  const docenteId = userData?.user?.id || null;
+  await supabase.from("comportamientos").delete().eq("categoria", categoria).eq("docente_id", docenteId);
+  if (categoria === "convivencial") {
+    const filas = Object.values(FALTAS_MANUAL).map((f) => ({ docente_id: docenteId, categoria: "convivencial", nombre: f.tipo, articulo: f.articulo, plazo_dias: f.plazoDias, implicaciones_legales: f.implicaciones }));
+    const { error } = await supabase.from("comportamientos").insert(filas);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase.from("comportamientos").insert({ docente_id: docenteId, categoria: "academico", nombre: "Recuperación estándar", plantilla: NIVELACION_COMPROMISOS_DEFAULT });
+    if (error) throw error;
+  }
 }
 
 /* ---------------- Catálogo de reinos/equipos ---------------- */
@@ -3166,6 +3211,51 @@ export async function crearPlantillaCompromiso(categoria, texto) {
 
 export async function eliminarPlantillaCompromiso(id) {
   const { error } = await supabase.from("plantillas_compromiso_dc").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function editarPlantillaCompromiso(id, texto) {
+  const { error } = await supabase.from("plantillas_compromiso_dc").update({ texto }).eq("id", id);
+  if (error) throw error;
+}
+
+const PLANTILLAS_COMPROMISO_SEED = {
+  nivelacion: [
+    "El estudiante y su acudiente se comprometen a presentar el plan de nivelación de las asignaturas pendientes en un plazo máximo de 15 días hábiles a partir de la firma de la presente acta, según lo establecido en el Manual de Convivencia.",
+    "El estudiante se compromete a mejorar su desempeño académico durante el periodo siguiente, cumpliendo oportunamente con las actividades, tareas y evaluaciones propuestas por cada docente.",
+  ],
+  convivencial: [
+    "El estudiante se compromete a dar cumplimiento a las normas establecidas en el Manual de Convivencia Institucional, manteniendo un comportamiento respetuoso con la comunidad educativa.",
+    "El estudiante se compromete a asistir puntualmente a la institución y a cada una de sus clases, evitando llegadas tarde e inasistencias injustificadas.",
+  ],
+};
+
+// Siembra las plantillas genéricas de fábrica, como filas normales editables
+// — solo lo que falte (no duplica si ya hay alguna en esa categoría).
+export async function sembrarPlantillasCompromisoBase() {
+  const { data: userData } = await supabase.auth.getUser();
+  const docenteId = userData?.user?.id || null;
+  const existentes = await fetchPlantillasCompromiso();
+  const filas = [];
+  ["nivelacion", "convivencial"].forEach((categoria) => {
+    if (!existentes.some((p) => p.categoria === categoria)) {
+      PLANTILLAS_COMPROMISO_SEED[categoria].forEach((texto) => filas.push({ docente_id: docenteId, categoria, texto }));
+    }
+  });
+  if (filas.length > 0) {
+    const { error } = await supabase.from("plantillas_compromiso_dc").insert(filas);
+    if (error) throw error;
+  }
+}
+
+// Borra todas las plantillas propias de una categoría y las vuelve a
+// sembrar con las genéricas de fábrica — para cuando cambia el manual.
+export async function restablecerPlantillasCompromiso(categoria) {
+  const { data: userData } = await supabase.auth.getUser();
+  const docenteId = userData?.user?.id || null;
+  await supabase.from("plantillas_compromiso_dc").delete().eq("categoria", categoria).eq("docente_id", docenteId);
+  const filas = PLANTILLAS_COMPROMISO_SEED[categoria].map((texto) => ({ docente_id: docenteId, categoria, texto }));
+  const { error } = await supabase.from("plantillas_compromiso_dc").insert(filas);
   if (error) throw error;
 }
 
