@@ -216,14 +216,9 @@ function NuevoHorarioForm({ jornadaId, orden, onCancelar, onCreado }) {
 // Textos preestablecidos para armar el acta rápido — son un punto de
 // partida genérico, hay que ajustarlos al Manual de Convivencia real de
 // cada institución antes de imprimir (son editables una vez insertados).
-const PLANTILLAS_NIVELACION = [
-  { categoria: "Tiempos de entrega", texto: "El estudiante y su acudiente se comprometen a presentar el plan de nivelación de las asignaturas pendientes en un plazo máximo de 15 días hábiles a partir de la firma de la presente acta, según lo establecido en el Manual de Convivencia." },
-  { categoria: "Compromiso periodo siguiente", texto: "El estudiante se compromete a mejorar su desempeño académico durante el periodo siguiente, cumpliendo oportunamente con las actividades, tareas y evaluaciones propuestas por cada docente." },
-];
-const PLANTILLAS_CONVIVENCIAL = [
-  { categoria: "Cumplimiento convivencial", texto: "El estudiante se compromete a dar cumplimiento a las normas establecidas en el Manual de Convivencia Institucional, manteniendo un comportamiento respetuoso con la comunidad educativa." },
-  { categoria: "Puntualidad / llegada temprana", texto: "El estudiante se compromete a asistir puntualmente a la institución y a cada una de sus clases, evitando llegadas tarde e inasistencias injustificadas." },
-];
+// Los textos genéricos de fábrica ahora viven en api.js (PLANTILLAS_COMPROMISO_SEED),
+// se siembran como filas editables la primera vez que se abre esta pantalla.
+
 
 // Bloque HTML de un acta — reutilizado tanto para imprimir una sola como
 // para imprimir todas juntas en un solo documento.
@@ -270,11 +265,21 @@ function ActaCompromisoModal({ estudiante, jornada, institucion, onClose, onGuar
   const [compromisoNivelacion, setCompromisoNivelacion] = useState(estudiante.asignacion?.compromiso_nivelacion || "");
   const [compromisoConvivencial, setCompromisoConvivencial] = useState(estudiante.asignacion?.compromiso_convivencial || "");
   const [guardando, setGuardando] = useState(false);
-  const [plantillasCustom, setPlantillasCustom] = useState([]);
+  const [plantillas, setPlantillas] = useState([]);
   const [formPlantillaAbierto, setFormPlantillaAbierto] = useState(null); // "nivelacion" | "convivencial" | null
   const [textoNuevaPlantilla, setTextoNuevaPlantilla] = useState("");
+  const [editandoPlantillaId, setEditandoPlantillaId] = useState(null);
+  const [textoEdicionPlantilla, setTextoEdicionPlantilla] = useState("");
 
-  useEffect(() => { api.fetchPlantillasCompromiso().then(setPlantillasCustom); }, []);
+  const cargarPlantillas = async () => {
+    let data = await api.fetchPlantillasCompromiso();
+    if (!data.some((p) => p.categoria === "nivelacion") || !data.some((p) => p.categoria === "convivencial")) {
+      await api.sembrarPlantillasCompromisoBase();
+      data = await api.fetchPlantillasCompromiso();
+    }
+    setPlantillas(data);
+  };
+  useEffect(() => { cargarPlantillas(); }, []);
 
   const toggleMateria = (materia) => setMateriasPerdidas((prev) => prev.includes(materia) ? prev.filter((m) => m !== materia) : [...prev, materia]);
 
@@ -286,10 +291,24 @@ function ActaCompromisoModal({ estudiante, jornada, institucion, onClose, onGuar
     await api.crearPlantillaCompromiso(formPlantillaAbierto, textoNuevaPlantilla.trim());
     setTextoNuevaPlantilla("");
     setFormPlantillaAbierto(null);
-    api.fetchPlantillasCompromiso().then(setPlantillasCustom);
+    cargarPlantillas();
   };
 
-  const eliminarPlantilla = async (id) => { await api.eliminarPlantillaCompromiso(id); api.fetchPlantillasCompromiso().then(setPlantillasCustom); };
+  const empezarEdicionPlantilla = (p) => { setEditandoPlantillaId(p.id); setTextoEdicionPlantilla(p.texto); };
+  const guardarEdicionPlantilla = async () => {
+    if (!textoEdicionPlantilla.trim()) return;
+    await api.editarPlantillaCompromiso(editandoPlantillaId, textoEdicionPlantilla.trim());
+    setEditandoPlantillaId(null);
+    cargarPlantillas();
+  };
+
+  const eliminarPlantilla = async (id) => { await api.eliminarPlantillaCompromiso(id); cargarPlantillas(); };
+
+  const restablecerPlantillas = async (categoria) => {
+    if (!confirm(`¿Restablecer las plantillas de "${categoria === "nivelacion" ? "nivelación académica" : "convivencia"}"? Esto borra las tuyas propias en esta categoría y vuelve a los textos genéricos de fábrica. Útil si cambiaste de institución. No se puede deshacer.`)) return;
+    await api.restablecerPlantillasCompromiso(categoria);
+    cargarPlantillas();
+  };
 
   const guardar = async () => {
     setGuardando(true);
@@ -320,8 +339,39 @@ function ActaCompromisoModal({ estudiante, jornada, institucion, onClose, onGuar
     ventana.document.close();
   };
 
-  const plantillasNivelacion = [...PLANTILLAS_NIVELACION, ...plantillasCustom.filter((p) => p.categoria === "nivelacion")];
-  const plantillasConvivencial = [...PLANTILLAS_CONVIVENCIAL, ...plantillasCustom.filter((p) => p.categoria === "convivencial")];
+  const plantillasNivelacion = plantillas.filter((p) => p.categoria === "nivelacion");
+  const plantillasConvivencial = plantillas.filter((p) => p.categoria === "convivencial");
+
+  const renderPlantillas = (lista, insertar, categoria) => (
+    <>
+      <div className="flex flex-wrap gap-1.5 mb-1.5">
+        {lista.map((p) => (
+          editandoPlantillaId === p.id ? (
+            <div key={p.id} className="flex gap-1 items-center w-full mb-1">
+              <input value={textoEdicionPlantilla} onChange={(e) => setTextoEdicionPlantilla(e.target.value)} className="flex-1 text-[11px] rounded-lg px-2 py-1 border border-violet-300 outline-none" />
+              <button onClick={guardarEdicionPlantilla} className="text-[10px] text-emerald-600">✔</button>
+              <button onClick={() => setEditandoPlantillaId(null)} className="text-[10px] text-slate-400">✕</button>
+            </div>
+          ) : (
+            <span key={p.id} className="inline-flex items-center rounded-full border border-violet-200">
+              <button onClick={() => insertar(p.texto)} className="text-[11px] pl-2.5 pr-1 py-1 text-violet-600">+ {p.texto.slice(0, 28)}…</button>
+              <button onClick={() => empezarEdicionPlantilla(p)} className="text-[10px] px-1 text-violet-400">✏️</button>
+              <button onClick={() => eliminarPlantilla(p.id)} className="text-[10px] pr-2 text-rose-400">✕</button>
+            </span>
+          )
+        ))}
+        <button onClick={() => setFormPlantillaAbierto(formPlantillaAbierto === categoria ? null : categoria)} className="text-[11px] px-2.5 py-1 rounded-full bg-violet-500 text-white">+ Nueva</button>
+        <button onClick={() => restablecerPlantillas(categoria)} title="Volver a las plantillas genéricas de fábrica en esta categoría" className="text-[11px] px-2.5 py-1 rounded-full border border-dashed border-rose-300 text-rose-500">🗑️ Restablecer</button>
+      </div>
+      {formPlantillaAbierto === categoria && (
+        <div className="flex gap-1.5 mb-2">
+          <input value={textoNuevaPlantilla} onChange={(e) => setTextoNuevaPlantilla(e.target.value)} placeholder="Texto de la nueva recomendación…"
+            className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+          <button onClick={guardarNuevaPlantilla} className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-violet-500 text-white">Guardar</button>
+        </div>
+      )}
+    </>
+  );
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
@@ -341,42 +391,12 @@ function ActaCompromisoModal({ estudiante, jornada, institucion, onClose, onGuar
         </div>
 
         <label className="text-xs text-slate-500 block mb-1">Compromisos de nivelación académica</label>
-        <div className="flex flex-wrap gap-1.5 mb-1.5">
-          {plantillasNivelacion.map((p, i) => (
-            <span key={p.id || i} className="inline-flex items-center rounded-full border border-violet-200">
-              <button onClick={() => insertarNivelacion(p.texto)} className="text-[11px] px-2.5 py-1 text-violet-600">+ {p.categoria === "nivelacion" || p.categoria === "convivencial" ? (p.texto.slice(0, 28) + "…") : p.categoria}</button>
-              {p.id && <button onClick={() => eliminarPlantilla(p.id)} className="text-[10px] pr-2 text-rose-400">✕</button>}
-            </span>
-          ))}
-          <button onClick={() => setFormPlantillaAbierto(formPlantillaAbierto === "nivelacion" ? null : "nivelacion")} className="text-[11px] px-2.5 py-1 rounded-full bg-violet-500 text-white">+ Nueva</button>
-        </div>
-        {formPlantillaAbierto === "nivelacion" && (
-          <div className="flex gap-1.5 mb-2">
-            <input value={textoNuevaPlantilla} onChange={(e) => setTextoNuevaPlantilla(e.target.value)} placeholder="Texto de la nueva recomendación…"
-              className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-            <button onClick={guardarNuevaPlantilla} className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-violet-500 text-white">Guardar</button>
-          </div>
-        )}
+        {renderPlantillas(plantillasNivelacion, insertarNivelacion, "nivelacion")}
         <textarea value={compromisoNivelacion} onChange={(e) => setCompromisoNivelacion(e.target.value)} rows={4}
           className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
 
         <label className="text-xs text-slate-500 block mb-1">Compromisos convivenciales</label>
-        <div className="flex flex-wrap gap-1.5 mb-1.5">
-          {plantillasConvivencial.map((p, i) => (
-            <span key={p.id || i} className="inline-flex items-center rounded-full border border-violet-200">
-              <button onClick={() => insertarConvivencial(p.texto)} className="text-[11px] px-2.5 py-1 text-violet-600">+ {p.categoria === "nivelacion" || p.categoria === "convivencial" ? (p.texto.slice(0, 28) + "…") : p.categoria}</button>
-              {p.id && <button onClick={() => eliminarPlantilla(p.id)} className="text-[10px] pr-2 text-rose-400">✕</button>}
-            </span>
-          ))}
-          <button onClick={() => setFormPlantillaAbierto(formPlantillaAbierto === "convivencial" ? null : "convivencial")} className="text-[11px] px-2.5 py-1 rounded-full bg-violet-500 text-white">+ Nueva</button>
-        </div>
-        {formPlantillaAbierto === "convivencial" && (
-          <div className="flex gap-1.5 mb-2">
-            <input value={textoNuevaPlantilla} onChange={(e) => setTextoNuevaPlantilla(e.target.value)} placeholder="Texto de la nueva recomendación…"
-              className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-            <button onClick={guardarNuevaPlantilla} className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-violet-500 text-white">Guardar</button>
-          </div>
-        )}
+        {renderPlantillas(plantillasConvivencial, insertarConvivencial, "convivencial")}
         <p className="text-[10px] text-slate-400 mb-1">Las plantillas por defecto son un punto de partida genérico — ajustalas o agregá las tuyas propias según tu Manual de Convivencia.</p>
         <textarea value={compromisoConvivencial} onChange={(e) => setCompromisoConvivencial(e.target.value)} rows={4}
           className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
