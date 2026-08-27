@@ -12,13 +12,96 @@ const TIPOS_DIPLOMA = [
   { key: "personalizado", badge: "Reconocimiento Especial", titulo: "DIPLOMA DE RECONOCIMIENTO", subtitulo: "", motivo: "" },
 ];
 
-// Insignia decorativa de esquina — reemplaza las fotos de personajes del
-// diseño original (que no tenemos) por un ícono + texto, con el mismo look.
+// Cada asignatura trae sus propios 3 "pilares" (esquinas decorativas) y un
+// patrón de fondo distinto — así el diploma se ve acorde a la materia.
+const ASIGNATURAS = {
+  etica_religion: {
+    label: "Ética y Religión",
+    pilares: [
+      { icono: "⚖️", color: "#d97706", titulo: "Ética y Liderazgo", sub: "Pilares de Excelencia" },
+      { icono: "🕊️", color: "#1e3a8a", titulo: "Respeto y Virtud", sub: "Formación Integral" },
+      { icono: "🤝", color: "#d97706", titulo: "Convivencia y Paz", sub: "Compromiso Social" },
+    ],
+    fondoSvg: `<circle cx="90" cy="90" r="3" fill="%231e3a8a" opacity="0.06"/><path d="M60 90 Q90 60 120 90 Q90 120 60 90 Z" fill="none" stroke="%23d97706" stroke-width="1" opacity="0.07"/>`,
+  },
+  matematicas: {
+    label: "Matemáticas",
+    pilares: [
+      { icono: "📐", color: "#0369a1", titulo: "Precisión y Lógica", sub: "Razonamiento Exacto" },
+      { icono: "🔢", color: "#7c3aed", titulo: "Pensamiento Numérico", sub: "Resolución de Problemas" },
+      { icono: "∞", color: "#0369a1", titulo: "Rigor Analítico", sub: "Excelencia Matemática" },
+    ],
+    fondoSvg: `<rect x="70" y="70" width="40" height="40" fill="none" stroke="%230369a1" stroke-width="1" opacity="0.07"/><line x1="60" y1="90" x2="120" y2="90" stroke="%237c3aed" stroke-width="1" opacity="0.06"/>`,
+  },
+  ciencias: {
+    label: "Ciencias Naturales",
+    pilares: [
+      { icono: "🔬", color: "#059669", titulo: "Curiosidad Científica", sub: "Método y Observación" },
+      { icono: "🌱", color: "#65a30d", titulo: "Naturaleza y Vida", sub: "Conciencia Ambiental" },
+      { icono: "🧪", color: "#059669", titulo: "Espíritu Investigador", sub: "Descubrimiento" },
+    ],
+    fondoSvg: `<circle cx="90" cy="90" r="30" fill="none" stroke="%23059669" stroke-width="1" opacity="0.07"/><circle cx="90" cy="90" r="4" fill="%2365a30d" opacity="0.08"/>`,
+  },
+  lenguaje: {
+    label: "Lenguaje y Literatura",
+    pilares: [
+      { icono: "📖", color: "#be185d", titulo: "Lectura y Comprensión", sub: "Amor por las Letras" },
+      { icono: "✍️", color: "#7c3aed", titulo: "Expresión Escrita", sub: "Creatividad Literaria" },
+      { icono: "💬", color: "#be185d", titulo: "Comunicación", sub: "Voz y Elocuencia" },
+    ],
+    fondoSvg: `<path d="M60 90 Q90 70 120 90" fill="none" stroke="%23be185d" stroke-width="1" opacity="0.07"/><path d="M60 100 Q90 80 120 100" fill="none" stroke="%237c3aed" stroke-width="1" opacity="0.06"/>`,
+  },
+  sociales: {
+    label: "Ciencias Sociales",
+    pilares: [
+      { icono: "🌍", color: "#0d9488", titulo: "Ciudadanía Global", sub: "Conciencia Social" },
+      { icono: "🏛️", color: "#b45309", titulo: "Historia y Cultura", sub: "Memoria Colectiva" },
+      { icono: "🗺️", color: "#0d9488", titulo: "Territorio e Identidad", sub: "Pertenencia" },
+    ],
+    fondoSvg: `<circle cx="90" cy="90" r="28" fill="none" stroke="%230d9488" stroke-width="1" opacity="0.07"/><path d="M75 90 L105 90 M90 75 L90 105" stroke="%23b45309" stroke-width="1" opacity="0.06"/>`,
+  },
+  educacion_fisica: {
+    label: "Educación Física",
+    pilares: [
+      { icono: "🏃", color: "#dc2626", titulo: "Disciplina Deportiva", sub: "Constancia Física" },
+      { icono: "💪", color: "#ea580c", titulo: "Esfuerzo y Superación", sub: "Fortaleza" },
+      { icono: "🏆", color: "#dc2626", titulo: "Espíritu Deportivo", sub: "Juego Limpio" },
+    ],
+    fondoSvg: `<path d="M60 90 L120 90" stroke="%23dc2626" stroke-width="2" opacity="0.06" stroke-dasharray="4,6"/>`,
+  },
+  artistica: {
+    label: "Educación Artística",
+    pilares: [
+      { icono: "🎨", color: "#c026d3", titulo: "Creatividad", sub: "Imaginación Libre" },
+      { icono: "🎭", color: "#7c3aed", titulo: "Expresión Artística", sub: "Sensibilidad" },
+      { icono: "✨", color: "#c026d3", titulo: "Talento e Innovación", sub: "Arte con Propósito" },
+    ],
+    fondoSvg: `<circle cx="80" cy="85" r="6" fill="%23c026d3" opacity="0.07"/><circle cx="100" cy="95" r="4" fill="%237c3aed" opacity="0.07"/>`,
+  },
+  general: {
+    label: "General / Institucional",
+    pilares: [
+      { icono: "🎓", color: "#1e3a8a", titulo: "Excelencia Académica", sub: "Compromiso Institucional" },
+      { icono: "⭐", color: "#d97706", titulo: "Mérito Estudiantil", sub: "Reconocimiento" },
+      { icono: "🏫", color: "#1e3a8a", titulo: "Comunidad Educativa", sub: "Formación Integral" },
+    ],
+    fondoSvg: `<circle cx="90" cy="90" r="3" fill="%231e3a8a" opacity="0.06"/>`,
+  },
+};
+
 function iconoEsquina(icono, color) {
-  return `<div style="width:56px; height:56px; border-radius:50%; background:${color}15; border:2px solid ${color}; display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0;">${icono}</div>`;
+  return `<div style="width:56px; height:56px; border-radius:50%; background:${color}15; border:2px solid ${color}; display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0; line-height:1;">${icono}</div>`;
 }
 
-function htmlDiploma({ institucion, estudianteNombre, gradoId, tituloDiploma, subtitulo, badge, motivo, puntajes, fecha, docenteNombre, docenteRol }) {
+function patronFondo(fondoSvg) {
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'>${fondoSvg}</svg>`;
+  return `data:image/svg+xml,${svg.replace(/#/g, "%23").replace(/"/g, "'")}`;
+}
+
+function htmlDiploma({ institucion, estudianteNombre, gradoId, tituloDiploma, subtitulo, badge, motivo, puntajes, fecha, docenteNombre, docenteRol, asignaturaKey }) {
+  const asig = ASIGNATURAS[asignaturaKey] || ASIGNATURAS.general;
+  const [p1, p2, p3] = asig.pilares;
+
   const puntajesHtml = (puntajes || []).filter((p) => p.label.trim() && p.valor.trim())
     .map((p, i) => `
       <div style="background:#fff; border:1.5px solid ${i === (puntajes.length - 1) ? "#93c5fd" : "#cbd5e1"}; ${i === (puntajes.length - 1) ? "background:#eff6ff;" : ""} border-radius:8px; padding:6px 16px; display:flex; align-items:center; gap:10px; box-shadow:0 2px 6px rgba(0,0,0,0.04);">
@@ -28,45 +111,47 @@ function htmlDiploma({ institucion, estudianteNombre, gradoId, tituloDiploma, su
     `).join("");
 
   return `
-    <div class="slide" style="width:1280px; height:720px; background:linear-gradient(135deg,#ffffff 0%,#fdfbf7 50%,#f7f2e4 100%); border-radius:12px; box-shadow:0 25px 50px rgba(0,0,0,0.5); position:relative; overflow:hidden; padding:25px 40px; display:flex; flex-direction:column; justify-content:space-between; border:6px solid #b45309; page-break-after: always; margin: 0 auto 30px auto; box-sizing:border-box;">
+    <div class="slide" style="width:1280px; height:720px; background-color:#fdfbf7; background-image: linear-gradient(135deg,#ffffff 0%,#fdfbf7 50%,#f7f2e4 100%), url('${patronFondo(asig.fondoSvg)}'); background-repeat: no-repeat, repeat; background-size: cover, 180px 180px; border-radius:12px; box-shadow:0 25px 50px rgba(0,0,0,0.5); position:relative; overflow:hidden; padding:25px 40px; display:flex; flex-direction:column; justify-content:space-between; border:6px solid #b45309; page-break-after: always; margin: 0 auto 30px auto; box-sizing:border-box;">
       <div style="position:absolute; top:14px; left:14px; right:14px; bottom:14px; border:3px solid #1e3a8a; border-radius:8px; pointer-events:none;"></div>
       <div style="position:absolute; top:20px; left:20px; right:20px; bottom:20px; border:1px dashed #d97706; border-radius:6px; pointer-events:none;"></div>
 
-      <div style="position:absolute; top:28px; left:32px; z-index:10; display:flex; align-items:center; gap:12px; background:rgba(255,255,255,0.9); padding:8px 16px 8px 10px; border-radius:50px; border:1.5px solid #d97706; box-shadow:0 4px 12px rgba(0,0,0,0.08);">
-        ${institucion?.logo_url ? `<img src="${institucion.logo_url}" style="height:56px; width:auto; object-fit:contain;" />` : iconoEsquina("🏛️", "#1e3a8a")}
-        <div style="display:flex; flex-direction:column;">
+      <div style="position:absolute; top:28px; left:32px; z-index:10; display:flex; align-items:center; justify-content:flex-start; gap:12px; height:56px; background:rgba(255,255,255,0.9); padding:4px 16px 4px 4px; border-radius:50px; border:1.5px solid #d97706; box-shadow:0 4px 12px rgba(0,0,0,0.08);">
+        ${institucion?.logo_url
+          ? `<div style="width:48px; height:48px; border-radius:50%; overflow:hidden; display:flex; align-items:center; justify-content:center; flex-shrink:0; background:#fff;"><img src="${institucion.logo_url}" style="max-width:100%; max-height:100%; object-fit:contain;" /></div>`
+          : iconoEsquina("🏛️", "#1e3a8a")}
+        <div style="display:flex; flex-direction:column; justify-content:center;">
           <span style="font-family:'Cinzel',serif; font-weight:800; font-size:12px; color:#1e3a8a; letter-spacing:0.5px; line-height:1.2;">${(institucion?.nombre || "INSTITUCIÓN EDUCATIVA").toUpperCase()}</span>
           <span style="font-size:9.5px; color:#b45309; font-weight:600;">Formación con Excelencia</span>
         </div>
       </div>
 
-      <div style="position:absolute; top:28px; right:32px; z-index:10; display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.92); padding:8px 16px; border-radius:40px; border:1.5px solid #1e3a8a; box-shadow:0 4px 12px rgba(0,0,0,0.08);">
-        ${iconoEsquina("⚖️", "#d97706")}
+      <div style="position:absolute; top:28px; right:32px; z-index:10; display:flex; align-items:center; justify-content:flex-end; gap:10px; height:56px; background:rgba(255,255,255,0.92); padding:4px 16px; border-radius:40px; border:1.5px solid ${p1.color}; box-shadow:0 4px 12px rgba(0,0,0,0.08);">
+        ${iconoEsquina(p1.icono, p1.color)}
         <div style="text-align:right;">
-          <div style="font-family:'Cinzel',serif; font-size:10.5px; font-weight:800; color:#d97706; text-transform:uppercase;">Ética y Liderazgo</div>
-          <div style="font-size:9px; color:#475569; font-weight:600;">Pilares de Excelencia</div>
+          <div style="font-family:'Cinzel',serif; font-size:10.5px; font-weight:800; color:${p1.color}; text-transform:uppercase;">${p1.titulo}</div>
+          <div style="font-size:9px; color:#475569; font-weight:600;">${p1.sub}</div>
         </div>
       </div>
 
-      <div style="position:absolute; bottom:28px; left:32px; z-index:10; display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.92); padding:8px 16px; border-radius:40px; border:1.5px solid #d97706; box-shadow:0 4px 12px rgba(0,0,0,0.08);">
-        ${iconoEsquina("🕊️", "#1e3a8a")}
+      <div style="position:absolute; bottom:28px; left:32px; z-index:10; display:flex; align-items:center; justify-content:flex-start; gap:10px; height:56px; background:rgba(255,255,255,0.92); padding:4px 16px; border-radius:40px; border:1.5px solid ${p2.color}; box-shadow:0 4px 12px rgba(0,0,0,0.08);">
+        ${iconoEsquina(p2.icono, p2.color)}
         <div style="text-align:left;">
-          <div style="font-family:'Cinzel',serif; font-size:10px; font-weight:800; color:#1e3a8a; text-transform:uppercase;">Respeto y Virtud</div>
-          <div style="font-size:8.5px; color:#b45309; font-weight:600;">Formación Integral</div>
+          <div style="font-family:'Cinzel',serif; font-size:10px; font-weight:800; color:${p2.color}; text-transform:uppercase;">${p2.titulo}</div>
+          <div style="font-size:8.5px; color:#475569; font-weight:600;">${p2.sub}</div>
         </div>
       </div>
 
-      <div style="position:absolute; bottom:28px; right:32px; z-index:10; display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.92); padding:8px 16px; border-radius:40px; border:1.5px solid #1e3a8a; box-shadow:0 4px 12px rgba(0,0,0,0.08);">
+      <div style="position:absolute; bottom:28px; right:32px; z-index:10; display:flex; align-items:center; justify-content:flex-end; gap:10px; height:56px; background:rgba(255,255,255,0.92); padding:4px 16px; border-radius:40px; border:1.5px solid ${p3.color}; box-shadow:0 4px 12px rgba(0,0,0,0.08);">
         <div style="text-align:right;">
-          <div style="font-family:'Cinzel',serif; font-size:10px; font-weight:800; color:#d97706; text-transform:uppercase;">Convivencia y Paz</div>
-          <div style="font-size:8.5px; color:#1e3a8a; font-weight:600;">Compromiso Social</div>
+          <div style="font-family:'Cinzel',serif; font-size:10px; font-weight:800; color:${p3.color}; text-transform:uppercase;">${p3.titulo}</div>
+          <div style="font-size:8.5px; color:#475569; font-weight:600;">${p3.sub}</div>
         </div>
-        ${iconoEsquina("🤝", "#d97706")}
+        ${iconoEsquina(p3.icono, p3.color)}
       </div>
 
       <div style="text-align:center; margin-top:15px; position:relative; z-index:2;">
         <div style="font-family:'Cinzel',serif; font-size:21px; font-weight:800; color:#1e3a8a; letter-spacing:2px; text-transform:uppercase;">${institucion?.nombre || "Institución Educativa"}</div>
-        <div style="font-size:12px; font-weight:700; color:#d97706; letter-spacing:2.5px; text-transform:uppercase; margin-top:3px;">Curso ${gradoId}</div>
+        <div style="font-size:12px; font-weight:700; color:#d97706; letter-spacing:2.5px; text-transform:uppercase; margin-top:3px;">Curso ${gradoId} · ${asig.label}</div>
       </div>
 
       <div style="text-align:center; position:relative; z-index:2;">
@@ -84,9 +169,8 @@ function htmlDiploma({ institucion, estudianteNombre, gradoId, tituloDiploma, su
         ${puntajesHtml ? `<div style="display:flex; justify-content:center; gap:18px; margin:10px auto 5px auto;">${puntajesHtml}</div>` : ""}
       </div>
 
-      <div>
-        <div style="text-align:center; font-size:11px; font-weight:700; color:#b45309; letter-spacing:1px; text-transform:uppercase; margin-bottom:14px;">📜 ${fecha}</div>
-        <div style="display:flex; justify-content:space-around; align-items:flex-end; width:70%; margin:0 auto;">
+      <div style="position:relative; z-index:2;">
+        <div style="display:flex; justify-content:center; gap:120px; align-items:flex-end; width:100%; margin:0 auto;">
           <div style="text-align:center; width:260px;">
             <div style="border-top:1.5px solid #475569; margin-bottom:4px;"></div>
             <div style="font-size:12px; font-weight:700; color:#1e293b;">${docenteNombre || "Director(a) de Curso"}</div>
@@ -98,6 +182,7 @@ function htmlDiploma({ institucion, estudianteNombre, gradoId, tituloDiploma, su
             <div style="font-size:10.5px; color:#64748b;">Rectoría</div>
           </div>
         </div>
+        <div style="text-align:center; font-size:11px; font-weight:700; color:#b45309; letter-spacing:1px; text-transform:uppercase; margin-top:12px;">📜 ${fecha}</div>
       </div>
     </div>
   `;
@@ -146,6 +231,7 @@ export function VistaDiplomas({ grados }) {
   const [cargando, setCargando] = useState(true);
   const [seleccionados, setSeleccionados] = useState(new Set());
   const [tipoKey, setTipoKey] = useState("excelencia");
+  const [asignaturaKey, setAsignaturaKey] = useState("etica_religion");
   const [tituloEditable, setTituloEditable] = useState(TIPOS_DIPLOMA[0].titulo);
   const [subtituloEditable, setSubtituloEditable] = useState(TIPOS_DIPLOMA[0].subtitulo);
   const [badgeEditable, setBadgeEditable] = useState(TIPOS_DIPLOMA[0].badge);
@@ -187,14 +273,16 @@ export function VistaDiplomas({ grados }) {
     const nombres = estudiantes.filter((s) => seleccionados.has(s.id)).map((s) => s.nombre);
     imprimirDiplomas(nombres, gradoId, {
       tituloDiploma: tituloEditable, subtitulo: subtituloEditable, badge: badgeEditable, motivo: motivoEditable,
-      puntajes, docenteRol: docenteRolEditable,
+      puntajes, docenteRol: docenteRolEditable, asignaturaKey,
     }, institucion, docenteNombre);
   };
+
+  const asigActual = ASIGNATURAS[asignaturaKey];
 
   return (
     <div>
       <h2 className="text-xl font-bold text-slate-800 mb-1">🏅 Generador de Diplomas</h2>
-      <p className="text-sm text-slate-400 mb-4">Elegí a quién reconocer y el tipo de diploma — se genera con el estilo elegante de siempre, listo para imprimir.</p>
+      <p className="text-sm text-slate-400 mb-4">Elegí a quién reconocer, la asignatura (define los íconos y el fondo) y el tipo de diploma.</p>
 
       <div className="flex flex-wrap gap-2 items-center mb-4">
         <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
@@ -218,6 +306,22 @@ export function VistaDiplomas({ grados }) {
       )}
 
       <div className="bg-white rounded-2xl border border-slate-100 p-4 mb-4">
+        <label className="text-xs text-slate-500 block mb-1">Asignatura (define los 3 íconos de las esquinas y el fondo decorativo)</label>
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {Object.entries(ASIGNATURAS).map(([key, a]) => (
+            <button key={key} onClick={() => setAsignaturaKey(key)} className={`text-[11px] px-2.5 py-1.5 rounded-full ${asignaturaKey === key ? "bg-violet-500 text-white" : "bg-slate-100 text-slate-600"}`}>
+              {a.pilares[0].icono} {a.label}
+            </button>
+          ))}
+        </div>
+        {asigActual && (
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            {asigActual.pilares.map((p, i) => (
+              <span key={i} className="text-[10px] px-2 py-1 rounded-full" style={{ background: `${p.color}15`, color: p.color }}>{p.icono} {p.titulo}</span>
+            ))}
+          </div>
+        )}
+
         <label className="text-xs text-slate-500 block mb-1">Tipo de diploma</label>
         <div className="flex flex-wrap gap-1.5 mb-3">
           {TIPOS_DIPLOMA.map((t) => (
