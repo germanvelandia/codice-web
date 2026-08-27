@@ -214,18 +214,33 @@ function htmlBloqueActa(estudiante, jornada, primero) {
   const a = estudiante.asignacion || {};
   const materias = (a.materias_perdidas && a.materias_perdidas.length > 0) ? a.materias_perdidas.join(", ") : (a.asignaturas_perdidas || "—");
   return `
-    <div style="${primero ? "" : "page-break-before: always;"} padding-top: ${primero ? "0" : "10px"};">
-      <p><b>Estudiante:</b> ${estudiante.nombre} · <b>Grado:</b> ${jornada.grado_id}</p>
-      <p><b>Periodo:</b> ${jornada.periodo} · <b>Fecha:</b> ${new Date().toLocaleDateString("es-CO")}</p>
-      <p><b>Asignaturas perdidas:</b><br/>${materias}</p>
-      <p><b>Compromisos de nivelación académica:</b></p>
-      <div style="white-space:pre-line; margin-bottom:10px;">${a.compromiso_nivelacion || "—"}</div>
-      <p><b>Compromisos convivenciales:</b></p>
-      <div style="white-space:pre-line;">${a.compromiso_convivencial || "—"}</div>
-      <div style="display:flex; justify-content:space-between; margin-top:50px;">
-        <div style="border-top:1px solid #000; width:28%; text-align:center; padding-top:4px; font-size:11px;">Firma Padre de Familia</div>
-        <div style="border-top:1px solid #000; width:28%; text-align:center; padding-top:4px; font-size:11px;">Firma Estudiante</div>
-        <div style="border-top:1px solid #000; width:28%; text-align:center; padding-top:4px; font-size:11px;">Firma Dirección de Curso</div>
+    <div style="${primero ? "" : "page-break-before: always;"} padding: 20px 6px 0 6px;">
+      <div style="display:flex; flex-wrap:wrap; gap:10px 24px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px 18px; margin-bottom:22px; font-size:12.5px;">
+        <div><b>Estudiante:</b> ${estudiante.nombre}</div>
+        <div><b>Grado:</b> ${jornada.grado_id}</div>
+        <div><b>Periodo:</b> ${jornada.periodo}</div>
+        <div><b>Fecha:</b> ${new Date().toLocaleDateString("es-CO")}</div>
+      </div>
+
+      <div style="margin-bottom:18px;">
+        <div style="font-weight:bold; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:#475569; margin-bottom:5px;">Asignaturas perdidas</div>
+        <div style="font-size:13px; line-height:1.5;">${materias}</div>
+      </div>
+
+      <div style="margin-bottom:18px;">
+        <div style="font-weight:bold; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:#475569; margin-bottom:5px;">Compromisos de nivelación académica</div>
+        <div style="white-space:pre-line; font-size:13px; line-height:1.6;">${a.compromiso_nivelacion || "—"}</div>
+      </div>
+
+      <div style="margin-bottom:40px;">
+        <div style="font-weight:bold; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:#475569; margin-bottom:5px;">Compromisos convivenciales</div>
+        <div style="white-space:pre-line; font-size:13px; line-height:1.6;">${a.compromiso_convivencial || "—"}</div>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; gap:20px; margin-top:50px; padding: 0 10px;">
+        <div style="border-top:1px solid #000; flex:1; text-align:center; padding-top:6px; font-size:11px;">Firma Padre de Familia</div>
+        <div style="border-top:1px solid #000; flex:1; text-align:center; padding-top:6px; font-size:11px;">Firma Estudiante</div>
+        <div style="border-top:1px solid #000; flex:1; text-align:center; padding-top:6px; font-size:11px;">Firma Dirección de Curso</div>
       </div>
     </div>
   `;
@@ -239,8 +254,10 @@ function imprimirActasUnificadas(jornada, institucion) {
     <html><head><title>Actas de compromiso — Curso ${jornada.grado_id}</title></head>
     <body style="font-family: Arial, sans-serif; padding: 30px; font-size: 13px;">
       ${conReportes.map((e, i) => `
-        ${i === 0 ? htmlEncabezadoColegio(institucion, "ACTA DE COMPROMISO ACADÉMICO Y CONVIVENCIAL") : ""}
-        ${htmlBloqueActa(e, jornada, i === 0)}
+        <div style="${i === 0 ? "" : "page-break-before: always;"}">
+          ${htmlEncabezadoColegio(institucion, "ACTA DE COMPROMISO ACADÉMICO Y CONVIVENCIAL")}
+          ${htmlBloqueActa(e, jornada, true)}
+        </div>
       `).join("")}
       <script>window.print();</script>
     </body></html>
