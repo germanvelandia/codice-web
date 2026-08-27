@@ -63,6 +63,14 @@ export function ordenarPorApellido(estudiantes) {
   );
 }
 
+// Alfabético simple por el nombre tal como está guardado (sin intentar
+// separar apellido) — para cuando resulta más fácil buscar así.
+export function ordenarPorNombre(estudiantes) {
+  return [...estudiantes].sort((a, b) =>
+    (a?.nombre || "").localeCompare(b?.nombre || "", "es", { sensitivity: "base" })
+  );
+}
+
 // Si el estudiante tiene apellido guardado explícitamente, se usa ese (orden confiable).
 // Si no, cae de vuelta a la adivinanza por posición de palabras (comportamiento anterior).
 export function claveOrden(estudiante) {
