@@ -6,20 +6,8 @@ import { NotasDireccionCurso } from "./NotasDireccionCurso";
 
 const PERIODOS = ["1", "2", "3", "4"];
 
-// Plan de asignaturas estándar del curso, para marcar con checkbox en vez
-// de escribirlas a mano.
-const MATERIAS_CHECKLIST = [
-  "Artes y Danzas",
-  "Ciencias Naturales y Educación Ambiental",
-  "Ciencias Sociales",
-  "Educación Ética y en Valores Humanos",
-  "Educación Física, Recreación y Deportes",
-  "Educación Religiosa y Moral",
-  "Humanidades - Lengua Castellana",
-  "Idioma Extranjero - Inglés",
-  "Matemáticas",
-  "Tecnología e Informática",
-];
+// El plan de asignaturas del checklist ahora se trae de la base de datos
+// (api.fetchMateriasChecklist) — editable/agregable, ya no fijo aquí.
 // Encabezado del colegio, reutilizado en todas las impresiones de esta pantalla
 function htmlEncabezadoColegio(institucion, subtitulo) {
   return `
@@ -270,6 +258,38 @@ function ActaCompromisoModal({ estudiante, jornada, institucion, onClose, onGuar
   const [textoNuevaPlantilla, setTextoNuevaPlantilla] = useState("");
   const [editandoPlantillaId, setEditandoPlantillaId] = useState(null);
   const [textoEdicionPlantilla, setTextoEdicionPlantilla] = useState("");
+  const [materiasChecklist, setMateriasChecklist] = useState([]);
+  const [editandoPlanAsignaturas, setEditandoPlanAsignaturas] = useState(false);
+  const [nuevaMateria, setNuevaMateria] = useState("");
+  const [editandoMateriaId, setEditandoMateriaId] = useState(null);
+  const [textoEdicionMateria, setTextoEdicionMateria] = useState("");
+
+  const cargarMateriasChecklist = () => api.fetchMateriasChecklist().then(setMateriasChecklist);
+  useEffect(() => { cargarMateriasChecklist(); }, []);
+
+  const agregarMateria = async () => {
+    if (!nuevaMateria.trim()) return;
+    await api.crearMateriaChecklist(nuevaMateria.trim());
+    setNuevaMateria("");
+    cargarMateriasChecklist();
+  };
+  const empezarEdicionMateria = (m) => { setEditandoMateriaId(m.id); setTextoEdicionMateria(m.nombre); };
+  const guardarEdicionMateria = async () => {
+    if (!textoEdicionMateria.trim()) return;
+    await api.editarMateriaChecklist(editandoMateriaId, textoEdicionMateria.trim());
+    setEditandoMateriaId(null);
+    cargarMateriasChecklist();
+  };
+  const eliminarMateria = async (id) => {
+    if (!confirm("¿Quitar esta asignatura del plan? No afecta actas ya guardadas con ella.")) return;
+    await api.eliminarMateriaChecklist(id);
+    cargarMateriasChecklist();
+  };
+  const restablecerPlanAsignaturas = async () => {
+    if (!confirm("¿Restablecer el plan de asignaturas? Esto borra las tuyas propias y vuelve a las 10 genéricas de fábrica. Útil si cambiaste de institución. No se puede deshacer.")) return;
+    await api.restablecerMateriasChecklist();
+    cargarMateriasChecklist();
+  };
 
   const cargarPlantillas = async () => {
     let data = await api.fetchPlantillasCompromiso();
@@ -381,14 +401,47 @@ function ActaCompromisoModal({ estudiante, jornada, institucion, onClose, onGuar
           <button onClick={onClose} className="text-slate-400">✕</button>
         </div>
 
-        <label className="text-xs text-slate-500 block mb-1">Asignaturas perdidas</label>
-        <div className="grid grid-cols-2 gap-1 mb-3 bg-slate-50 rounded-lg p-2">
-          {MATERIAS_CHECKLIST.map((m) => (
-            <label key={m} className="flex items-center gap-1.5 text-[11px] text-slate-600">
-              <input type="checkbox" checked={materiasPerdidas.includes(m)} onChange={() => toggleMateria(m)} /> {m}
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-xs text-slate-500">Asignaturas perdidas</label>
+          <button onClick={() => setEditandoPlanAsignaturas((v) => !v)} className="text-[10px] text-violet-500">⚙️ Editar plan de asignaturas</button>
+        </div>
+        <div className="grid grid-cols-2 gap-1 mb-2 bg-slate-50 rounded-lg p-2">
+          {materiasChecklist.map((m) => (
+            <label key={m.id} className="flex items-center gap-1.5 text-[11px] text-slate-600">
+              <input type="checkbox" checked={materiasPerdidas.includes(m.nombre)} onChange={() => toggleMateria(m.nombre)} /> {m.nombre}
             </label>
           ))}
         </div>
+        {editandoPlanAsignaturas && (
+          <div className="bg-violet-50 rounded-lg p-2 mb-3 space-y-1">
+            {materiasChecklist.map((m) => (
+              <div key={m.id} className="flex items-center gap-1.5">
+                {editandoMateriaId === m.id ? (
+                  <>
+                    <input value={textoEdicionMateria} onChange={(e) => setTextoEdicionMateria(e.target.value)} autoFocus
+                      onKeyDown={(e) => { if (e.key === "Enter") guardarEdicionMateria(); if (e.key === "Escape") setEditandoMateriaId(null); }}
+                      className="flex-1 text-[11px] rounded px-2 py-1 border border-violet-300 outline-none" />
+                    <button onClick={guardarEdicionMateria} className="text-[10px] text-emerald-600">✔</button>
+                    <button onClick={() => setEditandoMateriaId(null)} className="text-[10px] text-slate-400">✕</button>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex-1 text-[11px] text-slate-600">{m.nombre}</span>
+                    <button onClick={() => empezarEdicionMateria(m)} className="text-[10px] text-violet-500">✏️</button>
+                    <button onClick={() => eliminarMateria(m.id)} className="text-[10px] text-rose-400">✕</button>
+                  </>
+                )}
+              </div>
+            ))}
+            <div className="flex gap-1.5 pt-1">
+              <input value={nuevaMateria} onChange={(e) => setNuevaMateria(e.target.value)} placeholder="Nueva asignatura…"
+                onKeyDown={(e) => { if (e.key === "Enter") agregarMateria(); }}
+                className="flex-1 text-[11px] rounded px-2 py-1 border border-slate-200 outline-none bg-white" />
+              <button onClick={agregarMateria} className="text-[10px] font-semibold px-2 py-1 rounded bg-violet-500 text-white">+ Agregar</button>
+            </div>
+            <button onClick={restablecerPlanAsignaturas} className="text-[10px] text-rose-500 pt-1">🗑️ Restablecer plan (volver a las 10 de fábrica)</button>
+          </div>
+        )}
 
         <label className="text-xs text-slate-500 block mb-1">Compromisos de nivelación académica</label>
         {renderPlantillas(plantillasNivelacion, insertarNivelacion, "nivelacion")}
@@ -435,12 +488,14 @@ function JornadaDetalle({ jornada, gradoId, institucion }) {
   const [estudiantes, setEstudiantes] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [formHorarioAbierto, setFormHorarioAbierto] = useState(false);
+  const [materiasChecklist, setMateriasChecklist] = useState([]);
 
   const cargar = () => {
     setCargando(true);
     api.fetchDetalleJornada(jornada.id, gradoId).then((d) => { setHorarios(d.horarios); setEstudiantes(d.estudiantes); setCargando(false); });
   };
   useEffect(() => { cargar(); }, [jornada.id]);
+  useEffect(() => { api.fetchMateriasChecklist().then(setMateriasChecklist); }, []);
 
   const eliminarHorario = async (id) => { if (!confirm("¿Eliminar este horario/grupo? Los estudiantes asignados quedan sin grupo.")) return; await api.eliminarHorarioJornada(id); cargar(); };
   const asignar = async (estudianteId, horarioId) => { await api.asignarEstudianteHorario(jornada.id, estudianteId, horarioId || null); cargar(); };
@@ -523,16 +578,16 @@ function JornadaDetalle({ jornada, gradoId, institucion }) {
               <thead>
                 <tr className="bg-slate-50">
                   <th className="text-left px-2 py-2 sticky left-0 bg-slate-50">Estudiante</th>
-                  {MATERIAS_CHECKLIST.map((m) => <th key={m} className="px-1 py-2" style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}>{m}</th>)}
+                  {materiasChecklist.map((m) => <th key={m.id} className="px-1 py-2" style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}>{m.nombre}</th>)}
                 </tr>
               </thead>
               <tbody>
                 {estudiantes.map((e) => (
                   <tr key={e.id} className="border-t border-slate-100">
                     <td className="px-2 py-1 sticky left-0 bg-white font-medium text-slate-700 whitespace-nowrap">{e.nombre}</td>
-                    {MATERIAS_CHECKLIST.map((m) => (
-                      <td key={m} className="text-center px-1 py-1">
-                        <input type="checkbox" checked={!!e.asignacion?.materias_perdidas?.includes(m)} onChange={() => marcarMateriaMatriz(e, m)} />
+                    {materiasChecklist.map((m) => (
+                      <td key={m.id} className="text-center px-1 py-1">
+                        <input type="checkbox" checked={!!e.asignacion?.materias_perdidas?.includes(m.nombre)} onChange={() => marcarMateriaMatriz(e, m.nombre)} />
                       </td>
                     ))}
                   </tr>
