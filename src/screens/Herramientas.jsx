@@ -242,10 +242,10 @@ export function VistaRuletaMonedas({ grados }) {
     try {
       if (objetivo === "uno") {
         await api.ajustarMonedas(estudianteId, valor);
-        await api.registrarHistorialPunto(estudianteId, "monedas", valor, "🎡 Ruleta de Monedas (manual)");
+        await api.registrarHistorialGamificacion(estudianteId, { etiqueta: "🎡 Ruleta de Monedas (manual)", monedas: valor, categoria: "monedas" });
       } else {
         await api.ajustarMonedasMasivo(visibles.map((s) => s.id), valor);
-        await api.registrarHistorialPuntoMasivo(visibles.map((s) => s.id), "monedas", valor, "🎡 Ruleta de Monedas (manual)");
+        await api.registrarHistorialGamificacionMasivo(visibles.map((s) => s.id), { etiqueta: "🎡 Ruleta de Monedas (manual)", monedas: valor, categoria: "monedas" });
       }
       setResultado(valor);
       setManualValor("");
@@ -283,10 +283,10 @@ export function VistaRuletaMonedas({ grados }) {
           try {
             if (objetivo === "uno") {
               await api.ajustarMonedas(estudianteId, valor);
-              await api.registrarHistorialPunto(estudianteId, "monedas", valor, "🎡 Ruleta de Monedas");
+              await api.registrarHistorialGamificacion(estudianteId, { etiqueta: "🎡 Ruleta de Monedas", monedas: valor, categoria: "monedas" });
             } else {
               await api.ajustarMonedasMasivo(visibles.map((s) => s.id), valor);
-              await api.registrarHistorialPuntoMasivo(visibles.map((s) => s.id), "monedas", valor, "🎡 Ruleta de Monedas");
+              await api.registrarHistorialGamificacionMasivo(visibles.map((s) => s.id), { etiqueta: "🎡 Ruleta de Monedas", monedas: valor, categoria: "monedas" });
             }
           } catch (e) {
             alert("Error al aplicar las monedas: " + e.message);
