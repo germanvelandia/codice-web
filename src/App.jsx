@@ -1793,6 +1793,7 @@ function PortalEstudiante() {
   const [nuevosLogros, setNuevosLogros] = useState([]);
   const [equipados, setEquipados] = useState({ marco: null, titulo: null });
   const [avatarConfig, setAvatarConfig] = useState(null);
+  const [miRol, setMiRol] = useState(null);
 
   const consultar = async () => {
     if (!codigo.trim()) return;
@@ -1810,6 +1811,7 @@ function PortalEstudiante() {
           api.verificarYOtorgarLogros(info.id).then((nuevos) => { if (nuevos.length > 0) setNuevosLogros(nuevos); });
           api.fetchEquipadosEstudiante(info.id).then(setEquipados);
           api.fetchAvatarConfigsMultiples([info.id]).then((mapa) => setAvatarConfig(mapa[info.id] || null));
+          api.fetchMiRol(info.id).then(setMiRol);
         }
       }
     } catch (e) {
@@ -1845,10 +1847,11 @@ function PortalEstudiante() {
             <>
               <div className="text-center mb-4">
                 {avatarConfig && (
-                  <div className="flex justify-center mb-1.5">
+                  <div className="flex flex-col items-center mb-1.5">
                     <div className="bg-gradient-to-b from-violet-100 to-violet-50 rounded-2xl p-1.5 border border-violet-200">
                       <PersonajePreview config={avatarConfig} size={92} />
                     </div>
+                    {avatarConfig.nombre_personaje && <div className="text-xs font-bold text-violet-600 mt-1">✨ {avatarConfig.nombre_personaje}</div>}
                   </div>
                 )}
                 <div className="mx-auto mb-1.5 flex items-center justify-center rounded-full overflow-hidden" style={{ width: 56, height: 56, border: equipados.marco ? `4px solid ${equipados.marco.valor}` : "4px solid transparent", background: "#F5F3FF" }}>
@@ -1860,6 +1863,7 @@ function PortalEstudiante() {
                 </div>
                 <div className="text-lg font-bold text-slate-800">{datos.nombre}</div>
                 {equipados.titulo && <div className="text-[11px] font-semibold text-violet-500">✨ {equipados.titulo.valor}</div>}
+                {miRol && <div className="text-[11px] font-semibold text-amber-600" title={miRol.descripcion || undefined}>👑 {miRol.nombre}</div>}
                 <div className="text-xs text-slate-400">Grado {datos.grado_id} · {datos.grupo}</div>
               </div>
               <ValorSemanaEstudiante />
