@@ -3738,6 +3738,21 @@ export async function setObservacionValor(actividadId, estudianteId, observacion
   if (error) throw error;
 }
 
+// Deja registro de un punto bueno/malo (XP, vida y/o monedas) en el
+// historial de gamificación — usado desde Acciones Masivas, la Ruleta de
+// Monedas, y la asistencia, para que el estudiante después pueda ver por
+// qué le dieron o le quitaron puntos.
+export async function registrarHistorialGamificacion(estudianteId, { etiqueta, xp = 0, vida = 0, monedas = 0, categoria = "general" }) {
+  const { error } = await supabase.from("historial_gamificacion").insert({ estudiante_id: estudianteId, etiqueta, xp, vida, monedas, categoria });
+  if (error) throw error;
+}
+
+export async function registrarHistorialGamificacionMasivo(estudianteIds, campos) {
+  const filas = estudianteIds.map((id) => ({ estudiante_id: id, categoria: "general", xp: 0, vida: 0, monedas: 0, ...campos }));
+  const { error } = await supabase.from("historial_gamificacion").insert(filas);
+  if (error) throw error;
+}
+
 export async function fetchHistorialGamificacion(estudianteId) {
   const { data, error } = await supabase.from("historial_gamificacion").select("*").eq("estudiante_id", estudianteId).order("ts", { ascending: false });
   if (error) throw error;
@@ -3999,9 +4014,12 @@ export async function marcarAsistencia(estudianteId, fecha, codigo, observacion,
 
   if (efecto.xp) await ajustarXp(estudianteId, efecto.xp);
   if (efecto.vida) await ajustarVida(estudianteId, efecto.vida);
-  const motivoAsistencia = `Asistencia: ${LABEL_CODIGO_ASISTENCIA[codigo] || codigo} (${fecha})`;
-  if (efecto.xp) await registrarHistorialPunto(estudianteId, "xp", efecto.xp, motivoAsistencia);
-  if (efecto.vida) await registrarHistorialPunto(estudianteId, "vida", efecto.vida, motivoAsistencia);
+  if (efecto.xp || efecto.vida) {
+    await registrarHistorialGamificacion(estudianteId, {
+      etiqueta: `Asistencia: ${LABEL_CODIGO_ASISTENCIA[codigo] || codigo} (${fecha})`,
+      xp: efecto.xp || 0, vida: efecto.vida || 0, categoria: "asistencia",
+    });
+  }
 }
 
 export async function quitarAsistencia(estudianteId, fecha, materiaId = null) {
@@ -4148,13 +4166,11 @@ export async function registrarAccion(estudianteId, accion) {
   const deltaMonedas = accion.xp > 0 ? 1 : 0;
   const [, rpcRes] = await Promise.all([
     supabase.from("historial_gamificacion").insert({
-      estudiante_id: estudianteId, etiqueta: accion.label, xp: accion.xp, vida: accion.vida, categoria: accion.categoria,
+      estudiante_id: estudianteId, etiqueta: accion.label, xp: accion.xp, vida: accion.vida, monedas: deltaMonedas, categoria: accion.categoria,
     }),
     supabase.rpc("ajustar_progreso", { p_estudiante_id: estudianteId, p_delta_xp: accion.xp, p_delta_vida: accion.vida, p_delta_monedas: deltaMonedas }),
   ]);
   if (rpcRes.error) throw rpcRes.error;
-  if (accion.xp) await registrarHistorialPunto(estudianteId, "xp", accion.xp, accion.label);
-  if (accion.vida) await registrarHistorialPunto(estudianteId, "vida", accion.vida, accion.label);
   const fila = rpcRes.data?.[0];
   return { xp: fila?.xp ?? 0, vida: fila?.vida ?? 0, monedas: fila?.monedas ?? 0 };
 }
