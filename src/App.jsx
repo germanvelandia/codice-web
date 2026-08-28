@@ -14,6 +14,7 @@ import { VistaLogros } from "./screens/Logros";
 import { VistaSalonHonor } from "./screens/SalonHonor";
 import { VistaDiplomas } from "./screens/Diplomas";
 import { VistaPersonaje, PersonajePreview } from "./screens/Personaje";
+import { HistorialPuntosEstudiante } from "./screens/HistorialPuntos";
 import { VistaGamificacionExtra } from "./screens/GamificacionExtra";
 import { VistaRoles } from "./screens/Roles";
 import { VistaCalificaciones } from "./screens/Calificaciones";
@@ -1018,6 +1019,7 @@ const MENU_CODICE = [
   { key: "misiones", label: "Misiones", icono: "⚔️" },
   { key: "notas", label: "Notas", icono: "📝" },
   { key: "personaje", label: "Personaje", icono: "🎨" },
+  { key: "historial", label: "Historial", icono: "📖" },
   { key: "perfil", label: "Perfil", icono: "👤" },
   { key: "preguntados", label: "Preguntados", icono: "🎡" },
   { key: "proyectos", label: "Proyectos", icono: "📜" },
@@ -1031,7 +1033,7 @@ const MENU_CODICE = [
 // siendo la misma (la key de MENU_CODICE).
 const ICONO_MAPA = {
   album: "🏯", biblioteca: "📚", codice: "📖", forja: "⚒️", guias: "🗺️",
-  inicio: "🏰", misiones: "⚔️", notas: "📜", personaje: "🧙", perfil: "🛡️", preguntados: "🎡",
+  inicio: "🏰", misiones: "⚔️", notas: "📜", personaje: "🧙", historial: "📖", perfil: "🛡️", preguntados: "🎡",
   proyectos: "🏹", ranking: "👑", recompensas: "💎", salonhonor: "🏆",
 };
 
@@ -1925,6 +1927,10 @@ function PortalEstudiante() {
 
           {vista === "personaje" && estudianteInfo && (
             <VistaPersonaje estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} />
+          )}
+
+          {vista === "historial" && estudianteInfo && (
+            <HistorialPuntosEstudiante estudianteId={estudianteInfo.id} />
           )}
 
           {vista === "recompensas" && estudianteInfo && (
