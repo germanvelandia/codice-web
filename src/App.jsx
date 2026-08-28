@@ -1790,6 +1790,7 @@ function PortalEstudiante() {
   const [vista, setVista] = useState("inicio");
   const [nuevosLogros, setNuevosLogros] = useState([]);
   const [equipados, setEquipados] = useState({ marco: null, titulo: null });
+  const [avatarConfig, setAvatarConfig] = useState(null);
 
   const consultar = async () => {
     if (!codigo.trim()) return;
@@ -1806,6 +1807,7 @@ function PortalEstudiante() {
           api.registrarAcceso(info.id);
           api.verificarYOtorgarLogros(info.id).then((nuevos) => { if (nuevos.length > 0) setNuevosLogros(nuevos); });
           api.fetchEquipadosEstudiante(info.id).then(setEquipados);
+          api.fetchAvatarConfigsMultiples([info.id]).then((mapa) => setAvatarConfig(mapa[info.id] || null));
         }
       }
     } catch (e) {
@@ -1840,6 +1842,13 @@ function PortalEstudiante() {
           {vista === "inicio" && (
             <>
               <div className="text-center mb-4">
+                {avatarConfig && (
+                  <div className="flex justify-center mb-1.5">
+                    <div className="bg-gradient-to-b from-violet-100 to-violet-50 rounded-2xl p-1.5 border border-violet-200">
+                      <PersonajePreview config={avatarConfig} size={92} />
+                    </div>
+                  </div>
+                )}
                 <div className="mx-auto mb-1.5 flex items-center justify-center rounded-full overflow-hidden" style={{ width: 56, height: 56, border: equipados.marco ? `4px solid ${equipados.marco.valor}` : "4px solid transparent", background: "#F5F3FF" }}>
                   {estudianteInfo?.foto_url ? (
                     <img src={estudianteInfo.foto_url} alt={datos.nombre} className="w-full h-full object-cover" />
