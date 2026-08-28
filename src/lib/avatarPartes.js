@@ -189,11 +189,11 @@ const PANTALONES = {
 // posiciones documentadas en píxeles, así que se ajustaron por prueba visual.
 const OFF = {
   cabeza: [0, 0],
-  brazoIzq: [33, 104], brazoDer: [100, 104],
-  cuerpo: [55, 98],
-  piernaIzq: [59, 128], piernaDer: [73, 128],
-  camisa: [52, 98],
-  mangaIzq: [33, 104], mangaDer: [100, 104],
+  brazoIzq: [33, 118], brazoDer: [100, 118],
+  cuerpo: [55, 112],
+  piernaIzq: [59, 137], piernaDer: [73, 137],
+  camisa: [52, 112],
+  mangaIzq: [33, 118], mangaDer: [100, 118],
 };
 
 function grupo(inner, x, y) {
