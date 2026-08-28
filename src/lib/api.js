@@ -2284,7 +2284,7 @@ export async function eliminarParteAvatar(id) {
 export async function fetchAvatarConfig(estudianteId) {
   const { data, error } = await supabase.from("estudiante_avatar_config").select("*").eq("estudiante_id", estudianteId).maybeSingle();
   if (error) throw error;
-  return data || { estudiante_id: estudianteId, piel_color: "#F5D0A9", pelo_color: "#3B2314", atuendo_color: "#7C3AED" };
+  return data || { estudiante_id: estudianteId, cuerpo_id: null, pelo_id: null, pelo_color: "brown", atuendo_id: null, atuendo_color: "blue", accesorio_id: null };
 }
 
 // Trae la config de varios estudiantes a la vez (Ranking / Salón de Honor),
@@ -2302,7 +2302,8 @@ export async function fetchAvatarConfigsMultiples(estudianteIds) {
   const resultado = {};
   (configs || []).forEach((c) => {
     resultado[c.estudiante_id] = {
-      piel_color: c.piel_color, pelo_color: c.pelo_color, atuendo_color: c.atuendo_color,
+      pelo_color: c.pelo_color || "brown", atuendo_color: c.atuendo_color || "blue",
+      cuerpo_key: svgKeyDe(c.cuerpo_id) || "tint_1_smile",
       pelo_key: svgKeyDe(c.pelo_id) || "corto",
       atuendo_key: svgKeyDe(c.atuendo_id) || "tunica",
       accesorio_key: svgKeyDe(c.accesorio_id) || "ninguno",
