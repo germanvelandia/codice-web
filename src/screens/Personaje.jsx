@@ -3,13 +3,22 @@ import * as api from "../lib/api";
 import { personajeSvg } from "../lib/avatarPartes";
 
 const LABELS_CATEGORIA = { cuerpo: "🧍 Cuerpo", pelo: "💇 Pelo", atuendo: "👕 Atuendo", accesorio: "🎩 Accesorio" };
-const COLORES_PIEL = ["#F5D0A9", "#E8B585", "#C68642", "#8D5524", "#5A3825", "#FFDFC4"];
-const COLORES_PELO = ["#3B2314", "#000000", "#7C3AED", "#DC2626", "#F59E0B", "#FFFFFF", "#0891B2", "#EC4899"];
+
+// Vista previa en hex de cada color con nombre del paquete — solo para
+// pintar los botones de selección, el color real lo trae la pieza SVG.
+const COLORES_PELO_HEX = {
+  black: "#1F2937", blond: "#FDE68A", blue: "#3B82F6", brown: "#78350F",
+  green: "#16A34A", orange: "#F97316", red: "#DC2626", violet: "#7C3AED", white: "#F8FAFC",
+};
+const COLORES_ATUENDO_HEX = {
+  black: "#1F2937", blue: "#3B82F6", green: "#16A34A",
+  orange: "#F97316", red: "#DC2626", violet: "#7C3AED", white: "#F8FAFC",
+};
 
 export function PersonajePreview({ config, size = 100 }) {
   return (
-    <svg viewBox="0 0 100 120" width={size} height={size * 1.2} dangerouslySetInnerHTML={{ __html: personajeSvg({
-      pielColor: config.piel_color, peloKey: config.pelo_key, peloColor: config.pelo_color,
+    <svg viewBox="0 0 145 165" width={size} height={size * (165 / 145)} dangerouslySetInnerHTML={{ __html: personajeSvg({
+      cuerpoKey: config.cuerpo_key, peloKey: config.pelo_key, peloColor: config.pelo_color,
       atuendoKey: config.atuendo_key, atuendoColor: config.atuendo_color, accesorioKey: config.accesorio_key,
     }) }} />
   );
@@ -20,7 +29,7 @@ export function VistaPersonaje({ estudianteId, monedas, onMonedasActualizadas })
   const [config, setConfig] = useState(null);
   const [desbloqueados, setDesbloqueados] = useState([]);
   const [cargando, setCargando] = useState(true);
-  const [tab, setTab] = useState("pelo");
+  const [tab, setTab] = useState("cuerpo");
   const [comprando, setComprando] = useState(null);
 
   const cargar = async () => {
@@ -40,19 +49,19 @@ export function VistaPersonaje({ estudianteId, monedas, onMonedasActualizadas })
   // Traduce la config guardada (ids) a las claves de dibujo (svg_key) que necesita el renderer.
   const parteDe = (id) => catalogo.find((p) => p.id === id);
   const configVisual = {
-    piel_color: config.piel_color,
+    cuerpo_key: parteDe(config.cuerpo_id)?.svg_key || "tint_1_smile",
     pelo_key: parteDe(config.pelo_id)?.svg_key || "corto",
-    pelo_color: config.pelo_color,
+    pelo_color: config.pelo_color || "brown",
     atuendo_key: parteDe(config.atuendo_id)?.svg_key || "tunica",
-    atuendo_color: config.atuendo_color,
+    atuendo_color: config.atuendo_color || "blue",
     accesorio_key: parteDe(config.accesorio_id)?.svg_key || "ninguno",
   };
 
   const estaDesbloqueada = (parte) => parte.costo_monedas === 0 || desbloqueados.includes(parte.id);
 
   const equipar = async (categoria, parte) => {
-    const campo = { pelo: "pelo_id", atuendo: "atuendo_id", accesorio: "accesorio_id" }[categoria];
-    if (!campo) return; // "cuerpo" no tiene id que equipar, se maneja con color
+    const campo = { cuerpo: "cuerpo_id", pelo: "pelo_id", atuendo: "atuendo_id", accesorio: "accesorio_id" }[categoria];
+    if (!campo) return;
     await api.guardarAvatarConfig(estudianteId, { [campo]: parte.id });
     setConfig((prev) => ({ ...prev, [campo]: parte.id }));
   };
@@ -70,10 +79,6 @@ export function VistaPersonaje({ estudianteId, monedas, onMonedasActualizadas })
     setComprando(null);
   };
 
-  const cambiarColorPiel = async (color) => {
-    await api.guardarAvatarConfig(estudianteId, { piel_color: color });
-    setConfig((prev) => ({ ...prev, piel_color: color }));
-  };
   const cambiarColorPelo = async (color) => {
     await api.guardarAvatarConfig(estudianteId, { pelo_color: color });
     setConfig((prev) => ({ ...prev, pelo_color: color }));
@@ -84,7 +89,16 @@ export function VistaPersonaje({ estudianteId, monedas, onMonedasActualizadas })
   };
 
   const itemsDeTab = catalogo.filter((p) => p.categoria === tab);
-  const idEquipadoDeTab = { pelo: config.pelo_id, atuendo: config.atuendo_id, accesorio: config.accesorio_id }[tab];
+  const idEquipadoDeTab = { cuerpo: config.cuerpo_id, pelo: config.pelo_id, atuendo: config.atuendo_id, accesorio: config.accesorio_id }[tab];
+
+  // Vista previa chica de un ítem del catálogo — arma un personaje base con
+  // solo esa pieza puesta (más los colores actuales), para mostrar en la tarjeta.
+  const previaDeItem = (parte) => {
+    if (tab === "cuerpo") return personajeSvg({ cuerpoKey: parte.svg_key, peloKey: "calvo" });
+    if (tab === "pelo") return personajeSvg({ cuerpoKey: "tint_1_smile", peloKey: parte.svg_key, peloColor: config.pelo_color });
+    if (tab === "atuendo") return personajeSvg({ cuerpoKey: "tint_1_smile", atuendoKey: parte.svg_key, atuendoColor: config.atuendo_color });
+    return personajeSvg({ cuerpoKey: "tint_1_smile", accesorioKey: parte.svg_key });
+  };
 
   return (
     <div>
@@ -107,60 +121,44 @@ export function VistaPersonaje({ estudianteId, monedas, onMonedasActualizadas })
         ))}
       </div>
 
-      {tab === "cuerpo" ? (
-        <div className="bg-white rounded-2xl border border-slate-100 p-4">
-          <p className="text-xs text-slate-500 mb-2">Color de piel (gratis, elegí el que quieras)</p>
+      {(tab === "pelo" || tab === "atuendo") && (
+        <div className="bg-white rounded-2xl border border-slate-100 p-3 mb-2">
+          <p className="text-xs text-slate-500 mb-2">Color {tab === "pelo" ? "de pelo" : "del atuendo"} (gratis una vez que tengas el estilo)</p>
           <div className="flex flex-wrap gap-2">
-            {COLORES_PIEL.map((c) => (
-              <button key={c} onClick={() => cambiarColorPiel(c)} className="w-9 h-9 rounded-full border-2" style={{ background: c, borderColor: config.piel_color === c ? "#7C3AED" : "transparent" }} />
+            {Object.entries(tab === "pelo" ? COLORES_PELO_HEX : COLORES_ATUENDO_HEX).map(([nombre, hex]) => (
+              <button key={nombre} onClick={() => (tab === "pelo" ? cambiarColorPelo(nombre) : cambiarColorAtuendo(nombre))}
+                title={nombre}
+                className="w-7 h-7 rounded-full border-2"
+                style={{ background: hex, borderColor: (tab === "pelo" ? config.pelo_color : config.atuendo_color) === nombre ? "#7C3AED" : "#e2e8f0" }} />
             ))}
           </div>
         </div>
-      ) : (
-        <>
-          {(tab === "pelo" || tab === "atuendo") && (
-            <div className="bg-white rounded-2xl border border-slate-100 p-3 mb-2">
-              <p className="text-xs text-slate-500 mb-2">Color {tab === "pelo" ? "de pelo" : "del atuendo"} (gratis una vez que tengas el estilo)</p>
-              <div className="flex flex-wrap gap-2">
-                {COLORES_PELO.map((c) => (
-                  <button key={c} onClick={() => (tab === "pelo" ? cambiarColorPelo(c) : cambiarColorAtuendo(c))}
-                    className="w-7 h-7 rounded-full border-2" style={{ background: c, borderColor: (tab === "pelo" ? config.pelo_color : config.atuendo_color) === c ? "#7C3AED" : "#e2e8f0" }} />
-                ))}
-              </div>
-            </div>
-          )}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {itemsDeTab.map((parte) => {
-              const desbloqueada = estaDesbloqueada(parte);
-              const equipada = idEquipadoDeTab === parte.id || (parte.svg_key === "ninguno" && !idEquipadoDeTab);
-              return (
-                <div key={parte.id} className={`rounded-2xl border p-3 text-center ${equipada ? "border-violet-400 bg-violet-50" : "border-slate-100 bg-white"}`}>
-                  <div className="flex justify-center mb-1.5">
-                    <svg viewBox="0 0 100 60" width="70" height="42">
-                      <g dangerouslySetInnerHTML={{ __html:
-                        tab === "pelo" ? personajeSvg({ pielColor: "#F5D0A9", peloKey: parte.svg_key, peloColor: config.pelo_color }) :
-                        tab === "atuendo" ? personajeSvg({ pielColor: "#F5D0A9", peloKey: "corto", peloColor: config.pelo_color, atuendoKey: parte.svg_key, atuendoColor: config.atuendo_color }) :
-                        personajeSvg({ pielColor: "#F5D0A9", peloKey: "corto", peloColor: config.pelo_color, accesorioKey: parte.svg_key })
-                      }} />
-                    </svg>
-                  </div>
-                  <div className="text-[11px] font-semibold text-slate-700 mb-1.5">{parte.nombre}</div>
-                  {equipada ? (
-                    <span className="text-[10px] font-semibold text-violet-600">✓ Puesto</span>
-                  ) : desbloqueada ? (
-                    <button onClick={() => equipar(tab, parte)} className="text-[10px] font-semibold px-2 py-1 rounded-full bg-violet-500 text-white">Ponerse</button>
-                  ) : (
-                    <button disabled={comprando === parte.id} onClick={() => comprarYEquipar(tab, parte)}
-                      className="text-[10px] font-semibold px-2 py-1 rounded-full bg-amber-500 text-white disabled:opacity-60">
-                      {comprando === parte.id ? "…" : `🪙 ${parte.costo_monedas}`}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </>
       )}
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        {itemsDeTab.map((parte) => {
+          const desbloqueada = estaDesbloqueada(parte);
+          const equipada = idEquipadoDeTab === parte.id;
+          return (
+            <div key={parte.id} className={`rounded-2xl border p-3 text-center ${equipada ? "border-violet-400 bg-violet-50" : "border-slate-100 bg-white"}`}>
+              <div className="flex justify-center mb-1.5">
+                <svg viewBox="0 0 145 135" width="80" height="75" dangerouslySetInnerHTML={{ __html: previaDeItem(parte) }} />
+              </div>
+              <div className="text-[11px] font-semibold text-slate-700 mb-1.5">{parte.nombre}</div>
+              {equipada ? (
+                <span className="text-[10px] font-semibold text-violet-600">✓ Puesto</span>
+              ) : desbloqueada ? (
+                <button onClick={() => equipar(tab, parte)} className="text-[10px] font-semibold px-2 py-1 rounded-full bg-violet-500 text-white">Ponerse</button>
+              ) : (
+                <button disabled={comprando === parte.id} onClick={() => comprarYEquipar(tab, parte)}
+                  className="text-[10px] font-semibold px-2 py-1 rounded-full bg-amber-500 text-white disabled:opacity-60">
+                  {comprando === parte.id ? "…" : `🪙 ${parte.costo_monedas}`}
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
