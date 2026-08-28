@@ -1176,6 +1176,32 @@ export async function ajustarMonedasMasivo(estudianteIds, delta) {
   return resultados;
 }
 
+// Deja registro de un punto bueno/malo (XP, monedas o vida) dado en clase,
+// con motivo — para que el estudiante después pueda ver por qué se lo
+// dieron o se lo quitaron. Se llama por separado de ajustar* (que solo
+// mueve el total), así las compras/canjes normales no ensucian este
+// historial pedagógico.
+export async function registrarHistorialPunto(estudianteId, tipo, delta, motivo) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("historial_puntos").insert({
+    estudiante_id: estudianteId, tipo, delta, motivo: motivo || null, docente_id: userData?.user?.id || null,
+  });
+  if (error) throw error;
+}
+
+export async function registrarHistorialPuntoMasivo(estudianteIds, tipo, delta, motivo) {
+  const { data: userData } = await supabase.auth.getUser();
+  const filas = estudianteIds.map((id) => ({ estudiante_id: id, tipo, delta, motivo: motivo || null, docente_id: userData?.user?.id || null }));
+  const { error } = await supabase.from("historial_puntos").insert(filas);
+  if (error) throw error;
+}
+
+export async function fetchHistorialPuntos(estudianteId) {
+  const { data, error } = await supabase.from("historial_puntos").select("*").eq("estudiante_id", estudianteId).order("creado_en", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
 /* ---------------- Banco de premios ---------------- */
 export async function fetchPremios() {
   const { data, error } = await supabase.from("banco_premios").select("*").order("costo_monedas");
