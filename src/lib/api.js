@@ -3309,6 +3309,23 @@ export async function eliminarGuiaEstudio(id) {
   if (error) throw error;
 }
 
+// Autoevaluación del estudiante para una guía puntual (rúbrica marcada +
+// respuestas a las preguntas de reflexión) — se guarda a medida que va
+// completando, no hace falta un botón de "enviar" único.
+export async function fetchAutoevaluacionGuia(guiaId, estudianteId) {
+  const { data, error } = await supabase.from("guia_autoevaluaciones").select("*").eq("guia_id", guiaId).eq("estudiante_id", estudianteId).maybeSingle();
+  if (error) throw error;
+  return data?.respuestas || {};
+}
+
+export async function guardarAutoevaluacionGuia(guiaId, estudianteId, respuestas) {
+  const { error } = await supabase.from("guia_autoevaluaciones").upsert(
+    { guia_id: guiaId, estudiante_id: estudianteId, respuestas, actualizado_en: new Date().toISOString() },
+    { onConflict: "guia_id,estudiante_id" }
+  );
+  if (error) throw error;
+}
+
 // Marca/desmarca una materia como perdida para un estudiante en esa jornada
 // — recibe el arreglo actual (ya cargado en pantalla) para no tener que
 // releer de la base antes de guardar.
