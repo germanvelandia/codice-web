@@ -11,8 +11,18 @@ export function HistorialPuntosEstudiante({ estudianteId }) {
   const [historial, setHistorial] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [filtro, setFiltro] = useState("todos"); // "todos" | "buenos" | "malos"
+  const [debugInfo, setDebugInfo] = useState("");
 
-  useEffect(() => { api.fetchHistorialPuntos(estudianteId).then((d) => { setHistorial(d); setCargando(false); }); }, [estudianteId]);
+  useEffect(() => {
+    api.fetchHistorialPuntos(estudianteId).then((d) => {
+      setHistorial(d);
+      setCargando(false);
+      setDebugInfo(`🔧 estudianteId consultado = ${JSON.stringify(estudianteId)} (tipo: ${typeof estudianteId}) — filas devueltas: ${d.length}`);
+    }).catch((e) => {
+      setCargando(false);
+      setDebugInfo(`🔧 ERROR al consultar: ${e.message}`);
+    });
+  }, [estudianteId]);
 
   if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
 
@@ -24,6 +34,7 @@ export function HistorialPuntosEstudiante({ estudianteId }) {
 
   return (
     <div>
+      {debugInfo && <div className="text-[11px] bg-amber-50 text-amber-700 rounded-lg px-2 py-1 mb-2">{debugInfo}</div>}
       <h3 className="font-bold text-slate-800 mb-1">📖 Historial de Puntos</h3>
       <p className="text-xs text-slate-400 mb-3">Acá vas a ver cada vez que te dieron o te quitaron puntos en clase, y por qué.</p>
 
