@@ -57,11 +57,15 @@ export function VistaAccionesMasivas({ grados }) {
     if (ids.length === 0) { alert("Elegí al menos un estudiante."); return; }
     setAplicando(true);
     try {
-      const tipoRegistro = tipo === "oro" ? "monedas" : tipo === "experiencia" ? "xp" : "vida";
+      const categoriaRegistro = tipo === "oro" ? "monedas" : tipo === "experiencia" ? "xp" : "vida";
       if (tipo === "oro") await api.ajustarMonedasMasivo(ids, valor);
       if (tipo === "experiencia") await api.ajustarXpMasivo(ids, valor);
       if (tipo === "vida") await api.ajustarVidaMasivo(ids, valor);
-      await api.registrarHistorialPuntoMasivo(ids, tipoRegistro, valor, motivoNumero.trim() || null);
+      await api.registrarHistorialGamificacionMasivo(ids, {
+        etiqueta: motivoNumero.trim() || (tipo === "oro" ? "Oro entregado" : tipo === "experiencia" ? "Experiencia entregada" : "Ajuste de vida"),
+        xp: tipo === "experiencia" ? valor : 0, vida: tipo === "vida" ? valor : 0, monedas: tipo === "oro" ? valor : 0,
+        categoria: categoriaRegistro,
+      });
       setResultado({ tipo, valor, cantidad: ids.length });
       setValorOro(""); setValorXp(""); setValorVida(""); setMotivoNumero("");
     } catch (e) {
