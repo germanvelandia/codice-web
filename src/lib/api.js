@@ -236,6 +236,14 @@ export async function fetchRoles() {
   return data || [];
 }
 
+// Trae el rol asignado a un estudiante puntual (con nombre y descripción),
+// para mostrárselo a él mismo en su portal.
+export async function fetchMiRol(estudianteId) {
+  const { data, error } = await supabase.from("roles_asignados").select("roles_clase(nombre, descripcion)").eq("estudiante_id", estudianteId).maybeSingle();
+  if (error) throw error;
+  return data?.roles_clase || null;
+}
+
 export async function crearRol(nombre, descripcion) {
   const { error } = await supabase.from("roles_clase").insert({ nombre, descripcion: descripcion || null });
   if (error) throw error;
@@ -2310,7 +2318,7 @@ export async function eliminarParteAvatar(id) {
 export async function fetchAvatarConfig(estudianteId) {
   const { data, error } = await supabase.from("estudiante_avatar_config").select("*").eq("estudiante_id", estudianteId).maybeSingle();
   if (error) throw error;
-  return data || { estudiante_id: estudianteId, cuerpo_id: null, pelo_id: null, pelo_color: "brown", atuendo_id: null, atuendo_color: "blue", accesorio_id: null };
+  return data || { estudiante_id: estudianteId, cuerpo_id: null, pelo_id: null, pelo_color: "brown", atuendo_id: null, atuendo_color: "blue", accesorio_id: null, nombre_personaje: null };
 }
 
 // Trae la config de varios estudiantes a la vez (Ranking / Salón de Honor),
@@ -2333,6 +2341,7 @@ export async function fetchAvatarConfigsMultiples(estudianteIds) {
       pelo_key: svgKeyDe(c.pelo_id) || "corto",
       atuendo_key: svgKeyDe(c.atuendo_id) || "tunica",
       accesorio_key: svgKeyDe(c.accesorio_id) || "ninguno",
+      nombre_personaje: c.nombre_personaje || null,
     };
   });
   return resultado;
