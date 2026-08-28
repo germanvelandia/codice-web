@@ -2,6 +2,7 @@ import { supabase } from "./supabaseClient";
 import { GRADOS_BASE, ordenarPorApellido, buscarEstudiantePorNombre } from "./gamification";
 import { notaAutomatica, notaFinalPonderada } from "./calificaciones";
 import { NIVELACION_COMPROMISOS_DEFAULT, FALTAS_MANUAL } from "./actasTemplates";
+import { CATALOGO_BASE } from "./avatarPartes";
 
 export async function asegurarGradosBase() {
   const filas = GRADOS_BASE.map((id) => ({ id }));
@@ -2244,6 +2245,92 @@ export async function ajustarVidaMasivo(estudianteIds, delta) {
 }
 
 /* ---------------- Personalización cosmética ---------------- */
+/* ---------------- Personaje (constructor de avatar por partes) ---------------- */
+export async function fetchAvatarCatalogo() {
+  let { data, error } = await supabase.from("avatar_catalogo").select("*").order("categoria").order("orden");
+  if (error) throw error;
+  if (!data || data.length === 0) {
+    // Siembra el catálogo genérico de fábrica, editable después.
+    const { data: userData } = await supabase.auth.getUser();
+    const docenteId = userData?.user?.id || null;
+    const filas = [];
+    Object.entries(CATALOGO_BASE).forEach(([categoria, items]) => {
+      items.forEach((it, i) => filas.push({ docente_id: docenteId, categoria, nombre: it.nombre, svg_key: it.svg_key, costo_monedas: it.costo_monedas, orden: i }));
+    });
+    const { data: sembrado, error: e2 } = await supabase.from("avatar_catalogo").insert(filas).select();
+    if (e2) throw e2;
+    data = sembrado;
+  }
+  return data;
+}
+
+export async function crearParteAvatar(campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("avatar_catalogo").insert({ ...campos, docente_id: userData?.user?.id || null }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function editarParteAvatar(id, campos) {
+  const { error } = await supabase.from("avatar_catalogo").update(campos).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarParteAvatar(id) {
+  const { error } = await supabase.from("avatar_catalogo").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function fetchAvatarConfig(estudianteId) {
+  const { data, error } = await supabase.from("estudiante_avatar_config").select("*").eq("estudiante_id", estudianteId).maybeSingle();
+  if (error) throw error;
+  return data || { estudiante_id: estudianteId, piel_color: "#F5D0A9", pelo_color: "#3B2314", atuendo_color: "#7C3AED" };
+}
+
+// Trae la config de varios estudiantes a la vez (Ranking / Salón de Honor),
+// ya resuelta a svg_key (no ids) para pasarla directo al renderer del
+// personaje — un solo viaje a la base en vez de uno por fila.
+export async function fetchAvatarConfigsMultiples(estudianteIds) {
+  if (!estudianteIds || estudianteIds.length === 0) return {};
+  const [{ data: configs, error: e1 }, { data: catalogo, error: e2 }] = await Promise.all([
+    supabase.from("estudiante_avatar_config").select("*").in("estudiante_id", estudianteIds),
+    supabase.from("avatar_catalogo").select("id, svg_key"),
+  ]);
+  if (e1) throw e1;
+  if (e2) throw e2;
+  const svgKeyDe = (id) => (catalogo || []).find((c) => c.id === id)?.svg_key;
+  const resultado = {};
+  (configs || []).forEach((c) => {
+    resultado[c.estudiante_id] = {
+      piel_color: c.piel_color, pelo_color: c.pelo_color, atuendo_color: c.atuendo_color,
+      pelo_key: svgKeyDe(c.pelo_id) || "corto",
+      atuendo_key: svgKeyDe(c.atuendo_id) || "tunica",
+      accesorio_key: svgKeyDe(c.accesorio_id) || "ninguno",
+    };
+  });
+  return resultado;
+}
+
+export async function guardarAvatarConfig(estudianteId, campos) {
+  const { error } = await supabase.from("estudiante_avatar_config").upsert({ estudiante_id: estudianteId, ...campos }, { onConflict: "estudiante_id" });
+  if (error) throw error;
+}
+
+export async function fetchAvatarDesbloqueados(estudianteId) {
+  const { data, error } = await supabase.from("estudiante_avatar_desbloqueado").select("parte_id").eq("estudiante_id", estudianteId);
+  if (error) throw error;
+  return (data || []).map((d) => d.parte_id);
+}
+
+// Compra (descuenta monedas) y desbloquea una parte del catálogo para el
+// estudiante — falla con un mensaje claro si no le alcanzan las monedas.
+export async function comprarParteAvatar(estudianteId, parteId, costo, monedasActuales) {
+  if (monedasActuales < costo) throw new Error("No tenés suficientes monedas para esto.");
+  const { error: e1 } = await supabase.from("estudiante_avatar_desbloqueado").insert({ estudiante_id: estudianteId, parte_id: parteId });
+  if (e1) throw e1;
+  await ajustarMonedas(estudianteId, -costo);
+}
+
 export async function fetchCosmeticosCatalogo() {
   const { data, error } = await supabase.from("cosmeticos_catalogo").select("*").order("tipo").order("costo_monedas");
   if (error) throw error;
