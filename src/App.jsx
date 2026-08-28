@@ -1914,7 +1914,7 @@ function PortalEstudiante() {
           )}
 
           {vista === "guias" && estudianteInfo && (
-            <GuiasEstudiante gradoId={estudianteInfo.grado_id} />
+            <GuiasEstudiante gradoId={estudianteInfo.grado_id} estudianteId={estudianteInfo.id} />
           )}
 
           {vista === "codice" && estudianteInfo && (
