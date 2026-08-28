@@ -13,6 +13,7 @@ import { VistaAnuncios } from "./screens/Anuncios";
 import { VistaLogros } from "./screens/Logros";
 import { VistaSalonHonor } from "./screens/SalonHonor";
 import { VistaDiplomas } from "./screens/Diplomas";
+import { VistaPersonaje, PersonajePreview } from "./screens/Personaje";
 import { VistaGamificacionExtra } from "./screens/GamificacionExtra";
 import { VistaRoles } from "./screens/Roles";
 import { VistaCalificaciones } from "./screens/Calificaciones";
@@ -784,8 +785,16 @@ function EvaluacionesEstudiante({ estudianteId, gradoId }) {
 
 function SalonHonorEstudiante({ estudianteId }) {
   const [datos, setDatos] = useState(null);
+  const [avatares, setAvatares] = useState({});
   const [cargando, setCargando] = useState(true);
-  useEffect(() => { api.fetchSalonDeHonor().then((d) => { setDatos(d); setCargando(false); }); }, []);
+  useEffect(() => {
+    api.fetchSalonDeHonor().then((d) => {
+      setDatos(d);
+      setCargando(false);
+      const ids = [...new Set([...d.topXp.map((e) => e.id), ...d.topInsignias.map((e) => e.id)])];
+      api.fetchAvatarConfigsMultiples(ids).then(setAvatares);
+    });
+  }, []);
 
   if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
 
@@ -802,6 +811,7 @@ function SalonHonorEstudiante({ estudianteId }) {
           <div key={e.id} className={`flex items-center justify-between px-3 py-2 rounded-xl ${e.id === estudianteId ? "bg-violet-100 border border-violet-300" : "bg-slate-50"}`}>
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-sm w-6 text-center shrink-0">{medalla(datos.topXp.indexOf(e))}</span>
+              {avatares[e.id] && <PersonajePreview config={avatares[e.id]} size={26} />}
               <span className={`text-xs truncate ${e.id === estudianteId ? "font-bold text-violet-700" : "text-slate-700"}`}>{e.nombre}{e.id === estudianteId ? " (vos)" : ""}</span>
               <span className="text-[10px] text-slate-400 shrink-0">G{e.grado_id}</span>
             </div>
@@ -817,6 +827,7 @@ function SalonHonorEstudiante({ estudianteId }) {
           <div key={e.id} className={`flex items-center justify-between px-3 py-2 rounded-xl ${e.id === estudianteId ? "bg-violet-100 border border-violet-300" : "bg-slate-50"}`}>
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-sm w-6 text-center shrink-0">{medalla(datos.topInsignias.indexOf(e))}</span>
+              {avatares[e.id] && <PersonajePreview config={avatares[e.id]} size={26} />}
               <span className={`text-xs truncate ${e.id === estudianteId ? "font-bold text-violet-700" : "text-slate-700"}`}>{e.nombre}{e.id === estudianteId ? " (vos)" : ""}</span>
               <span className="text-[10px] text-slate-400 shrink-0">G{e.grado_id}</span>
             </div>
@@ -846,9 +857,16 @@ function SalonHonorEstudiante({ estudianteId }) {
 
 function RankingEstudiante({ estudianteId, gradoId }) {
   const [ranking, setRanking] = useState([]);
+  const [avatares, setAvatares] = useState({});
   const [cargando, setCargando] = useState(true);
 
-  useEffect(() => { api.fetchRankingGrado(gradoId).then((r) => { setRanking(r); setCargando(false); }); }, [gradoId]);
+  useEffect(() => {
+    api.fetchRankingGrado(gradoId).then((r) => {
+      setRanking(r);
+      setCargando(false);
+      api.fetchAvatarConfigsMultiples(r.map((x) => x.id)).then(setAvatares);
+    });
+  }, [gradoId]);
 
   if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
 
@@ -863,6 +881,7 @@ function RankingEstudiante({ estudianteId, gradoId }) {
           <div key={r.id} className={`flex items-center justify-between px-3 py-2 rounded-xl ${r.id === estudianteId ? "bg-violet-100 border border-violet-300" : "bg-slate-50"}`}>
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-sm w-6 text-center shrink-0">{medalla(i)}</span>
+              {avatares[r.id] && <PersonajePreview config={avatares[r.id]} size={26} />}
               <span className={`text-xs truncate ${r.id === estudianteId ? "font-bold text-violet-700" : "text-slate-700"}`}>{r.nombre}{r.id === estudianteId ? " (vos)" : ""}</span>
             </div>
             <span className="text-xs font-semibold text-slate-500 shrink-0">{r.xp} XP</span>
@@ -998,6 +1017,7 @@ const MENU_CODICE = [
   { key: "inicio", label: "Inicio", icono: "🏠" },
   { key: "misiones", label: "Misiones", icono: "⚔️" },
   { key: "notas", label: "Notas", icono: "📝" },
+  { key: "personaje", label: "Personaje", icono: "🎨" },
   { key: "perfil", label: "Perfil", icono: "👤" },
   { key: "preguntados", label: "Preguntados", icono: "🎡" },
   { key: "proyectos", label: "Proyectos", icono: "📜" },
@@ -1011,7 +1031,7 @@ const MENU_CODICE = [
 // siendo la misma (la key de MENU_CODICE).
 const ICONO_MAPA = {
   album: "🏯", biblioteca: "📚", codice: "📖", forja: "⚒️", guias: "🗺️",
-  inicio: "🏰", misiones: "⚔️", notas: "📜", perfil: "🛡️", preguntados: "🎡",
+  inicio: "🏰", misiones: "⚔️", notas: "📜", personaje: "🧙", perfil: "🛡️", preguntados: "🎡",
   proyectos: "🏹", ranking: "👑", recompensas: "💎", salonhonor: "🏆",
 };
 
@@ -1892,6 +1912,10 @@ function PortalEstudiante() {
 
           {vista === "notas" && estudianteInfo && (
             <MisNotas estudianteId={estudianteInfo.id} />
+          )}
+
+          {vista === "personaje" && estudianteInfo && (
+            <VistaPersonaje estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} />
           )}
 
           {vista === "recompensas" && estudianteInfo && (
