@@ -13,6 +13,7 @@ export function VistaAccionesMasivas({ grados }) {
   const [valorOro, setValorOro] = useState("");
   const [valorXp, setValorXp] = useState("");
   const [valorVida, setValorVida] = useState("");
+  const [motivoNumero, setMotivoNumero] = useState("");
   const [aplicando, setAplicando] = useState(false);
   const [resultado, setResultado] = useState(null);
 
@@ -56,11 +57,13 @@ export function VistaAccionesMasivas({ grados }) {
     if (ids.length === 0) { alert("Elegí al menos un estudiante."); return; }
     setAplicando(true);
     try {
+      const tipoRegistro = tipo === "oro" ? "monedas" : tipo === "experiencia" ? "xp" : "vida";
       if (tipo === "oro") await api.ajustarMonedasMasivo(ids, valor);
       if (tipo === "experiencia") await api.ajustarXpMasivo(ids, valor);
       if (tipo === "vida") await api.ajustarVidaMasivo(ids, valor);
+      await api.registrarHistorialPuntoMasivo(ids, tipoRegistro, valor, motivoNumero.trim() || null);
       setResultado({ tipo, valor, cantidad: ids.length });
-      setValorOro(""); setValorXp(""); setValorVida("");
+      setValorOro(""); setValorXp(""); setValorVida(""); setMotivoNumero("");
     } catch (e) {
       alert("Error al aplicar: " + e.message);
     }
@@ -132,10 +135,15 @@ export function VistaAccionesMasivas({ grados }) {
           <label className="text-xs text-slate-500 block mb-1">
             {pestaña === "oro" ? "Monedas a dar (negativo para quitar)" : pestaña === "experiencia" ? "Puntos de experiencia a dar (negativo para quitar)" : "Puntos de vida a dar (negativo para quitar)"}
           </label>
-          <div className="flex gap-2">
+          <div className="flex gap-2 mb-2">
             <input type="number" value={pestaña === "oro" ? valorOro : pestaña === "experiencia" ? valorXp : valorVida}
               onChange={(e) => (pestaña === "oro" ? setValorOro : pestaña === "experiencia" ? setValorXp : setValorVida)(e.target.value)}
               placeholder="Ej: 10 o -5" className="flex-1 text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" />
+          </div>
+          <label className="text-xs text-slate-500 block mb-1">Motivo (el estudiante lo va a ver en su historial)</label>
+          <div className="flex gap-2">
+            <input value={motivoNumero} onChange={(e) => setMotivoNumero(e.target.value)} placeholder="Ej: Excelente participación en clase"
+              className="flex-1 text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" />
             <button disabled={aplicando} onClick={() => aplicarNumero(pestaña)} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">
               {aplicando ? "Aplicando…" : `Aplicar a ${ids.length}`}
             </button>
