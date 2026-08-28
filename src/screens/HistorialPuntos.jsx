@@ -1,40 +1,28 @@
 import React, { useEffect, useState } from "react";
 import * as api from "../lib/api";
 
-const INFO_TIPO = {
-  xp: { icono: "⭐", label: "Experiencia" },
-  monedas: { icono: "🪙", label: "Monedas" },
-  vida: { icono: "❤️", label: "Vida" },
-};
-
 export function HistorialPuntosEstudiante({ estudianteId }) {
   const [historial, setHistorial] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [filtro, setFiltro] = useState("todos"); // "todos" | "buenos" | "malos"
-  const [debugInfo, setDebugInfo] = useState("");
 
-  useEffect(() => {
-    api.fetchHistorialPuntos(estudianteId).then((d) => {
-      setHistorial(d);
-      setCargando(false);
-      setDebugInfo(`🔧 estudianteId consultado = ${JSON.stringify(estudianteId)} (tipo: ${typeof estudianteId}) — filas devueltas: ${d.length}`);
-    }).catch((e) => {
-      setCargando(false);
-      setDebugInfo(`🔧 ERROR al consultar: ${e.message}`);
-    });
-  }, [estudianteId]);
+  useEffect(() => { api.fetchHistorialGamificacion(estudianteId).then((d) => { setHistorial(d); setCargando(false); }); }, [estudianteId]);
 
   if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
 
+  // "Bueno" si suma algo positivo en algún aspecto; "malo" si resta algo,
+  // sin contar como malo un simple gasto de monedas en la tienda.
+  const esBueno = (h) => (h.xp || 0) > 0 || (h.vida || 0) > 0 || (h.monedas || 0) > 0;
+  const esMalo = (h) => (h.xp || 0) < 0 || (h.vida || 0) < 0;
+
   const visibles = historial.filter((h) => {
-    if (filtro === "buenos") return h.delta > 0;
-    if (filtro === "malos") return h.delta < 0;
+    if (filtro === "buenos") return esBueno(h) && !esMalo(h);
+    if (filtro === "malos") return esMalo(h);
     return true;
   });
 
   return (
     <div>
-      {debugInfo && <div className="text-[11px] bg-amber-50 text-amber-700 rounded-lg px-2 py-1 mb-2">{debugInfo}</div>}
       <h3 className="font-bold text-slate-800 mb-1">📖 Historial de Puntos</h3>
       <p className="text-xs text-slate-400 mb-3">Acá vas a ver cada vez que te dieron o te quitaron puntos en clase, y por qué.</p>
 
@@ -51,18 +39,18 @@ export function HistorialPuntosEstudiante({ estudianteId }) {
       ) : (
         <div className="space-y-1.5">
           {visibles.map((h) => {
-            const info = INFO_TIPO[h.tipo] || { icono: "•", label: h.tipo };
-            const esBueno = h.delta > 0;
+            const malo = esMalo(h);
             return (
-              <div key={h.id} className={`rounded-xl px-3 py-2.5 border ${esBueno ? "bg-emerald-50 border-emerald-100" : "bg-rose-50 border-rose-100"}`}>
+              <div key={h.id} className={`rounded-xl px-3 py-2.5 border ${malo ? "bg-rose-50 border-rose-100" : "bg-emerald-50 border-emerald-100"}`}>
                 <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="text-base shrink-0">{info.icono}</span>
-                    <span className={`text-sm font-bold shrink-0 ${esBueno ? "text-emerald-600" : "text-rose-600"}`}>{esBueno ? "+" : ""}{h.delta} {info.label}</span>
+                  <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                    {!!h.xp && <span className={`text-xs font-bold shrink-0 ${h.xp > 0 ? "text-emerald-600" : "text-rose-600"}`}>⭐ {h.xp > 0 ? "+" : ""}{h.xp} XP</span>}
+                    {!!h.vida && <span className={`text-xs font-bold shrink-0 ${h.vida > 0 ? "text-emerald-600" : "text-rose-600"}`}>❤️ {h.vida > 0 ? "+" : ""}{h.vida} Vida</span>}
+                    {!!h.monedas && <span className={`text-xs font-bold shrink-0 ${h.monedas > 0 ? "text-emerald-600" : "text-rose-600"}`}>🪙 {h.monedas > 0 ? "+" : ""}{h.monedas} Monedas</span>}
                   </div>
-                  <span className="text-[10px] text-slate-400 shrink-0">{new Date(h.creado_en).toLocaleDateString("es-CO", { day: "numeric", month: "short" })}</span>
+                  <span className="text-[10px] text-slate-400 shrink-0">{new Date(h.ts).toLocaleDateString("es-CO", { day: "numeric", month: "short" })}</span>
                 </div>
-                {h.motivo && <p className="text-xs text-slate-600 mt-1">{h.motivo}</p>}
+                {h.etiqueta && <p className="text-xs text-slate-600 mt-1">{h.etiqueta}</p>}
               </div>
             );
           })}
