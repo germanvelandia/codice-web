@@ -3935,6 +3935,8 @@ export async function fetchAsistenciaFecha(estudianteIds, fecha, materiaId = nul
 // Cache simple en memoria del catálogo de asistencia, para no consultarlo en
 // cada marca de asistencia (se recarga en cada sesión/recarga de página).
 let _catalogoAsistenciaCache = null;
+const LABEL_CODIGO_ASISTENCIA = { P: "Presente", R: "Retardo", FI: "Falta injustificada", FJ: "Falta justificada" };
+
 async function efectoDeCodigoAsistencia(codigo) {
   if (!_catalogoAsistenciaCache) {
     const { data } = await supabase.from("acciones_gamificacion").select("*").eq("tab", "asistencia").eq("activo", true);
@@ -3997,6 +3999,9 @@ export async function marcarAsistencia(estudianteId, fecha, codigo, observacion,
 
   if (efecto.xp) await ajustarXp(estudianteId, efecto.xp);
   if (efecto.vida) await ajustarVida(estudianteId, efecto.vida);
+  const motivoAsistencia = `Asistencia: ${LABEL_CODIGO_ASISTENCIA[codigo] || codigo} (${fecha})`;
+  if (efecto.xp) await registrarHistorialPunto(estudianteId, "xp", efecto.xp, motivoAsistencia);
+  if (efecto.vida) await registrarHistorialPunto(estudianteId, "vida", efecto.vida, motivoAsistencia);
 }
 
 export async function quitarAsistencia(estudianteId, fecha, materiaId = null) {
@@ -4148,6 +4153,8 @@ export async function registrarAccion(estudianteId, accion) {
     supabase.rpc("ajustar_progreso", { p_estudiante_id: estudianteId, p_delta_xp: accion.xp, p_delta_vida: accion.vida, p_delta_monedas: deltaMonedas }),
   ]);
   if (rpcRes.error) throw rpcRes.error;
+  if (accion.xp) await registrarHistorialPunto(estudianteId, "xp", accion.xp, accion.label);
+  if (accion.vida) await registrarHistorialPunto(estudianteId, "vida", accion.vida, accion.label);
   const fila = rpcRes.data?.[0];
   return { xp: fila?.xp ?? 0, vida: fila?.vida ?? 0, monedas: fila?.monedas ?? 0 };
 }
