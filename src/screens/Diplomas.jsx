@@ -234,8 +234,8 @@ function imprimirDiplomas(seleccionados, gradoId, config, institucion, docenteNo
   ventana.document.close();
 }
 
-export function VistaDiplomas({ grados }) {
-  const [gradoId, setGradoId] = useState(grados[0]?.id || "");
+export function VistaDiplomas({ grados, gradoActivo }) {
+  const [gradoId, setGradoId] = useState(gradoActivo || grados[0]?.id || "");
   const [estudiantes, setEstudiantes] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [seleccionados, setSeleccionados] = useState(new Set());
@@ -259,6 +259,7 @@ export function VistaDiplomas({ grados }) {
   const [institucion, setInstitucion] = useState(null);
 
   useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
+  useEffect(() => { if (gradoActivo) setGradoId(gradoActivo); }, [gradoActivo]);
   useEffect(() => {
     api.fetchInstitucion().then(setInstitucion);
     api.fetchMiPerfil().then((p) => setDocenteNombre(p?.nombre || ""));
