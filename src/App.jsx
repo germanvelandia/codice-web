@@ -2167,18 +2167,18 @@ function BuscadorEstudiantesGlobal({ onSeleccionar }) {
 // interferir con la lectura de las tarjetas blancas de contenido.
 function FondoArcadeDocente() {
   return (
-    <div className="fixed inset-0 -z-10 overflow-hidden" style={{ background: "#FAFAFC" }}>
+    <div className="fixed inset-0 -z-10 overflow-hidden" style={{ background: "#E9E7F4" }}>
       <div className="absolute inset-0" style={{
-        backgroundImage: "linear-gradient(rgba(124,58,237,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(124,58,237,0.05) 1px, transparent 1px)",
+        backgroundImage: "linear-gradient(rgba(124,58,237,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(124,58,237,0.07) 1px, transparent 1px)",
         backgroundSize: "28px 28px",
       }} />
-      <svg viewBox="0 0 800 120" preserveAspectRatio="xMidYMax slice" className="absolute bottom-0 left-0 w-full" style={{ height: 130, opacity: 0.35 }}>
-        <Castillito x={20} y={20} escala={0.6} color="#DDD6FE" />
-        <Castillito x={140} y={35} escala={0.5} color="#EDE9FE" />
-        <Castillito x={280} y={15} escala={0.7} color="#DDD6FE" />
-        <Castillito x={440} y={30} escala={0.55} color="#EDE9FE" />
-        <Castillito x={580} y={18} escala={0.65} color="#DDD6FE" />
-        <Castillito x={710} y={32} escala={0.5} color="#EDE9FE" />
+      <svg viewBox="0 0 800 120" preserveAspectRatio="xMidYMax slice" className="absolute bottom-0 left-0 w-full" style={{ height: 130, opacity: 0.4 }}>
+        <Castillito x={20} y={20} escala={0.6} color="#C4B5FD" />
+        <Castillito x={140} y={35} escala={0.5} color="#DDD6FE" />
+        <Castillito x={280} y={15} escala={0.7} color="#C4B5FD" />
+        <Castillito x={440} y={30} escala={0.55} color="#DDD6FE" />
+        <Castillito x={580} y={18} escala={0.65} color="#C4B5FD" />
+        <Castillito x={710} y={32} escala={0.5} color="#DDD6FE" />
       </svg>
     </div>
   );
