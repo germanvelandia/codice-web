@@ -2,6 +2,81 @@ import React, { useEffect, useState } from "react";
 import * as api from "../lib/api";
 import { EditorTexto, TextoEnriquecido } from "../components/RichText";
 
+function PromptIaModal({ onClose }) {
+  const [texto, setTexto] = useState("");
+  const [cargando, setCargando] = useState(true);
+  const [editando, setEditando] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [copiado, setCopiado] = useState(false);
+
+  useEffect(() => { api.fetchPromptIaGuias().then((t) => { setTexto(t); setCargando(false); }); }, []);
+
+  const copiar = () => {
+    navigator.clipboard.writeText(texto);
+    setCopiado(true);
+    setTimeout(() => setCopiado(false), 2000);
+  };
+
+  const guardar = async () => {
+    setGuardando(true);
+    try {
+      await api.guardarPromptIaGuias(texto);
+      setEditando(false);
+    } catch (e) {
+      alert("Error al guardar: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  const restablecer = async () => {
+    if (!confirm("¿Volver al prompt original de fábrica? Esto reemplaza cualquier ajuste que le hayas hecho.")) return;
+    setTexto(api.PROMPT_IA_GUIAS_DEFAULT);
+    await api.guardarPromptIaGuias(api.PROMPT_IA_GUIAS_DEFAULT);
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="font-bold text-slate-800">🤖 Prompt de IA para generar Guías de Estudio</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-500 mb-3">
+          Copiá este texto y pegalo en Claude (u otra IA), completando los datos entre corchetes — te va a devolver una guía lista para pasar campo por campo al formulario de acá arriba.
+        </p>
+
+        {cargando ? (
+          <div className="text-sm text-slate-400">Cargando…</div>
+        ) : editando ? (
+          <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={20}
+            className="w-full text-xs font-mono rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
+        ) : (
+          <pre className="text-xs bg-slate-50 rounded-lg p-3 mb-3 whitespace-pre-wrap font-mono max-h-96 overflow-y-auto">{texto}</pre>
+        )}
+
+        <div className="flex flex-wrap justify-end gap-2">
+          <button onClick={restablecer} className="text-xs text-rose-500 px-3 py-2">🗑️ Restablecer al original</button>
+          {editando ? (
+            <>
+              <button onClick={() => setEditando(false)} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
+              <button disabled={guardando} onClick={guardar} className="text-xs font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+                {guardando ? "Guardando…" : "Guardar cambios"}
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={() => setEditando(true)} className="text-xs font-semibold px-4 py-2 rounded-lg border border-slate-200 text-slate-600">✏️ Editar</button>
+              <button onClick={copiar} className="text-xs font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white">
+                {copiado ? "✔ Copiado" : "📋 Copiar"}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Editor de una lista dinámica de filas (agregar/quitar), usado para
 // Conceptos Clave, Criterios de la Rúbrica y Preguntas de Reflexión.
 function ListaEditable({ filas, onCambiar, campos, placeholder }) {
@@ -233,6 +308,7 @@ export function VistaGuiasEstudio({ grados }) {
   const [institucion, setInstitucion] = useState(null);
   const [formAbierto, setFormAbierto] = useState(false);
   const [editando, setEditando] = useState(null);
+  const [promptAbierto, setPromptAbierto] = useState(false);
 
   useEffect(() => {
     api.fetchMaterias().then((data) => { setMaterias(data); if (data[0]) setMateriaId(data[0].id); });
@@ -271,7 +347,12 @@ export function VistaGuiasEstudio({ grados }) {
         <button onClick={() => { setEditando(null); setFormAbierto((v) => !v); }} className="text-xs font-semibold px-3 py-2 rounded-full bg-violet-500 text-white">
           {formAbierto ? "Cerrar" : "+ Nueva guía"}
         </button>
+        <button onClick={() => setPromptAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full border border-violet-200 text-violet-600">
+          🤖 Prompt de IA
+        </button>
       </div>
+
+      {promptAbierto && <PromptIaModal onClose={() => setPromptAbierto(false)} />}
 
       {formAbierto && (
         <GuiaForm materiaId={materiaId} gradoId={gradoId} periodo={periodo} guia={editando}
