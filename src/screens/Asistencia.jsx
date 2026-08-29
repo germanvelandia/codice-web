@@ -351,7 +351,7 @@ export function VistaAsistencia({ grados, gradoActivo }) {
             const infoReino = reinoInfo(s.reino_actual || s.reino_original || "Sin grupo", catalogoReinos);
             return (
               <div key={s.id} className="rounded-2xl p-3 shadow-sm border flex flex-col items-center text-center"
-                style={{ background: `${infoReino.color}12`, borderColor: `${infoReino.color}33` }}>
+                style={{ background: "#FFFFFF", borderColor: `${infoReino.color}55` }}>
                 <MiniAvatar estudiante={s} size={48} />
                 <div className="text-sm font-medium text-slate-800 mt-1.5 flex items-center gap-1">
                   {s.nombre} <InclusionBadge estudiante={s} size="text-xs" />
