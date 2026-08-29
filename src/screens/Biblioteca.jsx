@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import * as api from "../lib/api";
-import { agruparPorNivel } from "../lib/gamification";
+import { agruparPorNivel, nivelYCurso } from "../lib/gamification";
 import { EditorTexto } from "../components/RichText";
 
 const CATEGORIAS = [
@@ -80,13 +80,15 @@ function RecursoForm({ nivel, recurso, onCancelar, onGuardado }) {
   );
 }
 
-export function VistaBiblioteca({ grados }) {
+export function VistaBiblioteca({ grados, gradoActivo }) {
   const niveles = agruparPorNivel(grados);
   const [nivel, setNivel] = useState(niveles[0]?.nivel || "");
   const [recursos, setRecursos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [formAbierto, setFormAbierto] = useState(false);
   const [editando, setEditando] = useState(null);
+
+  useEffect(() => { if (gradoActivo) setNivel(nivelYCurso(gradoActivo).nivel); }, [gradoActivo]);
 
   const cargar = () => { setCargando(true); api.fetchBibliotecaRecursos().then((d) => { setRecursos(d); setCargando(false); }); };
   useEffect(() => { cargar(); }, []);
