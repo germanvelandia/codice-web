@@ -1386,9 +1386,9 @@ function GestionarEstandaresModal({ onClose }) {
   );
 }
 
-export function VistaPlaneaciones({ grados, gradoActivo }) {
+export function VistaPlaneaciones({ grados, gradoActivo, periodoActivo, materiaActiva }) {
   const [materias, setMaterias] = useState([]);
-  const [materiaId, setMateriaId] = useState("");
+  const [materiaId, setMateriaId] = useState(materiaActiva || "");
   const [gradoId, setGradoId] = useState(gradoActivo || "");
   const [periodo, setPeriodo] = useState("1");
   const [unidades, setUnidades] = useState([]);
@@ -1397,6 +1397,8 @@ export function VistaPlaneaciones({ grados, gradoActivo }) {
   const [error, setError] = useState(null);
 
   useEffect(() => { if (gradoActivo) setGradoId(gradoActivo); }, [gradoActivo]);
+  useEffect(() => { if (materiaActiva) setMateriaId(materiaActiva); }, [materiaActiva]);
+  useEffect(() => { if (periodoActivo) setPeriodo(periodoActivo); }, [periodoActivo]);
   const [formAbierto, setFormAbierto] = useState(false);
   const [institucion, setInstitucion] = useState(null);
   const [pendientesAbierto, setPendientesAbierto] = useState(false);
