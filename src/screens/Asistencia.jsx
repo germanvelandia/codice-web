@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import * as api from "../lib/api";
 import { ActasModal } from "./Actas";
 import { InclusionBadge, FotoLightbox } from "./Estudiantes";
-import { agruparPorNivel, nivelYCurso, initials } from "../lib/gamification";
+import { agruparPorNivel, nivelYCurso, initials, reinoInfo } from "../lib/gamification";
 
 function MiniAvatar({ estudiante, size = 28 }) {
   const [ampliada, setAmpliada] = useState(false);
@@ -205,9 +205,10 @@ export function VistaAsistencia({ grados, gradoActivo }) {
   const [usuarioId, setUsuarioId] = useState(null);
   const [consolidadoEstudiante, setConsolidadoEstudiante] = useState(null);
   const [vista, setVista] = useState("diaria"); // "diaria" | "totales"
+  const [catalogoReinos, setCatalogoReinos] = useState([]);
 
   useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
-  useEffect(() => { api.fetchMaterias().then(setMaterias); api.fetchUsuarioActualId().then(setUsuarioId); }, []);
+  useEffect(() => { api.fetchMaterias().then(setMaterias); api.fetchUsuarioActualId().then(setUsuarioId); api.fetchReinos().then(setCatalogoReinos); }, []);
 
   // Por defecto arranca en tu propia materia (ya no existe "General"),
   // para no marcar sin querer la asistencia de tu clase como si fuera de
@@ -344,48 +345,53 @@ export function VistaAsistencia({ grados, gradoActivo }) {
       {cargando ? (
         <div className="text-sm text-slate-400">Cargando…</div>
       ) : (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 divide-y divide-slate-100">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
           {visibles.map((s) => {
             const registro = asistencia[s.id];
+            const infoReino = reinoInfo(s.reino_actual || s.reino_original || "Sin grupo", catalogoReinos);
             return (
-              <div key={s.id} className="px-4 py-3">
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <div className="min-w-0 flex items-center gap-2">
-                    <MiniAvatar estudiante={s} />
-                    <div>
-                      <div className="text-sm font-medium text-slate-800">{s.nombre} <InclusionBadge estudiante={s} size="text-xs" /></div>
-                      <div className="text-xs text-slate-400">{s.reino_actual || s.reino_original}{registro?.observacion ? ` · 📝 ${registro.observacion}` : ""}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    {CODIGOS.map((c) => {
-                      const activo = registro?.codigo === c.code;
-                      return (
-                        <button key={c.code} disabled={soloLectura} onClick={() => marcar(s.id, c.code)}
-                          className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border disabled:opacity-50 disabled:cursor-not-allowed ${activo ? c.color + " text-white border-transparent" : "bg-white text-slate-500 border-slate-200"}`}>
-                          {c.code}
-                        </button>
-                      );
-                    })}
-                    {!soloLectura && (
-                      <button onClick={() => { setNotaAbiertaId(notaAbiertaId === s.id ? null : s.id); setNotaTexto(registro?.observacion || ""); }}
-                        className="text-xs px-2 py-1.5 rounded-lg border border-slate-200 text-slate-500">📝</button>
-                    )}
-                    <button onClick={() => setConsolidadoEstudiante(s)} title="Ver asistencia en todas las materias / procesos convivenciales"
-                      className="text-xs px-2 py-1.5 rounded-lg bg-violet-100 text-violet-700">📊</button>
-                  </div>
+              <div key={s.id} className="rounded-2xl p-3 shadow-sm border flex flex-col items-center text-center"
+                style={{ background: `${infoReino.color}12`, borderColor: `${infoReino.color}33` }}>
+                <MiniAvatar estudiante={s} size={48} />
+                <div className="text-sm font-medium text-slate-800 mt-1.5 flex items-center gap-1">
+                  {s.nombre} <InclusionBadge estudiante={s} size="text-xs" />
                 </div>
+                <div className="text-[11px] text-slate-400 mb-2">{s.reino_actual || s.reino_original}</div>
+
+                <div className="grid grid-cols-2 gap-1.5 w-full mb-2">
+                  {CODIGOS.map((c) => {
+                    const activo = registro?.codigo === c.code;
+                    return (
+                      <button key={c.code} disabled={soloLectura} onClick={() => marcar(s.id, c.code)}
+                        className={`text-xs font-semibold py-1.5 rounded-lg border disabled:opacity-50 disabled:cursor-not-allowed ${activo ? c.color + " text-white border-transparent" : "bg-white text-slate-500 border-slate-200"}`}>
+                        {c.code}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {registro?.observacion && <div className="text-[10px] text-slate-400 mb-1.5">📝 {registro.observacion}</div>}
+
+                <div className="flex items-center gap-1.5">
+                  {!soloLectura && (
+                    <button onClick={() => { setNotaAbiertaId(notaAbiertaId === s.id ? null : s.id); setNotaTexto(registro?.observacion || ""); }}
+                      className="text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-500">📝</button>
+                  )}
+                  <button onClick={() => setConsolidadoEstudiante(s)} title="Ver asistencia en todas las materias / procesos convivenciales"
+                    className="text-xs px-2.5 py-1.5 rounded-lg bg-violet-100 text-violet-700">📊</button>
+                </div>
+
                 {notaAbiertaId === s.id && (
-                  <div className="mt-2 flex gap-2">
-                    <input value={notaTexto} onChange={(e) => setNotaTexto(e.target.value)} placeholder="Observación (motivo de la falta, etc.)"
-                      className="flex-1 text-xs rounded-lg px-3 py-1.5 border border-slate-200 outline-none" />
-                    <button onClick={() => guardarNota(s.id)} className="text-xs px-3 py-1.5 rounded-lg bg-violet-500 text-white">Guardar</button>
+                  <div className="mt-2 w-full space-y-1.5">
+                    <input value={notaTexto} onChange={(e) => setNotaTexto(e.target.value)} placeholder="Observación…"
+                      className="w-full text-xs rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none" />
+                    <button onClick={() => guardarNota(s.id)} className="w-full text-xs px-3 py-1.5 rounded-lg bg-violet-500 text-white">Guardar</button>
                   </div>
                 )}
               </div>
             );
           })}
-          {visibles.length === 0 && <div className="px-4 py-6 text-sm text-slate-400">No hay estudiantes en esta selección.</div>}
+          {visibles.length === 0 && <div className="col-span-full text-sm text-slate-400 text-center py-6">No hay estudiantes en esta selección.</div>}
         </div>
       )}
 
