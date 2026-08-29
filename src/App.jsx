@@ -2116,22 +2116,19 @@ function BuscadorEstudiantesGlobal({ onSeleccionar }) {
 // interferir con la lectura de las tarjetas blancas de contenido.
 function FondoArcadeDocente() {
   return (
-    <div className="fixed inset-0 -z-10 overflow-hidden" style={{ background: "#1a1533" }}>
+    <div className="fixed inset-0 -z-10 overflow-hidden" style={{ background: "#FAFAFC" }}>
       <div className="absolute inset-0" style={{
-        backgroundImage: "linear-gradient(rgba(124,58,237,0.18) 1px, transparent 1px), linear-gradient(90deg, rgba(124,58,237,0.18) 1px, transparent 1px)",
+        backgroundImage: "linear-gradient(rgba(124,58,237,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(124,58,237,0.05) 1px, transparent 1px)",
         backgroundSize: "28px 28px",
       }} />
-      <svg viewBox="0 0 800 120" preserveAspectRatio="xMidYMax slice" className="absolute bottom-0 left-0 w-full" style={{ height: 140, opacity: 0.5 }}>
-        <Castillito x={20} y={20} escala={0.6} color="#4c1d95" />
-        <Castillito x={140} y={35} escala={0.5} color="#5b21b6" />
-        <Castillito x={280} y={15} escala={0.7} color="#4c1d95" />
-        <Castillito x={440} y={30} escala={0.55} color="#5b21b6" />
-        <Castillito x={580} y={18} escala={0.65} color="#4c1d95" />
-        <Castillito x={710} y={32} escala={0.5} color="#5b21b6" />
+      <svg viewBox="0 0 800 120" preserveAspectRatio="xMidYMax slice" className="absolute bottom-0 left-0 w-full" style={{ height: 130, opacity: 0.35 }}>
+        <Castillito x={20} y={20} escala={0.6} color="#DDD6FE" />
+        <Castillito x={140} y={35} escala={0.5} color="#EDE9FE" />
+        <Castillito x={280} y={15} escala={0.7} color="#DDD6FE" />
+        <Castillito x={440} y={30} escala={0.55} color="#EDE9FE" />
+        <Castillito x={580} y={18} escala={0.65} color="#DDD6FE" />
+        <Castillito x={710} y={32} escala={0.5} color="#EDE9FE" />
       </svg>
-      <div className="absolute inset-0" style={{
-        backgroundImage: "repeating-linear-gradient(0deg, rgba(0,0,0,0.12) 0px, rgba(0,0,0,0.12) 1px, transparent 1px, transparent 3px)",
-      }} />
     </div>
   );
 }
@@ -2162,7 +2159,7 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
   };
 
   return (
-    <div className="md:sticky md:top-0 md:z-20" style={{ background: "linear-gradient(180deg, #1e1b30 0%, #14101f 100%)", borderBottom: "2px solid #8B5CF6" }}>
+    <div className="md:sticky md:top-0 md:z-20 bg-white" style={{ borderBottom: "1px solid #E5E7EB", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
       {/* Fila superior: logo, buscador, accesos rápidos */}
       <div className="flex items-center justify-between gap-3 px-4 py-3 flex-wrap">
         <button onClick={() => elegir("inicio")} className="flex items-center gap-2 shrink-0">
@@ -2171,7 +2168,7 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
           ) : (
             <span className="text-xl">🧭</span>
           )}
-          <span className="text-violet-200 text-base font-bold tracking-[0.15em]" style={{ fontFamily: "Georgia, serif", textShadow: "0 0 8px #a78bfa, 0 0 16px #7c3aed" }}>CÓDICE</span>
+          <span className="text-violet-700 text-base font-bold tracking-[0.15em]" style={{ fontFamily: "Georgia, serif" }}>CÓDICE</span>
         </button>
 
         <div className="flex-1 min-w-[160px] max-w-md order-3 md:order-none">
@@ -2183,7 +2180,7 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
           <button onClick={onInstitucion} className="text-base" title="Institución">⚙️</button>
           <button onClick={onSalir} className="text-base hidden md:inline" title="Cerrar sesión">🚪</button>
           {/* Móvil: botón hamburguesa para desplegar el menú completo */}
-          <button onClick={() => setMenuAbierto((v) => !v)} className="md:hidden text-violet-200 text-lg" title="Menú">
+          <button onClick={() => setMenuAbierto((v) => !v)} className="md:hidden text-violet-600 text-lg" title="Menú">
             {menuAbierto ? "✕" : "☰"}
           </button>
         </div>
@@ -2194,7 +2191,7 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
         {MENU_PANEL.map((m) => (
           <button key={m.key} onClick={() => elegir(m.key)}
             className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap flex items-center gap-1.5"
-            style={{ background: activo === m.key ? "rgba(139,92,246,0.35)" : "transparent", color: activo === m.key ? "#EDE9FE" : "#A78BFA" }}>
+            style={{ background: activo === m.key ? "#7C3AED" : "transparent", color: activo === m.key ? "#FFFFFF" : "#64748B" }}>
             <span>{m.icono}</span> {m.label}
           </button>
         ))}
@@ -2206,12 +2203,12 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
           {MENU_PANEL.map((m) => (
             <button key={m.key} onClick={() => elegir(m.key)}
               className="text-[11px] px-2 py-2.5 rounded-xl flex flex-col items-center gap-1"
-              style={{ background: activo === m.key ? "rgba(139,92,246,0.35)" : "rgba(255,255,255,0.05)", color: activo === m.key ? "#EDE9FE" : "#A78BFA" }}>
+              style={{ background: activo === m.key ? "#7C3AED" : "#F8FAFC", color: activo === m.key ? "#FFFFFF" : "#475569" }}>
               <span className="text-base">{m.icono}</span>
               <span className="text-center leading-tight">{m.label}</span>
             </button>
           ))}
-          <button onClick={onSalir} className="text-[11px] px-2 py-2.5 rounded-xl flex flex-col items-center gap-1 text-rose-300" style={{ background: "rgba(255,255,255,0.05)" }}>
+          <button onClick={onSalir} className="text-[11px] px-2 py-2.5 rounded-xl flex flex-col items-center gap-1 text-rose-500 bg-slate-50">
             <span className="text-base">🚪</span>
             <span>Cerrar sesión</span>
           </button>
@@ -2223,12 +2220,12 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
           <>
             <input value={nombreTemp} onChange={(e) => setNombreTemp(e.target.value)} autoFocus
               onKeyDown={(e) => { if (e.key === "Enter") guardarNombre(); if (e.key === "Escape") setEditandoNombre(false); }}
-              placeholder="Tu nombre" className="text-[11px] bg-transparent border-b border-violet-400 text-violet-100 outline-none px-1 w-32" />
-            <button onClick={guardarNombre} className="text-[10px] text-emerald-400">✔</button>
-            <button onClick={() => setEditandoNombre(false)} className="text-[10px] text-violet-400/60">✕</button>
+              placeholder="Tu nombre" className="text-[11px] bg-transparent border-b border-violet-300 text-slate-600 outline-none px-1 w-32" />
+            <button onClick={guardarNombre} className="text-[10px] text-emerald-600">✔</button>
+            <button onClick={() => setEditandoNombre(false)} className="text-[10px] text-slate-400">✕</button>
           </>
         ) : (
-          <button onClick={() => { setNombreTemp(nombreDocente); setEditandoNombre(true); }} className="text-[10px] text-violet-400/60 truncate hover:text-violet-300" title="Tocá para editar tu nombre">
+          <button onClick={() => { setNombreTemp(nombreDocente); setEditandoNombre(true); }} className="text-[10px] text-slate-400 truncate hover:text-violet-600" title="Tocá para editar tu nombre">
             {nombreDocente || "+ Agregar tu nombre"} <span className="opacity-60">✏️</span>
           </button>
         )}
