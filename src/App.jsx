@@ -1859,18 +1859,18 @@ function PortalEstudiante() {
             <>
               <div className="flex items-center gap-3 mb-4 pb-4 border-b border-slate-100">
                 <div className="flex items-center gap-2 shrink-0">
-                  {avatarConfig && (
-                    <div className="bg-gradient-to-b from-violet-100 to-violet-50 rounded-2xl p-1 border border-violet-200">
-                      <PersonajePreview config={avatarConfig} size={56} />
-                    </div>
-                  )}
-                  <div className="flex items-center justify-center rounded-full overflow-hidden" style={{ width: 56, height: 56, border: equipados.marco ? `4px solid ${equipados.marco.valor}` : "4px solid transparent", background: "#F5F3FF" }}>
+                  <div className="shrink-0 flex items-center justify-center rounded-full overflow-hidden" style={{ width: 56, height: 56, border: equipados.marco ? `4px solid ${equipados.marco.valor}` : "4px solid transparent", background: "#F5F3FF" }}>
                     {estudianteInfo?.foto_url ? (
                       <img src={estudianteInfo.foto_url} alt={datos.nombre} className="w-full h-full object-cover" />
                     ) : (
                       <span className="text-2xl">🎓</span>
                     )}
                   </div>
+                  {avatarConfig && (
+                    <div className="shrink-0 bg-gradient-to-b from-violet-100 to-violet-50 rounded-2xl p-1 border border-violet-200">
+                      <PersonajePreview config={avatarConfig} size={56} />
+                    </div>
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-base font-bold text-slate-800 truncate">{datos.nombre}</div>
