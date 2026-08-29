@@ -436,9 +436,9 @@ function imprimirGuia(guia, institucion) {
   ventana.document.close();
 }
 
-export function VistaGuiasEstudio({ grados, gradoActivo }) {
+export function VistaGuiasEstudio({ grados, gradoActivo, periodoActivo, materiaActiva }) {
   const [materias, setMaterias] = useState([]);
-  const [materiaId, setMateriaId] = useState("");
+  const [materiaId, setMateriaId] = useState(materiaActiva || "");
   const [gradoId, setGradoId] = useState(gradoActivo || grados[0]?.id || "");
   const [periodo, setPeriodo] = useState("1");
   const [guias, setGuias] = useState([]);
@@ -449,6 +449,8 @@ export function VistaGuiasEstudio({ grados, gradoActivo }) {
   const [promptAbierto, setPromptAbierto] = useState(false);
 
   useEffect(() => { if (gradoActivo) setGradoId(gradoActivo); }, [gradoActivo]);
+  useEffect(() => { if (materiaActiva) setMateriaId(materiaActiva); }, [materiaActiva]);
+  useEffect(() => { if (periodoActivo) setPeriodo(periodoActivo); }, [periodoActivo]);
   const [pegarAbierto, setPegarAbierto] = useState(false);
 
   useEffect(() => {
