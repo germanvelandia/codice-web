@@ -1011,7 +1011,7 @@ function AreaEstudiante({ estudiante, progreso, grados, onClose, onAbrir }) {
   };
 
   return (
-    <div className="fixed inset-0 z-40 bg-white overflow-y-auto">
+    <div className="fixed inset-0 z-20 bg-white overflow-y-auto">
       <div className="max-w-2xl mx-auto p-4 sm:p-6">
         <button onClick={onClose} className="text-sm text-violet-500 mb-4">← Volver</button>
 
@@ -1176,12 +1176,15 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
         ✏️ Editar
       </button>
 
-      <select value={reino} onChange={(e) => onCambiarReino(estudiante.id, e.target.value)} className="text-[11px] text-slate-400 bg-transparent outline-none mb-1">
+      <select value={reino} onChange={(e) => onCambiarReino(estudiante.id, e.target.value)}
+        className="text-[11px] text-slate-400 bg-transparent outline-none mb-1 max-w-full"
+        style={{ textAlign: "center", textAlignLast: "center" }}>
         {reinos.map((r) => <option key={r} value={r}>{r}</option>)}
       </select>
       {roles && roles.length > 0 && (
         <select value={rolActualId} onChange={(e) => onCambiarRol(estudiante.id, e.target.value ? parseInt(e.target.value, 10) : null)}
-          className="text-[11px] bg-violet-50 text-violet-600 rounded-full px-2 py-0.5 mb-1.5 outline-none">
+          className="text-[11px] bg-violet-50 text-violet-600 rounded-full px-2 py-0.5 mb-1.5 outline-none max-w-full"
+          style={{ textAlign: "center", textAlignLast: "center" }}>
           <option value="">Sin rol</option>
           {roles.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
         </select>
