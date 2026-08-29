@@ -15,6 +15,7 @@ import { VistaSalonHonor } from "./screens/SalonHonor";
 import { VistaDiplomas } from "./screens/Diplomas";
 import { VistaPersonaje, PersonajePreview } from "./screens/Personaje";
 import { HistorialPuntosEstudiante } from "./screens/HistorialPuntos";
+import { MapaTerritoriosEstudiante } from "./screens/MapaTerritorios";
 import { VistaGamificacionExtra } from "./screens/GamificacionExtra";
 import { VistaRoles } from "./screens/Roles";
 import { VistaCalificaciones } from "./screens/Calificaciones";
@@ -1900,6 +1901,7 @@ function PortalEstudiante() {
 
           {vista === "misiones" && estudianteInfo && (
             <>
+              <div className="mb-4"><MapaTerritoriosEstudiante estudianteId={estudianteInfo.id} nombre={datos.nombre} xp={datos.xp} /></div>
               <MicroMisionesEstudiante estudianteId={estudianteInfo.id} onCambio={() => consultar()} />
               <EvaluacionesEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />
             </>
