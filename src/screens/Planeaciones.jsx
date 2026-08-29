@@ -1386,15 +1386,17 @@ function GestionarEstandaresModal({ onClose }) {
   );
 }
 
-export function VistaPlaneaciones({ grados }) {
+export function VistaPlaneaciones({ grados, gradoActivo }) {
   const [materias, setMaterias] = useState([]);
   const [materiaId, setMateriaId] = useState("");
-  const [gradoId, setGradoId] = useState("");
+  const [gradoId, setGradoId] = useState(gradoActivo || "");
   const [periodo, setPeriodo] = useState("1");
   const [unidades, setUnidades] = useState([]);
   const [config, setConfig] = useState({ cantidad_periodos: 4, sistema_periodos: "bimestre" });
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
+
+  useEffect(() => { if (gradoActivo) setGradoId(gradoActivo); }, [gradoActivo]);
   const [formAbierto, setFormAbierto] = useState(false);
   const [institucion, setInstitucion] = useState(null);
   const [pendientesAbierto, setPendientesAbierto] = useState(false);
