@@ -1010,24 +1010,46 @@ function ProximamentePanel({ nombre }) {
   );
 }
 
-const MENU_CODICE = [
-  { key: "album", label: "Álbum", icono: "🎴" },
-  { key: "biblioteca", label: "Biblioteca", icono: "📚" },
-  { key: "codice", label: "Códice", icono: "📖" },
-  { key: "forja", label: "Forja", icono: "🔨" },
-  { key: "guias", label: "Guías", icono: "📘" },
-  { key: "inicio", label: "Inicio", icono: "🏠" },
-  { key: "misiones", label: "Misiones", icono: "⚔️" },
-  { key: "notas", label: "Notas", icono: "📝" },
-  { key: "personaje", label: "Personaje", icono: "🎨" },
-  { key: "historial", label: "Historial", icono: "📖" },
-  { key: "perfil", label: "Perfil", icono: "👤" },
-  { key: "preguntados", label: "Preguntados", icono: "🎡" },
-  { key: "proyectos", label: "Proyectos", icono: "📜" },
-  { key: "ranking", label: "Ranking", icono: "📊" },
-  { key: "recompensas", label: "Recompensas", icono: "🎁" },
-  { key: "salonhonor", label: "Salón de Honor", icono: "🏆" },
+const MENU_CODICE_GRUPOS = [
+  {
+    key: "inicio_grupo", label: "Inicio", icono: "🏠", items: [
+      { key: "inicio", label: "Inicio", icono: "🏠" },
+    ],
+  },
+  {
+    key: "estudio", label: "Estudio", icono: "🎓", items: [
+      { key: "codice", label: "Códice", icono: "📖" },
+      { key: "notas", label: "Notas", icono: "📝" },
+      { key: "misiones", label: "Misiones", icono: "⚔️" },
+      { key: "forja", label: "Forja", icono: "🔨" },
+      { key: "guias", label: "Guías", icono: "📘" },
+      { key: "biblioteca", label: "Biblioteca", icono: "📚" },
+      { key: "proyectos", label: "Proyectos", icono: "📜" },
+      { key: "historial", label: "Historial", icono: "🗂️" },
+    ],
+  },
+  {
+    key: "comunidad", label: "Comunidad", icono: "🏆", items: [
+      { key: "ranking", label: "Ranking", icono: "📊" },
+      { key: "salonhonor", label: "Salón de Honor", icono: "🏆" },
+      { key: "recompensas", label: "Recompensas", icono: "🎁" },
+      { key: "album", label: "Álbum", icono: "🎴" },
+    ],
+  },
+  {
+    key: "diversion", label: "Diversión", icono: "🎡", items: [
+      { key: "preguntados", label: "Preguntados", icono: "🎡" },
+      { key: "personaje", label: "Personaje", icono: "🎨" },
+    ],
+  },
+  {
+    key: "cuenta", label: "Mi cuenta", icono: "👤", items: [
+      { key: "perfil", label: "Perfil", icono: "👤" },
+    ],
+  },
 ];
+// Lista plana — se sigue usando donde hace falta el conjunto completo sin agrupar.
+const MENU_CODICE = MENU_CODICE_GRUPOS.flatMap((g) => g.items);
 
 // Íconos temáticos de castillo/aventura para cada destino del menú, en vez
 // del emoji genérico — puramente decorativo, la navegación real sigue
@@ -1038,47 +1060,10 @@ const ICONO_MAPA = {
   proyectos: "🏹", ranking: "👑", recompensas: "💎", salonhonor: "🏆",
 };
 
-// Camino serpenteante estilo "mapa de mundo" (torres conectadas por un
-// sendero), con las mismas opciones y la misma navegación de siempre.
-function MapaMundo({ activo, onElegir }) {
-  const COLS = 3;
-  const ANCHO = 360;
-  const ALTO_FILA = 105;
-  const posiciones = MENU_CODICE.map((m, i) => {
-    const fila = Math.floor(i / COLS);
-    const enFilaPar = fila % 2 === 0;
-    const colVisual = enFilaPar ? i % COLS : COLS - 1 - (i % COLS);
-    const x = 60 + colVisual * ((ANCHO - 120) / (COLS - 1));
-    const y = 55 + fila * ALTO_FILA;
-    return { ...m, x, y };
-  });
-  const alto = 55 + (Math.ceil(MENU_CODICE.length / COLS) - 1) * ALTO_FILA + 55;
-  const camino = posiciones.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
-
-  return (
-    <div className="relative overflow-x-hidden" style={{ background: "linear-gradient(180deg, #2d2450 0%, #1e1b30 55%, #14101f 100%)" }}>
-      <svg viewBox={`0 0 ${ANCHO} ${alto}`} width="100%" height={alto} style={{ display: "block" }}>
-        <path d={camino} fill="none" stroke="#7c3aed" strokeWidth="5" strokeDasharray="2,10" strokeLinecap="round" opacity="0.6" />
-        {posiciones.map((p) => {
-          const esActivo = activo === p.key;
-          return (
-            <g key={p.key} transform={`translate(${p.x},${p.y})`} style={{ cursor: "pointer" }} onClick={() => onElegir(p.key)}>
-              <circle r="30" fill={esActivo ? "#7c3aed" : "#312e81"} stroke={esActivo ? "#c4b5fd" : "#4c1d95"} strokeWidth="3" />
-              <circle r="30" fill="none" stroke="#a78bfa" strokeWidth={esActivo ? "0" : "1"} opacity="0.4" />
-              <text textAnchor="middle" y="10" fontSize="26">{ICONO_MAPA[p.key] || p.icono}</text>
-              <text textAnchor="middle" y="48" fontSize="10" fontWeight="700" fill={esActivo ? "#EDE9FE" : "#A78BFA"}>{p.label}</text>
-            </g>
-          );
-        })}
-      </svg>
-    </div>
-  );
-}
-
 function MenuCodice({ activo, onCambiar, monedas, gradoId }) {
   const [ultimoAnuncio, setUltimoAnuncio] = useState(null);
   const [menuAbierto, setMenuAbierto] = useState(false);
-  const [modoMapa, setModoMapa] = useState(true);
+  const [submenuAbierto, setSubmenuAbierto] = useState(null);
 
   useEffect(() => {
     if (!gradoId) return;
@@ -1088,6 +1073,7 @@ function MenuCodice({ activo, onCambiar, monedas, gradoId }) {
   const elegir = (key) => {
     onCambiar(key);
     setMenuAbierto(false);
+    setSubmenuAbierto(null);
   };
 
   return (
@@ -1103,14 +1089,9 @@ function MenuCodice({ activo, onCambiar, monedas, gradoId }) {
             <span className="text-sm font-bold text-amber-300">{monedas}</span>
           </div>
         )}
-        <div className="flex items-center gap-2">
-          <button onClick={() => setModoMapa((v) => !v)} className="text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ background: "rgba(139,92,246,0.25)", color: "#DDD6FE" }}>
-            {modoMapa ? "☰ Lista" : "🗺️ Mapa"}
-          </button>
-          <button onClick={() => setMenuAbierto((v) => !v)} className="md:hidden text-violet-200 text-lg" title="Menú">
-            {menuAbierto ? "✕" : "☰"}
-          </button>
-        </div>
+        <button onClick={() => setMenuAbierto((v) => !v)} className="md:hidden text-violet-200 text-lg" title="Menú">
+          {menuAbierto ? "✕" : "☰"}
+        </button>
       </div>
 
       {ultimoAnuncio && (
@@ -1124,35 +1105,65 @@ function MenuCodice({ activo, onCambiar, monedas, gradoId }) {
         </button>
       )}
 
-      {modoMapa ? (
-        <MapaMundo activo={activo} onElegir={elegir} />
-      ) : (
-        <>
-          {/* Escritorio: opciones en fila, envolviendo si hace falta */}
-          <div className="hidden md:flex flex-wrap gap-1 px-3 py-2">
-            {MENU_CODICE.map((m) => (
+      {/* Escritorio: categorías con submenú desplegable */}
+      <div className="hidden md:flex flex-wrap gap-1 px-3 py-2">
+        {MENU_CODICE_GRUPOS.map((grupo) => {
+          if (grupo.items.length === 1) {
+            const m = grupo.items[0];
+            return (
               <button key={m.key} onClick={() => elegir(m.key)}
                 className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap flex items-center gap-1.5"
                 style={{ background: activo === m.key ? "rgba(139,92,246,0.35)" : "transparent", color: activo === m.key ? "#EDE9FE" : "#A78BFA" }}>
                 <span>{m.icono}</span> {m.label}
               </button>
-            ))}
-          </div>
-
-          {/* Móvil: menú desplegable en grilla — nada queda fuera de pantalla */}
-          {menuAbierto && (
-            <div className="md:hidden px-3 py-3 grid grid-cols-3 gap-1.5">
-              {MENU_CODICE.map((m) => (
-                <button key={m.key} onClick={() => elegir(m.key)}
-                  className="text-[11px] px-2 py-2.5 rounded-xl flex flex-col items-center gap-1"
-                  style={{ background: activo === m.key ? "rgba(139,92,246,0.35)" : "rgba(255,255,255,0.05)", color: activo === m.key ? "#EDE9FE" : "#A78BFA" }}>
-                  <span className="text-base">{m.icono}</span>
-                  <span className="text-center leading-tight">{m.label}</span>
-                </button>
-              ))}
+            );
+          }
+          const activoEnGrupo = grupo.items.some((it) => it.key === activo);
+          return (
+            <div key={grupo.key} className="relative">
+              <button onClick={() => setSubmenuAbierto(submenuAbierto === grupo.key ? null : grupo.key)}
+                className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap flex items-center gap-1.5"
+                style={{ background: activoEnGrupo ? "rgba(139,92,246,0.35)" : "transparent", color: activoEnGrupo ? "#EDE9FE" : "#A78BFA" }}>
+                <span>{grupo.icono}</span> {grupo.label} <span className="text-[8px]">▾</span>
+              </button>
+              {submenuAbierto === grupo.key && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setSubmenuAbierto(null)} />
+                  <div className="absolute left-0 top-full mt-1 rounded-xl shadow-lg py-1 w-52 z-20" style={{ background: "#241f3d", border: "1px solid #4c1d95" }}>
+                    {grupo.items.map((m) => (
+                      <button key={m.key} onClick={() => elegir(m.key)}
+                        className="w-full text-left text-xs px-3 py-2 flex items-center gap-2"
+                        style={{ color: activo === m.key ? "#EDE9FE" : "#C4B5FD", fontWeight: activo === m.key ? 700 : 400, background: activo === m.key ? "rgba(139,92,246,0.25)" : "transparent" }}>
+                        <span>{m.icono}</span> {m.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
-          )}
-        </>
+          );
+        })}
+      </div>
+
+      {/* Móvil: menú desplegable, agrupado por categoría */}
+      {menuAbierto && (
+        <div className="md:hidden px-3 py-3 space-y-2">
+          {MENU_CODICE_GRUPOS.map((grupo) => (
+            <div key={grupo.key}>
+              {grupo.items.length > 1 && <div className="text-[10px] font-bold text-violet-300 uppercase tracking-wide mb-1 px-1">{grupo.icono} {grupo.label}</div>}
+              <div className="grid grid-cols-3 gap-1.5">
+                {grupo.items.map((m) => (
+                  <button key={m.key} onClick={() => elegir(m.key)}
+                    className="text-[11px] px-2 py-2.5 rounded-xl flex flex-col items-center gap-1"
+                    style={{ background: activo === m.key ? "rgba(139,92,246,0.35)" : "rgba(255,255,255,0.05)", color: activo === m.key ? "#EDE9FE" : "#A78BFA" }}>
+                    <span className="text-base">{m.icono}</span>
+                    <span className="text-center leading-tight">{m.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
@@ -1846,31 +1857,41 @@ function PortalEstudiante() {
         <div className="bg-white rounded-2xl shadow-lg p-6">
           {vista === "inicio" && (
             <>
-              <div className="text-center mb-4">
-                {avatarConfig && (
-                  <div className="flex flex-col items-center mb-1.5">
-                    <div className="bg-gradient-to-b from-violet-100 to-violet-50 rounded-2xl p-1.5 border border-violet-200">
-                      <PersonajePreview config={avatarConfig} size={92} />
-                    </div>
-                    {avatarConfig.nombre_personaje && <div className="text-xs font-bold text-violet-600 mt-1">✨ {avatarConfig.nombre_personaje}</div>}
+              <div className="flex items-center gap-3 mb-4 pb-4 border-b border-slate-100">
+                {avatarConfig ? (
+                  <div className="shrink-0 bg-gradient-to-b from-violet-100 to-violet-50 rounded-2xl p-1 border border-violet-200">
+                    <PersonajePreview config={avatarConfig} size={56} />
+                  </div>
+                ) : (
+                  <div className="shrink-0 flex items-center justify-center rounded-full overflow-hidden" style={{ width: 56, height: 56, border: equipados.marco ? `4px solid ${equipados.marco.valor}` : "4px solid transparent", background: "#F5F3FF" }}>
+                    {estudianteInfo?.foto_url ? (
+                      <img src={estudianteInfo.foto_url} alt={datos.nombre} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-2xl">🎓</span>
+                    )}
                   </div>
                 )}
-                <div className="mx-auto mb-1.5 flex items-center justify-center rounded-full overflow-hidden" style={{ width: 56, height: 56, border: equipados.marco ? `4px solid ${equipados.marco.valor}` : "4px solid transparent", background: "#F5F3FF" }}>
-                  {estudianteInfo?.foto_url ? (
-                    <img src={estudianteInfo.foto_url} alt={datos.nombre} className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-2xl">🎓</span>
-                  )}
+                <div className="flex-1 min-w-0">
+                  <div className="text-base font-bold text-slate-800 truncate">{datos.nombre}</div>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]">
+                    {equipados.titulo && <span className="font-semibold text-violet-500">✨ {equipados.titulo.valor}</span>}
+                    {miRol && <span className="font-semibold text-amber-600" title={miRol.descripcion || undefined}>👑 {miRol.nombre}</span>}
+                    <span className="text-slate-400">Grado {datos.grado_id} · {datos.grupo}</span>
+                  </div>
                 </div>
-                <div className="text-lg font-bold text-slate-800">{datos.nombre}</div>
-                {equipados.titulo && <div className="text-[11px] font-semibold text-violet-500">✨ {equipados.titulo.valor}</div>}
-                {miRol && <div className="text-[11px] font-semibold text-amber-600" title={miRol.descripcion || undefined}>👑 {miRol.nombre}</div>}
-                <div className="text-xs text-slate-400">Grado {datos.grado_id} · {datos.grupo}</div>
+                <div className="w-32 shrink-0 hidden sm:block">
+                  <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+                    <span className="font-semibold text-violet-600">{level.name}</span>
+                    <span>{next ? `${datos.xp}/${next.min}` : "máx"}</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-violet-100 overflow-hidden">
+                    <div className="h-full rounded-full bg-gradient-to-r from-violet-400 to-violet-600" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
               </div>
-              <ValorSemanaEstudiante />
-              {estudianteInfo && <DesafioReinoEstudiante gradoId={estudianteInfo.grado_id} miReino={estudianteInfo.reino_actual || estudianteInfo.reino_original || "Sin grupo"} />}
-              {estudianteInfo && <AvisoRendimiento estudianteId={estudianteInfo.id} />}
-              <div className="mb-3">
+
+              {/* En pantallas chicas, la barra de nivel/XP se muestra completa acá abajo */}
+              <div className="mb-4 sm:hidden">
                 <div className="flex justify-between text-xs text-slate-500 mb-1">
                   <span className="font-semibold text-violet-600">{level.name}</span>
                   <span>{datos.xp}{next ? ` / ${next.min} XP` : " XP · nivel máximo"}</span>
@@ -1879,21 +1900,26 @@ function PortalEstudiante() {
                   <div className="h-full rounded-full bg-gradient-to-r from-violet-400 to-violet-600" style={{ width: `${pct}%` }} />
                 </div>
               </div>
+
+              <ValorSemanaEstudiante />
+              {estudianteInfo && <DesafioReinoEstudiante gradoId={estudianteInfo.grado_id} miReino={estudianteInfo.reino_actual || estudianteInfo.reino_original || "Sin grupo"} />}
+              {estudianteInfo && <AvisoRendimiento estudianteId={estudianteInfo.id} />}
+
               <div className="grid grid-cols-3 gap-2 mb-4">
-                <div className="bg-emerald-50 rounded-xl p-2 text-center">
-                  <div className="text-sm font-bold text-emerald-600">{datos.vida}</div>
-                  <div className="text-[10px] text-slate-400">Vida</div>
+                <div className="bg-emerald-50 rounded-xl p-3 text-center">
+                  <div className="text-lg font-bold text-emerald-600">{datos.vida}</div>
+                  <div className="text-[10px] text-slate-500">Vida</div>
                 </div>
-                <div className="bg-amber-50 rounded-xl p-2 text-center">
-                  <div className="text-sm font-bold text-amber-600">{datos.monedas}</div>
-                  <div className="text-[10px] text-slate-400">Monedas</div>
+                <div className="bg-amber-50 rounded-xl p-3 text-center">
+                  <div className="text-lg font-bold text-amber-600">{datos.monedas}</div>
+                  <div className="text-[10px] text-slate-500">Monedas</div>
                 </div>
-                <div className="bg-blue-50 rounded-xl p-2 text-center">
-                  <div className="text-sm font-bold text-blue-600">{pctAsis ?? "—"}{pctAsis !== null && "%"}</div>
-                  <div className="text-[10px] text-slate-400">Asistencia</div>
+                <div className="bg-blue-50 rounded-xl p-3 text-center">
+                  <div className="text-lg font-bold text-blue-600">{pctAsis ?? "—"}{pctAsis !== null && "%"}</div>
+                  <div className="text-[10px] text-slate-500">Asistencia</div>
                 </div>
               </div>
-              <div className="text-xs text-slate-500">
+              <div className="text-xs text-slate-500 bg-slate-50 rounded-xl p-3">
                 Presentes: {datos.presentes} · Retardos: {datos.retardos} · Faltas injustificadas: {datos.faltas_injustificadas} · Faltas justificadas: {datos.faltas_justificadas}
               </div>
             </>
