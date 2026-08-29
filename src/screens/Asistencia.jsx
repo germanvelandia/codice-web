@@ -187,8 +187,8 @@ function TotalesPorGrado({ grados }) {
   );
 }
 
-export function VistaAsistencia({ grados }) {
-  const [gradoId, setGradoId] = useState(grados[0]?.id || "");
+export function VistaAsistencia({ grados, gradoActivo }) {
+  const [gradoId, setGradoId] = useState(gradoActivo || grados[0]?.id || "");
   const [reinoFiltro, setReinoFiltro] = useState("Todos");
   const [fecha, setFecha] = useState(hoyISO());
   const [estudiantes, setEstudiantes] = useState([]);
@@ -198,6 +198,10 @@ export function VistaAsistencia({ grados }) {
   const [notaTexto, setNotaTexto] = useState("");
   const [materias, setMaterias] = useState([]);
   const [materiaId, setMateriaId] = useState(""); // "" = General (sin materia)
+
+  // Cuando cambia el curso activo desde la barra superior, esta pantalla
+  // se sincroniza automáticamente con ese curso.
+  useEffect(() => { if (gradoActivo) setGradoId(gradoActivo); }, [gradoActivo]);
   const [usuarioId, setUsuarioId] = useState(null);
   const [consolidadoEstudiante, setConsolidadoEstudiante] = useState(null);
   const [vista, setVista] = useState("diaria"); // "diaria" | "totales"
