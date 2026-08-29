@@ -959,6 +959,97 @@ export function HistorialGamificacionModal({ estudiante, onClose }) {
   );
 }
 
+// Área del Estudiante — reemplaza el menú chico de "⋯ Más" por una
+// pantalla completa, organizada por categorías, con todo lo que involucra
+// a este estudiante en un solo lugar. Reutiliza los mismos modales de
+// siempre (Actas, Observador, etc.) — solo cambia cómo se llega a ellos.
+function AreaEstudiante({ estudiante, progreso, grados, onClose, onAbrir }) {
+  const CATEGORIAS = [
+    {
+      titulo: "🎓 Académico y seguimiento",
+      items: [
+        { key: "resumen", label: "Resumen del estudiante", icono: "📊" },
+        { key: "observador", label: "Observador del Estudiante", icono: "📋" },
+        { key: "tutorias", label: "Tutoría individual", icono: "🧑‍🏫" },
+      ],
+    },
+    {
+      titulo: "🤝 Convivencia",
+      items: [
+        { key: "actas", label: "Actas", icono: "📋" },
+        { key: "historial", label: "Historial de comportamiento", icono: "📜" },
+        { key: "remision", label: "Remisión a Orientación", icono: "📨" },
+      ],
+    },
+    {
+      titulo: "🧩 Apoyo e inclusión",
+      items: [
+        { key: "inclusion", label: estudiante.piar || estudiante.dua ? "Inclusión (PIAR/DUA activo)" : "Inclusión (sin registrar)", icono: "🧩" },
+      ],
+    },
+    {
+      titulo: "🪪 Datos y administración",
+      items: [
+        { key: "documento", label: "Documento / datos personales", icono: "🪪" },
+        onAbrir.traslado ? { key: "traslado", label: "Trasladar de grado", icono: "🔀" } : null,
+      ].filter(Boolean),
+    },
+    {
+      titulo: "🎮 Vida en CÓDICE",
+      items: [
+        { key: "codice", label: "Ver Códice", icono: "📖" },
+      ],
+    },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-40 bg-white overflow-y-auto">
+      <div className="max-w-2xl mx-auto p-4 sm:p-6">
+        <button onClick={onClose} className="text-sm text-violet-500 mb-4">← Volver</button>
+
+        <div className="flex items-center gap-4 mb-6">
+          {estudiante.foto_url ? (
+            <img src={estudiante.foto_url} alt={estudiante.nombre} className="w-16 h-16 rounded-full object-cover border-2 border-violet-100" />
+          ) : (
+            <div className="w-16 h-16 rounded-full bg-violet-100 flex items-center justify-center text-2xl font-bold text-violet-500">
+              {estudiante.nombre?.[0] || "?"}
+            </div>
+          )}
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold text-slate-800 truncate">{estudiante.nombre}</h2>
+            <p className="text-xs text-slate-400">Curso {estudiante.grado_id} {(estudiante.piar || estudiante.dua) && <span className="ml-1">🧩</span>}</p>
+            <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-500">
+              <span>🪙 {progreso.monedas || 0}</span>
+              <span>⭐ {progreso.xp || 0} XP</span>
+              <span>❤️ {progreso.vida ?? 100}</span>
+            </div>
+          </div>
+        </div>
+
+        {CATEGORIAS.map((cat) => (
+          <div key={cat.titulo} className="mb-5">
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">{cat.titulo}</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {cat.items.map((item) => (
+                <button key={item.key} onClick={() => onAbrir[item.key]()}
+                  className="flex items-center gap-2.5 bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-3 text-left hover:border-violet-200 hover:shadow-md transition">
+                  <span className="text-lg">{item.icono}</span>
+                  <span className="text-sm font-medium text-slate-700">{item.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        <div className="mt-8 pt-4 border-t border-slate-100">
+          <button onClick={() => { if (confirm(`¿Quitar a ${estudiante.nombre} de la lista?`)) { onAbrir.quitar(); onClose(); } }}
+            className="text-xs text-rose-500 hover:text-rose-600">🗑 Quitar de la lista</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFotoActualizada, reinos, catalogoReinos, onCambiarReino, roles, onCambiarRol, onCodigoGenerado, grados, gradoActual, onTrasladado }) {
   const [actasAbiertas, setActasAbiertas] = useState(false);
   const [inclusionAbierta, setInclusionAbierta] = useState(false);
@@ -970,7 +1061,7 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
   const [historialAbierto, setHistorialAbierto] = useState(false);
   const [trasladoAbierto, setTrasladoAbierto] = useState(false);
   const [documentoAbierto, setDocumentoAbierto] = useState(false);
-  const [menuAbierto, setMenuAbierto] = useState(false);
+  const [areaAbierta, setAreaAbierta] = useState(false);
   const [generando, setGenerando] = useState(false);
   const [editandoNombre, setEditandoNombre] = useState(false);
   const [nombreTemp, setNombreTemp] = useState(estudiante.nombre);
@@ -1030,100 +1121,75 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
   };
 
   return (
-    <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
-      <div className="flex items-start gap-3 mb-2">
-        <div className="relative shrink-0">
-          {estudiante.foto_url ? (
-            <img src={estudiante.foto_url} alt={estudiante.nombre} onClick={() => setFotoAmpliada(true)}
-              className="w-10 h-10 object-cover rounded-full border border-slate-100 cursor-pointer" />
-          ) : infoReino.logo_url ? (
-            <img src={infoReino.logo_url} alt="" className="w-10 h-10 object-contain rounded-full border border-slate-100" />
-          ) : (
-            <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold"
-              style={{ background: `${infoReino.color}22`, color: infoReino.color }}>
-              {initials(estudiante.nombre)}
-            </div>
-          )}
-          <label className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-violet-500 flex items-center justify-center cursor-pointer" title="Subir foto">
-            <span className="text-white text-[8px]">{subiendoFoto ? "…" : "📷"}</span>
-            <input type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files[0]) subirFoto(e.target.files[0]); }} />
-          </label>
-          {estudiante.foto_url && (
-            <button onClick={quitarFoto} className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 flex items-center justify-center" title="Quitar foto">
-              <span className="text-white text-[8px]">✕</span>
-            </button>
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          {editandoNombre ? (
-            <div className="flex items-center gap-1">
-              <input autoFocus value={nombreTemp} onChange={(e) => setNombreTemp(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") guardarNombre(); if (e.key === "Escape") { setNombreTemp(estudiante.nombre); setEditandoNombre(false); } }}
-                onBlur={guardarNombre}
-                className="text-sm font-semibold text-slate-800 border-b border-violet-300 outline-none flex-1 min-w-0" />
-            </div>
-          ) : (
-            <div className="text-sm font-semibold text-slate-800 flex items-center gap-1 min-w-0">
-              <span className="truncate min-w-0">{estudiante.nombre}</span>
-              <InclusionBadge estudiante={estudiante} />
-              <button onClick={() => { setNombreTemp(estudiante.nombre); setEditandoNombre(true); }} title="Editar nombre" className="text-slate-300 hover:text-violet-500 text-xs shrink-0">✏️</button>
-            </div>
-          )}
-          <div className="flex items-center gap-1 text-xs text-slate-400">
-            <select value={reino} onChange={(e) => onCambiarReino(estudiante.id, e.target.value)} className="text-xs bg-transparent outline-none">
-              {reinos.map((r) => <option key={r} value={r}>{r}</option>)}
-            </select>
-          </div>
-          {roles && roles.length > 0 && (
-            <select value={rolActualId} onChange={(e) => onCambiarRol(estudiante.id, e.target.value ? parseInt(e.target.value, 10) : null)}
-              className="text-xs bg-violet-50 text-violet-600 rounded-full px-2 py-0.5 mt-1 outline-none">
-              <option value="">Sin rol</option>
-              {roles.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
-            </select>
-          )}
-        </div>
-        <div className="text-xs text-amber-500 font-semibold shrink-0">🪙 {progreso.monedas || 0}</div>
-      </div>
-      <LevelBar xp={progreso.xp || 0} />
-      <VidaBar vida={progreso.vida ?? 100} />
-      <div className="flex items-center justify-between mt-2">
-        {codigo ? (
-          <div className="text-[11px] text-slate-500">🔑 Código: <span className="font-mono font-bold text-violet-600">{codigo}</span></div>
+    <div className="relative bg-white rounded-2xl p-3 shadow-sm border border-slate-100 min-w-0 flex flex-col items-center text-center">
+      <div className="absolute top-2 left-2"><InclusionBadge estudiante={estudiante} /></div>
+
+      <div className="relative shrink-0 mb-2">
+        {estudiante.foto_url ? (
+          <img src={estudiante.foto_url} alt={estudiante.nombre} onClick={() => setFotoAmpliada(true)}
+            className="w-14 h-14 object-cover rounded-full border border-slate-100 cursor-pointer" />
+        ) : infoReino.logo_url ? (
+          <img src={infoReino.logo_url} alt="" className="w-14 h-14 object-contain rounded-full border border-slate-100" />
         ) : (
-          <button disabled={generando} onClick={generarCodigo} className="text-[11px] text-violet-500 underline">
-            {generando ? "Generando…" : "🔑 Generar código de acceso"}
+          <div className="w-14 h-14 rounded-full flex items-center justify-center text-sm font-bold"
+            style={{ background: `${infoReino.color}22`, color: infoReino.color }}>
+            {initials(estudiante.nombre)}
+          </div>
+        )}
+        <label className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-violet-500 flex items-center justify-center cursor-pointer" title="Subir foto">
+          <span className="text-white text-[9px]">{subiendoFoto ? "…" : "📷"}</span>
+          <input type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files[0]) subirFoto(e.target.files[0]); }} />
+        </label>
+        {estudiante.foto_url && (
+          <button onClick={quitarFoto} className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-500 flex items-center justify-center" title="Quitar foto">
+            <span className="text-white text-[9px]">✕</span>
           </button>
         )}
       </div>
-      <div className="flex justify-between items-center mt-2 relative">
-        <div className="relative">
-          <button onClick={() => setMenuAbierto((v) => !v)} className="text-xs px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">⋯ Más</button>
-          {menuAbierto && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setMenuAbierto(false)} />
-              <div className="absolute left-0 bottom-full mb-1 bg-white rounded-xl shadow-lg border border-slate-100 py-1 w-48 z-20">
-                <button onClick={() => { setMenuAbierto(false); setActasAbiertas(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📋 Actas</button>
-                <button onClick={() => { setMenuAbierto(false); setDocumentoAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">🪪 Documento</button>
-                <button onClick={() => { setMenuAbierto(false); setHistorialAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📜 Historial de comportamiento</button>
-                <button onClick={() => { setMenuAbierto(false); setInclusionAbierta(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">
-                  {estudiante.piar || estudiante.dua ? "🧩 Inclusión" : "+ Inclusión"}
-                </button>
-                <button onClick={() => { setMenuAbierto(false); setObservadorAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📋 Observador del Estudiante</button>
-                <button onClick={() => { setMenuAbierto(false); setRemisionAbierta(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📨 Remisión a Orientación</button>
-                <button onClick={() => { setMenuAbierto(false); setResumenAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📊 Resumen del estudiante</button>
-                <button onClick={() => { setMenuAbierto(false); setTutoriasAbierta(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">🧑‍🏫 Tutoría individual</button>
-                {grados && grados.length > 1 && (
-                  <button onClick={() => { setMenuAbierto(false); setTrasladoAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">🔀 Trasladar de grado</button>
-                )}
-                <button onClick={() => { setMenuAbierto(false); setCodiceAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📖 Ver Códice</button>
-                <div className="border-t border-slate-100 my-1" />
-                <button onClick={() => { setMenuAbierto(false); onQuitar(estudiante.id); }} className="w-full text-left text-xs px-3 py-2 hover:bg-rose-50 text-rose-500">🗑 Quitar de la lista</button>
-              </div>
-            </>
-          )}
-        </div>
-        <QuickGamify estudiante={estudiante} onAplicado={onAplicado} />
+
+      {editandoNombre ? (
+        <input autoFocus value={nombreTemp} onChange={(e) => setNombreTemp(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") guardarNombre(); if (e.key === "Escape") { setNombreTemp(estudiante.nombre); setEditandoNombre(false); } }}
+          onBlur={guardarNombre}
+          className="text-xs font-medium text-slate-900 text-center border-b border-violet-300 outline-none w-full mb-1" />
+      ) : (
+        <button onClick={() => setAreaAbierta(true)} className="text-xs font-medium text-slate-900 leading-tight mb-1 hover:text-violet-600" title="Ver toda la información de este estudiante">
+          {estudiante.nombre}
+        </button>
+      )}
+      <button onClick={() => { setNombreTemp(estudiante.nombre); setEditandoNombre(true); }} title="Editar nombre" className="text-[10px] text-slate-400 hover:text-violet-500 mb-1.5">
+        ✏️ Editar
+      </button>
+
+      <select value={reino} onChange={(e) => onCambiarReino(estudiante.id, e.target.value)} className="text-[11px] text-slate-400 bg-transparent outline-none mb-1">
+        {reinos.map((r) => <option key={r} value={r}>{r}</option>)}
+      </select>
+      {roles && roles.length > 0 && (
+        <select value={rolActualId} onChange={(e) => onCambiarRol(estudiante.id, e.target.value ? parseInt(e.target.value, 10) : null)}
+          className="text-[11px] bg-violet-50 text-violet-600 rounded-full px-2 py-0.5 mb-1.5 outline-none">
+          <option value="">Sin rol</option>
+          {roles.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
+        </select>
+      )}
+
+      <div className="flex items-center gap-1 text-xs text-amber-600 mb-1.5">
+        <span>🪙</span><span>{progreso.monedas || 0}</span>
       </div>
+
+      <div className="w-full mb-1.5">
+        <LevelBar xp={progreso.xp || 0} />
+        <VidaBar vida={progreso.vida ?? 100} />
+      </div>
+
+      {codigo ? (
+        <p className="text-[10px] text-slate-400 mb-2">🔑 <span className="font-mono font-bold text-violet-600">{codigo}</span></p>
+      ) : (
+        <button disabled={generando} onClick={generarCodigo} className="text-[10px] text-violet-500 underline mb-2">
+          {generando ? "Generando…" : "🔑 Generar código"}
+        </button>
+      )}
+
+      <QuickGamify estudiante={estudiante} onAplicado={onAplicado} />
       {actasAbiertas && <ActasModal estudiante={estudiante} onClose={() => setActasAbiertas(false)} />}
       {inclusionAbierta && <InclusionModal estudiante={estudiante} onClose={() => setInclusionAbierta(false)} onGuardado={() => setInclusionAbierta(false)} />}
       {codiceAbierto && <CodiceDocenteModal estudiante={estudiante} onClose={() => setCodiceAbierto(false)} />}
@@ -1140,6 +1206,27 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
       )}
       {fotoAmpliada && estudiante.foto_url && (
         <FotoLightbox url={estudiante.foto_url} nombre={estudiante.nombre} onClose={() => setFotoAmpliada(false)} />
+      )}
+      {areaAbierta && (
+        <AreaEstudiante
+          estudiante={estudiante}
+          progreso={progreso}
+          grados={grados}
+          onClose={() => setAreaAbierta(false)}
+          onAbrir={{
+            actas: () => setActasAbiertas(true),
+            documento: () => setDocumentoAbierto(true),
+            historial: () => setHistorialAbierto(true),
+            inclusion: () => setInclusionAbierta(true),
+            observador: () => setObservadorAbierto(true),
+            remision: () => setRemisionAbierta(true),
+            resumen: () => setResumenAbierto(true),
+            tutorias: () => setTutoriasAbierta(true),
+            traslado: grados && grados.length > 1 ? () => setTrasladoAbierto(true) : null,
+            codice: () => setCodiceAbierto(true),
+            quitar: () => onQuitar(estudiante.id),
+          }}
+        />
       )}
     </div>
   );
@@ -2004,7 +2091,7 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
       ) : visibles.length === 0 ? (
         <div className="text-sm text-slate-400">No hay estudiantes todavía. Agrega el primero arriba.</div>
       ) : (
-        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
           {visibles.map((s) => (
             <TarjetaEstudiante key={s.id} estudiante={s} reinos={reinos} catalogoReinos={catalogoReinos} onQuitar={quitar} onRenombrar={renombrar} onCambiarReino={cambiarReino} onAplicado={actualizarProgresoLocal} onFotoActualizada={actualizarFotoLocal} roles={roles} onCambiarRol={cambiarRol} onCodigoGenerado={actualizarCodigoLocal} grados={grados} gradoActual={gradoId} onTrasladado={cargar} />
           ))}
