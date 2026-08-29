@@ -539,15 +539,17 @@ function TareaCard({ tarea, categorias, materias, grados, onCambio }) {
   );
 }
 
-export function VistaProyectosForja({ grados }) {
+export function VistaProyectosForja({ grados, gradoActivo }) {
   const [tipo, setTipo] = useState("proyecto");
   const [materias, setMaterias] = useState([]);
   const [materiaId, setMateriaId] = useState("");
-  const [gradoId, setGradoId] = useState("");
+  const [gradoId, setGradoId] = useState(gradoActivo || "");
   const [periodo, setPeriodo] = useState("1");
   const [config, setConfig] = useState({ cantidad_periodos: 4 });
   const [categorias, setCategorias] = useState([]);
   const [tareas, setTareas] = useState([]);
+
+  useEffect(() => { if (gradoActivo) setGradoId(gradoActivo); }, [gradoActivo]);
   const [cargando, setCargando] = useState(true);
   const [formAbierto, setFormAbierto] = useState(false);
 
