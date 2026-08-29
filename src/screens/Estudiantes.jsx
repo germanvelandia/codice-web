@@ -1136,7 +1136,7 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
 
   return (
     <div className="relative rounded-2xl p-3 shadow-sm border min-w-0 flex flex-col items-center text-center"
-      style={{ background: `${infoReino.color}12`, borderColor: `${infoReino.color}33` }}>
+      style={{ background: "#FFFFFF", borderColor: `${infoReino.color}55` }}>
       <div className="absolute top-2 left-2"><InclusionBadge estudiante={estudiante} /></div>
 
       <div className="relative shrink-0 mb-2">
