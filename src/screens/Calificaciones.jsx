@@ -1612,18 +1612,22 @@ function ComentariosDesempenoModal({ onClose }) {
   );
 }
 
-export function VistaCalificaciones({ grados, destinoBusqueda }) {
+export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo }) {
   const [materias, setMaterias] = useState([]);
   const [materiaActualId, setMateriaActualId] = useState(null);
   const [config, setConfig] = useState(CONFIG_DEFAULT);
   const [categorias, setCategorias] = useState([]);
-  const [gradoId, setGradoId] = useState(grados[0]?.id || "");
+  const [gradoId, setGradoId] = useState(gradoActivo || grados[0]?.id || "");
   const [periodo, setPeriodo] = useState("1");
   const [soloVigente, setSoloVigente] = useState(true);
   const [subVista, setSubVista] = useState("planilla");
   const [comentariosAbiertos, setComentariosAbiertos] = useState(false);
   const [estudiantes, setEstudiantes] = useState([]);
   const [cargando, setCargando] = useState(true);
+
+  // Curso activo elegido en la barra superior — no pisa el salto puntual
+  // que hace el buscador global de estudiantes (ver el efecto de abajo).
+  useEffect(() => { if (gradoActivo) setGradoId(gradoActivo); }, [gradoActivo]);
 
   // Cuando llega desde el buscador global de estudiantes: saltar directo a su
   // curso, en la Planilla, con su fila resaltada.
