@@ -3309,6 +3309,97 @@ export async function eliminarGuiaEstudio(id) {
   if (error) throw error;
 }
 
+// Prompt de IA de fábrica para generar Guías de Estudio — se siembra la
+// primera vez, editable después.
+export const PROMPT_IA_GUIAS_DEFAULT = `Actuá como un diseñador instruccional experto en educación básica y media.
+Vas a crear una GUÍA DE ESTUDIO PEDAGÓGICA completa, siguiendo exactamente
+esta estructura de 6 secciones, sin saltarte ninguna:
+
+DATOS DE ENTRADA
+- Institución / Asignatura: [nombre institución — asignatura o módulo]
+- Título de la Unidad / Tema: [tema central]
+- Nivel / Grado / Población: [grado o ciclo]
+- Docente / Responsable: [nombre]
+- Tiempo estimado: [horas de estudio o plazo de entrega]
+- Nivel de profundidad deseado: [introductorio / intermedio / avanzado]
+- Enfoque o énfasis particular (opcional): [ej: pensamiento crítico, resolución
+  de problemas, enfoque práctico, preparación para evaluación externa, etc.]
+
+GENERÁ LA GUÍA CON ESTAS 6 SECCIONES EXACTAS:
+
+1. DATOS DE IDENTIFICACIÓN
+   Tabla con: Institución/Asignatura, Título de la Unidad/Tema,
+   Nivel/Grado/Población, Docente/Responsable, Tiempo Estimado.
+
+2. METAS DE APRENDIZAJE Y COMPETENCIAS
+   - Propósito General (1-2 oraciones).
+   - Desempeño/Aprendizaje Esperado: 2-4 enunciados con formato
+     "Verbo de acción + contenido + contexto" (ej: "Analizar los postulados
+     teóricos centrales mediante estudio de casos").
+   - Criterios de Evaluación: 3-5 indicadores concretos y observables que
+     muestren el nivel de dominio esperado.
+
+3. FUNDAMENTACIÓN TEÓRICA Y CONCEPTOS CLAVE
+   - Una síntesis clara y estructurada del tema (evitá bloques densos de
+     texto — usá párrafos cortos, listas o subtítulos).
+   - Una tabla de 4-8 Conceptos Clave, cada uno con su definición sintética
+     y su relación directa con el tema central.
+
+4. SECUENCIA DE ACTIVIDADES Y PRÁCTICA GUIADA
+   - Fase de Exploración y Comprensión: una pregunta de reflexión inicial o
+     lectura dirigida que conecte con saberes previos.
+   - Fase de Aplicación y Análisis: un ejercicio práctico, caso, problema o
+     cuadro comparativo concreto (no solo la instrucción genérica — traé el
+     ejercicio ya armado, con su enunciado completo).
+   - Fase de Transferencia/Creación: una consigna de síntesis, propuesta,
+     argumentación o producto final que el estudiante deba construir.
+
+5. RECURSOS DE APOYO Y MATERIAL COMPLEMENTARIO
+   - Lectura Principal: referencia bibliográfica sugerida (autor, título,
+     capítulo/páginas aproximadas — aclarando que es una sugerencia genérica
+     si no conocés el material real del docente).
+   - Material Multimedia/Enlaces: 2-3 sugerencias de tipo de recurso
+     (video explicativo, podcast, simulador, etc.) describiendo qué buscar,
+     sin inventar URLs reales.
+   - Herramientas Sugeridas: software, calculadoras o plataformas útiles
+     para esta unidad puntual.
+
+6. RÚBRICA DE AUTOEVALUACIÓN Y METACOGNICIÓN
+   - Tabla con 3-5 Criterios de Desempeño (columnas: Logrado / En Proceso /
+     Por Mejorar) — los criterios deben reflejar exactamente lo que se pidió
+     lograr en la sección 2.
+   - 2 Preguntas de Reflexión Final, siguiendo este espíritu:
+     "¿Cuál fue el concepto o actividad más desafiante y qué estrategia
+     utilicé para resolverlo?" / "¿Qué dudas o temas requieren una tutoría
+     o profundización adicional?" — podés ajustarlas al tema puntual.
+
+REGLAS IMPORTANTES:
+- Todo el contenido tiene que ser específico al tema pedido, no genérico
+  ni reciclable para cualquier materia.
+- Usá un lenguaje claro y adecuado al nivel/grado indicado.
+- La Fase de Aplicación (sección 4) es la más importante: el ejercicio
+  tiene que estar completamente desarrollado, listo para que el estudiante
+  lo resuelva sin pasos adicionales de tu parte.
+- Si el "Enfoque o énfasis particular" fue indicado, que se note claramente
+  en las secciones 2, 3 y 4.
+- No uses relleno ni frases vacías — cada campo debe aportar contenido real.`;
+
+export async function fetchPromptIaGuias() {
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData?.user) return PROMPT_IA_GUIAS_DEFAULT;
+  const { data, error } = await supabase.from("prompt_ia_guias").select("texto").eq("docente_id", userData.user.id).maybeSingle();
+  if (error) throw error;
+  if (data) return data.texto;
+  await supabase.from("prompt_ia_guias").insert({ docente_id: userData.user.id, texto: PROMPT_IA_GUIAS_DEFAULT });
+  return PROMPT_IA_GUIAS_DEFAULT;
+}
+
+export async function guardarPromptIaGuias(texto) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("prompt_ia_guias").upsert({ docente_id: userData?.user?.id, texto, actualizado_en: new Date().toISOString() }, { onConflict: "docente_id" });
+  if (error) throw error;
+}
+
 // Autoevaluación del estudiante para una guía puntual (rúbrica marcada +
 // respuestas a las preguntas de reflexión) — se guarda a medida que va
 // completando, no hace falta un botón de "enviar" único.
