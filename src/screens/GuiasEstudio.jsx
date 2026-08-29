@@ -2,6 +2,144 @@ import React, { useEffect, useState } from "react";
 import * as api from "../lib/api";
 import { EditorTexto, TextoEnriquecido } from "../components/RichText";
 
+// Analiza el texto que la IA devolvió (siguiendo la estructura del prompt
+// de 6 secciones) e intenta separarlo en los campos del formulario. Es un
+// "mejor esfuerzo" — si algo no lo detecta bien, el campo queda vacío y se
+// completa a mano; nunca hace fallar la carga.
+function analizarRespuestaIA(textoCompleto) {
+  const limpiar = (s) => (s || "").replace(/\*\*/g, "").replace(/^[:\s]+/, "").trim();
+
+  const seccionRegex = (nombre) => new RegExp(`(?:^|\\n)\\s*#{0,3}\\s*\\*{0,2}\\s*\\d*\\.?\\s*${nombre}[^\\n]*`, "i");
+
+  const extraerSeccion = (texto, inicioRe, finRes) => {
+    const mInicio = texto.match(inicioRe);
+    if (!mInicio) return "";
+    const desde = mInicio.index + mInicio[0].length;
+    let hasta = texto.length;
+    finRes.forEach((re) => {
+      const m = texto.slice(desde).match(re);
+      if (m) hasta = Math.min(hasta, desde + m.index);
+    });
+    return texto.slice(desde, hasta).trim();
+  };
+
+  const extraerCampo = (texto, etiquetas, siguientes) => {
+    for (const etq of etiquetas) {
+      const re = new RegExp(`\\*{0,2}${etq}\\*{0,2}\\s*:?\\s*`, "i");
+      const m = texto.match(re);
+      if (m) {
+        const desde = m.index + m[0].length;
+        let hasta = texto.length;
+        siguientes.forEach((sig) => {
+          const re2 = new RegExp(`\\*{0,2}${sig}\\*{0,2}\\s*:?`, "i");
+          const m2 = texto.slice(desde).match(re2);
+          if (m2) hasta = Math.min(hasta, desde + m2.index);
+        });
+        return limpiar(texto.slice(desde, hasta));
+      }
+    }
+    return "";
+  };
+
+  const reSec1 = seccionRegex("DATOS DE IDENTIFICACI[OÓ]N");
+  const reSec2 = seccionRegex("METAS DE APRENDIZAJE");
+  const reSec3 = seccionRegex("FUNDAMENTACI[OÓ]N TE[OÓ]RICA");
+  const reSec4 = seccionRegex("SECUENCIA DE ACTIVIDADES");
+  const reSec5 = seccionRegex("RECURSOS DE APOYO");
+  const reSec6 = seccionRegex("R[UÚ]BRICA DE AUTOEVALUACI[OÓ]N");
+
+  const seccion1 = extraerSeccion(textoCompleto, reSec1, [reSec2, reSec3, reSec4, reSec5, reSec6]);
+  const seccion2 = extraerSeccion(textoCompleto, reSec2, [reSec3, reSec4, reSec5, reSec6]);
+  const seccion3 = extraerSeccion(textoCompleto, reSec3, [reSec4, reSec5, reSec6]);
+  const seccion4 = extraerSeccion(textoCompleto, reSec4, [reSec5, reSec6]);
+  const seccion5 = extraerSeccion(textoCompleto, reSec5, [reSec6]);
+  const seccion6 = extraerSeccion(textoCompleto, reSec6, []);
+
+  const titulo = extraerCampo(seccion1, ["T[ií]tulo de la Unidad\\s*/?\\s*Tema"], ["Nivel", "Docente", "Tiempo Estimado"]);
+  const tiempoEstimado = extraerCampo(seccion1, ["Tiempo Estimado"], []);
+
+  const propositoGeneral = extraerCampo(seccion2, ["Prop[oó]sito General"], ["Desempe[nñ]o", "Aprendizaje Esperado", "Criterios de Evaluaci[oó]n"]);
+  const objetivo = extraerCampo(seccion2, ["Desempe[nñ]o\\s*/?\\s*Aprendizaje Esperado", "Aprendizaje Esperado"], ["Criterios de Evaluaci[oó]n"]);
+  const criteriosEvaluacion = extraerCampo(seccion2, ["Criterios de Evaluaci[oó]n"], []);
+
+  const esEncabezadoTabla = (s) => /^-+$/.test(s) || /^(criterio|logrado|en proceso|proceso|por mejorar|mejorar|concepto\s*clave|t[eé]rmino)$/i.test(s.trim());
+
+  const idxConceptos = seccion3.search(/Conceptos?\s+Clave/i);
+  const contenido = limpiar(idxConceptos >= 0 ? seccion3.slice(0, idxConceptos) : seccion3);
+  const bloqueConceptos = idxConceptos >= 0 ? seccion3.slice(idxConceptos) : "";
+  let conceptosClave = [...bloqueConceptos.matchAll(/\|\s*([^\|\n]+?)\s*\|\s*([^\|\n]+?)\s*\|/g)]
+    .map(([, termino, definicion]) => ({ termino: limpiar(termino), definicion: limpiar(definicion) }))
+    .filter((c) => c.termino && !esEncabezadoTabla(c.termino));
+  if (conceptosClave.length === 0) {
+    conceptosClave = [...bloqueConceptos.matchAll(/[-*]\s*\*{0,2}([^:*\n]+?)\*{0,2}\s*:\s*([^\n]+)/g)]
+      .map(([, termino, definicion]) => ({ termino: limpiar(termino), definicion: limpiar(definicion) }));
+  }
+
+  const faseExploracion = extraerCampo(seccion4, ["Fase de Exploraci[oó]n[^:]*"], ["Fase de Aplicaci[oó]n", "Fase de Transferencia"]);
+  const faseAplicacion = extraerCampo(seccion4, ["Fase de Aplicaci[oó]n[^:]*"], ["Fase de Transferencia"]);
+  const faseTransferencia = extraerCampo(seccion4, ["Fase de Transferencia[^:]*"], []);
+
+  const lecturaPrincipal = extraerCampo(seccion5, ["Lectura Principal"], ["Material Multimedia", "Enlaces", "Herramientas Sugeridas"]);
+  const materialMultimedia = extraerCampo(seccion5, ["Material Multimedia\\s*/?\\s*Enlaces"], ["Herramientas Sugeridas"]);
+  const herramientasSugeridas = extraerCampo(seccion5, ["Herramientas Sugeridas"], []);
+
+  const idxPreguntas = seccion6.search(/Preguntas?\s+de\s+Reflexi[oó]n/i);
+  const bloqueRubrica = idxPreguntas >= 0 ? seccion6.slice(0, idxPreguntas) : seccion6;
+  const bloquePreguntas = idxPreguntas >= 0 ? seccion6.slice(idxPreguntas) : "";
+  const rubricaCriterios = [...bloqueRubrica.matchAll(/\|\s*([^\|\n]+?)\s*\|/g)]
+    .map(([, criterio]) => limpiar(criterio))
+    .filter((c) => c && !esEncabezadoTabla(c))
+    .map((criterio) => ({ criterio }));
+  const preguntasReflexion = [...bloquePreguntas.matchAll(/(?:\d+[.)]|[-*])\s*([^\n]+)/g)]
+    .map(([, texto]) => limpiar(texto))
+    .filter((p) => p && !/preguntas? de reflexi/i.test(p))
+    .map((texto) => ({ texto }));
+
+  return {
+    titulo: titulo || null, tiempo_estimado: tiempoEstimado || null,
+    proposito_general: propositoGeneral || null, objetivo: objetivo || null, criterios_evaluacion: criteriosEvaluacion || null,
+    contenido: contenido || null, conceptos_clave: conceptosClave,
+    fase_exploracion: faseExploracion || null, fase_aplicacion: faseAplicacion || null, fase_transferencia: faseTransferencia || null,
+    lectura_principal: lecturaPrincipal || null, material_multimedia: materialMultimedia || null, herramientas_sugeridas: herramientasSugeridas || null,
+    rubrica_criterios: rubricaCriterios,
+    preguntas_reflexion: preguntasReflexion.length > 0 ? preguntasReflexion : undefined,
+  };
+}
+
+function PegarDeIaModal({ onClose, onAnalizado }) {
+  const [texto, setTexto] = useState("");
+
+  const analizar = () => {
+    if (!texto.trim()) { alert("Pegá acá el texto que te devolvió la IA."); return; }
+    const datos = analizarRespuestaIA(texto);
+    const huboAlgo = Object.values(datos).some((v) => (Array.isArray(v) ? v.length > 0 : !!v));
+    if (!huboAlgo) {
+      if (!confirm("No pude reconocer ninguna sección con el formato esperado — ¿igual querés abrir el formulario vacío para completarlo a mano?")) return;
+    }
+    onAnalizado(datos);
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-2xl shadow-xl">
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="font-bold text-slate-800">📋 Pegar lo que devolvió la IA</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-500 mb-3">
+          Pegá acá **todo** lo que te devolvió Claude (u otra IA) con el prompt de las 6 secciones — voy a intentar separarlo automáticamente en los campos del formulario. Después vas a poder revisar y ajustar todo antes de guardar.
+        </p>
+        <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={14} placeholder="Pegá acá la respuesta completa de la IA…"
+          className="w-full text-xs rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
+          <button onClick={analizar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white">Analizar y llenar formulario</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PromptIaModal({ onClose }) {
   const [texto, setTexto] = useState("");
   const [cargando, setCargando] = useState(true);
@@ -138,7 +276,7 @@ function GuiaForm({ materiaId, gradoId, periodo, guia, onCancelar, onGuardada })
         fecha_entrega: fechaEntrega || null, publicada,
         materia_id: materiaId, grado_id: gradoId, periodo,
       };
-      if (guia) await api.editarGuiaEstudio(guia.id, campos);
+      if (guia?.id) await api.editarGuiaEstudio(guia.id, campos);
       else await api.crearGuiaEstudio(campos);
       onGuardada();
     } catch (e) {
@@ -222,7 +360,7 @@ function GuiaForm({ materiaId, gradoId, periodo, guia, onCancelar, onGuardada })
       <div className="flex justify-end gap-2">
         <button onClick={onCancelar} className="text-xs text-slate-500 px-3 py-1.5">Cancelar</button>
         <button disabled={guardando} onClick={guardar} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
-          {guardando ? "Guardando…" : guia ? "Guardar cambios" : "Crear guía"}
+          {guardando ? "Guardando…" : guia?.id ? "Guardar cambios" : "Crear guía"}
         </button>
       </div>
     </div>
@@ -309,6 +447,7 @@ export function VistaGuiasEstudio({ grados }) {
   const [formAbierto, setFormAbierto] = useState(false);
   const [editando, setEditando] = useState(null);
   const [promptAbierto, setPromptAbierto] = useState(false);
+  const [pegarAbierto, setPegarAbierto] = useState(false);
 
   useEffect(() => {
     api.fetchMaterias().then((data) => { setMaterias(data); if (data[0]) setMateriaId(data[0].id); });
@@ -350,9 +489,16 @@ export function VistaGuiasEstudio({ grados }) {
         <button onClick={() => setPromptAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full border border-violet-200 text-violet-600">
           🤖 Prompt de IA
         </button>
+        <button onClick={() => setPegarAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full border border-emerald-200 text-emerald-600">
+          📋 Pegar desde IA
+        </button>
       </div>
 
       {promptAbierto && <PromptIaModal onClose={() => setPromptAbierto(false)} />}
+      {pegarAbierto && (
+        <PegarDeIaModal onClose={() => setPegarAbierto(false)}
+          onAnalizado={(datos) => { setEditando(datos); setPegarAbierto(false); setFormAbierto(true); }} />
+      )}
 
       {formAbierto && (
         <GuiaForm materiaId={materiaId} gradoId={gradoId} periodo={periodo} guia={editando}
