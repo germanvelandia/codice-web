@@ -589,15 +589,17 @@ function EvaluacionCard({ evaluacion, materias, grados, categorias, onCambio }) 
   );
 }
 
-export function VistaEvaluaciones({ grados, gradoActivo }) {
+export function VistaEvaluaciones({ grados, gradoActivo, periodoActivo, materiaActiva }) {
   const [materias, setMaterias] = useState([]);
-  const [materiaId, setMateriaId] = useState("");
+  const [materiaId, setMateriaId] = useState(materiaActiva || "");
   const [gradoId, setGradoId] = useState(gradoActivo || "");
   const [periodo, setPeriodo] = useState("1");
   const [config, setConfig] = useState({ cantidad_periodos: 4, sistema_periodos: "bimestre" });
   const [categorias, setCategorias] = useState([]);
 
   useEffect(() => { if (gradoActivo) setGradoId(gradoActivo); }, [gradoActivo]);
+  useEffect(() => { if (materiaActiva) setMateriaId(materiaActiva); }, [materiaActiva]);
+  useEffect(() => { if (periodoActivo) setPeriodo(periodoActivo); }, [periodoActivo]);
   const [evaluaciones, setEvaluaciones] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
