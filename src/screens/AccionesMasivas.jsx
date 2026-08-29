@@ -2,13 +2,15 @@ import React, { useEffect, useMemo, useState } from "react";
 import * as api from "../lib/api";
 import { ordenarPorApellido } from "../lib/gamification";
 
-export function VistaAccionesMasivas({ grados }) {
-  const [gradoId, setGradoId] = useState(grados[0]?.id || "");
+export function VistaAccionesMasivas({ grados, gradoActivo }) {
+  const [gradoId, setGradoId] = useState(gradoActivo || grados[0]?.id || "");
   const [estudiantes, setEstudiantes] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [reinoFiltro, setReinoFiltro] = useState("Todos");
   const [seleccionados, setSeleccionados] = useState(new Set());
   const [pestaña, setPestaña] = useState("oro"); // "oro" | "experiencia" | "vida" | "comportamiento"
+
+  useEffect(() => { if (gradoActivo) setGradoId(gradoActivo); }, [gradoActivo]);
 
   const [valorOro, setValorOro] = useState("");
   const [valorXp, setValorXp] = useState("");
