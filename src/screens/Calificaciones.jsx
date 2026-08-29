@@ -1612,7 +1612,7 @@ function ComentariosDesempenoModal({ onClose }) {
   );
 }
 
-export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo }) {
+export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, materiaActiva }) {
   const [materias, setMaterias] = useState([]);
   const [materiaActualId, setMateriaActualId] = useState(null);
   const [config, setConfig] = useState(CONFIG_DEFAULT);
@@ -1628,6 +1628,9 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo }) {
   // Curso activo elegido en la barra superior — no pisa el salto puntual
   // que hace el buscador global de estudiantes (ver el efecto de abajo).
   useEffect(() => { if (gradoActivo) setGradoId(gradoActivo); }, [gradoActivo]);
+  // Materia activa de la barra superior (el periodo sigue su propia lógica
+  // de "vigente" por materia, no se pisa con un periodo global).
+  useEffect(() => { if (materiaActiva) setMateriaActualId(materiaActiva); }, [materiaActiva]);
 
   // Cuando llega desde el buscador global de estudiantes: saltar directo a su
   // curso, en la Planilla, con su fila resaltada.
