@@ -2043,26 +2043,48 @@ function LoginScreen() {
   );
 }
 
-const MENU_PANEL = [
-  { key: "inicio", label: "Inicio", icono: "🏠" },
-  { key: "estudiantes", label: "Estudiantes", icono: "🏰" },
-  { key: "asistencia", label: "Asistencia", icono: "📋" },
-  { key: "calificaciones", label: "Códice", icono: "📖" },
-  { key: "evaluaciones", label: "Misiones", icono: "⚔️" },
-  { key: "proyectosforja", label: "La Forja", icono: "🔨" },
-  { key: "planeaciones", label: "Planeaciones", icono: "📝" },
-  { key: "biblioteca", label: "Biblioteca", icono: "📚" },
-  { key: "anotaciones", label: "Anotaciones", icono: "🗒️" },
-  { key: "inclusion", label: "Inclusión", icono: "🧩" },
-  { key: "bajasvida", label: "Bajas de Vida", icono: "📉" },
-  { key: "corregirnombres", label: "Corregir Nombres", icono: "🪪" },
-  { key: "direccioncurso", label: "Dirección de Curso", icono: "🎓" },
-  { key: "guiasestudio", label: "Guías de Estudio", icono: "📘" },
-  { key: "horario", label: "Agenda", icono: "🗓️" },
-  { key: "herramientas", label: "Herramientas", icono: "🛠️" },
-  { key: "roles", label: "Roles", icono: "🎭" },
-  { key: "reportes", label: "Reportes", icono: "📊" },
+const MENU_PANEL_GRUPOS = [
+  {
+    key: "inicio_grupo", label: "Inicio", icono: "🏠", items: [
+      { key: "inicio", label: "Inicio", icono: "🏠" },
+    ],
+  },
+  {
+    key: "academico", label: "Académico", icono: "🎓", items: [
+      { key: "estudiantes", label: "Estudiantes", icono: "🏰" },
+      { key: "asistencia", label: "Asistencia", icono: "📋" },
+      { key: "calificaciones", label: "Códice", icono: "📖" },
+      { key: "evaluaciones", label: "Misiones", icono: "⚔️" },
+      { key: "proyectosforja", label: "La Forja", icono: "🔨" },
+      { key: "planeaciones", label: "Planeaciones", icono: "📝" },
+      { key: "guiasestudio", label: "Guías de Estudio", icono: "📘" },
+      { key: "biblioteca", label: "Biblioteca", icono: "📚" },
+    ],
+  },
+  {
+    key: "convivencial", label: "Convivencial", icono: "🤝", items: [
+      { key: "anotaciones", label: "Anotaciones", icono: "🗒️" },
+      { key: "inclusion", label: "Inclusión", icono: "🧩" },
+      { key: "bajasvida", label: "Bajas de Vida", icono: "📉" },
+      { key: "direccioncurso", label: "Dirección de Curso", icono: "🎓" },
+    ],
+  },
+  {
+    key: "administracion", label: "Administración", icono: "⚙️", items: [
+      { key: "corregirnombres", label: "Corregir Nombres", icono: "🪪" },
+      { key: "horario", label: "Agenda", icono: "🗓️" },
+      { key: "roles", label: "Roles", icono: "🎭" },
+      { key: "reportes", label: "Reportes", icono: "📊" },
+    ],
+  },
+  {
+    key: "herramientas_grupo", label: "Herramientas", icono: "🛠️", items: [
+      { key: "herramientas", label: "Herramientas", icono: "🛠️" },
+    ],
+  },
 ];
+// Lista plana — se sigue usando donde hace falta el conjunto completo sin agrupar.
+const MENU_PANEL = MENU_PANEL_GRUPOS.flatMap((g) => g.items);
 
 function BuscadorEstudiantesGlobal({ onSeleccionar }) {
   const [query, setQuery] = useState("");
@@ -2133,8 +2155,9 @@ function FondoArcadeDocente() {
   );
 }
 
-function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstitucion, onSalir, onBuscarEstudiante, grados, gradoActivo, onCambiarGradoActivo }) {
+function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstitucion, onSalir, onBuscarEstudiante, grados, gradoActivo, onCambiarGradoActivo, periodoActivo, onCambiarPeriodoActivo, materias, materiaActiva, onCambiarMateriaActiva }) {
   const [menuAbierto, setMenuAbierto] = useState(false);
+  const [submenuAbierto, setSubmenuAbierto] = useState(null);
   const [nombreDocente, setNombreDocente] = useState("");
   const [editandoNombre, setEditandoNombre] = useState(false);
   const [nombreTemp, setNombreTemp] = useState("");
@@ -2177,8 +2200,20 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
 
         {grados && grados.length > 0 && (
           <select value={gradoActivo || ""} onChange={(e) => onCambiarGradoActivo(e.target.value)}
-            className="text-xs font-semibold rounded-full px-3 py-2 border border-violet-200 text-violet-700 outline-none bg-violet-50 shrink-0" title="Curso activo — se aplica a Asistencia, Herramientas y Calificaciones">
+            className="text-xs font-semibold rounded-full px-3 py-2 border border-violet-200 text-violet-700 outline-none bg-violet-50 shrink-0" title="Curso activo — se aplica a Asistencia, Herramientas, Calificaciones y más">
             {grados.map((g) => <option key={g.id} value={g.id}>🎓 Curso {g.id}</option>)}
+          </select>
+        )}
+
+        <select value={periodoActivo} onChange={(e) => onCambiarPeriodoActivo(e.target.value)}
+          className="text-xs font-semibold rounded-full px-3 py-2 border border-violet-200 text-violet-700 outline-none bg-violet-50 shrink-0" title="Periodo activo">
+          {["1", "2", "3", "4"].map((p) => <option key={p} value={p}>📅 Periodo {p}</option>)}
+        </select>
+
+        {materias && materias.length > 0 && (
+          <select value={materiaActiva || ""} onChange={(e) => onCambiarMateriaActiva(parseInt(e.target.value, 10))}
+            className="text-xs font-semibold rounded-full px-3 py-2 border border-violet-200 text-violet-700 outline-none bg-violet-50 shrink-0 max-w-[140px]" title="Materia activa">
+            {materias.map((m) => <option key={m.id} value={m.id}>📖 {m.nombre}</option>)}
           </select>
         )}
 
@@ -2193,29 +2228,65 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
         </div>
       </div>
 
-      {/* Escritorio: todas las opciones en fila, envolviendo si hace falta */}
+      {/* Escritorio: categorías con submenú desplegable — mucho menos abarrotado */}
       <div className="hidden md:flex flex-wrap gap-1 px-3 pb-2">
-        {MENU_PANEL.map((m) => (
-          <button key={m.key} onClick={() => elegir(m.key)}
-            className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap flex items-center gap-1.5"
-            style={{ background: activo === m.key ? "#7C3AED" : "transparent", color: activo === m.key ? "#FFFFFF" : "#64748B" }}>
-            <span>{m.icono}</span> {m.label}
-          </button>
-        ))}
+        {MENU_PANEL_GRUPOS.map((grupo) => {
+          if (grupo.items.length === 1) {
+            const m = grupo.items[0];
+            return (
+              <button key={m.key} onClick={() => elegir(m.key)}
+                className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap flex items-center gap-1.5"
+                style={{ background: activo === m.key ? "#7C3AED" : "transparent", color: activo === m.key ? "#FFFFFF" : "#64748B" }}>
+                <span>{m.icono}</span> {m.label}
+              </button>
+            );
+          }
+          const activoEnGrupo = grupo.items.some((it) => it.key === activo);
+          return (
+            <div key={grupo.key} className="relative">
+              <button onClick={() => setSubmenuAbierto(submenuAbierto === grupo.key ? null : grupo.key)}
+                className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap flex items-center gap-1.5"
+                style={{ background: activoEnGrupo ? "#EDE9FE" : "transparent", color: activoEnGrupo ? "#7C3AED" : "#64748B" }}>
+                <span>{grupo.icono}</span> {grupo.label} <span className="text-[8px]">▾</span>
+              </button>
+              {submenuAbierto === grupo.key && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setSubmenuAbierto(null)} />
+                  <div className="absolute left-0 top-full mt-1 bg-white rounded-xl shadow-lg border border-slate-100 py-1 w-56 z-20">
+                    {grupo.items.map((m) => (
+                      <button key={m.key} onClick={() => { elegir(m.key); setSubmenuAbierto(null); }}
+                        className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50 flex items-center gap-2"
+                        style={{ color: activo === m.key ? "#7C3AED" : "#334155", fontWeight: activo === m.key ? 700 : 400 }}>
+                        <span>{m.icono}</span> {m.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
       </div>
 
-      {/* Móvil: menú desplegable en grilla — nada queda fuera de pantalla */}
+      {/* Móvil: menú desplegable, agrupado por categoría */}
       {menuAbierto && (
-        <div className="md:hidden px-3 pb-3 grid grid-cols-3 gap-1.5">
-          {MENU_PANEL.map((m) => (
-            <button key={m.key} onClick={() => elegir(m.key)}
-              className="text-[11px] px-2 py-2.5 rounded-xl flex flex-col items-center gap-1"
-              style={{ background: activo === m.key ? "#7C3AED" : "#F8FAFC", color: activo === m.key ? "#FFFFFF" : "#475569" }}>
-              <span className="text-base">{m.icono}</span>
-              <span className="text-center leading-tight">{m.label}</span>
-            </button>
+        <div className="md:hidden px-3 pb-3 space-y-2">
+          {MENU_PANEL_GRUPOS.map((grupo) => (
+            <div key={grupo.key}>
+              {grupo.items.length > 1 && <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1 px-1">{grupo.icono} {grupo.label}</div>}
+              <div className="grid grid-cols-3 gap-1.5">
+                {grupo.items.map((m) => (
+                  <button key={m.key} onClick={() => elegir(m.key)}
+                    className="text-[11px] px-2 py-2.5 rounded-xl flex flex-col items-center gap-1"
+                    style={{ background: activo === m.key ? "#7C3AED" : "#F8FAFC", color: activo === m.key ? "#FFFFFF" : "#475569" }}>
+                    <span className="text-base">{m.icono}</span>
+                    <span className="text-center leading-tight">{m.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
-          <button onClick={onSalir} className="text-[11px] px-2 py-2.5 rounded-xl flex flex-col items-center gap-1 text-rose-500 bg-slate-50">
+          <button onClick={onSalir} className="w-full text-[11px] px-2 py-2.5 rounded-xl flex items-center justify-center gap-2 text-rose-500 bg-slate-50">
             <span className="text-base">🚪</span>
             <span>Cerrar sesión</span>
           </button>
@@ -2246,6 +2317,9 @@ function Panel({ session }) {
   const [subTabHerramientas, setSubTabHerramientas] = useState("ruleta");
   const [grado, setGrado] = useState(null);
   const [gradoActivo, setGradoActivo] = useState(null);
+  const [periodoActivo, setPeriodoActivo] = useState("1");
+  const [materias, setMaterias] = useState([]);
+  const [materiaActiva, setMateriaActiva] = useState(null);
   const [reino, setReino] = useState(null);
   const [modoLista, setModoLista] = useState(false);
   const [grados, setGrados] = useState([]);
@@ -2266,6 +2340,10 @@ function Panel({ session }) {
       setGrados(data);
       setGradoActivo((prev) => prev || data[0]?.id || null);
     });
+    api.fetchMaterias().then((data) => {
+      setMaterias(data);
+      setMateriaActiva((prev) => prev || data[0]?.id || null);
+    });
     cargarInstitucion();
   }, []);
 
@@ -2280,7 +2358,9 @@ function Panel({ session }) {
       <SidebarPanel activo={tab} onCambiar={irA} email={session.user.email} institucion={institucion}
         onAdmin={() => setAdministracionAbierta(true)} onInstitucion={() => setInstitucionAbierta(true)}
         onSalir={() => supabase.auth.signOut()} onBuscarEstudiante={irACalificacionesDesdeBusqueda}
-        grados={grados} gradoActivo={gradoActivo} onCambiarGradoActivo={setGradoActivo} />
+        grados={grados} gradoActivo={gradoActivo} onCambiarGradoActivo={setGradoActivo}
+        periodoActivo={periodoActivo} onCambiarPeriodoActivo={setPeriodoActivo}
+        materias={materias} materiaActiva={materiaActiva} onCambiarMateriaActiva={setMateriaActiva} />
 
       {institucionAbierta && <InstitucionModal onClose={() => { setInstitucionAbierta(false); cargarInstitucion(); }} />}
       {administracionAbierta && <AdministracionModal onClose={() => setAdministracionAbierta(false)} />}
@@ -2313,21 +2393,21 @@ function Panel({ session }) {
         {tab === "herramientas" && grados.length > 0 && (
           <>
             <div className="flex flex-wrap gap-1.5 mb-6 rounded-2xl bg-white p-2 w-full border border-slate-100 shadow-sm">
-              <button onClick={() => setSubTabHerramientas("ruleta")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "ruleta" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Ruleta</button>
-              <button onClick={() => setSubTabHerramientas("ruletamonedas")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "ruletamonedas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Ruleta de Monedas</button>
+              <button onClick={() => setSubTabHerramientas("ruleta")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "ruleta" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🎡 Ruleta</button>
+              <button onClick={() => setSubTabHerramientas("ruletamonedas")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "ruletamonedas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🪙 Ruleta de Monedas</button>
               <button onClick={() => setSubTabHerramientas("accionesmasivas")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "accionesmasivas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🎯 Acciones Masivas</button>
-              <button onClick={() => setSubTabHerramientas("banco")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "banco" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Banco</button>
-              <button onClick={() => setSubTabHerramientas("album")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "album" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Álbum</button>
-              <button onClick={() => setSubTabHerramientas("anuncios")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "anuncios" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Anuncios</button>
-              <button onClick={() => setSubTabHerramientas("logros")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "logros" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Logros</button>
-              <button onClick={() => setSubTabHerramientas("salonhonor")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "salonhonor" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Salón de Honor</button>
+              <button onClick={() => setSubTabHerramientas("banco")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "banco" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🏦 Banco</button>
+              <button onClick={() => setSubTabHerramientas("album")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "album" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🖼️ Álbum</button>
+              <button onClick={() => setSubTabHerramientas("anuncios")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "anuncios" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📣 Anuncios</button>
+              <button onClick={() => setSubTabHerramientas("logros")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "logros" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🏆 Logros</button>
+              <button onClick={() => setSubTabHerramientas("salonhonor")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "salonhonor" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🥇 Salón de Honor</button>
               <button onClick={() => setSubTabHerramientas("diplomas")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "diplomas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🏅 Diplomas</button>
-              <button onClick={() => setSubTabHerramientas("gamext")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "gamext" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Desafíos/Misiones/Cosméticos</button>
-              <button onClick={() => setSubTabHerramientas("consignas")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "consignas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Consignas del Códice</button>
+              <button onClick={() => setSubTabHerramientas("gamext")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "gamext" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🕹️ Desafíos/Misiones/Cosméticos</button>
+              <button onClick={() => setSubTabHerramientas("consignas")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "consignas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📜 Consignas del Códice</button>
               <button onClick={() => setSubTabHerramientas("trivia")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "trivia" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🎡 Preguntados</button>
               <button onClick={() => setSubTabHerramientas("bancopreguntas")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "bancopreguntas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🗂️ Banco de Preguntas</button>
-              <button onClick={() => setSubTabHerramientas("temporizador")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "temporizador" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Temporizador</button>
-              <button onClick={() => setSubTabHerramientas("otras")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "otras" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Otras herramientas</button>
+              <button onClick={() => setSubTabHerramientas("temporizador")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "temporizador" ? "bg-violet-500 text-white" : "text-slate-600"}`}>⏱️ Temporizador</button>
+              <button onClick={() => setSubTabHerramientas("otras")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "otras" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🧰 Otras herramientas</button>
             </div>
             {subTabHerramientas === "ruleta" && <VistaRuleta grados={grados} gradoActivo={gradoActivo} />}
             {subTabHerramientas === "ruletamonedas" && <VistaRuletaMonedas grados={grados} gradoActivo={gradoActivo} />}
@@ -2347,19 +2427,19 @@ function Panel({ session }) {
           </>
         )}
         {tab === "roles" && <VistaRoles />}
-        {tab === "calificaciones" && grados.length > 0 && <VistaCalificaciones grados={grados} destinoBusqueda={destinoBusqueda} gradoActivo={gradoActivo} />}
+        {tab === "calificaciones" && grados.length > 0 && <VistaCalificaciones grados={grados} destinoBusqueda={destinoBusqueda} gradoActivo={gradoActivo} materiaActiva={materiaActiva} />}
         {tab === "reportes" && grados.length > 0 && <VistaReportes grados={grados} gradoActivo={gradoActivo} />}
         {tab === "horario" && grados.length > 0 && <VistaHorario grados={grados} />}
-        {tab === "planeaciones" && grados.length > 0 && <VistaPlaneaciones grados={grados} gradoActivo={gradoActivo} />}
+        {tab === "planeaciones" && grados.length > 0 && <VistaPlaneaciones grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} />}
         {tab === "biblioteca" && grados.length > 0 && <VistaBiblioteca grados={grados} gradoActivo={gradoActivo} />}
         {tab === "anotaciones" && <VistaAnotaciones />}
         {tab === "inclusion" && <VistaInclusionGeneral />}
         {tab === "bajasvida" && <VistaBajasVida />}
         {tab === "corregirnombres" && <VistaCorregirNombres />}
         {tab === "direccioncurso" && <VistaDireccionCurso grados={grados} gradoActivo={gradoActivo} />}
-        {tab === "guiasestudio" && <VistaGuiasEstudio grados={grados} gradoActivo={gradoActivo} />}
-        {tab === "evaluaciones" && grados.length > 0 && <VistaEvaluaciones grados={grados} gradoActivo={gradoActivo} />}
-        {tab === "proyectosforja" && grados.length > 0 && <VistaProyectosForja grados={grados} gradoActivo={gradoActivo} />}
+        {tab === "guiasestudio" && <VistaGuiasEstudio grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} />}
+        {tab === "evaluaciones" && grados.length > 0 && <VistaEvaluaciones grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} />}
+        {tab === "proyectosforja" && grados.length > 0 && <VistaProyectosForja grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} />}
       </div>
     </div>
   );
