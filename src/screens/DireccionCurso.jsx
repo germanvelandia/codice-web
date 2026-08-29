@@ -828,12 +828,13 @@ function CitacionesDireccionCurso({ gradoId, institucion }) {
     </div>
   );
 }
-export function VistaDireccionCurso({ grados }) {
-  const [gradoId, setGradoId] = useState(grados[0]?.id || "");
+export function VistaDireccionCurso({ grados, gradoActivo }) {
+  const [gradoId, setGradoId] = useState(gradoActivo || grados[0]?.id || "");
   const [vista, setVista] = useState("notas"); // "notas" | "citaciones" | "jornada"
   const [institucion, setInstitucion] = useState(null);
 
   useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
+  useEffect(() => { if (gradoActivo) setGradoId(gradoActivo); }, [gradoActivo]);
   useEffect(() => { api.fetchInstitucion().then(setInstitucion); }, []);
 
   return (
