@@ -5,13 +5,15 @@ import { nextLevel } from "../lib/gamification";
 import { bandaDesempeno } from "../lib/calificaciones";
 import { ActasModal } from "./Actas";
 
-export function VistaReportes({ grados }) {
-  const [gradoId, setGradoId] = useState(grados[0]?.id || "");
+export function VistaReportes({ grados, gradoActivo }) {
+  const [gradoId, setGradoId] = useState(gradoActivo || grados[0]?.id || "");
   const [estudiantes, setEstudiantes] = useState([]);
   const [estudianteId, setEstudianteId] = useState(null);
   const [cargando, setCargando] = useState(false);
   const [periodoTransversal, setPeriodoTransversal] = useState("");
   const [transversal, setTransversal] = useState(null);
+
+  useEffect(() => { if (gradoActivo) setGradoId(gradoActivo); }, [gradoActivo]);
   const [cargandoTransversal, setCargandoTransversal] = useState(false);
   const [configsPorMateria, setConfigsPorMateria] = useState({});
   const [actaEstudiante, setActaEstudiante] = useState(null);
