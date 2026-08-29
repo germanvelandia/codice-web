@@ -1077,8 +1077,8 @@ function MenuCodice({ activo, onCambiar, monedas, gradoId }) {
   };
 
   return (
-    <div className="rounded-2xl overflow-hidden mb-4" style={{ background: "linear-gradient(180deg, #1e1b30 0%, #14101f 100%)", border: "2px solid #8B5CF6" }}>
-      <div className="flex items-center justify-between gap-3 px-4 py-3" style={{ background: "linear-gradient(180deg, #2d2450 0%, #1e1b30 100%)", borderBottom: "2px solid #7c3aed55" }}>
+    <div className="rounded-2xl mb-4" style={{ background: "linear-gradient(180deg, #1e1b30 0%, #14101f 100%)", border: "2px solid #8B5CF6" }}>
+      <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-t-2xl" style={{ background: "linear-gradient(180deg, #2d2450 0%, #1e1b30 100%)", borderBottom: "2px solid #7c3aed55" }}>
         <button onClick={() => elegir("inicio")} className="flex items-center gap-2">
           <span className="text-xl">🧭</span>
           <span className="text-violet-200 text-sm font-bold tracking-[0.2em]" style={{ fontFamily: "Georgia, serif" }}>CÓDICE</span>
