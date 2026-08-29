@@ -2133,7 +2133,7 @@ function FondoArcadeDocente() {
   );
 }
 
-function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstitucion, onSalir, onBuscarEstudiante }) {
+function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstitucion, onSalir, onBuscarEstudiante, grados, gradoActivo, onCambiarGradoActivo }) {
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [nombreDocente, setNombreDocente] = useState("");
   const [editandoNombre, setEditandoNombre] = useState(false);
@@ -2174,6 +2174,13 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
         <div className="flex-1 min-w-[160px] max-w-md order-3 md:order-none">
           <BuscadorEstudiantesGlobal onSeleccionar={onBuscarEstudiante} />
         </div>
+
+        {grados && grados.length > 0 && (
+          <select value={gradoActivo || ""} onChange={(e) => onCambiarGradoActivo(e.target.value)}
+            className="text-xs font-semibold rounded-full px-3 py-2 border border-violet-200 text-violet-700 outline-none bg-violet-50 shrink-0" title="Curso activo — se aplica a Asistencia, Herramientas y Calificaciones">
+            {grados.map((g) => <option key={g.id} value={g.id}>🎓 Curso {g.id}</option>)}
+          </select>
+        )}
 
         <div className="flex items-center gap-3 shrink-0">
           <button onClick={onAdmin} className="text-base" title="Docentes y mi cuenta">👤</button>
@@ -2238,6 +2245,7 @@ function Panel({ session }) {
   const [tab, setTab] = useState("inicio");
   const [subTabHerramientas, setSubTabHerramientas] = useState("ruleta");
   const [grado, setGrado] = useState(null);
+  const [gradoActivo, setGradoActivo] = useState(null);
   const [reino, setReino] = useState(null);
   const [modoLista, setModoLista] = useState(false);
   const [grados, setGrados] = useState([]);
@@ -2254,7 +2262,10 @@ function Panel({ session }) {
   const cargarInstitucion = () => api.fetchInstitucion().then(setInstitucion);
 
   useEffect(() => {
-    api.asegurarProfesor().then(() => api.asegurarGradosBase()).then(() => api.fetchGrados()).then(setGrados);
+    api.asegurarProfesor().then(() => api.asegurarGradosBase()).then(() => api.fetchGrados()).then((data) => {
+      setGrados(data);
+      setGradoActivo((prev) => prev || data[0]?.id || null);
+    });
     cargarInstitucion();
   }, []);
 
@@ -2268,7 +2279,8 @@ function Panel({ session }) {
       <FondoArcadeDocente />
       <SidebarPanel activo={tab} onCambiar={irA} email={session.user.email} institucion={institucion}
         onAdmin={() => setAdministracionAbierta(true)} onInstitucion={() => setInstitucionAbierta(true)}
-        onSalir={() => supabase.auth.signOut()} onBuscarEstudiante={irACalificacionesDesdeBusqueda} />
+        onSalir={() => supabase.auth.signOut()} onBuscarEstudiante={irACalificacionesDesdeBusqueda}
+        grados={grados} gradoActivo={gradoActivo} onCambiarGradoActivo={setGradoActivo} />
 
       {institucionAbierta && <InstitucionModal onClose={() => { setInstitucionAbierta(false); cargarInstitucion(); }} />}
       {administracionAbierta && <AdministracionModal onClose={() => setAdministracionAbierta(false)} />}
@@ -2297,7 +2309,7 @@ function Panel({ session }) {
             )}
           </>
         )}
-        {tab === "asistencia" && grados.length > 0 && <VistaAsistencia grados={grados} />}
+        {tab === "asistencia" && grados.length > 0 && <VistaAsistencia grados={grados} gradoActivo={gradoActivo} />}
         {tab === "herramientas" && grados.length > 0 && (
           <>
             <div className="flex flex-wrap gap-1.5 mb-6 rounded-2xl bg-white p-2 w-full border border-slate-100 shadow-sm">
@@ -2317,9 +2329,9 @@ function Panel({ session }) {
               <button onClick={() => setSubTabHerramientas("temporizador")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "temporizador" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Temporizador</button>
               <button onClick={() => setSubTabHerramientas("otras")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "otras" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Otras herramientas</button>
             </div>
-            {subTabHerramientas === "ruleta" && <VistaRuleta grados={grados} />}
-            {subTabHerramientas === "ruletamonedas" && <VistaRuletaMonedas grados={grados} />}
-            {subTabHerramientas === "accionesmasivas" && <VistaAccionesMasivas grados={grados} />}
+            {subTabHerramientas === "ruleta" && <VistaRuleta grados={grados} gradoActivo={gradoActivo} />}
+            {subTabHerramientas === "ruletamonedas" && <VistaRuletaMonedas grados={grados} gradoActivo={gradoActivo} />}
+            {subTabHerramientas === "accionesmasivas" && <VistaAccionesMasivas grados={grados} gradoActivo={gradoActivo} />}
             {subTabHerramientas === "banco" && <VistaBanco />}
             {subTabHerramientas === "album" && <VistaAlbum />}
             {subTabHerramientas === "anuncios" && <VistaAnuncios grados={grados} />}
@@ -2335,7 +2347,7 @@ function Panel({ session }) {
           </>
         )}
         {tab === "roles" && <VistaRoles />}
-        {tab === "calificaciones" && grados.length > 0 && <VistaCalificaciones grados={grados} destinoBusqueda={destinoBusqueda} />}
+        {tab === "calificaciones" && grados.length > 0 && <VistaCalificaciones grados={grados} destinoBusqueda={destinoBusqueda} gradoActivo={gradoActivo} />}
         {tab === "reportes" && grados.length > 0 && <VistaReportes grados={grados} />}
         {tab === "horario" && grados.length > 0 && <VistaHorario grados={grados} />}
         {tab === "planeaciones" && grados.length > 0 && <VistaPlaneaciones grados={grados} />}
