@@ -58,8 +58,8 @@ function boom() {
 // una ruleta real que gira rápido y va frenando (usa la misma curva del CSS).
 // (los sonidos de "clac" ahora se generan directo en cada spin(), ver más abajo)
 
-export function VistaRuleta({ grados }) {
-  const [gradoId, setGradoId] = useState(grados[0]?.id || "");
+export function VistaRuleta({ grados, gradoActivo }) {
+  const [gradoId, setGradoId] = useState(gradoActivo || grados[0]?.id || "");
   const [modo, setModo] = useState("grado");
   const [reino, setReino] = useState("");
   const [estudiantes, setEstudiantes] = useState([]);
@@ -68,6 +68,8 @@ export function VistaRuleta({ grados }) {
   const [winner, setWinner] = useState(null);
   const [registrando, setRegistrando] = useState(null);
   const [registrado, setRegistrado] = useState(null);
+
+  useEffect(() => { if (gradoActivo) setGradoId(gradoActivo); }, [gradoActivo]);
   const [accionesRapidas, setAccionesRapidas] = useState([]);
 
   useEffect(() => { api.fetchAccionesGamificacion().then((d) => setAccionesRapidas(d.filter((a) => a.tab === "rapido" && a.activo))); }, []);
@@ -195,12 +197,14 @@ export function VistaRuleta({ grados }) {
 
 const OPCIONES_MONEDAS_DEFAULT = [10, 5, 3, -3, -5, 0, 15, -10];
 
-export function VistaRuletaMonedas({ grados }) {
-  const [gradoId, setGradoId] = useState(grados[0]?.id || "");
+export function VistaRuletaMonedas({ grados, gradoActivo }) {
+  const [gradoId, setGradoId] = useState(gradoActivo || grados[0]?.id || "");
   const [reinoFiltro, setReinoFiltro] = useState("Todos");
   const [estudiantes, setEstudiantes] = useState([]);
   const [objetivo, setObjetivo] = useState("uno"); // "uno" | "todos"
   const [estudianteId, setEstudianteId] = useState("");
+
+  useEffect(() => { if (gradoActivo) setGradoId(gradoActivo); }, [gradoActivo]);
   const [opciones, setOpciones] = useState(OPCIONES_MONEDAS_DEFAULT);
   const [spinning, setSpinning] = useState(false);
   const [mostrado, setMostrado] = useState(null);
