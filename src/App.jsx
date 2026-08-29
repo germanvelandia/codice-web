@@ -2337,7 +2337,7 @@ function Panel({ session }) {
             {subTabHerramientas === "anuncios" && <VistaAnuncios grados={grados} />}
             {subTabHerramientas === "logros" && <VistaLogros />}
             {subTabHerramientas === "salonhonor" && <VistaSalonHonor />}
-            {subTabHerramientas === "diplomas" && <VistaDiplomas grados={grados} />}
+            {subTabHerramientas === "diplomas" && <VistaDiplomas grados={grados} gradoActivo={gradoActivo} />}
             {subTabHerramientas === "gamext" && <VistaGamificacionExtra grados={grados} />}
             {subTabHerramientas === "consignas" && <VistaConsignasCodice grados={grados} />}
             {subTabHerramientas === "trivia" && <VistaTriviaAdmin grados={grados} />}
@@ -2348,18 +2348,18 @@ function Panel({ session }) {
         )}
         {tab === "roles" && <VistaRoles />}
         {tab === "calificaciones" && grados.length > 0 && <VistaCalificaciones grados={grados} destinoBusqueda={destinoBusqueda} gradoActivo={gradoActivo} />}
-        {tab === "reportes" && grados.length > 0 && <VistaReportes grados={grados} />}
+        {tab === "reportes" && grados.length > 0 && <VistaReportes grados={grados} gradoActivo={gradoActivo} />}
         {tab === "horario" && grados.length > 0 && <VistaHorario grados={grados} />}
-        {tab === "planeaciones" && grados.length > 0 && <VistaPlaneaciones grados={grados} />}
-        {tab === "biblioteca" && grados.length > 0 && <VistaBiblioteca grados={grados} />}
+        {tab === "planeaciones" && grados.length > 0 && <VistaPlaneaciones grados={grados} gradoActivo={gradoActivo} />}
+        {tab === "biblioteca" && grados.length > 0 && <VistaBiblioteca grados={grados} gradoActivo={gradoActivo} />}
         {tab === "anotaciones" && <VistaAnotaciones />}
         {tab === "inclusion" && <VistaInclusionGeneral />}
         {tab === "bajasvida" && <VistaBajasVida />}
         {tab === "corregirnombres" && <VistaCorregirNombres />}
-        {tab === "direccioncurso" && <VistaDireccionCurso grados={grados} />}
-        {tab === "guiasestudio" && <VistaGuiasEstudio grados={grados} />}
-        {tab === "evaluaciones" && grados.length > 0 && <VistaEvaluaciones grados={grados} />}
-        {tab === "proyectosforja" && grados.length > 0 && <VistaProyectosForja grados={grados} />}
+        {tab === "direccioncurso" && <VistaDireccionCurso grados={grados} gradoActivo={gradoActivo} />}
+        {tab === "guiasestudio" && <VistaGuiasEstudio grados={grados} gradoActivo={gradoActivo} />}
+        {tab === "evaluaciones" && grados.length > 0 && <VistaEvaluaciones grados={grados} gradoActivo={gradoActivo} />}
+        {tab === "proyectosforja" && grados.length > 0 && <VistaProyectosForja grados={grados} gradoActivo={gradoActivo} />}
       </div>
     </div>
   );
