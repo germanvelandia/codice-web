@@ -1211,6 +1211,149 @@ export async function fetchHistorialPuntos(estudianteId) {
 }
 
 /* ---------------- Banco de premios ---------------- */
+// Niveles de XP (Novato/Aprendiz/etc.) — editable por docente, se siembra
+// con los mismos valores de fábrica la primera vez.
+const NIVELES_DEFAULT = [
+  { nombre: "Novato", xp_minimo: 0 }, { nombre: "Aprendiz", xp_minimo: 150 }, { nombre: "Experto", xp_minimo: 400 },
+  { nombre: "Maestro", xp_minimo: 800 }, { nombre: "Sabio", xp_minimo: 1400 }, { nombre: "Leyenda", xp_minimo: 2200 },
+];
+
+export async function fetchNivelesConfig() {
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData?.user) return NIVELES_DEFAULT.map((n) => ({ name: n.nombre, min: n.xp_minimo }));
+  let { data, error } = await supabase.from("niveles_config").select("*").eq("docente_id", userData.user.id).order("orden");
+  if (error) throw error;
+  if (!data || data.length === 0) {
+    const filas = NIVELES_DEFAULT.map((n, i) => ({ docente_id: userData.user.id, nombre: n.nombre, xp_minimo: n.xp_minimo, orden: i }));
+    const { data: sembrados, error: e2 } = await supabase.from("niveles_config").insert(filas).select();
+    if (e2) throw e2;
+    data = sembrados;
+  }
+  return data;
+}
+
+// Traduce las filas de la base (nombre/xp_minimo) al formato {name, min}
+// que usa nextLevel() — pensada para el lado del ESTUDIANTE, que no tiene
+// sesión de Supabase Auth (entra con código), así que lee sin filtrar por
+// docente_id. Si todavía no hay nada configurado, cae a los valores de fábrica.
+export async function fetchNivelesParaJuego() {
+  const { data, error } = await supabase.from("niveles_config").select("*").order("xp_minimo");
+  if (error) throw error;
+  if (!data || data.length === 0) return NIVELES_DEFAULT.map((n) => ({ name: n.nombre, min: n.xp_minimo }));
+  return data.map((n) => ({ name: n.nombre, min: n.xp_minimo }));
+}
+
+export async function crearNivelConfig(nombre, xpMinimo) {
+  const { data: userData } = await supabase.auth.getUser();
+  const existentes = await fetchNivelesConfig();
+  const { error } = await supabase.from("niveles_config").insert({ docente_id: userData?.user?.id, nombre, xp_minimo: xpMinimo, orden: existentes.length });
+  if (error) throw error;
+}
+
+export async function editarNivelConfig(id, campos) {
+  const { error } = await supabase.from("niveles_config").update(campos).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarNivelConfig(id) {
+  const { error } = await supabase.from("niveles_config").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function restablecerNivelesConfig() {
+  const { data: userData } = await supabase.auth.getUser();
+  const docenteId = userData?.user?.id || null;
+  await supabase.from("niveles_config").delete().eq("docente_id", docenteId);
+  const filas = NIVELES_DEFAULT.map((n, i) => ({ docente_id: docenteId, nombre: n.nombre, xp_minimo: n.xp_minimo, orden: i }));
+  const { error } = await supabase.from("niveles_config").insert(filas);
+  if (error) throw error;
+}
+
+/* ---------------- Objetos (inventario con efecto real) ---------------- */
+const OBJETOS_DEFAULT = [
+  { nombre: "Sangre", emoji: "🩸", descripcion: "Un poco de vitalidad — restaura algo de vida.", tipo: "consumible", efecto_vida: 5, costo_monedas: 8, comprable: true },
+  { nombre: "Poción de sangre", emoji: "🧪", descripcion: "Una poción concentrada — restaura bastante vida.", tipo: "consumible", efecto_vida: 15, costo_monedas: 20, comprable: true },
+  { nombre: "Poción de sangre mayor", emoji: "⚗️", descripcion: "La versión más fuerte — restaura mucha vida.", tipo: "consumible", efecto_vida: 30, costo_monedas: 40, comprable: true },
+  { nombre: "Llave", emoji: "🗝️", descripcion: "Un objeto misterioso para coleccionar.", tipo: "coleccionable", efecto_vida: 0, costo_monedas: 15, comprable: true },
+];
+
+export async function fetchObjetosCatalogo() {
+  let { data, error } = await supabase.from("objetos_catalogo").select("*").order("orden");
+  if (error) throw error;
+  if (!data || data.length === 0) {
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData?.user) return OBJETOS_DEFAULT.map((o, i) => ({ id: `default-${i}`, ...o }));
+    const filas = OBJETOS_DEFAULT.map((o, i) => ({ docente_id: userData.user.id, ...o, orden: i }));
+    const { data: sembrados, error: e2 } = await supabase.from("objetos_catalogo").insert(filas).select();
+    if (e2) throw e2;
+    data = sembrados;
+  }
+  return data;
+}
+
+export async function crearObjeto(campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("objetos_catalogo").insert({ ...campos, docente_id: userData?.user?.id || null });
+  if (error) throw error;
+}
+
+export async function editarObjeto(id, campos) {
+  const { error } = await supabase.from("objetos_catalogo").update(campos).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarObjeto(id) {
+  const { error } = await supabase.from("objetos_catalogo").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function fetchInventarioEstudiante(estudianteId) {
+  const { data, error } = await supabase.from("estudiante_objetos").select("*, objetos_catalogo(*)").eq("estudiante_id", estudianteId).gt("cantidad", 0);
+  if (error) throw error;
+  return data || [];
+}
+
+async function ajustarInventario(estudianteId, objetoId, delta) {
+  const { data: existente } = await supabase.from("estudiante_objetos").select("*").eq("estudiante_id", estudianteId).eq("objeto_id", objetoId).maybeSingle();
+  const cantidadNueva = Math.max(0, (existente?.cantidad || 0) + delta);
+  const { error } = await supabase.from("estudiante_objetos").upsert(
+    { estudiante_id: estudianteId, objeto_id: objetoId, cantidad: cantidadNueva },
+    { onConflict: "estudiante_id,objeto_id" }
+  );
+  if (error) throw error;
+  return cantidadNueva;
+}
+
+// El estudiante compra un objeto de la tienda con sus propias monedas.
+export async function comprarObjeto(estudianteId, objetoId, costo, monedasActuales) {
+  if (monedasActuales < costo) throw new Error("No tenés suficientes monedas para esto.");
+  await ajustarMonedas(estudianteId, -costo);
+  await ajustarInventario(estudianteId, objetoId, 1);
+}
+
+// El docente le da un objeto a un estudiante (o a varios) como recompensa —
+// no descuenta monedas.
+export async function darObjetoEstudiante(estudianteId, objetoId, nombreObjeto, cantidad = 1) {
+  await ajustarInventario(estudianteId, objetoId, cantidad);
+  await registrarHistorialGamificacion(estudianteId, { etiqueta: `🎁 Recibiste: ${nombreObjeto}`, categoria: "objeto" });
+}
+
+export async function darObjetoMasivo(estudianteIds, objetoId, nombreObjeto, cantidad = 1) {
+  await Promise.all(estudianteIds.map((id) => darObjetoEstudiante(id, objetoId, nombreObjeto, cantidad)));
+}
+
+// El estudiante usa un objeto de su inventario: descuenta 1 unidad y, si
+// tiene efecto_vida, se lo aplica.
+export async function usarObjeto(estudianteId, objetoId, efectoVida, nombreObjeto) {
+  const nuevaCantidad = await ajustarInventario(estudianteId, objetoId, -1);
+  if (nuevaCantidad < 0) throw new Error("Ya no tenés unidades de este objeto.");
+  if (efectoVida) {
+    await ajustarVida(estudianteId, efectoVida);
+    await registrarHistorialGamificacion(estudianteId, { etiqueta: `Usaste: ${nombreObjeto}`, vida: efectoVida, categoria: "objeto" });
+  }
+  return nuevaCantidad;
+}
+
 export async function fetchPremios() {
   const { data, error } = await supabase.from("banco_premios").select("*").order("costo_monedas");
   if (error) throw error;
