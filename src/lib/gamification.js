@@ -30,11 +30,12 @@ export const LEVELS = [
   { name: "Leyenda", min: 2200 },
 ];
 
-export function nextLevel(xp) {
-  let level = LEVELS[0];
-  let next = LEVELS[1];
-  for (let i = 0; i < LEVELS.length; i++) {
-    if (xp >= LEVELS[i].min) { level = LEVELS[i]; next = LEVELS[i + 1] || null; }
+export function nextLevel(xp, listaNiveles) {
+  const niveles = listaNiveles && listaNiveles.length > 0 ? listaNiveles : LEVELS;
+  let level = niveles[0];
+  let next = niveles[1];
+  for (let i = 0; i < niveles.length; i++) {
+    if (xp >= niveles[i].min) { level = niveles[i]; next = niveles[i + 1] || null; }
   }
   const pct = next ? Math.min(100, Math.round(((xp - level.min) / (next.min - level.min)) * 100)) : 100;
   return { level, next, pct };
