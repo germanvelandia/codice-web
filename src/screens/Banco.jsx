@@ -1,6 +1,24 @@
 import React, { useEffect, useState } from "react";
 import * as api from "../lib/api";
 
+// Catálogo sugerido de premios reales de aula, con costos pensados para la
+// economía típica de CÓDICE (más o menos 1 moneda por acción positiva) —
+// el docente los puede editar o borrar después de cargarlos.
+const CATALOGO_SUGERIDO = [
+  { emoji: "🪑", nombre: "Elegir tu puesto por un día", costo_monedas: 15, peso: 3 },
+  { emoji: "⏰", nombre: "Salir 5 minutos antes de clase", costo_monedas: 20, peso: 2 },
+  { emoji: "🎧", nombre: "Escuchar música mientras trabajas", costo_monedas: 15, peso: 3 },
+  { emoji: "🥇", nombre: "Ser el ayudante del profesor por un día", costo_monedas: 20, peso: 2 },
+  { emoji: "🍬", nombre: "Premio pequeño (dulce o sticker)", costo_monedas: 10, peso: 4 },
+  { emoji: "🎨", nombre: "10 minutos libres para dibujar", costo_monedas: 15, peso: 3 },
+  { emoji: "👥", nombre: "Elegir con quién trabajar en la próxima actividad", costo_monedas: 20, peso: 2 },
+  { emoji: "📝", nombre: "Comodín: un día extra para entregar una tarea", costo_monedas: 30, peso: 1 },
+  { emoji: "🏆", nombre: "Mención especial en la cartelera de honor", costo_monedas: 25, peso: 2 },
+  { emoji: "🎟️", nombre: "Pase para saltar una pregunta oral", costo_monedas: 20, peso: 2 },
+  { emoji: "🖍️", nombre: "Kit de útiles pequeño", costo_monedas: 35, peso: 1 },
+  { emoji: "🎮", nombre: "5 minutos de tiempo libre (juego, celular, etc.)", costo_monedas: 25, peso: 2 },
+];
+
 function PremioForm({ premio, onCancelar, onGuardado }) {
   const [nombre, setNombre] = useState(premio?.nombre || "");
   const [descripcion, setDescripcion] = useState(premio?.descripcion || "");
@@ -117,15 +135,33 @@ export function VistaBanco() {
   const toggleActivo = async (p) => { await api.editarPremio(p.id, { activo: !p.activo }); cargar(); };
   const eliminar = async (p) => { if (!confirm(`¿Eliminar "${p.nombre}" del banco?`)) return; await api.eliminarPremio(p.id); cargar(); };
 
+  const [cargandoSugerido, setCargandoSugerido] = useState(false);
+  const cargarSugerido = async () => {
+    setCargandoSugerido(true);
+    try {
+      await Promise.all(CATALOGO_SUGERIDO.map((p) => api.crearPremio({ ...p, activo: true, stock: null })));
+      cargar();
+    } catch (e) {
+      alert("Error al cargar el catálogo sugerido: " + e.message);
+    }
+    setCargandoSugerido(false);
+  };
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-1">
         <div>
           <h2 className="text-xl font-bold text-slate-800">🏦 Banco de premios</h2>
           <p className="text-sm text-slate-400">Los estudiantes canjean sus monedas por un premio sorpresa desde su portal.</p>
         </div>
         <button onClick={() => { setEditando(null); setFormAbierto((v) => !v); }} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">
           {formAbierto ? "Cerrar" : "+ Nuevo premio"}
+        </button>
+      </div>
+
+      <div className="mb-4">
+        <button disabled={cargandoSugerido} onClick={cargarSugerido} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-violet-200 text-violet-600 disabled:opacity-50">
+          {cargandoSugerido ? "Cargando…" : "✨ Cargar catálogo sugerido (12 premios)"}
         </button>
       </div>
 
