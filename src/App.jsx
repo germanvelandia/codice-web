@@ -16,6 +16,8 @@ import { VistaDiplomas } from "./screens/Diplomas";
 import { VistaPersonaje, PersonajePreview } from "./screens/Personaje";
 import { HistorialPuntosEstudiante } from "./screens/HistorialPuntos";
 import { MapaTerritoriosEstudiante } from "./screens/MapaTerritorios";
+import { VistaNiveles } from "./screens/Niveles";
+import { VistaObjetos, ObjetosEstudiante } from "./screens/Objetos";
 import { VistaGamificacionExtra } from "./screens/GamificacionExtra";
 import { VistaRoles } from "./screens/Roles";
 import { VistaCalificaciones } from "./screens/Calificaciones";
@@ -1806,6 +1808,9 @@ function PortalEstudiante() {
   const [equipados, setEquipados] = useState({ marco: null, titulo: null });
   const [avatarConfig, setAvatarConfig] = useState(null);
   const [miRol, setMiRol] = useState(null);
+  const [nivelesConfig, setNivelesConfig] = useState(null);
+
+  useEffect(() => { api.fetchNivelesParaJuego().then(setNivelesConfig); }, []);
 
   const consultar = async () => {
     if (!codigo.trim()) return;
@@ -1833,7 +1838,7 @@ function PortalEstudiante() {
   };
 
   if (datos) {
-    const { level, next, pct } = nextLevel(datos.xp || 0);
+    const { level, next, pct } = nextLevel(datos.xp || 0, nivelesConfig);
     const totalAsis = Number(datos.total_asistencia) || 0;
     const pctAsis = totalAsis > 0 ? Math.round((Number(datos.presentes) / totalAsis) * 100) : null;
 
@@ -1967,7 +1972,10 @@ function PortalEstudiante() {
           )}
 
           {vista === "recompensas" && estudianteInfo && (
-            <BancoEstudiante estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} />
+            <>
+              <BancoEstudiante estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} />
+              <ObjetosEstudiante estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} />
+            </>
           )}
 
           {vista === "preguntados" && estudianteInfo && (
@@ -2101,6 +2109,8 @@ const MENU_PANEL_GRUPOS = [
   {
     key: "administracion", label: "Administración", icono: "⚙️", items: [
       { key: "corregirnombres", label: "Corregir Nombres", icono: "🪪" },
+      { key: "niveles", label: "Niveles", icono: "🏅" },
+      { key: "objetos", label: "Objetos", icono: "🎒" },
       { key: "horario", label: "Agenda", icono: "🗓️" },
       { key: "roles", label: "Roles", icono: "🎭" },
       { key: "reportes", label: "Reportes", icono: "📊" },
@@ -2450,6 +2460,8 @@ function Panel({ session }) {
         {tab === "inclusion" && <VistaInclusionGeneral />}
         {tab === "bajasvida" && <VistaBajasVida />}
         {tab === "corregirnombres" && <VistaCorregirNombres />}
+        {tab === "niveles" && <VistaNiveles />}
+        {tab === "objetos" && <VistaObjetos grados={grados} gradoActivo={gradoActivo} />}
         {tab === "direccioncurso" && <VistaDireccionCurso grados={grados} gradoActivo={gradoActivo} />}
         {tab === "guiasestudio" && <VistaGuiasEstudio grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} />}
         {tab === "evaluaciones" && grados.length > 0 && <VistaEvaluaciones grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} />}
