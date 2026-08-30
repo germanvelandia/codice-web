@@ -91,6 +91,7 @@ export function MapaTerritoriosEstudiante({ estudianteId, nombre, xp }) {
   const [territories, setTerritories] = useState([]);
   const [insignias, setInsignias] = useState(0);
   const [avatarConfig, setAvatarConfig] = useState(null);
+  const [nivelesConfig, setNivelesConfig] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [seleccionado, setSeleccionado] = useState(null);
 
@@ -99,7 +100,8 @@ export function MapaTerritoriosEstudiante({ estudianteId, nombre, xp }) {
       api.fetchNotasEstudiante(estudianteId),
       api.fetchLogrosEstudiante(estudianteId),
       api.fetchAvatarConfigsMultiples([estudianteId]),
-    ]).then(([notas, logros, avatares]) => {
+      api.fetchNivelesParaJuego(),
+    ]).then(([notas, logros, avatares, niveles]) => {
       // Por materia, usa el periodo más reciente con nota final registrada
       // como "estado actual" de ese territorio.
       const porMateria = {};
@@ -115,13 +117,14 @@ export function MapaTerritoriosEstudiante({ estudianteId, nombre, xp }) {
       setTerritories(territorios);
       setInsignias(logros.length);
       setAvatarConfig(avatares[estudianteId] || null);
+      setNivelesConfig(niveles);
       setCargando(false);
     });
   }, [estudianteId]);
 
   if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
 
-  const { level, next, pct } = nextLevel(xp || 0);
+  const { level, next, pct } = nextLevel(xp || 0, nivelesConfig);
   const xpDesdeNivel = (xp || 0) - level.min;
   const xpParaSubir = next ? next.min - level.min : 0;
 
