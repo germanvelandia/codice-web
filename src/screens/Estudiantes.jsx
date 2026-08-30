@@ -39,6 +39,7 @@ function VidaBar({ vida }) {
 
 function AccionGamificacionForm({ tab, accion, onCancelar, onGuardado }) {
   const [label, setLabel] = useState(accion?.label || "");
+  const [emoji, setEmoji] = useState(accion?.emoji || "");
   const [xp, setXp] = useState(accion?.xp ?? 10);
   const [vida, setVida] = useState(accion?.vida ?? 2);
   const [guardando, setGuardando] = useState(false);
@@ -47,7 +48,7 @@ function AccionGamificacionForm({ tab, accion, onCancelar, onGuardado }) {
     if (!label.trim()) { alert("Escribe un nombre."); return; }
     setGuardando(true);
     try {
-      const campos = { label: label.trim(), xp: parseInt(xp, 10) || 0, vida: parseInt(vida, 10) || 0 };
+      const campos = { label: label.trim(), emoji: emoji.trim() || null, xp: parseInt(xp, 10) || 0, vida: parseInt(vida, 10) || 0 };
       if (accion) await api.editarAccionGamificacion(accion.id, campos);
       else await api.crearAccionGamificacion({ ...campos, tab, activo: true });
       onGuardado();
@@ -59,8 +60,12 @@ function AccionGamificacionForm({ tab, accion, onCancelar, onGuardado }) {
 
   return (
     <div className="bg-violet-50 rounded-xl p-3 mb-2">
-      <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Nombre de la acción"
-        className="w-full text-xs rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none bg-white" />
+      <div className="flex gap-2 mb-2">
+        <input value={emoji} onChange={(e) => setEmoji(e.target.value)} placeholder="🙂" maxLength={4}
+          className="w-14 text-sm text-center rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
+        <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Nombre de la acción"
+          className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
+      </div>
       <div className="grid grid-cols-2 gap-2 mb-2">
         <div>
           <label className="text-[10px] text-slate-500 block mb-0.5">XP (puede ser negativo)</label>
@@ -160,8 +165,11 @@ function QuickGamify({ estudiante, onAplicado }) {
                 {listaActual.map((a) => (
                   gestionando ? (
                     <div key={a.id} className={`text-xs text-left px-2.5 py-2 rounded-xl flex items-center justify-between ${a.xp >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
-                      <div>
-                        {a.label}<div className="text-[10px] opacity-70">{a.xp > 0 ? "+" : ""}{a.xp} XP</div>
+                      <div className="flex items-center gap-1.5">
+                        {a.emoji && <span className="text-base">{a.emoji}</span>}
+                        <div>
+                          {a.label}<div className="text-[10px] opacity-70">{a.xp > 0 ? "+" : ""}{a.xp} XP</div>
+                        </div>
                       </div>
                       <div className="flex gap-1 shrink-0 ml-1">
                         <button onClick={() => { setEditando(a); setFormAbierto(true); }} className="opacity-60 hover:opacity-100">✏️</button>
@@ -170,8 +178,9 @@ function QuickGamify({ estudiante, onAplicado }) {
                     </div>
                   ) : (
                     <button key={a.id} disabled={cargando} onClick={() => aplicar(a)}
-                      className={`text-xs text-left px-2.5 py-2 rounded-xl ${a.xp >= 0 ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "bg-rose-50 text-rose-700 hover:bg-rose-100"}`}>
-                      {a.label}<div className="text-[10px] opacity-70">{a.xp > 0 ? "+" : ""}{a.xp} XP</div>
+                      className={`text-xs text-left px-2.5 py-2 rounded-xl flex items-center gap-1.5 ${a.xp >= 0 ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "bg-rose-50 text-rose-700 hover:bg-rose-100"}`}>
+                      {a.emoji && <span className="text-base shrink-0">{a.emoji}</span>}
+                      <span>{a.label}<div className="text-[10px] opacity-70">{a.xp > 0 ? "+" : ""}{a.xp} XP</div></span>
                     </button>
                   )
                 ))}
