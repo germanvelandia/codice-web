@@ -1072,6 +1072,15 @@ export async function entregarIntento(intentoId, respuestas) {
   if (error) throw error;
 }
 
+// Borra un intento (y sus respuestas) para que el estudiante pueda volver a
+// presentar la evaluación desde cero — cuenta contra el límite de intentos
+// como si nunca lo hubiera hecho.
+export async function eliminarIntento(intentoId) {
+  await supabase.from("evaluacion_respuestas").delete().eq("intento_id", intentoId);
+  const { error } = await supabase.from("evaluacion_intentos").delete().eq("id", intentoId);
+  if (error) throw error;
+}
+
 export async function copiarEvaluacion(evaluacionId, materiaDestinoId, gradoDestinoId, periodoDestino) {
   const { data: original, error: e1 } = await supabase.from("evaluaciones").select("*").eq("id", evaluacionId).single();
   if (e1) throw e1;
