@@ -3989,6 +3989,36 @@ export async function setValor(actividadId, estudianteId, valor) {
     { onConflict: "actividad_id,estudiante_id" }
   );
   if (error) throw error;
+  await otorgarRecompensaSiCorresponde(actividadId, estudianteId, valor);
+}
+
+// Si esta actividad tiene una unidad de Planeaciones vinculada con
+// recompensa configurada, y la nota alcanza el mínimo, le da al estudiante
+// el XP/Vida/Monedas configurados — una sola vez por actividad+estudiante,
+// aunque se corrija la nota varias veces después.
+async function otorgarRecompensaSiCorresponde(actividadId, estudianteId, valor) {
+  const { data: unidad } = await supabase.from("planeaciones").select("recompensa_xp, recompensa_vida, recompensa_monedas, recompensa_nota_minima, titulo")
+    .eq("actividad_recompensa_id", actividadId).eq("tipo", "unidad").maybeSingle();
+  if (!unidad) return;
+  const sinRecompensa = !unidad.recompensa_xp && !unidad.recompensa_vida && !unidad.recompensa_monedas;
+  if (sinRecompensa) return;
+  if (valor < (unidad.recompensa_nota_minima ?? 3.5)) return;
+
+  const { data: yaOtorgada } = await supabase.from("recompensas_otorgadas").select("id").eq("actividad_id", actividadId).eq("estudiante_id", estudianteId).maybeSingle();
+  if (yaOtorgada) return;
+
+  const { error: eGuard } = await supabase.from("recompensas_otorgadas").insert({ actividad_id: actividadId, estudiante_id: estudianteId });
+  if (eGuard) return; // si otro proceso ya insertó el guard en simultáneo, no duplicamos
+
+  await supabase.rpc("ajustar_progreso", {
+    p_estudiante_id: estudianteId, p_delta_xp: unidad.recompensa_xp || 0,
+    p_delta_vida: unidad.recompensa_vida || 0, p_delta_monedas: unidad.recompensa_monedas || 0,
+  });
+  await registrarHistorialGamificacion(estudianteId, {
+    etiqueta: `🎯 Aprobaste: ${unidad.titulo}`,
+    xp: unidad.recompensa_xp || 0, vida: unidad.recompensa_vida || 0, monedas: unidad.recompensa_monedas || 0,
+    categoria: "academico",
+  });
 }
 
 // Guarda una observación para una celda de la Planilla que YA tiene nota
