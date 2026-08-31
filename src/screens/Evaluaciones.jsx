@@ -266,6 +266,12 @@ function ResultadosEvaluacion({ evaluacion, onCerrar }) {
     cargar();
   };
 
+  const reiniciar = async (intento) => {
+    if (!confirm(`¿Reiniciar el intento ${intento.numero_intento} de ${intento.estudiante_nombre}? Se borra por completo (respuestas y calificación) y va a poder volver a presentar la evaluación. No se puede deshacer.`)) return;
+    await api.eliminarIntento(intento.id);
+    cargar();
+  };
+
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onCerrar}>
       <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-xl">
@@ -291,13 +297,16 @@ function ResultadosEvaluacion({ evaluacion, onCerrar }) {
                       <span className="font-semibold">{i.estudiante_nombre}</span>
                       <span className="text-slate-400"> · Intento {i.numero_intento} · {i.estado}{i.puntaje_obtenido !== null ? ` · ${i.puntaje_obtenido}/${i.puntaje_maximo} pts` : ""}</span>
                     </button>
-                    {i.estado !== "en_progreso" && (
-                      i.visible_para_estudiante ? (
-                        <span className="text-[10px] text-emerald-600">✔ Publicado</span>
-                      ) : (
-                        <button onClick={() => publicar(i.id)} className="text-[11px] text-violet-500">Publicar</button>
-                      )
-                    )}
+                    <div className="flex items-center gap-2 shrink-0">
+                      {i.estado !== "en_progreso" && (
+                        i.visible_para_estudiante ? (
+                          <span className="text-[10px] text-emerald-600">✔ Publicado</span>
+                        ) : (
+                          <button onClick={() => publicar(i.id)} className="text-[11px] text-violet-500">Publicar</button>
+                        )
+                      )}
+                      <button onClick={() => reiniciar(i)} title="Borrar este intento para que pueda volver a presentar" className="text-[11px] text-rose-500">🔄 Reiniciar</button>
+                    </div>
                   </div>
                 ))}
               </div>
