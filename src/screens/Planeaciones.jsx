@@ -702,37 +702,6 @@ function UnidadCard({ unidad, institucion, materiaNombre, materias, gradoId, gra
   const [orientacionesEvaluacion, setOrientacionesEvaluacion] = useState(unidad.orientaciones_evaluacion || "");
   const [estado, setEstado] = useState(unidad.estado);
   const [imprimiendo, setImprimiendo] = useState(false);
-  const [recompensaAbierta, setRecompensaAbierta] = useState(false);
-  const [actividades, setActividades] = useState([]);
-  const [actividadRecompensaId, setActividadRecompensaId] = useState(unidad.actividad_recompensa_id || "");
-  const [recompensaXp, setRecompensaXp] = useState(unidad.recompensa_xp || 0);
-  const [recompensaVida, setRecompensaVida] = useState(unidad.recompensa_vida || 0);
-  const [recompensaMonedas, setRecompensaMonedas] = useState(unidad.recompensa_monedas || 0);
-  const [recompensaNotaMinima, setRecompensaNotaMinima] = useState(unidad.recompensa_nota_minima ?? 3.5);
-  const [guardandoRecompensa, setGuardandoRecompensa] = useState(false);
-
-  useEffect(() => {
-    if (recompensaAbierta) api.fetchActividades(unidad.materia_id, gradoId, unidad.periodo).then(setActividades);
-  }, [recompensaAbierta]);
-
-  const guardarRecompensa = async () => {
-    setGuardandoRecompensa(true);
-    try {
-      await api.editarPlaneacion(unidad.id, {
-        actividad_recompensa_id: actividadRecompensaId || null,
-        recompensa_xp: parseInt(recompensaXp, 10) || 0,
-        recompensa_vida: parseInt(recompensaVida, 10) || 0,
-        recompensa_monedas: parseInt(recompensaMonedas, 10) || 0,
-        recompensa_nota_minima: parseFloat(recompensaNotaMinima) || 3.5,
-      });
-      setRecompensaAbierta(false);
-      onCambio();
-    } catch (e) {
-      alert("Error al guardar: " + e.message);
-    }
-    setGuardandoRecompensa(false);
-  };
-
   const guardar = async () => {
     await api.editarPlaneacion(unidad.id, {
       titulo: titulo.trim(), objetivo: objetivo.trim() || null, contenido: contenido.trim() || null,
@@ -774,59 +743,11 @@ function UnidadCard({ unidad, institucion, materiaNombre, materias, gradoId, gra
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button onClick={() => setImprimiendo(true)} className="text-xs text-slate-400 hover:text-violet-600" title="Exportar / Imprimir PDF">🖨️</button>
-          <button onClick={() => setRecompensaAbierta((v) => !v)} className="text-xs" title="Configurar recompensa automática (XP/Vida/Monedas)">
-            {unidad.actividad_recompensa_id ? "🎮" : "🎮"}
-          </button>
           <button onClick={() => setEditando((v) => !v)} className="text-xs text-slate-400 hover:text-violet-600">{editando ? "✕" : "✏️"}</button>
           <button onClick={eliminar} className="text-xs text-slate-400 hover:text-rose-500">🗑</button>
           <button onClick={() => setExpandida((v) => !v)} className="text-xs text-violet-500">{expandida ? "Cerrar ▲" : "Abrir ▼"}</button>
         </div>
       </div>
-
-      {unidad.actividad_recompensa_id && (unidad.recompensa_xp || unidad.recompensa_vida || unidad.recompensa_monedas) && (
-        <div className="mt-2 text-[11px] text-violet-600 bg-violet-50 rounded-lg px-2.5 py-1.5 inline-flex items-center gap-1.5">
-          🎮 Al aprobar (≥{unidad.recompensa_nota_minima}) da:
-          {unidad.recompensa_xp > 0 && <span>⭐{unidad.recompensa_xp}</span>}
-          {unidad.recompensa_vida > 0 && <span>❤️{unidad.recompensa_vida}</span>}
-          {unidad.recompensa_monedas > 0 && <span>🪙{unidad.recompensa_monedas}</span>}
-        </div>
-      )}
-
-      {recompensaAbierta && (
-        <div className="mt-3 bg-emerald-50 rounded-xl p-3 space-y-2">
-          <p className="text-[11px] font-semibold text-emerald-700">🎮 Recompensa automática al aprobar</p>
-          <p className="text-[10px] text-slate-500">Elegí a qué actividad de la Planilla de calificaciones (de este curso) se vincula esta unidad — cuando le pongas nota ahí y apruebe, se le da la recompensa solo una vez.</p>
-          <select value={actividadRecompensaId} onChange={(e) => setActividadRecompensaId(e.target.value ? parseInt(e.target.value, 10) : "")}
-            className="w-full text-xs rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none bg-white">
-            <option value="">— Sin vincular (sin recompensa automática) —</option>
-            {actividades.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
-          </select>
-          <div className="grid grid-cols-4 gap-1.5">
-            <div>
-              <label className="text-[9px] text-slate-500 block">⭐ XP</label>
-              <input type="number" value={recompensaXp} onChange={(e) => setRecompensaXp(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1 border border-slate-200 outline-none bg-white" />
-            </div>
-            <div>
-              <label className="text-[9px] text-slate-500 block">❤️ Vida</label>
-              <input type="number" value={recompensaVida} onChange={(e) => setRecompensaVida(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1 border border-slate-200 outline-none bg-white" />
-            </div>
-            <div>
-              <label className="text-[9px] text-slate-500 block">🪙 Oro</label>
-              <input type="number" value={recompensaMonedas} onChange={(e) => setRecompensaMonedas(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1 border border-slate-200 outline-none bg-white" />
-            </div>
-            <div>
-              <label className="text-[9px] text-slate-500 block">Nota mín.</label>
-              <input type="number" step="0.1" value={recompensaNotaMinima} onChange={(e) => setRecompensaNotaMinima(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1 border border-slate-200 outline-none bg-white" />
-            </div>
-          </div>
-          <div className="flex justify-end gap-2">
-            <button onClick={() => setRecompensaAbierta(false)} className="text-xs text-slate-500 px-2 py-1">Cancelar</button>
-            <button disabled={guardandoRecompensa} onClick={guardarRecompensa} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-500 text-white disabled:opacity-60">
-              {guardandoRecompensa ? "Guardando…" : "Guardar recompensa"}
-            </button>
-          </div>
-        </div>
-      )}
 
       {editando ? (
         <div className="mt-2 space-y-2">
