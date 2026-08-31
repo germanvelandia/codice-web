@@ -1354,6 +1354,51 @@ export async function usarObjeto(estudianteId, objetoId, efectoVida, nombreObjet
   return nuevaCantidad;
 }
 
+/* ---------------- Actividades Programadas (recompensa automática, con duplicado a varios cursos) ---------------- */
+export async function fetchActividadesProgramadas() {
+  const { data, error } = await supabase.from("actividades_programadas")
+    .select("*, materias(nombre), actividades_programadas_cursos(*, notas_actividades(nombre))")
+    .order("fecha", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+// Crea la actividad programada y la vincula de una a los cursos elegidos —
+// "cursos" es un array de { grado_id, actividad_notas_id (o null) }.
+export async function crearActividadProgramada(campos, cursos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data: creada, error } = await supabase.from("actividades_programadas")
+    .insert({ ...campos, docente_id: userData?.user?.id || null }).select().single();
+  if (error) throw error;
+  if (cursos.length > 0) {
+    const filas = cursos.map((c) => ({ actividad_programada_id: creada.id, grado_id: c.grado_id, actividad_notas_id: c.actividad_notas_id || null }));
+    const { error: e2 } = await supabase.from("actividades_programadas_cursos").insert(filas);
+    if (e2) throw e2;
+  }
+  return creada;
+}
+
+export async function editarActividadProgramada(id, campos) {
+  const { error } = await supabase.from("actividades_programadas").update(campos).eq("id", id);
+  if (error) throw error;
+}
+
+// Reemplaza por completo la lista de cursos duplicados de una actividad
+// programada (borra los que ya no estén, agrega los nuevos).
+export async function actualizarCursosActividadProgramada(actividadProgramadaId, cursos) {
+  await supabase.from("actividades_programadas_cursos").delete().eq("actividad_programada_id", actividadProgramadaId);
+  if (cursos.length > 0) {
+    const filas = cursos.map((c) => ({ actividad_programada_id: actividadProgramadaId, grado_id: c.grado_id, actividad_notas_id: c.actividad_notas_id || null }));
+    const { error } = await supabase.from("actividades_programadas_cursos").insert(filas);
+    if (error) throw error;
+  }
+}
+
+export async function eliminarActividadProgramada(id) {
+  const { error } = await supabase.from("actividades_programadas").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function fetchPremios() {
   const { data, error } = await supabase.from("banco_premios").select("*").order("costo_monedas");
   if (error) throw error;
@@ -3992,17 +4037,19 @@ export async function setValor(actividadId, estudianteId, valor) {
   await otorgarRecompensaSiCorresponde(actividadId, estudianteId, valor);
 }
 
-// Si esta actividad tiene una unidad de Planeaciones vinculada con
-// recompensa configurada, y la nota alcanza el mínimo, le da al estudiante
-// el XP/Vida/Monedas configurados — una sola vez por actividad+estudiante,
-// aunque se corrija la nota varias veces después.
+// Si esta actividad de la Planilla está vinculada a una Actividad
+// Programada con recompensa configurada, y la nota alcanza el mínimo, le
+// da al estudiante el XP/Vida/Monedas configurados — una sola vez por
+// actividad+estudiante, aunque se corrija la nota varias veces después.
 async function otorgarRecompensaSiCorresponde(actividadId, estudianteId, valor) {
-  const { data: unidad } = await supabase.from("planeaciones").select("recompensa_xp, recompensa_vida, recompensa_monedas, recompensa_nota_minima, titulo")
-    .eq("actividad_recompensa_id", actividadId).eq("tipo", "unidad").maybeSingle();
-  if (!unidad) return;
-  const sinRecompensa = !unidad.recompensa_xp && !unidad.recompensa_vida && !unidad.recompensa_monedas;
+  const { data: vinculo } = await supabase.from("actividades_programadas_cursos")
+    .select("actividades_programadas(nombre, recompensa_xp, recompensa_vida, recompensa_monedas, nota_minima)")
+    .eq("actividad_notas_id", actividadId).maybeSingle();
+  const prog = vinculo?.actividades_programadas;
+  if (!prog) return;
+  const sinRecompensa = !prog.recompensa_xp && !prog.recompensa_vida && !prog.recompensa_monedas;
   if (sinRecompensa) return;
-  if (valor < (unidad.recompensa_nota_minima ?? 3.5)) return;
+  if (valor < (prog.nota_minima ?? 3.5)) return;
 
   const { data: yaOtorgada } = await supabase.from("recompensas_otorgadas").select("id").eq("actividad_id", actividadId).eq("estudiante_id", estudianteId).maybeSingle();
   if (yaOtorgada) return;
@@ -4011,12 +4058,12 @@ async function otorgarRecompensaSiCorresponde(actividadId, estudianteId, valor) 
   if (eGuard) return; // si otro proceso ya insertó el guard en simultáneo, no duplicamos
 
   await supabase.rpc("ajustar_progreso", {
-    p_estudiante_id: estudianteId, p_delta_xp: unidad.recompensa_xp || 0,
-    p_delta_vida: unidad.recompensa_vida || 0, p_delta_monedas: unidad.recompensa_monedas || 0,
+    p_estudiante_id: estudianteId, p_delta_xp: prog.recompensa_xp || 0,
+    p_delta_vida: prog.recompensa_vida || 0, p_delta_monedas: prog.recompensa_monedas || 0,
   });
   await registrarHistorialGamificacion(estudianteId, {
-    etiqueta: `🎯 Aprobaste: ${unidad.titulo}`,
-    xp: unidad.recompensa_xp || 0, vida: unidad.recompensa_vida || 0, monedas: unidad.recompensa_monedas || 0,
+    etiqueta: `🎯 Aprobaste: ${prog.nombre}`,
+    xp: prog.recompensa_xp || 0, vida: prog.recompensa_vida || 0, monedas: prog.recompensa_monedas || 0,
     categoria: "academico",
   });
 }
