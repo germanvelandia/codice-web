@@ -18,6 +18,7 @@ import { HistorialPuntosEstudiante } from "./screens/HistorialPuntos";
 import { MapaTerritoriosEstudiante } from "./screens/MapaTerritorios";
 import { VistaNiveles } from "./screens/Niveles";
 import { VistaObjetos, ObjetosEstudiante } from "./screens/Objetos";
+import { VistaActividadesProgramadas } from "./screens/ActividadesProgramadas";
 import { VistaGamificacionExtra } from "./screens/GamificacionExtra";
 import { VistaRoles } from "./screens/Roles";
 import { VistaCalificaciones } from "./screens/Calificaciones";
@@ -2095,6 +2096,7 @@ const MENU_PANEL_GRUPOS = [
       { key: "proyectosforja", label: "La Forja", icono: "🔨" },
       { key: "planeaciones", label: "Planeaciones", icono: "📝" },
       { key: "guiasestudio", label: "Guías de Estudio", icono: "📘" },
+      { key: "actividadesprogramadas", label: "Actividades Programadas", icono: "🎮" },
       { key: "biblioteca", label: "Biblioteca", icono: "📚" },
     ],
   },
@@ -2464,6 +2466,7 @@ function Panel({ session }) {
         {tab === "objetos" && <VistaObjetos grados={grados} gradoActivo={gradoActivo} />}
         {tab === "direccioncurso" && <VistaDireccionCurso grados={grados} gradoActivo={gradoActivo} />}
         {tab === "guiasestudio" && <VistaGuiasEstudio grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} />}
+        {tab === "actividadesprogramadas" && <VistaActividadesProgramadas grados={grados} />}
         {tab === "evaluaciones" && grados.length > 0 && <VistaEvaluaciones grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} />}
         {tab === "proyectosforja" && grados.length > 0 && <VistaProyectosForja grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} />}
       </div>
