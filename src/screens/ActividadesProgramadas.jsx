@@ -145,6 +145,18 @@ export function VistaActividadesProgramadas({ grados }) {
 
   const eliminar = async (a) => { if (!confirm(`¿Eliminar la actividad "${a.nombre}"?`)) return; await api.eliminarActividadProgramada(a.id); cargar(); };
 
+  const [aplicandoRetroactivo, setAplicandoRetroactivo] = useState(null);
+  const aplicarRetroactivo = async (a) => {
+    setAplicandoRetroactivo(a.id);
+    try {
+      const otorgadas = await api.aplicarRecompensasRetroactivas(a.id);
+      alert(otorgadas > 0 ? `Se le dio la recompensa a ${otorgadas} estudiante(s) que ya tenían la nota puesta.` : "No había estudiantes pendientes — todos los que aprueban ya la habían recibido.");
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setAplicandoRetroactivo(null);
+  };
+
   if (materias.length === 0) {
     return <p className="text-sm text-slate-400">Primero creá al menos una materia (en Calificaciones) para poder programar actividades.</p>;
   }
@@ -207,6 +219,8 @@ export function VistaActividadesProgramadas({ grados }) {
                   <td className="px-3 py-2">{a.recompensa_monedas || "—"}</td>
                   <td className="px-3 py-2">{a.recompensa_vida || "—"}</td>
                   <td className="px-3 py-2 whitespace-nowrap">
+                    <button disabled={aplicandoRetroactivo === a.id} onClick={() => aplicarRetroactivo(a)} title="Dar la recompensa a quienes ya tenían la nota puesta antes de vincular"
+                      className="text-slate-400 hover:text-emerald-600 mr-2 disabled:opacity-50">{aplicandoRetroactivo === a.id ? "…" : "🔁"}</button>
                     <button onClick={() => { setEditando(a); setFormAbierto(true); }} className="text-slate-400 hover:text-violet-600 mr-2">✏️</button>
                     <button onClick={() => eliminar(a)} className="text-slate-400 hover:text-rose-500">🗑</button>
                   </td>
