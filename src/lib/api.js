@@ -1408,6 +1408,28 @@ export async function eliminarActividadProgramada(id) {
   if (error) throw error;
 }
 
+// Aplica la recompensa a las notas que YA estaban guardadas antes de
+// vincular la actividad — para el caso de "primero puse las notas,
+// después configuré el vínculo". Devuelve cuántos estudiantes recibieron
+// la recompensa recién ahora.
+export async function aplicarRecompensasRetroactivas(actividadProgramadaId) {
+  const { data: cursos, error } = await supabase.from("actividades_programadas_cursos").select("actividad_notas_id").eq("actividad_programada_id", actividadProgramadaId);
+  if (error) throw error;
+  let otorgadas = 0;
+  for (const curso of cursos || []) {
+    if (!curso.actividad_notas_id) continue;
+    const { data: valores } = await supabase.from("notas_valores").select("estudiante_id, valor").eq("actividad_id", curso.actividad_notas_id);
+    for (const v of valores || []) {
+      const { data: yaOtorgada } = await supabase.from("recompensas_otorgadas").select("id").eq("actividad_id", curso.actividad_notas_id).eq("estudiante_id", v.estudiante_id).maybeSingle();
+      if (yaOtorgada) continue;
+      await otorgarRecompensaSiCorresponde(curso.actividad_notas_id, v.estudiante_id, v.valor);
+      const { data: confirmar } = await supabase.from("recompensas_otorgadas").select("id").eq("actividad_id", curso.actividad_notas_id).eq("estudiante_id", v.estudiante_id).maybeSingle();
+      if (confirmar) otorgadas++;
+    }
+  }
+  return otorgadas;
+}
+
 export async function fetchPremios() {
   const { data, error } = await supabase.from("banco_premios").select("*").order("costo_monedas");
   if (error) throw error;
