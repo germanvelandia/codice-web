@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import * as api from "../lib/api";
+import { ordenarPorApellido } from "../lib/gamification";
 
 // Selector de cursos duplicados: por cada grado que el docente marque, se
 // puede elegir a qué actividad de SU Planilla de calificaciones se vincula
