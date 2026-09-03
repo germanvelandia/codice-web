@@ -4541,4 +4541,25 @@ export async function registrarAccion(estudianteId, accion) {
   if (rpcRes.error) throw rpcRes.error;
   const fila = rpcRes.data?.[0];
   return { xp: fila?.xp ?? 0, vida: fila?.vida ?? 0, monedas: fila?.monedas ?? 0 };
+/* ---------------- Rúbricas (catálogo reutilizable) ---------------- */
+export async function fetchRubricasCatalogo() {
+  const { data, error } = await supabase.from("rubricas_catalogo").select("*").order("nombre");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearRubricaCatalogo(nombre, criterios) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("rubricas_catalogo").insert({ docente_id: userData?.user?.id || null, nombre, criterios });
+  if (error) throw error;
+}
+
+export async function editarRubricaCatalogo(id, campos) {
+  const { error } = await supabase.from("rubricas_catalogo").update(campos).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarRubricaCatalogo(id) {
+  const { error } = await supabase.from("rubricas_catalogo").delete().eq("id", id);
+  if (error) throw error;
 }
