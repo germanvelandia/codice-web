@@ -533,6 +533,33 @@ function RubricaTareaModal({ tarea, config, onClose, onGuardada }) {
     tarea.rubrica?.length ? tarea.rubrica : [{ criterio: "", niveles: NIVELES_INICIALES() }]
   );
   const [guardando, setGuardando] = useState(false);
+  const [catalogo, setCatalogo] = useState([]);
+  const [plantillaElegida, setPlantillaElegida] = useState("");
+  const [guardandoComoPlantilla, setGuardandoComoPlantilla] = useState(false);
+  const [nombrePlantilla, setNombrePlantilla] = useState("");
+
+  useEffect(() => { api.fetchRubricasCatalogo().then(setCatalogo); }, []);
+
+  const cargarDesdePlantilla = (id) => {
+    setPlantillaElegida(id);
+    const plantilla = catalogo.find((r) => r.id === parseInt(id, 10));
+    if (plantilla) setCriterios(plantilla.criterios);
+  };
+
+  const guardarComoPlantilla = async () => {
+    if (!nombrePlantilla.trim()) { alert("Ponele un nombre a la plantilla."); return; }
+    const limpios = criterios.filter((c) => c.criterio.trim());
+    if (limpios.length === 0) { alert("Agregá al menos un criterio antes de guardarla."); return; }
+    try {
+      await api.crearRubricaCatalogo(nombrePlantilla.trim(), limpios);
+      alert(`"${nombrePlantilla.trim()}" quedó guardada en tu catálogo de Rúbricas — la vas a poder reutilizar en cualquier otra tarea.`);
+      setGuardandoComoPlantilla(false);
+      setNombrePlantilla("");
+      api.fetchRubricasCatalogo().then(setCatalogo);
+    } catch (e) {
+      alert("Error al guardar: " + e.message);
+    }
+  };
 
   const actualizarCriterio = (i, texto) => setCriterios((prev) => prev.map((c, idx) => idx === i ? { ...c, criterio: texto } : c));
   const actualizarNivel = (i, j, campo, valor) => setCriterios((prev) => prev.map((c, idx) => idx === i
@@ -591,6 +618,15 @@ function RubricaTareaModal({ tarea, config, onClose, onGuardada }) {
           Al calificar, elegís el nivel de cada criterio y la nota se calcula sola, ajustada a la escala real de tu Planilla ({escalaMin}–{escalaMax}).
         </p>
 
+        {catalogo.length > 0 && (
+          <div className="flex items-center gap-2 mb-3">
+            <select value={plantillaElegida} onChange={(e) => cargarDesdePlantilla(e.target.value)} className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none">
+              <option value="">📋 Cargar desde una rúbrica guardada…</option>
+              {catalogo.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
+            </select>
+          </div>
+        )}
+
         <div className="space-y-3 mb-4">
           {criterios.map((c, i) => (
             <div key={i} className="border border-slate-200 rounded-xl p-3">
@@ -618,14 +654,25 @@ function RubricaTareaModal({ tarea, config, onClose, onGuardada }) {
           <button onClick={agregarCriterio} className="text-xs text-violet-500">+ Agregar criterio</button>
         </div>
 
+        {guardandoComoPlantilla && (
+          <div className="flex gap-2 mb-3 bg-slate-50 rounded-lg p-2">
+            <input value={nombrePlantilla} onChange={(e) => setNombrePlantilla(e.target.value)} placeholder="Nombre de la plantilla (ej: Ensayo argumentativo)"
+              autoFocus className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+            <button onClick={guardarComoPlantilla} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white">Guardar</button>
+            <button onClick={() => setGuardandoComoPlantilla(false)} className="text-xs text-slate-400 px-2">✕</button>
+          </div>
+        )}
+
         <div className="flex gap-2">
           {tarea.rubrica?.length > 0 && (
             <button disabled={guardando} onClick={quitarRubrica} className="text-xs font-semibold px-3 py-2.5 rounded-lg border border-rose-200 text-rose-500">Quitar rúbrica</button>
           )}
+          <button onClick={() => setGuardandoComoPlantilla(true)} className="text-xs font-semibold px-3 py-2.5 rounded-lg border border-violet-200 text-violet-600">💾 Guardar como plantilla</button>
           <button disabled={guardando} onClick={guardar} className="flex-1 text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
             {guardando ? "Guardando…" : "Guardar rúbrica"}
           </button>
         </div>
+
       </div>
     </div>
   );
