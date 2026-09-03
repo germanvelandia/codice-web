@@ -37,6 +37,7 @@ import { VistaTriviaAdmin } from "./screens/TriviaAdmin";
 import { VistaBancoPreguntas } from "./screens/BancoPreguntas";
 import { VistaEvaluaciones } from "./screens/Evaluaciones";
 import { VistaProyectosForja } from "./screens/TareasCalificables";
+import { VistaRubricas } from "./screens/Rubricas";
 import { VistaInicio, ContenidoLightbox } from "./screens/Inicio";
 import { EditorTexto, TextoEnriquecido, textoPlano } from "./components/RichText";
 import { InstitucionModal } from "./screens/Institucion";
@@ -2095,6 +2096,7 @@ const MENU_PANEL_GRUPOS = [
       { key: "evaluaciones", label: "Misiones", icono: "⚔️" },
       { key: "proyectosforja", label: "La Forja", icono: "🔨" },
       { key: "planeaciones", label: "Planeaciones", icono: "📝" },
+      { key: "rubricas", label: "Rúbricas", icono: "🎯" },
       { key: "guiasestudio", label: "Guías de Estudio", icono: "📘" },
       { key: "actividadesprogramadas", label: "Actividades Programadas", icono: "🎮" },
       { key: "biblioteca", label: "Biblioteca", icono: "📚" },
@@ -2457,6 +2459,7 @@ function Panel({ session }) {
         {tab === "reportes" && grados.length > 0 && <VistaReportes grados={grados} gradoActivo={gradoActivo} />}
         {tab === "horario" && grados.length > 0 && <VistaHorario grados={grados} />}
         {tab === "planeaciones" && grados.length > 0 && <VistaPlaneaciones grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} />}
+        {tab === "rubricas" && <VistaRubricas />}
         {tab === "biblioteca" && grados.length > 0 && <VistaBiblioteca grados={grados} gradoActivo={gradoActivo} />}
         {tab === "anotaciones" && <VistaAnotaciones />}
         {tab === "inclusion" && <VistaInclusionGeneral />}
