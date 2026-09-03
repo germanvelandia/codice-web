@@ -71,7 +71,51 @@ function TareaForm({ tipo, materiaId, gradoId, periodo, categorias, tarea, onCan
   );
 }
 
-function CalificarModal({ tarea, onClose, onCambio }) {
+// Calcula la nota a partir de los puntos de la rúbrica, respetando la
+// escala REAL configurada en la Planilla de esa materia (antes estaba fija
+// a un máximo de 5, sin importar la configuración).
+function calcularNotaRubrica(rubrica, nivelesElegidos, config) {
+  const escalaMin = config?.escala_min ?? 1;
+  const escalaMax = config?.nota_maxima ?? 5;
+  let obtenidos = 0, maximos = 0;
+  rubrica.forEach((c, i) => {
+    const maxCriterio = Math.max(...c.niveles.map((n) => n.puntos));
+    maximos += maxCriterio;
+    const elegido = nivelesElegidos[i];
+    if (elegido !== undefined) obtenidos += c.niveles[elegido].puntos;
+  });
+  const nota = maximos > 0 ? Math.round((escalaMin + (obtenidos / maximos) * (escalaMax - escalaMin)) * 10) / 10 : escalaMin;
+  return { obtenidos, maximos, nota, escalaMin, escalaMax };
+}
+
+// Selector de rúbrica reutilizable — usado tanto para calificar a un
+// estudiante individual como a todo un reino de una vez.
+function SelectorRubrica({ rubrica, nivelesElegidos, onElegir, config }) {
+  const { obtenidos, maximos, nota, escalaMin, escalaMax } = calcularNotaRubrica(rubrica, nivelesElegidos, config);
+  return (
+    <div className="bg-white rounded-lg p-3 border border-violet-100 space-y-2">
+      {rubrica.map((c, i) => (
+        <div key={i}>
+          <div className="text-[11px] font-semibold text-slate-600 mb-1">{c.criterio}</div>
+          <div className="flex flex-wrap gap-1.5">
+            {c.niveles.map((n, j) => (
+              <button key={j} onClick={() => onElegir(i, j)}
+                className={`text-[11px] px-2 py-1 rounded-full border ${nivelesElegidos[i] === j ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>
+                {n.nombre} ({n.puntos})
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+      <div className="text-xs text-slate-500 pt-1 border-t border-slate-100">
+        {obtenidos}/{maximos} pts → nota <b>{nota}</b> <span className="text-slate-400">(escala {escalaMin}–{escalaMax}, la misma de tu Planilla)</span>
+      </div>
+    </div>
+  );
+}
+
+function CalificarModal({ tarea, config, onClose, onCambio }) {
+  const [modo, setModo] = useState("individual"); // "individual" | "reino"
   const [entregas, setEntregas] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [editandoId, setEditandoId] = useState(null);
@@ -87,8 +131,19 @@ function CalificarModal({ tarea, onClose, onCambio }) {
   const [comentarioMasivo, setComentarioMasivo] = useState("");
   const [aplicandoMasivo, setAplicandoMasivo] = useState(false);
 
+  // --- Modo "Por Reino" ---
+  const [estudiantesGrado, setEstudiantesGrado] = useState([]);
+  const [reinoElegido, setReinoElegido] = useState(null);
+  const [notaReino, setNotaReino] = useState("");
+  const [comentarioReino, setComentarioReino] = useState("");
+  const [nivelesReino, setNivelesReino] = useState({});
+  const [aplicandoReino, setAplicandoReino] = useState(false);
+
   const cargar = () => { setCargando(true); api.fetchEntregasDeTarea(tarea.id).then((d) => { setEntregas(d); setCargando(false); }); };
   useEffect(() => { cargar(); }, [tarea.id]);
+  useEffect(() => {
+    if (modo === "reino" && tarea.grado_id) api.fetchEstudiantesPorGrado(tarea.grado_id).then(setEstudiantesGrado);
+  }, [modo, tarea.grado_id]);
 
   const guardarNota = async (estudianteId) => {
     const valor = parseFloat(notaTemp.replace(",", "."));
@@ -136,21 +191,8 @@ function CalificarModal({ tarea, onClose, onCambio }) {
     setNivelesElegidos(resultadoPrevio || {});
   };
 
-  const elegirNivel = (criterioIdx, nivelIdx) => setNivelesElegidos((prev) => ({ ...prev, [criterioIdx]: nivelIdx }));
-
-  const totalRubrica = () => {
-    let obtenidos = 0, maximos = 0;
-    tarea.rubrica.forEach((c, i) => {
-      const maxCriterio = Math.max(...c.niveles.map((n) => n.puntos));
-      maximos += maxCriterio;
-      const elegido = nivelesElegidos[i];
-      if (elegido !== undefined) obtenidos += c.niveles[elegido].puntos;
-    });
-    return { obtenidos, maximos, nota: maximos > 0 ? Math.round((obtenidos / maximos) * 5 * 10) / 10 : 0 };
-  };
-
   const guardarConRubrica = async (estudianteId) => {
-    const { nota } = totalRubrica();
+    const { nota } = calcularNotaRubrica(tarea.rubrica, nivelesElegidos, config);
     try {
       await api.calificarTarea(tarea, estudianteId, nota, "", nivelesElegidos);
       setRubricando(null);
@@ -189,6 +231,43 @@ function CalificarModal({ tarea, onClose, onCambio }) {
     setGuardandoCodice(false);
   };
 
+  // --- Lógica del modo "Por Reino" ---
+  const reinosAgrupados = {};
+  estudiantesGrado.forEach((e) => {
+    const r = e.reino_actual || e.reino_original || "Sin grupo";
+    (reinosAgrupados[r] = reinosAgrupados[r] || []).push(e);
+  });
+
+  const elegirReino = (reino) => {
+    setReinoElegido(reino);
+    setNotaReino(""); setComentarioReino(""); setNivelesReino({});
+  };
+
+  const aplicarAlReino = async () => {
+    const estudiantesDelReino = reinosAgrupados[reinoElegido] || [];
+    if (estudiantesDelReino.length === 0) return;
+    let nota;
+    if (tarea.rubrica?.length > 0) {
+      nota = calcularNotaRubrica(tarea.rubrica, nivelesReino, config).nota;
+    } else {
+      nota = parseFloat(notaReino.replace(",", "."));
+      if (isNaN(nota)) { alert("Escribe una nota válida."); return; }
+    }
+    if (!confirm(`¿Aplicar la nota ${nota} a los ${estudiantesDelReino.length} estudiantes de "${reinoElegido}"? Esto sobrescribe la nota que ya tuvieran en esta tarea.`)) return;
+    setAplicandoReino(true);
+    try {
+      for (const est of estudiantesDelReino) {
+        await api.calificarTarea(tarea, est.id, nota, comentarioReino, tarea.rubrica?.length > 0 ? nivelesReino : undefined);
+      }
+      setReinoElegido(null);
+      cargar();
+      onCambio();
+    } catch (e) {
+      alert("Error al calificar por reino: " + e.message);
+    }
+    setAplicandoReino(false);
+  };
+
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
@@ -198,113 +277,149 @@ function CalificarModal({ tarea, onClose, onCambio }) {
         </div>
         <p className="text-xs text-slate-500 mb-3">Al guardar una nota, se manda automáticamente a la columna "{tarea.titulo}" en la Planilla de Calificaciones.</p>
 
-        {notasDisponibles.length > 0 && (
-          <div className="bg-violet-50 rounded-xl p-3 mb-3">
-            <div className="text-[11px] font-semibold text-violet-700 mb-1.5">📝 Comentario masivo por nota</div>
-            <div className="flex gap-1.5 mb-2">
-              <select value={notaMasiva} onChange={(e) => setNotaMasiva(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
-                <option value="">Elegí un grupo…</option>
-                {notasDisponibles.map((n) => <option key={n} value={n}>Nota {n} ({gruposPorNota[n].length} estudiante{gruposPorNota[n].length !== 1 ? "s" : ""})</option>)}
-              </select>
-            </div>
-            <div className="flex gap-1.5">
-              <input value={comentarioMasivo} onChange={(e) => setComentarioMasivo(e.target.value)} placeholder="Comentario a aplicar a todo el grupo…"
-                className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
-              <button disabled={aplicandoMasivo} onClick={aplicarComentarioMasivo} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
-                {aplicandoMasivo ? "Aplicando…" : "Aplicar"}
-              </button>
-            </div>
-            <p className="text-[10px] text-slate-400 mt-1">Esto reemplaza el comentario de cada estudiante del grupo elegido — la nota no cambia.</p>
-          </div>
-        )}
+        <div className="flex gap-1 rounded-full bg-slate-100 p-1 mb-3 w-fit">
+          <button onClick={() => setModo("individual")} className={`text-xs px-3 py-1.5 rounded-full ${modo === "individual" ? "bg-violet-500 text-white" : "text-slate-600"}`}>👤 Individual</button>
+          <button onClick={() => setModo("reino")} className={`text-xs px-3 py-1.5 rounded-full ${modo === "reino" ? "bg-violet-500 text-white" : "text-slate-600"}`}>👥 Por Reino</button>
+        </div>
 
-        {cargando ? (
-          <div className="text-sm text-slate-400">Cargando…</div>
-        ) : (
-          <div className="space-y-1.5">
-            {entregas.map((e) => (
-              <div key={e.estudiante_id} className="bg-slate-50 rounded-lg px-3 py-2">
-                <div className="flex items-center justify-between flex-wrap gap-1.5">
-                  <span className="text-xs font-semibold text-slate-700">{e.estudiante_nombre}</span>
-                  <div className="flex items-center gap-1.5">
-                    {tarea.rubrica?.length > 0 && (
-                      <button onClick={() => abrirRubrica(e.estudiante_id, e.rubrica_resultado)} className="text-[11px] px-2 py-1 rounded-full border border-violet-200 text-violet-600">📊 Con rúbrica</button>
-                    )}
-                    {editandoId === e.estudiante_id ? (
-                      <div className="flex items-center gap-1.5">
-                        <input type="text" inputMode="decimal" value={notaTemp} onChange={(ev) => setNotaTemp(ev.target.value)} placeholder="Nota"
-                          className="w-16 text-xs text-center rounded px-2 py-1 border border-slate-200 outline-none" />
-                        <input type="text" value={comentarioTemp} onChange={(ev) => setComentarioTemp(ev.target.value)} placeholder="Comentario (opcional)"
-                          className="w-32 text-xs rounded px-2 py-1 border border-slate-200 outline-none" />
-                        <button onClick={() => guardarNota(e.estudiante_id)} className="text-xs px-2 py-1 rounded bg-violet-500 text-white">✔</button>
-                        <button onClick={() => setEditandoId(null)} className="text-xs text-slate-400">✕</button>
+        {modo === "reino" ? (
+          <div>
+            <p className="text-xs text-slate-500 mb-2">Elegí un reino para calificar a todos sus estudiantes con la misma nota de una sola vez.</p>
+            {estudiantesGrado.length === 0 ? (
+              <div className="text-sm text-slate-400">Cargando estudiantes…</div>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {Object.entries(reinosAgrupados).map(([reino, ests]) => (
+                    <button key={reino} onClick={() => elegirReino(reino)}
+                      className={`text-xs px-3 py-1.5 rounded-full border ${reinoElegido === reino ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>
+                      {reino} ({ests.length})
+                    </button>
+                  ))}
+                </div>
+                {reinoElegido && (
+                  <div className="bg-violet-50 rounded-xl p-3">
+                    <p className="text-xs font-semibold text-violet-700 mb-2">Calificando a los {reinosAgrupados[reinoElegido].length} estudiantes de "{reinoElegido}"</p>
+                    {tarea.rubrica?.length > 0 ? (
+                      <div className="mb-2">
+                        <SelectorRubrica rubrica={tarea.rubrica} nivelesElegidos={nivelesReino} config={config}
+                          onElegir={(i, j) => setNivelesReino((prev) => ({ ...prev, [i]: j }))} />
                       </div>
                     ) : (
-                      <button onClick={() => { setEditandoId(e.estudiante_id); setNotaTemp(e.nota ?? ""); setComentarioTemp(e.comentario || ""); }}
-                        className="text-xs px-2 py-1 rounded-full" style={{ background: e.nota !== null ? "#DCFCE7" : "#F1F5F9", color: e.nota !== null ? "#15803D" : "#64748B" }}>
-                        {e.nota !== null ? `Nota: ${e.nota}` : "Sin calificar"}
-                      </button>
+                      <div className="flex gap-1.5 mb-2">
+                        <input type="text" inputMode="decimal" value={notaReino} onChange={(e) => setNotaReino(e.target.value)} placeholder="Nota"
+                          className="w-20 text-sm text-center rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
+                        <input type="text" value={comentarioReino} onChange={(e) => setComentarioReino(e.target.value)} placeholder="Comentario (opcional, para todos)"
+                          className="flex-1 text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
+                      </div>
                     )}
-                    {tarea.recompensa_monedas > 0 && e.nota !== null && (
-                      e.monedas_entregadas ? (
-                        <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-2 py-1 rounded-full">🪙 Entregadas</span>
-                      ) : (
-                        <button disabled={dandoMonedas === e.estudiante_id} onClick={() => darMonedas(e.estudiante_id)}
-                          className="text-[10px] font-semibold text-white bg-amber-500 px-2 py-1 rounded-full disabled:opacity-50">
-                          {dandoMonedas === e.estudiante_id ? "…" : `🪙 Dar ${tarea.recompensa_monedas}`}
-                        </button>
-                      )
+                    {tarea.rubrica?.length > 0 && (
+                      <input type="text" value={comentarioReino} onChange={(e) => setComentarioReino(e.target.value)} placeholder="Comentario (opcional, para todos)"
+                        className="w-full text-sm rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none bg-white" />
                     )}
-                    <button onClick={() => { setCodiceAbiertoPara(codiceAbiertoPara === e.estudiante_id ? null : e.estudiante_id); setCodiceTexto(""); }}
-                      className="text-[10px] font-semibold text-violet-600 bg-violet-100 px-2 py-1 rounded-full">
-                      📖 Códice
+                    <button disabled={aplicandoReino} onClick={aplicarAlReino} className="w-full text-sm font-semibold py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+                      {aplicandoReino ? "Aplicando…" : `Aplicar a los ${reinosAgrupados[reinoElegido].length} estudiantes`}
                     </button>
                   </div>
-                </div>
-                {codiceAbiertoPara === e.estudiante_id && (
-                  <div className="mt-2 bg-white rounded-lg p-2 border border-violet-100">
-                    <div className="mb-1.5">
-                      <EditorTexto value={codiceTexto} onChange={setCodiceTexto} minHeight={60}
-                        placeholder={`Escribí algo sobre "${tarea.titulo}" para dejar en su Códice…`} />
-                    </div>
-                    <div className="flex justify-end gap-2">
-                      <button onClick={() => setCodiceAbiertoPara(null)} className="text-[11px] text-slate-400">Cancelar</button>
-                      <button disabled={guardandoCodice} onClick={() => dejarEnCodice(e.estudiante_id)} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-violet-500 text-white disabled:opacity-60">
-                        {guardandoCodice ? "Guardando…" : "Agregar al Códice"}
-                      </button>
-                    </div>
-                  </div>
                 )}
-                {rubricando === e.estudiante_id && (
-                  <div className="mt-2 bg-white rounded-lg p-3 border border-violet-100 space-y-2">
-                    {tarea.rubrica.map((c, i) => (
-                      <div key={i}>
-                        <div className="text-[11px] font-semibold text-slate-600 mb-1">{c.criterio}</div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {c.niveles.map((n, j) => (
-                            <button key={j} onClick={() => elegirNivel(i, j)}
-                              className={`text-[11px] px-2 py-1 rounded-full border ${nivelesElegidos[i] === j ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>
-                              {n.nombre} ({n.puntos})
+              </>
+            )}
+          </div>
+        ) : (
+          <>
+            {notasDisponibles.length > 0 && (
+              <div className="bg-violet-50 rounded-xl p-3 mb-3">
+                <div className="text-[11px] font-semibold text-violet-700 mb-1.5">📝 Comentario masivo por nota</div>
+                <div className="flex gap-1.5 mb-2">
+                  <select value={notaMasiva} onChange={(e) => setNotaMasiva(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
+                    <option value="">Elegí un grupo…</option>
+                    {notasDisponibles.map((n) => <option key={n} value={n}>Nota {n} ({gruposPorNota[n].length} estudiante{gruposPorNota[n].length !== 1 ? "s" : ""})</option>)}
+                  </select>
+                </div>
+                <div className="flex gap-1.5">
+                  <input value={comentarioMasivo} onChange={(e) => setComentarioMasivo(e.target.value)} placeholder="Comentario a aplicar a todo el grupo…"
+                    className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
+                  <button disabled={aplicandoMasivo} onClick={aplicarComentarioMasivo} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+                    {aplicandoMasivo ? "Aplicando…" : "Aplicar"}
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">Esto reemplaza el comentario de cada estudiante del grupo elegido — la nota no cambia.</p>
+              </div>
+            )}
+
+            {cargando ? (
+              <div className="text-sm text-slate-400">Cargando…</div>
+            ) : (
+              <div className="space-y-1.5">
+                {entregas.map((e) => (
+                  <div key={e.estudiante_id} className="bg-slate-50 rounded-lg px-3 py-2">
+                    <div className="flex items-center justify-between flex-wrap gap-1.5">
+                      <span className="text-xs font-semibold text-slate-700">{e.estudiante_nombre}</span>
+                      <div className="flex items-center gap-1.5">
+                        {tarea.rubrica?.length > 0 && (
+                          <button onClick={() => abrirRubrica(e.estudiante_id, e.rubrica_resultado)} className="text-[11px] px-2 py-1 rounded-full border border-violet-200 text-violet-600">📊 Con rúbrica</button>
+                        )}
+                        {editandoId === e.estudiante_id ? (
+                          <div className="flex items-center gap-1.5">
+                            <input type="text" inputMode="decimal" value={notaTemp} onChange={(ev) => setNotaTemp(ev.target.value)} placeholder="Nota"
+                              className="w-16 text-xs text-center rounded px-2 py-1 border border-slate-200 outline-none" />
+                            <input type="text" value={comentarioTemp} onChange={(ev) => setComentarioTemp(ev.target.value)} placeholder="Comentario (opcional)"
+                              className="w-32 text-xs rounded px-2 py-1 border border-slate-200 outline-none" />
+                            <button onClick={() => guardarNota(e.estudiante_id)} className="text-xs px-2 py-1 rounded bg-violet-500 text-white">✔</button>
+                            <button onClick={() => setEditandoId(null)} className="text-xs text-slate-400">✕</button>
+                          </div>
+                        ) : (
+                          <button onClick={() => { setEditandoId(e.estudiante_id); setNotaTemp(e.nota ?? ""); setComentarioTemp(e.comentario || ""); }}
+                            className="text-xs px-2 py-1 rounded-full" style={{ background: e.nota !== null ? "#DCFCE7" : "#F1F5F9", color: e.nota !== null ? "#15803D" : "#64748B" }}>
+                            {e.nota !== null ? `Nota: ${e.nota}` : "Sin calificar"}
+                          </button>
+                        )}
+                        {tarea.recompensa_monedas > 0 && e.nota !== null && (
+                          e.monedas_entregadas ? (
+                            <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-2 py-1 rounded-full">🪙 Entregadas</span>
+                          ) : (
+                            <button disabled={dandoMonedas === e.estudiante_id} onClick={() => darMonedas(e.estudiante_id)}
+                              className="text-[10px] font-semibold text-white bg-amber-500 px-2 py-1 rounded-full disabled:opacity-50">
+                              {dandoMonedas === e.estudiante_id ? "…" : `🪙 Dar ${tarea.recompensa_monedas}`}
                             </button>
-                          ))}
+                          )
+                        )}
+                        <button onClick={() => { setCodiceAbiertoPara(codiceAbiertoPara === e.estudiante_id ? null : e.estudiante_id); setCodiceTexto(""); }}
+                          className="text-[10px] font-semibold text-violet-600 bg-violet-100 px-2 py-1 rounded-full">
+                          📖 Códice
+                        </button>
+                      </div>
+                    </div>
+                    {codiceAbiertoPara === e.estudiante_id && (
+                      <div className="mt-2 bg-white rounded-lg p-2 border border-violet-100">
+                        <div className="mb-1.5">
+                          <EditorTexto value={codiceTexto} onChange={setCodiceTexto} minHeight={60}
+                            placeholder={`Escribí algo sobre "${tarea.titulo}" para dejar en su Códice…`} />
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <button onClick={() => setCodiceAbiertoPara(null)} className="text-[11px] text-slate-400">Cancelar</button>
+                          <button disabled={guardandoCodice} onClick={() => dejarEnCodice(e.estudiante_id)} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+                            {guardandoCodice ? "Guardando…" : "Agregar al Códice"}
+                          </button>
                         </div>
                       </div>
-                    ))}
-                    <div className="flex items-center justify-between pt-1 border-t border-slate-100">
-                      <span className="text-xs text-slate-500">
-                        {totalRubrica().obtenidos}/{totalRubrica().maximos} pts → nota <b>{totalRubrica().nota}</b>
-                      </span>
-                      <div className="flex gap-2">
-                        <button onClick={() => setRubricando(null)} className="text-[11px] text-slate-400">Cancelar</button>
-                        <button onClick={() => guardarConRubrica(e.estudiante_id)} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-violet-500 text-white">Guardar nota</button>
+                    )}
+                    {rubricando === e.estudiante_id && (
+                      <div className="mt-2">
+                        <SelectorRubrica rubrica={tarea.rubrica} nivelesElegidos={nivelesElegidos} config={config}
+                          onElegir={(i, j) => setNivelesElegidos((prev) => ({ ...prev, [i]: j }))} />
+                        <div className="flex justify-end gap-2 mt-2">
+                          <button onClick={() => setRubricando(null)} className="text-[11px] text-slate-400">Cancelar</button>
+                          <button onClick={() => guardarConRubrica(e.estudiante_id)} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-violet-500 text-white">Guardar nota</button>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
-                )}
+                ))}
+                {entregas.length === 0 && <p className="text-xs text-slate-400">Todavía nadie tiene registro. Se irán agregando cuando califiques a cada estudiante.</p>}
               </div>
-            ))}
-            {entregas.length === 0 && <p className="text-xs text-slate-400">Todavía nadie tiene registro. Se irán agregando cuando califiques a cada estudiante.</p>}
-          </div>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -412,9 +527,10 @@ function CopiarTareaModal({ tarea, materias, grados, onClose, onCopiada }) {
   );
 }
 
-function RubricaTareaModal({ tarea, onClose, onGuardada }) {
+function RubricaTareaModal({ tarea, config, onClose, onGuardada }) {
+  const NIVELES_INICIALES = () => [{ nombre: "Alto", puntos: 5 }, { nombre: "Medio", puntos: 3 }, { nombre: "Bajo", puntos: 1 }];
   const [criterios, setCriterios] = useState(
-    tarea.rubrica?.length ? tarea.rubrica : [{ criterio: "", niveles: [{ nombre: "Alto", puntos: 5 }, { nombre: "Medio", puntos: 3 }, { nombre: "Bajo", puntos: 1 }] }]
+    tarea.rubrica?.length ? tarea.rubrica : [{ criterio: "", niveles: NIVELES_INICIALES() }]
   );
   const [guardando, setGuardando] = useState(false);
 
@@ -422,13 +538,23 @@ function RubricaTareaModal({ tarea, onClose, onGuardada }) {
   const actualizarNivel = (i, j, campo, valor) => setCriterios((prev) => prev.map((c, idx) => idx === i
     ? { ...c, niveles: c.niveles.map((n, k) => k === j ? { ...n, [campo]: campo === "puntos" ? parseFloat(valor) || 0 : valor } : n) }
     : c));
-  const agregarCriterio = () => setCriterios((prev) => [...prev, { criterio: "", niveles: [{ nombre: "Alto", puntos: 5 }, { nombre: "Medio", puntos: 3 }, { nombre: "Bajo", puntos: 1 }] }]);
+  const agregarCriterio = () => setCriterios((prev) => [...prev, { criterio: "", niveles: NIVELES_INICIALES() }]);
   const quitarCriterio = (i) => setCriterios((prev) => prev.filter((_, idx) => idx !== i));
 
+  // Niveles ahora totalmente ajustables — antes quedaban fijos en 3 por criterio.
+  const agregarNivel = (i) => setCriterios((prev) => prev.map((c, idx) => idx === i ? { ...c, niveles: [...c.niveles, { nombre: "Nuevo nivel", puntos: 0 }] } : c));
+  const quitarNivel = (i, j) => setCriterios((prev) => prev.map((c, idx) => {
+    if (idx !== i) return c;
+    if (c.niveles.length <= 1) { alert("Cada criterio necesita al menos un nivel."); return c; }
+    return { ...c, niveles: c.niveles.filter((_, k) => k !== j) };
+  }));
+
   const guardar = async () => {
+    const limpios = criterios.filter((c) => c.criterio.trim());
+    if (limpios.some((c) => c.niveles.length === 0)) { alert("Cada criterio necesita al menos un nivel."); return; }
     setGuardando(true);
     try {
-      await api.guardarRubricaTareaCalificable(tarea.id, criterios.filter((c) => c.criterio.trim()));
+      await api.guardarRubricaTareaCalificable(tarea.id, limpios);
       onGuardada();
     } catch (e) {
       alert("Error al guardar: " + e.message);
@@ -448,6 +574,9 @@ function RubricaTareaModal({ tarea, onClose, onGuardada }) {
     setGuardando(false);
   };
 
+  const escalaMin = config?.escala_min ?? 1;
+  const escalaMax = config?.nota_maxima ?? 5;
+
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-xl">
@@ -455,8 +584,11 @@ function RubricaTareaModal({ tarea, onClose, onGuardada }) {
           <h3 className="font-bold text-slate-800">📊 Rúbrica — {tarea.titulo}</h3>
           <button onClick={onClose} className="text-slate-400">✕</button>
         </div>
+        <p className="text-xs text-slate-500 mb-1">
+          Definí los criterios y sus niveles con puntos — podés agregar o quitar tanto criterios como niveles, no hay un número fijo.
+        </p>
         <p className="text-xs text-slate-500 mb-3">
-          Definí los criterios y sus niveles con puntos. Al calificar, elegís el nivel de cada criterio y la nota se calcula sola (suma de puntos, ajustada a una escala de 1 a 5).
+          Al calificar, elegís el nivel de cada criterio y la nota se calcula sola, ajustada a la escala real de tu Planilla ({escalaMin}–{escalaMax}).
         </p>
 
         <div className="space-y-3 mb-4">
@@ -467,15 +599,19 @@ function RubricaTareaModal({ tarea, onClose, onGuardada }) {
                   className="flex-1 text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
                 <button onClick={() => quitarCriterio(i)} className="text-slate-300 hover:text-rose-500">🗑</button>
               </div>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="flex flex-wrap gap-2">
                 {c.niveles.map((n, j) => (
-                  <div key={j} className="bg-slate-50 rounded-lg p-2">
+                  <div key={j} className="bg-slate-50 rounded-lg p-2 relative" style={{ width: 110 }}>
+                    <button onClick={() => quitarNivel(i, j)} className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-rose-400 text-white text-[9px] flex items-center justify-center" title="Quitar este nivel">✕</button>
                     <input value={n.nombre} onChange={(e) => actualizarNivel(i, j, "nombre", e.target.value)}
                       className="w-full text-xs font-semibold rounded px-1 py-1 border border-slate-200 outline-none mb-1" />
                     <input type="number" value={n.puntos} onChange={(e) => actualizarNivel(i, j, "puntos", e.target.value)}
                       className="w-full text-xs rounded px-1 py-1 border border-slate-200 outline-none" placeholder="Puntos" />
                   </div>
                 ))}
+                <button onClick={() => agregarNivel(i)} className="text-xs text-violet-500 border border-dashed border-violet-300 rounded-lg px-3" style={{ width: 110 }}>
+                  + Nivel
+                </button>
               </div>
             </div>
           ))}
@@ -495,7 +631,7 @@ function RubricaTareaModal({ tarea, onClose, onGuardada }) {
   );
 }
 
-function TareaCard({ tarea, categorias, materias, grados, onCambio }) {
+function TareaCard({ tarea, categorias, materias, grados, config, onCambio }) {
   const [calificando, setCalificando] = useState(false);
   const [editando, setEditando] = useState(false);
   const [copiando, setCopiando] = useState(false);
@@ -532,9 +668,9 @@ function TareaCard({ tarea, categorias, materias, grados, onCambio }) {
           <button onClick={eliminar} className="text-xs text-slate-400 hover:text-rose-500">🗑</button>
         </div>
       </div>
-      {calificando && <CalificarModal tarea={tarea} onClose={() => setCalificando(false)} onCambio={onCambio} />}
+      {calificando && <CalificarModal tarea={tarea} config={config} onClose={() => setCalificando(false)} onCambio={onCambio} />}
       {copiando && <CopiarTareaModal tarea={tarea} materias={materias} grados={grados} onClose={() => setCopiando(false)} onCopiada={onCambio} />}
-      {rubricaAbierta && <RubricaTareaModal tarea={tarea} onClose={() => setRubricaAbierta(false)} onGuardada={() => { setRubricaAbierta(false); onCambio(); }} />}
+      {rubricaAbierta && <RubricaTareaModal tarea={tarea} config={config} onClose={() => setRubricaAbierta(false)} onGuardada={() => { setRubricaAbierta(false); onCambio(); }} />}
     </div>
   );
 }
@@ -618,7 +754,7 @@ export function VistaProyectosForja({ grados, gradoActivo, periodoActivo, materi
           Todavía no hay {tipo === "proyecto" ? "proyectos" : "talleres"} para este periodo.
         </div>
       ) : (
-        tareas.map((t) => <TareaCard key={t.id} tarea={t} categorias={categorias} materias={materias} grados={grados} onCambio={cargar} />)
+        tareas.map((t) => <TareaCard key={t.id} tarea={t} categorias={categorias} materias={materias} grados={grados} config={config} onCambio={cargar} />)
       )}
     </div>
   );
