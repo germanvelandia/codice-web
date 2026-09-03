@@ -2091,7 +2091,7 @@ const MENU_PANEL_GRUPOS = [
     key: "academico", label: "Académico", icono: "🎓", items: [
       { key: "estudiantes", label: "Estudiantes", icono: "🏰" },
       { key: "asistencia", label: "Asistencia", icono: "📋" },
-      { key: "calificaciones", label: "Códice", icono: "📖" },
+      { key: "calificaciones", label: "Planillas", icono: "📖" },
       { key: "evaluaciones", label: "Misiones", icono: "⚔️" },
       { key: "proyectosforja", label: "La Forja", icono: "🔨" },
       { key: "planeaciones", label: "Planeaciones", icono: "📝" },
