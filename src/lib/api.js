@@ -1430,6 +1430,64 @@ export async function aplicarRecompensasRetroactivas(actividadProgramadaId) {
   return otorgadas;
 }
 
+// Junta, cruzando todas las materias/cursos del docente, lo que está
+// esperando revisión: intentos de Misiones ya entregados pero sin publicar,
+// y estudiantes de Proyectos/Forja todavía sin nota. Se usa en "Entregas
+// por revisar" para no tener que ir materia por materia a buscarlo.
+export async function fetchResumenEntregasPorRevisar() {
+  const { data: userData } = await supabase.auth.getUser();
+  const docenteId = userData?.user?.id;
+  if (!docenteId) return { evaluaciones: [], tareas: [] };
+
+  // ---- Misiones (evaluaciones) entregadas y sin publicar ----
+  const { data: evals, error: e1 } = await supabase.from("evaluaciones").select("id, titulo, grado_id, materia_id, periodo, materias(nombre)").eq("docente_id", docenteId);
+  if (e1) throw e1;
+  const evalIds = (evals || []).map((e) => e.id);
+  let intentos = [];
+  if (evalIds.length > 0) {
+    const { data, error: e2 } = await supabase.from("evaluacion_intentos").select("evaluacion_id, estudiante_id, estado, visible_para_estudiante")
+      .in("evaluacion_id", evalIds).neq("estado", "en_progreso").eq("visible_para_estudiante", false);
+    if (e2) throw e2;
+    intentos = data || [];
+  }
+  const evalPorId = {}; (evals || []).forEach((e) => { evalPorId[e.id] = e; });
+  const conteoEval = {}; // evaluacion_id -> cantidad
+  intentos.forEach((i) => { conteoEval[i.evaluacion_id] = (conteoEval[i.evaluacion_id] || 0) + 1; });
+  const evaluacionesPendientes = Object.entries(conteoEval).map(([evalId, cantidad]) => {
+    const ev = evalPorId[evalId];
+    return { grado_id: ev?.grado_id, materia_id: ev?.materia_id, periodo: ev?.periodo, materia_nombre: ev?.materias?.nombre, titulo: ev?.titulo, cantidad };
+  }).filter((x) => x.grado_id);
+
+  // ---- Proyectos/Forja sin calificar todavía ----
+  const { data: tareas, error: e3 } = await supabase.from("tareas_calificables").select("id, titulo, tipo, grado_id, materia_id, periodo, materias(nombre)").eq("docente_id", docenteId);
+  if (e3) throw e3;
+  const tareaIds = (tareas || []).map((t) => t.id);
+  let calificadas = [];
+  if (tareaIds.length > 0) {
+    const { data, error: e4 } = await supabase.from("tarea_entregas").select("tarea_id, estudiante_id").in("tarea_id", tareaIds).not("nota", "is", null);
+    if (e4) throw e4;
+    calificadas = data || [];
+  }
+  const calificadosPorTarea = {};
+  calificadas.forEach((e) => { (calificadosPorTarea[e.tarea_id] = calificadosPorTarea[e.tarea_id] || new Set()).add(e.estudiante_id); });
+
+  const gradosUnicos = [...new Set((tareas || []).map((t) => t.grado_id))];
+  const estudiantesPorGrado = {};
+  await Promise.all(gradosUnicos.map(async (g) => {
+    const { data } = await supabase.from("estudiantes").select("id").eq("grado_id", g);
+    estudiantesPorGrado[g] = (data || []).map((e) => e.id);
+  }));
+
+  const tareasPendientes = (tareas || []).map((t) => {
+    const totalGrado = estudiantesPorGrado[t.grado_id]?.length || 0;
+    const yaCalificados = calificadosPorTarea[t.id]?.size || 0;
+    const cantidad = totalGrado - yaCalificados;
+    return { grado_id: t.grado_id, materia_id: t.materia_id, periodo: t.periodo, materia_nombre: t.materias?.nombre, titulo: t.titulo, tipo: t.tipo, cantidad };
+  }).filter((x) => x.cantidad > 0);
+
+  return { evaluaciones: evaluacionesPendientes, tareas: tareasPendientes };
+}
+
 export async function fetchPremios() {
   const { data, error } = await supabase.from("banco_premios").select("*").order("costo_monedas");
   if (error) throw error;
