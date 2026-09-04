@@ -783,6 +783,30 @@ function UnidadCard({ unidad, institucion, materiaNombre, materias, gradoId, gra
         </div>
       ) : (
         <>
+          {unidad.formato === "mision" && (
+            <div className="mt-1 mb-2">
+              {unidad.area && (
+                <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full mb-2"
+                  style={{ background: unidad.area === "ET" ? "#EDE9FE" : unidad.area === "RE" ? "#FEF3C7" : "#DBEAFE", color: unidad.area === "ET" ? "#7C3AED" : unidad.area === "RE" ? "#B45309" : "#1D4ED8" }}>
+                  {unidad.area === "ET" ? "🏛️ Ética" : unidad.area === "RE" ? "✝️ Religión" : "⚜️ Integrada"}
+                </span>
+              )}
+              <div className="space-y-1">
+                {[
+                  { icono: "👁️", label: "VER", texto: unidad.momento_ver, xp: unidad.xp_ver },
+                  { icono: "⚖️", label: "JUZGAR", texto: unidad.momento_juzgar, xp: unidad.xp_juzgar },
+                  { icono: "🖐️", label: "ACTUAR", texto: unidad.momento_actuar, xp: unidad.xp_actuar },
+                  { icono: "🔨", label: "FORJA", texto: unidad.momento_forja, xp: unidad.xp_forja },
+                  { icono: "📢", label: "TESTIMONIAR", texto: unidad.momento_testimoniar, xp: unidad.xp_testimoniar },
+                  { icono: "📖", label: "MI CÓDICE", texto: unidad.momento_codice, xp: unidad.xp_codice },
+                ].filter((m) => m.texto).map((m) => (
+                  <div key={m.label} className="text-xs text-slate-600 bg-slate-50 rounded-lg px-2.5 py-1.5">
+                    <span className="font-bold">{m.icono} {m.label}</span> — {m.texto} <span className="text-violet-500 font-semibold">(+{m.xp} XP)</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {unidad.objetivo && <p className="text-xs text-slate-500 mt-1"><b>Finalidad/objetivo:</b> {unidad.objetivo}</p>}
           {unidad.contenido && <p className="text-xs text-slate-500 mt-1 whitespace-pre-line"><b>Contenidos:</b> {unidad.contenido}</p>}
           {unidad.problema_proyecto && (
@@ -970,6 +994,12 @@ function NuevaUnidadForm({ materiaId, materias, gradoId, periodo, orden, onCance
   const [alcance, setAlcance] = useState("grado"); // "grado" | "curso"
   const [materiasExtra, setMateriasExtra] = useState([]);
   const [guardando, setGuardando] = useState(false);
+  const [formato, setFormato] = useState("generico"); // "generico" | "mision"
+  const [area, setArea] = useState("ET");
+  const [momentos, setMomentos] = useState({
+    ver: "", juzgar: "", actuar: "", forja: "", testimoniar: "", codice: "",
+  });
+  const [xp, setXp] = useState({ ver: 10, juzgar: 20, actuar: 20, forja: 50, testimoniar: 30, codice: 20 });
 
   const { nivel, curso } = nivelYCurso(gradoId);
   const gradoIdAGuardar = alcance === "grado" ? nivel : gradoId;
@@ -981,10 +1011,22 @@ function NuevaUnidadForm({ materiaId, materias, gradoId, periodo, orden, onCance
     if (!titulo.trim()) { alert("Escribe un título para la unidad/tema."); return; }
     setGuardando(true);
     try {
-      await api.crearPlaneacion({
+      const campos = {
         tipo: "unidad", materia_id: materiaId, materias_extra: materiasExtra, grado_id: gradoIdAGuardar, periodo,
-        titulo: titulo.trim(), objetivo: objetivo.trim() || null, orden,
-      });
+        titulo: titulo.trim(), objetivo: objetivo.trim() || null, orden, formato,
+      };
+      if (formato === "mision") {
+        Object.assign(campos, {
+          area,
+          momento_ver: momentos.ver.trim() || null, xp_ver: parseInt(xp.ver, 10) || 0,
+          momento_juzgar: momentos.juzgar.trim() || null, xp_juzgar: parseInt(xp.juzgar, 10) || 0,
+          momento_actuar: momentos.actuar.trim() || null, xp_actuar: parseInt(xp.actuar, 10) || 0,
+          momento_forja: momentos.forja.trim() || null, xp_forja: parseInt(xp.forja, 10) || 0,
+          momento_testimoniar: momentos.testimoniar.trim() || null, xp_testimoniar: parseInt(xp.testimoniar, 10) || 0,
+          momento_codice: momentos.codice.trim() || null, xp_codice: parseInt(xp.codice, 10) || 0,
+        });
+      }
+      await api.crearPlaneacion(campos);
       onCreada();
     } catch (e) {
       alert("Error al guardar: " + e.message);
@@ -992,12 +1034,54 @@ function NuevaUnidadForm({ materiaId, materias, gradoId, periodo, orden, onCance
     setGuardando(false);
   };
 
+  const MOMENTOS_INFO = [
+    { key: "ver", icono: "👁️", label: "VER", placeholder: "Caso, dilema, imagen o experiencia que se presenta…" },
+    { key: "juzgar", icono: "⚖️", label: "JUZGAR", placeholder: "Fuente, marco ético/religioso o concepto para analizar…" },
+    { key: "actuar", icono: "🖐️", label: "ACTUAR", placeholder: "Decisión, postura o propuesta que toma el estudiante…" },
+    { key: "forja", icono: "🔨", label: "CREAR / FORJA", placeholder: "Producto concreto que van a construir…" },
+    { key: "testimoniar", icono: "📢", label: "TESTIMONIAR", placeholder: "Cómo van a presentar y defender lo aprendido…" },
+    { key: "codice", icono: "📖", label: "MI CÓDICE", placeholder: "Pregunta de reflexión para el diario personal…" },
+  ];
+
   return (
     <div className="bg-violet-50 rounded-2xl p-4 mb-3">
-      <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título de la unidad/tema (ej: Unidad 1 — Números racionales)"
+      <div className="flex gap-1 rounded-full bg-white p-1 w-fit border border-slate-200 mb-3">
+        <button onClick={() => setFormato("generico")} className={`text-xs px-3 py-1.5 rounded-full ${formato === "generico" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📝 Genérico</button>
+        <button onClick={() => setFormato("mision")} className={`text-xs px-3 py-1.5 rounded-full ${formato === "mision" ? "bg-violet-500 text-white" : "text-slate-600"}`}>⚔️ Misión</button>
+      </div>
+
+      <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder={formato === "mision" ? "Nombre de la misión (ej: M01 · El Gobernante Ético)" : "Título de la unidad/tema (ej: Unidad 1 — Números racionales)"}
         className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
       <input value={objetivo} onChange={(e) => setObjetivo(e.target.value)} placeholder="Objetivo de aprendizaje (opcional)"
         className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none bg-white" />
+
+      {formato === "mision" && (
+        <div className="mb-3">
+          <label className="text-xs text-slate-500 block mb-1">Área</label>
+          <div className="flex gap-1.5 mb-3">
+            <button onClick={() => setArea("ET")} className={`text-xs px-3 py-1.5 rounded-full border ${area === "ET" ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>🏛️ [ET] Ética</button>
+            <button onClick={() => setArea("RE")} className={`text-xs px-3 py-1.5 rounded-full border ${area === "RE" ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>✝️ [RE] Religión</button>
+            <button onClick={() => setArea("IN")} className={`text-xs px-3 py-1.5 rounded-full border ${area === "IN" ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>⚜️ [IN] Integrada</button>
+          </div>
+
+          <div className="space-y-2">
+            {MOMENTOS_INFO.map((m) => (
+              <div key={m.key} className="bg-white rounded-xl p-2.5 border border-slate-200">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-xs font-bold text-slate-600">{m.icono} {m.label}</span>
+                  <div className="flex items-center gap-1 ml-auto">
+                    <span className="text-[10px] text-slate-400">XP</span>
+                    <input type="number" value={xp[m.key]} onChange={(e) => setXp((prev) => ({ ...prev, [m.key]: e.target.value }))}
+                      className="w-14 text-xs text-center rounded px-1 py-0.5 border border-slate-200 outline-none" />
+                  </div>
+                </div>
+                <input value={momentos[m.key]} onChange={(e) => setMomentos((prev) => ({ ...prev, [m.key]: e.target.value }))}
+                  placeholder={m.placeholder} className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {otrasMaterias.length > 0 && (
         <div className="mb-3">
@@ -1030,7 +1114,7 @@ function NuevaUnidadForm({ materiaId, materias, gradoId, periodo, orden, onCance
       <div className="flex justify-end gap-2">
         <button onClick={onCancelar} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
         <button disabled={guardando} onClick={guardar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
-          {guardando ? "Guardando…" : "Crear unidad"}
+          {guardando ? "Guardando…" : formato === "mision" ? "Crear misión" : "Crear unidad"}
         </button>
       </div>
     </div>
