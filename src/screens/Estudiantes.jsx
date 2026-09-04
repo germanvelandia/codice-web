@@ -7,6 +7,7 @@ import { EditorTexto, TextoEnriquecido } from "../components/RichText";
 
 // (REINO_COLORS ahora se importa directo desde gamification.js, ver arriba)
 import * as api from "../lib/api";
+import { EmojiPicker } from "../components/EmojiPicker";
 import { ActasModal } from "./Actas";
 import { RemisionModal } from "./Remision";
 import { ResumenEstudianteModal } from "./Resumen";
@@ -61,8 +62,7 @@ function AccionGamificacionForm({ tab, accion, onCancelar, onGuardado }) {
   return (
     <div className="bg-violet-50 rounded-xl p-3 mb-2">
       <div className="flex gap-2 mb-2">
-        <input value={emoji} onChange={(e) => setEmoji(e.target.value)} placeholder="🙂" maxLength={4}
-          className="w-14 text-sm text-center rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
+        <EmojiPicker value={emoji} onChange={setEmoji} />
         <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Nombre de la acción"
           className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
       </div>
