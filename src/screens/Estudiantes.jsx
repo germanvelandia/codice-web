@@ -2454,12 +2454,84 @@ function ImportarDirectorioInstitucionalModal({ onClose }) {
   );
 }
 
+// Papelera de estudiantes "quitados" — se pueden restaurar sin tocar
+// Supabase directamente, o borrarlos de verdad si ya no hacen falta.
+function PapeleraModal({ onClose, onCambio }) {
+  const [inactivos, setInactivos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [ocupado, setOcupado] = useState(null);
+
+  const cargar = () => { setCargando(true); api.fetchEstudiantesInactivos().then((d) => { setInactivos(d); setCargando(false); }); };
+  useEffect(() => { cargar(); }, []);
+
+  const restaurar = async (e) => {
+    setOcupado(e.id);
+    try {
+      await api.restaurarEstudiante(e.id);
+      cargar();
+      onCambio();
+    } catch (err) {
+      alert("Error al restaurar: " + err.message);
+    }
+    setOcupado(null);
+  };
+
+  const borrarDefinitivo = async (e) => {
+    if (!confirm(`¿Eliminar a ${e.nombre} PARA SIEMPRE? Se borran también todas sus notas, asistencia, puntos e historial. Esto NO se puede deshacer — si tenés dudas, mejor dejalo en la papelera.`)) return;
+    setOcupado(e.id);
+    try {
+      await api.eliminarEstudiantePermanente(e.id);
+      cargar();
+    } catch (err) {
+      alert("Error al eliminar: " + err.message);
+    }
+    setOcupado(null);
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="font-bold text-slate-800">🗑️ Papelera de estudiantes</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-500 mb-3">Estudiantes que quitaste de algún curso — siguen acá con todos sus datos hasta que los restaures o los borres para siempre.</p>
+        {cargando ? (
+          <div className="text-sm text-slate-400">Cargando…</div>
+        ) : inactivos.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-6">La papelera está vacía.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {inactivos.map((e) => (
+              <div key={e.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-slate-700 truncate">{e.nombre}</div>
+                  <div className="text-[11px] text-slate-400">Curso {e.grado_id}{(e.reino_actual || e.reino_original) ? ` · ${e.reino_actual || e.reino_original}` : ""}</div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button disabled={ocupado === e.id} onClick={() => restaurar(e)} className="text-[11px] font-semibold px-2.5 py-1.5 rounded-full bg-violet-500 text-white disabled:opacity-50">
+                    {ocupado === e.id ? "…" : "♻️ Restaurar"}
+                  </button>
+                  <button disabled={ocupado === e.id} onClick={() => borrarDefinitivo(e)} className="text-[11px] font-semibold px-2.5 py-1.5 rounded-full border border-rose-200 text-rose-500 disabled:opacity-50">
+                    🗑 Borrar para siempre
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function VistaGrados({ onElegirGrado }) {
   const [grados, setGrados] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [nuevoGrado, setNuevoGrado] = useState("");
   const [editandoColorDe, setEditandoColorDe] = useState(null);
   const [importarAbierto, setImportarAbierto] = useState(false);
+  const [papeleraAbierta, setPapeleraAbierta] = useState(false);
 
   const cargar = async () => {
     setCargando(true);
@@ -2507,6 +2579,7 @@ export function VistaGrados({ onElegirGrado }) {
             className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none w-40" />
           <button onClick={crear} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white">Crear</button>
           <button onClick={() => setImportarAbierto(true)} className="text-sm font-semibold px-4 py-2 rounded-lg border border-slate-200 text-slate-600">🗂️ Importar directorio</button>
+          <button onClick={() => setPapeleraAbierta(true)} className="text-sm font-semibold px-4 py-2 rounded-lg border border-slate-200 text-slate-600">🗑️ Papelera</button>
         </div>
       </div>
       <p className="text-xs text-slate-400 mb-3">El color de cada grado se usa automáticamente en el calendario de Horario y en otros lugares de la app. Tocá el círculo de color para cambiarlo. Los cursos ocultos (atenuados) no aparecen en los selectores del resto de la app, pero siguen existiendo con todos sus datos — tocá "👁️ Mostrar" para recuperarlos.</p>
@@ -2543,6 +2616,7 @@ export function VistaGrados({ onElegirGrado }) {
         </div>
       )}
       {importarAbierto && <ImportarDirectorioInstitucionalModal onClose={() => setImportarAbierto(false)} />}
+      {papeleraAbierta && <PapeleraModal onClose={() => setPapeleraAbierta(false)} onCambio={cargar} />}
     </div>
   );
 }
