@@ -186,6 +186,28 @@ export async function quitarEstudiante(id) {
   if (error) throw error;
 }
 
+// Papelera de estudiantes — trae a todos los que están "quitados" (activo:
+// false) de cualquier curso, para poder restaurarlos sin depender de
+// Supabase directamente.
+export async function fetchEstudiantesInactivos() {
+  const { data, error } = await supabase.from("estudiantes").select("id, nombre, grado_id, reino_actual, reino_original").eq("activo", false).order("nombre");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function restaurarEstudiante(id) {
+  const { error } = await supabase.from("estudiantes").update({ activo: true }).eq("id", id);
+  if (error) throw error;
+}
+
+// Borrado real y definitivo — a diferencia de "quitar", esto sí borra al
+// estudiante y (por las relaciones en cascada) todos sus datos. No hay
+// vuelta atrás desde acá.
+export async function eliminarEstudiantePermanente(id) {
+  const { error } = await supabase.from("estudiantes").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function cambiarReino(id, reino_actual) {
   const { error } = await supabase.from("estudiantes").update({ reino_actual }).eq("id", id);
   if (error) throw error;
