@@ -9,6 +9,7 @@ import { buscarEstudiantePorNombre, agruparPorNivel, nivelYCurso, initials } fro
 import { ActasModal } from "./Actas";
 import { InclusionBadge, FotoLightbox } from "./Estudiantes";
 import { EditorTexto, TextoEnriquecido, textoPlano } from "../components/RichText";
+import { calcularNotaRubrica, SelectorRubrica } from "../components/Rubrica";
 
 function MiniAvatarCal({ estudiante, size = 22 }) {
   const [ampliada, setAmpliada] = useState(false);
@@ -992,6 +993,174 @@ function colorCategoria(nombre) {
   return PALETA_CATEGORIAS[Math.abs(hash) % PALETA_CATEGORIAS.length];
 }
 
+// Editor de rúbrica para una actividad puntual de la Planilla — igual
+// mecánica que en La Forja: se puede cargar desde el catálogo reutilizable,
+// o armar acá mismo y guardarla como plantilla nueva.
+function RubricaActividadModal({ actividad, config, onClose, onGuardada }) {
+  const NIVELES_INICIALES = () => [{ nombre: "Alto", puntos: 5 }, { nombre: "Medio", puntos: 3 }, { nombre: "Bajo", puntos: 1 }];
+  const [criterios, setCriterios] = useState(actividad.rubrica?.length ? actividad.rubrica : [{ criterio: "", niveles: NIVELES_INICIALES() }]);
+  const [guardando, setGuardando] = useState(false);
+  const [catalogo, setCatalogo] = useState([]);
+  const [plantillaElegida, setPlantillaElegida] = useState("");
+  const [guardandoComoPlantilla, setGuardandoComoPlantilla] = useState(false);
+  const [nombrePlantilla, setNombrePlantilla] = useState("");
+
+  useEffect(() => { api.fetchRubricasCatalogo().then(setCatalogo); }, []);
+
+  const cargarDesdePlantilla = (id) => {
+    setPlantillaElegida(id);
+    const plantilla = catalogo.find((r) => r.id === parseInt(id, 10));
+    if (plantilla) setCriterios(plantilla.criterios);
+  };
+
+  const guardarComoPlantilla = async () => {
+    if (!nombrePlantilla.trim()) { alert("Ponele un nombre a la plantilla."); return; }
+    const limpios = criterios.filter((c) => c.criterio.trim());
+    if (limpios.length === 0) { alert("Agregá al menos un criterio antes de guardarla."); return; }
+    try {
+      await api.crearRubricaCatalogo(nombrePlantilla.trim(), limpios);
+      alert(`"${nombrePlantilla.trim()}" quedó guardada en tu catálogo de Rúbricas.`);
+      setGuardandoComoPlantilla(false);
+      setNombrePlantilla("");
+      api.fetchRubricasCatalogo().then(setCatalogo);
+    } catch (e) {
+      alert("Error al guardar: " + e.message);
+    }
+  };
+
+  const actualizarCriterio = (i, texto) => setCriterios((prev) => prev.map((c, idx) => idx === i ? { ...c, criterio: texto } : c));
+  const actualizarNivel = (i, j, campo, valor) => setCriterios((prev) => prev.map((c, idx) => idx === i
+    ? { ...c, niveles: c.niveles.map((n, k) => k === j ? { ...n, [campo]: campo === "puntos" ? parseFloat(valor) || 0 : valor } : n) }
+    : c));
+  const agregarCriterio = () => setCriterios((prev) => [...prev, { criterio: "", niveles: NIVELES_INICIALES() }]);
+  const quitarCriterio = (i) => setCriterios((prev) => prev.filter((_, idx) => idx !== i));
+  const agregarNivel = (i) => setCriterios((prev) => prev.map((c, idx) => idx === i ? { ...c, niveles: [...c.niveles, { nombre: "Nuevo nivel", puntos: 0 }] } : c));
+  const quitarNivel = (i, j) => setCriterios((prev) => prev.map((c, idx) => {
+    if (idx !== i) return c;
+    if (c.niveles.length <= 1) { alert("Cada criterio necesita al menos un nivel."); return c; }
+    return { ...c, niveles: c.niveles.filter((_, k) => k !== j) };
+  }));
+
+  const guardar = async () => {
+    const limpios = criterios.filter((c) => c.criterio.trim());
+    if (limpios.some((c) => c.niveles.length === 0)) { alert("Cada criterio necesita al menos un nivel."); return; }
+    setGuardando(true);
+    try {
+      await api.guardarRubricaActividad(actividad.id, limpios.length > 0 ? limpios : null);
+      onGuardada();
+    } catch (e) {
+      alert("Error al guardar: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  const quitarRubrica = async () => {
+    if (!confirm("¿Quitar la rúbrica de esta columna? Vas a volver a calificar escribiendo la nota a mano.")) return;
+    setGuardando(true);
+    try {
+      await api.guardarRubricaActividad(actividad.id, null);
+      onGuardada();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  const escalaMin = config?.escala_min ?? 1;
+  const escalaMax = config?.nota_maxima ?? 5;
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">📊 Rúbrica — {actividad.nombre}</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-500 mb-3">
+          Con rúbrica activada, esta columna se califica eligiendo un nivel por criterio en vez de escribir la nota — se calcula sola, ajustada a tu escala ({escalaMin}–{escalaMax}).
+        </p>
+
+        {catalogo.length > 0 && (
+          <select value={plantillaElegida} onChange={(e) => cargarDesdePlantilla(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1.5 mb-3 border border-slate-200 outline-none">
+            <option value="">📋 Cargar desde una rúbrica guardada…</option>
+            {catalogo.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
+          </select>
+        )}
+
+        <div className="space-y-3 mb-4">
+          {criterios.map((c, i) => (
+            <div key={i} className="border border-slate-200 rounded-xl p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <input value={c.criterio} onChange={(e) => actualizarCriterio(i, e.target.value)} placeholder="Criterio a evaluar (ej: Ortografía)"
+                  className="flex-1 text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+                <button onClick={() => quitarCriterio(i)} className="text-slate-300 hover:text-rose-500">🗑</button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {c.niveles.map((n, j) => (
+                  <div key={j} className="bg-slate-50 rounded-lg p-2 relative" style={{ width: 110 }}>
+                    <button onClick={() => quitarNivel(i, j)} className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-rose-400 text-white text-[9px] flex items-center justify-center" title="Quitar este nivel">✕</button>
+                    <input value={n.nombre} onChange={(e) => actualizarNivel(i, j, "nombre", e.target.value)}
+                      className="w-full text-xs font-semibold rounded px-1 py-1 border border-slate-200 outline-none mb-1" />
+                    <input type="number" value={n.puntos} onChange={(e) => actualizarNivel(i, j, "puntos", e.target.value)}
+                      className="w-full text-xs rounded px-1 py-1 border border-slate-200 outline-none" placeholder="Puntos" />
+                  </div>
+                ))}
+                <button onClick={() => agregarNivel(i)} className="text-xs text-violet-500 border border-dashed border-violet-300 rounded-lg px-3" style={{ width: 110 }}>
+                  + Nivel
+                </button>
+              </div>
+            </div>
+          ))}
+          <button onClick={agregarCriterio} className="text-xs text-violet-500">+ Agregar criterio</button>
+        </div>
+
+        {guardandoComoPlantilla && (
+          <div className="flex gap-2 mb-3 bg-slate-50 rounded-lg p-2">
+            <input value={nombrePlantilla} onChange={(e) => setNombrePlantilla(e.target.value)} placeholder="Nombre de la plantilla"
+              autoFocus className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+            <button onClick={guardarComoPlantilla} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white">Guardar</button>
+            <button onClick={() => setGuardandoComoPlantilla(false)} className="text-xs text-slate-400 px-2">✕</button>
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          {actividad.rubrica?.length > 0 && (
+            <button disabled={guardando} onClick={quitarRubrica} className="text-xs font-semibold px-3 py-2.5 rounded-lg border border-rose-200 text-rose-500">Quitar rúbrica</button>
+          )}
+          <button onClick={() => setGuardandoComoPlantilla(true)} className="text-xs font-semibold px-3 py-2.5 rounded-lg border border-violet-200 text-violet-600">💾 Guardar como plantilla</button>
+          <button disabled={guardando} onClick={guardar} className="flex-1 text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+            {guardando ? "Guardando…" : "Guardar rúbrica"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Selector emergente para calificar una celda puntual con la rúbrica de su
+// columna — aparece pegado al input de esa celda.
+function CeldaConRubrica({ actividad, estudianteId, config, onGuardado, onCerrar }) {
+  const [nivelesElegidos, setNivelesElegidos] = useState({});
+  const guardar = async () => {
+    const { nota } = calcularNotaRubrica(actividad.rubrica, nivelesElegidos, config);
+    await onGuardado(nota);
+    onCerrar();
+  };
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.4)" }} onClick={onCerrar}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-4 w-full max-w-sm shadow-xl">
+        <div className="flex justify-between items-center mb-2">
+          <h4 className="text-sm font-bold text-slate-800">{actividad.nombre}</h4>
+          <button onClick={onCerrar} className="text-slate-400">✕</button>
+        </div>
+        <SelectorRubrica rubrica={actividad.rubrica} nivelesElegidos={nivelesElegidos} config={config}
+          onElegir={(i, j) => setNivelesElegidos((prev) => ({ ...prev, [i]: j }))} />
+        <button onClick={guardar} className="w-full text-sm font-semibold py-2 rounded-lg bg-violet-500 text-white mt-3">Guardar nota</button>
+      </div>
+    </div>
+  );
+}
+
 function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados, periodo, materias, onCambioCategorias, estudianteDestacadoId }) {
   const [actividades, setActividades] = useState([]);
   const [valores, setValores] = useState({});
@@ -1014,6 +1183,8 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
   const [copiarColumnasAbierto, setCopiarColumnasAbierto] = useState(false);
   const [copiarPlanillaAbierto, setCopiarPlanillaAbierto] = useState(false);
   const [menuHerramientasAbierto, setMenuHerramientasAbierto] = useState(false);
+  const [rubricaColumnaAbierta, setRubricaColumnaAbierta] = useState(null); // actividad
+  const [celdaRubricaAbierta, setCeldaRubricaAbierta] = useState(null); // { actividad, estudianteId }
 
   const cargar = async () => {
     setCargando(true);
@@ -1236,6 +1407,9 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
                       {a.fecha && <span className="text-[9px] text-slate-400 font-normal">({a.fecha.slice(5)})</span>}
                       {!seleccionando && (
                         <>
+                          {!a.es_automatica && (
+                            <button onClick={() => setRubricaColumnaAbierta(a)} className={a.rubrica?.length > 0 ? "text-violet-500" : "text-slate-400"} title="Calificar esta columna con rúbrica">📊</button>
+                          )}
                           <button onClick={() => { setActividadEditar(a); setModalAbierto(true); }} className="text-slate-400">✎</button>
                           <button onClick={() => eliminarAct(a.id)} className="text-slate-400">✕</button>
                         </>
@@ -1266,9 +1440,17 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
                       return (
                         <td key={a.id} className="text-center px-3 py-2" style={{ background: tinte }}>
                           <div className="flex items-center justify-center gap-0.5">
-                            <input type="number" step="0.1" defaultValue={v ?? ""} onBlur={(e) => guardarValorManual(a.id, s.id, e.target.value)}
-                              style={v !== null && v !== undefined ? { color: b.color, borderColor: b.color, background: `${b.color}11`, fontWeight: 700 } : {}}
-                              className="w-14 text-center text-xs rounded px-1 py-1 border border-slate-200 outline-none" />
+                            {a.rubrica?.length > 0 ? (
+                              <button onClick={() => setCeldaRubricaAbierta({ actividad: a, estudianteId: s.id })}
+                                style={v !== null && v !== undefined ? { color: b.color, borderColor: b.color, background: `${b.color}11`, fontWeight: 700 } : {}}
+                                className="w-14 text-center text-xs rounded px-1 py-1 border border-slate-200">
+                                {v ?? "📊"}
+                              </button>
+                            ) : (
+                              <input type="number" step="0.1" defaultValue={v ?? ""} onBlur={(e) => guardarValorManual(a.id, s.id, e.target.value)}
+                                style={v !== null && v !== undefined ? { color: b.color, borderColor: b.color, background: `${b.color}11`, fontWeight: 700 } : {}}
+                                className="w-14 text-center text-xs rounded px-1 py-1 border border-slate-200 outline-none" />
+                            )}
                             {observaciones[a.id]?.[s.id] && (
                               <span title={observaciones[a.id][s.id]} className="text-[10px] cursor-help">📝</span>
                             )}
@@ -1331,6 +1513,15 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
       {copiarPlanillaAbierto && (
         <CopiarPlanillaOtroCursoModal materiaId={materiaId} gradoId={gradoId} grados={grados} periodo={periodo} periodos={periodosDe(config)}
           onClose={() => setCopiarPlanillaAbierto(false)} onCopiado={() => {}} />
+      )}
+      {rubricaColumnaAbierta && (
+        <RubricaActividadModal actividad={rubricaColumnaAbierta} config={config}
+          onClose={() => setRubricaColumnaAbierta(null)} onGuardada={() => { setRubricaColumnaAbierta(null); cargar(); }} />
+      )}
+      {celdaRubricaAbierta && (
+        <CeldaConRubrica actividad={celdaRubricaAbierta.actividad} estudianteId={celdaRubricaAbierta.estudianteId} config={config}
+          onGuardado={(nota) => guardarValorManual(celdaRubricaAbierta.actividad.id, celdaRubricaAbierta.estudianteId, String(nota))}
+          onCerrar={() => setCeldaRubricaAbierta(null)} />
       )}
     </div>
   );
