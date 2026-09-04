@@ -38,6 +38,7 @@ import { VistaBancoPreguntas } from "./screens/BancoPreguntas";
 import { VistaEvaluaciones } from "./screens/Evaluaciones";
 import { VistaProyectosForja } from "./screens/TareasCalificables";
 import { VistaRubricas } from "./screens/Rubricas";
+import { VistaEntregasPorRevisar } from "./screens/EntregasPorRevisar";
 import { VistaInicio, ContenidoLightbox } from "./screens/Inicio";
 import { EditorTexto, TextoEnriquecido, textoPlano } from "./components/RichText";
 import { InstitucionModal } from "./screens/Institucion";
@@ -2090,6 +2091,7 @@ const MENU_PANEL_GRUPOS = [
   },
   {
     key: "academico", label: "Académico", icono: "🎓", items: [
+      { key: "entregasrevisar", label: "Entregas por revisar", icono: "📝" },
       { key: "estudiantes", label: "Estudiantes", icono: "🏰" },
       { key: "asistencia", label: "Asistencia", icono: "📋" },
       { key: "calificaciones", label: "Planillas", icono: "📖" },
@@ -2380,6 +2382,15 @@ function Panel({ session }) {
     if (key === "estudiantes") { setGrado(null); setReino(null); setModoLista(false); }
   };
 
+  // Desde "Entregas por revisar": salta directo a Misiones o Proyectos/Forja,
+  // ya con el curso, la materia y el periodo correctos seleccionados arriba.
+  const irAGradoDesdeRevisar = (gradoId, materiaId, periodo, destino) => {
+    setGradoActivo(gradoId);
+    if (materiaId) setMateriaActiva(materiaId);
+    if (periodo) setPeriodoActivo(String(periodo));
+    setTab(destino);
+  };
+
   return (
     <div className="min-h-screen relative">
       <FondoArcadeDocente />
@@ -2395,6 +2406,7 @@ function Panel({ session }) {
 
       <div className="p-6 max-w-6xl mx-auto">
         {tab === "inicio" && <VistaInicio onIrA={irA} />}
+        {tab === "entregasrevisar" && <VistaEntregasPorRevisar onIrAGrado={irAGradoDesdeRevisar} />}
         {tab === "estudiantes" && (
           <>
             {!grado && <VistaGrados onElegirGrado={(g) => { setGrado(g); setReino(null); setModoLista(true); }} />}
