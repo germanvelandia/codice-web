@@ -1605,6 +1605,14 @@ export async function guardarRubricaTareaCalificable(tareaId, criterios) {
   if (error) throw error;
 }
 
+// Igual que la anterior, pero para una actividad de la Planilla de
+// Calificaciones (no solo las de La Forja) — permite calificar con rúbrica
+// directo desde cualquier columna.
+export async function guardarRubricaActividad(actividadId, criterios) {
+  const { error } = await supabase.from("notas_actividades").update({ rubrica: criterios }).eq("id", actividadId);
+  if (error) throw error;
+}
+
 export async function eliminarTareaCalificable(id) {
   const { error } = await supabase.from("tareas_calificables").delete().eq("id", id);
   if (error) throw error;
