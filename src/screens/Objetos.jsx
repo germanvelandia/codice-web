@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import * as api from "../lib/api";
 import { agruparPorNivel, ordenarPorApellido } from "../lib/gamification";
+import { EmojiPicker } from "../components/EmojiPicker";
 
 function ObjetoForm({ objeto, onCancelar, onGuardado }) {
   const [nombre, setNombre] = useState(objeto?.nombre || "");
@@ -32,7 +33,7 @@ function ObjetoForm({ objeto, onCancelar, onGuardado }) {
   return (
     <div className="bg-violet-50 rounded-2xl p-4 mb-3">
       <div className="grid grid-cols-2 gap-2 mb-2">
-        <input value={emoji} onChange={(e) => setEmoji(e.target.value)} placeholder="🎒" className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white text-center" />
+        <EmojiPicker value={emoji} onChange={setEmoji} />
         <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre del objeto" className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
       </div>
       <input value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Descripción (opcional)"
