@@ -3,6 +3,7 @@ import { supabase } from "./lib/supabaseClient";
 import * as api from "./lib/api";
 import { nextLevel, nivelYCurso } from "./lib/gamification";
 import { bandaDesempeno, notaFinalPonderada } from "./lib/calificaciones";
+import { sonidoGirar, sonidoAcierto, sonidoError, sonidoLogro } from "./lib/sonidos";
 import { VistaGrados, VistaReinos, VistaEstudiantes, FotoLightbox } from "./screens/Estudiantes";
 import { VistaAsistencia } from "./screens/Asistencia";
 import { VistaRuleta, VistaRuletaMonedas, VistaTemporizador, VistaHerramientas } from "./screens/Herramientas";
@@ -1653,6 +1654,7 @@ function PreguntadosEstudiante({ estudianteId }) {
 
   const girar = () => {
     if (categorias.length === 0) return;
+    sonidoGirar();
     setGirando(true);
     setCategoriaElegida(null);
     setPregunta(null);
@@ -1679,7 +1681,9 @@ function PreguntadosEstudiante({ estudianteId }) {
     if (respondida) return;
     const r = await api.responderTrivia(estudianteId, pregunta, opcionIdx);
     setRespondida({ opcion: opcionIdx, ...r });
-    if (r.corona) setCoronas((prev) => [...prev, pregunta.categoria_id]);
+    if (r.corona) { sonidoLogro(); setCoronas((prev) => [...prev, pregunta.categoria_id]); }
+    else if (r.acierto) sonidoAcierto();
+    else sonidoError();
   };
 
   if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
@@ -1829,7 +1833,7 @@ function PortalEstudiante() {
         setEstudianteInfo(info);
         if (info) {
           api.registrarAcceso(info.id);
-          api.verificarYOtorgarLogros(info.id).then((nuevos) => { if (nuevos.length > 0) setNuevosLogros(nuevos); });
+          api.verificarYOtorgarLogros(info.id).then((nuevos) => { if (nuevos.length > 0) { sonidoLogro(); setNuevosLogros(nuevos); } });
           api.fetchEquipadosEstudiante(info.id).then(setEquipados);
           api.fetchAvatarConfigsMultiples([info.id]).then((mapa) => setAvatarConfig(mapa[info.id] || null));
           api.fetchMiRol(info.id).then(setMiRol);
