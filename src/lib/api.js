@@ -1488,24 +1488,31 @@ export async function fetchResumenEntregasPorRevisar() {
   return { evaluaciones: evaluacionesPendientes, tareas: tareasPendientes };
 }
 
-/* ---------------- Tablero Semanal (semana × curso) ---------------- */
-export async function fetchTableroSemanal(gradosIds) {
-  const { data, error } = await supabase.from("tablero_semanal").select("*").in("grado_id", gradosIds).order("semana");
+/* ---------------- Tablero Semanal (semana × curso, por periodo) ---------------- */
+export async function fetchTableroSemanal(gradosIds, periodo) {
+  const { data, error } = await supabase.from("tablero_semanal").select("*").in("grado_id", gradosIds).eq("periodo", periodo).order("semana");
   if (error) throw error;
   return data || [];
 }
 
-export async function guardarCeldaTablero(gradoId, semana, campos) {
+export async function guardarCeldaTablero(gradoId, periodo, semana, campos) {
   const { data: userData } = await supabase.auth.getUser();
   const { error } = await supabase.from("tablero_semanal").upsert(
-    { docente_id: userData?.user?.id || null, grado_id: gradoId, semana, ...campos },
-    { onConflict: "docente_id,grado_id,semana" }
+    { docente_id: userData?.user?.id || null, grado_id: gradoId, periodo, semana, ...campos },
+    { onConflict: "docente_id,grado_id,periodo,semana" }
   );
   if (error) throw error;
 }
 
-export async function eliminarSemanaTablero(gradosIds, semana) {
-  const { error } = await supabase.from("tablero_semanal").delete().in("grado_id", gradosIds).eq("semana", semana);
+// Borra el contenido de una sola celda (curso + semana puntual).
+export async function eliminarCeldaTablero(gradoId, periodo, semana) {
+  const { error } = await supabase.from("tablero_semanal").delete().eq("grado_id", gradoId).eq("periodo", periodo).eq("semana", semana);
+  if (error) throw error;
+}
+
+// Borra la fila completa de una semana (todos los cursos de ese grado, en ese periodo).
+export async function eliminarSemanaTablero(gradosIds, periodo, semana) {
+  const { error } = await supabase.from("tablero_semanal").delete().in("grado_id", gradosIds).eq("periodo", periodo).eq("semana", semana);
   if (error) throw error;
 }
 
