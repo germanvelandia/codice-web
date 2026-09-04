@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import * as api from "../lib/api";
 import { agruparPorNivel } from "../lib/gamification";
+import { EmojiPicker } from "../components/EmojiPicker";
 
 const COLORES_CATEGORIA = ["#0EA5E9", "#22C55E", "#EC4899", "#F59E0B", "#8B5CF6", "#EF4444", "#14B8A6", "#6366F1"];
 
@@ -28,7 +29,7 @@ function CategoriaForm({ materias, categoria, onCancelar, onGuardada }) {
   return (
     <div className="bg-violet-50 rounded-xl p-3 mb-3">
       <div className="flex gap-2 mb-2">
-        <input value={emoji} onChange={(e) => setEmoji(e.target.value)} placeholder="❓" className="w-14 text-center text-lg rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
+        <EmojiPicker value={emoji} onChange={setEmoji} />
         <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre de la categoría" className="flex-1 text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none bg-white" />
       </div>
       <label className="text-xs text-slate-500 block mb-1">Ligar a una materia (opcional — si no, queda como categoría general)</label>
