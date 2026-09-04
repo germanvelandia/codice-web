@@ -103,6 +103,48 @@ function CeldaEditor({ celda, gradoId, periodo, semana, onCerrar, onGuardado, on
   );
 }
 
+function MoverPeriodoModal({ cursosIds, periodoActual, onCerrar, onMovido }) {
+  const [destino, setDestino] = useState(["1", "2", "3", "4"].find((p) => p !== periodoActual));
+  const [moviendo, setMoviendo] = useState(false);
+
+  const mover = async () => {
+    const conteo = await api.fetchConteoTablero(cursosIds, periodoActual);
+    if (conteo === 0) { alert("No hay nada cargado en el periodo actual para mover."); return; }
+    const conteoDestino = await api.fetchConteoTablero(cursosIds, destino);
+    const aviso = conteoDestino > 0
+      ? `El Periodo ${destino} ya tiene ${conteoDestino} celda(s) cargada(s) para este grado — las que choquen en curso+semana se van a reemplazar. `
+      : "";
+    if (!confirm(`${aviso}¿Mover las ${conteo} celda(s) del Periodo ${periodoActual} al Periodo ${destino}? No se puede deshacer.`)) return;
+    setMoviendo(true);
+    try {
+      await api.moverTableroAPeriodo(cursosIds, periodoActual, destino);
+      onMovido();
+    } catch (e) {
+      alert("Error al mover: " + e.message);
+    }
+    setMoviendo(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onCerrar}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">🔀 Mover a otro periodo</h3>
+          <button onClick={onCerrar} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-500 mb-3">Mueve todo lo cargado en este grado, del Periodo {periodoActual} al periodo que elijas — para corregir cuando se completó en el periodo equivocado.</p>
+        <label className="text-xs text-slate-500 block mb-1">Mover al periodo</label>
+        <select value={destino} onChange={(e) => setDestino(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 mb-4 border border-slate-200 outline-none">
+          {["1", "2", "3", "4"].filter((p) => p !== periodoActual).map((p) => <option key={p} value={p}>Periodo {p}</option>)}
+        </select>
+        <button disabled={moviendo} onClick={mover} className="w-full text-sm font-semibold py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+          {moviendo ? "Moviendo…" : `Mover del Periodo ${periodoActual} al Periodo ${destino}`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function VistaTableroSemanal({ grados, periodoActivo }) {
   const niveles = agruparPorNivel(grados);
   const [nivelActual, setNivelActual] = useState(niveles[0]?.nivel || "");
@@ -111,6 +153,7 @@ export function VistaTableroSemanal({ grados, periodoActivo }) {
   const [cargando, setCargando] = useState(true);
   const [semanas, setSemanas] = useState([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
   const [editando, setEditando] = useState(null); // { gradoId, semana }
+  const [moverAbierto, setMoverAbierto] = useState(false);
 
   useEffect(() => { if (periodoActivo) setPeriodo(periodoActivo); }, [periodoActivo]);
 
@@ -173,6 +216,7 @@ export function VistaTableroSemanal({ grados, periodoActivo }) {
             {["1", "2", "3", "4"].map((p) => <option key={p} value={p}>Periodo {p}</option>)}
           </select>
           <button onClick={exportarExcel} className="text-xs font-semibold px-3 py-2 rounded-full border border-slate-200 text-slate-600">📤 Exportar</button>
+          <button onClick={() => setMoverAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full border border-slate-200 text-slate-600">🔀 Mover a otro periodo</button>
         </div>
       </div>
 
@@ -242,6 +286,11 @@ export function VistaTableroSemanal({ grados, periodoActivo }) {
       {editando && (
         <CeldaEditor celda={celdaDe(editando.gradoId, editando.semana)} gradoId={editando.gradoId} periodo={periodo} semana={editando.semana}
           onCerrar={() => setEditando(null)} onGuardado={() => { setEditando(null); cargar(); }} onBorrado={() => { setEditando(null); cargar(); }} />
+      )}
+
+      {moverAbierto && (
+        <MoverPeriodoModal cursosIds={cursosIds} periodoActual={periodo}
+          onCerrar={() => setMoverAbierto(false)} onMovido={() => { setMoverAbierto(false); cargar(); }} />
       )}
     </div>
   );
