@@ -1538,6 +1538,26 @@ export async function eliminarSemanaTablero(gradosIds, periodo, semana) {
   if (error) throw error;
 }
 
+// Mueve todo lo cargado de un periodo a otro, para corregir cuando se
+// completó el Tablero en el periodo equivocado. Si el destino ya tiene
+// datos para el mismo curso+semana, esos se reemplazan (se avisa antes).
+export async function fetchConteoTablero(gradosIds, periodo) {
+  const { count, error } = await supabase.from("tablero_semanal").select("*", { count: "exact", head: true }).in("grado_id", gradosIds).eq("periodo", periodo);
+  if (error) throw error;
+  return count || 0;
+}
+
+export async function moverTableroAPeriodo(gradosIds, periodoOrigen, periodoDestino) {
+  // Saca del destino cualquier celda que choque en curso+semana con lo que se va a mover.
+  const { data: origen, error: e1 } = await supabase.from("tablero_semanal").select("grado_id, semana").in("grado_id", gradosIds).eq("periodo", periodoOrigen);
+  if (e1) throw e1;
+  for (const fila of origen || []) {
+    await supabase.from("tablero_semanal").delete().eq("grado_id", fila.grado_id).eq("periodo", periodoDestino).eq("semana", fila.semana);
+  }
+  const { error: e2 } = await supabase.from("tablero_semanal").update({ periodo: periodoDestino }).in("grado_id", gradosIds).eq("periodo", periodoOrigen);
+  if (e2) throw e2;
+}
+
 export async function fetchPremios() {
   const { data, error } = await supabase.from("banco_premios").select("*").order("costo_monedas");
   if (error) throw error;
