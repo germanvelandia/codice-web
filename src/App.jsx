@@ -2473,7 +2473,7 @@ function Panel({ session }) {
         {tab === "reportes" && grados.length > 0 && <VistaReportes grados={grados} gradoActivo={gradoActivo} />}
         {tab === "horario" && grados.length > 0 && <VistaHorario grados={grados} />}
         {tab === "planeaciones" && grados.length > 0 && <VistaPlaneaciones grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} />}
-        {tab === "tablerosemanal" && grados.length > 0 && <VistaTableroSemanal grados={grados} />}
+        {tab === "tablerosemanal" && grados.length > 0 && <VistaTableroSemanal grados={grados} periodoActivo={periodoActivo} />}
         {tab === "rubricas" && <VistaRubricas />}
         {tab === "biblioteca" && grados.length > 0 && <VistaBiblioteca grados={grados} gradoActivo={gradoActivo} />}
         {tab === "anotaciones" && <VistaAnotaciones />}
