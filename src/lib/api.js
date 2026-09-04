@@ -1488,6 +1488,27 @@ export async function fetchResumenEntregasPorRevisar() {
   return { evaluaciones: evaluacionesPendientes, tareas: tareasPendientes };
 }
 
+/* ---------------- Tablero Semanal (semana × curso) ---------------- */
+export async function fetchTableroSemanal(gradosIds) {
+  const { data, error } = await supabase.from("tablero_semanal").select("*").in("grado_id", gradosIds).order("semana");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function guardarCeldaTablero(gradoId, semana, campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("tablero_semanal").upsert(
+    { docente_id: userData?.user?.id || null, grado_id: gradoId, semana, ...campos },
+    { onConflict: "docente_id,grado_id,semana" }
+  );
+  if (error) throw error;
+}
+
+export async function eliminarSemanaTablero(gradosIds, semana) {
+  const { error } = await supabase.from("tablero_semanal").delete().in("grado_id", gradosIds).eq("semana", semana);
+  if (error) throw error;
+}
+
 export async function fetchPremios() {
   const { data, error } = await supabase.from("banco_premios").select("*").order("costo_monedas");
   if (error) throw error;
