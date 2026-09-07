@@ -11,7 +11,9 @@ const ESTADOS = {
   exposicion_pendiente: { label: "Exposición pendiente", color: "#7C3AED", bg: "#F5F3FF" },
 };
 
-function CeldaEditor({ celda, gradoId, periodo, semana, onCerrar, onGuardado, onBorrado }) {
+const CLAVE_PERIODO_GUARDADO = "codice_tablero_periodo";
+
+function CeldaEditor({ celda, gradoId, periodo, semana, celdaCopiada, onCopiar, onCerrar, onGuardado, onBorrado }) {
   const [mision, setMision] = useState(celda?.mision || "");
   const [estado, setEstado] = useState(celda?.estado || "pendiente");
   const [evidencia, setEvidencia] = useState(celda?.evidencia || "");
@@ -20,6 +22,21 @@ function CeldaEditor({ celda, gradoId, periodo, semana, onCerrar, onGuardado, on
   const [oroSugerido, setOroSugerido] = useState(celda?.oro_sugerido || 0);
   const [sangreSugerida, setSangreSugerida] = useState(celda?.sangre_sugerida || 0);
   const [guardando, setGuardando] = useState(false);
+
+  const pegar = () => {
+    if (!celdaCopiada) return;
+    setMision(celdaCopiada.mision || "");
+    setEstado(celdaCopiada.estado || "pendiente");
+    setEvidencia(celdaCopiada.evidencia || "");
+    setNotas(celdaCopiada.notas || "");
+    setXpSugerido(celdaCopiada.xp_sugerido || 0);
+    setOroSugerido(celdaCopiada.oro_sugerido || 0);
+    setSangreSugerida(celdaCopiada.sangre_sugerida || 0);
+  };
+
+  const copiar = () => {
+    onCopiar({ mision, estado, evidencia, notas, xp_sugerido: xpSugerido, oro_sugerido: oroSugerido, sangre_sugerida: sangreSugerida });
+  };
 
   const guardar = async () => {
     setGuardando(true);
@@ -54,6 +71,12 @@ function CeldaEditor({ celda, gradoId, periodo, semana, onCerrar, onGuardado, on
           <h4 className="font-bold text-slate-800">Semana {semana} · Curso {gradoId} · Periodo {periodo}</h4>
           <button onClick={onCerrar} className="text-slate-400">✕</button>
         </div>
+
+        <div className="flex gap-2 mb-3">
+          <button onClick={copiar} className="text-[11px] font-semibold px-2.5 py-1.5 rounded-full border border-violet-200 text-violet-600">📋 Copiar esta celda</button>
+          {celdaCopiada && <button onClick={pegar} className="text-[11px] font-semibold px-2.5 py-1.5 rounded-full bg-violet-100 text-violet-700">📥 Pegar acá</button>}
+        </div>
+
         <label className="text-xs text-slate-500 block mb-1">Misión</label>
         <input value={mision} onChange={(e) => setMision(e.target.value)} placeholder="Ej: M01 · El Gobernante Ético"
           className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
@@ -145,17 +168,24 @@ function MoverPeriodoModal({ cursosIds, periodoActual, onCerrar, onMovido }) {
   );
 }
 
-export function VistaTableroSemanal({ grados, periodoActivo }) {
+export function VistaTableroSemanal({ grados }) {
   const niveles = agruparPorNivel(grados);
   const [nivelActual, setNivelActual] = useState(niveles[0]?.nivel || "");
-  const [periodo, setPeriodo] = useState(periodoActivo || "1");
+  // El periodo de esta pantalla queda fijo a lo último que se eligió acá
+  // mismo — no sigue al "Periodo activo" general de arriba de la app.
+  const [periodo, setPeriodo] = useState(() => localStorage.getItem(CLAVE_PERIODO_GUARDADO) || "1");
   const [celdas, setCeldas] = useState([]);
+  const [fechas, setFechas] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [semanas, setSemanas] = useState([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
   const [editando, setEditando] = useState(null); // { gradoId, semana }
   const [moverAbierto, setMoverAbierto] = useState(false);
+  const [celdaCopiada, setCeldaCopiada] = useState(null);
 
-  useEffect(() => { if (periodoActivo) setPeriodo(periodoActivo); }, [periodoActivo]);
+  const cambiarPeriodo = (p) => {
+    setPeriodo(p);
+    localStorage.setItem(CLAVE_PERIODO_GUARDADO, p);
+  };
 
   const cursos = niveles.find((n) => n.nivel === nivelActual)?.cursos || [];
   const cursosIds = cursos.map((c) => c.id);
@@ -163,9 +193,10 @@ export function VistaTableroSemanal({ grados, periodoActivo }) {
   const cargar = () => {
     if (cursosIds.length === 0) { setCargando(false); return; }
     setCargando(true);
-    api.fetchTableroSemanal(cursosIds, periodo).then((d) => {
+    Promise.all([api.fetchTableroSemanal(cursosIds, periodo), api.fetchFechasTablero(periodo)]).then(([d, f]) => {
       setCeldas(d);
-      const maxSemana = Math.max(10, ...d.map((c) => c.semana));
+      setFechas(f);
+      const maxSemana = Math.max(10, ...d.map((c) => c.semana), ...f.map((x) => x.semana));
       setSemanas(Array.from({ length: maxSemana }, (_, i) => i + 1));
       setCargando(false);
     });
@@ -173,7 +204,20 @@ export function VistaTableroSemanal({ grados, periodoActivo }) {
   useEffect(() => { cargar(); }, [nivelActual, periodo]);
 
   const celdaDe = (gradoId, semana) => celdas.find((c) => c.grado_id === gradoId && c.semana === semana);
+  const fechaDe = (semana) => fechas.find((f) => f.semana === semana)?.fecha || "";
   const agregarSemana = () => setSemanas((prev) => [...prev, prev.length + 1]);
+
+  const cambiarFecha = async (semana, fecha) => {
+    setFechas((prev) => {
+      const existe = prev.some((f) => f.semana === semana);
+      return existe ? prev.map((f) => (f.semana === semana ? { ...f, fecha } : f)) : [...prev, { semana, fecha }];
+    });
+    try {
+      await api.guardarFechaSemana(periodo, semana, fecha);
+    } catch (e) {
+      alert("Error al guardar la fecha: " + e.message);
+    }
+  };
 
   const eliminarSemana = async (semana) => {
     if (!confirm(`¿Eliminar la semana ${semana} completa (todos los cursos de este grado, en este periodo)? No se puede deshacer.`)) return;
@@ -188,7 +232,7 @@ export function VistaTableroSemanal({ grados, periodoActivo }) {
         const celda = celdaDe(c.id, semana);
         if (!celda) return;
         filas.push({
-          Semana: semana, Curso: c.id, Misión: celda.mision || "", Estado: ESTADOS[celda.estado]?.label || celda.estado,
+          Semana: semana, Fecha: fechaDe(semana) || "", Curso: c.id, Misión: celda.mision || "", Estado: ESTADOS[celda.estado]?.label || celda.estado,
           Evidencia: celda.evidencia || "", "Actividades realizadas": celda.notas || "",
           "XP sugerido": celda.xp_sugerido || 0, "Oro sugerido": celda.oro_sugerido || 0, "Sangre sugerida": celda.sangre_sugerida || 0,
         });
@@ -208,11 +252,11 @@ export function VistaTableroSemanal({ grados, periodoActivo }) {
           <h2 className="text-xl font-bold text-slate-800">🗓️ Tablero Semanal por Curso</h2>
           <p className="text-sm text-slate-400">Los cursos de un mismo grado no tienen por qué ir al mismo ritmo — cada celda es independiente.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <select value={nivelActual} onChange={(e) => setNivelActual(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
             {niveles.map((n) => <option key={n.nivel} value={n.nivel}>Grado {n.nivel}°</option>)}
           </select>
-          <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
+          <select value={periodo} onChange={(e) => cambiarPeriodo(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white" title="El periodo de esta pantalla queda fijo hasta que lo cambies vos acá">
             {["1", "2", "3", "4"].map((p) => <option key={p} value={p}>Periodo {p}</option>)}
           </select>
           <button onClick={exportarExcel} className="text-xs font-semibold px-3 py-2 rounded-full border border-slate-200 text-slate-600">📤 Exportar</button>
@@ -220,11 +264,17 @@ export function VistaTableroSemanal({ grados, periodoActivo }) {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div className="flex flex-wrap gap-2 mb-2">
         {Object.entries(ESTADOS).map(([key, info]) => (
           <span key={key} className="text-[10px] px-2 py-1 rounded-full" style={{ background: info.bg, color: info.color }}>{info.label}</span>
         ))}
       </div>
+      {celdaCopiada && (
+        <div className="flex items-center gap-2 mb-4 text-[11px] text-violet-600 bg-violet-50 rounded-lg px-3 py-1.5 w-fit">
+          📋 Tenés copiada: <b>{celdaCopiada.mision || "(celda vacía)"}</b>
+          <button onClick={() => setCeldaCopiada(null)} className="text-violet-400">✕</button>
+        </div>
+      )}
 
       {cargando ? (
         <div className="text-sm text-slate-400">Cargando…</div>
@@ -236,6 +286,7 @@ export function VistaTableroSemanal({ grados, periodoActivo }) {
             <thead>
               <tr className="bg-slate-50 text-slate-500 text-left">
                 <th className="px-3 py-2 sticky left-0 bg-slate-50">Semana</th>
+                <th className="px-2 py-2">Fecha</th>
                 {cursos.map((c) => <th key={c.id} className="px-3 py-2 text-center">Curso {c.id}</th>)}
                 <th className="px-2 py-2"></th>
               </tr>
@@ -244,6 +295,10 @@ export function VistaTableroSemanal({ grados, periodoActivo }) {
               {semanas.map((semana) => (
                 <tr key={semana} className="border-t border-slate-100">
                   <td className="px-3 py-2 font-semibold text-slate-600 sticky left-0 bg-white">{semana}</td>
+                  <td className="px-2 py-1.5">
+                    <input type="date" value={fechaDe(semana)} onChange={(e) => cambiarFecha(semana, e.target.value)}
+                      className="text-[11px] rounded-lg px-1.5 py-1 border border-slate-200 outline-none" style={{ width: 128 }} />
+                  </td>
                   {cursos.map((c) => {
                     const celda = celdaDe(c.id, semana);
                     const info = ESTADOS[celda?.estado || "pendiente"];
@@ -285,6 +340,7 @@ export function VistaTableroSemanal({ grados, periodoActivo }) {
 
       {editando && (
         <CeldaEditor celda={celdaDe(editando.gradoId, editando.semana)} gradoId={editando.gradoId} periodo={periodo} semana={editando.semana}
+          celdaCopiada={celdaCopiada} onCopiar={setCeldaCopiada}
           onCerrar={() => setEditando(null)} onGuardado={() => { setEditando(null); cargar(); }} onBorrado={() => { setEditando(null); cargar(); }} />
       )}
 
