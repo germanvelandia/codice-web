@@ -16,6 +16,7 @@ const CLAVE_PERIODO_GUARDADO = "codice_tablero_periodo";
 function CeldaEditor({ celda, gradoId, periodo, semana, celdaCopiada, onCopiar, onCerrar, onGuardado, onBorrado }) {
   const [mision, setMision] = useState(celda?.mision || "");
   const [estado, setEstado] = useState(celda?.estado || "pendiente");
+  const [fecha, setFecha] = useState(celda?.fecha || "");
   const [evidencia, setEvidencia] = useState(celda?.evidencia || "");
   const [notas, setNotas] = useState(celda?.notas || "");
   const [xpSugerido, setXpSugerido] = useState(celda?.xp_sugerido || 0);
@@ -32,6 +33,7 @@ function CeldaEditor({ celda, gradoId, periodo, semana, celdaCopiada, onCopiar, 
     setXpSugerido(celdaCopiada.xp_sugerido || 0);
     setOroSugerido(celdaCopiada.oro_sugerido || 0);
     setSangreSugerida(celdaCopiada.sangre_sugerida || 0);
+    // La fecha NO se pega — cada curso/semana tiene la suya propia.
   };
 
   const copiar = () => {
@@ -42,7 +44,7 @@ function CeldaEditor({ celda, gradoId, periodo, semana, celdaCopiada, onCopiar, 
     setGuardando(true);
     try {
       await api.guardarCeldaTablero(gradoId, periodo, semana, {
-        mision: mision.trim() || null, estado, evidencia: evidencia.trim() || null, notas: notas.trim() || null,
+        mision: mision.trim() || null, estado, fecha: fecha || null, evidencia: evidencia.trim() || null, notas: notas.trim() || null,
         xp_sugerido: parseInt(xpSugerido, 10) || 0, oro_sugerido: parseInt(oroSugerido, 10) || 0, sangre_sugerida: parseInt(sangreSugerida, 10) || 0,
       });
       onGuardado();
@@ -77,9 +79,18 @@ function CeldaEditor({ celda, gradoId, periodo, semana, celdaCopiada, onCopiar, 
           {celdaCopiada && <button onClick={pegar} className="text-[11px] font-semibold px-2.5 py-1.5 rounded-full bg-violet-100 text-violet-700">📥 Pegar acá</button>}
         </div>
 
-        <label className="text-xs text-slate-500 block mb-1">Misión</label>
-        <input value={mision} onChange={(e) => setMision(e.target.value)} placeholder="Ej: M01 · El Gobernante Ético"
-          className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">Misión</label>
+            <input value={mision} onChange={(e) => setMision(e.target.value)} placeholder="Ej: M01 · El Gobernante Ético"
+              className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">Fecha (de este curso)</label>
+            <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)}
+              className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" />
+          </div>
+        </div>
         <label className="text-xs text-slate-500 block mb-1">Estado</label>
         <div className="flex flex-wrap gap-1.5 mb-3">
           {Object.entries(ESTADOS).map(([key, info]) => (
@@ -175,7 +186,6 @@ export function VistaTableroSemanal({ grados }) {
   // mismo — no sigue al "Periodo activo" general de arriba de la app.
   const [periodo, setPeriodo] = useState(() => localStorage.getItem(CLAVE_PERIODO_GUARDADO) || "1");
   const [celdas, setCeldas] = useState([]);
-  const [fechas, setFechas] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [semanas, setSemanas] = useState([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
   const [editando, setEditando] = useState(null); // { gradoId, semana }
@@ -193,10 +203,9 @@ export function VistaTableroSemanal({ grados }) {
   const cargar = () => {
     if (cursosIds.length === 0) { setCargando(false); return; }
     setCargando(true);
-    Promise.all([api.fetchTableroSemanal(cursosIds, periodo), api.fetchFechasTablero(periodo)]).then(([d, f]) => {
+    api.fetchTableroSemanal(cursosIds, periodo).then((d) => {
       setCeldas(d);
-      setFechas(f);
-      const maxSemana = Math.max(10, ...d.map((c) => c.semana), ...f.map((x) => x.semana));
+      const maxSemana = Math.max(10, ...d.map((c) => c.semana));
       setSemanas(Array.from({ length: maxSemana }, (_, i) => i + 1));
       setCargando(false);
     });
@@ -204,20 +213,7 @@ export function VistaTableroSemanal({ grados }) {
   useEffect(() => { cargar(); }, [nivelActual, periodo]);
 
   const celdaDe = (gradoId, semana) => celdas.find((c) => c.grado_id === gradoId && c.semana === semana);
-  const fechaDe = (semana) => fechas.find((f) => f.semana === semana)?.fecha || "";
   const agregarSemana = () => setSemanas((prev) => [...prev, prev.length + 1]);
-
-  const cambiarFecha = async (semana, fecha) => {
-    setFechas((prev) => {
-      const existe = prev.some((f) => f.semana === semana);
-      return existe ? prev.map((f) => (f.semana === semana ? { ...f, fecha } : f)) : [...prev, { semana, fecha }];
-    });
-    try {
-      await api.guardarFechaSemana(periodo, semana, fecha);
-    } catch (e) {
-      alert("Error al guardar la fecha: " + e.message);
-    }
-  };
 
   const eliminarSemana = async (semana) => {
     if (!confirm(`¿Eliminar la semana ${semana} completa (todos los cursos de este grado, en este periodo)? No se puede deshacer.`)) return;
@@ -232,7 +228,7 @@ export function VistaTableroSemanal({ grados }) {
         const celda = celdaDe(c.id, semana);
         if (!celda) return;
         filas.push({
-          Semana: semana, Fecha: fechaDe(semana) || "", Curso: c.id, Misión: celda.mision || "", Estado: ESTADOS[celda.estado]?.label || celda.estado,
+          Semana: semana, Fecha: celda.fecha || "", Curso: c.id, Misión: celda.mision || "", Estado: ESTADOS[celda.estado]?.label || celda.estado,
           Evidencia: celda.evidencia || "", "Actividades realizadas": celda.notas || "",
           "XP sugerido": celda.xp_sugerido || 0, "Oro sugerido": celda.oro_sugerido || 0, "Sangre sugerida": celda.sangre_sugerida || 0,
         });
@@ -286,7 +282,6 @@ export function VistaTableroSemanal({ grados }) {
             <thead>
               <tr className="bg-slate-50 text-slate-500 text-left">
                 <th className="px-3 py-2 sticky left-0 bg-slate-50">Semana</th>
-                <th className="px-2 py-2">Fecha</th>
                 {cursos.map((c) => <th key={c.id} className="px-3 py-2 text-center">Curso {c.id}</th>)}
                 <th className="px-2 py-2"></th>
               </tr>
@@ -295,10 +290,6 @@ export function VistaTableroSemanal({ grados }) {
               {semanas.map((semana) => (
                 <tr key={semana} className="border-t border-slate-100">
                   <td className="px-3 py-2 font-semibold text-slate-600 sticky left-0 bg-white">{semana}</td>
-                  <td className="px-2 py-1.5">
-                    <input type="date" value={fechaDe(semana)} onChange={(e) => cambiarFecha(semana, e.target.value)}
-                      className="text-[11px] rounded-lg px-1.5 py-1 border border-slate-200 outline-none" style={{ width: 128 }} />
-                  </td>
                   {cursos.map((c) => {
                     const celda = celdaDe(c.id, semana);
                     const info = ESTADOS[celda?.estado || "pendiente"];
@@ -310,7 +301,7 @@ export function VistaTableroSemanal({ grados }) {
                           {celda?.mision ? (
                             <>
                               <div className="font-semibold truncate" style={{ maxWidth: 110 }}>{celda.mision}</div>
-                              <div className="text-[9px]">{info.label}</div>
+                              <div className="text-[9px]">{info.label}{celda.fecha ? ` · ${celda.fecha.slice(8, 10)}/${celda.fecha.slice(5, 7)}` : ""}</div>
                               {(celda.xp_sugerido > 0 || celda.oro_sugerido > 0 || celda.sangre_sugerida > 0) && (
                                 <div className="text-[9px] mt-0.5 opacity-80">
                                   {celda.xp_sugerido > 0 && `⭐${celda.xp_sugerido} `}
