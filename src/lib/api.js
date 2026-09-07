@@ -1558,6 +1558,23 @@ export async function moverTableroAPeriodo(gradosIds, periodoOrigen, periodoDest
   if (e2) throw e2;
 }
 
+// Fecha real de cada semana (una por semana/periodo, compartida por todo el grado).
+export async function fetchFechasTablero(periodo) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("tablero_semanas_fechas").select("*").eq("docente_id", userData?.user?.id).eq("periodo", periodo);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function guardarFechaSemana(periodo, semana, fecha) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("tablero_semanas_fechas").upsert(
+    { docente_id: userData?.user?.id || null, periodo, semana, fecha: fecha || null },
+    { onConflict: "docente_id,periodo,semana" }
+  );
+  if (error) throw error;
+}
+
 export async function fetchPremios() {
   const { data, error } = await supabase.from("banco_premios").select("*").order("costo_monedas");
   if (error) throw error;
