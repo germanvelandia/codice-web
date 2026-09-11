@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import * as XLSX from "xlsx";
 import * as api from "../lib/api";
 import { InclusionModal } from "./Estudiantes";
 
@@ -15,6 +16,7 @@ export function VistaInclusionGeneral() {
   const [infoImpresion, setInfoImpresion] = useState({});
   const [preparandoImpresion, setPreparandoImpresion] = useState(false);
   const [estudiantesImpresion, setEstudiantesImpresion] = useState([]);
+  const [importando, setImportando] = useState(false);
 
   const cargar = () => { setCargando(true); api.fetchEstudiantesEnInclusion().then((d) => { setEstudiantes(d); setCargando(false); }); };
   useEffect(() => { cargar(); api.fetchInstitucion().then(setInstitucion); }, []);
@@ -47,6 +49,75 @@ export function VistaInclusionGeneral() {
       alert("Error al preparar la impresión: " + e.message);
     }
     setPreparandoImpresion(false);
+  };
+
+  // Exporta a Excel con las mismas columnas que espera el importador — para
+  // poder editar en Excel (por ejemplo, completar varios estudiantes con
+  // orientación escolar) y volver a subirlo después.
+  const exportarExcel = async () => {
+    if (visibles.length === 0) { alert("No hay estudiantes para exportar con el filtro actual."); return; }
+    const info = await api.fetchInclusionInfoMultiples(visibles.map((e) => e.id));
+    const filas = visibles.map((e) => {
+      const inf = info[e.id] || {};
+      return {
+        Nombre: e.nombre, Grado: e.grado_id, PIAR: e.piar ? "Sí" : "No", DUA: e.dua ? "Sí" : "No",
+        "Diagnóstico": inf.diagnostico || "", "EPS/Tratamiento": inf.eps_o_tratamiento || "",
+        "Barreras identificadas": inf.barreras_identificadas || "", "Apoyos requeridos": inf.apoyos_requeridos || "",
+        "Objetivos PIAR": inf.objetivos_piar || "", "Ajustes razonables": e.ajustes_inclusion || "",
+        "Responsable seguimiento": inf.responsable_seguimiento || "",
+        "Fecha inicio proceso": inf.fecha_inicio_proceso || "", "Fecha próxima revisión": inf.fecha_proxima_revision || "",
+      };
+    });
+    const hoja = XLSX.utils.json_to_sheet(filas);
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, "Inclusión PIAR-DUA");
+    XLSX.writeFile(libro, "inclusion_piar_dua.xlsx");
+  };
+
+  // Importa desde un Excel con las mismas columnas — busca a cada estudiante
+  // por Nombre + Grado (tienen que coincidir con lo que ya está cargado en
+  // Estudiantes) y actualiza su información de inclusión.
+  const importarExcel = (file) => {
+    setImportando(true);
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      try {
+        const wb = XLSX.read(ev.target.result, { type: "binary" });
+        const hoja = wb.Sheets[wb.SheetNames[0]];
+        const filas = XLSX.utils.sheet_to_json(hoja);
+        if (filas.length === 0) { alert("El archivo no tiene filas."); setImportando(false); return; }
+
+        const esSi = (v) => ["sí", "si", "true", "1", "x"].includes(String(v || "").trim().toLowerCase());
+        let actualizados = 0;
+        const noEncontrados = [];
+
+        for (const f of filas) {
+          const nombre = String(f["Nombre"] || "").trim();
+          const grado = String(f["Grado"] || "").trim();
+          if (!nombre || !grado) continue;
+          const estudiante = await api.fetchEstudiantePorNombreYGrado(nombre, grado);
+          if (!estudiante) { noEncontrados.push(`${nombre} (Grado ${grado})`); continue; }
+
+          await api.guardarInclusion(estudiante.id, { piar: esSi(f["PIAR"]), dua: esSi(f["DUA"]), ajustes_inclusion: f["Ajustes razonables"] || null });
+          await api.guardarInclusionInfo(estudiante.id, {
+            diagnostico: f["Diagnóstico"] || null, eps_o_tratamiento: f["EPS/Tratamiento"] || null,
+            barreras_identificadas: f["Barreras identificadas"] || null, apoyos_requeridos: f["Apoyos requeridos"] || null,
+            objetivos_piar: f["Objetivos PIAR"] || null, responsable_seguimiento: f["Responsable seguimiento"] || null,
+            fecha_inicio_proceso: f["Fecha inicio proceso"] || null, fecha_proxima_revision: f["Fecha próxima revisión"] || null,
+          });
+          actualizados++;
+        }
+
+        let mensaje = `Se actualizaron ${actualizados} estudiante(s).`;
+        if (noEncontrados.length > 0) mensaje += `\n\nNo se encontraron (revisá que el nombre y el grado coincidan exactamente con Estudiantes):\n${noEncontrados.join("\n")}`;
+        alert(mensaje);
+        cargar();
+      } catch (e) {
+        alert("Error al importar: " + e.message);
+      }
+      setImportando(false);
+    };
+    reader.readAsBinaryString(file);
   };
 
   const contenidoImprimible = imprimiendo ? (
@@ -129,9 +200,17 @@ export function VistaInclusionGeneral() {
           <h2 className="text-xl font-bold text-slate-800">🧩 Inclusión — todos los cursos</h2>
           <p className="text-sm text-slate-400">Todos los estudiantes en proceso de inclusión (PIAR o DUA), sin importar el curso — tocá uno para ver o agregar su seguimiento.</p>
         </div>
-        <button disabled={preparandoImpresion} onClick={imprimir} className="text-xs font-semibold px-3 py-2 rounded-full bg-violet-500 text-white disabled:opacity-60 shrink-0">
-          {preparandoImpresion ? "Preparando…" : "🖨️ Imprimir todo (con el filtro actual)"}
-        </button>
+        <div className="flex gap-2 shrink-0 flex-wrap">
+          <button disabled={preparandoImpresion} onClick={imprimir} className="text-xs font-semibold px-3 py-2 rounded-full bg-violet-500 text-white disabled:opacity-60">
+            {preparandoImpresion ? "Preparando…" : "🖨️ Imprimir todo"}
+          </button>
+          <button onClick={exportarExcel} className="text-xs font-semibold px-3 py-2 rounded-full border border-slate-200 text-slate-600">📤 Exportar a Excel</button>
+          <label className="text-xs font-semibold px-3 py-2 rounded-full border border-slate-200 text-slate-600 cursor-pointer">
+            {importando ? "Importando…" : "📥 Importar de Excel"}
+            <input type="file" accept=".xlsx,.xls" className="hidden" disabled={importando}
+              onChange={(e) => { if (e.target.files[0]) importarExcel(e.target.files[0]); e.target.value = ""; }} />
+          </label>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2 mb-4">
