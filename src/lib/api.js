@@ -666,6 +666,30 @@ export async function fetchSeguimientosInclusionMultiples(estudianteIds) {
   return porEstudiante;
 }
 
+/* ---------------- Información ampliada del PIAR/DUA ---------------- */
+export async function fetchInclusionInfo(estudianteId) {
+  const { data, error } = await supabase.from("inclusion_info").select("*").eq("estudiante_id", estudianteId).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function fetchInclusionInfoMultiples(estudianteIds) {
+  if (estudianteIds.length === 0) return {};
+  const { data, error } = await supabase.from("inclusion_info").select("*").in("estudiante_id", estudianteIds);
+  if (error) throw error;
+  const porEstudiante = {};
+  (data || []).forEach((info) => { porEstudiante[info.estudiante_id] = info; });
+  return porEstudiante;
+}
+
+export async function guardarInclusionInfo(estudianteId, campos) {
+  const { error } = await supabase.from("inclusion_info").upsert(
+    { estudiante_id: estudianteId, ...campos, actualizado_en: new Date().toISOString() },
+    { onConflict: "estudiante_id" }
+  );
+  if (error) throw error;
+}
+
 export async function crearSeguimientoInclusion(estudianteId, materiaId, tipo, observacion) {
   const { data: userData } = await supabase.auth.getUser();
   const { error } = await supabase.from("seguimiento_inclusion").insert({
