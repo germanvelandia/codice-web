@@ -646,6 +646,26 @@ export async function fetchSeguimientosInclusion(estudianteId) {
   }));
 }
 
+// Igual que la anterior, pero para VARIOS estudiantes de una — pensada para
+// armar el reporte imprimible de Inclusión sin hacer una consulta por cada uno.
+export async function fetchSeguimientosInclusionMultiples(estudianteIds) {
+  if (estudianteIds.length === 0) return {};
+  const [seguimientosRes, profesoresRes, materiasRes] = await Promise.all([
+    supabase.from("seguimiento_inclusion").select("*").in("estudiante_id", estudianteIds).order("fecha", { ascending: false }),
+    supabase.from("profesores").select("id, nombre"),
+    supabase.from("materias").select("id, nombre"),
+  ]);
+  if (seguimientosRes.error) throw seguimientosRes.error;
+  const nombreProfPorId = {}; (profesoresRes.data || []).forEach((p) => { nombreProfPorId[p.id] = p.nombre; });
+  const nombreMatPorId = {}; (materiasRes.data || []).forEach((m) => { nombreMatPorId[m.id] = m.nombre; });
+  const porEstudiante = {};
+  (seguimientosRes.data || []).forEach((s) => {
+    const fila = { ...s, profesores: s.docente_id ? { nombre: nombreProfPorId[s.docente_id] || null } : null, materias: s.materia_id ? { nombre: nombreMatPorId[s.materia_id] || null } : null };
+    (porEstudiante[s.estudiante_id] = porEstudiante[s.estudiante_id] || []).push(fila);
+  });
+  return porEstudiante;
+}
+
 export async function crearSeguimientoInclusion(estudianteId, materiaId, tipo, observacion) {
   const { data: userData } = await supabase.auth.getUser();
   const { error } = await supabase.from("seguimiento_inclusion").insert({
