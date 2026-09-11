@@ -690,6 +690,16 @@ export async function guardarInclusionInfo(estudianteId, campos) {
   if (error) throw error;
 }
 
+// Busca UN estudiante por nombre + grado (coincidencia exacta de nombre,
+// sin importar mayúsculas) — pensado para el importador de Excel de
+// Inclusión, donde el archivo no trae el id interno del estudiante.
+export async function fetchEstudiantePorNombreYGrado(nombre, gradoId) {
+  const { data, error } = await supabase.from("estudiantes").select("id, nombre, grado_id")
+    .eq("activo", true).eq("grado_id", String(gradoId).trim()).ilike("nombre", nombre.trim()).limit(1).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 export async function crearSeguimientoInclusion(estudianteId, materiaId, tipo, observacion) {
   const { data: userData } = await supabase.auth.getUser();
   const { error } = await supabase.from("seguimiento_inclusion").insert({
