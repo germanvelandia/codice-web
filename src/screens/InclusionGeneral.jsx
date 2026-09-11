@@ -1,21 +1,66 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import * as api from "../lib/api";
 import { InclusionModal } from "./Estudiantes";
 
-// Vista imprimible con todos los datos del proceso de inclusión de cada
-// estudiante: PIAR/DUA, ajustes acordados, y toda la bitácora de seguimiento.
-function ReporteInclusionImprimible({ estudiantes, seguimientosPorEstudiante, institucion }) {
-  return (
+export function VistaInclusionGeneral() {
+  const [estudiantes, setEstudiantes] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [filtro, setFiltro] = useState("todos"); // "todos" | "piar" | "dua"
+  const [query, setQuery] = useState("");
+  const [abiertoPara, setAbiertoPara] = useState(null);
+  const [institucion, setInstitucion] = useState(null);
+  const [imprimiendo, setImprimiendo] = useState(false);
+  const [seguimientosImpresion, setSeguimientosImpresion] = useState({});
+  const [infoImpresion, setInfoImpresion] = useState({});
+  const [preparandoImpresion, setPreparandoImpresion] = useState(false);
+  const [estudiantesImpresion, setEstudiantesImpresion] = useState([]);
+
+  const cargar = () => { setCargando(true); api.fetchEstudiantesEnInclusion().then((d) => { setEstudiantes(d); setCargando(false); }); };
+  useEffect(() => { cargar(); api.fetchInstitucion().then(setInstitucion); }, []);
+
+  useEffect(() => {
+    if (!imprimiendo) return;
+    const id = setTimeout(() => window.print(), 150);
+    const onAfter = () => setImprimiendo(false);
+    window.addEventListener("afterprint", onAfter);
+    return () => { clearTimeout(id); window.removeEventListener("afterprint", onAfter); };
+  }, [imprimiendo]);
+
+  const visibles = estudiantes
+    .filter((e) => filtro === "todos" || (filtro === "piar" && e.piar) || (filtro === "dua" && e.dua))
+    .filter((e) => !query.trim() || e.nombre.toLowerCase().includes(query.trim().toLowerCase()));
+
+  const imprimir = async () => {
+    if (visibles.length === 0) { alert("No hay estudiantes para imprimir con el filtro actual."); return; }
+    setPreparandoImpresion(true);
+    try {
+      const [seguimientos, info] = await Promise.all([
+        api.fetchSeguimientosInclusionMultiples(visibles.map((e) => e.id)),
+        api.fetchInclusionInfoMultiples(visibles.map((e) => e.id)),
+      ]);
+      setSeguimientosImpresion(seguimientos);
+      setInfoImpresion(info);
+      setEstudiantesImpresion(visibles);
+      setImprimiendo(true);
+    } catch (e) {
+      alert("Error al preparar la impresión: " + e.message);
+    }
+    setPreparandoImpresion(false);
+  };
+
+  const contenidoImprimible = imprimiendo ? (
     <div className="print-only" style={{ maxWidth: 900, margin: "0 auto", padding: 28, fontFamily: "Georgia, serif", color: "#1e293b" }}>
       <div style={{ textAlign: "center", marginBottom: 24, borderBottom: "2px solid #7C3AED", paddingBottom: 12 }}>
-        {institucion?.logo_url && <img src={institucion.logo_url} alt="" style={{ height: 56, margin: "0 auto 8px" }} />}
+        {institucion?.logo_url && <img src={institucion.logo_url} alt="" style={{ maxHeight: 60, margin: "0 auto 8px", display: "block", marginLeft: "auto", marginRight: "auto" }} />}
         <div style={{ fontSize: 18, fontWeight: "bold" }}>{institucion?.nombre || "Institución Educativa"}</div>
         <div style={{ fontSize: 14, color: "#7C3AED", fontWeight: "bold", marginTop: 4 }}>🧩 Reporte del Proceso de Inclusión</div>
-        <div style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>{estudiantes.length} estudiante(s) · Generado el {new Date().toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })}</div>
+        <div style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>{estudiantesImpresion.length} estudiante(s) · Generado el {new Date().toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })}</div>
       </div>
 
-      {estudiantes.map((e) => {
-        const seguimientos = seguimientosPorEstudiante[e.id] || [];
+      {estudiantesImpresion.map((e) => {
+        const seguimientos = seguimientosImpresion[e.id] || [];
+        const info = infoImpresion[e.id] || {};
         return (
           <div key={e.id} className="print-avoid-break" style={{ marginBottom: 26, border: "1px solid #E2E8F0", borderRadius: 8, padding: 14 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
@@ -29,9 +74,18 @@ function ReporteInclusionImprimible({ estudiantes, seguimientosPorEstudiante, in
               </div>
             </div>
 
-            {e.ajustes_inclusion && (
-              <div style={{ fontSize: 11, background: "#F8FAFC", borderRadius: 6, padding: 8, marginBottom: 8 }}>
-                <b>Ajustes razonables / apoyos acordados:</b> {e.ajustes_inclusion}
+            {[
+              ["Diagnóstico / condición", info.diagnostico], ["EPS / tratamiento", info.eps_o_tratamiento],
+              ["Barreras identificadas", info.barreras_identificadas], ["Apoyos requeridos", info.apoyos_requeridos],
+              ["Objetivos del PIAR", info.objetivos_piar], ["Ajustes razonables / apoyos acordados", e.ajustes_inclusion],
+            ].filter(([, v]) => v).map(([label, valor]) => (
+              <div key={label} style={{ fontSize: 11, marginBottom: 6 }}><b>{label}:</b> {valor}</div>
+            ))}
+            {(info.responsable_seguimiento || info.fecha_inicio_proceso || info.fecha_proxima_revision) && (
+              <div style={{ display: "flex", gap: 16, fontSize: 10, color: "#475569", marginBottom: 8, flexWrap: "wrap" }}>
+                {info.responsable_seguimiento && <span><b>Responsable:</b> {info.responsable_seguimiento}</span>}
+                {info.fecha_inicio_proceso && <span><b>Inicio:</b> {info.fecha_inicio_proceso}</span>}
+                {info.fecha_proxima_revision && <span><b>Próxima revisión:</b> {info.fecha_proxima_revision}</span>}
               </div>
             )}
 
@@ -66,47 +120,7 @@ function ReporteInclusionImprimible({ estudiantes, seguimientosPorEstudiante, in
         );
       })}
     </div>
-  );
-}
-
-export function VistaInclusionGeneral() {
-  const [estudiantes, setEstudiantes] = useState([]);
-  const [cargando, setCargando] = useState(true);
-  const [filtro, setFiltro] = useState("todos"); // "todos" | "piar" | "dua"
-  const [query, setQuery] = useState("");
-  const [abiertoPara, setAbiertoPara] = useState(null);
-  const [institucion, setInstitucion] = useState(null);
-  const [imprimiendo, setImprimiendo] = useState(false);
-  const [seguimientosImpresion, setSeguimientosImpresion] = useState({});
-  const [preparandoImpresion, setPreparandoImpresion] = useState(false);
-
-  const cargar = () => { setCargando(true); api.fetchEstudiantesEnInclusion().then((d) => { setEstudiantes(d); setCargando(false); }); };
-  useEffect(() => { cargar(); api.fetchInstitucion().then(setInstitucion); }, []);
-
-  useEffect(() => {
-    if (!imprimiendo) return;
-    const id = setTimeout(() => window.print(), 150);
-    const onAfter = () => setImprimiendo(false);
-    window.addEventListener("afterprint", onAfter);
-    return () => { clearTimeout(id); window.removeEventListener("afterprint", onAfter); };
-  }, [imprimiendo]);
-
-  const visibles = estudiantes
-    .filter((e) => filtro === "todos" || (filtro === "piar" && e.piar) || (filtro === "dua" && e.dua))
-    .filter((e) => !query.trim() || e.nombre.toLowerCase().includes(query.trim().toLowerCase()));
-
-  const imprimir = async () => {
-    if (visibles.length === 0) { alert("No hay estudiantes para imprimir con el filtro actual."); return; }
-    setPreparandoImpresion(true);
-    try {
-      const seguimientos = await api.fetchSeguimientosInclusionMultiples(visibles.map((e) => e.id));
-      setSeguimientosImpresion(seguimientos);
-      setImprimiendo(true);
-    } catch (e) {
-      alert("Error al preparar la impresión: " + e.message);
-    }
-    setPreparandoImpresion(false);
-  };
+  ) : null;
 
   return (
     <div>
@@ -167,9 +181,7 @@ export function VistaInclusionGeneral() {
         <InclusionModal estudiante={abiertoPara} onClose={() => setAbiertoPara(null)} onGuardado={cargar} />
       )}
 
-      {imprimiendo && (
-        <ReporteInclusionImprimible estudiantes={visibles} seguimientosPorEstudiante={seguimientosImpresion} institucion={institucion} />
-      )}
+      {contenidoImprimible && createPortal(contenidoImprimible, document.body)}
     </div>
   );
 }
