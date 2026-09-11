@@ -680,16 +680,59 @@ export function InclusionModal({ estudiante, materiaId, onClose, onGuardado }) {
   const [nuevoTipo, setNuevoTipo] = useState("General");
   const [nuevaObs, setNuevaObs] = useState("");
 
+  // Información ampliada del PIAR/DUA
+  const [infoAbierta, setInfoAbierta] = useState(false);
+  const [diagnostico, setDiagnostico] = useState("");
+  const [epsTratamiento, setEpsTratamiento] = useState("");
+  const [barreras, setBarreras] = useState("");
+  const [apoyosRequeridos, setApoyosRequeridos] = useState("");
+  const [objetivosPiar, setObjetivosPiar] = useState("");
+  const [responsable, setResponsable] = useState("");
+  const [fechaInicio, setFechaInicio] = useState("");
+  const [fechaRevision, setFechaRevision] = useState("");
+  const [cargandoInfo, setCargandoInfo] = useState(true);
+
+  const [imprimiendo, setImprimiendo] = useState(false);
+  const [institucion, setInstitucion] = useState(null);
+
   const cargarSeguimientos = () => {
     setCargandoSeg(true);
     api.fetchSeguimientosInclusion(estudiante.id).then((d) => { setSeguimientos(d); setCargandoSeg(false); });
   };
   useEffect(() => { cargarSeguimientos(); }, [estudiante.id]);
 
+  useEffect(() => {
+    setCargandoInfo(true);
+    api.fetchInclusionInfo(estudiante.id).then((info) => {
+      if (info) {
+        setDiagnostico(info.diagnostico || ""); setEpsTratamiento(info.eps_o_tratamiento || "");
+        setBarreras(info.barreras_identificadas || ""); setApoyosRequeridos(info.apoyos_requeridos || "");
+        setObjetivosPiar(info.objetivos_piar || ""); setResponsable(info.responsable_seguimiento || "");
+        setFechaInicio(info.fecha_inicio_proceso || ""); setFechaRevision(info.fecha_proxima_revision || "");
+      }
+      setCargandoInfo(false);
+    });
+    api.fetchInstitucion().then(setInstitucion);
+  }, [estudiante.id]);
+
+  useEffect(() => {
+    if (!imprimiendo) return;
+    const id = setTimeout(() => window.print(), 150);
+    const onAfter = () => setImprimiendo(false);
+    window.addEventListener("afterprint", onAfter);
+    return () => { clearTimeout(id); window.removeEventListener("afterprint", onAfter); };
+  }, [imprimiendo]);
+
   const guardar = async () => {
     setGuardando(true);
     try {
       await api.guardarInclusion(estudiante.id, { piar, dua, ajustes_inclusion: ajustes.trim() || null });
+      await api.guardarInclusionInfo(estudiante.id, {
+        diagnostico: diagnostico.trim() || null, eps_o_tratamiento: epsTratamiento.trim() || null,
+        barreras_identificadas: barreras.trim() || null, apoyos_requeridos: apoyosRequeridos.trim() || null,
+        objetivos_piar: objetivosPiar.trim() || null, responsable_seguimiento: responsable.trim() || null,
+        fecha_inicio_proceso: fechaInicio || null, fecha_proxima_revision: fechaRevision || null,
+      });
       onGuardado?.({ ...estudiante, piar, dua, ajustes_inclusion: ajustes.trim() || null });
     } catch (e) {
       alert("Error al guardar: " + e.message);
@@ -714,12 +757,73 @@ export function InclusionModal({ estudiante, materiaId, onClose, onGuardado }) {
     cargarSeguimientos();
   };
 
+  const contenidoImprimible = imprimiendo ? (
+    <div className="print-only" style={{ maxWidth: 900, margin: "0 auto", padding: 28, fontFamily: "Georgia, serif", color: "#1e293b" }}>
+      <div style={{ textAlign: "center", marginBottom: 20, borderBottom: "2px solid #7C3AED", paddingBottom: 10 }}>
+        {institucion?.logo_url && <img src={institucion.logo_url} alt="" style={{ maxHeight: 60, marginBottom: 6, display: "block", marginLeft: "auto", marginRight: "auto" }} />}
+        <div style={{ fontSize: 18, fontWeight: "bold" }}>{institucion?.nombre || "Institución Educativa"}</div>
+        <div style={{ fontSize: 14, color: "#7C3AED", fontWeight: "bold", marginTop: 4 }}>🧩 Ficha del Proceso de Inclusión</div>
+      </div>
+
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 16, fontWeight: "bold" }}>{estudiante.nombre}</div>
+        <div style={{ fontSize: 12, color: "#64748B" }}>Grado {estudiante.grado_id}</div>
+        <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+          {piar && <span style={{ fontSize: 10, fontWeight: "bold", padding: "2px 8px", borderRadius: 10, background: "#EDE9FE", color: "#7C3AED" }}>PIAR</span>}
+          {dua && <span style={{ fontSize: 10, fontWeight: "bold", padding: "2px 8px", borderRadius: 10, background: "#DBEAFE", color: "#1D4ED8" }}>DUA</span>}
+        </div>
+      </div>
+
+      {[
+        ["Diagnóstico / condición", diagnostico], ["EPS / tratamiento", epsTratamiento],
+        ["Barreras identificadas", barreras], ["Apoyos requeridos", apoyosRequeridos],
+        ["Objetivos del PIAR", objetivosPiar], ["Ajustes razonables / apoyos acordados", ajustes],
+      ].filter(([, v]) => v).map(([label, valor]) => (
+        <div key={label} style={{ fontSize: 11, marginBottom: 8 }}><b>{label}:</b> {valor}</div>
+      ))}
+
+      <div style={{ display: "flex", gap: 20, fontSize: 11, marginBottom: 8 }}>
+        {responsable && <div><b>Responsable de seguimiento:</b> {responsable}</div>}
+        {fechaInicio && <div><b>Inicio del proceso:</b> {fechaInicio}</div>}
+        {fechaRevision && <div><b>Próxima revisión:</b> {fechaRevision}</div>}
+      </div>
+
+      <div style={{ fontSize: 12, fontWeight: "bold", color: "#475569", marginTop: 16, marginBottom: 4 }}>Bitácora de seguimiento ({seguimientos.length})</div>
+      {seguimientos.length === 0 ? (
+        <div style={{ fontSize: 10, color: "#94A3B8" }}>Sin registros de seguimiento todavía.</div>
+      ) : (
+        <table style={{ width: "100%", fontSize: 10, borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ textAlign: "left", borderBottom: "1px solid #E2E8F0" }}>
+              <th style={{ padding: "3px 4px" }}>Fecha</th><th style={{ padding: "3px 4px" }}>Tipo</th>
+              <th style={{ padding: "3px 4px" }}>Materia</th><th style={{ padding: "3px 4px" }}>Docente</th><th style={{ padding: "3px 4px" }}>Observación</th>
+            </tr>
+          </thead>
+          <tbody>
+            {seguimientos.map((s) => (
+              <tr key={s.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                <td style={{ padding: "3px 4px", whiteSpace: "nowrap" }}>{s.fecha ? new Date(s.fecha).toLocaleDateString("es-CO") : "—"}</td>
+                <td style={{ padding: "3px 4px" }}>{s.tipo}</td>
+                <td style={{ padding: "3px 4px" }}>{s.materias?.nombre || "—"}</td>
+                <td style={{ padding: "3px 4px" }}>{s.profesores?.nombre || "—"}</td>
+                <td style={{ padding: "3px 4px" }}>{s.observacion}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  ) : null;
+
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
         <div className="flex justify-between items-center mb-3">
           <h3 className="font-bold text-slate-800">🧩 Proceso de inclusión — {estudiante.nombre}</h3>
-          <button onClick={onClose} className="text-slate-400">✕</button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setImprimiendo(true)} className="text-xs text-slate-400 hover:text-violet-600" title="Imprimir ficha individual">🖨️</button>
+            <button onClick={onClose} className="text-slate-400">✕</button>
+          </div>
         </div>
 
         <div className="flex gap-4 mb-3">
@@ -735,6 +839,62 @@ export function InclusionModal({ estudiante, materiaId, onClose, onGuardado }) {
         <textarea value={ajustes} onChange={(e) => setAjustes(e.target.value)} rows={3}
           placeholder="Ej: Tiempo adicional en evaluaciones, material en letra ampliada, ubicación cerca al docente…"
           className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
+
+        <button onClick={() => setInfoAbierta((v) => !v)} className="text-xs font-semibold text-violet-600 mb-3">
+          {infoAbierta ? "▲ Ocultar información ampliada" : "▼ Ver / completar información ampliada del PIAR-DUA"}
+        </button>
+
+        {infoAbierta && (
+          cargandoInfo ? (
+            <div className="text-xs text-slate-400 mb-3">Cargando…</div>
+          ) : (
+            <div className="bg-slate-50 rounded-xl p-3 mb-3 space-y-2">
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">Diagnóstico / condición</label>
+                <input value={diagnostico} onChange={(e) => setDiagnostico(e.target.value)} placeholder="Ej: TDAH, discapacidad cognitiva leve…"
+                  className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">EPS / tratamiento</label>
+                <input value={epsTratamiento} onChange={(e) => setEpsTratamiento(e.target.value)} placeholder="Ej: Nueva EPS, terapia ocupacional semanal…"
+                  className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">Barreras identificadas</label>
+                <textarea value={barreras} onChange={(e) => setBarreras(e.target.value)} rows={2}
+                  className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">Apoyos requeridos</label>
+                <textarea value={apoyosRequeridos} onChange={(e) => setApoyosRequeridos(e.target.value)} rows={2}
+                  placeholder="Ej: Docente de apoyo, intérprete, material adaptado…"
+                  className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">Objetivos del PIAR</label>
+                <textarea value={objetivosPiar} onChange={(e) => setObjetivosPiar(e.target.value)} rows={2}
+                  className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">Responsable de seguimiento</label>
+                <input value={responsable} onChange={(e) => setResponsable(e.target.value)} placeholder="Ej: Orientadora escolar, docente de apoyo…"
+                  className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-slate-500 block mb-1">Inicio del proceso</label>
+                  <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)}
+                    className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 block mb-1">Próxima revisión</label>
+                  <input type="date" value={fechaRevision} onChange={(e) => setFechaRevision(e.target.value)}
+                    className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
+                </div>
+              </div>
+            </div>
+          )
+        )}
 
         <button disabled={guardando} onClick={guardar} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60 mb-4">
           {guardando ? "Guardando…" : "Guardar"}
@@ -775,6 +935,7 @@ export function InclusionModal({ estudiante, materiaId, onClose, onGuardado }) {
           )}
         </div>
       </div>
+      {contenidoImprimible && createPortal(contenidoImprimible, document.body)}
     </div>
   );
 }
