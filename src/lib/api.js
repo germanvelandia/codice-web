@@ -4766,24 +4766,35 @@ export const COMARCA_REINOS_BASE = [
   { nombre: "Ruinas de la Concordia", emoji: "🔴", recurso: "Pergaminos y Laicidad" },
 ];
 
-// Crea una sesión nueva, con los 6 reinos y sus 4 provincias cada uno,
-// listos para empezar a jugar.
-export async function crearSesionComarca(gradoId, titulo) {
+// Trae los Reinos reales que ya tienen tus estudiantes de ese curso (los
+// mismos que ven en "Mi Reino") — para fundar la Comarca sobre los grupos
+// que ya existen, en vez de nombres inventados.
+export async function fetchReinosDeGrado(gradoId) {
+  const { data, error } = await supabase.from("estudiantes").select("reino_actual").eq("grado_id", gradoId).eq("activo", true);
+  if (error) throw error;
+  const nombres = [...new Set((data || []).map((e) => e.reino_actual).filter(Boolean))];
+  return nombres;
+}
+
+// Crea una sesión nueva, con un Reino de la Comarca por cada Reino real de
+// tus estudiantes en ese curso (hasta los 6 temáticos, si hay más los usa
+// igual con emoji genérico), y sus 4 provincias cada uno.
+export async function crearSesionComarca(gradoId, titulo, nombresReinos) {
   const { data: userData } = await supabase.auth.getUser();
   const { data: sesion, error } = await supabase.from("comarca_sesiones")
     .insert({ docente_id: userData?.user?.id || null, grado_id: gradoId, titulo: titulo || "Comarca de Oakhaven" })
     .select().single();
   if (error) throw error;
 
-  const reinosAInsertar = COMARCA_REINOS_BASE.map((r, i) => ({
-    sesion_id: sesion.id, nombre: r.nombre, emoji: r.emoji, orden: i,
+  const reinosAInsertar = nombresReinos.map((nombre, i) => ({
+    sesion_id: sesion.id, nombre, emoji: COMARCA_REINOS_BASE[i]?.emoji || "🏰", orden: i,
   }));
   const { data: reinos, error: e2 } = await supabase.from("comarca_reinos").insert(reinosAInsertar).select();
   if (e2) throw e2;
 
   const provinciasAInsertar = [];
   reinos.forEach((reino, i) => {
-    const recurso = COMARCA_REINOS_BASE[i].recurso;
+    const recurso = COMARCA_REINOS_BASE[i]?.recurso || "Recursos";
     for (let p = 1; p <= 4; p++) {
       provinciasAInsertar.push({
         sesion_id: sesion.id, nombre: `${reino.nombre} — Provincia ${p}`, recurso,
