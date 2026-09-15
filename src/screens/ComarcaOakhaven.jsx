@@ -206,15 +206,24 @@ export function VistaComarcaOakhaven({ grados, gradoActivo }) {
   const [creandoAbierto, setCreandoAbierto] = useState(false);
   const [gradoId, setGradoId] = useState(gradoActivo || grados[0]?.id || "");
   const [titulo, setTitulo] = useState("Comarca de Oakhaven");
+  const [reinosDelCurso, setReinosDelCurso] = useState([]);
+  const [cargandoReinos, setCargandoReinos] = useState(false);
   const [creando, setCreando] = useState(false);
 
   const cargar = () => { setCargando(true); api.fetchSesionesComarca().then((d) => { setSesiones(d); setCargando(false); }); };
   useEffect(() => { cargar(); }, []);
 
+  useEffect(() => {
+    if (!gradoId) return;
+    setCargandoReinos(true);
+    api.fetchReinosDeGrado(gradoId).then((r) => { setReinosDelCurso(r); setCargandoReinos(false); });
+  }, [gradoId]);
+
   const crear = async () => {
+    if (reinosDelCurso.length === 0) { alert("Este curso todavía no tiene estudiantes con un Reino asignado — asigná Reinos primero en la pantalla de Estudiantes."); return; }
     setCreando(true);
     try {
-      const nueva = await api.crearSesionComarca(gradoId, titulo.trim() || "Comarca de Oakhaven");
+      const nueva = await api.crearSesionComarca(gradoId, titulo.trim() || "Comarca de Oakhaven", reinosDelCurso);
       setCreandoAbierto(false);
       setSesionAbierta(nueva);
     } catch (e) {
@@ -245,8 +254,24 @@ export function VistaComarcaOakhaven({ grados, gradoActivo }) {
           </select>
           <label className="text-xs text-slate-500 block mb-1">Título de la sesión</label>
           <input value={titulo} onChange={(e) => setTitulo(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none bg-white" />
-          <p className="text-[11px] text-slate-400 mb-3">Se van a crear los 6 Reinos y sus 24 provincias automáticamente, listos para repartir entre las mesas.</p>
-          <button disabled={creando} onClick={crear} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+
+          <label className="text-xs text-slate-500 block mb-1">Reinos de este curso (los mismos de "Mi Reino")</label>
+          {cargandoReinos ? (
+            <p className="text-xs text-slate-400 mb-3">Buscando…</p>
+          ) : reinosDelCurso.length === 0 ? (
+            <p className="text-xs text-rose-500 mb-3">Este curso todavía no tiene Reinos asignados a sus estudiantes.</p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {reinosDelCurso.map((r, i) => (
+                <span key={r} className="text-xs font-semibold px-2 py-1 rounded-full bg-white border border-violet-200 text-violet-700">
+                  {api.COMARCA_REINOS_BASE[i]?.emoji || "🏰"} {r}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <p className="text-[11px] text-slate-400 mb-3">Se va a crear un Reino de la Comarca por cada uno de estos, con sus 4 provincias, listos para repartir entre las mesas.</p>
+          <button disabled={creando || reinosDelCurso.length === 0} onClick={crear} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
             {creando ? "Creando el tablero…" : "🏛️ Fundar la Comarca"}
           </button>
         </div>
