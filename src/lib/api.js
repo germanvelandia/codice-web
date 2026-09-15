@@ -4755,3 +4755,110 @@ export async function eliminarRubricaCatalogo(id) {
   const { error } = await supabase.from("rubricas_catalogo").delete().eq("id", id);
   if (error) throw error;
 }
+
+/* ==================== COMARCA DE OAKHAVEN — Fase 1 ==================== */
+export const COMARCA_REINOS_BASE = [
+  { nombre: "Templo del Sol", emoji: "🟡", recurso: "Oro y Tradición" },
+  { nombre: "Forja Oscura", emoji: "🌑", recurso: "Hierro y Herramientas" },
+  { nombre: "Plaza Comercial", emoji: "🟢", recurso: "Monedas y Mercados" },
+  { nombre: "Acueducto Común", emoji: "🔵", recurso: "Agua Vital e Infraestructura" },
+  { nombre: "Campos del Común", emoji: "🌾", recurso: "Trigo y Madera" },
+  { nombre: "Ruinas de la Concordia", emoji: "🔴", recurso: "Pergaminos y Laicidad" },
+];
+
+// Crea una sesión nueva, con los 6 reinos y sus 4 provincias cada uno,
+// listos para empezar a jugar.
+export async function crearSesionComarca(gradoId, titulo) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data: sesion, error } = await supabase.from("comarca_sesiones")
+    .insert({ docente_id: userData?.user?.id || null, grado_id: gradoId, titulo: titulo || "Comarca de Oakhaven" })
+    .select().single();
+  if (error) throw error;
+
+  const reinosAInsertar = COMARCA_REINOS_BASE.map((r, i) => ({
+    sesion_id: sesion.id, nombre: r.nombre, emoji: r.emoji, orden: i,
+  }));
+  const { data: reinos, error: e2 } = await supabase.from("comarca_reinos").insert(reinosAInsertar).select();
+  if (e2) throw e2;
+
+  const provinciasAInsertar = [];
+  reinos.forEach((reino, i) => {
+    const recurso = COMARCA_REINOS_BASE[i].recurso;
+    for (let p = 1; p <= 4; p++) {
+      provinciasAInsertar.push({
+        sesion_id: sesion.id, nombre: `${reino.nombre} — Provincia ${p}`, recurso,
+        reino_original_id: reino.id, reino_actual_id: reino.id,
+      });
+    }
+  });
+  const { error: e3 } = await supabase.from("comarca_provincias").insert(provinciasAInsertar);
+  if (e3) throw e3;
+
+  return sesion;
+}
+
+export async function fetchSesionesComarca() {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("comarca_sesiones").select("*")
+    .eq("docente_id", userData?.user?.id).order("creado_en", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function fetchSesionComarca(sesionId) {
+  const { data, error } = await supabase.from("comarca_sesiones").select("*").eq("id", sesionId).single();
+  if (error) throw error;
+  return data;
+}
+
+export async function fetchReinosDeSesion(sesionId) {
+  const { data, error } = await supabase.from("comarca_reinos").select("*").eq("sesion_id", sesionId).order("orden");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function fetchProvinciasDeSesion(sesionId) {
+  const { data, error } = await supabase.from("comarca_provincias").select("*").eq("sesion_id", sesionId).order("id");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function guardarImagenReino(reinoId, imagenUrl) {
+  const { error } = await supabase.from("comarca_reinos").update({ imagen_url: imagenUrl }).eq("id", reinoId);
+  if (error) throw error;
+}
+
+// Suma o resta GP/FP a un reino, y deja el movimiento en el historial.
+export async function ajustarEconomiaReino(sesionId, reinoId, tipo, cantidad, motivo) {
+  const columna = tipo === "fp" ? "fp" : "gp";
+  const { data: reino, error: e1 } = await supabase.from("comarca_reinos").select(columna).eq("id", reinoId).single();
+  if (e1) throw e1;
+  const nuevoValor = Math.max(0, (reino[columna] || 0) + cantidad);
+  const { error: e2 } = await supabase.from("comarca_reinos").update({ [columna]: nuevoValor }).eq("id", reinoId);
+  if (e2) throw e2;
+  const { error: e3 } = await supabase.from("comarca_movimientos").insert({ sesion_id: sesionId, reino_id: reinoId, tipo, cantidad, motivo });
+  if (e3) throw e3;
+  return nuevoValor;
+}
+
+export async function fetchMovimientosDeSesion(sesionId) {
+  const { data, error } = await supabase.from("comarca_movimientos").select("*, comarca_reinos(nombre, emoji)").eq("sesion_id", sesionId).order("creado_en", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+// Cambia el dueño actual de una provincia (por compra, duelo, o juicio).
+export async function transferirProvincia(provinciaId, reinoNuevoId) {
+  const { error } = await supabase.from("comarca_provincias").update({ reino_actual_id: reinoNuevoId }).eq("id", provinciaId);
+  if (error) throw error;
+}
+
+export async function finalizarSesionComarca(sesionId) {
+  const { error } = await supabase.from("comarca_sesiones").update({ estado: "finalizada" }).eq("id", sesionId);
+  if (error) throw error;
+}
+
+export async function guardarEventoSesion(sesionId, evento) {
+  const { error } = await supabase.from("comarca_sesiones").update({ evento_actual: evento }).eq("id", sesionId);
+  if (error) throw error;
+}
