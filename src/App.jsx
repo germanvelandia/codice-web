@@ -22,6 +22,7 @@ import { VistaObjetos, ObjetosEstudiante } from "./screens/Objetos";
 import { VistaActividadesProgramadas } from "./screens/ActividadesProgramadas";
 import { VistaGamificacionExtra } from "./screens/GamificacionExtra";
 import { VistaRoles } from "./screens/Roles";
+import { VistaComarcaOakhaven } from "./screens/ComarcaOakhaven";
 import { VistaCalificaciones } from "./screens/Calificaciones";
 import { VistaReportes } from "./screens/Reportes";
 import { VistaHorario } from "./screens/Horario";
@@ -2125,6 +2126,7 @@ const MENU_PANEL_GRUPOS = [
       { key: "objetos", label: "Objetos", icono: "🎒" },
       { key: "horario", label: "Agenda", icono: "🗓️" },
       { key: "roles", label: "Roles", icono: "🎭" },
+      { key: "comarca", label: "Comarca de Oakhaven", icono: "🏛️" },
       { key: "reportes", label: "Reportes", icono: "📊" },
     ],
   },
@@ -2473,6 +2475,7 @@ function Panel({ session }) {
           </>
         )}
         {tab === "roles" && <VistaRoles />}
+        {tab === "comarca" && grados.length > 0 && <VistaComarcaOakhaven grados={grados} gradoActivo={gradoActivo} />}
         {tab === "calificaciones" && grados.length > 0 && <VistaCalificaciones grados={grados} destinoBusqueda={destinoBusqueda} gradoActivo={gradoActivo} materiaActiva={materiaActiva} />}
         {tab === "reportes" && grados.length > 0 && <VistaReportes grados={grados} gradoActivo={gradoActivo} />}
         {tab === "horario" && grados.length > 0 && <VistaHorario grados={grados} />}
