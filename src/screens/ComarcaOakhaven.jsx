@@ -157,11 +157,26 @@ function AjustarEconomiaModal({ sesion, reino, billetesDeSesion, onClose, onCamb
 
 const PALETA_REINOS = ["#8B5CF6", "#F59E0B", "#10B981", "#3B82F6", "#EF4444", "#EC4899", "#14B8A6", "#F97316"];
 
-function MapaProvinciasModal({ reinos, provincias, onClose, onCambio }) {
+function MapaProvinciasModal({ sesion, reinos, provincias, onClose, onCambio }) {
   const [transfiriendo, setTransfiriendo] = useState(null);
+  const [mejorando, setMejorando] = useState(null);
+  const [costoMejora, setCostoMejora] = useState(15);
+  const [guardandoMejora, setGuardandoMejora] = useState(false);
   const colorDe = (reinoId) => {
     const idx = reinos.findIndex((r) => r.id === reinoId);
     return PALETA_REINOS[idx % PALETA_REINOS.length] || "#94A3B8";
+  };
+
+  const confirmarMejora = async () => {
+    setGuardandoMejora(true);
+    try {
+      await api.mejorarProvincia(sesion.id, mejorando, parseInt(costoMejora, 10) || 0);
+      setMejorando(null);
+      onCambio();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setGuardandoMejora(false);
   };
 
   return (
@@ -171,7 +186,7 @@ function MapaProvinciasModal({ reinos, provincias, onClose, onCambio }) {
           <h3 className="font-bold text-slate-800 text-lg">🗺️ Mapa de Provincias</h3>
           <button onClick={onClose} className="text-slate-400 text-xl">✕</button>
         </div>
-        <p className="text-xs text-slate-400 mb-4">Tocá cualquier provincia para cambiarla de dueño (por compra, duelo o juicio).</p>
+        <p className="text-xs text-slate-400 mb-4">El número grande es el que activa su producción con el Dado. Tocá una provincia para transferirla, o "⬆️" para subirla a Ciudad.</p>
 
         {/* Referencia de colores por Reino */}
         <div className="flex flex-wrap gap-2 mb-4">
@@ -187,20 +202,47 @@ function MapaProvinciasModal({ reinos, provincias, onClose, onCambio }) {
             const reinoDueno = reinos.find((r) => r.id === p.reino_actual_id);
             const cambioDeManos = p.reino_original_id !== p.reino_actual_id;
             return (
-              <button key={p.id} onClick={() => setTransfiriendo(p)}
-                className="rounded-xl p-3 text-left text-white shadow-sm hover:scale-[1.03] transition-transform relative"
-                style={{ background: colorDe(p.reino_actual_id) }}>
-                {cambioDeManos && <span className="absolute top-1.5 right-1.5 text-[10px]">🔄</span>}
-                <div className="text-[10px] opacity-80 mb-1">{p.recurso}</div>
-                <div className="text-sm font-bold leading-tight mb-2">{p.nombre.split("— ")[1] || p.nombre}</div>
-                <div className="text-[10px] bg-black/20 rounded-full px-2 py-0.5 inline-block">{reinoDueno ? `${reinoDueno.emoji} ${reinoDueno.nombre}` : "Sin dueño"}</div>
-              </button>
+              <div key={p.id} className="rounded-xl p-3 text-white shadow-sm relative" style={{ background: colorDe(p.reino_actual_id) }}>
+                {p.bloqueada && <span className="absolute top-1.5 right-1.5 text-sm" title="Bloqueada por el Ladrón">🔒</span>}
+                {!p.bloqueada && cambioDeManos && <span className="absolute top-1.5 right-1.5 text-[10px]">🔄</span>}
+                <button onClick={() => setTransfiriendo(p)} className="text-left w-full">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] opacity-80">{p.recurso}</span>
+                    <span className="text-xs font-bold bg-white/25 rounded-full w-5 h-5 flex items-center justify-center">{p.numero_dado || "–"}</span>
+                  </div>
+                  <div className="text-sm font-bold leading-tight mb-1.5">{p.nombre.split("— ")[1] || p.nombre}</div>
+                  <div className="text-[10px] bg-black/20 rounded-full px-2 py-0.5 inline-block">{reinoDueno ? `${reinoDueno.emoji} ${reinoDueno.nombre}` : "Sin dueño"}</div>
+                </button>
+                <div className="flex items-center justify-between mt-1.5">
+                  <span className="text-[9px] uppercase tracking-wide opacity-70">{p.nivel === "ciudad" ? "🏙️ Ciudad" : "🏘️ Villa"}</span>
+                  {p.nivel !== "ciudad" && (
+                    <button onClick={() => setMejorando(p)} className="text-[10px] bg-white/25 hover:bg-white/40 rounded-full px-2 py-0.5">⬆️ Mejorar</button>
+                  )}
+                </div>
+              </div>
             );
           })}
         </div>
       </div>
 
       {transfiriendo && <TransferirProvinciaModal provincia={transfiriendo} reinos={reinos} onClose={() => setTransfiriendo(null)} onCambio={onCambio} />}
+
+      {mejorando && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={() => setMejorando(null)}>
+          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-4 w-full max-w-xs shadow-xl">
+            <h4 className="font-bold text-slate-800 mb-1">⬆️ Mejorar a Ciudad</h4>
+            <p className="text-xs text-slate-500 mb-3">{mejorando.nombre.split("— ")[1] || mejorando.nombre} va a producir el doble desde ahora. ¿Cuánto GP le cobramos al Reino dueño?</p>
+            <input type="number" value={costoMejora} onChange={(e) => setCostoMejora(e.target.value)}
+              className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none text-center" />
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setMejorando(null)} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
+              <button disabled={guardandoMejora} onClick={confirmarMejora} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+                {guardandoMejora ? "…" : "Confirmar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -347,7 +389,7 @@ function BancoModal({ sesion, reinos, onClose, onCambio }) {
   );
 }
 
-function TruequesModal({ sesion, reinos, inventario, onClose, onCambio }) {
+function TruequesModal({ sesion, reinos, inventario, recursos, onClose, onCambio }) {
   const [trueques, setTrueques] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [formAbierto, setFormAbierto] = useState(false);
@@ -357,11 +399,16 @@ function TruequesModal({ sesion, reinos, inventario, onClose, onCambio }) {
   const [gpPedido, setGpPedido] = useState(0);
   const [productoOfrecidoId, setProductoOfrecidoId] = useState("");
   const [productoPedidoId, setProductoPedidoId] = useState("");
+  const [recursoOfrecido, setRecursoOfrecido] = useState("");
+  const [cantidadRecursoOfrecida, setCantidadRecursoOfrecida] = useState(1);
+  const [recursoPedido, setRecursoPedido] = useState("");
+  const [cantidadRecursoPedida, setCantidadRecursoPedida] = useState(1);
 
   const cargar = () => { setCargando(true); api.fetchTruequesDeSesion(sesion.id).then((d) => { setTrueques(d); setCargando(false); }); };
   useEffect(() => { cargar(); }, []);
 
   const productosDisponibles = [...new Map(inventario.map((i) => [i.producto_id, i.comarca_productos])).values()];
+  const recursosPosibles = [...new Set(recursos.map((r) => r.recurso))];
 
   const proponer = async () => {
     try {
@@ -370,6 +417,8 @@ function TruequesModal({ sesion, reinos, inventario, onClose, onCambio }) {
         gp_ofrecido: parseInt(gpOfrecido, 10) || 0, gp_pedido: parseInt(gpPedido, 10) || 0,
         producto_ofrecido_id: productoOfrecidoId || null, cantidad_ofrecida: productoOfrecidoId ? 1 : 0,
         producto_pedido_id: productoPedidoId || null, cantidad_pedida: productoPedidoId ? 1 : 0,
+        recurso_ofrecido: recursoOfrecido || null, cantidad_recurso_ofrecida: recursoOfrecido ? (parseInt(cantidadRecursoOfrecida, 10) || 0) : 0,
+        recurso_pedido: recursoPedido || null, cantidad_recurso_pedida: recursoPedido ? (parseInt(cantidadRecursoPedida, 10) || 0) : 0,
       });
       setFormAbierto(false);
       cargar();
@@ -424,6 +473,22 @@ function TruequesModal({ sesion, reinos, inventario, onClose, onCambio }) {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2">
+              <div className="flex gap-1">
+                <select value={recursoOfrecido} onChange={(e) => setRecursoOfrecido(e.target.value)} className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
+                  <option value="">Sin recurso</option>
+                  {recursosPosibles.map((r) => <option key={r} value={r}>{r}</option>)}
+                </select>
+                {recursoOfrecido && <input type="number" value={cantidadRecursoOfrecida} onChange={(e) => setCantidadRecursoOfrecida(e.target.value)} className="w-12 text-xs rounded-lg px-1 py-1.5 border border-slate-200 outline-none text-center" />}
+              </div>
+              <div className="flex gap-1">
+                <select value={recursoPedido} onChange={(e) => setRecursoPedido(e.target.value)} className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
+                  <option value="">Sin recurso</option>
+                  {recursosPosibles.map((r) => <option key={r} value={r}>{r}</option>)}
+                </select>
+                {recursoPedido && <input type="number" value={cantidadRecursoPedida} onChange={(e) => setCantidadRecursoPedida(e.target.value)} className="w-12 text-xs rounded-lg px-1 py-1.5 border border-slate-200 outline-none text-center" />}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-[10px] text-slate-500 block mb-1">Ofrece producto</label>
                 <select value={productoOfrecidoId} onChange={(e) => setProductoOfrecidoId(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
@@ -453,10 +518,10 @@ function TruequesModal({ sesion, reinos, inventario, onClose, onCambio }) {
               <div key={t.id} className="border border-slate-100 rounded-xl p-2.5 text-xs">
                 <div className="font-semibold text-slate-700">{t.oferta?.emoji} {t.oferta?.nombre} ⇄ {t.destino?.emoji} {t.destino?.nombre}</div>
                 <div className="text-slate-500 mt-1">
-                  Ofrece: {t.gp_ofrecido > 0 && `🪙${t.gp_ofrecido} `}{t.ofrecido && `${t.ofrecido.emoji} ${t.ofrecido.nombre}`}
-                  {!t.gp_ofrecido && !t.ofrecido && "nada"}
-                  {" — "}Pide: {t.gp_pedido > 0 && `🪙${t.gp_pedido} `}{t.pedido && `${t.pedido.emoji} ${t.pedido.nombre}`}
-                  {!t.gp_pedido && !t.pedido && "nada"}
+                  Ofrece: {t.gp_ofrecido > 0 && `🪙${t.gp_ofrecido} `}{t.ofrecido && `${t.ofrecido.emoji} ${t.ofrecido.nombre} `}{t.recurso_ofrecido && `${t.cantidad_recurso_ofrecida} ${t.recurso_ofrecido}`}
+                  {!t.gp_ofrecido && !t.ofrecido && !t.recurso_ofrecido && "nada"}
+                  {" — "}Pide: {t.gp_pedido > 0 && `🪙${t.gp_pedido} `}{t.pedido && `${t.pedido.emoji} ${t.pedido.nombre} `}{t.recurso_pedido && `${t.cantidad_recurso_pedida} ${t.recurso_pedido}`}
+                  {!t.gp_pedido && !t.pedido && !t.recurso_pedido && "nada"}
                 </div>
                 {t.estado === "pendiente" ? (
                   <div className="flex gap-2 mt-2">
@@ -518,28 +583,322 @@ function InventarioImprimibleModal({ reinos, inventario, onClose }) {
   );
 }
 
-function TableroSesion({ sesion, onVolver }) {
+function DuelosModal({ sesion, reinos, provincias, onClose, onCambio }) {
+  const [duelos, setDuelos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [formAbierto, setFormAbierto] = useState(false);
+  const [reinoRetador, setReinoRetador] = useState(reinos[0]?.id || "");
+  const [reinoRetado, setReinoRetado] = useState(reinos[1]?.id || "");
+  const [provinciaEnJuego, setProvinciaEnJuego] = useState("");
+  const [jugadaRetador, setJugadaRetador] = useState("");
+  const [jugadaRetado, setJugadaRetado] = useState("");
+  const [jugandoRondaDe, setJugandoRondaDe] = useState(null);
+
+  const cargar = () => { setCargando(true); api.fetchDuelosDeSesion(sesion.id).then((d) => { setDuelos(d); setCargando(false); }); };
+  useEffect(() => { cargar(); }, []);
+
+  const provinciasDelRetado = provincias.filter((p) => p.reino_actual_id === reinoRetado);
+
+  const crear = async () => {
+    if (reinoRetador === reinoRetado) { alert("Elegí dos Reinos distintos."); return; }
+    try {
+      await api.crearDuelo(sesion.id, reinoRetador, reinoRetado, provinciaEnJuego || null);
+      setFormAbierto(false);
+      cargar();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+  };
+
+  const siguienteRonda = (duelo) => {
+    for (let n = 1; n <= 3; n++) { if (!duelo[`ronda${n}_retador`]) return n; }
+    return null;
+  };
+
+  const jugar = async (duelo) => {
+    const ronda = siguienteRonda(duelo);
+    if (!ronda || !jugadaRetador || !jugadaRetado) return;
+    try {
+      await api.jugarRondaDuelo(duelo, ronda, jugadaRetador, jugadaRetado);
+      setJugandoRondaDe(null); setJugadaRetador(""); setJugadaRetado("");
+      cargar();
+      onCambio();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+  };
+
+  const eliminar = async (d) => {
+    if (!confirm("¿Cancelar este duelo?")) return;
+    await api.eliminarDuelo(d.id);
+    cargar();
+  };
+
+  const OPCIONES = [{ v: "piedra", e: "🪨" }, { v: "papel", e: "📄" }, { v: "tijera", e: "✂️" }];
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-4 w-full max-w-md max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">⚔️ Duelos (Piedra, Papel o Tijera)</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+
+        <button onClick={() => setFormAbierto((v) => !v)} className="text-xs font-semibold text-violet-500 mb-2">{formAbierto ? "Cerrar" : "+ Nuevo duelo"}</button>
+        {formAbierto && (
+          <div className="bg-violet-50 rounded-xl p-3 mb-3 space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] text-slate-500 block mb-1">Reino retador</label>
+                <select value={reinoRetador} onChange={(e) => setReinoRetador(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
+                  {reinos.map((r) => <option key={r.id} value={r.id}>{r.emoji} {r.nombre}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-500 block mb-1">Reino retado</label>
+                <select value={reinoRetado} onChange={(e) => setReinoRetado(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
+                  {reinos.map((r) => <option key={r.id} value={r.id}>{r.emoji} {r.nombre}</option>)}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="text-[10px] text-slate-500 block mb-1">Provincia en juego (opcional — se la lleva el retador si gana)</label>
+              <select value={provinciaEnJuego} onChange={(e) => setProvinciaEnJuego(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
+                <option value="">Sin provincia en juego (solo por honor)</option>
+                {provinciasDelRetado.map((p) => <option key={p.id} value={p.id}>{p.nombre.split("— ")[1] || p.nombre}</option>)}
+              </select>
+            </div>
+            <button onClick={crear} className="w-full text-xs font-semibold py-2 rounded-lg bg-violet-500 text-white">Empezar duelo</button>
+          </div>
+        )}
+
+        {cargando ? (
+          <div className="text-sm text-slate-400">Cargando…</div>
+        ) : duelos.length === 0 ? (
+          <div className="text-sm text-slate-400 text-center py-4">Todavía no hay duelos.</div>
+        ) : (
+          <div className="space-y-2">
+            {duelos.map((d) => {
+              const ronda = siguienteRonda(d);
+              return (
+                <div key={d.id} className="border border-slate-100 rounded-xl p-3 text-xs">
+                  <div className="flex justify-between items-start">
+                    <div className="font-semibold text-slate-700">{d.retador?.emoji} {d.retador?.nombre} 🆚 {d.retado?.emoji} {d.retado?.nombre}</div>
+                    {d.estado === "en_curso" && <button onClick={() => eliminar(d)} className="text-slate-300 hover:text-rose-500">🗑</button>}
+                  </div>
+                  {d.provincia && <div className="text-slate-400 mt-0.5">En juego: {d.provincia.nombre.split("— ")[1] || d.provincia.nombre}</div>}
+                  <div className="flex gap-2 mt-1.5">
+                    {[1, 2, 3].map((n) => (
+                      <span key={n} className="text-slate-500">R{n}: {d[`ronda${n}_retador`] ? OPCIONES.find((o) => o.v === d[`ronda${n}_retador`])?.e : "—"} vs {d[`ronda${n}_retado`] ? OPCIONES.find((o) => o.v === d[`ronda${n}_retado`])?.e : "—"}</span>
+                    ))}
+                  </div>
+
+                  {d.estado === "terminado" ? (
+                    <div className="mt-2 text-emerald-700 font-semibold">🏆 Ganó {d.ganador?.emoji} {d.ganador?.nombre}</div>
+                  ) : jugandoRondaDe === d.id ? (
+                    <div className="mt-2 bg-slate-50 rounded-lg p-2 space-y-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-16 shrink-0">{d.retador?.nombre}:</span>
+                        {OPCIONES.map((o) => <button key={o.v} onClick={() => setJugadaRetador(o.v)} className={`text-base px-1.5 py-0.5 rounded ${jugadaRetador === o.v ? "bg-violet-200" : ""}`}>{o.e}</button>)}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-16 shrink-0">{d.retado?.nombre}:</span>
+                        {OPCIONES.map((o) => <button key={o.v} onClick={() => setJugadaRetado(o.v)} className={`text-base px-1.5 py-0.5 rounded ${jugadaRetado === o.v ? "bg-violet-200" : ""}`}>{o.e}</button>)}
+                      </div>
+                      <button disabled={!jugadaRetador || !jugadaRetado} onClick={() => jugar(d)} className="w-full text-xs font-semibold py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-50">Confirmar Ronda {ronda}</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => { setJugandoRondaDe(d.id); setJugadaRetador(""); setJugadaRetado(""); }} className="mt-2 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-violet-100 text-violet-700">Jugar Ronda {ronda}</button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RolesModal({ sesion, reinos, onClose }) {
+  const [estudiantes, setEstudiantes] = useState([]);
+  const [asignados, setAsignados] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [guardandoClave, setGuardandoClave] = useState(null);
+
+  const cargar = () => {
+    setCargando(true);
+    Promise.all([api.fetchEstudiantesPorGrado(sesion.grado_id), api.fetchRolesDeSesion(sesion.id)]).then(([est, asig]) => {
+      setEstudiantes(est); setAsignados(asig); setCargando(false);
+    });
+  };
+  useEffect(() => { cargar(); }, []);
+
+  const asignar = async (reinoId, rol, estudianteId) => {
+    const clave = `${reinoId}-${rol}`;
+    setGuardandoClave(clave);
+    try {
+      await api.asignarRolComarca(sesion.id, reinoId, rol, estudianteId || null);
+      cargar();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setGuardandoClave(null);
+  };
+
+  const asignadoA = (reinoId, rol) => asignados.find((a) => a.reino_id === reinoId && a.rol === rol)?.estudiante_id || "";
+
+  if (cargando) return null;
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-4 w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-1">
+          <h3 className="font-bold text-slate-800">🎭 Los 7 Roles</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-400 mb-4">Asigná a cada estudiante del curso su rol dentro de su Reino.</p>
+
+        <div className="space-y-4">
+          {reinos.map((reino) => (
+            <div key={reino.id} className="border border-slate-100 rounded-xl p-3">
+              <div className="font-bold text-slate-800 text-sm mb-2">{reino.emoji} {reino.nombre}</div>
+              <div className="grid sm:grid-cols-2 gap-2">
+                {api.COMARCA_ROLES.map((rol) => (
+                  <div key={rol.key} className="flex items-center gap-2">
+                    <span className="text-lg shrink-0" title={rol.descripcion}>{rol.emoji}</span>
+                    <select value={asignadoA(reino.id, rol.key)} onChange={(e) => asignar(reino.id, rol.key, e.target.value ? parseInt(e.target.value, 10) : null)}
+                      disabled={guardandoClave === `${reino.id}-${rol.key}`}
+                      className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
+                      <option value="">{rol.nombre} — sin asignar</option>
+                      {estudiantes.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RecursosModal({ sesion, reinos, recursos, onClose, onCambio }) {
+  const [vendiendo, setVendiendo] = useState(null); // { reinoId, recurso }
+  const [cantidadVenta, setCantidadVenta] = useState(3);
+  const [guardando, setGuardando] = useState(false);
+
+  const vender = async () => {
+    setGuardando(true);
+    try {
+      const gp = await api.venderRecursoAlBanco(sesion.id, vendiendo.reinoId, vendiendo.recurso, parseInt(cantidadVenta, 10) || 0);
+      alert(`El Banco pagó ${gp} GP por eso.`);
+      setVendiendo(null);
+      onCambio();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-4 w-full max-w-md max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-1">
+          <h3 className="font-bold text-slate-800">📦 Recursos por Reino</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-400 mb-3">Se ganan tirando el Dado — el Banco los compra a 3 recursos = 1 GP.</p>
+
+        <div className="space-y-3">
+          {reinos.map((r) => {
+            const suyos = recursos.filter((x) => x.reino_id === r.id && x.cantidad > 0);
+            return (
+              <div key={r.id} className="border border-slate-100 rounded-xl p-3">
+                <div className="font-bold text-slate-800 text-sm mb-2">{r.emoji} {r.nombre}</div>
+                {suyos.length === 0 ? (
+                  <p className="text-xs text-slate-400">Todavía no juntó recursos.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {suyos.map((x) => (
+                      <button key={x.id} onClick={() => { setVendiendo({ reinoId: r.id, recurso: x.recurso, disponible: x.cantidad }); setCantidadVenta(Math.min(3, x.cantidad)); }}
+                        className="text-xs font-semibold px-2.5 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        {x.recurso}: {x.cantidad}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {vendiendo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={() => setVendiendo(null)}>
+          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-4 w-full max-w-xs shadow-xl">
+            <h4 className="font-bold text-slate-800 mb-2">Vender {vendiendo.recurso} al Banco</h4>
+            <p className="text-xs text-slate-400 mb-2">Tiene {vendiendo.disponible} disponibles — cada 3 = 1 GP.</p>
+            <input type="number" max={vendiendo.disponible} value={cantidadVenta} onChange={(e) => setCantidadVenta(e.target.value)}
+              className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none text-center" />
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setVendiendo(null)} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
+              <button disabled={guardando} onClick={vender} className="text-sm font-semibold px-4 py-2 rounded-lg bg-emerald-500 text-white disabled:opacity-60">
+                {guardando ? "…" : "Vender"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TableroSesion({ sesion: sesionInicial, onVolver }) {
+  const [sesion, setSesion] = useState(sesionInicial);
   const [reinos, setReinos] = useState([]);
   const [provincias, setProvincias] = useState([]);
   const [inventario, setInventario] = useState([]);
   const [billetes, setBilletes] = useState([]);
+  const [recursos, setRecursos] = useState([]);
   const [cargando, setCargando] = useState(true);
+  const [tirandoDado, setTirandoDado] = useState(false);
+  const [resultadoDado, setResultadoDado] = useState(null);
   const [ajustandoEconomiaDe, setAjustandoEconomiaDe] = useState(null);
   const [transfiriendo, setTransfiriendo] = useState(null);
   const [bancoAbierto, setBancoAbierto] = useState(false);
   const [truequesAbierto, setTruequesAbierto] = useState(false);
   const [inventarioAbierto, setInventarioAbierto] = useState(false);
   const [mapaAbierto, setMapaAbierto] = useState(false);
+  const [recursosAbierto, setRecursosAbierto] = useState(false);
+  const [duelosAbierto, setDuelosAbierto] = useState(false);
+  const [rolesAbierto, setRolesAbierto] = useState(false);
   const [evento, setEvento] = useState(sesion.evento_actual || "");
   const [guardandoEvento, setGuardandoEvento] = useState(false);
 
   const cargar = () => {
     setCargando(true);
-    Promise.all([api.fetchReinosDeSesion(sesion.id), api.fetchProvinciasDeSesion(sesion.id), api.fetchInventarioDeSesion(sesion.id), api.fetchBilletesDeSesion(sesion.id)]).then(([r, p, inv, bil]) => {
-      setReinos(r); setProvincias(p); setInventario(inv); setBilletes(bil); setCargando(false);
+    Promise.all([api.fetchReinosDeSesion(sesion.id), api.fetchProvinciasDeSesion(sesion.id), api.fetchInventarioDeSesion(sesion.id), api.fetchBilletesDeSesion(sesion.id), api.fetchRecursosDeSesion(sesion.id)]).then(([r, p, inv, bil, rec]) => {
+      setReinos(r); setProvincias(p); setInventario(inv); setBilletes(bil); setRecursos(rec); setCargando(false);
     });
   };
   useEffect(() => { cargar(); }, [sesion.id]);
+
+  const tirarDado = async () => {
+    setTirandoDado(true);
+    try {
+      const { dado, provinciaBloqueada } = await api.tirarDado(sesion.id, provincias);
+      let produjeron = 0;
+      if (dado !== 7) produjeron = await api.producirPorDado(sesion.id, dado, provincias);
+      setResultadoDado({ dado, provinciaBloqueada, produjeron });
+      setSesion((prev) => ({ ...prev, ultimo_dado: dado }));
+      cargar();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setTirandoDado(false);
+  };
 
   const guardarEvento = async () => {
     setGuardandoEvento(true);
@@ -569,10 +928,35 @@ function TableroSesion({ sesion, onVolver }) {
           <button onClick={() => setBancoAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-amber-100 text-amber-700">🏦 El Banco</button>
           <button onClick={() => setTruequesAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-teal-100 text-teal-700">🤝 Trueques</button>
           <button onClick={() => setInventarioAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-indigo-100 text-indigo-700">📋 Inventario</button>
+          <button onClick={() => setRecursosAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-emerald-100 text-emerald-700">📦 Recursos</button>
+          <button onClick={() => setDuelosAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-rose-100 text-rose-700">⚔️ Duelos</button>
+          <button onClick={() => setRolesAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-fuchsia-100 text-fuchsia-700">🎭 Roles</button>
           {sesion.estado === "activa" && (
             <button onClick={finalizar} className="text-xs font-semibold px-3 py-2 rounded-full border border-slate-200 text-slate-600">🏁 Finalizar sesión</button>
           )}
         </div>
+      </div>
+
+      {/* El Dado — producción de recursos */}
+      <div className="bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-200 rounded-2xl p-4 mb-4 flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <div className="text-xs font-bold text-indigo-700 uppercase tracking-wide mb-1">🎲 El Dado (producción de recursos)</div>
+          {sesion.ultimo_dado ? (
+            <div className="text-sm text-slate-600">
+              Último resultado: <span className="text-2xl font-bold text-indigo-700">{sesion.ultimo_dado}</span>
+              {sesion.ultimo_dado === 7 ? (
+                <span className="text-rose-600 font-semibold"> — ¡Salió el Ladrón! Bloqueó una provincia.</span>
+              ) : resultadoDado && (
+                <span className="text-slate-500"> — produjeron {resultadoDado.produjeron} provincia(s).</span>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400">Todavía no se tiró el dado en esta sesión.</p>
+          )}
+        </div>
+        <button disabled={tirandoDado} onClick={tirarDado} className="text-sm font-semibold px-4 py-2.5 rounded-xl bg-indigo-500 text-white disabled:opacity-60 shrink-0">
+          {tirandoDado ? "Tirando…" : "🎲 Tirar el Dado"}
+        </button>
       </div>
 
       {/* Carta de Destino actual */}
@@ -625,9 +1009,12 @@ function TableroSesion({ sesion, onVolver }) {
       {ajustandoEconomiaDe && <AjustarEconomiaModal sesion={sesion} reino={ajustandoEconomiaDe} billetesDeSesion={billetes} onClose={() => setAjustandoEconomiaDe(null)} onCambio={cargar} />}
       {transfiriendo && <TransferirProvinciaModal provincia={transfiriendo} reinos={reinos} onClose={() => setTransfiriendo(null)} onCambio={cargar} />}
       {bancoAbierto && <BancoModal sesion={sesion} reinos={reinos} onClose={() => setBancoAbierto(false)} onCambio={cargar} />}
-      {truequesAbierto && <TruequesModal sesion={sesion} reinos={reinos} inventario={inventario} onClose={() => setTruequesAbierto(false)} onCambio={cargar} />}
+      {truequesAbierto && <TruequesModal sesion={sesion} reinos={reinos} inventario={inventario} recursos={recursos} onClose={() => setTruequesAbierto(false)} onCambio={cargar} />}
       {inventarioAbierto && <InventarioImprimibleModal reinos={reinos} inventario={inventario} onClose={() => setInventarioAbierto(false)} />}
-      {mapaAbierto && <MapaProvinciasModal reinos={reinos} provincias={provincias} onClose={() => setMapaAbierto(false)} onCambio={cargar} />}
+      {mapaAbierto && <MapaProvinciasModal sesion={sesion} reinos={reinos} provincias={provincias} onClose={() => setMapaAbierto(false)} onCambio={cargar} />}
+      {recursosAbierto && <RecursosModal sesion={sesion} reinos={reinos} recursos={recursos} onClose={() => setRecursosAbierto(false)} onCambio={cargar} />}
+      {duelosAbierto && <DuelosModal sesion={sesion} reinos={reinos} provincias={provincias} onClose={() => setDuelosAbierto(false)} onCambio={cargar} />}
+      {rolesAbierto && <RolesModal sesion={sesion} reinos={reinos} onClose={() => setRolesAbierto(false)} />}
     </div>
   );
 }
