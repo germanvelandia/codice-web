@@ -155,6 +155,56 @@ function AjustarEconomiaModal({ sesion, reino, billetesDeSesion, onClose, onCamb
   );
 }
 
+const PALETA_REINOS = ["#8B5CF6", "#F59E0B", "#10B981", "#3B82F6", "#EF4444", "#EC4899", "#14B8A6", "#F97316"];
+
+function MapaProvinciasModal({ reinos, provincias, onClose, onCambio }) {
+  const [transfiriendo, setTransfiriendo] = useState(null);
+  const colorDe = (reinoId) => {
+    const idx = reinos.findIndex((r) => r.id === reinoId);
+    return PALETA_REINOS[idx % PALETA_REINOS.length] || "#94A3B8";
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.55)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-3xl max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-1">
+          <h3 className="font-bold text-slate-800 text-lg">🗺️ Mapa de Provincias</h3>
+          <button onClick={onClose} className="text-slate-400 text-xl">✕</button>
+        </div>
+        <p className="text-xs text-slate-400 mb-4">Tocá cualquier provincia para cambiarla de dueño (por compra, duelo o juicio).</p>
+
+        {/* Referencia de colores por Reino */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          {reinos.map((r) => (
+            <span key={r.id} className="text-xs font-semibold px-2.5 py-1 rounded-full text-white" style={{ background: colorDe(r.id) }}>
+              {r.emoji} {r.nombre}
+            </span>
+          ))}
+        </div>
+
+        <div className="grid sm:grid-cols-3 md:grid-cols-4 gap-3">
+          {provincias.map((p) => {
+            const reinoDueno = reinos.find((r) => r.id === p.reino_actual_id);
+            const cambioDeManos = p.reino_original_id !== p.reino_actual_id;
+            return (
+              <button key={p.id} onClick={() => setTransfiriendo(p)}
+                className="rounded-xl p-3 text-left text-white shadow-sm hover:scale-[1.03] transition-transform relative"
+                style={{ background: colorDe(p.reino_actual_id) }}>
+                {cambioDeManos && <span className="absolute top-1.5 right-1.5 text-[10px]">🔄</span>}
+                <div className="text-[10px] opacity-80 mb-1">{p.recurso}</div>
+                <div className="text-sm font-bold leading-tight mb-2">{p.nombre.split("— ")[1] || p.nombre}</div>
+                <div className="text-[10px] bg-black/20 rounded-full px-2 py-0.5 inline-block">{reinoDueno ? `${reinoDueno.emoji} ${reinoDueno.nombre}` : "Sin dueño"}</div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {transfiriendo && <TransferirProvinciaModal provincia={transfiriendo} reinos={reinos} onClose={() => setTransfiriendo(null)} onCambio={onCambio} />}
+    </div>
+  );
+}
+
 function TransferirProvinciaModal({ provincia, reinos, onClose, onCambio }) {
   const transferir = async (reinoId) => {
     try {
@@ -479,6 +529,7 @@ function TableroSesion({ sesion, onVolver }) {
   const [bancoAbierto, setBancoAbierto] = useState(false);
   const [truequesAbierto, setTruequesAbierto] = useState(false);
   const [inventarioAbierto, setInventarioAbierto] = useState(false);
+  const [mapaAbierto, setMapaAbierto] = useState(false);
   const [evento, setEvento] = useState(sesion.evento_actual || "");
   const [guardandoEvento, setGuardandoEvento] = useState(false);
 
@@ -514,6 +565,7 @@ function TableroSesion({ sesion, onVolver }) {
           <p className="text-sm text-slate-400">Curso {sesion.grado_id} · {sesion.fecha} · {sesion.estado === "activa" ? "🟢 En juego" : "⚪ Finalizada"}</p>
         </div>
         <div className="flex gap-2">
+          <button onClick={() => setMapaAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-violet-100 text-violet-700">🗺️ Ver Mapa</button>
           <button onClick={() => setBancoAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-amber-100 text-amber-700">🏦 El Banco</button>
           <button onClick={() => setTruequesAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-teal-100 text-teal-700">🤝 Trueques</button>
           <button onClick={() => setInventarioAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-indigo-100 text-indigo-700">📋 Inventario</button>
@@ -554,14 +606,7 @@ function TableroSesion({ sesion, onVolver }) {
                   <button onClick={() => setAjustandoEconomiaDe(reino)} className="text-[11px] font-semibold px-2 py-1 rounded-full bg-violet-100 text-violet-700">🕊️ {reino.fp} FP</button>
                 </div>
                 <div className="text-[10px] text-slate-400 mb-1">Provincias controladas: {susProvincias.length}/24</div>
-                <div className="flex flex-wrap gap-1 mb-2">
-                  {susProvincias.map((p) => (
-                    <button key={p.id} onClick={() => setTransfiriendo(p)} title={p.recurso}
-                      className={`text-[9px] px-1.5 py-0.5 rounded ${p.reino_original_id === p.reino_actual_id ? "bg-slate-100 text-slate-500" : "bg-emerald-100 text-emerald-700"}`}>
-                      {p.nombre.split("— ")[1]}
-                    </button>
-                  ))}
-                </div>
+                <button onClick={() => setMapaAbierto(true)} className="text-[10px] text-slate-400 hover:text-violet-600 mb-2 underline">Ver detalle en el mapa →</button>
                 {inventario.filter((i) => i.reino_id === reino.id && i.cantidad > 0).length > 0 && (
                   <div className="flex flex-wrap gap-1 pt-1.5 border-t border-slate-100">
                     {inventario.filter((i) => i.reino_id === reino.id && i.cantidad > 0).map((i) => (
@@ -582,6 +627,7 @@ function TableroSesion({ sesion, onVolver }) {
       {bancoAbierto && <BancoModal sesion={sesion} reinos={reinos} onClose={() => setBancoAbierto(false)} onCambio={cargar} />}
       {truequesAbierto && <TruequesModal sesion={sesion} reinos={reinos} inventario={inventario} onClose={() => setTruequesAbierto(false)} onCambio={cargar} />}
       {inventarioAbierto && <InventarioImprimibleModal reinos={reinos} inventario={inventario} onClose={() => setInventarioAbierto(false)} />}
+      {mapaAbierto && <MapaProvinciasModal reinos={reinos} provincias={provincias} onClose={() => setMapaAbierto(false)} onCambio={cargar} />}
     </div>
   );
 }
