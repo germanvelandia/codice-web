@@ -855,6 +855,177 @@ function RecursosModal({ sesion, reinos, recursos, onClose, onCambio }) {
   );
 }
 
+function urlDeTarjeta(sesionId, reinoId, estudianteId) {
+  const base = window.location.origin + window.location.pathname;
+  const params = new URLSearchParams({ sesion: sesionId, reino: reinoId });
+  if (estudianteId) params.set("estudiante", estudianteId);
+  return `${base}#comarca-tarjeta?${params.toString()}`;
+}
+
+function urlQR(texto) {
+  return `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(texto)}`;
+}
+
+function QRModal({ sesion, reinos, onClose }) {
+  const [rolesAsignados, setRolesAsignados] = useState([]);
+  const [vista, setVista] = useState("reinos"); // "reinos" | "estudiantes"
+
+  useEffect(() => { api.fetchRolesDeSesion(sesion.id).then(setRolesAsignados); }, []);
+
+  const conEstudiante = rolesAsignados.filter((r) => r.estudiante_id);
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-4 w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-1">
+          <h3 className="font-bold text-slate-800">📱 Tarjetas QR</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-400 mb-3">Cada estudiante escanea su QR con el celular y ve el saldo de su Reino en vivo, sin necesitar login.</p>
+
+        <div className="flex gap-1 rounded-full bg-slate-100 p-1 mb-4 w-fit">
+          <button onClick={() => setVista("reinos")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "reinos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Por Reino (compartida)</button>
+          <button onClick={() => setVista("estudiantes")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "estudiantes" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Por estudiante</button>
+        </div>
+
+        {vista === "reinos" ? (
+          <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
+            {reinos.map((r) => (
+              <div key={r.id} className="border border-slate-100 rounded-xl p-3 text-center">
+                <img src={urlQR(urlDeTarjeta(sesion.id, r.id))} alt={`QR ${r.nombre}`} className="mx-auto mb-2 rounded-lg" />
+                <div className="text-xs font-semibold text-slate-700">{r.emoji} {r.nombre}</div>
+              </div>
+            ))}
+          </div>
+        ) : conEstudiante.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-6">Todavía no asignaste roles a estudiantes — hacelo en "🎭 Roles" primero.</p>
+        ) : (
+          <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
+            {conEstudiante.map((asig) => {
+              const reino = reinos.find((r) => r.id === asig.reino_id);
+              const rolInfo = api.COMARCA_ROLES.find((rl) => rl.key === asig.rol);
+              return (
+                <div key={asig.id} className="border border-slate-100 rounded-xl p-3 text-center">
+                  <img src={urlQR(urlDeTarjeta(sesion.id, asig.reino_id, asig.estudiante_id))} alt={`QR ${asig.estudiantes?.nombre}`} className="mx-auto mb-2 rounded-lg" />
+                  <div className="text-xs font-semibold text-slate-700">{asig.estudiantes?.nombre}</div>
+                  <div className="text-[10px] text-slate-400">{rolInfo?.emoji} {rolInfo?.nombre} · {reino?.nombre}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const EFECTOS_INFO = {
+  gp_todos: { label: "Suma/resta GP a TODOS los Reinos", necesitaValor: true },
+  fp_todos: { label: "Suma/resta FP a TODOS los Reinos", necesitaValor: true },
+  gp_aleatorio: { label: "Suma/resta GP a UN Reino al azar", necesitaValor: true },
+  bloquear_provincia_aleatoria: { label: "Bloquea una provincia al azar (como el Ladrón)", necesitaValor: false },
+  liberar_provincias: { label: "Libera todas las provincias bloqueadas", necesitaValor: false },
+  producir_extra: { label: "Ronda de producción extra (tira el dado sola)", necesitaValor: false },
+  ninguno: { label: "Sin efecto — solo un mensaje narrativo", necesitaValor: false },
+};
+
+function CartaDestinoCard({ sesion, reinos, provincias, onCambio }) {
+  const [eventos, setEventos] = useState([]);
+  const [eventoElegidoId, setEventoElegidoId] = useState("");
+  const [aplicando, setAplicando] = useState(false);
+  const [resultado, setResultado] = useState(null);
+  const [formAbierto, setFormAbierto] = useState(false);
+  const [titulo, setTitulo] = useState("");
+  const [descripcion, setDescripcion] = useState("");
+  const [efectoTipo, setEfectoTipo] = useState("gp_todos");
+  const [efectoValor, setEfectoValor] = useState(5);
+
+  const cargar = () => api.fetchComarcaEventos().then(setEventos);
+  useEffect(() => { cargar(); }, []);
+
+  const crearEvento = async () => {
+    if (!titulo.trim()) return;
+    await api.crearComarcaEvento({ titulo: titulo.trim(), descripcion: descripcion.trim() || null, efecto_tipo: efectoTipo, efecto_valor: parseInt(efectoValor, 10) || 0 });
+    setTitulo(""); setDescripcion(""); setFormAbierto(false);
+    cargar();
+  };
+
+  const eliminarEvento = async (id) => { await api.eliminarComarcaEvento(id); cargar(); };
+
+  const sacarCarta = async () => {
+    const evento = eventos[Math.floor(Math.random() * eventos.length)];
+    if (!evento) { alert("Todavía no armaste ninguna Carta de Destino en el catálogo."); return; }
+    await aplicar(evento);
+  };
+
+  const aplicar = async (evento) => {
+    setAplicando(true);
+    try {
+      const detalle = await api.aplicarEventoComarca(sesion.id, evento, reinos, provincias);
+      setResultado({ evento, detalle });
+      onCambio();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setAplicando(false);
+  };
+
+  return (
+    <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-4 mb-4">
+      <div className="flex justify-between items-start mb-2 flex-wrap gap-2">
+        <div className="text-xs font-bold text-amber-700 uppercase tracking-wide">🎲 Carta de Destino Inesperado</div>
+        <button onClick={() => setFormAbierto((v) => !v)} className="text-[11px] text-amber-700 underline">{formAbierto ? "Cerrar catálogo" : "+ Crear carta nueva"}</button>
+      </div>
+
+      {sesion.evento_actual && <p className="text-sm text-amber-800 mb-2">📜 {sesion.evento_actual}</p>}
+
+      {formAbierto && (
+        <div className="bg-white/70 rounded-xl p-3 mb-3 space-y-1.5">
+          <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título (ej: Peste Fiscal)" className="w-full text-sm rounded-lg px-2 py-1.5 border border-amber-200 outline-none" />
+          <input value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Descripción narrativa (opcional)" className="w-full text-xs rounded-lg px-2 py-1.5 border border-amber-200 outline-none" />
+          <select value={efectoTipo} onChange={(e) => setEfectoTipo(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1.5 border border-amber-200 outline-none bg-white">
+            {Object.entries(EFECTOS_INFO).map(([key, info]) => <option key={key} value={key}>{info.label}</option>)}
+          </select>
+          {EFECTOS_INFO[efectoTipo].necesitaValor && (
+            <input type="number" value={efectoValor} onChange={(e) => setEfectoValor(e.target.value)} placeholder="Cantidad (puede ser negativa)" className="w-full text-xs rounded-lg px-2 py-1.5 border border-amber-200 outline-none" />
+          )}
+          <button onClick={crearEvento} className="w-full text-xs font-semibold py-1.5 rounded-lg bg-amber-500 text-white">Agregar al catálogo</button>
+
+          {eventos.length > 0 && (
+            <div className="pt-2 space-y-1">
+              {eventos.map((ev) => (
+                <div key={ev.id} className="flex justify-between items-center text-xs bg-white rounded-lg px-2 py-1">
+                  <span>{ev.titulo}</span>
+                  <button onClick={() => eliminarEvento(ev.id)} className="text-slate-300 hover:text-rose-500">🗑</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="flex gap-2 items-center flex-wrap">
+        <select value={eventoElegidoId} onChange={(e) => setEventoElegidoId(e.target.value)} className="flex-1 min-w-[160px] text-sm rounded-lg px-3 py-2 border border-amber-200 outline-none bg-white">
+          <option value="">Elegir una carta puntual…</option>
+          {eventos.map((ev) => <option key={ev.id} value={ev.id}>{ev.titulo}</option>)}
+        </select>
+        <button disabled={aplicando || !eventoElegidoId} onClick={() => aplicar(eventos.find((e) => e.id === parseInt(eventoElegidoId, 10)))}
+          className="text-xs font-semibold px-3 py-2 rounded-lg bg-amber-500 text-white disabled:opacity-50">Aplicar esta</button>
+        <button disabled={aplicando || eventos.length === 0} onClick={sacarCarta} className="text-xs font-semibold px-3 py-2 rounded-lg bg-orange-500 text-white disabled:opacity-50">🎴 Sacar al azar</button>
+      </div>
+
+      {resultado && (
+        <div className="mt-2 text-xs text-amber-700 bg-white/60 rounded-lg p-2">
+          Se aplicó "{resultado.evento.titulo}"
+          {resultado.evento.efecto_tipo === "gp_aleatorio" && resultado.detalle && ` — le tocó a ${resultado.detalle.emoji} ${resultado.detalle.nombre}`}
+          {resultado.evento.efecto_tipo === "bloquear_provincia_aleatoria" && resultado.detalle && ` — bloqueó ${resultado.detalle.nombre.split("— ")[1] || resultado.detalle.nombre}`}
+          {resultado.evento.efecto_tipo === "producir_extra" && resultado.detalle !== null && ` — salió ${resultado.detalle} en el dado extra`}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TableroSesion({ sesion: sesionInicial, onVolver }) {
   const [sesion, setSesion] = useState(sesionInicial);
   const [reinos, setReinos] = useState([]);
@@ -874,6 +1045,7 @@ function TableroSesion({ sesion: sesionInicial, onVolver }) {
   const [recursosAbierto, setRecursosAbierto] = useState(false);
   const [duelosAbierto, setDuelosAbierto] = useState(false);
   const [rolesAbierto, setRolesAbierto] = useState(false);
+  const [qrAbierto, setQrAbierto] = useState(false);
   const [evento, setEvento] = useState(sesion.evento_actual || "");
   const [guardandoEvento, setGuardandoEvento] = useState(false);
 
@@ -931,6 +1103,7 @@ function TableroSesion({ sesion: sesionInicial, onVolver }) {
           <button onClick={() => setRecursosAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-emerald-100 text-emerald-700">📦 Recursos</button>
           <button onClick={() => setDuelosAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-rose-100 text-rose-700">⚔️ Duelos</button>
           <button onClick={() => setRolesAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-fuchsia-100 text-fuchsia-700">🎭 Roles</button>
+          <button onClick={() => setQrAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-slate-100 text-slate-700">📱 Tarjetas QR</button>
           {sesion.estado === "activa" && (
             <button onClick={finalizar} className="text-xs font-semibold px-3 py-2 rounded-full border border-slate-200 text-slate-600">🏁 Finalizar sesión</button>
           )}
@@ -960,14 +1133,7 @@ function TableroSesion({ sesion: sesionInicial, onVolver }) {
       </div>
 
       {/* Carta de Destino actual */}
-      <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-4 mb-4">
-        <div className="text-xs font-bold text-amber-700 uppercase tracking-wide mb-2">🎲 Carta de Destino Inesperado (evento actual)</div>
-        <div className="flex gap-2">
-          <input value={evento} onChange={(e) => setEvento(e.target.value)} placeholder="Ej: Peste Fiscal — el Banco sube todos sus precios esta ronda"
-            className="flex-1 text-sm rounded-lg px-3 py-2 border border-amber-200 outline-none bg-white" />
-          <button disabled={guardandoEvento} onClick={guardarEvento} className="text-xs font-semibold px-3 py-2 rounded-lg bg-amber-500 text-white disabled:opacity-60">Guardar</button>
-        </div>
-      </div>
+      <CartaDestinoCard sesion={sesion} reinos={reinos} provincias={provincias} onCambio={cargar} />
 
       {/* Los 6 reinos */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
@@ -1015,6 +1181,131 @@ function TableroSesion({ sesion: sesionInicial, onVolver }) {
       {recursosAbierto && <RecursosModal sesion={sesion} reinos={reinos} recursos={recursos} onClose={() => setRecursosAbierto(false)} onCambio={cargar} />}
       {duelosAbierto && <DuelosModal sesion={sesion} reinos={reinos} provincias={provincias} onClose={() => setDuelosAbierto(false)} onCambio={cargar} />}
       {rolesAbierto && <RolesModal sesion={sesion} reinos={reinos} onClose={() => setRolesAbierto(false)} />}
+      {qrAbierto && <QRModal sesion={sesion} reinos={reinos} onClose={() => setQrAbierto(false)} />}
+    </div>
+  );
+}
+
+export function TarjetaComarcaPublica() {
+  const params = new URLSearchParams(window.location.hash.split("?")[1] || "");
+  const sesionId = params.get("sesion");
+  const reinoId = params.get("reino");
+  const estudianteId = params.get("estudiante");
+
+  const [datos, setDatos] = useState(null);
+  const [cargando, setCargando] = useState(true);
+  const [formTruequeAbierto, setFormTruequeAbierto] = useState(false);
+  const [reinoDestino, setReinoDestino] = useState("");
+  const [otrosReinos, setOtrosReinos] = useState([]);
+  const [gpPedido, setGpPedido] = useState(0);
+  const [gpOfrecido, setGpOfrecido] = useState(0);
+  const [enviando, setEnviando] = useState(false);
+
+  const cargar = () => {
+    setCargando(true);
+    api.fetchTarjetaReino(sesionId, reinoId).then((d) => { setDatos(d); setCargando(false); });
+  };
+  useEffect(() => {
+    cargar();
+    const intervalo = setInterval(cargar, 15000); // se refresca solo cada 15s
+    return () => clearInterval(intervalo);
+  }, [sesionId, reinoId]);
+
+  useEffect(() => { if (sesionId) api.fetchTodosLosReinosDeSesionPublico(sesionId).then(setOtrosReinos); }, [sesionId]);
+
+  const miRol = datos?.roles.find((r) => String(r.estudiante_id) === String(estudianteId));
+  const miNombre = miRol?.estudiantes?.nombre;
+
+  const enviarTrueque = async () => {
+    if (!reinoDestino) { alert("Elegí a qué Reino se lo proponés."); return; }
+    setEnviando(true);
+    try {
+      await api.proponerTrueque({
+        sesion_id: sesionId, reino_oferta_id: reinoId, reino_destino_id: reinoDestino,
+        gp_ofrecido: parseInt(gpOfrecido, 10) || 0, gp_pedido: parseInt(gpPedido, 10) || 0,
+      });
+      alert("¡Propuesta enviada! El docente la va a revisar.");
+      setFormTruequeAbierto(false); setGpOfrecido(0); setGpPedido(0);
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setEnviando(false);
+  };
+
+  if (!sesionId || !reinoId) return <div className="min-h-screen flex items-center justify-center text-white">Tarjeta inválida.</div>;
+  if (cargando || !datos?.reino) return <div className="min-h-screen flex items-center justify-center text-white">Cargando tu Reino…</div>;
+
+  const { reino, provincias, inventario, recursos } = datos;
+
+  return (
+    <div className="min-h-screen py-6 px-4" style={{ background: "linear-gradient(135deg, #2d2450 0%, #1e1b30 60%, #14101f 100%)" }}>
+      <div className="max-w-sm mx-auto">
+        <div className="text-center mb-4">
+          <div className="text-4xl mb-1">🏰</div>
+          <h1 className="text-white text-lg font-bold tracking-wide" style={{ fontFamily: "Georgia, serif" }}>CÓDICE — Comarca de Oakhaven</h1>
+        </div>
+
+        <div className="bg-white rounded-2xl overflow-hidden shadow-xl mb-3">
+          <div className="h-28 bg-gradient-to-br from-violet-200 to-fuchsia-200 flex items-center justify-center">
+            {reino.imagen_url ? <img src={reino.imagen_url} alt={reino.nombre} className="w-full h-full object-cover" /> : <span className="text-5xl">{reino.emoji}</span>}
+          </div>
+          <div className="p-4">
+            <div className="text-lg font-bold text-slate-800">{reino.emoji} {reino.nombre}</div>
+            {miNombre && <div className="text-xs text-violet-600 font-semibold">{miNombre} · {api.COMARCA_ROLES.find((r) => r.key === miRol.rol)?.emoji} {api.COMARCA_ROLES.find((r) => r.key === miRol.rol)?.nombre}</div>}
+            <div className="flex gap-2 mt-3">
+              <div className="flex-1 bg-amber-50 rounded-xl p-2 text-center"><div className="text-xl font-bold text-amber-700">{reino.gp}</div><div className="text-[10px] text-amber-600">🪙 GP</div></div>
+              <div className="flex-1 bg-violet-50 rounded-xl p-2 text-center"><div className="text-xl font-bold text-violet-700">{reino.fp}</div><div className="text-[10px] text-violet-600">🕊️ FP</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white/95 rounded-2xl p-3 mb-3">
+          <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">🗺️ Provincias ({provincias.length})</div>
+          <div className="flex flex-wrap gap-1.5">
+            {provincias.length === 0 ? <p className="text-xs text-slate-400">Todavía ninguna.</p> : provincias.map((p) => (
+              <span key={p.id} className="text-[10px] bg-slate-100 px-2 py-1 rounded-full">{p.nombre.split("— ")[1] || p.nombre} ({p.numero_dado}){p.nivel === "ciudad" ? " 🏙️" : ""}</span>
+            ))}
+          </div>
+        </div>
+
+        {recursos.some((r) => r.cantidad > 0) && (
+          <div className="bg-white/95 rounded-2xl p-3 mb-3">
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">📦 Recursos</div>
+            <div className="flex flex-wrap gap-1.5">
+              {recursos.filter((r) => r.cantidad > 0).map((r) => <span key={r.id} className="text-[10px] bg-emerald-50 text-emerald-700 px-2 py-1 rounded-full">{r.recurso}: {r.cantidad}</span>)}
+            </div>
+          </div>
+        )}
+
+        {inventario.some((i) => i.cantidad > 0) && (
+          <div className="bg-white/95 rounded-2xl p-3 mb-3">
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">🎒 Inventario</div>
+            <div className="flex flex-wrap gap-1.5">
+              {inventario.filter((i) => i.cantidad > 0).map((i) => <span key={i.id} className="text-[10px] bg-teal-50 text-teal-700 px-2 py-1 rounded-full">{i.comarca_productos?.emoji} {i.comarca_productos?.nombre} x{i.cantidad}</span>)}
+            </div>
+          </div>
+        )}
+
+        <button onClick={() => setFormTruequeAbierto((v) => !v)} className="w-full text-sm font-semibold py-2.5 rounded-xl bg-violet-500 text-white mb-2">
+          {formTruequeAbierto ? "Cerrar" : "🤝 Proponer un trueque"}
+        </button>
+        {formTruequeAbierto && (
+          <div className="bg-white/95 rounded-2xl p-3 mb-3 space-y-2">
+            <select value={reinoDestino} onChange={(e) => setReinoDestino(e.target.value)} className="w-full text-xs rounded-lg px-2 py-2 border border-slate-200 outline-none">
+              <option value="">¿A qué Reino se lo proponés?</option>
+              {otrosReinos.filter((r) => String(r.id) !== String(reinoId)).map((r) => <option key={r.id} value={r.id}>{r.emoji} {r.nombre}</option>)}
+            </select>
+            <div className="grid grid-cols-2 gap-2">
+              <div><label className="text-[10px] text-slate-500 block mb-1">Ofrecés GP</label><input type="number" value={gpOfrecido} onChange={(e) => setGpOfrecido(e.target.value)} className="w-full text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none text-center" /></div>
+              <div><label className="text-[10px] text-slate-500 block mb-1">Pedís GP</label><input type="number" value={gpPedido} onChange={(e) => setGpPedido(e.target.value)} className="w-full text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none text-center" /></div>
+            </div>
+            <button disabled={enviando} onClick={enviarTrueque} className="w-full text-sm font-semibold py-2 rounded-lg bg-teal-500 text-white disabled:opacity-60">{enviando ? "Enviando…" : "Enviar propuesta"}</button>
+          </div>
+        )}
+
+        <p className="text-center text-[10px] text-violet-200 mt-4">Se actualiza solo cada 15 segundos — o tocá para actualizar ya.</p>
+        <button onClick={cargar} className="w-full text-xs text-violet-200 underline mt-1">🔄 Actualizar ahora</button>
+      </div>
     </div>
   );
 }
