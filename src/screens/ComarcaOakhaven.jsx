@@ -723,14 +723,19 @@ function DuelosModal({ sesion, reinos, provincias, onClose, onCambio }) {
 function RolesModal({ sesion, reinos, onClose }) {
   const [estudiantes, setEstudiantes] = useState([]);
   const [catalogoRoles, setCatalogoRoles] = useState([]);
+  const [nombresFantasia, setNombresFantasia] = useState([]);
+  const [nombresTemp, setNombresTemp] = useState({}); // edición local antes de guardar
   const [cargando, setCargando] = useState(true);
   const [creandoCatalogo, setCreandoCatalogo] = useState(false);
   const [guardandoId, setGuardandoId] = useState(null);
+  const [recienGuardadoId, setRecienGuardadoId] = useState(null);
+  const [guardandoNombreId, setGuardandoNombreId] = useState(null);
+  const [recienGuardadoNombreId, setRecienGuardadoNombreId] = useState(null);
 
   const cargar = () => {
     setCargando(true);
-    Promise.all([api.fetchEstudiantesPorGrado(sesion.grado_id), api.fetchRoles()]).then(([est, roles]) => {
-      setEstudiantes(est); setCatalogoRoles(roles); setCargando(false);
+    Promise.all([api.fetchEstudiantesPorGrado(sesion.grado_id), api.fetchRoles(), api.fetchNombresFantasiaDeSesion(sesion.id)]).then(([est, roles, fantasia]) => {
+      setEstudiantes(est); setCatalogoRoles(roles); setNombresFantasia(fantasia); setCargando(false);
     });
   };
   useEffect(() => { cargar(); }, []);
@@ -753,16 +758,33 @@ function RolesModal({ sesion, reinos, onClose }) {
     setGuardandoId(estudianteId);
     try {
       await api.asignarRol(estudianteId, rolId || null);
-      cargar();
+      await cargar();
+      setRecienGuardadoId(estudianteId);
+      setTimeout(() => setRecienGuardadoId((prev) => (prev === estudianteId ? null : prev)), 2000);
     } catch (e) {
-      alert("Error: " + e.message);
+      alert("Error al guardar el rol: " + e.message);
     }
     setGuardandoId(null);
+  };
+
+  const guardarNombreFantasia = async (estudianteId) => {
+    const nombre = nombresTemp[estudianteId] ?? (nombresFantasia.find((n) => n.estudiante_id === estudianteId)?.nombre || "");
+    setGuardandoNombreId(estudianteId);
+    try {
+      await api.guardarNombreFantasia(sesion.id, estudianteId, nombre);
+      await cargar();
+      setRecienGuardadoNombreId(estudianteId);
+      setTimeout(() => setRecienGuardadoNombreId((prev) => (prev === estudianteId ? null : prev)), 2000);
+    } catch (e) {
+      alert("Error al guardar el nombre: " + e.message);
+    }
+    setGuardandoNombreId(null);
   };
 
   // Agrupa a los estudiantes del curso según su Reino actual (o el
   // original, si no tienen el actual seteado).
   const estudiantesDe = (reino) => estudiantes.filter((e) => (e.reino_actual || e.reino_original) === reino.nombre);
+  const nombreFantasiaDe = (estudianteId) => nombresTemp[estudianteId] ?? (nombresFantasia.find((n) => n.estudiante_id === estudianteId)?.nombre || "");
 
   if (cargando) return null;
 
@@ -773,7 +795,7 @@ function RolesModal({ sesion, reinos, onClose }) {
           <h3 className="font-bold text-slate-800">🎭 Los 7 Roles</h3>
           <button onClick={onClose} className="text-slate-400">✕</button>
         </div>
-        <p className="text-xs text-slate-400 mb-3">Usa tu mismo catálogo de "Roles de Clase" — asignar acá reemplaza el rol de clase que tuviera antes ese estudiante.</p>
+        <p className="text-xs text-slate-400 mb-3">Asigná el rol y, si querés, un nombre de fantasía para el avatar de cada estudiante (ej: "Lord Aldric"). Cada guardado se confirma con un ✓ visible.</p>
 
         {faltanPorCrear.length > 0 && (
           <div className="bg-violet-50 rounded-xl p-3 mb-4 flex items-center justify-between flex-wrap gap-2">
@@ -791,21 +813,34 @@ function RolesModal({ sesion, reinos, onClose }) {
               {estudiantesDe(reino).length === 0 ? (
                 <p className="text-xs text-slate-400">Ningún estudiante de este curso tiene este Reino asignado.</p>
               ) : (
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   {estudiantesDe(reino).map((est) => {
                     const rolActualId = est.roles_asignados?.[0]?.rol_id || "";
                     return (
-                      <div key={est.id} className="flex items-center gap-2">
-                        <span className="text-xs text-slate-700 flex-1 min-w-0 truncate">{est.nombre}</span>
-                        <select value={rolActualId} onChange={(e) => asignar(est.id, e.target.value ? parseInt(e.target.value, 10) : null)}
-                          disabled={guardandoId === est.id}
-                          className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
-                          <option value="">Sin rol</option>
-                          {catalogoRoles.map((r) => {
-                            const infoComarca = api.COMARCA_ROLES.find((rc) => rc.nombre === r.nombre);
-                            return <option key={r.id} value={r.id}>{infoComarca ? `${infoComarca.emoji} ` : ""}{r.nombre}</option>;
-                          })}
-                        </select>
+                      <div key={est.id} className="bg-slate-50 rounded-lg p-2">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="text-xs font-semibold text-slate-700 flex-1 min-w-0 truncate">{est.nombre}</span>
+                          <select value={rolActualId} onChange={(e) => asignar(est.id, e.target.value ? parseInt(e.target.value, 10) : null)}
+                            disabled={guardandoId === est.id}
+                            className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
+                            <option value="">Sin rol</option>
+                            {catalogoRoles.map((r) => {
+                              const infoComarca = api.COMARCA_ROLES.find((rc) => rc.nombre === r.nombre);
+                              return <option key={r.id} value={r.id}>{infoComarca ? `${infoComarca.emoji} ` : ""}{r.nombre}</option>;
+                            })}
+                          </select>
+                          {guardandoId === est.id && <span className="text-[10px] text-slate-400 shrink-0">Guardando…</span>}
+                          {recienGuardadoId === est.id && <span className="text-[10px] text-emerald-600 font-semibold shrink-0">✓ Guardado</span>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-slate-400 w-20 shrink-0">🎭 Nombre de fantasía</span>
+                          <input value={nombreFantasiaDe(est.id)} onChange={(e) => setNombresTemp((prev) => ({ ...prev, [est.id]: e.target.value }))}
+                            onBlur={() => guardarNombreFantasia(est.id)} onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
+                            placeholder="Ej: Lord Aldric (opcional)" disabled={guardandoNombreId === est.id}
+                            className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
+                          {guardandoNombreId === est.id && <span className="text-[10px] text-slate-400 shrink-0">Guardando…</span>}
+                          {recienGuardadoNombreId === est.id && <span className="text-[10px] text-emerald-600 font-semibold shrink-0">✓ Guardado</span>}
+                        </div>
                       </div>
                     );
                   })}
@@ -904,11 +939,12 @@ function urlQR(texto) {
 function QRModal({ sesion, reinos, onClose }) {
   const [estudiantes, setEstudiantes] = useState([]);
   const [catalogoRoles, setCatalogoRoles] = useState([]);
+  const [nombresFantasia, setNombresFantasia] = useState([]);
   const [vista, setVista] = useState("reinos"); // "reinos" | "estudiantes"
 
   useEffect(() => {
-    Promise.all([api.fetchEstudiantesPorGrado(sesion.grado_id), api.fetchRoles()]).then(([est, roles]) => {
-      setEstudiantes(est); setCatalogoRoles(roles);
+    Promise.all([api.fetchEstudiantesPorGrado(sesion.grado_id), api.fetchRoles(), api.fetchNombresFantasiaDeSesion(sesion.id)]).then(([est, roles, fantasia]) => {
+      setEstudiantes(est); setCatalogoRoles(roles); setNombresFantasia(fantasia);
     });
   }, []);
 
@@ -919,6 +955,7 @@ function QRModal({ sesion, reinos, onClose }) {
     const catalogado = catalogoRoles.find((r) => r.id === rolId);
     return catalogado ? { ...catalogado, info: api.COMARCA_ROLES.find((rc) => rc.nombre === catalogado.nombre) } : null;
   };
+  const nombreMostrado = (est) => nombresFantasia.find((n) => n.estudiante_id === est.id)?.nombre || est.nombre;
 
   const conRolYReino = estudiantes.filter((e) => rolDe(e) && reinoDe(e));
 
@@ -955,7 +992,7 @@ function QRModal({ sesion, reinos, onClose }) {
               return (
                 <div key={est.id} className="border border-slate-100 rounded-xl p-3 text-center">
                   <img src={urlQR(urlDeTarjeta(sesion.id, reino.id, est.id))} alt={`QR ${est.nombre}`} className="mx-auto mb-2 rounded-lg" />
-                  <div className="text-xs font-semibold text-slate-700">{est.nombre}</div>
+                  <div className="text-xs font-semibold text-slate-700">{nombreMostrado(est)}</div>
                   <div className="text-[10px] text-slate-400">{rol.info?.emoji || "🎭"} {rol.nombre} · {reino?.nombre}</div>
                 </div>
               );
@@ -1282,13 +1319,14 @@ export function TarjetaComarcaPublica() {
   const [formTruequeAbierto, setFormTruequeAbierto] = useState(false);
   const [reinoDestino, setReinoDestino] = useState("");
   const [otrosReinos, setOtrosReinos] = useState([]);
+  const [nombresFantasia, setNombresFantasia] = useState([]);
   const [gpPedido, setGpPedido] = useState(0);
   const [gpOfrecido, setGpOfrecido] = useState(0);
   const [enviando, setEnviando] = useState(false);
 
   const cargar = () => {
     setCargando(true);
-    api.fetchTarjetaReino(sesionId, reinoId).then((d) => { setDatos(d); setCargando(false); });
+    Promise.all([api.fetchTarjetaReino(sesionId, reinoId), api.fetchNombresFantasiaDeSesion(sesionId)]).then(([d, fantasia]) => { setDatos(d); setNombresFantasia(fantasia); setCargando(false); });
   };
   useEffect(() => {
     cargar();
@@ -1299,7 +1337,7 @@ export function TarjetaComarcaPublica() {
   useEffect(() => { if (sesionId) api.fetchTodosLosReinosDeSesionPublico(sesionId).then(setOtrosReinos); }, [sesionId]);
 
   const miDato = datos?.estudiantesDelReino?.find((e) => String(e.id) === String(estudianteId));
-  const miNombre = miDato?.nombre;
+  const miNombre = nombresFantasia.find((n) => String(n.estudiante_id) === String(estudianteId))?.nombre || miDato?.nombre;
   const miRolNombre = miDato?.roles_asignados?.[0]?.roles_clase?.nombre;
   const miRolInfo = miRolNombre ? api.COMARCA_ROLES.find((r) => r.nombre === miRolNombre) : null;
 
