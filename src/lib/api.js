@@ -1013,6 +1013,14 @@ export async function crearPreguntaConBanco(campos, guardarEnBanco, materiaId, t
 // evaluación tiene preguntas aleatorias configuradas, le sortea un
 // subconjunto propio a este intento puntual — estable durante todo el intento.
 export async function iniciarIntentoConAleatorias(evaluacion, estudianteId) {
+  // Si el estudiante tiene Falta Injustificada (FI) hoy en esta materia,
+  // no lo deja empezar la evaluación.
+  const hoy = new Date().toISOString().slice(0, 10);
+  const conFalta = await fetchEstudiantesConFaltaInjustificada([estudianteId], hoy, evaluacion.materia_id || null);
+  if (conFalta.has(estudianteId)) {
+    throw new Error("Tenés una falta injustificada registrada hoy en esta materia — no podés presentar esta evaluación hoy. Hablá con tu docente.");
+  }
+
   const intentoId = await iniciarIntento(evaluacion.id, estudianteId);
 
   if (!evaluacion.preguntas_aleatorias_cantidad) {
@@ -4264,13 +4272,20 @@ export async function setValor(actividadId, estudianteId, valor) {
 // actividad+estudiante, aunque se corrija la nota varias veces después.
 async function otorgarRecompensaSiCorresponde(actividadId, estudianteId, valor) {
   const { data: vinculo } = await supabase.from("actividades_programadas_cursos")
-    .select("actividades_programadas(nombre, recompensa_xp, recompensa_vida, recompensa_monedas, nota_minima)")
+    .select("actividades_programadas(nombre, recompensa_xp, recompensa_vida, recompensa_monedas, nota_minima, fecha, materia_id)")
     .eq("actividad_notas_id", actividadId).maybeSingle();
   const prog = vinculo?.actividades_programadas;
   if (!prog) return;
   const sinRecompensa = !prog.recompensa_xp && !prog.recompensa_vida && !prog.recompensa_monedas;
   if (sinRecompensa) return;
   if (valor < (prog.nota_minima ?? 3.5)) return;
+
+  // No otorga la recompensa si el estudiante tuvo Falta Injustificada (FI)
+  // justo el día de esta actividad.
+  if (prog.fecha) {
+    const conFalta = await fetchEstudiantesConFaltaInjustificada([estudianteId], prog.fecha, prog.materia_id || null);
+    if (conFalta.has(estudianteId)) return;
+  }
 
   const { data: yaOtorgada } = await supabase.from("recompensas_otorgadas").select("id").eq("actividad_id", actividadId).eq("estudiante_id", estudianteId).maybeSingle();
   if (yaOtorgada) return;
@@ -4503,6 +4518,15 @@ export async function fetchAsistenciaFecha(estudianteIds, fecha, materiaId = nul
   const mapa = {};
   (data || []).forEach((f) => { mapa[f.estudiante_id] = f; });
   return mapa;
+}
+
+// Función central reutilizable: devuelve el conjunto de IDs de
+// estudiantes marcados con Falta Injustificada (FI) en una fecha puntual
+// (y materia, si se especifica) — para excluirlos de actividades de ese
+// día en cualquier pantalla de la app.
+export async function fetchEstudiantesConFaltaInjustificada(estudianteIds, fecha, materiaId = null) {
+  const mapa = await fetchAsistenciaFecha(estudianteIds, fecha, materiaId);
+  return new Set(Object.values(mapa).filter((a) => a.codigo === "FI").map((a) => a.estudiante_id));
 }
 
 // Cache simple en memoria del catálogo de asistencia, para no consultarlo en
