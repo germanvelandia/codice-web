@@ -109,6 +109,7 @@ function BancoModal({ sesion, reinos, onClose, onCambio }) {
   const [reinoElegido, setReinoElegido] = useState(reinos[0]?.id || "");
   const [comprando, setComprando] = useState(null);
   const [formAbierto, setFormAbierto] = useState(false);
+  const [editandoId, setEditandoId] = useState(null);
   const [nombre, setNombre] = useState("");
   const [emoji, setEmoji] = useState("📦");
   const [costoGp, setCostoGp] = useState(5);
@@ -116,10 +117,30 @@ function BancoModal({ sesion, reinos, onClose, onCambio }) {
   const cargar = () => { setCargando(true); api.fetchComarcaProductos().then((d) => { setProductos(d); setCargando(false); }); };
   useEffect(() => { cargar(); }, []);
 
-  const crearProducto = async () => {
+  const empezarEdicion = (p) => {
+    setEditandoId(p.id); setNombre(p.nombre); setEmoji(p.emoji); setCostoGp(p.costo_gp);
+    setFormAbierto(true);
+  };
+
+  const cancelarForm = () => {
+    setFormAbierto(false); setEditandoId(null); setNombre(""); setEmoji("📦"); setCostoGp(5);
+  };
+
+  const guardarProducto = async () => {
     if (!nombre.trim()) return;
-    await api.crearComarcaProducto({ nombre: nombre.trim(), emoji, costo_gp: parseInt(costoGp, 10) || 0 });
-    setNombre(""); setFormAbierto(false); cargar();
+    if (editandoId) {
+      await api.editarComarcaProducto(editandoId, { nombre: nombre.trim(), emoji, costo_gp: parseInt(costoGp, 10) || 0 });
+    } else {
+      await api.crearComarcaProducto({ nombre: nombre.trim(), emoji, costo_gp: parseInt(costoGp, 10) || 0 });
+    }
+    cancelarForm();
+    cargar();
+  };
+
+  const eliminarProducto = async (p) => {
+    if (!confirm(`¿Quitar "${p.nombre}" del catálogo del Banco? El inventario que ya tengan los Reinos no se pierde.`)) return;
+    await api.eliminarComarcaProducto(p.id);
+    cargar();
   };
 
   const comprar = async (producto) => {
@@ -147,13 +168,13 @@ function BancoModal({ sesion, reinos, onClose, onCambio }) {
           {reinos.map((r) => <option key={r.id} value={r.id}>{r.emoji} {r.nombre} (🪙 {r.gp})</option>)}
         </select>
 
-        <button onClick={() => setFormAbierto((v) => !v)} className="text-xs font-semibold text-violet-500 mb-2">{formAbierto ? "Cerrar" : "+ Agregar producto al catálogo del Banco"}</button>
+        <button onClick={() => (formAbierto ? cancelarForm() : setFormAbierto(true))} className="text-xs font-semibold text-violet-500 mb-2">{formAbierto ? "Cerrar" : "+ Agregar producto al catálogo del Banco"}</button>
         {formAbierto && (
           <div className="bg-violet-50 rounded-xl p-3 mb-3 flex gap-1.5 flex-wrap items-end">
             <input value={emoji} onChange={(e) => setEmoji(e.target.value)} className="w-12 text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none text-center" />
             <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre (ej: Tijeras)" className="flex-1 min-w-[100px] text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
             <input type="number" value={costoGp} onChange={(e) => setCostoGp(e.target.value)} placeholder="GP" className="w-16 text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none text-center" />
-            <button onClick={crearProducto} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white">Agregar</button>
+            <button onClick={guardarProducto} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white">{editandoId ? "Guardar" : "Agregar"}</button>
           </div>
         )}
 
@@ -164,7 +185,11 @@ function BancoModal({ sesion, reinos, onClose, onCambio }) {
         ) : (
           <div className="grid grid-cols-2 gap-2">
             {productos.map((p) => (
-              <div key={p.id} className="border border-slate-100 rounded-xl p-2.5 text-center">
+              <div key={p.id} className="border border-slate-100 rounded-xl p-2.5 text-center relative">
+                <div className="absolute top-1 right-1 flex gap-1">
+                  <button onClick={() => empezarEdicion(p)} className="text-[10px] text-slate-300 hover:text-violet-600">✏️</button>
+                  <button onClick={() => eliminarProducto(p)} className="text-[10px] text-slate-300 hover:text-rose-500">🗑</button>
+                </div>
                 <div className="text-2xl mb-1">{p.emoji}</div>
                 <div className="text-xs font-semibold text-slate-700">{p.nombre}</div>
                 <button disabled={comprando === p.id} onClick={() => comprar(p)} className="text-[11px] font-semibold px-2 py-1 rounded-full bg-amber-500 text-white mt-1.5 disabled:opacity-60">
@@ -428,9 +453,11 @@ export function VistaComarcaOakhaven({ grados, gradoActivo }) {
   const [cargando, setCargando] = useState(true);
   const [sesionAbierta, setSesionAbierta] = useState(null);
   const [creandoAbierto, setCreandoAbierto] = useState(false);
+  const [editandoSesion, setEditandoSesion] = useState(null);
   const [gradoId, setGradoId] = useState(gradoActivo || grados[0]?.id || "");
   const [titulo, setTitulo] = useState("Comarca de Oakhaven");
-  const [reinosDelCurso, setReinosDelCurso] = useState([]);
+  const [catalogoReinos, setCatalogoReinos] = useState([]);
+  const [reinosSeleccionados, setReinosSeleccionados] = useState([]);
   const [cargandoReinos, setCargandoReinos] = useState(false);
   const [creando, setCreando] = useState(false);
 
@@ -439,20 +466,45 @@ export function VistaComarcaOakhaven({ grados, gradoActivo }) {
 
   useEffect(() => {
     setCargandoReinos(true);
-    api.fetchReinosParaComarca().then((r) => { setReinosDelCurso(r); setCargandoReinos(false); });
+    api.fetchReinosParaComarca().then((r) => { setCatalogoReinos(r); setReinosSeleccionados(r); setCargandoReinos(false); });
   }, []);
 
+  const toggleReino = (nombre) => {
+    setReinosSeleccionados((prev) => prev.includes(nombre) ? prev.filter((r) => r !== nombre) : [...prev, nombre]);
+  };
+
   const crear = async () => {
-    if (reinosDelCurso.length === 0) { alert("Todavía no hay ningún Reino en el catálogo — creá al menos uno primero en Estudiantes → Reinos."); return; }
+    if (reinosSeleccionados.length < 2) { alert("Elegí al menos 2 Reinos para que jueguen en esta sesión."); return; }
     setCreando(true);
     try {
-      const nueva = await api.crearSesionComarca(gradoId, titulo.trim() || "Comarca de Oakhaven", reinosDelCurso);
+      const nueva = await api.crearSesionComarca(gradoId, titulo.trim() || "Comarca de Oakhaven", reinosSeleccionados);
       setCreandoAbierto(false);
       setSesionAbierta(nueva);
     } catch (e) {
       alert("Error al crear la sesión: " + e.message);
     }
     setCreando(false);
+  };
+
+  const guardarEdicionSesion = async () => {
+    try {
+      await api.editarSesionComarca(editandoSesion.id, { titulo: editandoSesion.titulo.trim() || "Comarca de Oakhaven" });
+      setEditandoSesion(null);
+      cargar();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+  };
+
+  const eliminarSesion = async (s, ev) => {
+    ev.stopPropagation();
+    if (!confirm(`¿Eliminar por completo la sesión "${s.titulo}"? Se borran también sus reinos, provincias, trueques y todo lo demás. No se puede deshacer.`)) return;
+    try {
+      await api.eliminarSesionComarca(s.id);
+      cargar();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
   };
 
   if (sesionAbierta) return <TableroSesion sesion={sesionAbierta} onVolver={() => { setSesionAbierta(null); cargar(); }} />;
@@ -478,25 +530,43 @@ export function VistaComarcaOakhaven({ grados, gradoActivo }) {
           <label className="text-xs text-slate-500 block mb-1">Título de la sesión</label>
           <input value={titulo} onChange={(e) => setTitulo(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none bg-white" />
 
-          <label className="text-xs text-slate-500 block mb-1">Reinos (catálogo completo, el mismo de "Mi Reino")</label>
+          <label className="text-xs text-slate-500 block mb-1">¿Qué Reinos juegan esta sesión?</label>
           {cargandoReinos ? (
             <p className="text-xs text-slate-400 mb-3">Buscando…</p>
-          ) : reinosDelCurso.length === 0 ? (
+          ) : catalogoReinos.length === 0 ? (
             <p className="text-xs text-rose-500 mb-3">Todavía no creaste ningún Reino en el catálogo — hacelo primero desde Estudiantes → Reinos.</p>
           ) : (
             <div className="flex flex-wrap gap-1.5 mb-3">
-              {reinosDelCurso.map((r, i) => (
-                <span key={r} className="text-xs font-semibold px-2 py-1 rounded-full bg-white border border-violet-200 text-violet-700">
-                  {api.COMARCA_REINOS_BASE[i]?.emoji || "🏰"} {r}
-                </span>
-              ))}
+              {catalogoReinos.map((r, i) => {
+                const marcado = reinosSeleccionados.includes(r);
+                return (
+                  <button key={r} type="button" onClick={() => toggleReino(r)}
+                    className={`text-xs font-semibold px-2 py-1 rounded-full border ${marcado ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-400 border-slate-200"}`}>
+                    {marcado ? "✓ " : ""}{api.COMARCA_REINOS_BASE[i]?.emoji || "🏰"} {r}
+                  </button>
+                );
+              })}
             </div>
           )}
 
-          <p className="text-[11px] text-slate-400 mb-3">Se va a crear un Reino de la Comarca por cada uno de estos, con sus 4 provincias, listos para repartir entre las mesas.</p>
-          <button disabled={creando || reinosDelCurso.length === 0} onClick={crear} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+          <p className="text-[11px] text-slate-400 mb-3">Se va a crear un Reino de la Comarca por cada uno de los marcados, con sus 4 provincias, listos para repartir entre las mesas.</p>
+          <button disabled={creando || reinosSeleccionados.length < 2} onClick={crear} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
             {creando ? "Creando el tablero…" : "🏛️ Fundar la Comarca"}
           </button>
+        </div>
+      )}
+
+      {editandoSesion && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={() => setEditandoSesion(null)}>
+          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-4 w-full max-w-xs shadow-xl">
+            <h4 className="font-bold text-slate-800 mb-2">Editar sesión</h4>
+            <input value={editandoSesion.titulo} onChange={(e) => setEditandoSesion({ ...editandoSesion, titulo: e.target.value })} autoFocus
+              className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setEditandoSesion(null)} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
+              <button onClick={guardarEdicionSesion} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white">Guardar</button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -509,13 +579,19 @@ export function VistaComarcaOakhaven({ grados, gradoActivo }) {
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
           {sesiones.map((s) => (
-            <button key={s.id} onClick={() => setSesionAbierta(s)} className="bg-white rounded-2xl border border-slate-100 p-4 text-left hover:border-violet-300">
-              <div className="font-bold text-slate-800">{s.titulo}</div>
+            <div key={s.id} onClick={() => setSesionAbierta(s)} className="bg-white rounded-2xl border border-slate-100 p-4 text-left hover:border-violet-300 cursor-pointer relative">
+              <div className="flex justify-between items-start gap-2">
+                <div className="font-bold text-slate-800">{s.titulo}</div>
+                <div className="flex gap-1.5 shrink-0">
+                  <button onClick={(e) => { e.stopPropagation(); setEditandoSesion(s); }} className="text-xs text-slate-400 hover:text-violet-600">✏️</button>
+                  <button onClick={(e) => eliminarSesion(s, e)} className="text-xs text-slate-400 hover:text-rose-500">🗑</button>
+                </div>
+              </div>
               <div className="text-xs text-slate-400">Curso {s.grado_id} · {s.fecha}</div>
               <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full mt-1.5 inline-block ${s.estado === "activa" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
                 {s.estado === "activa" ? "🟢 En juego" : "⚪ Finalizada"}
               </span>
-            </button>
+            </div>
           ))}
         </div>
       )}
