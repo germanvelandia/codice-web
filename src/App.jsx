@@ -22,7 +22,7 @@ import { VistaObjetos, ObjetosEstudiante } from "./screens/Objetos";
 import { VistaActividadesProgramadas } from "./screens/ActividadesProgramadas";
 import { VistaGamificacionExtra } from "./screens/GamificacionExtra";
 import { VistaRoles } from "./screens/Roles";
-import { VistaComarcaOakhaven } from "./screens/ComarcaOakhaven";
+import { VistaComarcaOakhaven, TarjetaComarcaPublica } from "./screens/ComarcaOakhaven";
 import { VistaCalificaciones } from "./screens/Calificaciones";
 import { VistaReportes } from "./screens/Reportes";
 import { VistaHorario } from "./screens/Horario";
@@ -54,9 +54,10 @@ export default function App() {
   // Link dedicado para estudiantes: tu-sitio.vercel.app/#estudiante
   // No muestra ninguna opción de docente, ni espera sesión de Supabase.
   const soloEstudiante = typeof window !== "undefined" && window.location.hash === "#estudiante";
+  const tarjetaComarca = typeof window !== "undefined" && window.location.hash.startsWith("#comarca-tarjeta");
 
   useEffect(() => {
-    if (soloEstudiante) return;
+    if (soloEstudiante || tarjetaComarca) return;
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setLoading(false);
@@ -64,6 +65,8 @@ export default function App() {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
     return () => listener.subscription.unsubscribe();
   }, []);
+
+  if (tarjetaComarca) return <TarjetaComarcaPublica />;
 
   if (soloEstudiante) {
     return (
