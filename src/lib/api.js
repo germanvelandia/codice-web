@@ -4766,12 +4766,21 @@ export const COMARCA_REINOS_BASE = [
   { nombre: "Ruinas de la Concordia", emoji: "🔴", recurso: "Pergaminos y Laicidad" },
 ];
 
-// Usa el catálogo global de Reinos (el mismo de "Mi Reino") — así la
-// Comarca siempre muestra TODOS los Reinos existentes, tengan o no
-// estudiantes ya repartidos ahí en este curso puntual.
+// Usa el catálogo global de Reinos (el mismo de "Mi Reino") — sirve para
+// mostrar colores/emojis, pero no filtra por curso.
 export async function fetchReinosParaComarca() {
   const catalogo = await fetchReinos();
   return catalogo.map((r) => r.nombre);
+}
+
+// Trae SOLO los Reinos que existen realmente entre los estudiantes de ESE
+// curso puntual (802, 803, etc.) — así cada curso ve nada más que los
+// suyos, no el catálogo completo del colegio.
+export async function fetchReinosDelCurso(gradoId) {
+  const { data, error } = await supabase.from("estudiantes").select("reino_actual").eq("grado_id", gradoId).eq("activo", true);
+  if (error) throw error;
+  const nombres = [...new Set((data || []).map((e) => e.reino_actual).filter(Boolean))];
+  return nombres;
 }
 
 // Crea una sesión nueva, con un Reino de la Comarca por cada Reino real de
