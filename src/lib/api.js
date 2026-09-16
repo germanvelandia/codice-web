@@ -4766,14 +4766,12 @@ export const COMARCA_REINOS_BASE = [
   { nombre: "Ruinas de la Concordia", emoji: "🔴", recurso: "Pergaminos y Laicidad" },
 ];
 
-// Trae los Reinos reales que ya tienen tus estudiantes de ese curso (los
-// mismos que ven en "Mi Reino") — para fundar la Comarca sobre los grupos
-// que ya existen, en vez de nombres inventados.
-export async function fetchReinosDeGrado(gradoId) {
-  const { data, error } = await supabase.from("estudiantes").select("reino_actual").eq("grado_id", gradoId).eq("activo", true);
-  if (error) throw error;
-  const nombres = [...new Set((data || []).map((e) => e.reino_actual).filter(Boolean))];
-  return nombres;
+// Usa el catálogo global de Reinos (el mismo de "Mi Reino") — así la
+// Comarca siempre muestra TODOS los Reinos existentes, tengan o no
+// estudiantes ya repartidos ahí en este curso puntual.
+export async function fetchReinosParaComarca() {
+  const catalogo = await fetchReinos();
+  return catalogo.map((r) => r.nombre);
 }
 
 // Crea una sesión nueva, con un Reino de la Comarca por cada Reino real de
@@ -4872,4 +4870,112 @@ export async function finalizarSesionComarca(sesionId) {
 export async function guardarEventoSesion(sesionId, evento) {
   const { error } = await supabase.from("comarca_sesiones").update({ evento_actual: evento }).eq("id", sesionId);
   if (error) throw error;
+}
+
+/* ==================== COMARCA — Fase 2: Tablero de Transferencias ==================== */
+export async function fetchComarcaProductos() {
+  const { data, error } = await supabase.from("comarca_productos").select("*").eq("activo", true).order("costo_gp");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearComarcaProducto(campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("comarca_productos").insert({ ...campos, docente_id: userData?.user?.id || null }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function editarComarcaProducto(id, campos) {
+  const { error } = await supabase.from("comarca_productos").update(campos).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarComarcaProducto(id) {
+  const { error } = await supabase.from("comarca_productos").update({ activo: false }).eq("id", id);
+  if (error) throw error;
+}
+
+export async function fetchInventarioDeSesion(sesionId) {
+  const { data, error } = await supabase.from("comarca_inventario").select("*, comarca_productos(*)").eq("sesion_id", sesionId);
+  if (error) throw error;
+  return data || [];
+}
+
+// El Banco le vende un producto a un Reino: le cobra el GP y se lo suma
+// al inventario.
+export async function comprarleAlBanco(sesionId, reinoId, producto, cantidad = 1) {
+  const costoTotal = producto.costo_gp * cantidad;
+  await ajustarEconomiaReino(sesionId, reinoId, "gp", -costoTotal, `Compra al Banco: ${producto.emoji} ${producto.nombre} x${cantidad}`);
+
+  const { data: existente } = await supabase.from("comarca_inventario").select("*").eq("sesion_id", sesionId).eq("reino_id", reinoId).eq("producto_id", producto.id).maybeSingle();
+  if (existente) {
+    const { error } = await supabase.from("comarca_inventario").update({ cantidad: existente.cantidad + cantidad }).eq("id", existente.id);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase.from("comarca_inventario").insert({ sesion_id: sesionId, reino_id: reinoId, producto_id: producto.id, cantidad });
+    if (error) throw error;
+  }
+}
+
+// Le da un producto a un Reino directamente, sin cobrar GP — para premiar
+// (ganar un duelo, cumplir una misión secreta, etc.)
+export async function darProductoAReino(sesionId, reinoId, productoId, cantidad = 1) {
+  const { data: existente } = await supabase.from("comarca_inventario").select("*").eq("sesion_id", sesionId).eq("reino_id", reinoId).eq("producto_id", productoId).maybeSingle();
+  if (existente) {
+    const { error } = await supabase.from("comarca_inventario").update({ cantidad: existente.cantidad + cantidad }).eq("id", existente.id);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase.from("comarca_inventario").insert({ sesion_id: sesionId, reino_id: reinoId, producto_id: productoId, cantidad });
+    if (error) throw error;
+  }
+}
+
+export async function fetchTruequesDeSesion(sesionId) {
+  const { data, error } = await supabase.from("comarca_trueques")
+    .select("*, oferta:reino_oferta_id(nombre, emoji), destino:reino_destino_id(nombre, emoji), ofrecido:producto_ofrecido_id(nombre, emoji), pedido:producto_pedido_id(nombre, emoji)")
+    .eq("sesion_id", sesionId).order("creado_en", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function proponerTrueque(campos) {
+  const { error } = await supabase.from("comarca_trueques").insert(campos);
+  if (error) throw error;
+}
+
+// El docente resuelve el trueque: si lo acepta, mueve el GP y los
+// productos entre los dos reinos; si lo rechaza, solo cambia el estado.
+export async function resolverTrueque(trueque, aceptar) {
+  if (!aceptar) {
+    const { error } = await supabase.from("comarca_trueques").update({ estado: "rechazado" }).eq("id", trueque.id);
+    if (error) throw error;
+    return;
+  }
+
+  if (trueque.gp_ofrecido > 0) await ajustarEconomiaReino(trueque.sesion_id, trueque.reino_oferta_id, "gp", -trueque.gp_ofrecido, "Trueque entregado");
+  if (trueque.gp_ofrecido > 0) await ajustarEconomiaReino(trueque.sesion_id, trueque.reino_destino_id, "gp", trueque.gp_ofrecido, "Trueque recibido");
+  if (trueque.gp_pedido > 0) await ajustarEconomiaReino(trueque.sesion_id, trueque.reino_destino_id, "gp", -trueque.gp_pedido, "Trueque entregado");
+  if (trueque.gp_pedido > 0) await ajustarEconomiaReino(trueque.sesion_id, trueque.reino_oferta_id, "gp", trueque.gp_pedido, "Trueque recibido");
+
+  if (trueque.producto_ofrecido_id && trueque.cantidad_ofrecida > 0) {
+    await moverProductoEntreReinos(trueque.sesion_id, trueque.reino_oferta_id, trueque.reino_destino_id, trueque.producto_ofrecido_id, trueque.cantidad_ofrecida);
+  }
+  if (trueque.producto_pedido_id && trueque.cantidad_pedida > 0) {
+    await moverProductoEntreReinos(trueque.sesion_id, trueque.reino_destino_id, trueque.reino_oferta_id, trueque.producto_pedido_id, trueque.cantidad_pedida);
+  }
+
+  const { error } = await supabase.from("comarca_trueques").update({ estado: "aceptado" }).eq("id", trueque.id);
+  if (error) throw error;
+}
+
+async function moverProductoEntreReinos(sesionId, reinoOrigenId, reinoDestinoId, productoId, cantidad) {
+  const { data: origen, error: e1 } = await supabase.from("comarca_inventario").select("*").eq("sesion_id", sesionId).eq("reino_id", reinoOrigenId).eq("producto_id", productoId).maybeSingle();
+  if (e1) throw e1;
+  const cantidadOrigen = Math.max(0, (origen?.cantidad || 0) - cantidad);
+  if (origen) {
+    const { error } = await supabase.from("comarca_inventario").update({ cantidad: cantidadOrigen }).eq("id", origen.id);
+    if (error) throw error;
+  }
+  await darProductoAReino(sesionId, reinoDestinoId, productoId, cantidad);
 }
