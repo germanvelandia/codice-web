@@ -29,11 +29,56 @@ function SubirImagenReino({ reino, onGuardado }) {
   );
 }
 
-function AjustarEconomiaModal({ sesion, reino, onClose, onCambio }) {
+function AjustarEconomiaModal({ sesion, reino, billetesDeSesion, onClose, onCambio }) {
   const [tipo, setTipo] = useState("gp");
+  const [modo, setModo] = useState("rapido"); // "rapido" | "billetes"
   const [cantidad, setCantidad] = useState(5);
   const [motivo, setMotivo] = useState("");
   const [guardando, setGuardando] = useState(false);
+
+  const [denominaciones, setDenominaciones] = useState([]);
+  const [conteos, setConteos] = useState({}); // { denominacion_id: cantidad }
+  const [formDenomAbierto, setFormDenomAbierto] = useState(false);
+  const [valorNuevo, setValorNuevo] = useState(10);
+  const [emojiNuevo, setEmojiNuevo] = useState("💵");
+
+  useEffect(() => {
+    api.fetchComarcaDenominaciones().then((d) => {
+      setDenominaciones(d);
+      const inicial = {};
+      d.forEach((den) => {
+        const existente = billetesDeSesion.find((b) => b.reino_id === reino.id && b.denominacion_id === den.id);
+        inicial[den.id] = existente?.cantidad || 0;
+      });
+      setConteos(inicial);
+    });
+  }, []);
+
+  const totalContado = denominaciones.reduce((sum, d) => sum + d.valor * (conteos[d.id] || 0), 0);
+
+  const cambiarConteo = (denomId, delta) => {
+    setConteos((prev) => ({ ...prev, [denomId]: Math.max(0, (prev[denomId] || 0) + delta) }));
+  };
+
+  const crearDenominacion = async () => {
+    await api.crearComarcaDenominacion(valorNuevo, emojiNuevo, null);
+    const actualizadas = await api.fetchComarcaDenominaciones();
+    setDenominaciones(actualizadas);
+    setFormDenomAbierto(false);
+  };
+
+  const guardarConteo = async () => {
+    setGuardando(true);
+    try {
+      const lista = denominaciones.map((d) => ({ denominacion_id: d.id, cantidad: conteos[d.id] || 0 }));
+      await api.guardarBilletesReino(sesion.id, reino.id, lista);
+      onCambio();
+      onClose();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setGuardando(false);
+  };
 
   const aplicar = async (signo) => {
     setGuardando(true);
@@ -49,7 +94,7 @@ function AjustarEconomiaModal({ sesion, reino, onClose, onCambio }) {
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-4 w-full max-w-xs shadow-xl">
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-4 w-full max-w-xs max-h-[85vh] overflow-y-auto shadow-xl">
         <div className="flex justify-between items-center mb-3">
           <h4 className="font-bold text-slate-800">{reino.emoji} {reino.nombre}</h4>
           <button onClick={onClose} className="text-slate-400">✕</button>
@@ -58,14 +103,53 @@ function AjustarEconomiaModal({ sesion, reino, onClose, onCambio }) {
           <button onClick={() => setTipo("gp")} className={`flex-1 text-xs py-1.5 rounded-full ${tipo === "gp" ? "bg-amber-500 text-white" : "text-slate-600"}`}>🪙 GP</button>
           <button onClick={() => setTipo("fp")} className={`flex-1 text-xs py-1.5 rounded-full ${tipo === "fp" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🕊️ FP</button>
         </div>
-        <input type="number" value={cantidad} onChange={(e) => setCantidad(e.target.value)} placeholder="Cantidad"
-          className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none text-center" />
-        <input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Motivo (opcional, ej: Peaje cobrado)"
-          className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
-        <div className="flex gap-2">
-          <button disabled={guardando} onClick={() => aplicar(-1)} className="flex-1 text-sm font-semibold py-2 rounded-lg bg-rose-100 text-rose-700 disabled:opacity-50">− Quitar</button>
-          <button disabled={guardando} onClick={() => aplicar(1)} className="flex-1 text-sm font-semibold py-2 rounded-lg bg-emerald-100 text-emerald-700 disabled:opacity-50">+ Dar</button>
-        </div>
+
+        {tipo === "gp" && (
+          <div className="flex gap-1 rounded-full bg-amber-50 p-1 mb-3">
+            <button onClick={() => setModo("rapido")} className={`flex-1 text-[11px] py-1.5 rounded-full ${modo === "rapido" ? "bg-amber-500 text-white" : "text-slate-500"}`}>Ajuste rápido</button>
+            <button onClick={() => setModo("billetes")} className={`flex-1 text-[11px] py-1.5 rounded-full ${modo === "billetes" ? "bg-amber-500 text-white" : "text-slate-500"}`}>💵 Contar billetes</button>
+          </div>
+        )}
+
+        {tipo === "gp" && modo === "billetes" ? (
+          <div>
+            <div className="space-y-1.5 mb-3">
+              {denominaciones.map((d) => (
+                <div key={d.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
+                  <span className="text-sm font-semibold text-slate-700">{d.emoji} {d.valor} GP</span>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => cambiarConteo(d.id, -1)} className="w-6 h-6 rounded-full bg-white border border-slate-200 text-slate-500">−</button>
+                    <span className="text-sm w-5 text-center">{conteos[d.id] || 0}</span>
+                    <button onClick={() => cambiarConteo(d.id, 1)} className="w-6 h-6 rounded-full bg-white border border-slate-200 text-slate-500">+</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setFormDenomAbierto((v) => !v)} className="text-[11px] text-violet-500 mb-2">{formDenomAbierto ? "Cerrar" : "+ Agregar otra denominación"}</button>
+            {formDenomAbierto && (
+              <div className="flex gap-1.5 mb-3">
+                <input value={emojiNuevo} onChange={(e) => setEmojiNuevo(e.target.value)} className="w-10 text-sm rounded-lg px-1 py-1.5 border border-slate-200 outline-none text-center" />
+                <input type="number" value={valorNuevo} onChange={(e) => setValorNuevo(e.target.value)} className="flex-1 text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none text-center" />
+                <button onClick={crearDenominacion} className="text-xs font-semibold px-2 py-1.5 rounded-lg bg-violet-500 text-white">+</button>
+              </div>
+            )}
+            <div className="text-center text-sm font-bold text-amber-700 mb-3">Total contado: 🪙 {totalContado} GP</div>
+            <button disabled={guardando} onClick={guardarConteo} className="w-full text-sm font-semibold py-2 rounded-lg bg-amber-500 text-white disabled:opacity-60">
+              {guardando ? "Guardando…" : "Guardar conteo"}
+            </button>
+          </div>
+        ) : (
+          <>
+            <input type="number" value={cantidad} onChange={(e) => setCantidad(e.target.value)} placeholder="Cantidad"
+              className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none text-center" />
+            <input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Motivo (opcional, ej: Peaje cobrado)"
+              className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
+            <div className="flex gap-2">
+              <button disabled={guardando} onClick={() => aplicar(-1)} className="flex-1 text-sm font-semibold py-2 rounded-lg bg-rose-100 text-rose-700 disabled:opacity-50">− Quitar</button>
+              <button disabled={guardando} onClick={() => aplicar(1)} className="flex-1 text-sm font-semibold py-2 rounded-lg bg-emerald-100 text-emerald-700 disabled:opacity-50">+ Dar</button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -113,25 +197,27 @@ function BancoModal({ sesion, reinos, onClose, onCambio }) {
   const [nombre, setNombre] = useState("");
   const [emoji, setEmoji] = useState("📦");
   const [costoGp, setCostoGp] = useState(5);
+  const [reinoDueno, setReinoDueno] = useState("");
 
   const cargar = () => { setCargando(true); api.fetchComarcaProductos().then((d) => { setProductos(d); setCargando(false); }); };
   useEffect(() => { cargar(); }, []);
 
   const empezarEdicion = (p) => {
-    setEditandoId(p.id); setNombre(p.nombre); setEmoji(p.emoji); setCostoGp(p.costo_gp);
+    setEditandoId(p.id); setNombre(p.nombre); setEmoji(p.emoji); setCostoGp(p.costo_gp); setReinoDueno(p.reino_dueno_nombre || "");
     setFormAbierto(true);
   };
 
   const cancelarForm = () => {
-    setFormAbierto(false); setEditandoId(null); setNombre(""); setEmoji("📦"); setCostoGp(5);
+    setFormAbierto(false); setEditandoId(null); setNombre(""); setEmoji("📦"); setCostoGp(5); setReinoDueno("");
   };
 
   const guardarProducto = async () => {
     if (!nombre.trim()) return;
+    const campos = { nombre: nombre.trim(), emoji, costo_gp: parseInt(costoGp, 10) || 0, reino_dueno_nombre: reinoDueno || null };
     if (editandoId) {
-      await api.editarComarcaProducto(editandoId, { nombre: nombre.trim(), emoji, costo_gp: parseInt(costoGp, 10) || 0 });
+      await api.editarComarcaProducto(editandoId, campos);
     } else {
-      await api.crearComarcaProducto({ nombre: nombre.trim(), emoji, costo_gp: parseInt(costoGp, 10) || 0 });
+      await api.crearComarcaProducto(campos);
     }
     cancelarForm();
     cargar();
@@ -170,11 +256,17 @@ function BancoModal({ sesion, reinos, onClose, onCambio }) {
 
         <button onClick={() => (formAbierto ? cancelarForm() : setFormAbierto(true))} className="text-xs font-semibold text-violet-500 mb-2">{formAbierto ? "Cerrar" : "+ Agregar producto al catálogo del Banco"}</button>
         {formAbierto && (
-          <div className="bg-violet-50 rounded-xl p-3 mb-3 flex gap-1.5 flex-wrap items-end">
-            <input value={emoji} onChange={(e) => setEmoji(e.target.value)} className="w-12 text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none text-center" />
-            <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre (ej: Tijeras)" className="flex-1 min-w-[100px] text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-            <input type="number" value={costoGp} onChange={(e) => setCostoGp(e.target.value)} placeholder="GP" className="w-16 text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none text-center" />
-            <button onClick={guardarProducto} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white">{editandoId ? "Guardar" : "Agregar"}</button>
+          <div className="bg-violet-50 rounded-xl p-3 mb-3 space-y-1.5">
+            <div className="flex gap-1.5 flex-wrap items-end">
+              <input value={emoji} onChange={(e) => setEmoji(e.target.value)} className="w-12 text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none text-center" />
+              <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre (ej: Tijeras)" className="flex-1 min-w-[100px] text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+              <input type="number" value={costoGp} onChange={(e) => setCostoGp(e.target.value)} placeholder="GP" className="w-16 text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none text-center" />
+            </div>
+            <select value={reinoDueno} onChange={(e) => setReinoDueno(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
+              <option value="">Sin Reino dueño (producto general)</option>
+              {reinos.map((r) => <option key={r.id} value={r.nombre}>{r.emoji} Especialidad de {r.nombre}</option>)}
+            </select>
+            <button onClick={guardarProducto} className="w-full text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white">{editandoId ? "Guardar" : "Agregar"}</button>
           </div>
         )}
 
@@ -192,6 +284,7 @@ function BancoModal({ sesion, reinos, onClose, onCambio }) {
                 </div>
                 <div className="text-2xl mb-1">{p.emoji}</div>
                 <div className="text-xs font-semibold text-slate-700">{p.nombre}</div>
+                {p.reino_dueno_nombre && <div className="text-[9px] text-violet-500 mb-1">⭐ {p.reino_dueno_nombre}</div>}
                 <button disabled={comprando === p.id} onClick={() => comprar(p)} className="text-[11px] font-semibold px-2 py-1 rounded-full bg-amber-500 text-white mt-1.5 disabled:opacity-60">
                   {comprando === p.id ? "…" : `🪙 ${p.costo_gp}`}
                 </button>
@@ -334,22 +427,65 @@ function TruequesModal({ sesion, reinos, inventario, onClose, onCambio }) {
   );
 }
 
+function InventarioImprimibleModal({ reinos, inventario, onClose }) {
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl print:shadow-none print:max-h-none">
+        <div className="flex justify-between items-center mb-4 print:hidden">
+          <h3 className="font-bold text-slate-800">📋 Inventario por Reino</h3>
+          <div className="flex gap-2">
+            <button onClick={() => window.print()} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">🖨️ Imprimir</button>
+            <button onClick={onClose} className="text-slate-400">✕</button>
+          </div>
+        </div>
+        <div className="space-y-4">
+          {reinos.map((r) => {
+            const items = inventario.filter((i) => i.reino_id === r.id && i.cantidad > 0);
+            return (
+              <div key={r.id} className="border border-slate-200 rounded-xl p-3">
+                <div className="font-bold text-slate-800 text-sm mb-2">{r.emoji} {r.nombre} — 🪙 {r.gp} GP · 🕊️ {r.fp} FP</div>
+                {items.length === 0 ? (
+                  <p className="text-xs text-slate-400">Sin productos todavía.</p>
+                ) : (
+                  <table className="w-full text-xs">
+                    <thead><tr className="text-left text-slate-400"><th className="pb-1">Producto</th><th className="pb-1 text-right">Cantidad</th></tr></thead>
+                    <tbody>
+                      {items.map((i) => (
+                        <tr key={i.id} className="border-t border-slate-100">
+                          <td className="py-1">{i.comarca_productos?.emoji} {i.comarca_productos?.nombre}</td>
+                          <td className="py-1 text-right font-semibold">{i.cantidad}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TableroSesion({ sesion, onVolver }) {
   const [reinos, setReinos] = useState([]);
   const [provincias, setProvincias] = useState([]);
   const [inventario, setInventario] = useState([]);
+  const [billetes, setBilletes] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [ajustandoEconomiaDe, setAjustandoEconomiaDe] = useState(null);
   const [transfiriendo, setTransfiriendo] = useState(null);
   const [bancoAbierto, setBancoAbierto] = useState(false);
   const [truequesAbierto, setTruequesAbierto] = useState(false);
+  const [inventarioAbierto, setInventarioAbierto] = useState(false);
   const [evento, setEvento] = useState(sesion.evento_actual || "");
   const [guardandoEvento, setGuardandoEvento] = useState(false);
 
   const cargar = () => {
     setCargando(true);
-    Promise.all([api.fetchReinosDeSesion(sesion.id), api.fetchProvinciasDeSesion(sesion.id), api.fetchInventarioDeSesion(sesion.id)]).then(([r, p, inv]) => {
-      setReinos(r); setProvincias(p); setInventario(inv); setCargando(false);
+    Promise.all([api.fetchReinosDeSesion(sesion.id), api.fetchProvinciasDeSesion(sesion.id), api.fetchInventarioDeSesion(sesion.id), api.fetchBilletesDeSesion(sesion.id)]).then(([r, p, inv, bil]) => {
+      setReinos(r); setProvincias(p); setInventario(inv); setBilletes(bil); setCargando(false);
     });
   };
   useEffect(() => { cargar(); }, [sesion.id]);
@@ -380,6 +516,7 @@ function TableroSesion({ sesion, onVolver }) {
         <div className="flex gap-2">
           <button onClick={() => setBancoAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-amber-100 text-amber-700">🏦 El Banco</button>
           <button onClick={() => setTruequesAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-teal-100 text-teal-700">🤝 Trueques</button>
+          <button onClick={() => setInventarioAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-indigo-100 text-indigo-700">📋 Inventario</button>
           {sesion.estado === "activa" && (
             <button onClick={finalizar} className="text-xs font-semibold px-3 py-2 rounded-full border border-slate-200 text-slate-600">🏁 Finalizar sesión</button>
           )}
@@ -440,10 +577,11 @@ function TableroSesion({ sesion, onVolver }) {
         })}
       </div>
 
-      {ajustandoEconomiaDe && <AjustarEconomiaModal sesion={sesion} reino={ajustandoEconomiaDe} onClose={() => setAjustandoEconomiaDe(null)} onCambio={cargar} />}
+      {ajustandoEconomiaDe && <AjustarEconomiaModal sesion={sesion} reino={ajustandoEconomiaDe} billetesDeSesion={billetes} onClose={() => setAjustandoEconomiaDe(null)} onCambio={cargar} />}
       {transfiriendo && <TransferirProvinciaModal provincia={transfiriendo} reinos={reinos} onClose={() => setTransfiriendo(null)} onCambio={cargar} />}
       {bancoAbierto && <BancoModal sesion={sesion} reinos={reinos} onClose={() => setBancoAbierto(false)} onCambio={cargar} />}
       {truequesAbierto && <TruequesModal sesion={sesion} reinos={reinos} inventario={inventario} onClose={() => setTruequesAbierto(false)} onCambio={cargar} />}
+      {inventarioAbierto && <InventarioImprimibleModal reinos={reinos} inventario={inventario} onClose={() => setInventarioAbierto(false)} />}
     </div>
   );
 }
