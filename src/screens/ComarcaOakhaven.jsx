@@ -722,31 +722,47 @@ function DuelosModal({ sesion, reinos, provincias, onClose, onCambio }) {
 
 function RolesModal({ sesion, reinos, onClose }) {
   const [estudiantes, setEstudiantes] = useState([]);
-  const [asignados, setAsignados] = useState([]);
+  const [catalogoRoles, setCatalogoRoles] = useState([]);
   const [cargando, setCargando] = useState(true);
-  const [guardandoClave, setGuardandoClave] = useState(null);
+  const [creandoCatalogo, setCreandoCatalogo] = useState(false);
+  const [guardandoId, setGuardandoId] = useState(null);
 
   const cargar = () => {
     setCargando(true);
-    Promise.all([api.fetchEstudiantesPorGrado(sesion.grado_id), api.fetchRolesDeSesion(sesion.id)]).then(([est, asig]) => {
-      setEstudiantes(est); setAsignados(asig); setCargando(false);
+    Promise.all([api.fetchEstudiantesPorGrado(sesion.grado_id), api.fetchRoles()]).then(([est, roles]) => {
+      setEstudiantes(est); setCatalogoRoles(roles); setCargando(false);
     });
   };
   useEffect(() => { cargar(); }, []);
 
-  const asignar = async (reinoId, rol, estudianteId) => {
-    const clave = `${reinoId}-${rol}`;
-    setGuardandoClave(clave);
+  const rolesComarcaEnCatalogo = api.COMARCA_ROLES.map((rc) => ({ ...rc, catalogado: catalogoRoles.find((c) => c.nombre === rc.nombre) }));
+  const faltanPorCrear = rolesComarcaEnCatalogo.filter((r) => !r.catalogado);
+
+  const crearLos7EnCatalogo = async () => {
+    setCreandoCatalogo(true);
     try {
-      await api.asignarRolComarca(sesion.id, reinoId, rol, estudianteId || null);
+      for (const r of faltanPorCrear) await api.crearRol(r.nombre, r.descripcion);
       cargar();
     } catch (e) {
       alert("Error: " + e.message);
     }
-    setGuardandoClave(null);
+    setCreandoCatalogo(false);
   };
 
-  const asignadoA = (reinoId, rol) => asignados.find((a) => a.reino_id === reinoId && a.rol === rol)?.estudiante_id || "";
+  const asignar = async (estudianteId, rolId) => {
+    setGuardandoId(estudianteId);
+    try {
+      await api.asignarRol(estudianteId, rolId || null);
+      cargar();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setGuardandoId(null);
+  };
+
+  // Agrupa a los estudiantes del curso según su Reino actual (o el
+  // original, si no tienen el actual seteado).
+  const estudiantesDe = (reino) => estudiantes.filter((e) => (e.reino_actual || e.reino_original) === reino.nombre);
 
   if (cargando) return null;
 
@@ -757,25 +773,44 @@ function RolesModal({ sesion, reinos, onClose }) {
           <h3 className="font-bold text-slate-800">🎭 Los 7 Roles</h3>
           <button onClick={onClose} className="text-slate-400">✕</button>
         </div>
-        <p className="text-xs text-slate-400 mb-4">Asigná a cada estudiante del curso su rol dentro de su Reino.</p>
+        <p className="text-xs text-slate-400 mb-3">Usa tu mismo catálogo de "Roles de Clase" — asignar acá reemplaza el rol de clase que tuviera antes ese estudiante.</p>
+
+        {faltanPorCrear.length > 0 && (
+          <div className="bg-violet-50 rounded-xl p-3 mb-4 flex items-center justify-between flex-wrap gap-2">
+            <p className="text-xs text-violet-700">Faltan {faltanPorCrear.length} de los 7 roles en tu catálogo de Roles de Clase.</p>
+            <button disabled={creandoCatalogo} onClick={crearLos7EnCatalogo} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+              {creandoCatalogo ? "Creando…" : "+ Crear los que faltan"}
+            </button>
+          </div>
+        )}
 
         <div className="space-y-4">
           {reinos.map((reino) => (
             <div key={reino.id} className="border border-slate-100 rounded-xl p-3">
               <div className="font-bold text-slate-800 text-sm mb-2">{reino.emoji} {reino.nombre}</div>
-              <div className="grid sm:grid-cols-2 gap-2">
-                {api.COMARCA_ROLES.map((rol) => (
-                  <div key={rol.key} className="flex items-center gap-2">
-                    <span className="text-lg shrink-0" title={rol.descripcion}>{rol.emoji}</span>
-                    <select value={asignadoA(reino.id, rol.key)} onChange={(e) => asignar(reino.id, rol.key, e.target.value ? parseInt(e.target.value, 10) : null)}
-                      disabled={guardandoClave === `${reino.id}-${rol.key}`}
-                      className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
-                      <option value="">{rol.nombre} — sin asignar</option>
-                      {estudiantes.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
-                    </select>
-                  </div>
-                ))}
-              </div>
+              {estudiantesDe(reino).length === 0 ? (
+                <p className="text-xs text-slate-400">Ningún estudiante de este curso tiene este Reino asignado.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {estudiantesDe(reino).map((est) => {
+                    const rolActualId = est.roles_asignados?.[0]?.rol_id || "";
+                    return (
+                      <div key={est.id} className="flex items-center gap-2">
+                        <span className="text-xs text-slate-700 flex-1 min-w-0 truncate">{est.nombre}</span>
+                        <select value={rolActualId} onChange={(e) => asignar(est.id, e.target.value ? parseInt(e.target.value, 10) : null)}
+                          disabled={guardandoId === est.id}
+                          className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
+                          <option value="">Sin rol</option>
+                          {catalogoRoles.map((r) => {
+                            const infoComarca = api.COMARCA_ROLES.find((rc) => rc.nombre === r.nombre);
+                            return <option key={r.id} value={r.id}>{infoComarca ? `${infoComarca.emoji} ` : ""}{r.nombre}</option>;
+                          })}
+                        </select>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -867,12 +902,25 @@ function urlQR(texto) {
 }
 
 function QRModal({ sesion, reinos, onClose }) {
-  const [rolesAsignados, setRolesAsignados] = useState([]);
+  const [estudiantes, setEstudiantes] = useState([]);
+  const [catalogoRoles, setCatalogoRoles] = useState([]);
   const [vista, setVista] = useState("reinos"); // "reinos" | "estudiantes"
 
-  useEffect(() => { api.fetchRolesDeSesion(sesion.id).then(setRolesAsignados); }, []);
+  useEffect(() => {
+    Promise.all([api.fetchEstudiantesPorGrado(sesion.grado_id), api.fetchRoles()]).then(([est, roles]) => {
+      setEstudiantes(est); setCatalogoRoles(roles);
+    });
+  }, []);
 
-  const conEstudiante = rolesAsignados.filter((r) => r.estudiante_id);
+  const reinoDe = (est) => reinos.find((r) => r.nombre === (est.reino_actual || est.reino_original));
+  const rolDe = (est) => {
+    const rolId = est.roles_asignados?.[0]?.rol_id;
+    if (!rolId) return null;
+    const catalogado = catalogoRoles.find((r) => r.id === rolId);
+    return catalogado ? { ...catalogado, info: api.COMARCA_ROLES.find((rc) => rc.nombre === catalogado.nombre) } : null;
+  };
+
+  const conRolYReino = estudiantes.filter((e) => rolDe(e) && reinoDe(e));
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
@@ -897,18 +945,18 @@ function QRModal({ sesion, reinos, onClose }) {
               </div>
             ))}
           </div>
-        ) : conEstudiante.length === 0 ? (
-          <p className="text-sm text-slate-400 text-center py-6">Todavía no asignaste roles a estudiantes — hacelo en "🎭 Roles" primero.</p>
+        ) : conRolYReino.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-6">Todavía ningún estudiante de este curso tiene uno de los 7 roles asignado — hacelo en "🎭 Roles" primero.</p>
         ) : (
           <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
-            {conEstudiante.map((asig) => {
-              const reino = reinos.find((r) => r.id === asig.reino_id);
-              const rolInfo = api.COMARCA_ROLES.find((rl) => rl.key === asig.rol);
+            {conRolYReino.map((est) => {
+              const reino = reinoDe(est);
+              const rol = rolDe(est);
               return (
-                <div key={asig.id} className="border border-slate-100 rounded-xl p-3 text-center">
-                  <img src={urlQR(urlDeTarjeta(sesion.id, asig.reino_id, asig.estudiante_id))} alt={`QR ${asig.estudiantes?.nombre}`} className="mx-auto mb-2 rounded-lg" />
-                  <div className="text-xs font-semibold text-slate-700">{asig.estudiantes?.nombre}</div>
-                  <div className="text-[10px] text-slate-400">{rolInfo?.emoji} {rolInfo?.nombre} · {reino?.nombre}</div>
+                <div key={est.id} className="border border-slate-100 rounded-xl p-3 text-center">
+                  <img src={urlQR(urlDeTarjeta(sesion.id, reino.id, est.id))} alt={`QR ${est.nombre}`} className="mx-auto mb-2 rounded-lg" />
+                  <div className="text-xs font-semibold text-slate-700">{est.nombre}</div>
+                  <div className="text-[10px] text-slate-400">{rol.info?.emoji || "🎭"} {rol.nombre} · {reino?.nombre}</div>
                 </div>
               );
             })}
@@ -1213,8 +1261,10 @@ export function TarjetaComarcaPublica() {
 
   useEffect(() => { if (sesionId) api.fetchTodosLosReinosDeSesionPublico(sesionId).then(setOtrosReinos); }, [sesionId]);
 
-  const miRol = datos?.roles.find((r) => String(r.estudiante_id) === String(estudianteId));
-  const miNombre = miRol?.estudiantes?.nombre;
+  const miDato = datos?.estudiantesDelReino?.find((e) => String(e.id) === String(estudianteId));
+  const miNombre = miDato?.nombre;
+  const miRolNombre = miDato?.roles_asignados?.[0]?.roles_clase?.nombre;
+  const miRolInfo = miRolNombre ? api.COMARCA_ROLES.find((r) => r.nombre === miRolNombre) : null;
 
   const enviarTrueque = async () => {
     if (!reinoDestino) { alert("Elegí a qué Reino se lo proponés."); return; }
@@ -1251,7 +1301,7 @@ export function TarjetaComarcaPublica() {
           </div>
           <div className="p-4">
             <div className="text-lg font-bold text-slate-800">{reino.emoji} {reino.nombre}</div>
-            {miNombre && <div className="text-xs text-violet-600 font-semibold">{miNombre} · {api.COMARCA_ROLES.find((r) => r.key === miRol.rol)?.emoji} {api.COMARCA_ROLES.find((r) => r.key === miRol.rol)?.nombre}</div>}
+            {miNombre && <div className="text-xs text-violet-600 font-semibold">{miNombre}{miRolNombre ? ` · ${miRolInfo?.emoji || "🎭"} ${miRolNombre}` : ""}</div>}
             <div className="flex gap-2 mt-3">
               <div className="flex-1 bg-amber-50 rounded-xl p-2 text-center"><div className="text-xl font-bold text-amber-700">{reino.gp}</div><div className="text-[10px] text-amber-600">🪙 GP</div></div>
               <div className="flex-1 bg-violet-50 rounded-xl p-2 text-center"><div className="text-xl font-bold text-violet-700">{reino.fp}</div><div className="text-[10px] text-violet-600">🕊️ FP</div></div>
