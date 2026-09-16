@@ -4774,12 +4774,13 @@ export async function fetchReinosParaComarca() {
 }
 
 // Trae SOLO los Reinos que existen realmente entre los estudiantes de ESE
-// curso puntual (802, 803, etc.) — así cada curso ve nada más que los
-// suyos, no el catálogo completo del colegio.
+// curso puntual (802, 803, etc.) — usa reino_actual, y si está vacío cae a
+// reino_original (igual que hace el resto de la app), para no perderse
+// ningún Reino por estudiantes que todavía no tienen el campo actual seteado.
 export async function fetchReinosDelCurso(gradoId) {
-  const { data, error } = await supabase.from("estudiantes").select("reino_actual").eq("grado_id", gradoId).eq("activo", true);
+  const { data, error } = await supabase.from("estudiantes").select("reino_actual, reino_original").eq("grado_id", gradoId).eq("activo", true);
   if (error) throw error;
-  const nombres = [...new Set((data || []).map((e) => e.reino_actual).filter(Boolean))];
+  const nombres = [...new Set((data || []).map((e) => e.reino_actual || e.reino_original).filter(Boolean))];
   return nombres;
 }
 
@@ -5000,3 +5001,64 @@ async function moverProductoEntreReinos(sesionId, reinoOrigenId, reinoDestinoId,
   }
   await darProductoAReino(sesionId, reinoDestinoId, productoId, cantidad);
 }
+
+/* ==================== COMARCA — Billetes de GP ==================== */
+export async function fetchComarcaDenominaciones() {
+  const { data, error } = await supabase.from("comarca_denominaciones").select("*").order("valor");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearComarcaDenominacion(valor, emoji, imagenUrl) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("comarca_denominaciones")
+    .insert({ docente_id: userData?.user?.id || null, valor: parseInt(valor, 10) || 0, emoji: emoji || "💵", imagen_url: imagenUrl || null })
+    .select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function editarComarcaDenominacion(id, campos) {
+  const { error } = await supabase.from("comarca_denominaciones").update(campos).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarComarcaDenominacion(id) {
+  const { error } = await supabase.from("comarca_denominaciones").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function fetchBilletesDeSesion(sesionId) {
+  const { data, error } = await supabase.from("comarca_reino_billetes").select("*, comarca_denominaciones(*)").eq("sesion_id", sesionId);
+  if (error) throw error;
+  return data || [];
+}
+
+// Guarda el conteo de billetes de un Reino (uno por denominación), y
+// ajusta su GP total para que quede exactamente igual a la suma contada
+// (deja un movimiento en el historial con el motivo "Conteo de billetes").
+export async function guardarBilletesReino(sesionId, reinoId, conteos) {
+  for (const c of conteos) {
+    const { error } = await supabase.from("comarca_reino_billetes")
+      .upsert({ sesion_id: sesionId, reino_id: reinoId, denominacion_id: c.denominacion_id, cantidad: c.cantidad }, { onConflict: "sesion_id,reino_id,denominacion_id" });
+    if (error) throw error;
+  }
+  const denominaciones = await fetchComarcaDenominaciones();
+  const totalContado = conteos.reduce((sum, c) => {
+    const denom = denominaciones.find((d) => d.id === c.denominacion_id);
+    return sum + (denom ? denom.valor * c.cantidad : 0);
+  }, 0);
+
+  const { data: reino, error: e1 } = await supabase.from("comarca_reinos").select("gp").eq("id", reinoId).single();
+  if (e1) throw e1;
+  const diferencia = totalContado - (reino.gp || 0);
+  if (diferencia !== 0) {
+    await ajustarEconomiaReino(sesionId, reinoId, "gp", diferencia, "Conteo de billetes");
+  }
+  return totalContado;
+}
+
+/* ==================== COMARCA — Reino dueño de un producto ==================== */
+// (crearComarcaProducto y editarComarcaProducto ya aceptan cualquier campo
+// extra en el objeto "campos"/"cambios" — reino_dueno_nombre se manda igual
+// que el resto, no hace falta una función aparte.)
