@@ -5106,6 +5106,23 @@ export async function fetchTodosLosReinosDeSesionPublico(sesionId) {
   return data || [];
 }
 
+export async function fetchNombresFantasiaDeSesion(sesionId) {
+  const { data, error } = await supabase.from("comarca_nombres_fantasia").select("*").eq("sesion_id", sesionId);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function guardarNombreFantasia(sesionId, estudianteId, nombre) {
+  if (!nombre || !nombre.trim()) {
+    const { error } = await supabase.from("comarca_nombres_fantasia").delete().eq("sesion_id", sesionId).eq("estudiante_id", estudianteId);
+    if (error) throw error;
+    return;
+  }
+  const { error } = await supabase.from("comarca_nombres_fantasia")
+    .upsert({ sesion_id: sesionId, estudiante_id: estudianteId, nombre: nombre.trim() }, { onConflict: "sesion_id,estudiante_id" });
+  if (error) throw error;
+}
+
 /* ==================== COMARCA — Cartas de Destino con efecto ==================== */
 export async function fetchComarcaEventos() {
   const { data, error } = await supabase.from("comarca_eventos").select("*").eq("activo", true).order("titulo");
