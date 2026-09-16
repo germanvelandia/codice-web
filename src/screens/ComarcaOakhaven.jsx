@@ -103,19 +103,228 @@ function TransferirProvinciaModal({ provincia, reinos, onClose, onCambio }) {
   );
 }
 
+function BancoModal({ sesion, reinos, onClose, onCambio }) {
+  const [productos, setProductos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [reinoElegido, setReinoElegido] = useState(reinos[0]?.id || "");
+  const [comprando, setComprando] = useState(null);
+  const [formAbierto, setFormAbierto] = useState(false);
+  const [nombre, setNombre] = useState("");
+  const [emoji, setEmoji] = useState("📦");
+  const [costoGp, setCostoGp] = useState(5);
+
+  const cargar = () => { setCargando(true); api.fetchComarcaProductos().then((d) => { setProductos(d); setCargando(false); }); };
+  useEffect(() => { cargar(); }, []);
+
+  const crearProducto = async () => {
+    if (!nombre.trim()) return;
+    await api.crearComarcaProducto({ nombre: nombre.trim(), emoji, costo_gp: parseInt(costoGp, 10) || 0 });
+    setNombre(""); setFormAbierto(false); cargar();
+  };
+
+  const comprar = async (producto) => {
+    if (!reinoElegido) { alert("Elegí primero a qué Reino se le vende."); return; }
+    setComprando(producto.id);
+    try {
+      await api.comprarleAlBanco(sesion.id, reinoElegido, producto);
+      onCambio();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setComprando(null);
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-4 w-full max-w-md max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">🏦 El Banco Central</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+
+        <label className="text-xs text-slate-500 block mb-1">Vender a qué Reino</label>
+        <select value={reinoElegido} onChange={(e) => setReinoElegido(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none">
+          {reinos.map((r) => <option key={r.id} value={r.id}>{r.emoji} {r.nombre} (🪙 {r.gp})</option>)}
+        </select>
+
+        <button onClick={() => setFormAbierto((v) => !v)} className="text-xs font-semibold text-violet-500 mb-2">{formAbierto ? "Cerrar" : "+ Agregar producto al catálogo del Banco"}</button>
+        {formAbierto && (
+          <div className="bg-violet-50 rounded-xl p-3 mb-3 flex gap-1.5 flex-wrap items-end">
+            <input value={emoji} onChange={(e) => setEmoji(e.target.value)} className="w-12 text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none text-center" />
+            <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre (ej: Tijeras)" className="flex-1 min-w-[100px] text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+            <input type="number" value={costoGp} onChange={(e) => setCostoGp(e.target.value)} placeholder="GP" className="w-16 text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none text-center" />
+            <button onClick={crearProducto} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white">Agregar</button>
+          </div>
+        )}
+
+        {cargando ? (
+          <div className="text-sm text-slate-400">Cargando…</div>
+        ) : productos.length === 0 ? (
+          <div className="text-sm text-slate-400 text-center py-4">El Banco todavía no tiene productos para vender.</div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            {productos.map((p) => (
+              <div key={p.id} className="border border-slate-100 rounded-xl p-2.5 text-center">
+                <div className="text-2xl mb-1">{p.emoji}</div>
+                <div className="text-xs font-semibold text-slate-700">{p.nombre}</div>
+                <button disabled={comprando === p.id} onClick={() => comprar(p)} className="text-[11px] font-semibold px-2 py-1 rounded-full bg-amber-500 text-white mt-1.5 disabled:opacity-60">
+                  {comprando === p.id ? "…" : `🪙 ${p.costo_gp}`}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TruequesModal({ sesion, reinos, inventario, onClose, onCambio }) {
+  const [trueques, setTrueques] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [formAbierto, setFormAbierto] = useState(false);
+  const [reinoOferta, setReinoOferta] = useState(reinos[0]?.id || "");
+  const [reinoDestino, setReinoDestino] = useState(reinos[1]?.id || "");
+  const [gpOfrecido, setGpOfrecido] = useState(0);
+  const [gpPedido, setGpPedido] = useState(0);
+  const [productoOfrecidoId, setProductoOfrecidoId] = useState("");
+  const [productoPedidoId, setProductoPedidoId] = useState("");
+
+  const cargar = () => { setCargando(true); api.fetchTruequesDeSesion(sesion.id).then((d) => { setTrueques(d); setCargando(false); }); };
+  useEffect(() => { cargar(); }, []);
+
+  const productosDisponibles = [...new Map(inventario.map((i) => [i.producto_id, i.comarca_productos])).values()];
+
+  const proponer = async () => {
+    try {
+      await api.proponerTrueque({
+        sesion_id: sesion.id, reino_oferta_id: reinoOferta, reino_destino_id: reinoDestino,
+        gp_ofrecido: parseInt(gpOfrecido, 10) || 0, gp_pedido: parseInt(gpPedido, 10) || 0,
+        producto_ofrecido_id: productoOfrecidoId || null, cantidad_ofrecida: productoOfrecidoId ? 1 : 0,
+        producto_pedido_id: productoPedidoId || null, cantidad_pedida: productoPedidoId ? 1 : 0,
+      });
+      setFormAbierto(false);
+      cargar();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+  };
+
+  const resolver = async (t, aceptar) => {
+    try {
+      await api.resolverTrueque(t, aceptar);
+      cargar();
+      onCambio();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-4 w-full max-w-md max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">🤝 Trueques entre Reinos</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+
+        <button onClick={() => setFormAbierto((v) => !v)} className="text-xs font-semibold text-violet-500 mb-2">{formAbierto ? "Cerrar" : "+ Proponer un trueque"}</button>
+        {formAbierto && (
+          <div className="bg-violet-50 rounded-xl p-3 mb-3 space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] text-slate-500 block mb-1">Reino que ofrece</label>
+                <select value={reinoOferta} onChange={(e) => setReinoOferta(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
+                  {reinos.map((r) => <option key={r.id} value={r.id}>{r.emoji} {r.nombre}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-500 block mb-1">Reino destino</label>
+                <select value={reinoDestino} onChange={(e) => setReinoDestino(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
+                  {reinos.map((r) => <option key={r.id} value={r.id}>{r.emoji} {r.nombre}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] text-slate-500 block mb-1">Ofrece GP</label>
+                <input type="number" value={gpOfrecido} onChange={(e) => setGpOfrecido(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-500 block mb-1">Pide GP</label>
+                <input type="number" value={gpPedido} onChange={(e) => setGpPedido(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] text-slate-500 block mb-1">Ofrece producto</label>
+                <select value={productoOfrecidoId} onChange={(e) => setProductoOfrecidoId(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
+                  <option value="">Ninguno</option>
+                  {productosDisponibles.map((p) => <option key={p.id} value={p.id}>{p.emoji} {p.nombre}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-500 block mb-1">Pide producto</label>
+                <select value={productoPedidoId} onChange={(e) => setProductoPedidoId(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
+                  <option value="">Ninguno</option>
+                  {productosDisponibles.map((p) => <option key={p.id} value={p.id}>{p.emoji} {p.nombre}</option>)}
+                </select>
+              </div>
+            </div>
+            <button onClick={proponer} className="w-full text-xs font-semibold py-2 rounded-lg bg-violet-500 text-white">Proponer trueque</button>
+          </div>
+        )}
+
+        {cargando ? (
+          <div className="text-sm text-slate-400">Cargando…</div>
+        ) : trueques.length === 0 ? (
+          <div className="text-sm text-slate-400 text-center py-4">Todavía no se propuso ningún trueque.</div>
+        ) : (
+          <div className="space-y-2">
+            {trueques.map((t) => (
+              <div key={t.id} className="border border-slate-100 rounded-xl p-2.5 text-xs">
+                <div className="font-semibold text-slate-700">{t.oferta?.emoji} {t.oferta?.nombre} ⇄ {t.destino?.emoji} {t.destino?.nombre}</div>
+                <div className="text-slate-500 mt-1">
+                  Ofrece: {t.gp_ofrecido > 0 && `🪙${t.gp_ofrecido} `}{t.ofrecido && `${t.ofrecido.emoji} ${t.ofrecido.nombre}`}
+                  {!t.gp_ofrecido && !t.ofrecido && "nada"}
+                  {" — "}Pide: {t.gp_pedido > 0 && `🪙${t.gp_pedido} `}{t.pedido && `${t.pedido.emoji} ${t.pedido.nombre}`}
+                  {!t.gp_pedido && !t.pedido && "nada"}
+                </div>
+                {t.estado === "pendiente" ? (
+                  <div className="flex gap-2 mt-2">
+                    <button onClick={() => resolver(t, true)} className="text-[11px] font-semibold px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">✔ Aceptar</button>
+                    <button onClick={() => resolver(t, false)} className="text-[11px] font-semibold px-2 py-1 rounded-full bg-rose-100 text-rose-700">✕ Rechazar</button>
+                  </div>
+                ) : (
+                  <span className={`text-[10px] font-semibold mt-1.5 inline-block px-2 py-0.5 rounded-full ${t.estado === "aceptado" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                    {t.estado === "aceptado" ? "✔ Aceptado" : "✕ Rechazado"}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function TableroSesion({ sesion, onVolver }) {
   const [reinos, setReinos] = useState([]);
   const [provincias, setProvincias] = useState([]);
+  const [inventario, setInventario] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [ajustandoEconomiaDe, setAjustandoEconomiaDe] = useState(null);
   const [transfiriendo, setTransfiriendo] = useState(null);
+  const [bancoAbierto, setBancoAbierto] = useState(false);
+  const [truequesAbierto, setTruequesAbierto] = useState(false);
   const [evento, setEvento] = useState(sesion.evento_actual || "");
   const [guardandoEvento, setGuardandoEvento] = useState(false);
 
   const cargar = () => {
     setCargando(true);
-    Promise.all([api.fetchReinosDeSesion(sesion.id), api.fetchProvinciasDeSesion(sesion.id)]).then(([r, p]) => {
-      setReinos(r); setProvincias(p); setCargando(false);
+    Promise.all([api.fetchReinosDeSesion(sesion.id), api.fetchProvinciasDeSesion(sesion.id), api.fetchInventarioDeSesion(sesion.id)]).then(([r, p, inv]) => {
+      setReinos(r); setProvincias(p); setInventario(inv); setCargando(false);
     });
   };
   useEffect(() => { cargar(); }, [sesion.id]);
@@ -143,9 +352,13 @@ function TableroSesion({ sesion, onVolver }) {
           <h2 className="text-xl font-bold text-slate-800">🗺️ {sesion.titulo}</h2>
           <p className="text-sm text-slate-400">Curso {sesion.grado_id} · {sesion.fecha} · {sesion.estado === "activa" ? "🟢 En juego" : "⚪ Finalizada"}</p>
         </div>
-        {sesion.estado === "activa" && (
-          <button onClick={finalizar} className="text-xs font-semibold px-3 py-2 rounded-full border border-slate-200 text-slate-600">🏁 Finalizar sesión</button>
-        )}
+        <div className="flex gap-2">
+          <button onClick={() => setBancoAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-amber-100 text-amber-700">🏦 El Banco</button>
+          <button onClick={() => setTruequesAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-teal-100 text-teal-700">🤝 Trueques</button>
+          {sesion.estado === "activa" && (
+            <button onClick={finalizar} className="text-xs font-semibold px-3 py-2 rounded-full border border-slate-200 text-slate-600">🏁 Finalizar sesión</button>
+          )}
+        </div>
       </div>
 
       {/* Carta de Destino actual */}
@@ -179,7 +392,7 @@ function TableroSesion({ sesion, onVolver }) {
                   <button onClick={() => setAjustandoEconomiaDe(reino)} className="text-[11px] font-semibold px-2 py-1 rounded-full bg-violet-100 text-violet-700">🕊️ {reino.fp} FP</button>
                 </div>
                 <div className="text-[10px] text-slate-400 mb-1">Provincias controladas: {susProvincias.length}/24</div>
-                <div className="flex flex-wrap gap-1">
+                <div className="flex flex-wrap gap-1 mb-2">
                   {susProvincias.map((p) => (
                     <button key={p.id} onClick={() => setTransfiriendo(p)} title={p.recurso}
                       className={`text-[9px] px-1.5 py-0.5 rounded ${p.reino_original_id === p.reino_actual_id ? "bg-slate-100 text-slate-500" : "bg-emerald-100 text-emerald-700"}`}>
@@ -187,6 +400,15 @@ function TableroSesion({ sesion, onVolver }) {
                     </button>
                   ))}
                 </div>
+                {inventario.filter((i) => i.reino_id === reino.id && i.cantidad > 0).length > 0 && (
+                  <div className="flex flex-wrap gap-1 pt-1.5 border-t border-slate-100">
+                    {inventario.filter((i) => i.reino_id === reino.id && i.cantidad > 0).map((i) => (
+                      <span key={i.id} title={i.comarca_productos?.nombre} className="text-[10px] bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded-full">
+                        {i.comarca_productos?.emoji} x{i.cantidad}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -195,6 +417,8 @@ function TableroSesion({ sesion, onVolver }) {
 
       {ajustandoEconomiaDe && <AjustarEconomiaModal sesion={sesion} reino={ajustandoEconomiaDe} onClose={() => setAjustandoEconomiaDe(null)} onCambio={cargar} />}
       {transfiriendo && <TransferirProvinciaModal provincia={transfiriendo} reinos={reinos} onClose={() => setTransfiriendo(null)} onCambio={cargar} />}
+      {bancoAbierto && <BancoModal sesion={sesion} reinos={reinos} onClose={() => setBancoAbierto(false)} onCambio={cargar} />}
+      {truequesAbierto && <TruequesModal sesion={sesion} reinos={reinos} inventario={inventario} onClose={() => setTruequesAbierto(false)} onCambio={cargar} />}
     </div>
   );
 }
@@ -214,13 +438,12 @@ export function VistaComarcaOakhaven({ grados, gradoActivo }) {
   useEffect(() => { cargar(); }, []);
 
   useEffect(() => {
-    if (!gradoId) return;
     setCargandoReinos(true);
-    api.fetchReinosDeGrado(gradoId).then((r) => { setReinosDelCurso(r); setCargandoReinos(false); });
-  }, [gradoId]);
+    api.fetchReinosParaComarca().then((r) => { setReinosDelCurso(r); setCargandoReinos(false); });
+  }, []);
 
   const crear = async () => {
-    if (reinosDelCurso.length === 0) { alert("Este curso todavía no tiene estudiantes con un Reino asignado — asigná Reinos primero en la pantalla de Estudiantes."); return; }
+    if (reinosDelCurso.length === 0) { alert("Todavía no hay ningún Reino en el catálogo — creá al menos uno primero en Estudiantes → Reinos."); return; }
     setCreando(true);
     try {
       const nueva = await api.crearSesionComarca(gradoId, titulo.trim() || "Comarca de Oakhaven", reinosDelCurso);
@@ -255,11 +478,11 @@ export function VistaComarcaOakhaven({ grados, gradoActivo }) {
           <label className="text-xs text-slate-500 block mb-1">Título de la sesión</label>
           <input value={titulo} onChange={(e) => setTitulo(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none bg-white" />
 
-          <label className="text-xs text-slate-500 block mb-1">Reinos de este curso (los mismos de "Mi Reino")</label>
+          <label className="text-xs text-slate-500 block mb-1">Reinos (catálogo completo, el mismo de "Mi Reino")</label>
           {cargandoReinos ? (
             <p className="text-xs text-slate-400 mb-3">Buscando…</p>
           ) : reinosDelCurso.length === 0 ? (
-            <p className="text-xs text-rose-500 mb-3">Este curso todavía no tiene Reinos asignados a sus estudiantes.</p>
+            <p className="text-xs text-rose-500 mb-3">Todavía no creaste ningún Reino en el catálogo — hacelo primero desde Estudiantes → Reinos.</p>
           ) : (
             <div className="flex flex-wrap gap-1.5 mb-3">
               {reinosDelCurso.map((r, i) => (
