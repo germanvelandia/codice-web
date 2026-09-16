@@ -5055,15 +5055,16 @@ export async function asignarRolComarca(sesionId, reinoId, rol, estudianteId) {
 // Todo esto es de lectura abierta (sin login), para que un estudiante
 // pueda ver su Reino/tarjeta escaneando un QR.
 export async function fetchTarjetaReino(sesionId, reinoId) {
-  const [{ data: sesion }, { data: reino }, { data: provincias }, { data: inventario }, { data: recursos }, { data: roles }] = await Promise.all([
+  const { data: reino } = await supabase.from("comarca_reinos").select("*").eq("id", reinoId).single();
+  const [{ data: sesion }, { data: provincias }, { data: inventario }, { data: recursos }, { data: estudiantesDelReino }] = await Promise.all([
     supabase.from("comarca_sesiones").select("*").eq("id", sesionId).single(),
-    supabase.from("comarca_reinos").select("*").eq("id", reinoId).single(),
     supabase.from("comarca_provincias").select("*").eq("sesion_id", sesionId).eq("reino_actual_id", reinoId),
     supabase.from("comarca_inventario").select("*, comarca_productos(*)").eq("sesion_id", sesionId).eq("reino_id", reinoId),
     supabase.from("comarca_reino_recursos").select("*").eq("sesion_id", sesionId).eq("reino_id", reinoId),
-    supabase.from("comarca_roles_asignados").select("*, estudiantes(nombre)").eq("sesion_id", sesionId).eq("reino_id", reinoId),
+    reino ? supabase.from("estudiantes").select("id, nombre, reino_actual, reino_original, roles_asignados(rol_id, roles_clase(nombre))")
+      .or(`reino_actual.eq.${reino.nombre},reino_original.eq.${reino.nombre}`) : Promise.resolve({ data: [] }),
   ]);
-  return { sesion, reino, provincias: provincias || [], inventario: inventario || [], recursos: recursos || [], roles: roles || [] };
+  return { sesion, reino, provincias: provincias || [], inventario: inventario || [], recursos: recursos || [], estudiantesDelReino: estudiantesDelReino || [] };
 }
 
 export async function fetchTodosLosReinosDeSesionPublico(sesionId) {
