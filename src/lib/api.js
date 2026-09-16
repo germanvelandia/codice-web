@@ -5051,6 +5051,88 @@ export async function asignarRolComarca(sesionId, reinoId, rol, estudianteId) {
   if (error) throw error;
 }
 
+/* ==================== COMARCA — Tarjeta pública (QR) ==================== */
+// Todo esto es de lectura abierta (sin login), para que un estudiante
+// pueda ver su Reino/tarjeta escaneando un QR.
+export async function fetchTarjetaReino(sesionId, reinoId) {
+  const [{ data: sesion }, { data: reino }, { data: provincias }, { data: inventario }, { data: recursos }, { data: roles }] = await Promise.all([
+    supabase.from("comarca_sesiones").select("*").eq("id", sesionId).single(),
+    supabase.from("comarca_reinos").select("*").eq("id", reinoId).single(),
+    supabase.from("comarca_provincias").select("*").eq("sesion_id", sesionId).eq("reino_actual_id", reinoId),
+    supabase.from("comarca_inventario").select("*, comarca_productos(*)").eq("sesion_id", sesionId).eq("reino_id", reinoId),
+    supabase.from("comarca_reino_recursos").select("*").eq("sesion_id", sesionId).eq("reino_id", reinoId),
+    supabase.from("comarca_roles_asignados").select("*, estudiantes(nombre)").eq("sesion_id", sesionId).eq("reino_id", reinoId),
+  ]);
+  return { sesion, reino, provincias: provincias || [], inventario: inventario || [], recursos: recursos || [], roles: roles || [] };
+}
+
+export async function fetchTodosLosReinosDeSesionPublico(sesionId) {
+  const { data, error } = await supabase.from("comarca_reinos").select("*").eq("sesion_id", sesionId).order("orden");
+  if (error) throw error;
+  return data || [];
+}
+
+/* ==================== COMARCA — Cartas de Destino con efecto ==================== */
+export async function fetchComarcaEventos() {
+  const { data, error } = await supabase.from("comarca_eventos").select("*").eq("activo", true).order("titulo");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearComarcaEvento(campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("comarca_eventos").insert({ ...campos, docente_id: userData?.user?.id || null }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function editarComarcaEvento(id, campos) {
+  const { error } = await supabase.from("comarca_eventos").update(campos).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarComarcaEvento(id) {
+  const { error } = await supabase.from("comarca_eventos").update({ activo: false }).eq("id", id);
+  if (error) throw error;
+}
+
+// Aplica el efecto real del evento a todos los Reinos de la sesión, y
+// guarda el título como "evento_actual" para que se vea en el tablero.
+export async function aplicarEventoComarca(sesionId, evento, reinos, provincias) {
+  await guardarEventoSesion(sesionId, `${evento.titulo}${evento.descripcion ? " — " + evento.descripcion : ""}`);
+
+  switch (evento.efecto_tipo) {
+    case "gp_todos":
+      for (const r of reinos) await ajustarEconomiaReino(sesionId, r.id, "gp", evento.efecto_valor, `Evento: ${evento.titulo}`);
+      break;
+    case "fp_todos":
+      for (const r of reinos) await ajustarEconomiaReino(sesionId, r.id, "fp", evento.efecto_valor, `Evento: ${evento.titulo}`);
+      break;
+    case "gp_aleatorio": {
+      const elegido = reinos[Math.floor(Math.random() * reinos.length)];
+      if (elegido) await ajustarEconomiaReino(sesionId, elegido.id, "gp", evento.efecto_valor, `Evento: ${evento.titulo}`);
+      return elegido;
+    }
+    case "bloquear_provincia_aleatoria": {
+      const candidatas = provincias.filter((p) => !p.bloqueada);
+      const elegida = candidatas[Math.floor(Math.random() * candidatas.length)];
+      if (elegida) await supabase.from("comarca_provincias").update({ bloqueada: true }).eq("id", elegida.id);
+      return elegida;
+    }
+    case "liberar_provincias":
+      await supabase.from("comarca_provincias").update({ bloqueada: false }).eq("sesion_id", sesionId);
+      break;
+    case "producir_extra": {
+      const dado = Math.floor(Math.random() * 6) + 1 + Math.floor(Math.random() * 6) + 1;
+      await producirPorDado(sesionId, dado, provincias);
+      return dado;
+    }
+    default:
+      break;
+  }
+  return null;
+}
+
 /* ==================== COMARCA — Fase 2: Tablero de Transferencias ==================== */
 export async function fetchComarcaProductos() {
   const { data, error } = await supabase.from("comarca_productos").select("*").eq("activo", true).order("costo_gp");
