@@ -465,9 +465,10 @@ export function VistaComarcaOakhaven({ grados, gradoActivo }) {
   useEffect(() => { cargar(); }, []);
 
   useEffect(() => {
+    if (!gradoId) return;
     setCargandoReinos(true);
-    api.fetchReinosParaComarca().then((r) => { setCatalogoReinos(r); setReinosSeleccionados(r); setCargandoReinos(false); });
-  }, []);
+    api.fetchReinosDelCurso(gradoId).then((r) => { setCatalogoReinos(r); setReinosSeleccionados(r); setCargandoReinos(false); });
+  }, [gradoId]);
 
   const toggleReino = (nombre) => {
     setReinosSeleccionados((prev) => prev.includes(nombre) ? prev.filter((r) => r !== nombre) : [...prev, nombre]);
@@ -534,7 +535,7 @@ export function VistaComarcaOakhaven({ grados, gradoActivo }) {
           {cargandoReinos ? (
             <p className="text-xs text-slate-400 mb-3">Buscando…</p>
           ) : catalogoReinos.length === 0 ? (
-            <p className="text-xs text-rose-500 mb-3">Todavía no creaste ningún Reino en el catálogo — hacelo primero desde Estudiantes → Reinos.</p>
+            <p className="text-xs text-rose-500 mb-3">Este curso todavía no tiene Reinos asignados a sus estudiantes — hacelo primero desde Estudiantes → Reinos.</p>
           ) : (
             <div className="flex flex-wrap gap-1.5 mb-3">
               {catalogoReinos.map((r, i) => {
