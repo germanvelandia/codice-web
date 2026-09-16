@@ -167,6 +167,7 @@ function CalificarModal({ tarea, config, onClose, onCambio }) {
     try {
       const r = await api.darMonedasPorTarea(tarea.id, estudianteId, tarea.recompensa_monedas);
       if (r.yaEntregadas) alert("A este estudiante ya se le habían dado las monedas de esta tarea.");
+      else if (r.faltaInjustificada) alert("No se dieron las monedas: este estudiante tuvo Falta Injustificada (FI) el día de entrega de esta tarea.");
       cargar();
     } catch (e) {
       alert("Error al dar las monedas: " + e.message);
