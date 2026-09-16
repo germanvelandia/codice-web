@@ -1813,6 +1813,15 @@ export async function eliminarTareaCalificable(id) {
 export async function darMonedasPorTarea(tareaId, estudianteId, monedas) {
   const { data: entrega } = await supabase.from("tarea_entregas").select("monedas_entregadas").eq("tarea_id", tareaId).eq("estudiante_id", estudianteId).maybeSingle();
   if (entrega?.monedas_entregadas) return { yaEntregadas: true };
+
+  // No da las monedas si el estudiante tuvo Falta Injustificada (FI) el
+  // día de entrega de esta tarea.
+  const { data: tarea } = await supabase.from("tareas_calificables").select("fecha_entrega, materia_id").eq("id", tareaId).maybeSingle();
+  if (tarea?.fecha_entrega) {
+    const conFalta = await fetchEstudiantesConFaltaInjustificada([estudianteId], tarea.fecha_entrega, tarea.materia_id || null);
+    if (conFalta.has(estudianteId)) return { yaEntregadas: false, faltaInjustificada: true };
+  }
+
   await ajustarMonedas(estudianteId, monedas);
   await supabase.from("tarea_entregas").update({ monedas_entregadas: true }).eq("tarea_id", tareaId).eq("estudiante_id", estudianteId);
   return { yaEntregadas: false };
