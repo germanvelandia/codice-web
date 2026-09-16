@@ -4758,12 +4758,12 @@ export async function eliminarRubricaCatalogo(id) {
 
 /* ==================== COMARCA DE OAKHAVEN — Fase 1 ==================== */
 export const COMARCA_REINOS_BASE = [
-  { nombre: "Templo del Sol", emoji: "🟡", recurso: "Oro y Tradición" },
-  { nombre: "Forja Oscura", emoji: "🌑", recurso: "Hierro y Herramientas" },
-  { nombre: "Plaza Comercial", emoji: "🟢", recurso: "Monedas y Mercados" },
-  { nombre: "Acueducto Común", emoji: "🔵", recurso: "Agua Vital e Infraestructura" },
-  { nombre: "Campos del Común", emoji: "🌾", recurso: "Trigo y Madera" },
-  { nombre: "Ruinas de la Concordia", emoji: "🔴", recurso: "Pergaminos y Laicidad" },
+  { nombre: "Templo del Sol", emoji: "🟡", recurso: "Oro y Tradición", recursoClave: "Oro" },
+  { nombre: "Forja Oscura", emoji: "🌑", recurso: "Hierro y Herramientas", recursoClave: "Hierro" },
+  { nombre: "Plaza Comercial", emoji: "🟢", recurso: "Monedas y Mercados", recursoClave: "Mercancía" },
+  { nombre: "Acueducto Común", emoji: "🔵", recurso: "Agua Vital e Infraestructura", recursoClave: "Agua" },
+  { nombre: "Campos del Común", emoji: "🌾", recurso: "Trigo y Madera", recursoClave: "Trigo" },
+  { nombre: "Ruinas de la Concordia", emoji: "🔴", recurso: "Pergaminos y Laicidad", recursoClave: "Pergaminos" },
 ];
 
 // Usa el catálogo global de Reinos (el mismo de "Mi Reino") — sirve para
@@ -4800,13 +4800,15 @@ export async function crearSesionComarca(gradoId, titulo, nombresReinos) {
   const { data: reinos, error: e2 } = await supabase.from("comarca_reinos").insert(reinosAInsertar).select();
   if (e2) throw e2;
 
+  const NUMEROS_DADO = [2, 3, 4, 5, 6, 8, 9, 10, 11, 12]; // sin el 7 — ese activa al Ladrón
   const provinciasAInsertar = [];
   reinos.forEach((reino, i) => {
-    const recurso = COMARCA_REINOS_BASE[i]?.recurso || "Recursos";
+    const recurso = COMARCA_REINOS_BASE[i]?.recursoClave || "Recursos";
     for (let p = 1; p <= 4; p++) {
       provinciasAInsertar.push({
         sesion_id: sesion.id, nombre: `${reino.nombre} — Provincia ${p}`, recurso,
         reino_original_id: reino.id, reino_actual_id: reino.id,
+        numero_dado: NUMEROS_DADO[Math.floor(Math.random() * NUMEROS_DADO.length)],
       });
     }
   });
@@ -4891,6 +4893,161 @@ export async function eliminarSesionComarca(sesionId) {
 
 export async function guardarEventoSesion(sesionId, evento) {
   const { error } = await supabase.from("comarca_sesiones").update({ evento_actual: evento }).eq("id", sesionId);
+  if (error) throw error;
+}
+
+/* ==================== COMARCA — Estilo Catan ==================== */
+export async function fetchRecursosDeSesion(sesionId) {
+  const { data, error } = await supabase.from("comarca_reino_recursos").select("*").eq("sesion_id", sesionId);
+  if (error) throw error;
+  return data || [];
+}
+
+async function sumarRecursoAReino(sesionId, reinoId, recurso, cantidad) {
+  const { data: existente } = await supabase.from("comarca_reino_recursos").select("*").eq("sesion_id", sesionId).eq("reino_id", reinoId).eq("recurso", recurso).maybeSingle();
+  if (existente) {
+    const { error } = await supabase.from("comarca_reino_recursos").update({ cantidad: existente.cantidad + cantidad }).eq("id", existente.id);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase.from("comarca_reino_recursos").insert({ sesion_id: sesionId, reino_id: reinoId, recurso, cantidad });
+    if (error) throw error;
+  }
+}
+
+// Tira el "dado" (2 a 12). Si sale 7, mueve al Ladrón a una provincia al
+// azar (bloqueándola — no produce hasta que se mueva de nuevo). Guarda el
+// resultado en la sesión para que se vea en el tablero.
+export async function tirarDado(sesionId, provincias) {
+  const dado = Math.floor(Math.random() * 6) + 1 + Math.floor(Math.random() * 6) + 1;
+  await supabase.from("comarca_sesiones").update({ ultimo_dado: dado }).eq("id", sesionId);
+
+  let provinciaBloqueada = null;
+  if (dado === 7) {
+    // Libera la que estuviera bloqueada antes.
+    await supabase.from("comarca_provincias").update({ bloqueada: false }).eq("sesion_id", sesionId).eq("bloqueada", true);
+    const candidatas = provincias.filter((p) => !p.bloqueada);
+    if (candidatas.length > 0) {
+      provinciaBloqueada = candidatas[Math.floor(Math.random() * candidatas.length)];
+      await supabase.from("comarca_provincias").update({ bloqueada: true }).eq("id", provinciaBloqueada.id);
+    }
+  }
+  return { dado, provinciaBloqueada };
+}
+
+// Reparte el recurso de cada provincia que coincida con el número del
+// dado (y no esté bloqueada por el Ladrón) al Reino dueño. Las "Ciudades"
+// dan el doble.
+export async function producirPorDado(sesionId, numero, provincias) {
+  const provinciasQueProducen = provincias.filter((p) => p.numero_dado === numero && !p.bloqueada && p.reino_actual_id);
+  for (const p of provinciasQueProducen) {
+    const cantidad = p.nivel === "ciudad" ? 2 : 1;
+    await sumarRecursoAReino(sesionId, p.reino_actual_id, p.recurso, cantidad);
+  }
+  return provinciasQueProducen.length;
+}
+
+// Sube una provincia de Villa a Ciudad — le cobra el costo al Reino dueño
+// (en GP), y de ahí en más produce el doble.
+export async function mejorarProvincia(sesionId, provincia, costoGp) {
+  if (!provincia.reino_actual_id) throw new Error("Esta provincia no tiene dueño todavía.");
+  await ajustarEconomiaReino(sesionId, provincia.reino_actual_id, "gp", -costoGp, `Mejora a Ciudad: ${provincia.nombre}`);
+  const { error } = await supabase.from("comarca_provincias").update({ nivel: "ciudad" }).eq("id", provincia.id);
+  if (error) throw error;
+}
+
+// Un Reino le vende recursos al Banco a cambio de GP (tasa configurable,
+// por defecto 3 recursos = 1 GP, como en Catan).
+export async function venderRecursoAlBanco(sesionId, reinoId, recurso, cantidad, tasa = 3) {
+  const { data: existente, error: e1 } = await supabase.from("comarca_reino_recursos").select("*").eq("sesion_id", sesionId).eq("reino_id", reinoId).eq("recurso", recurso).maybeSingle();
+  if (e1) throw e1;
+  if (!existente || existente.cantidad < cantidad) throw new Error(`Ese Reino no tiene suficiente ${recurso}.`);
+
+  const { error: e2 } = await supabase.from("comarca_reino_recursos").update({ cantidad: existente.cantidad - cantidad }).eq("id", existente.id);
+  if (e2) throw e2;
+
+  const gpGanado = Math.floor(cantidad / tasa);
+  if (gpGanado > 0) await ajustarEconomiaReino(sesionId, reinoId, "gp", gpGanado, `Venta al Banco: ${cantidad} ${recurso}`);
+  return gpGanado;
+}
+
+/* ==================== COMARCA — Fase 3: Duelos ==================== */
+const GANA_A = { piedra: "tijera", papel: "piedra", tijera: "papel" };
+
+function resultadoRonda(retador, retado) {
+  if (retador === retado) return "empate";
+  return GANA_A[retador] === retado ? "retador" : "retado";
+}
+
+export async function crearDuelo(sesionId, reinoRetadorId, reinoRetadoId, provinciaEnJuegoId) {
+  const { data, error } = await supabase.from("comarca_duelos")
+    .insert({ sesion_id: sesionId, reino_retador_id: reinoRetadorId, reino_retado_id: reinoRetadoId, provincia_en_juego_id: provinciaEnJuegoId || null })
+    .select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function fetchDuelosDeSesion(sesionId) {
+  const { data, error } = await supabase.from("comarca_duelos")
+    .select("*, retador:reino_retador_id(nombre, emoji), retado:reino_retado_id(nombre, emoji), provincia:provincia_en_juego_id(nombre), ganador:ganador_id(nombre, emoji)")
+    .eq("sesion_id", sesionId).order("creado_en", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+// Guarda las jugadas de una ronda (1, 2 o 3). Si con esta ronda ya hay un
+// ganador claro (2 de 3), cierra el duelo solo y transfiere la provincia
+// en juego si correspondía.
+export async function jugarRondaDuelo(duelo, numeroRonda, jugadaRetador, jugadaRetado) {
+  const campos = { [`ronda${numeroRonda}_retador`]: jugadaRetador, [`ronda${numeroRonda}_retado`]: jugadaRetado };
+  const { error } = await supabase.from("comarca_duelos").update(campos).eq("id", duelo.id);
+  if (error) throw error;
+
+  const duelizado = { ...duelo, ...campos };
+  const resultados = [1, 2, 3].map((n) => {
+    const r = duelizado[`ronda${n}_retador`], t = duelizado[`ronda${n}_retado`];
+    return r && t ? resultadoRonda(r, t) : null;
+  });
+  const victoriasRetador = resultados.filter((r) => r === "retador").length;
+  const victoriasRetado = resultados.filter((r) => r === "retado").length;
+
+  let ganadorId = null;
+  if (victoriasRetador >= 2) ganadorId = duelo.reino_retador_id;
+  else if (victoriasRetado >= 2) ganadorId = duelo.reino_retado_id;
+
+  if (ganadorId) {
+    await supabase.from("comarca_duelos").update({ estado: "terminado", ganador_id: ganadorId }).eq("id", duelo.id);
+    if (duelo.provincia_en_juego_id && ganadorId === duelo.reino_retador_id) {
+      await transferirProvincia(duelo.provincia_en_juego_id, ganadorId);
+    }
+  }
+  return { resultados, ganadorId };
+}
+
+export async function eliminarDuelo(id) {
+  const { error } = await supabase.from("comarca_duelos").delete().eq("id", id);
+  if (error) throw error;
+}
+
+/* ==================== COMARCA — Fase 3: Los 7 Roles ==================== */
+export const COMARCA_ROLES = [
+  { key: "maestro_gremio", nombre: "Maestro del Gremio", emoji: "👑", descripcion: "Administra el GP y el FP. Firma tratados y lidera los duelos." },
+  { key: "heraldo", nombre: "Heraldo de la Alianza", emoji: "🕊️", descripcion: "Negocia trueques. Es el único que puede cruzar a otras mesas." },
+  { key: "peregrino", nombre: "Peregrino del Sentido", emoji: "📜", descripcion: "Investiga y argumenta en los juicios/dilemas éticos." },
+  { key: "cronista", nombre: "Cronista del Reino", emoji: "🖋️", descripcion: "Lleva la bitácora, dibuja rutas, firma los tratados." },
+  { key: "defensor", nombre: "Defensor del Pacto", emoji: "⚖️", descripcion: "Vigila el cumplimiento de las reglas. Puede pedir un Alto al Fuego." },
+  { key: "consejero", nombre: "Consejero Real", emoji: "🏦", descripcion: "Audita entregas, o administra el Banco si le toca esa rotación." },
+  { key: "guardian", nombre: "Guardián del Símbolo", emoji: "🎨", descripcion: "Diseña la heráldica y actualiza el mapa del Reino." },
+];
+
+export async function fetchRolesDeSesion(sesionId) {
+  const { data, error } = await supabase.from("comarca_roles_asignados").select("*, estudiantes(nombre)").eq("sesion_id", sesionId);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function asignarRolComarca(sesionId, reinoId, rol, estudianteId) {
+  const { error } = await supabase.from("comarca_roles_asignados")
+    .upsert({ sesion_id: sesionId, reino_id: reinoId, rol, estudiante_id: estudianteId || null }, { onConflict: "sesion_id,reino_id,rol" });
   if (error) throw error;
 }
 
@@ -4986,9 +5143,26 @@ export async function resolverTrueque(trueque, aceptar) {
   if (trueque.producto_pedido_id && trueque.cantidad_pedida > 0) {
     await moverProductoEntreReinos(trueque.sesion_id, trueque.reino_destino_id, trueque.reino_oferta_id, trueque.producto_pedido_id, trueque.cantidad_pedida);
   }
+  if (trueque.recurso_ofrecido && trueque.cantidad_recurso_ofrecida > 0) {
+    await moverRecursoEntreReinos(trueque.sesion_id, trueque.reino_oferta_id, trueque.reino_destino_id, trueque.recurso_ofrecido, trueque.cantidad_recurso_ofrecida);
+  }
+  if (trueque.recurso_pedido && trueque.cantidad_recurso_pedida > 0) {
+    await moverRecursoEntreReinos(trueque.sesion_id, trueque.reino_destino_id, trueque.reino_oferta_id, trueque.recurso_pedido, trueque.cantidad_recurso_pedida);
+  }
 
   const { error } = await supabase.from("comarca_trueques").update({ estado: "aceptado" }).eq("id", trueque.id);
   if (error) throw error;
+}
+
+async function moverRecursoEntreReinos(sesionId, reinoOrigenId, reinoDestinoId, recurso, cantidad) {
+  const { data: origen, error: e1 } = await supabase.from("comarca_reino_recursos").select("*").eq("sesion_id", sesionId).eq("reino_id", reinoOrigenId).eq("recurso", recurso).maybeSingle();
+  if (e1) throw e1;
+  const cantidadOrigen = Math.max(0, (origen?.cantidad || 0) - cantidad);
+  if (origen) {
+    const { error } = await supabase.from("comarca_reino_recursos").update({ cantidad: cantidadOrigen }).eq("id", origen.id);
+    if (error) throw error;
+  }
+  await sumarRecursoAReino(sesionId, reinoDestinoId, recurso, cantidad);
 }
 
 async function moverProductoEntreReinos(sesionId, reinoOrigenId, reinoDestinoId, productoId, cantidad) {
