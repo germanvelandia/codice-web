@@ -967,6 +967,50 @@ function QRModal({ sesion, reinos, onClose }) {
   );
 }
 
+function iconoDeEfecto(evento) {
+  switch (evento.efecto_tipo) {
+    case "gp_todos": return evento.efecto_valor >= 0 ? "🪙" : "💸";
+    case "fp_todos": return evento.efecto_valor >= 0 ? "🕊️" : "💔";
+    case "gp_aleatorio": return "🎁";
+    case "bloquear_provincia_aleatoria": return "🔒";
+    case "liberar_provincias": return "🔓";
+    case "producir_extra": return "🌾";
+    default: return "📜";
+  }
+}
+
+function textoDeEfecto(evento, detalle) {
+  switch (evento.efecto_tipo) {
+    case "gp_todos": return `Todos los Reinos ${evento.efecto_valor >= 0 ? "ganan" : "pierden"} ${Math.abs(evento.efecto_valor)} GP.`;
+    case "fp_todos": return `Todos los Reinos ${evento.efecto_valor >= 0 ? "ganan" : "pierden"} ${Math.abs(evento.efecto_valor)} FP.`;
+    case "gp_aleatorio": return detalle ? `¡${detalle.emoji} ${detalle.nombre} fue el elegido! ${evento.efecto_valor >= 0 ? "Gana" : "Pierde"} ${Math.abs(evento.efecto_valor)} GP.` : "No había ningún Reino para elegir.";
+    case "bloquear_provincia_aleatoria": return detalle ? `Se bloqueó: ${detalle.nombre.split("— ")[1] || detalle.nombre}.` : "No había ninguna provincia libre para bloquear.";
+    case "liberar_provincias": return "Todas las provincias bloqueadas quedan libres de nuevo.";
+    case "producir_extra": return detalle !== null ? `Salió ${detalle} en el dado extra — produjeron las provincias con ese número.` : "";
+    default: return "Esta carta no tiene efecto sobre el juego.";
+  }
+}
+
+function CartaReveladaModal({ evento, detalle, onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.7)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="rounded-3xl shadow-2xl overflow-hidden w-full max-w-sm"
+        style={{ background: "linear-gradient(160deg, #451a80 0%, #2d1155 100%)", border: "3px solid #C084FC" }}>
+        <div className="p-6 text-center">
+          <div className="text-[11px] font-bold text-violet-300 uppercase tracking-[0.2em] mb-3">🎲 Carta de Destino Inesperado</div>
+          <div className="text-7xl mb-3">{iconoDeEfecto(evento)}</div>
+          <h2 className="text-2xl font-bold text-white mb-2" style={{ fontFamily: "Georgia, serif" }}>{evento.titulo}</h2>
+          {evento.descripcion && <p className="text-sm text-violet-100 italic mb-4">{evento.descripcion}</p>}
+          <div className="bg-white/10 rounded-2xl p-3 mb-5">
+            <p className="text-sm text-white font-semibold">{textoDeEfecto(evento, detalle)}</p>
+          </div>
+          <button onClick={onClose} className="text-sm font-semibold px-6 py-2.5 rounded-xl bg-white text-violet-700">Continuar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const EFECTOS_INFO = {
   gp_todos: { label: "Suma/resta GP a TODOS los Reinos", necesitaValor: true },
   fp_todos: { label: "Suma/resta FP a TODOS los Reinos", necesitaValor: true },
@@ -981,7 +1025,7 @@ function CartaDestinoCard({ sesion, reinos, provincias, onCambio }) {
   const [eventos, setEventos] = useState([]);
   const [eventoElegidoId, setEventoElegidoId] = useState("");
   const [aplicando, setAplicando] = useState(false);
-  const [resultado, setResultado] = useState(null);
+  const [revelada, setRevelada] = useState(null); // { evento, detalle }
   const [formAbierto, setFormAbierto] = useState(false);
   const [titulo, setTitulo] = useState("");
   const [descripcion, setDescripcion] = useState("");
@@ -1010,7 +1054,7 @@ function CartaDestinoCard({ sesion, reinos, provincias, onCambio }) {
     setAplicando(true);
     try {
       const detalle = await api.aplicarEventoComarca(sesion.id, evento, reinos, provincias);
-      setResultado({ evento, detalle });
+      setRevelada({ evento, detalle });
       onCambio();
     } catch (e) {
       alert("Error: " + e.message);
@@ -1025,7 +1069,7 @@ function CartaDestinoCard({ sesion, reinos, provincias, onCambio }) {
         <button onClick={() => setFormAbierto((v) => !v)} className="text-[11px] text-amber-700 underline">{formAbierto ? "Cerrar catálogo" : "+ Crear carta nueva"}</button>
       </div>
 
-      {sesion.evento_actual && <p className="text-sm text-amber-800 mb-2">📜 {sesion.evento_actual}</p>}
+      {sesion.evento_actual && <p className="text-sm text-amber-800 mb-2">📜 Última carta: {sesion.evento_actual}</p>}
 
       {formAbierto && (
         <div className="bg-white/70 rounded-xl p-3 mb-3 space-y-1.5">
@@ -1043,7 +1087,7 @@ function CartaDestinoCard({ sesion, reinos, provincias, onCambio }) {
             <div className="pt-2 space-y-1">
               {eventos.map((ev) => (
                 <div key={ev.id} className="flex justify-between items-center text-xs bg-white rounded-lg px-2 py-1">
-                  <span>{ev.titulo}</span>
+                  <span>{iconoDeEfecto(ev)} {ev.titulo}</span>
                   <button onClick={() => eliminarEvento(ev.id)} className="text-slate-300 hover:text-rose-500">🗑</button>
                 </div>
               ))}
@@ -1062,14 +1106,7 @@ function CartaDestinoCard({ sesion, reinos, provincias, onCambio }) {
         <button disabled={aplicando || eventos.length === 0} onClick={sacarCarta} className="text-xs font-semibold px-3 py-2 rounded-lg bg-orange-500 text-white disabled:opacity-50">🎴 Sacar al azar</button>
       </div>
 
-      {resultado && (
-        <div className="mt-2 text-xs text-amber-700 bg-white/60 rounded-lg p-2">
-          Se aplicó "{resultado.evento.titulo}"
-          {resultado.evento.efecto_tipo === "gp_aleatorio" && resultado.detalle && ` — le tocó a ${resultado.detalle.emoji} ${resultado.detalle.nombre}`}
-          {resultado.evento.efecto_tipo === "bloquear_provincia_aleatoria" && resultado.detalle && ` — bloqueó ${resultado.detalle.nombre.split("— ")[1] || resultado.detalle.nombre}`}
-          {resultado.evento.efecto_tipo === "producir_extra" && resultado.detalle !== null && ` — salió ${resultado.detalle} en el dado extra`}
-        </div>
-      )}
+      {revelada && <CartaReveladaModal evento={revelada.evento} detalle={revelada.detalle} onClose={() => setRevelada(null)} />}
     </div>
   );
 }
