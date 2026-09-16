@@ -4867,6 +4867,18 @@ export async function finalizarSesionComarca(sesionId) {
   if (error) throw error;
 }
 
+export async function editarSesionComarca(sesionId, campos) {
+  const { error } = await supabase.from("comarca_sesiones").update(campos).eq("id", sesionId);
+  if (error) throw error;
+}
+
+// Borra la sesión entera y todo lo que tenga adentro (reinos, provincias,
+// movimientos, inventario, trueques) — por las llaves en cascada.
+export async function eliminarSesionComarca(sesionId) {
+  const { error } = await supabase.from("comarca_sesiones").delete().eq("id", sesionId);
+  if (error) throw error;
+}
+
 export async function guardarEventoSesion(sesionId, evento) {
   const { error } = await supabase.from("comarca_sesiones").update({ evento_actual: evento }).eq("id", sesionId);
   if (error) throw error;
