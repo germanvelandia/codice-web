@@ -731,6 +731,7 @@ function RolesModal({ sesion, reinos, onClose }) {
   const [recienGuardadoId, setRecienGuardadoId] = useState(null);
   const [guardandoNombreId, setGuardandoNombreId] = useState(null);
   const [recienGuardadoNombreId, setRecienGuardadoNombreId] = useState(null);
+  const [editandoRolDe, setEditandoRolDe] = useState(null);
 
   const cargar = () => {
     return Promise.all([api.fetchEstudiantesPorGrado(sesion.grado_id), api.fetchRoles(), api.fetchNombresFantasiaDeSesion(sesion.id)]).then(([est, roles, fantasia]) => {
@@ -758,6 +759,7 @@ function RolesModal({ sesion, reinos, onClose }) {
     try {
       await api.asignarRol(estudianteId, rolId || null);
       await cargar();
+      setEditandoRolDe(null);
       setRecienGuardadoId(estudianteId);
       setTimeout(() => setRecienGuardadoId((prev) => (prev === estudianteId ? null : prev)), 2000);
     } catch (e) {
@@ -827,30 +829,56 @@ function RolesModal({ sesion, reinos, onClose }) {
                 <div className="space-y-2">
                   {estudiantesDe(reino).map((est) => {
                     const rolActualId = est.roles_asignados?.[0]?.rol_id || "";
+                    const rolActual = catalogoRoles.find((r) => r.id === rolActualId);
+                    const infoComarcaActual = rolActual ? api.COMARCA_ROLES.find((rc) => rc.nombre === rolActual.nombre) : null;
+                    const editando = editandoRolDe === est.id;
                     return (
-                      <div key={est.id} className="bg-slate-50 rounded-lg p-2">
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <span className="text-xs font-semibold text-slate-700 flex-1 min-w-0 truncate">{est.nombre}</span>
-                          <select value={rolActualId} onChange={(e) => asignar(est.id, e.target.value ? parseInt(e.target.value, 10) : null)}
-                            disabled={guardandoId === est.id}
-                            className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
-                            <option value="">Sin rol</option>
-                            {catalogoRoles.map((r) => {
-                              const infoComarca = api.COMARCA_ROLES.find((rc) => rc.nombre === r.nombre);
-                              return <option key={r.id} value={r.id}>{infoComarca ? `${infoComarca.emoji} ` : ""}{r.nombre}</option>;
-                            })}
-                          </select>
-                          {guardandoId === est.id && <span className="text-[10px] text-slate-400 shrink-0">Guardando…</span>}
+                      <div key={est.id} className="bg-white border border-slate-100 rounded-xl p-3">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <span className="text-sm font-semibold text-slate-800 flex-1 min-w-0 truncate">{est.nombre}</span>
                           {recienGuardadoId === est.id && <span className="text-[10px] text-emerald-600 font-semibold shrink-0">✓ Guardado</span>}
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-slate-400 w-20 shrink-0">🎭 Nombre de fantasía</span>
+
+                        {editando ? (
+                          <div className="flex items-center gap-2">
+                            <select value={rolActualId} onChange={(e) => asignar(est.id, e.target.value ? parseInt(e.target.value, 10) : null)}
+                              disabled={guardandoId === est.id} autoFocus
+                              className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-violet-300 outline-none bg-white">
+                              <option value="">Sin rol</option>
+                              {catalogoRoles.map((r) => {
+                                const infoComarca = api.COMARCA_ROLES.find((rc) => rc.nombre === r.nombre);
+                                return <option key={r.id} value={r.id}>{infoComarca ? `${infoComarca.emoji} ` : ""}{r.nombre}</option>;
+                              })}
+                            </select>
+                            {guardandoId === est.id ? (
+                              <span className="text-[10px] text-slate-400 shrink-0">Guardando…</span>
+                            ) : (
+                              <button onClick={() => setEditandoRolDe(null)} className="text-[11px] text-slate-400 shrink-0">Cancelar</button>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between gap-2">
+                            {rolActual ? (
+                              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-violet-100 text-violet-700">
+                                {infoComarcaActual?.emoji || "🎭"} {rolActual.nombre}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-slate-400 px-2.5 py-1 rounded-full bg-slate-100">Sin rol asignado</span>
+                            )}
+                            <button onClick={() => setEditandoRolDe(est.id)} className="text-[11px] font-semibold text-violet-500 shrink-0">
+                              {rolActual ? "Cambiar" : "Asignar"}
+                            </button>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-50">
+                          <span className="text-[10px] text-slate-400 shrink-0">🎭 Nombre de fantasía</span>
                           <input value={nombreFantasiaDe(est.id)} onChange={(e) => setNombresTemp((prev) => ({ ...prev, [est.id]: e.target.value }))}
                             onBlur={() => guardarNombreFantasia(est.id)} onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
                             placeholder="Ej: Lord Aldric (opcional)" disabled={guardandoNombreId === est.id}
-                            className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
-                          {guardandoNombreId === est.id && <span className="text-[10px] text-slate-400 shrink-0">Guardando…</span>}
-                          {recienGuardadoNombreId === est.id && <span className="text-[10px] text-emerald-600 font-semibold shrink-0">✓ Guardado</span>}
+                            className="flex-1 text-xs rounded-lg px-2 py-1 border border-slate-200 outline-none bg-white" />
+                          {guardandoNombreId === est.id && <span className="text-[10px] text-slate-400 shrink-0">…</span>}
+                          {recienGuardadoNombreId === est.id && <span className="text-[10px] text-emerald-600 font-semibold shrink-0">✓</span>}
                         </div>
                       </div>
                     );
