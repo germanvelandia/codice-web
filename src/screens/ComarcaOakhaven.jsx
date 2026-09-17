@@ -964,14 +964,14 @@ function RecursosModal({ sesion, reinos, recursos, onClose, onCambio }) {
   );
 }
 
-function urlDeTarjeta(sesionId, reinoId, estudianteId) {
+export function urlDeTarjeta(sesionId, reinoId, estudianteId) {
   const base = window.location.origin + window.location.pathname;
   const params = new URLSearchParams({ sesion: sesionId, reino: reinoId });
   if (estudianteId) params.set("estudiante", estudianteId);
   return `${base}#comarca-tarjeta?${params.toString()}`;
 }
 
-function urlQR(texto) {
+export function urlQR(texto) {
   return `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(texto)}`;
 }
 
