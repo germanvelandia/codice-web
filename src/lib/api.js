@@ -4859,6 +4859,15 @@ export async function fetchSesionesComarca() {
   return data || [];
 }
 
+// Sin sesión de docente — la usa el estudiante para encontrar la sesión
+// de Comarca activa de su curso, y así poder ver su propia tarjeta.
+export async function fetchSesionActivaDelGrado(gradoId) {
+  const { data, error } = await supabase.from("comarca_sesiones").select("*")
+    .eq("grado_id", gradoId).eq("estado", "activa").order("creado_en", { ascending: false }).limit(1).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 export async function fetchSesionComarca(sesionId) {
   const { data, error } = await supabase.from("comarca_sesiones").select("*").eq("id", sesionId).single();
   if (error) throw error;
