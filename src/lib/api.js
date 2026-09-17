@@ -5015,16 +5015,19 @@ async function sumarRecursoAReino(sesionId, reinoId, recurso, cantidad) {
 // resultado en la sesión para que se vea en el tablero.
 export async function tirarDado(sesionId, provincias) {
   const dado = Math.floor(Math.random() * 6) + 1 + Math.floor(Math.random() * 6) + 1;
-  await supabase.from("comarca_sesiones").update({ ultimo_dado: dado }).eq("id", sesionId);
+  const { error: e0 } = await supabase.from("comarca_sesiones").update({ ultimo_dado: dado }).eq("id", sesionId);
+  if (e0) throw e0;
 
   let provinciaBloqueada = null;
   if (dado === 7) {
     // Libera la que estuviera bloqueada antes.
-    await supabase.from("comarca_provincias").update({ bloqueada: false }).eq("sesion_id", sesionId).eq("bloqueada", true);
+    const { error: e1 } = await supabase.from("comarca_provincias").update({ bloqueada: false }).eq("sesion_id", sesionId).eq("bloqueada", true);
+    if (e1) throw e1;
     const candidatas = provincias.filter((p) => !p.bloqueada);
     if (candidatas.length > 0) {
       provinciaBloqueada = candidatas[Math.floor(Math.random() * candidatas.length)];
-      await supabase.from("comarca_provincias").update({ bloqueada: true }).eq("id", provinciaBloqueada.id);
+      const { error: e2 } = await supabase.from("comarca_provincias").update({ bloqueada: true }).eq("id", provinciaBloqueada.id);
+      if (e2) throw e2;
     }
   }
   return { dado, provinciaBloqueada };
@@ -5035,11 +5038,13 @@ export async function tirarDado(sesionId, provincias) {
 // dan el doble.
 export async function producirPorDado(sesionId, numero, provincias) {
   const provinciasQueProducen = provincias.filter((p) => p.numero_dado === numero && !p.bloqueada && p.reino_actual_id);
+  const detalle = [];
   for (const p of provinciasQueProducen) {
     const cantidad = p.nivel === "ciudad" ? 2 : 1;
     await sumarRecursoAReino(sesionId, p.reino_actual_id, p.recurso, cantidad);
+    detalle.push({ reinoId: p.reino_actual_id, recurso: p.recurso, cantidad, provinciaNombre: p.nombre.split("— ")[1] || p.nombre });
   }
-  return provinciasQueProducen.length;
+  return detalle;
 }
 
 // Sube una provincia de Villa a Ciudad — le cobra el costo al Reino dueño
