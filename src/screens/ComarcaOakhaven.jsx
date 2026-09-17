@@ -2,6 +2,43 @@ import React, { useEffect, useState } from "react";
 import * as api from "../lib/api";
 import { agruparPorNivel } from "../lib/gamification";
 
+function CambiarEmojiReino({ reino, onGuardado }) {
+  const [editando, setEditando] = useState(false);
+  const [valor, setValor] = useState(reino.emoji);
+  const [guardando, setGuardando] = useState(false);
+
+  const guardar = async () => {
+    if (!valor.trim()) { setEditando(false); return; }
+    setGuardando(true);
+    try {
+      await api.guardarEmojiReino(reino.id, valor.trim());
+      onGuardado();
+      setEditando(false);
+    } catch (e) {
+      alert("Error al guardar el emoji: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  if (!editando) {
+    return (
+      <button onClick={() => { setValor(reino.emoji); setEditando(true); }} className="text-[10px] font-semibold px-2 py-1 rounded-full bg-white/80 text-slate-600">
+        {reino.emoji} Cambiar ícono
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1 bg-white/90 rounded-full px-1.5 py-1">
+      <input value={valor} onChange={(e) => setValor(e.target.value)} autoFocus
+        onKeyDown={(e) => { if (e.key === "Enter") guardar(); if (e.key === "Escape") setEditando(false); }}
+        className="w-9 text-center text-sm outline-none bg-transparent" placeholder="🏰" />
+      <button disabled={guardando} onClick={guardar} className="text-[10px] font-semibold text-violet-600">{guardando ? "…" : "✓"}</button>
+      <button onClick={() => setEditando(false)} className="text-[10px] text-slate-400">✕</button>
+    </div>
+  );
+}
+
 function SubirImagenReino({ reino, onGuardado }) {
   const [subiendo, setSubiendo] = useState(false);
 
@@ -157,6 +194,16 @@ function AjustarEconomiaModal({ sesion, reino, billetesDeSesion, onClose, onCamb
 
 const PALETA_REINOS = ["#8B5CF6", "#F59E0B", "#10B981", "#3B82F6", "#EF4444", "#EC4899", "#14B8A6", "#F97316"];
 
+const ICONOS_MATERIAL = {
+  "Madera": "🪵", "Hierbas": "🌿", "Frutas": "🍎", "Animales": "🦌", "Piedra": "🪨", "Resina": "🟤", "Setas": "🍄", "Aguas": "💧",
+  "Oro": "🪙", "Mármol": "⬜", "Esmeraldas": "💚", "Hierro": "⚙️", "Carbón": "⚫", "Cristales": "💎", "Pieles": "🦫", "Agua Glacial": "🧊",
+  "Trigo": "🌾", "Especias": "🌶️", "Aceite": "🫒", "Telas": "🧵", "Cerámica": "🏺", "Cobre": "🟠", "Algarrobo": "🌰",
+  "Azufre": "🟡", "Petróleo": "🛢️", "Caucho": "⚫", "Sal": "🧂", "Tabaco": "🚬", "Cacao": "🍫",
+  "Lana": "🧶", "Plata": "⚪", "Uvas": "🍇", "Papel": "📄", "Tinta": "🖋️", "Esencias": "🧴", "Fósforos": "🔥",
+  "Pescado": "🐟", "Perlas": "🦪", "Algas": "🌱", "Calamar": "🦑", "Langosta": "🦞", "Conchas": "🐚", "Madera Marina": "🪵",
+};
+function iconoDeMaterial(material) { return ICONOS_MATERIAL[material] || "📦"; }
+
 function ReajustarProvinciasModal({ sesion, reinos, provincias, onClose, onCambio }) {
   const [arquetipos, setArquetipos] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -303,6 +350,7 @@ function MapaProvinciasModal({ sesion, reinos, provincias, onClose, onCambio }) 
   const [mejorando, setMejorando] = useState(null);
   const [costoMejora, setCostoMejora] = useState(15);
   const [guardandoMejora, setGuardandoMejora] = useState(false);
+  const [filtroReinoId, setFiltroReinoId] = useState("todos");
   const colorDe = (reinoId) => {
     const idx = reinos.findIndex((r) => r.id === reinoId);
     return PALETA_REINOS[idx % PALETA_REINOS.length] || "#94A3B8";
@@ -320,6 +368,8 @@ function MapaProvinciasModal({ sesion, reinos, provincias, onClose, onCambio }) 
     setGuardandoMejora(false);
   };
 
+  const provinciasFiltradas = filtroReinoId === "todos" ? provincias : provincias.filter((p) => p.reino_actual_id === filtroReinoId);
+
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.55)" }} onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-3xl max-h-[85vh] overflow-y-auto shadow-xl">
@@ -327,19 +377,26 @@ function MapaProvinciasModal({ sesion, reinos, provincias, onClose, onCambio }) 
           <h3 className="font-bold text-slate-800 text-lg">🗺️ Mapa de Provincias</h3>
           <button onClick={onClose} className="text-slate-400 text-xl">✕</button>
         </div>
-        <p className="text-xs text-slate-400 mb-4">El número grande es el que activa su producción con el Dado. Tocá una provincia para transferirla, o "⬆️" para subirla a Ciudad.</p>
+        <p className="text-xs text-slate-400 mb-3">El número grande es el que activa su producción con el Dado. Tocá una provincia para transferirla, o "⬆️" para subirla a Ciudad.</p>
 
-        {/* Referencia de colores por Reino */}
-        <div className="flex flex-wrap gap-2 mb-4">
+        {/* Pestañas: ver todos los Reinos juntos, o el mapa de uno solo */}
+        <div className="flex gap-1.5 mb-4 overflow-x-auto pb-1">
+          <button onClick={() => setFiltroReinoId("todos")}
+            className="text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap shrink-0"
+            style={{ background: filtroReinoId === "todos" ? "#1E293B" : "#F1F5F9", color: filtroReinoId === "todos" ? "#FFFFFF" : "#475569" }}>
+            🗺️ Todos
+          </button>
           {reinos.map((r) => (
-            <span key={r.id} className="text-xs font-semibold px-2.5 py-1 rounded-full text-white" style={{ background: colorDe(r.id) }}>
+            <button key={r.id} onClick={() => setFiltroReinoId(r.id)}
+              className="text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap shrink-0"
+              style={{ background: filtroReinoId === r.id ? colorDe(r.id) : "#F1F5F9", color: filtroReinoId === r.id ? "#FFFFFF" : "#475569" }}>
               {r.emoji} {r.nombre}
-            </span>
+            </button>
           ))}
         </div>
 
         <div className="grid sm:grid-cols-3 md:grid-cols-4 gap-3">
-          {provincias.map((p) => {
+          {provinciasFiltradas.map((p) => {
             const reinoDueno = reinos.find((r) => r.id === p.reino_actual_id);
             const cambioDeManos = p.reino_original_id !== p.reino_actual_id;
             return (
@@ -348,7 +405,7 @@ function MapaProvinciasModal({ sesion, reinos, provincias, onClose, onCambio }) 
                 {!p.bloqueada && cambioDeManos && <span className="absolute top-1.5 right-1.5 text-[10px]">🔄</span>}
                 <button onClick={() => setTransfiriendo(p)} className="text-left w-full">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] opacity-80">{p.recurso}</span>
+                    <span className="text-[10px] opacity-80">{iconoDeMaterial(p.recurso)} {p.recurso}</span>
                     <span className="text-xs font-bold bg-white/25 rounded-full w-5 h-5 flex items-center justify-center">{p.numero_dado || "–"}</span>
                   </div>
                   <div className="text-sm font-bold leading-tight mb-1.5">{p.nombre.split("— ")[1] || p.nombre}</div>
@@ -1488,7 +1545,10 @@ function TableroSesion({ sesion: sesionInicial, onVolver }) {
                 ) : (
                   <span className="text-4xl">{reino.emoji}</span>
                 )}
-                <div className="absolute bottom-1.5 right-1.5"><SubirImagenReino reino={reino} onGuardado={cargar} /></div>
+                <div className="absolute bottom-1.5 right-1.5 flex gap-1">
+                  <CambiarEmojiReino reino={reino} onGuardado={cargar} />
+                  <SubirImagenReino reino={reino} onGuardado={cargar} />
+                </div>
               </div>
               <div className="p-3">
                 <div className="font-bold text-slate-800 text-sm mb-1">{reino.emoji} {reino.nombre}</div>
