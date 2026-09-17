@@ -740,6 +740,193 @@ function TruequesModal({ sesion, reinos, inventario, recursos, onClose, onCambio
   );
 }
 
+function MisionesSecretasModal({ sesion, reinos, onClose }) {
+  const [catalogo, setCatalogo] = useState([]);
+  const [misiones, setMisiones] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [formAbierto, setFormAbierto] = useState(false);
+  const [textoNuevo, setTextoNuevo] = useState("");
+  const [repartiendo, setRepartiendo] = useState(false);
+  const [modoImprimir, setModoImprimir] = useState(false);
+
+  const cargar = () => {
+    setCargando(true);
+    Promise.all([api.fetchMisionesCatalogo(), api.fetchMisionesDeSesion(sesion.id)]).then(([cat, mis]) => {
+      setCatalogo(cat); setMisiones(mis); setCargando(false);
+    });
+  };
+  useEffect(() => { cargar(); }, []);
+
+  const agregarAlCatalogo = async () => {
+    if (!textoNuevo.trim()) return;
+    await api.crearMisionCatalogo(textoNuevo.trim());
+    setTextoNuevo("");
+    cargar();
+  };
+
+  const eliminarDelCatalogo = async (id) => { await api.eliminarMisionCatalogo(id); cargar(); };
+
+  const repartir = async () => {
+    if (misiones.length > 0 && !confirm("Ya hay misiones repartidas en esta sesión — ¿volver a sortear? Se van a reemplazar las actuales.")) return;
+    setRepartiendo(true);
+    try {
+      await api.repartirMisionesSecretas(sesion.id, reinos);
+      cargar();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setRepartiendo(false);
+  };
+
+  const toggleCumplida = async (mision) => {
+    await api.marcarMisionCumplida(mision.id, !mision.cumplida);
+    cargar();
+  };
+
+  const misionesDe = (reinoId) => misiones.filter((m) => m.reino_id === reinoId);
+
+  if (modoImprimir) {
+    return (
+      <div className="fixed inset-0 z-40 bg-white overflow-y-auto p-6">
+        <div className="flex justify-between items-center mb-4 print:hidden">
+          <h3 className="font-bold text-slate-800">📜 Misiones Secretas — para imprimir</h3>
+          <div className="flex gap-2">
+            <button onClick={() => window.print()} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">🖨️ Imprimir</button>
+            <button onClick={() => setModoImprimir(false)} className="text-slate-400">✕</button>
+          </div>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-4">
+          {reinos.map((reino) => (
+            <div key={reino.id} className="border-2 border-dashed border-slate-300 rounded-2xl p-4 break-inside-avoid">
+              <div className="text-center mb-2">
+                <div className="text-2xl">{reino.emoji}</div>
+                <div className="font-bold text-slate-800">{reino.nombre}</div>
+                <div className="text-[10px] text-slate-400 uppercase tracking-wide">Misiones Secretas — Confidencial</div>
+              </div>
+              <ol className="text-xs text-slate-700 list-decimal list-inside space-y-1">
+                {misionesDe(reino.id).map((m) => <li key={m.id}>{m.texto}</li>)}
+              </ol>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (cargando) return null;
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-4 w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-1">
+          <h3 className="font-bold text-slate-800">📜 Misiones Secretas</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-400 mb-3">Cada Reino recibe 10 misiones al azar del catálogo — se revelan al final de la sesión.</p>
+
+        <div className="flex gap-2 mb-3">
+          <button disabled={repartiendo} onClick={repartir} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+            {repartiendo ? "Repartiendo…" : "🎲 Repartir 10 misiones a cada Reino"}
+          </button>
+          {misiones.length > 0 && (
+            <button onClick={() => setModoImprimir(true)} className="text-sm font-semibold px-4 py-2 rounded-lg border border-violet-200 text-violet-600">🖨️ Ver para imprimir</button>
+          )}
+        </div>
+
+        <button onClick={() => setFormAbierto((v) => !v)} className="text-xs text-violet-500 mb-2">{formAbierto ? "Cerrar catálogo" : "+ Agregar misión al catálogo"}</button>
+        {formAbierto && (
+          <div className="bg-violet-50 rounded-xl p-3 mb-3">
+            <div className="flex gap-1.5 mb-2">
+              <input value={textoNuevo} onChange={(e) => setTextoNuevo(e.target.value)} placeholder="Ej: Dominar 3 provincias de un mismo material"
+                className="flex-1 text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none" onKeyDown={(e) => e.key === "Enter" && agregarAlCatalogo()} />
+              <button onClick={agregarAlCatalogo} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white">+</button>
+            </div>
+            <div className="max-h-40 overflow-y-auto space-y-1">
+              {catalogo.map((m) => (
+                <div key={m.id} className="flex justify-between items-center text-xs bg-white rounded-lg px-2 py-1">
+                  <span>{m.texto}</span>
+                  <button onClick={() => eliminarDelCatalogo(m.id)} className="text-slate-300 hover:text-rose-500 shrink-0">🗑</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {misiones.length > 0 && (
+          <div className="space-y-3">
+            {reinos.map((reino) => (
+              <div key={reino.id} className="border border-slate-100 rounded-xl p-3">
+                <div className="font-bold text-slate-800 text-sm mb-2">{reino.emoji} {reino.nombre}</div>
+                <div className="space-y-1">
+                  {misionesDe(reino.id).map((m) => (
+                    <label key={m.id} className={`flex items-center gap-2 text-xs px-2 py-1 rounded-lg ${m.cumplida ? "bg-emerald-50 text-emerald-700 line-through" : "bg-slate-50 text-slate-600"}`}>
+                      <input type="checkbox" checked={m.cumplida} onChange={() => toggleCumplida(m)} />
+                      {m.texto}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TarjetasRolImprimibleModal({ sesion, reinos, onClose }) {
+  const [estudiantes, setEstudiantes] = useState([]);
+  const [catalogoRoles, setCatalogoRoles] = useState([]);
+  const [nombresFantasia, setNombresFantasia] = useState([]);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    Promise.all([api.fetchEstudiantesPorGrado(sesion.grado_id), api.fetchRoles(), api.fetchNombresFantasiaDeSesion(sesion.id)]).then(([est, roles, fantasia]) => {
+      setEstudiantes(est); setCatalogoRoles(roles); setNombresFantasia(fantasia); setCargando(false);
+    });
+  }, []);
+
+  if (cargando) return null;
+
+  const reinoDe = (est) => reinos.find((r) => r.nombre.trim().toLowerCase() === (est.reino_actual || est.reino_original || "").trim().toLowerCase());
+  const rolDe = (est) => {
+    const rolId = est.roles_asignados?.[0]?.rol_id || est.roles_asignados?.rol_id;
+    if (!rolId) return null;
+    const catalogado = catalogoRoles.find((r) => r.id === rolId);
+    return catalogado ? { ...catalogado, info: api.COMARCA_ROLES.find((rc) => rc.nombre === catalogado.nombre) } : null;
+  };
+  const nombreMostrado = (est) => nombresFantasia.find((n) => n.estudiante_id === est.id)?.nombre || est.nombre;
+
+  const tarjetas = estudiantes.map((est) => ({ est, reino: reinoDe(est), rol: rolDe(est) })).filter((t) => t.reino && t.rol);
+
+  return (
+    <div className="fixed inset-0 z-40 bg-white overflow-y-auto p-6">
+      <div className="flex justify-between items-center mb-4 print:hidden">
+        <h3 className="font-bold text-slate-800">🎭 Tarjetas de Rol — para imprimir</h3>
+        <div className="flex gap-2">
+          <button onClick={() => window.print()} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">🖨️ Imprimir</button>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+      </div>
+      {tarjetas.length === 0 ? (
+        <p className="text-sm text-slate-400 print:hidden">Todavía nadie tiene un Reino y un rol asignados a la vez — hacelo primero en "🎭 Roles".</p>
+      ) : (
+        <div className="grid sm:grid-cols-3 gap-3">
+          {tarjetas.map(({ est, reino, rol }) => (
+            <div key={est.id} className="rounded-2xl p-4 text-white shadow-sm break-inside-avoid" style={{ background: "linear-gradient(160deg, #451a80 0%, #2d1155 100%)", border: "2px solid #C084FC" }}>
+              <div className="text-[9px] uppercase tracking-widest text-violet-200 mb-1">{reino.emoji} {reino.nombre}</div>
+              <div className="text-3xl mb-1">{rol.info?.emoji || "🎭"}</div>
+              <div className="text-sm font-bold mb-0.5">{rol.nombre}</div>
+              <div className="text-xs text-violet-200 mb-2">{nombreMostrado(est)}</div>
+              {rol.info?.descripcion && <p className="text-[10px] text-violet-100 leading-snug">{rol.info.descripcion}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function InventarioImprimibleModal({ reinos, inventario, onClose }) {
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
@@ -1510,6 +1697,8 @@ function TableroSesion({ sesion: sesionInicial, onVolver }) {
   const [duelosAbierto, setDuelosAbierto] = useState(false);
   const [rolesAbierto, setRolesAbierto] = useState(false);
   const [qrAbierto, setQrAbierto] = useState(false);
+  const [misionesAbierto, setMisionesAbierto] = useState(false);
+  const [tarjetasRolAbierto, setTarjetasRolAbierto] = useState(false);
   const [evento, setEvento] = useState(sesion.evento_actual || "");
   const [guardandoEvento, setGuardandoEvento] = useState(false);
 
@@ -1568,6 +1757,8 @@ function TableroSesion({ sesion: sesionInicial, onVolver }) {
           <button onClick={() => setDuelosAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-rose-100 text-rose-700">⚔️ Duelos</button>
           <button onClick={() => setRolesAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-fuchsia-100 text-fuchsia-700">🎭 Roles</button>
           <button onClick={() => setQrAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-slate-100 text-slate-700">📱 Tarjetas QR</button>
+          <button onClick={() => setMisionesAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-orange-100 text-orange-700">📜 Misiones Secretas</button>
+          <button onClick={() => setTarjetasRolAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-fuchsia-100 text-fuchsia-700">🖨️ Imprimir Tarjetas de Rol</button>
           {sesion.estado === "activa" && (
             <button onClick={finalizar} className="text-xs font-semibold px-3 py-2 rounded-full border border-slate-200 text-slate-600">🏁 Finalizar sesión</button>
           )}
@@ -1647,6 +1838,8 @@ function TableroSesion({ sesion: sesionInicial, onVolver }) {
       {duelosAbierto && <DuelosModal sesion={sesion} reinos={reinos} provincias={provincias} onClose={() => setDuelosAbierto(false)} onCambio={cargar} />}
       {rolesAbierto && <RolesModal sesion={sesion} reinos={reinos} onClose={() => setRolesAbierto(false)} />}
       {qrAbierto && <QRModal sesion={sesion} reinos={reinos} onClose={() => setQrAbierto(false)} />}
+      {misionesAbierto && <MisionesSecretasModal sesion={sesion} reinos={reinos} onClose={() => setMisionesAbierto(false)} />}
+      {tarjetasRolAbierto && <TarjetasRolImprimibleModal sesion={sesion} reinos={reinos} onClose={() => setTarjetasRolAbierto(false)} />}
     </div>
   );
 }
