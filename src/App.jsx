@@ -22,7 +22,7 @@ import { VistaObjetos, ObjetosEstudiante } from "./screens/Objetos";
 import { VistaActividadesProgramadas } from "./screens/ActividadesProgramadas";
 import { VistaGamificacionExtra } from "./screens/GamificacionExtra";
 import { VistaRoles } from "./screens/Roles";
-import { VistaComarcaOakhaven, TarjetaComarcaPublica } from "./screens/ComarcaOakhaven";
+import { VistaComarcaOakhaven, TarjetaComarcaPublica, urlDeTarjeta, urlQR } from "./screens/ComarcaOakhaven";
 import { VistaCalificaciones } from "./screens/Calificaciones";
 import { VistaReportes } from "./screens/Reportes";
 import { VistaHorario } from "./screens/Horario";
@@ -1045,6 +1045,7 @@ const MENU_CODICE_GRUPOS = [
       { key: "salonhonor", label: "Salón de Honor", icono: "🏆" },
       { key: "recompensas", label: "Recompensas", icono: "🎁" },
       { key: "album", label: "Álbum", icono: "🎴" },
+      { key: "comarca", label: "Mi Comarca", icono: "🏛️" },
     ],
   },
   {
@@ -1809,6 +1810,53 @@ function PreguntadosEstudiante({ estudianteId }) {
   );
 }
 
+function MiComarcaEstudiante({ estudianteInfo }) {
+  const [sesion, setSesion] = useState(undefined); // undefined = cargando, null = no hay
+  const [reino, setReino] = useState(null);
+
+  useEffect(() => {
+    if (!estudianteInfo?.grado_id) return;
+    api.fetchSesionActivaDelGrado(estudianteInfo.grado_id).then(async (s) => {
+      setSesion(s);
+      if (s) {
+        const reinos = await api.fetchTodosLosReinosDeSesionPublico(s.id);
+        const nombreReino = (estudianteInfo.reino_actual || estudianteInfo.reino_original || "").trim().toLowerCase();
+        setReino(reinos.find((r) => r.nombre.trim().toLowerCase() === nombreReino) || null);
+      }
+    });
+  }, [estudianteInfo?.grado_id]);
+
+  const abrirMiTarjeta = () => {
+    window.location.href = urlDeTarjeta(sesion.id, reino.id, estudianteInfo.id);
+  };
+
+  if (sesion === undefined) return <div className="text-sm text-slate-400">Cargando…</div>;
+
+  return (
+    <div>
+      <h3 className="font-bold text-slate-800 mb-1">🏛️ Mi Comarca</h3>
+      <p className="text-xs text-slate-400 mb-4">Tu tarjeta en vivo de la sesión de la Comarca de Oakhaven de tu curso.</p>
+
+      {!sesion ? (
+        <div className="text-sm text-slate-400 bg-slate-50 rounded-2xl p-6 text-center border border-dashed border-slate-200">
+          Tu curso no tiene ninguna sesión de la Comarca activa en este momento.
+        </div>
+      ) : !reino ? (
+        <div className="text-sm text-slate-400 bg-slate-50 rounded-2xl p-6 text-center border border-dashed border-slate-200">
+          Hay una sesión activa, pero tu Reino todavía no está en ella — hablá con tu docente.
+        </div>
+      ) : (
+        <div className="flex flex-col items-center bg-gradient-to-b from-violet-50 to-white rounded-2xl p-5 border border-violet-100">
+          <div className="text-3xl mb-1">{reino.emoji}</div>
+          <div className="font-bold text-slate-800 mb-3">{reino.nombre}</div>
+          <img src={urlQR(urlDeTarjeta(sesion.id, reino.id, estudianteInfo.id))} alt="Mi QR de la Comarca" className="rounded-xl mb-3 shadow-sm" />
+          <button onClick={abrirMiTarjeta} className="text-sm font-semibold px-4 py-2 rounded-xl bg-violet-500 text-white">Ver mi tarjeta ahora</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PortalEstudiante() {
   const [codigo, setCodigo] = useState("");
   const [datos, setDatos] = useState(null);
@@ -1997,6 +2045,8 @@ function PortalEstudiante() {
           {vista === "album" && estudianteInfo && (
             <AlbumEstudiante estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} />
           )}
+
+          {vista === "comarca" && estudianteInfo && <MiComarcaEstudiante estudianteInfo={estudianteInfo} />}
 
           {vista === "ranking" && estudianteInfo && (
             <RankingEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />
