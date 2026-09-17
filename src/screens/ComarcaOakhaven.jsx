@@ -725,7 +725,7 @@ function RolesModal({ sesion, reinos, onClose }) {
   const [catalogoRoles, setCatalogoRoles] = useState([]);
   const [nombresFantasia, setNombresFantasia] = useState([]);
   const [nombresTemp, setNombresTemp] = useState({}); // edición local antes de guardar
-  const [cargando, setCargando] = useState(true);
+  const [primeraCarga, setPrimeraCarga] = useState(true);
   const [creandoCatalogo, setCreandoCatalogo] = useState(false);
   const [guardandoId, setGuardandoId] = useState(null);
   const [recienGuardadoId, setRecienGuardadoId] = useState(null);
@@ -733,9 +733,8 @@ function RolesModal({ sesion, reinos, onClose }) {
   const [recienGuardadoNombreId, setRecienGuardadoNombreId] = useState(null);
 
   const cargar = () => {
-    setCargando(true);
-    Promise.all([api.fetchEstudiantesPorGrado(sesion.grado_id), api.fetchRoles(), api.fetchNombresFantasiaDeSesion(sesion.id)]).then(([est, roles, fantasia]) => {
-      setEstudiantes(est); setCatalogoRoles(roles); setNombresFantasia(fantasia); setCargando(false);
+    return Promise.all([api.fetchEstudiantesPorGrado(sesion.grado_id), api.fetchRoles(), api.fetchNombresFantasiaDeSesion(sesion.id)]).then(([est, roles, fantasia]) => {
+      setEstudiantes(est); setCatalogoRoles(roles); setNombresFantasia(fantasia); setPrimeraCarga(false);
     });
   };
   useEffect(() => { cargar(); }, []);
@@ -790,7 +789,7 @@ function RolesModal({ sesion, reinos, onClose }) {
   const sinReinoAsignado = estudiantes.filter((e) => !reinos.some((r) => normalizar(r.nombre) === normalizar(e.reino_actual || e.reino_original)));
   const nombreFantasiaDe = (estudianteId) => nombresTemp[estudianteId] ?? (nombresFantasia.find((n) => n.estudiante_id === estudianteId)?.nombre || "");
 
-  if (cargando) return null;
+  if (primeraCarga) return null;
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
@@ -1191,6 +1190,7 @@ function TableroSesion({ sesion: sesionInicial, onVolver }) {
   const [billetes, setBilletes] = useState([]);
   const [recursos, setRecursos] = useState([]);
   const [cargando, setCargando] = useState(true);
+  const [primeraCarga, setPrimeraCarga] = useState(true);
   const [tirandoDado, setTirandoDado] = useState(false);
   const [resultadoDado, setResultadoDado] = useState(null);
   const [ajustandoEconomiaDe, setAjustandoEconomiaDe] = useState(null);
@@ -1207,9 +1207,8 @@ function TableroSesion({ sesion: sesionInicial, onVolver }) {
   const [guardandoEvento, setGuardandoEvento] = useState(false);
 
   const cargar = () => {
-    setCargando(true);
     Promise.all([api.fetchReinosDeSesion(sesion.id), api.fetchProvinciasDeSesion(sesion.id), api.fetchInventarioDeSesion(sesion.id), api.fetchBilletesDeSesion(sesion.id), api.fetchRecursosDeSesion(sesion.id)]).then(([r, p, inv, bil, rec]) => {
-      setReinos(r); setProvincias(p); setInventario(inv); setBilletes(bil); setRecursos(rec); setCargando(false);
+      setReinos(r); setProvincias(p); setInventario(inv); setBilletes(bil); setRecursos(rec); setCargando(false); setPrimeraCarga(false);
     });
   };
   useEffect(() => { cargar(); }, [sesion.id]);
@@ -1241,7 +1240,7 @@ function TableroSesion({ sesion: sesionInicial, onVolver }) {
     onVolver();
   };
 
-  if (cargando) return <div className="text-sm text-slate-400">Cargando el tablero…</div>;
+  if (primeraCarga) return <div className="text-sm text-slate-400">Cargando el tablero…</div>;
 
   return (
     <div>
