@@ -861,12 +861,15 @@ export async function crearPlaneacion(campos) {
 // Crea (o reutiliza si ya existe) la sesión real de la Comarca a partir de
 // lo preparado en una Planeación, y deja el enlace guardado en la
 // planeación para la próxima vez.
-export async function iniciarComarcaDesdePlaneacion(planeacion, gradoId, reinosSeleccionados) {
-  if (planeacion.comarca_sesion_id) {
-    const existente = await fetchSesionComarca(planeacion.comarca_sesion_id);
+// dictado = el registro de "esta planeación se dictó en el curso X, en la
+// fecha Y" (de la tabla dictados) — la sesión queda enlazada ahí, no en
+// toda la planeación, para que cada curso tenga la suya propia.
+export async function iniciarComarcaDesdePlaneacion(planeacion, dictado, reinosSeleccionados) {
+  if (dictado.comarca_sesion_id) {
+    const existente = await fetchSesionComarca(dictado.comarca_sesion_id);
     if (existente) return existente;
   }
-  const sesion = await crearSesionComarca(gradoId, planeacion.titulo, reinosSeleccionados);
+  const sesion = await crearSesionComarca(dictado.grado_id, `${planeacion.titulo} — Curso ${dictado.grado_id}`, reinosSeleccionados);
   if (planeacion.comarca_evento_id) {
     const { data: evento } = await supabase.from("comarca_eventos").select("*").eq("id", planeacion.comarca_evento_id).single();
     if (evento) {
@@ -877,7 +880,7 @@ export async function iniciarComarcaDesdePlaneacion(planeacion, gradoId, reinosS
   } else if (planeacion.comarca_dilema) {
     await guardarEventoSesion(sesion.id, planeacion.comarca_dilema);
   }
-  await editarPlaneacion(planeacion.id, { comarca_sesion_id: sesion.id });
+  await editarDictado(dictado.id, { comarca_sesion_id: sesion.id });
   return sesion;
 }
 
