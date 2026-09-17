@@ -157,6 +157,147 @@ function AjustarEconomiaModal({ sesion, reino, billetesDeSesion, onClose, onCamb
 
 const PALETA_REINOS = ["#8B5CF6", "#F59E0B", "#10B981", "#3B82F6", "#EF4444", "#EC4899", "#14B8A6", "#F97316"];
 
+function ReajustarProvinciasModal({ sesion, reinos, provincias, onClose, onCambio }) {
+  const [arquetipos, setArquetipos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [reinoActivoId, setReinoActivoId] = useState(reinos[0]?.id || null);
+  const [nuevoMaterial, setNuevoMaterial] = useState("");
+  const [nuevoDado, setNuevoDado] = useState(6);
+  const [guardando, setGuardando] = useState(false);
+
+  const cargar = () => api.fetchComarcaArquetipos().then((d) => { setArquetipos(d); setCargando(false); });
+  useEffect(() => { cargar(); }, []);
+
+  const reinoActivo = reinos.find((r) => r.id === reinoActivoId);
+  const arquetipoDeReino = (reino) => arquetipos.find((a) => a.id === reino?.arquetipo_id);
+  const provinciasDe = (reinoId) => provincias.filter((p) => p.reino_original_id === reinoId);
+
+  const cambiarArquetipo = async (arquetipoId) => {
+    setGuardando(true);
+    try {
+      await api.asignarArquetipoAReino(reinoActivoId, arquetipoId ? parseInt(arquetipoId, 10) : null);
+      onCambio();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  const agregarProvincia = async () => {
+    if (!nuevoMaterial) return;
+    setGuardando(true);
+    try {
+      await api.crearProvincia(sesion.id, reinoActivoId, `${reinoActivo.nombre} — ${nuevoMaterial}`, nuevoMaterial, parseInt(nuevoDado, 10) || 6);
+      setNuevoMaterial("");
+      onCambio();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  const cambiarMaterialDe = async (provincia, material) => {
+    setGuardando(true);
+    try {
+      await api.editarProvincia(provincia.id, { recurso: material, nombre: `${reinoActivo.nombre} — ${material}` });
+      onCambio();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  const cambiarDadoDe = async (provincia, numero) => {
+    await api.editarProvincia(provincia.id, { numero_dado: parseInt(numero, 10) || null });
+    onCambio();
+  };
+
+  const borrarProvincia = async (provincia) => {
+    if (!confirm(`¿Eliminar la provincia "${provincia.nombre.split("— ")[1] || provincia.nombre}"?`)) return;
+    setGuardando(true);
+    try {
+      await api.eliminarProvincia(provincia.id);
+      onCambio();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  if (cargando) return null;
+  const arquetipo = arquetipoDeReino(reinoActivo);
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-4 w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-1">
+          <h3 className="font-bold text-slate-800">🛠️ Reajustar Provincias</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-400 mb-3">Elegí un arquetipo temático para cada Reino, y armá sus provincias con los materiales de esa lista.</p>
+
+        <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1">
+          {reinos.map((r) => (
+            <button key={r.id} onClick={() => setReinoActivoId(r.id)}
+              className="text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap shrink-0"
+              style={{ background: reinoActivoId === r.id ? "#8B5CF6" : "#F1F5F9", color: reinoActivoId === r.id ? "#FFFFFF" : "#475569" }}>
+              {r.emoji} {r.nombre}
+            </button>
+          ))}
+        </div>
+
+        {reinoActivo && (
+          <div className="border border-slate-100 rounded-xl p-3">
+            <label className="text-xs text-slate-500 block mb-1">Arquetipo temático de {reinoActivo.nombre}</label>
+            <select value={reinoActivo.arquetipo_id || ""} onChange={(e) => cambiarArquetipo(e.target.value)} disabled={guardando}
+              className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none bg-white">
+              <option value="">Sin arquetipo asignado</option>
+              {arquetipos.map((a) => <option key={a.id} value={a.id}>{a.emoji} {a.nombre}</option>)}
+            </select>
+
+            {!arquetipo ? (
+              <p className="text-xs text-slate-400">Elegí un arquetipo arriba para ver sus materiales disponibles.</p>
+            ) : (
+              <>
+                <div className="flex gap-2 items-end mb-3">
+                  <div className="flex-1">
+                    <label className="text-[10px] text-slate-500 block mb-1">Agregar provincia con material</label>
+                    <select value={nuevoMaterial} onChange={(e) => setNuevoMaterial(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
+                      <option value="">Elegir material…</option>
+                      {arquetipo.comarca_materiales.map((m) => <option key={m.id} value={m.nombre}>{m.nombre}</option>)}
+                    </select>
+                  </div>
+                  <div className="w-20">
+                    <label className="text-[10px] text-slate-500 block mb-1">N° dado</label>
+                    <input type="number" min="2" max="12" value={nuevoDado} onChange={(e) => setNuevoDado(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+                  </div>
+                  <button disabled={guardando || !nuevoMaterial} onClick={agregarProvincia} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-50">+ Agregar</button>
+                </div>
+
+                <div className="space-y-1.5">
+                  {provinciasDe(reinoActivo.id).length === 0 ? (
+                    <p className="text-xs text-slate-400">Este Reino todavía no tiene provincias — agregá una arriba.</p>
+                  ) : provinciasDe(reinoActivo.id).map((p) => (
+                    <div key={p.id} className="flex items-center gap-2 bg-slate-50 rounded-lg p-2">
+                      <select value={p.recurso} onChange={(e) => cambiarMaterialDe(p, e.target.value)} className="flex-1 text-xs rounded-lg px-2 py-1 border border-slate-200 outline-none bg-white">
+                        {arquetipo.comarca_materiales.map((m) => <option key={m.id} value={m.nombre}>{m.nombre}</option>)}
+                        {!arquetipo.comarca_materiales.some((m) => m.nombre === p.recurso) && <option value={p.recurso}>{p.recurso} (actual)</option>}
+                      </select>
+                      <input type="number" min="2" max="12" value={p.numero_dado || ""} onChange={(e) => cambiarDadoDe(p, e.target.value)}
+                        className="w-14 text-xs rounded-lg px-2 py-1 border border-slate-200 outline-none text-center" title="Número de dado" />
+                      <button onClick={() => borrarProvincia(p)} className="text-slate-300 hover:text-rose-500 shrink-0">🗑</button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function MapaProvinciasModal({ sesion, reinos, provincias, onClose, onCambio }) {
   const [transfiriendo, setTransfiriendo] = useState(null);
   const [mejorando, setMejorando] = useState(null);
@@ -1241,6 +1382,7 @@ function TableroSesion({ sesion: sesionInicial, onVolver }) {
   const [truequesAbierto, setTruequesAbierto] = useState(false);
   const [inventarioAbierto, setInventarioAbierto] = useState(false);
   const [mapaAbierto, setMapaAbierto] = useState(false);
+  const [reajustandoAbierto, setReajustandoAbierto] = useState(false);
   const [recursosAbierto, setRecursosAbierto] = useState(false);
   const [duelosAbierto, setDuelosAbierto] = useState(false);
   const [rolesAbierto, setRolesAbierto] = useState(false);
@@ -1295,6 +1437,7 @@ function TableroSesion({ sesion: sesionInicial, onVolver }) {
         </div>
         <div className="flex gap-2">
           <button onClick={() => setMapaAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-violet-100 text-violet-700">🗺️ Ver Mapa</button>
+          <button onClick={() => setReajustandoAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-cyan-100 text-cyan-700">🛠️ Reajustar Provincias</button>
           <button onClick={() => setBancoAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-amber-100 text-amber-700">🏦 El Banco</button>
           <button onClick={() => setTruequesAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-teal-100 text-teal-700">🤝 Trueques</button>
           <button onClick={() => setInventarioAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-indigo-100 text-indigo-700">📋 Inventario</button>
@@ -1376,6 +1519,7 @@ function TableroSesion({ sesion: sesionInicial, onVolver }) {
       {truequesAbierto && <TruequesModal sesion={sesion} reinos={reinos} inventario={inventario} recursos={recursos} onClose={() => setTruequesAbierto(false)} onCambio={cargar} />}
       {inventarioAbierto && <InventarioImprimibleModal reinos={reinos} inventario={inventario} onClose={() => setInventarioAbierto(false)} />}
       {mapaAbierto && <MapaProvinciasModal sesion={sesion} reinos={reinos} provincias={provincias} onClose={() => setMapaAbierto(false)} onCambio={cargar} />}
+      {reajustandoAbierto && <ReajustarProvinciasModal sesion={sesion} reinos={reinos} provincias={provincias} onClose={() => setReajustandoAbierto(false)} onCambio={cargar} />}
       {recursosAbierto && <RecursosModal sesion={sesion} reinos={reinos} recursos={recursos} onClose={() => setRecursosAbierto(false)} onCambio={cargar} />}
       {duelosAbierto && <DuelosModal sesion={sesion} reinos={reinos} provincias={provincias} onClose={() => setDuelosAbierto(false)} onCambio={cargar} />}
       {rolesAbierto && <RolesModal sesion={sesion} reinos={reinos} onClose={() => setRolesAbierto(false)} />}
