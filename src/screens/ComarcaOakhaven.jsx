@@ -782,8 +782,12 @@ function RolesModal({ sesion, reinos, onClose }) {
   };
 
   // Agrupa a los estudiantes del curso según su Reino actual (o el
-  // original, si no tienen el actual seteado).
-  const estudiantesDe = (reino) => estudiantes.filter((e) => (e.reino_actual || e.reino_original) === reino.nombre);
+  // original, si no tienen el actual seteado) — comparación sin importar
+  // mayúsculas/minúsculas ni espacios de más, para no perder estudiantes
+  // por una diferencia mínima de escritura.
+  const normalizar = (s) => (s || "").trim().toLowerCase();
+  const estudiantesDe = (reino) => estudiantes.filter((e) => normalizar(e.reino_actual || e.reino_original) === normalizar(reino.nombre));
+  const sinReinoAsignado = estudiantes.filter((e) => !reinos.some((r) => normalizar(r.nombre) === normalizar(e.reino_actual || e.reino_original)));
   const nombreFantasiaDe = (estudianteId) => nombresTemp[estudianteId] ?? (nombresFantasia.find((n) => n.estudiante_id === estudianteId)?.nombre || "");
 
   if (cargando) return null;
@@ -803,6 +807,14 @@ function RolesModal({ sesion, reinos, onClose }) {
             <button disabled={creandoCatalogo} onClick={crearLos7EnCatalogo} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
               {creandoCatalogo ? "Creando…" : "+ Crear los que faltan"}
             </button>
+          </div>
+        )}
+
+        {sinReinoAsignado.length > 0 && (
+          <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 mb-4">
+            <p className="text-xs text-rose-700 font-semibold mb-1">⚠️ {sinReinoAsignado.length} estudiante(s) de este curso no calzan con ninguno de los Reinos de esta sesión:</p>
+            <p className="text-xs text-rose-600">{sinReinoAsignado.map((e) => `${e.nombre} (Reino: "${e.reino_actual || e.reino_original || "sin asignar"}")`).join(", ")}</p>
+            <p className="text-[11px] text-rose-500 mt-1">Revisá en Estudiantes que el nombre de su Reino sea exactamente igual al de esta sesión.</p>
           </div>
         )}
 
@@ -1068,9 +1080,21 @@ function CartaDestinoCard({ sesion, reinos, provincias, onCambio }) {
   const [descripcion, setDescripcion] = useState("");
   const [efectoTipo, setEfectoTipo] = useState("gp_todos");
   const [efectoValor, setEfectoValor] = useState(5);
+  const [cargandoSemilla, setCargandoSemilla] = useState(false);
 
   const cargar = () => api.fetchComarcaEventos().then(setEventos);
   useEffect(() => { cargar(); }, []);
+
+  const cargarSemilla = async () => {
+    setCargandoSemilla(true);
+    try {
+      await api.cargarEventosSemilla();
+      cargar();
+    } catch (e) {
+      alert("Error al cargar las cartas: " + e.message);
+    }
+    setCargandoSemilla(false);
+  };
 
   const crearEvento = async () => {
     if (!titulo.trim()) return;
@@ -1133,15 +1157,26 @@ function CartaDestinoCard({ sesion, reinos, provincias, onCambio }) {
         </div>
       )}
 
-      <div className="flex gap-2 items-center flex-wrap">
-        <select value={eventoElegidoId} onChange={(e) => setEventoElegidoId(e.target.value)} className="flex-1 min-w-[160px] text-sm rounded-lg px-3 py-2 border border-amber-200 outline-none bg-white">
-          <option value="">Elegir una carta puntual…</option>
-          {eventos.map((ev) => <option key={ev.id} value={ev.id}>{ev.titulo}</option>)}
-        </select>
-        <button disabled={aplicando || !eventoElegidoId} onClick={() => aplicar(eventos.find((e) => e.id === parseInt(eventoElegidoId, 10)))}
-          className="text-xs font-semibold px-3 py-2 rounded-lg bg-amber-500 text-white disabled:opacity-50">Aplicar esta</button>
-        <button disabled={aplicando || eventos.length === 0} onClick={sacarCarta} className="text-xs font-semibold px-3 py-2 rounded-lg bg-orange-500 text-white disabled:opacity-50">🎴 Sacar al azar</button>
-      </div>
+      {eventos.length === 0 ? (
+        <div className="bg-white/70 border border-dashed border-amber-300 rounded-xl p-3 text-center">
+          <p className="text-xs text-amber-700 mb-2">Todavía no hay ninguna carta cargada en el catálogo.</p>
+          <button disabled={cargandoSemilla} onClick={cargarSemilla} className="text-sm font-semibold px-4 py-2 rounded-lg bg-orange-500 text-white disabled:opacity-60">
+            {cargandoSemilla ? "Cargando 30 cartas…" : "🎴 Cargar 30 cartas de ejemplo"}
+          </button>
+        </div>
+      ) : (
+        <div className="flex gap-2 items-center flex-wrap">
+          <select value={eventoElegidoId} onChange={(e) => setEventoElegidoId(e.target.value)} className="flex-1 min-w-[160px] text-sm rounded-lg px-3 py-2 border border-amber-200 outline-none bg-white">
+            <option value="">Elegir una carta puntual…</option>
+            {eventos.map((ev) => <option key={ev.id} value={ev.id}>{ev.titulo}</option>)}
+          </select>
+          <button disabled={aplicando || !eventoElegidoId} onClick={() => aplicar(eventos.find((e) => e.id === parseInt(eventoElegidoId, 10)))}
+            className="text-xs font-semibold px-3 py-2 rounded-lg bg-amber-500 text-white disabled:opacity-50">Aplicar esta</button>
+          <button disabled={aplicando} onClick={sacarCarta} className="text-xs font-semibold px-3 py-2 rounded-lg bg-orange-500 text-white disabled:opacity-50">
+            {aplicando ? "Sacando…" : "🎴 Sacar al azar"}
+          </button>
+        </div>
+      )}
 
       {revelada && <CartaReveladaModal evento={revelada.evento} detalle={revelada.detalle} onClose={() => setRevelada(null)} />}
     </div>
