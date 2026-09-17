@@ -5130,6 +5130,49 @@ export async function fetchComarcaEventos() {
   return data || [];
 }
 
+// 30 cartas de ejemplo, listas para cargar desde la app con un botón —
+// no hace falta correr ningún SQL a mano.
+export const COMARCA_EVENTOS_SEMILLA = [
+  { titulo: "Peste Fiscal", descripcion: "Una epidemia de impuestos corruptos golpea a todos los Reinos por igual.", efecto_tipo: "gp_todos", efecto_valor: -5 },
+  { titulo: "Revolución de Escribas", descripcion: "El pueblo celebra la honestidad de los cronistas con una ronda de prosperidad.", efecto_tipo: "gp_todos", efecto_valor: 4 },
+  { titulo: "Bendición del Templo del Sol", descripcion: "El Templo reparte su fe pública a toda la Comarca.", efecto_tipo: "fp_todos", efecto_valor: 3 },
+  { titulo: "Motín en el Banco", descripcion: "Los prestamistas exigen el pago inmediato de deudas atrasadas.", efecto_tipo: "gp_todos", efecto_valor: -3 },
+  { titulo: "Cosecha Milagrosa", descripcion: "Una ronda extra de abundancia recorre los campos de la Comarca.", efecto_tipo: "producir_extra", efecto_valor: 0 },
+  { titulo: "Inundación del Acueducto", descripcion: "Las aguas se desbordan y anegan una provincia al azar.", efecto_tipo: "bloquear_provincia_aleatoria", efecto_valor: 0 },
+  { titulo: "Sequía Prolongada", descripcion: "El sol castiga sin piedad a una provincia, dejándola sin producir.", efecto_tipo: "bloquear_provincia_aleatoria", efecto_valor: 0 },
+  { titulo: "Botín del Explorador", descripcion: "Un Reino al azar encuentra un tesoro olvidado entre las ruinas.", efecto_tipo: "gp_aleatorio", efecto_valor: 10 },
+  { titulo: "Feria Comercial de la Comarca", descripcion: "El comercio florece esta ronda para todos los Reinos.", efecto_tipo: "gp_todos", efecto_valor: 4 },
+  { titulo: "Escándalo de Corrupción", descripcion: "Se destapa un escándalo que golpea la reputación de todos.", efecto_tipo: "fp_todos", efecto_valor: -4 },
+  { titulo: "Peregrinación de Fe", descripcion: "Cientos de fieles recorren la Comarca dejando ofrendas de estabilidad.", efecto_tipo: "fp_todos", efecto_valor: 5 },
+  { titulo: "Plaga de Langostas", descripcion: "Una plaga arrasa los campos de una provincia al azar.", efecto_tipo: "bloquear_provincia_aleatoria", efecto_valor: 0 },
+  { titulo: "El Ladrón se Retira", descripcion: "Un pacto secreto convence al Ladrón de liberar todo lo que tenía bloqueado.", efecto_tipo: "liberar_provincias", efecto_valor: 0 },
+  { titulo: "Tregua General", descripcion: "Todos los bloqueos y disputas de la ronda anterior quedan perdonados.", efecto_tipo: "liberar_provincias", efecto_valor: 0 },
+  { titulo: "Herencia Real", descripcion: "Un noble sin herederos deja su fortuna a un Reino elegido al azar.", efecto_tipo: "gp_aleatorio", efecto_valor: 15 },
+  { titulo: "Rebelión Campesina", descripcion: "El descontento popular resta estabilidad a todos los Reinos.", efecto_tipo: "fp_todos", efecto_valor: -3 },
+  { titulo: "Edicto de Clemencia", descripcion: "El Gran Canciller perdona las deudas menores de todos.", efecto_tipo: "gp_todos", efecto_valor: 3 },
+  { titulo: "Terremoto en las Ruinas", descripcion: "La tierra tiembla y bloquea una provincia al azar.", efecto_tipo: "bloquear_provincia_aleatoria", efecto_valor: 0 },
+  { titulo: "Alianza de los Mercaderes", descripcion: "Los gremios comerciales impulsan una segunda ronda de producción.", efecto_tipo: "producir_extra", efecto_valor: 0 },
+  { titulo: "Fraude en el Banco Central", descripcion: "Se descubren cuentas falsas — todos los Reinos pierden algo de oro.", efecto_tipo: "gp_todos", efecto_valor: -4 },
+  { titulo: "Festival de la Concordia", descripcion: "Una celebración conjunta sube la fe pública de todos por igual.", efecto_tipo: "fp_todos", efecto_valor: 4 },
+  { titulo: "Naufragio en el Acueducto", descripcion: "Un accidente bloquea temporalmente una provincia al azar.", efecto_tipo: "bloquear_provincia_aleatoria", efecto_valor: 0 },
+  { titulo: "Golpe de Suerte", descripcion: "La fortuna sonríe a un solo Reino, elegido por el destino.", efecto_tipo: "gp_aleatorio", efecto_valor: 8 },
+  { titulo: "Amnistía General", descripcion: "Se liberan todas las provincias bloqueadas como gesto de buena fe.", efecto_tipo: "liberar_provincias", efecto_valor: 0 },
+  { titulo: "Impuesto de Guerra", descripcion: "La amenaza de conflicto obliga a todos los Reinos a aportar oro.", efecto_tipo: "gp_todos", efecto_valor: -5 },
+  { titulo: "Lluvia de Bendiciones", descripcion: "Una señal celestial reconforta la fe pública de toda la Comarca.", efecto_tipo: "fp_todos", efecto_valor: 6 },
+  { titulo: "Doble Cosecha", descripcion: "Las condiciones perfectas permiten una ronda extra de producción.", efecto_tipo: "producir_extra", efecto_valor: 0 },
+  { titulo: "Disputa Fronteriza", descripcion: "Un conflicto menor bloquea una provincia al azar hasta que se resuelva.", efecto_tipo: "bloquear_provincia_aleatoria", efecto_valor: 0 },
+  { titulo: "El Canciller Reparte Oro", descripcion: "Como gesto de buena voluntad, el Gran Canciller reparte monedas.", efecto_tipo: "gp_todos", efecto_valor: 5 },
+  { titulo: "Rumor sin Fundamento", descripcion: "Se corre un rumor por la Comarca, pero al final no pasa nada.", efecto_tipo: "ninguno", efecto_valor: 0 },
+];
+
+export async function cargarEventosSemilla() {
+  for (const ev of COMARCA_EVENTOS_SEMILLA) {
+    const { data: existente } = await supabase.from("comarca_eventos").select("id").eq("titulo", ev.titulo).maybeSingle();
+    if (existente) continue; // no duplica si ya la habías cargado antes
+    await crearComarcaEvento(ev);
+  }
+}
+
 export async function crearComarcaEvento(campos) {
   const { data: userData } = await supabase.auth.getUser();
   const { data, error } = await supabase.from("comarca_eventos").insert({ ...campos, docente_id: userData?.user?.id || null }).select().single();
