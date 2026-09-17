@@ -4817,6 +4817,42 @@ export async function fetchReinosDelCurso(gradoId) {
   return nombres;
 }
 
+/* ==================== COMARCA — Arquetipos y materiales ==================== */
+export async function fetchComarcaArquetipos() {
+  const { data, error } = await supabase.from("comarca_arquetipos").select("*, comarca_materiales(*)").order("nombre");
+  if (error) throw error;
+  return data || [];
+}
+
+// Le asigna un arquetipo temático a un Reino de la sesión (para saber de
+// qué lista de materiales puede armar sus provincias).
+export async function asignarArquetipoAReino(reinoId, arquetipoId) {
+  const { error } = await supabase.from("comarca_reinos").update({ arquetipo_id: arquetipoId || null }).eq("id", reinoId);
+  if (error) throw error;
+}
+
+// Cambia el nombre y/o el material (recurso) de una provincia ya
+// existente — para "reajustarla" sin tener que recrear toda la sesión.
+export async function editarProvincia(provinciaId, campos) {
+  const { error } = await supabase.from("comarca_provincias").update(campos).eq("id", provinciaId);
+  if (error) throw error;
+}
+
+// Crea una provincia nueva dentro de una sesión ya fundada — para poder
+// agregar más de las 4 iniciales si un Reino quiere más materiales.
+export async function crearProvincia(sesionId, reinoId, nombre, recurso, numeroDado) {
+  const { data, error } = await supabase.from("comarca_provincias")
+    .insert({ sesion_id: sesionId, reino_original_id: reinoId, reino_actual_id: reinoId, nombre, recurso, numero_dado: numeroDado })
+    .select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function eliminarProvincia(provinciaId) {
+  const { error } = await supabase.from("comarca_provincias").delete().eq("id", provinciaId);
+  if (error) throw error;
+}
+
 // Crea una sesión nueva, con un Reino de la Comarca por cada Reino real de
 // tus estudiantes en ese curso (hasta los 6 temáticos, si hay más los usa
 // igual con emoji genérico), y sus 4 provincias cada uno.
