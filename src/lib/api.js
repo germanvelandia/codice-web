@@ -4863,26 +4863,39 @@ export async function crearSesionComarca(gradoId, titulo, nombresReinos) {
     .select().single();
   if (error) throw error;
 
+  // Reparte un arquetipo temático distinto a cada Reino (mezclados al
+  // azar), para que cada uno arranque con sus propias provincias
+  // preconfiguradas y diferenciadas — después se puede reajustar en
+  // "🛠️ Reajustar Provincias".
+  const arquetipos = await fetchComarcaArquetipos();
+  const arquetiposMezclados = [...arquetipos].sort(() => Math.random() - 0.5);
+
   const reinosAInsertar = nombresReinos.map((nombre, i) => ({
     sesion_id: sesion.id, nombre, emoji: COMARCA_REINOS_BASE[i]?.emoji || "🏰", orden: i,
+    arquetipo_id: arquetiposMezclados[i % arquetiposMezclados.length]?.id || null,
   }));
   const { data: reinos, error: e2 } = await supabase.from("comarca_reinos").insert(reinosAInsertar).select();
   if (e2) throw e2;
 
   const NUMEROS_DADO = [2, 3, 4, 5, 6, 8, 9, 10, 11, 12]; // sin el 7 — ese activa al Ladrón
   const provinciasAInsertar = [];
-  reinos.forEach((reino, i) => {
-    const recurso = COMARCA_REINOS_BASE[i]?.recursoClave || "Recursos";
-    for (let p = 1; p <= 4; p++) {
+  reinos.forEach((reino) => {
+    const arquetipo = arquetiposMezclados.find((a) => a.id === reino.arquetipo_id);
+    const materiales = arquetipo?.comarca_materiales || [];
+    // Elige 6 materiales distintos del arquetipo (o todos si tiene menos).
+    const elegidos = [...materiales].sort(() => Math.random() - 0.5).slice(0, 6);
+    elegidos.forEach((material) => {
       provinciasAInsertar.push({
-        sesion_id: sesion.id, nombre: `${reino.nombre} — Provincia ${p}`, recurso,
+        sesion_id: sesion.id, nombre: `${reino.nombre} — ${material.nombre}`, recurso: material.nombre,
         reino_original_id: reino.id, reino_actual_id: reino.id,
         numero_dado: NUMEROS_DADO[Math.floor(Math.random() * NUMEROS_DADO.length)],
       });
-    }
+    });
   });
-  const { error: e3 } = await supabase.from("comarca_provincias").insert(provinciasAInsertar);
-  if (e3) throw e3;
+  if (provinciasAInsertar.length > 0) {
+    const { error: e3 } = await supabase.from("comarca_provincias").insert(provinciasAInsertar);
+    if (e3) throw e3;
+  }
 
   return sesion;
 }
@@ -4924,6 +4937,11 @@ export async function fetchProvinciasDeSesion(sesionId) {
 
 export async function guardarImagenReino(reinoId, imagenUrl) {
   const { error } = await supabase.from("comarca_reinos").update({ imagen_url: imagenUrl }).eq("id", reinoId);
+  if (error) throw error;
+}
+
+export async function guardarEmojiReino(reinoId, emoji) {
+  const { error } = await supabase.from("comarca_reinos").update({ emoji }).eq("id", reinoId);
   if (error) throw error;
 }
 
