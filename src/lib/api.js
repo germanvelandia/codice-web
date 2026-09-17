@@ -858,6 +858,29 @@ export async function crearPlaneacion(campos) {
   return data;
 }
 
+// Crea (o reutiliza si ya existe) la sesión real de la Comarca a partir de
+// lo preparado en una Planeación, y deja el enlace guardado en la
+// planeación para la próxima vez.
+export async function iniciarComarcaDesdePlaneacion(planeacion, gradoId, reinosSeleccionados) {
+  if (planeacion.comarca_sesion_id) {
+    const existente = await fetchSesionComarca(planeacion.comarca_sesion_id);
+    if (existente) return existente;
+  }
+  const sesion = await crearSesionComarca(gradoId, planeacion.titulo, reinosSeleccionados);
+  if (planeacion.comarca_evento_id) {
+    const { data: evento } = await supabase.from("comarca_eventos").select("*").eq("id", planeacion.comarca_evento_id).single();
+    if (evento) {
+      const reinos = await fetchReinosDeSesion(sesion.id);
+      const provincias = await fetchProvinciasDeSesion(sesion.id);
+      await aplicarEventoComarca(sesion.id, evento, reinos, provincias);
+    }
+  } else if (planeacion.comarca_dilema) {
+    await guardarEventoSesion(sesion.id, planeacion.comarca_dilema);
+  }
+  await editarPlaneacion(planeacion.id, { comarca_sesion_id: sesion.id });
+  return sesion;
+}
+
 export async function editarPlaneacion(id, cambios) {
   const { error } = await supabase.from("planeaciones").update(cambios).eq("id", id);
   if (error) throw error;
