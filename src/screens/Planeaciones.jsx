@@ -783,7 +783,7 @@ function UnidadCard({ unidad, institucion, materiaNombre, materias, gradoId, gra
         </div>
       ) : (
         <>
-          {unidad.formato === "mision" && (
+          {(unidad.incluye_momentos || unidad.formato === "mision") && (
             <div className="mt-1 mb-2">
               {unidad.area && (
                 <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full mb-2"
@@ -807,6 +807,7 @@ function UnidadCard({ unidad, institucion, materiaNombre, materias, gradoId, gra
               </div>
             </div>
           )}
+          {unidad.incluye_comarca && <ComarcaEnPlaneacion unidad={unidad} />}
           {unidad.objetivo && <p className="text-xs text-slate-500 mt-1"><b>Finalidad/objetivo:</b> {unidad.objetivo}</p>}
           {unidad.contenido && <p className="text-xs text-slate-500 mt-1 whitespace-pre-line"><b>Contenidos:</b> {unidad.contenido}</p>}
           {unidad.problema_proyecto && (
@@ -988,18 +989,97 @@ function ImportarPlanIAModal({ materiaId, materias, gradoId, periodo, onCerrar, 
   );
 }
 
+function ComarcaEnPlaneacion({ unidad }) {
+  const [abriendo, setAbriendo] = useState(false);
+  const [reinosDelCurso, setReinosDelCurso] = useState([]);
+  const [seleccionados, setSeleccionados] = useState([]);
+  const [cargandoReinos, setCargandoReinos] = useState(false);
+  const [lanzando, setLanzando] = useState(false);
+
+  const empezarLanzamiento = () => {
+    setAbriendo(true);
+    setCargandoReinos(true);
+    api.fetchReinosDelCurso(unidad.grado_id).then((r) => { setReinosDelCurso(r); setSeleccionados(r); setCargandoReinos(false); });
+  };
+
+  const toggleReino = (nombre) => setSeleccionados((prev) => prev.includes(nombre) ? prev.filter((r) => r !== nombre) : [...prev, nombre]);
+
+  const lanzar = async () => {
+    if (seleccionados.length < 2) { alert("Elegí al menos 2 Reinos."); return; }
+    setLanzando(true);
+    try {
+      await api.iniciarComarcaDesdePlaneacion(unidad, unidad.grado_id, seleccionados);
+      alert("¡Listo! La sesión ya está creada — andá a la pestaña \"Comarca de Oakhaven\" para jugarla.");
+      setAbriendo(false);
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setLanzando(false);
+  };
+
+  return (
+    <div className="mt-2 mb-2 bg-gradient-to-r from-violet-50 to-fuchsia-50 border border-violet-200 rounded-xl p-3">
+      <div className="text-xs font-bold text-violet-700 mb-1.5">🏛️ Comarca de Oakhaven</div>
+      {unidad.comarca_dilema && <p className="text-xs text-slate-600 mb-1"><b>Dilema:</b> {unidad.comarca_dilema}</p>}
+      {unidad.comarca_pregunta_dilema && <p className="text-[11px] text-slate-500">1. {unidad.comarca_pregunta_dilema}</p>}
+      {unidad.comarca_pregunta_fundamentacion && <p className="text-[11px] text-slate-500">2. {unidad.comarca_pregunta_fundamentacion}</p>}
+      {unidad.comarca_pregunta_edicto && <p className="text-[11px] text-slate-500">3. {unidad.comarca_pregunta_edicto}</p>}
+
+      {unidad.comarca_sesion_id ? (
+        <p className="text-xs text-emerald-700 font-semibold mt-2">✓ Ya tiene una sesión vinculada — andá a "Comarca de Oakhaven" para continuarla.</p>
+      ) : !abriendo ? (
+        <button onClick={empezarLanzamiento} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white mt-2">🏛️ Iniciar sesión de la Comarca</button>
+      ) : (
+        <div className="mt-2">
+          {cargandoReinos ? (
+            <p className="text-xs text-slate-400">Buscando los Reinos del curso…</p>
+          ) : reinosDelCurso.length === 0 ? (
+            <p className="text-xs text-rose-500">Este curso todavía no tiene Reinos asignados a sus estudiantes.</p>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {reinosDelCurso.map((r) => (
+                  <button key={r} onClick={() => toggleReino(r)}
+                    className={`text-[11px] font-semibold px-2 py-1 rounded-full border ${seleccionados.includes(r) ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-500 border-slate-200"}`}>
+                    {seleccionados.includes(r) ? "✓ " : ""}{r}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setAbriendo(false)} className="text-xs text-slate-500">Cancelar</button>
+                <button disabled={lanzando} onClick={lanzar} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+                  {lanzando ? "Creando…" : "Fundar y vincular"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NuevaUnidadForm({ materiaId, materias, gradoId, periodo, orden, onCancelar, onCreada }) {
   const [titulo, setTitulo] = useState("");
   const [objetivo, setObjetivo] = useState("");
   const [alcance, setAlcance] = useState("grado"); // "grado" | "curso"
   const [materiasExtra, setMateriasExtra] = useState([]);
   const [guardando, setGuardando] = useState(false);
-  const [formato, setFormato] = useState("generico"); // "generico" | "mision"
+  const [incluyeMomentos, setIncluyeMomentos] = useState(false);
+  const [incluyeComarca, setIncluyeComarca] = useState(false);
   const [area, setArea] = useState("ET");
   const [momentos, setMomentos] = useState({
     ver: "", juzgar: "", actuar: "", forja: "", testimoniar: "", codice: "",
   });
   const [xp, setXp] = useState({ ver: 10, juzgar: 20, actuar: 20, forja: 50, testimoniar: 30, codice: 20 });
+  const [comarcaDilema, setComarcaDilema] = useState("");
+  const [comarcaPreguntaDilema, setComarcaPreguntaDilema] = useState("");
+  const [comarcaPreguntaFundamentacion, setComarcaPreguntaFundamentacion] = useState("");
+  const [comarcaPreguntaEdicto, setComarcaPreguntaEdicto] = useState("");
+  const [eventosComarca, setEventosComarca] = useState([]);
+  const [comarcaEventoId, setComarcaEventoId] = useState("");
+
+  useEffect(() => { if (incluyeComarca) api.fetchComarcaEventos().then(setEventosComarca); }, [incluyeComarca]);
 
   const { nivel, curso } = nivelYCurso(gradoId);
   const gradoIdAGuardar = alcance === "grado" ? nivel : gradoId;
@@ -1013,9 +1093,11 @@ function NuevaUnidadForm({ materiaId, materias, gradoId, periodo, orden, onCance
     try {
       const campos = {
         tipo: "unidad", materia_id: materiaId, materias_extra: materiasExtra, grado_id: gradoIdAGuardar, periodo,
-        titulo: titulo.trim(), objetivo: objetivo.trim() || null, orden, formato,
+        titulo: titulo.trim(), objetivo: objetivo.trim() || null, orden,
+        formato: incluyeMomentos ? "mision" : "generico", // se mantiene por compatibilidad con planeaciones viejas
+        incluye_momentos: incluyeMomentos, incluye_comarca: incluyeComarca,
       };
-      if (formato === "mision") {
+      if (incluyeMomentos) {
         Object.assign(campos, {
           area,
           momento_ver: momentos.ver.trim() || null, xp_ver: parseInt(xp.ver, 10) || 0,
@@ -1024,6 +1106,15 @@ function NuevaUnidadForm({ materiaId, materias, gradoId, periodo, orden, onCance
           momento_forja: momentos.forja.trim() || null, xp_forja: parseInt(xp.forja, 10) || 0,
           momento_testimoniar: momentos.testimoniar.trim() || null, xp_testimoniar: parseInt(xp.testimoniar, 10) || 0,
           momento_codice: momentos.codice.trim() || null, xp_codice: parseInt(xp.codice, 10) || 0,
+        });
+      }
+      if (incluyeComarca) {
+        Object.assign(campos, {
+          comarca_dilema: comarcaDilema.trim() || null,
+          comarca_pregunta_dilema: comarcaPreguntaDilema.trim() || null,
+          comarca_pregunta_fundamentacion: comarcaPreguntaFundamentacion.trim() || null,
+          comarca_pregunta_edicto: comarcaPreguntaEdicto.trim() || null,
+          comarca_evento_id: comarcaEventoId ? parseInt(comarcaEventoId, 10) : null,
         });
       }
       await api.crearPlaneacion(campos);
@@ -1045,17 +1136,24 @@ function NuevaUnidadForm({ materiaId, materias, gradoId, periodo, orden, onCance
 
   return (
     <div className="bg-violet-50 rounded-2xl p-4 mb-3">
-      <div className="flex gap-1 rounded-full bg-white p-1 w-fit border border-slate-200 mb-3">
-        <button onClick={() => setFormato("generico")} className={`text-xs px-3 py-1.5 rounded-full ${formato === "generico" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📝 Genérico</button>
-        <button onClick={() => setFormato("mision")} className={`text-xs px-3 py-1.5 rounded-full ${formato === "mision" ? "bg-violet-500 text-white" : "text-slate-600"}`}>⚔️ Misión</button>
+      <label className="text-xs text-slate-500 block mb-1">Esta clase incluye (podés marcar más de una)</label>
+      <div className="flex gap-1.5 flex-wrap mb-3">
+        <button onClick={() => setIncluyeMomentos((v) => !v)}
+          className={`text-xs px-3 py-1.5 rounded-full border ${incluyeMomentos ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>
+          {incluyeMomentos ? "✓ " : ""}⚔️ Momentos Ver-Juzgar-Actuar
+        </button>
+        <button onClick={() => setIncluyeComarca((v) => !v)}
+          className={`text-xs px-3 py-1.5 rounded-full border ${incluyeComarca ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>
+          {incluyeComarca ? "✓ " : ""}🏛️ Comarca de Oakhaven
+        </button>
       </div>
 
-      <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder={formato === "mision" ? "Nombre de la misión (ej: M01 · El Gobernante Ético)" : "Título de la unidad/tema (ej: Unidad 1 — Números racionales)"}
+      <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder={incluyeMomentos ? "Nombre de la misión (ej: M01 · El Gobernante Ético)" : "Título de la unidad/tema (ej: Unidad 1 — Números racionales)"}
         className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
       <input value={objetivo} onChange={(e) => setObjetivo(e.target.value)} placeholder="Objetivo de aprendizaje (opcional)"
         className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none bg-white" />
 
-      {formato === "mision" && (
+      {incluyeMomentos && (
         <div className="mb-3">
           <label className="text-xs text-slate-500 block mb-1">Área</label>
           <div className="flex gap-1.5 mb-3">
@@ -1080,6 +1178,30 @@ function NuevaUnidadForm({ materiaId, materias, gradoId, periodo, orden, onCance
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {incluyeComarca && (
+        <div className="mb-3 bg-white rounded-xl p-3 border border-violet-200">
+          <div className="text-xs font-bold text-violet-700 mb-2">🏛️ Preparación de la Comarca de Oakhaven</div>
+          <label className="text-[10px] text-slate-500 block mb-1">El dilema/tema que vas a plantear (se guarda como Carta de Destino inicial si no elegís una del catálogo)</label>
+          <textarea value={comarcaDilema} onChange={(e) => setComarcaDilema(e.target.value)} rows={2}
+            placeholder="Ej: El Acueducto Común se está secando — solo hay agua para 4 de los 6 Reinos este mes."
+            className="w-full text-xs rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none" />
+
+          <label className="text-[10px] text-slate-500 block mb-1">O elegí una carta puntual del catálogo (opcional)</label>
+          <select value={comarcaEventoId} onChange={(e) => setComarcaEventoId(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1.5 mb-3 border border-slate-200 outline-none bg-white">
+            <option value="">Usar el dilema de arriba</option>
+            {eventosComarca.map((ev) => <option key={ev.id} value={ev.id}>{ev.titulo}</option>)}
+          </select>
+
+          <div className="text-[10px] text-slate-500 font-semibold mb-1">Preguntas de la Cara B (el entregable de La Forja)</div>
+          <input value={comarcaPreguntaDilema} onChange={(e) => setComarcaPreguntaDilema(e.target.value)} placeholder="Pregunta 1 — El Dilema"
+            className="w-full text-xs rounded-lg px-2 py-1.5 mb-1.5 border border-slate-200 outline-none" />
+          <input value={comarcaPreguntaFundamentacion} onChange={(e) => setComarcaPreguntaFundamentacion(e.target.value)} placeholder="Pregunta 2 — Fundamentación"
+            className="w-full text-xs rounded-lg px-2 py-1.5 mb-1.5 border border-slate-200 outline-none" />
+          <input value={comarcaPreguntaEdicto} onChange={(e) => setComarcaPreguntaEdicto(e.target.value)} placeholder="Pregunta 3 — Edicto de Concordia"
+            className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
         </div>
       )}
 
@@ -1114,7 +1236,7 @@ function NuevaUnidadForm({ materiaId, materias, gradoId, periodo, orden, onCance
       <div className="flex justify-end gap-2">
         <button onClick={onCancelar} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
         <button disabled={guardando} onClick={guardar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
-          {guardando ? "Guardando…" : formato === "mision" ? "Crear misión" : "Crear unidad"}
+          {guardando ? "Guardando…" : "Crear planeación"}
         </button>
       </div>
     </div>
