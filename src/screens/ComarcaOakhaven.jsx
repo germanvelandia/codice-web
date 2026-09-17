@@ -2045,6 +2045,23 @@ export function VistaComarcaOakhaven({ grados, gradoActivo }) {
         </button>
       </div>
 
+      {!cargando && (
+        <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 my-3">
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">✅ Checklist — ¿qué cursos ya tienen su Comarca?</div>
+          <div className="flex flex-wrap gap-1.5">
+            {grados.map((g) => {
+              const activa = sesiones.find((s) => String(s.grado_id) === String(g.id) && s.estado === "activa");
+              return (
+                <button key={g.id} onClick={() => activa && setSesionAbierta(activa)}
+                  className={`text-xs font-semibold px-2.5 py-1.5 rounded-full ${activa ? "bg-emerald-100 text-emerald-700" : "bg-white text-slate-400 border border-dashed border-slate-300"}`}>
+                  {activa ? "✅" : "⬜"} Curso {g.id}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {creandoAbierto && (
         <div className="bg-violet-50 rounded-2xl p-4 my-4">
           <label className="text-xs text-slate-500 block mb-1">Curso</label>
