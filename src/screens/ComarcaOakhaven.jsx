@@ -1279,6 +1279,72 @@ function textoDeEfecto(evento, detalle) {
   }
 }
 
+function DadoReveladoModal({ resultado, reinos, onClose }) {
+  const { dado, provinciaBloqueada, detalleProduccion } = resultado;
+  const esLadron = dado === 7;
+
+  // Agrupa la producción por Reino, para mostrar "Zafiro recibió: 2 Oro, 1 Trigo".
+  const porReino = {};
+  (detalleProduccion || []).forEach((d) => {
+    if (!porReino[d.reinoId]) porReino[d.reinoId] = [];
+    porReino[d.reinoId].push(d);
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.7)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="rounded-3xl shadow-2xl overflow-hidden w-full max-w-sm"
+        style={{ background: esLadron ? "linear-gradient(160deg, #7f1d1d 0%, #450a0a 100%)" : "linear-gradient(160deg, #1e3a8a 0%, #172554 100%)", border: `3px solid ${esLadron ? "#F87171" : "#60A5FA"}` }}>
+        <div className="p-6 text-center">
+          <div className="text-[11px] font-bold text-white/70 uppercase tracking-[0.2em] mb-3">🎲 Resultado del Dado</div>
+          <div className="flex justify-center gap-2 mb-3">
+            <div className="w-16 h-16 rounded-xl bg-white text-slate-800 text-3xl font-bold flex items-center justify-center shadow-lg">{dado}</div>
+          </div>
+
+          {esLadron ? (
+            <>
+              <div className="text-5xl mb-2">🔒</div>
+              <h2 className="text-xl font-bold text-white mb-2">¡Salió el Ladrón!</h2>
+              {provinciaBloqueada ? (
+                <p className="text-sm text-rose-100">Bloqueó: <b>{provinciaBloqueada.nombre.split("— ")[1] || provinciaBloqueada.nombre}</b> — no va a producir hasta el próximo 7.</p>
+              ) : (
+                <p className="text-sm text-rose-100">No había ninguna provincia libre para bloquear.</p>
+              )}
+            </>
+          ) : Object.keys(porReino).length === 0 ? (
+            <>
+              <div className="text-5xl mb-2">🌾</div>
+              <h2 className="text-xl font-bold text-white mb-2">Ninguna provincia produjo</h2>
+              <p className="text-sm text-blue-100">Ningún Reino tiene una provincia con el número {dado} en este momento.</p>
+            </>
+          ) : (
+            <>
+              <div className="text-5xl mb-3">🌾</div>
+              <h2 className="text-lg font-bold text-white mb-3">¡Producción!</h2>
+              <div className="space-y-2 text-left">
+                {Object.entries(porReino).map(([reinoId, items]) => {
+                  const reino = reinos.find((r) => String(r.id) === String(reinoId));
+                  return (
+                    <div key={reinoId} className="bg-white/10 rounded-xl p-2.5">
+                      <div className="text-sm font-bold text-white mb-1">{reino?.emoji} {reino?.nombre}</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {items.map((it, i) => (
+                          <span key={i} className="text-[11px] bg-white/15 text-blue-50 px-2 py-0.5 rounded-full">{iconoDeMaterial(it.recurso)} +{it.cantidad} {it.recurso}</span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          <button onClick={onClose} className="text-sm font-semibold px-6 py-2.5 rounded-xl bg-white text-slate-800 mt-5">Continuar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CartaReveladaModal({ evento, detalle, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.7)" }} onClick={onClose}>
@@ -1458,9 +1524,9 @@ function TableroSesion({ sesion: sesionInicial, onVolver }) {
     setTirandoDado(true);
     try {
       const { dado, provinciaBloqueada } = await api.tirarDado(sesion.id, provincias);
-      let produjeron = 0;
-      if (dado !== 7) produjeron = await api.producirPorDado(sesion.id, dado, provincias);
-      setResultadoDado({ dado, provinciaBloqueada, produjeron });
+      let detalleProduccion = [];
+      if (dado !== 7) detalleProduccion = await api.producirPorDado(sesion.id, dado, provincias);
+      setResultadoDado({ dado, provinciaBloqueada, detalleProduccion });
       setSesion((prev) => ({ ...prev, ultimo_dado: dado }));
       cargar();
     } catch (e) {
@@ -1515,11 +1581,6 @@ function TableroSesion({ sesion: sesionInicial, onVolver }) {
           {sesion.ultimo_dado ? (
             <div className="text-sm text-slate-600">
               Último resultado: <span className="text-2xl font-bold text-indigo-700">{sesion.ultimo_dado}</span>
-              {sesion.ultimo_dado === 7 ? (
-                <span className="text-rose-600 font-semibold"> — ¡Salió el Ladrón! Bloqueó una provincia.</span>
-              ) : resultadoDado && (
-                <span className="text-slate-500"> — produjeron {resultadoDado.produjeron} provincia(s).</span>
-              )}
             </div>
           ) : (
             <p className="text-xs text-slate-400">Todavía no se tiró el dado en esta sesión.</p>
@@ -1529,6 +1590,8 @@ function TableroSesion({ sesion: sesionInicial, onVolver }) {
           {tirandoDado ? "Tirando…" : "🎲 Tirar el Dado"}
         </button>
       </div>
+
+      {resultadoDado && <DadoReveladoModal resultado={resultadoDado} reinos={reinos} onClose={() => setResultadoDado(null)} />}
 
       {/* Carta de Destino actual */}
       <CartaDestinoCard sesion={sesion} reinos={reinos} provincias={provincias} onCambio={cargar} />
