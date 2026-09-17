@@ -4917,6 +4917,52 @@ export async function fetchSesionActivaDelGrado(gradoId) {
   return data;
 }
 
+/* ==================== COMARCA — Misiones Secretas ==================== */
+export async function fetchMisionesCatalogo() {
+  const { data, error } = await supabase.from("comarca_misiones_catalogo").select("*").eq("activo", true).order("id");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearMisionCatalogo(texto) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("comarca_misiones_catalogo").insert({ texto, docente_id: userData?.user?.id || null });
+  if (error) throw error;
+}
+
+export async function eliminarMisionCatalogo(id) {
+  const { error } = await supabase.from("comarca_misiones_catalogo").update({ activo: false }).eq("id", id);
+  if (error) throw error;
+}
+
+export async function fetchMisionesDeSesion(sesionId) {
+  const { data, error } = await supabase.from("comarca_misiones_asignadas").select("*").eq("sesion_id", sesionId).order("id");
+  if (error) throw error;
+  return data || [];
+}
+
+// Le reparte 10 misiones al azar del catálogo a cada Reino (borra las que
+// ya tuviera asignadas antes, para poder repetir el sorteo).
+export async function repartirMisionesSecretas(sesionId, reinos, cantidadPorReino = 10) {
+  const catalogo = await fetchMisionesCatalogo();
+  if (catalogo.length === 0) throw new Error("Todavía no hay ninguna misión en el catálogo.");
+
+  await supabase.from("comarca_misiones_asignadas").delete().eq("sesion_id", sesionId);
+
+  const filas = [];
+  reinos.forEach((reino) => {
+    const mezcladas = [...catalogo].sort(() => Math.random() - 0.5).slice(0, cantidadPorReino);
+    mezcladas.forEach((m) => filas.push({ sesion_id: sesionId, reino_id: reino.id, texto: m.texto }));
+  });
+  const { error } = await supabase.from("comarca_misiones_asignadas").insert(filas);
+  if (error) throw error;
+}
+
+export async function marcarMisionCumplida(misionId, cumplida) {
+  const { error } = await supabase.from("comarca_misiones_asignadas").update({ cumplida }).eq("id", misionId);
+  if (error) throw error;
+}
+
 export async function fetchSesionComarca(sesionId) {
   const { data, error } = await supabase.from("comarca_sesiones").select("*").eq("id", sesionId).single();
   if (error) throw error;
