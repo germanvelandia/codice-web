@@ -732,6 +732,7 @@ function RolesModal({ sesion, reinos, onClose }) {
   const [guardandoNombreId, setGuardandoNombreId] = useState(null);
   const [recienGuardadoNombreId, setRecienGuardadoNombreId] = useState(null);
   const [editandoRolDe, setEditandoRolDe] = useState(null);
+  const [reinoActivoId, setReinoActivoId] = useState(reinos[0]?.id || null);
 
   const cargar = () => {
     return Promise.all([api.fetchEstudiantesPorGrado(sesion.grado_id), api.fetchRoles(), api.fetchNombresFantasiaDeSesion(sesion.id)]).then(([est, roles, fantasia]) => {
@@ -819,9 +820,22 @@ function RolesModal({ sesion, reinos, onClose }) {
           </div>
         )}
 
-        <div className="space-y-4">
+        {/* Pestañas por Reino */}
+        <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1">
           {reinos.map((reino) => (
-            <div key={reino.id} className="border border-slate-100 rounded-xl p-3">
+            <button key={reino.id} onClick={() => setReinoActivoId(reino.id)}
+              className="text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap shrink-0"
+              style={{ background: reinoActivoId === reino.id ? "#8B5CF6" : "#F1F5F9", color: reinoActivoId === reino.id ? "#FFFFFF" : "#475569" }}>
+              {reino.emoji} {reino.nombre} <span className="opacity-70">({estudiantesDe(reino).length})</span>
+            </button>
+          ))}
+        </div>
+
+        {(() => {
+          const reino = reinos.find((r) => r.id === reinoActivoId) || reinos[0];
+          if (!reino) return null;
+          return (
+            <div className="border border-slate-100 rounded-xl p-3">
               <div className="font-bold text-slate-800 text-sm mb-2">{reino.emoji} {reino.nombre}</div>
               {estudiantesDe(reino).length === 0 ? (
                 <p className="text-xs text-slate-400">Ningún estudiante de este curso tiene este Reino asignado.</p>
@@ -886,8 +900,8 @@ function RolesModal({ sesion, reinos, onClose }) {
                 </div>
               )}
             </div>
-          ))}
-        </div>
+          );
+        })()}
       </div>
     </div>
   );
