@@ -828,7 +828,7 @@ function RolesModal({ sesion, reinos, onClose }) {
               ) : (
                 <div className="space-y-2">
                   {estudiantesDe(reino).map((est) => {
-                    const rolActualId = est.roles_asignados?.[0]?.rol_id || "";
+                    const rolActualId = est.roles_asignados?.[0]?.rol_id || est.roles_asignados?.rol_id || "";
                     const rolActual = catalogoRoles.find((r) => r.id === rolActualId);
                     const infoComarcaActual = rolActual ? api.COMARCA_ROLES.find((rc) => rc.nombre === rolActual.nombre) : null;
                     const editando = editandoRolDe === est.id;
@@ -989,7 +989,7 @@ function QRModal({ sesion, reinos, onClose }) {
 
   const reinoDe = (est) => reinos.find((r) => r.nombre === (est.reino_actual || est.reino_original));
   const rolDe = (est) => {
-    const rolId = est.roles_asignados?.[0]?.rol_id;
+    const rolId = est.roles_asignados?.[0]?.rol_id || est.roles_asignados?.rol_id;
     if (!rolId) return null;
     const catalogado = catalogoRoles.find((r) => r.id === rolId);
     return catalogado ? { ...catalogado, info: api.COMARCA_ROLES.find((rc) => rc.nombre === catalogado.nombre) } : null;
@@ -1400,7 +1400,7 @@ export function TarjetaComarcaPublica() {
 
   const miDato = datos?.estudiantesDelReino?.find((e) => String(e.id) === String(estudianteId));
   const miNombre = nombresFantasia.find((n) => String(n.estudiante_id) === String(estudianteId))?.nombre || miDato?.nombre;
-  const miRolNombre = miDato?.roles_asignados?.[0]?.roles_clase?.nombre;
+  const miRolNombre = miDato?.roles_asignados?.[0]?.roles_clase?.nombre || miDato?.roles_asignados?.roles_clase?.nombre;
   const miRolInfo = miRolNombre ? api.COMARCA_ROLES.find((r) => r.nombre === miRolNombre) : null;
 
   const enviarTrueque = async () => {
