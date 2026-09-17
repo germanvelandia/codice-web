@@ -312,7 +312,7 @@ const ESTADOS_DICTADO = [
   { key: "aplazada", label: "Aplazada", color: "#EF4444" },
 ];
 
-function DictadoControl({ claseId, grados }) {
+function DictadoControl({ claseId, grados, unidad }) {
   const [dictados, setDictados] = useState([]);
   const [agregando, setAgregando] = useState(false);
   const [gradoId, setGradoId] = useState("");
@@ -320,6 +320,33 @@ function DictadoControl({ claseId, grados }) {
   const [estado, setEstado] = useState("dictada");
   const [observacionAbiertaDe, setObservacionAbiertaDe] = useState(null);
   const [observacionTemp, setObservacionTemp] = useState({});
+  const [comarcaAbiertaDe, setComarcaAbiertaDe] = useState(null);
+  const [reinosDelCurso, setReinosDelCurso] = useState([]);
+  const [seleccionados, setSeleccionados] = useState([]);
+  const [cargandoReinos, setCargandoReinos] = useState(false);
+  const [lanzando, setLanzando] = useState(false);
+
+  const abrirComarcaDe = (dictado) => {
+    setComarcaAbiertaDe(dictado.id);
+    setCargandoReinos(true);
+    api.fetchReinosDelCurso(dictado.grado_id).then((r) => { setReinosDelCurso(r); setSeleccionados(r); setCargandoReinos(false); });
+  };
+
+  const toggleReino = (nombre) => setSeleccionados((prev) => prev.includes(nombre) ? prev.filter((r) => r !== nombre) : [...prev, nombre]);
+
+  const lanzarComarca = async (dictado) => {
+    if (seleccionados.length < 2) { alert("Elegí al menos 2 Reinos."); return; }
+    setLanzando(true);
+    try {
+      await api.iniciarComarcaDesdePlaneacion(unidad, dictado, seleccionados);
+      alert("¡Listo! La sesión ya está creada — andá a la pestaña \"Comarca de Oakhaven\" para jugarla.");
+      setComarcaAbiertaDe(null);
+      cargar();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setLanzando(false);
+  };
 
   const cargar = () => api.fetchDictados(claseId).then(setDictados);
   useEffect(() => { cargar(); }, [claseId]);
@@ -366,8 +393,41 @@ function DictadoControl({ claseId, grados }) {
                   <button onClick={() => setObservacionAbiertaDe(observacionAbiertaDe === d.id ? null : d.id)} className="text-[10px] text-violet-500 shrink-0">
                     {d.observacion ? "📝 Ver nota" : "+ Nota"}
                   </button>
+                  {unidad?.incluye_comarca && (
+                    d.comarca_sesion_id ? (
+                      <span className="text-[10px] text-emerald-600 font-semibold shrink-0">✓ 🏛️ Comarca vinculada</span>
+                    ) : (
+                      <button onClick={() => abrirComarcaDe(d)} className="text-[10px] text-violet-500 shrink-0">🏛️ Iniciar Comarca</button>
+                    )
+                  )}
                   <button onClick={() => quitar(d.id)} className="text-slate-300 hover:text-rose-500 ml-auto shrink-0">✕</button>
                 </div>
+                {comarcaAbiertaDe === d.id && (
+                  <div className="mt-1.5 bg-violet-50 rounded-lg p-2">
+                    {cargandoReinos ? (
+                      <p className="text-[11px] text-slate-400">Buscando los Reinos de este curso…</p>
+                    ) : reinosDelCurso.length === 0 ? (
+                      <p className="text-[11px] text-rose-500">Este curso todavía no tiene Reinos asignados a sus estudiantes.</p>
+                    ) : (
+                      <>
+                        <div className="flex flex-wrap gap-1.5 mb-2">
+                          {reinosDelCurso.map((r) => (
+                            <button key={r} onClick={() => toggleReino(r)}
+                              className={`text-[10px] font-semibold px-2 py-1 rounded-full border ${seleccionados.includes(r) ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-500 border-slate-200"}`}>
+                              {seleccionados.includes(r) ? "✓ " : ""}{r}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => setComarcaAbiertaDe(null)} className="text-[11px] text-slate-500">Cancelar</button>
+                          <button disabled={lanzando} onClick={() => lanzarComarca(d)} className="text-[11px] font-semibold px-2 py-1 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+                            {lanzando ? "Creando…" : "Fundar y vincular"}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
                 {observacionAbiertaDe === d.id && (
                   <div className="mt-1 flex gap-1.5">
                     <textarea value={observacionTemp[d.id] ?? d.observacion ?? ""} onChange={(e) => setObservacionTemp((prev) => ({ ...prev, [d.id]: e.target.value }))}
@@ -403,7 +463,7 @@ function DictadoControl({ claseId, grados }) {
   );
 }
 
-function ClasesLista({ unidadId, grados }) {
+function ClasesLista({ unidad, unidadId, grados }) {
   const [clases, setClases] = useState([]);
   const [agregando, setAgregando] = useState(false);
   const [editandoId, setEditandoId] = useState(null);
@@ -529,7 +589,7 @@ function ClasesLista({ unidadId, grados }) {
                 <SelectorEstandares planeacionId={c.id} tipo="competencia" />
               </div>
               <RecursosLista planeacionId={c.id} />
-              <DictadoControl claseId={c.id} grados={grados} />
+              <DictadoControl claseId={c.id} grados={grados} unidad={unidad} />
             </div>
           ))}
         </div>
@@ -826,7 +886,7 @@ function UnidadCard({ unidad, institucion, materiaNombre, materias, gradoId, gra
             <SelectorEstandares planeacionId={unidad.id} tipo="competencia" />
           </div>
           <RecursosLista planeacionId={unidad.id} />
-          <ClasesLista unidadId={unidad.id} grados={grados} />
+          <ClasesLista unidad={unidad} unidadId={unidad.id} grados={grados} />
           <TareasLista planeacionId={unidad.id} />
         </div>
       )}
@@ -990,33 +1050,6 @@ function ImportarPlanIAModal({ materiaId, materias, gradoId, periodo, onCerrar, 
 }
 
 function ComarcaEnPlaneacion({ unidad }) {
-  const [abriendo, setAbriendo] = useState(false);
-  const [reinosDelCurso, setReinosDelCurso] = useState([]);
-  const [seleccionados, setSeleccionados] = useState([]);
-  const [cargandoReinos, setCargandoReinos] = useState(false);
-  const [lanzando, setLanzando] = useState(false);
-
-  const empezarLanzamiento = () => {
-    setAbriendo(true);
-    setCargandoReinos(true);
-    api.fetchReinosDelCurso(unidad.grado_id).then((r) => { setReinosDelCurso(r); setSeleccionados(r); setCargandoReinos(false); });
-  };
-
-  const toggleReino = (nombre) => setSeleccionados((prev) => prev.includes(nombre) ? prev.filter((r) => r !== nombre) : [...prev, nombre]);
-
-  const lanzar = async () => {
-    if (seleccionados.length < 2) { alert("Elegí al menos 2 Reinos."); return; }
-    setLanzando(true);
-    try {
-      await api.iniciarComarcaDesdePlaneacion(unidad, unidad.grado_id, seleccionados);
-      alert("¡Listo! La sesión ya está creada — andá a la pestaña \"Comarca de Oakhaven\" para jugarla.");
-      setAbriendo(false);
-    } catch (e) {
-      alert("Error: " + e.message);
-    }
-    setLanzando(false);
-  };
-
   return (
     <div className="mt-2 mb-2 bg-gradient-to-r from-violet-50 to-fuchsia-50 border border-violet-200 rounded-xl p-3">
       <div className="text-xs font-bold text-violet-700 mb-1.5">🏛️ Comarca de Oakhaven</div>
@@ -1024,37 +1057,7 @@ function ComarcaEnPlaneacion({ unidad }) {
       {unidad.comarca_pregunta_dilema && <p className="text-[11px] text-slate-500">1. {unidad.comarca_pregunta_dilema}</p>}
       {unidad.comarca_pregunta_fundamentacion && <p className="text-[11px] text-slate-500">2. {unidad.comarca_pregunta_fundamentacion}</p>}
       {unidad.comarca_pregunta_edicto && <p className="text-[11px] text-slate-500">3. {unidad.comarca_pregunta_edicto}</p>}
-
-      {unidad.comarca_sesion_id ? (
-        <p className="text-xs text-emerald-700 font-semibold mt-2">✓ Ya tiene una sesión vinculada — andá a "Comarca de Oakhaven" para continuarla.</p>
-      ) : !abriendo ? (
-        <button onClick={empezarLanzamiento} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white mt-2">🏛️ Iniciar sesión de la Comarca</button>
-      ) : (
-        <div className="mt-2">
-          {cargandoReinos ? (
-            <p className="text-xs text-slate-400">Buscando los Reinos del curso…</p>
-          ) : reinosDelCurso.length === 0 ? (
-            <p className="text-xs text-rose-500">Este curso todavía no tiene Reinos asignados a sus estudiantes.</p>
-          ) : (
-            <>
-              <div className="flex flex-wrap gap-1.5 mb-2">
-                {reinosDelCurso.map((r) => (
-                  <button key={r} onClick={() => toggleReino(r)}
-                    className={`text-[11px] font-semibold px-2 py-1 rounded-full border ${seleccionados.includes(r) ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-500 border-slate-200"}`}>
-                    {seleccionados.includes(r) ? "✓ " : ""}{r}
-                  </button>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => setAbriendo(false)} className="text-xs text-slate-500">Cancelar</button>
-                <button disabled={lanzando} onClick={lanzar} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
-                  {lanzando ? "Creando…" : "Fundar y vincular"}
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      )}
+      <p className="text-[11px] text-violet-500 mt-1.5">Para iniciar la sesión real, usá el botón "🏛️" junto al curso, en el Control por curso de abajo.</p>
     </div>
   );
 }
