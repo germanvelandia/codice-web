@@ -316,6 +316,23 @@ export async function crearActa(estudianteId, campos) {
   if (error) throw error;
 }
 
+// Crea la MISMA acta (mismo contenido) para varios estudiantes de una
+// sola vez — por ejemplo, una reunión de padres donde cada uno firma su
+// propia copia. Todas quedan agrupadas con el mismo reunion_lote_id.
+export async function crearActasEnLote(estudianteIds, camposComunes) {
+  const { data: userData } = await supabase.auth.getUser();
+  const loteId = crypto.randomUUID();
+  const filas = estudianteIds.map((estudianteId) => ({
+    estudiante_id: estudianteId,
+    registrado_por: userData?.user?.id || null,
+    reunion_lote_id: loteId,
+    ...camposComunes,
+  }));
+  const { data, error } = await supabase.from("actas").insert(filas).select();
+  if (error) throw error;
+  return data;
+}
+
 export async function eliminarActa(id) {
   const { error } = await supabase.from("actas").delete().eq("id", id);
   if (error) throw error;
