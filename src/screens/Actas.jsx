@@ -306,8 +306,9 @@ function ActaInstitucionalPrintView({ estudiante, acta, institucion, ultimaPagin
   );
 }
 
-export function GenerarActaMultipleModal({ gradoId, onClose }) {
-  const [estudiantes, setEstudiantes] = useState([]);
+export function GenerarActaMultipleModal({ gradoId, grados = [], onClose }) {
+  const [cursosSeleccionados, setCursosSeleccionados] = useState([gradoId]);
+  const [estudiantesPorCurso, setEstudiantesPorCurso] = useState({}); // { gradoId: [estudiantes] }
   const [seleccionados, setSeleccionados] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [institucion, setInstitucion] = useState({ nombre: "Institución Educativa" });
@@ -327,10 +328,34 @@ export function GenerarActaMultipleModal({ gradoId, onClose }) {
   const [elaboradoPor, setElaboradoPor] = useState("");
   const [proximaReunion, setProximaReunion] = useState("");
 
+  useEffect(() => { api.fetchInstitucion().then(setInstitucion); }, []);
+
+  // Trae los estudiantes de cada curso elegido — solo pide los que
+  // todavía no tiene en caché, para no repetir consultas al agregar más.
   useEffect(() => {
-    api.fetchEstudiantesPorGrado(gradoId).then((est) => { setEstudiantes(est); setCargando(false); });
-    api.fetchInstitucion().then(setInstitucion);
-  }, [gradoId]);
+    const faltantes = cursosSeleccionados.filter((id) => !estudiantesPorCurso[id]);
+    if (faltantes.length === 0) { setCargando(false); return; }
+    setCargando(true);
+    Promise.all(faltantes.map((id) => api.fetchEstudiantesPorGrado(id).then((est) => [id, est])))
+      .then((pares) => {
+        setEstudiantesPorCurso((prev) => { const next = { ...prev }; pares.forEach(([id, est]) => { next[id] = est; }); return next; });
+        setCargando(false);
+      });
+  }, [cursosSeleccionados]);
+
+  const toggleCurso = (id) => {
+    setCursosSeleccionados((prev) => {
+      if (prev.includes(id)) {
+        // Al quitar un curso, también se destildan sus estudiantes elegidos.
+        const idsDeEseCurso = new Set((estudiantesPorCurso[id] || []).map((e) => e.id));
+        setSeleccionados((s) => s.filter((eid) => !idsDeEseCurso.has(eid)));
+        return prev.filter((x) => x !== id);
+      }
+      return [...prev, id];
+    });
+  };
+
+  const estudiantes = cursosSeleccionados.flatMap((id) => (estudiantesPorCurso[id] || []).map((e) => ({ ...e, __curso: id })));
 
   useEffect(() => {
     if (!actasParaImprimir) return;
@@ -411,6 +436,20 @@ export function GenerarActaMultipleModal({ gradoId, onClose }) {
           </div>
         </div>
 
+        {grados.length > 1 && (
+          <div className="mb-3">
+            <label className="text-xs font-semibold text-slate-600 block mb-1.5">Cursos a citar (podés sumar más de uno)</label>
+            <div className="flex flex-wrap gap-1.5">
+              {grados.map((g) => (
+                <button key={g.id} onClick={() => toggleCurso(g.id)}
+                  className={`text-xs font-semibold px-2.5 py-1.5 rounded-full border ${cursosSeleccionados.includes(g.id) ? "bg-indigo-500 text-white border-indigo-500" : "bg-white text-slate-500 border-slate-200"}`}>
+                  {cursosSeleccionados.includes(g.id) ? "✓ " : ""}Curso {g.id}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="flex justify-between items-center mb-2">
           <label className="text-xs font-semibold text-slate-600">¿A qué estudiantes citás? ({seleccionados.length} elegido{seleccionados.length !== 1 && "s"})</label>
           <button onClick={marcarTodos} className="text-xs text-violet-500">{seleccionados.length === estudiantes.length ? "Ninguno" : "Todos"}</button>
@@ -418,13 +457,24 @@ export function GenerarActaMultipleModal({ gradoId, onClose }) {
         {cargando ? (
           <p className="text-xs text-slate-400">Cargando estudiantes…</p>
         ) : (
-          <div className="flex flex-wrap gap-1.5 mb-4 max-h-40 overflow-y-auto">
-            {estudiantes.map((e) => (
-              <button key={e.id} onClick={() => toggleEstudiante(e.id)}
-                className={`text-xs px-2.5 py-1.5 rounded-full border ${seleccionados.includes(e.id) ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-500 border-slate-200"}`}>
-                {seleccionados.includes(e.id) ? "✓ " : ""}{e.nombre}
-              </button>
-            ))}
+          <div className="mb-4 max-h-52 overflow-y-auto space-y-3">
+            {cursosSeleccionados.map((cursoId) => {
+              const estDelCurso = estudiantesPorCurso[cursoId] || [];
+              if (estDelCurso.length === 0) return null;
+              return (
+                <div key={cursoId}>
+                  {grados.length > 1 && <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Curso {cursoId}</div>}
+                  <div className="flex flex-wrap gap-1.5">
+                    {estDelCurso.map((e) => (
+                      <button key={e.id} onClick={() => toggleEstudiante(e.id)}
+                        className={`text-xs px-2.5 py-1.5 rounded-full border ${seleccionados.includes(e.id) ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-500 border-slate-200"}`}>
+                        {seleccionados.includes(e.id) ? "✓ " : ""}{e.nombre}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
