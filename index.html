@@ -1,100 +1,13 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-html, body, #root {
-  height: 100%;
-}
-
-.print-only {
-  display: none;
-}
-
-@media print {
-  @page {
-    /* Sin "size" fijo — así el diálogo de impresión del navegador
-       controla Vertical/Horizontal libremente (con "size: letter" solo,
-       CSS ya fuerza vertical por spec, así que hay que omitirlo del todo). */
-    margin: 18mm 16mm 22mm 16mm;
-  }
-
-  html, body {
-    height: auto;
-  }
-
-  /* display:none libera el espacio que ocupaba el resto de la app —
-     con solo visibility:hidden ese espacio quedaba reservado y empujaba
-     el acta hacia abajo, generando hojas en blanco de más. */
-  body > *:not(.print-only) {
-    display: none !important;
-  }
-
-  .print-only {
-    display: block !important;
-    position: static;
-    width: auto;
-    margin: 0;
-  }
-  .print-only * {
-    visibility: visible;
-  }
-
-  /* Pie de página repetido en cada hoja impresa, alineado abajo a la izquierda */
-  .print-footer {
-    display: block !important;
-    visibility: visible;
-    position: fixed;
-    left: 16mm;
-    bottom: 8mm;
-    font-size: 9px;
-    color: #64748b;
-    font-family: Georgia, "Times New Roman", serif;
-  }
-
-  /* El Acta de Reunión arma su propia paginación a mano en JavaScript
-     (un encabezado por cada página calculada, en el flujo normal) — por
-     eso el encabezado va SIN position:fixed. Usar fixed acá chocaba con
-     esa paginación manual en Safari (los dos intentaban "repetir" el
-     encabezado al mismo tiempo, por caminos distintos, y quedaba
-     superpuesto). En flujo normal, cada copia del encabezado ya cae
-     exactamente donde la puso el cálculo en JS.
-  */
-  .print-header {
-    display: block !important;
-    visibility: visible;
-  }
-
-  .print-avoid-break {
-    break-inside: avoid;
-    page-break-inside: avoid;
-  }
-
-  /* Hoja(s) marcadas con esta clase salen en horizontal fijo, sin
-     depender del diálogo del navegador — se sigue pudiendo usar aparte. */
-  @page hoja-horizontal {
-    size: letter landscape;
-    margin: 14mm 16mm;
-  }
-  .print-horizontal {
-    page: hoja-horizontal;
-  }
-
-  /* El Acta de Reunión SIEMPRE sale en vertical — su paginación (dónde
-     repetir el encabezado) está calibrada asumiendo hoja carta vertical,
-     así que no puede depender de lo que elija el diálogo de impresión. */
-  @page hoja-vertical-forzada {
-    size: letter portrait;
-    margin: 18mm 16mm 22mm 16mm;
-  }
-  .print-vertical-forzado {
-    page: hoja-vertical-forzada;
-  }
-}
-
-/* Placeholder para el editor de texto enriquecido (contentEditable no soporta
-   el atributo placeholder nativo como los input/textarea) */
-.rich-text-editable:empty::before {
-  content: attr(data-placeholder);
-  color: #94a3b8;
-  pointer-events: none;
-}
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CÓDICE</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
