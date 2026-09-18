@@ -293,7 +293,6 @@ function ActaInstitucionalPrintView({ estudiante, acta, institucion, ultimaPagin
       {paginas.map((bloquesDePagina, idxPagina) => (
         <div key={idxPagina} className="print-avoid-break" style={{ pageBreakAfter: idxPagina === paginas.length - 1 && ultimaPagina ? "auto" : "always" }}>
           <EncabezadoInstitucional a={actaConEstudiante} />
-          <div className="print-header-espaciador" />
           <CuerpoActaInterno
             agendaItems={bloquesDePagina.some((b) => b.tipo === "agenda") ? agendaItems : []}
             desarrolloParrafos={bloquesDePagina.filter((b) => b.tipo === "parrafo").map((b) => desarrolloParrafos[b.i])}
