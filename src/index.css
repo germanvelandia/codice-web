@@ -72,3 +72,30 @@ html, body, #root {
   color: #94a3b8;
   pointer-events: none;
 }
+/* Estilos para que las Actas (y cualquier otra vista de impresión)
+   se vean bien tanto en pantalla como al imprimir. */
+
+/* En pantalla normal: el contenido de impresión queda oculto */
+.print-only {
+  display: none;
+}
+
+/* Al imprimir: se oculta todo lo demás, y se muestra SOLO el contenido de impresión */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-only, .print-only * {
+    visibility: visible;
+  }
+  .print-only {
+    display: block !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
