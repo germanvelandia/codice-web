@@ -2111,7 +2111,7 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
       {observadoresGradoAbierto && (
         <ObservadorPorGradoModal gradoId={gradoId} onClose={() => setObservadoresGradoAbierto(false)} />
       )}
-      {actaMultipleAbierta && <GenerarActaMultipleModal gradoId={gradoId} onClose={() => setActaMultipleAbierta(false)} />}
+      {actaMultipleAbierta && <GenerarActaMultipleModal gradoId={gradoId} grados={grados} onClose={() => setActaMultipleAbierta(false)} />}
 
       <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar estudiante…"
         className="w-full max-w-sm text-sm rounded-full px-4 py-2 border border-slate-200 outline-none mb-4" />
