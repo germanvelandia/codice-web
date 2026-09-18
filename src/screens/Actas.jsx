@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import * as api from "../lib/api";
 import { FALTAS_MANUAL, NIVELACION_COMPROMISOS_DEFAULT } from "../lib/actasTemplates";
+import { LOGO_ALCALDIA_BOGOTA } from "../lib/logoAlcaldiaBogota";
 
 function hoyISO() {
   return new Date().toISOString().slice(0, 10);
@@ -134,8 +135,8 @@ function EncabezadoInstitucional({ institucion, a }) {
       <tr>
         <td colSpan={8} style={{ border: "1px solid #000", padding: 0 }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}><tbody><tr>
-            <td style={{ width: 90, padding: 6, borderRight: "1px solid #000", textAlign: "center", verticalAlign: "middle" }}>
-              {institucion?.logo_url && <img src={institucion.logo_url} alt="Logo" style={{ maxWidth: 78, maxHeight: 60 }} />}
+            <td style={{ width: 100, padding: 6, borderRight: "1px solid #000", textAlign: "center", verticalAlign: "middle" }}>
+              <img src={LOGO_ALCALDIA_BOGOTA} alt="Alcaldía Mayor de Bogotá D.C. — Secretaría de Educación" style={{ maxWidth: 88, maxHeight: 72 }} />
             </td>
             <td style={{ padding: 6, textAlign: "center", verticalAlign: "middle" }}>
               <div style={{ fontWeight: "bold", fontSize: 18, fontFamily: "Arial, sans-serif" }}>ACTA DE REUNIÓN</div>
@@ -173,11 +174,12 @@ function ActaInstitucionalPrintView({ estudiante, acta, institucion, ultimaPagin
   const actaConEstudiante = { ...a, asistentes: a.asistentes ? `${a.asistentes} — Acudiente de ${estudiante.nombre} (${estudiante.grado_id})` : `Acudiente de ${estudiante.nombre} (${estudiante.grado_id})` };
 
   return (
-    <div className="print-only print-avoid-break" style={{ maxWidth: 760, margin: "0 auto", fontFamily: "Arial, sans-serif", color: "#000", pageBreakAfter: ultimaPagina ? "auto" : "always" }}>
+    <div className="print-only print-avoid-break" style={{ maxWidth: 700, margin: "0 auto", padding: "0 14px", fontFamily: "Arial, sans-serif", color: "#000", pageBreakAfter: ultimaPagina ? "auto" : "always" }}>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <EncabezadoInstitucional institucion={institucion} a={actaConEstudiante} />
         <tbody>
-          <tr><td colSpan={8} style={{ border: "1px solid #000", borderTop: "none", padding: "10px 10px 4px" }}>
+          <tr><td colSpan={8} style={{ border: "none", padding: "10px 0 0" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}><tbody><tr><td style={{ border: "1px solid #000", padding: "10px 10px 4px" }}>
             <div style={{ fontWeight: "bold", fontSize: 11.5, marginBottom: 4 }}>AGENDA DE LA REUNIÓN</div>
             {agendaItems.length > 0 ? (
               <ol style={{ margin: "0 0 10px 18px", padding: 0, fontSize: 10.5 }}>
@@ -203,6 +205,7 @@ function ActaInstitucionalPrintView({ estudiante, acta, institucion, ultimaPagin
             </tbody></table>
 
             <div style={{ fontSize: 10.5 }}>En constancia se firma a satisfacción de todos los presentes.</div>
+          </td></tr></tbody></table>
           </td></tr>
         </tbody>
       </table>
