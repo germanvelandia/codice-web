@@ -12,7 +12,9 @@ html, body, #root {
 
 @media print {
   @page {
-    size: letter portrait;
+    /* Sin "size" fijo — así el diálogo de impresión del navegador
+       controla Vertical/Horizontal libremente (con "size: letter" solo,
+       CSS ya fuerza vertical por spec, así que hay que omitirlo del todo). */
     margin: 18mm 16mm 22mm 16mm;
   }
 
@@ -54,8 +56,8 @@ html, body, #root {
     page-break-inside: avoid;
   }
 
-  /* Hoja(s) marcadas con esta clase salen en horizontal, sin afectar
-     el resto del documento (que sigue en vertical). */
+  /* Hoja(s) marcadas con esta clase salen en horizontal fijo, sin
+     depender del diálogo del navegador — se sigue pudiendo usar aparte. */
   @page hoja-horizontal {
     size: letter landscape;
     margin: 14mm 16mm;
