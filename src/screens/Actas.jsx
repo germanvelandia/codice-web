@@ -119,92 +119,94 @@ export function ActasModal({ estudiante, onClose }) {
   );
 }
 
-function celdaTh({ children, width }) {
-  return <td style={{ border: "1px solid #000", padding: "4px 6px", fontWeight: "bold", fontSize: 11, width, verticalAlign: "top", background: "#F1F1F1" }}>{children}</td>;
+function celdaTh({ children, width, colSpan }) {
+  return <td colSpan={colSpan} style={{ border: "1px solid #000", padding: "3px 6px", fontWeight: "bold", fontSize: 10.5, width, whiteSpace: "nowrap", verticalAlign: "middle", fontFamily: "Arial, sans-serif" }}>{children}</td>;
 }
 function celdaTd({ children, colSpan }) {
-  return <td colSpan={colSpan} style={{ border: "1px solid #000", padding: "4px 6px", fontSize: 11, verticalAlign: "top" }}>{children}</td>;
+  return <td colSpan={colSpan} style={{ border: "1px solid #000", padding: "3px 6px", fontSize: 10.5, verticalAlign: "middle", fontFamily: "Arial, sans-serif" }}>{children}</td>;
 }
 
-function ActaInstitucionalPrintView({ estudiante, acta, institucion, ultimaPagina = true, numeroPagina = 1, totalPaginas = 1 }) {
+// Encabezado institucional — repite en cada hoja si el contenido ocupa
+// más de una página (por eso va dentro de <thead>).
+function EncabezadoInstitucional({ institucion, a }) {
+  return (
+    <thead>
+      <tr>
+        <td colSpan={8} style={{ border: "1px solid #000", padding: 0 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}><tbody><tr>
+            <td style={{ width: 90, padding: 6, borderRight: "1px solid #000", textAlign: "center", verticalAlign: "middle" }}>
+              {institucion?.logo_url && <img src={institucion.logo_url} alt="Logo" style={{ maxWidth: 78, maxHeight: 60 }} />}
+            </td>
+            <td style={{ padding: 6, textAlign: "center", verticalAlign: "middle" }}>
+              <div style={{ fontWeight: "bold", fontSize: 18, fontFamily: "Arial, sans-serif" }}>ACTA DE REUNIÓN</div>
+            </td>
+          </tr></tbody></table>
+        </td>
+      </tr>
+      <tr>
+        {celdaTh({ children: "Fecha", width: 70 })}{celdaTd({ children: a.fecha })}
+        {celdaTh({ children: "Inicio", width: 55 })}{celdaTd({ children: a.hora_inicio || "—" })}
+        {celdaTh({ children: "Fin", width: 45 })}{celdaTd({ children: a.hora_fin || "—" })}
+        {celdaTh({ children: "Lugar", width: 55 })}{celdaTd({ children: a.lugar || "—" })}
+      </tr>
+      <tr>
+        {celdaTh({ children: "Asunto" })}{celdaTd({ children: a.asunto || a.motivo, colSpan: 7 })}
+      </tr>
+      <tr>
+        {celdaTh({ children: "Asistentes" })}{celdaTd({ children: a.asistentes || "—", colSpan: 3 })}
+        {celdaTh({ children: "Asistentes Externos", colSpan: 2 })}{celdaTd({ children: a.asistentes_externos || "—", colSpan: 2 })}
+      </tr>
+      <tr>
+        {celdaTh({ children: "Fecha de Elaboración", colSpan: 2 })}{celdaTd({ children: a.fecha })}
+        {celdaTh({ children: "Elaborado por" })}{celdaTd({ children: a.elaborado_por || (a.profesores?.nombre ?? "—"), colSpan: 2 })}
+        {celdaTh({ children: "Próxima Reunión" })}{celdaTd({ children: a.proxima_reunion || "—" })}
+      </tr>
+    </thead>
+  );
+}
+
+function ActaInstitucionalPrintView({ estudiante, acta, institucion, ultimaPagina = true }) {
   const a = acta;
   const agendaItems = (a.agenda || "").split("\n").filter((l) => l.trim());
+  // El campo "Asistentes" es el único lugar donde aparece el estudiante —
+  // no se agrega ninguna fila nueva a la tabla institucional.
+  const actaConEstudiante = { ...a, asistentes: a.asistentes ? `${a.asistentes} — Acudiente de ${estudiante.nombre} (${estudiante.grado_id})` : `Acudiente de ${estudiante.nombre} (${estudiante.grado_id})` };
+
   return (
-    <div className="print-only" style={{ maxWidth: 760, margin: "0 auto", padding: 28, fontFamily: "Calibri, Arial, sans-serif", color: "#000", pageBreakAfter: ultimaPagina ? "auto" : "always" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 6 }}>
+    <div className="print-only print-avoid-break" style={{ maxWidth: 760, margin: "0 auto", fontFamily: "Arial, sans-serif", color: "#000", pageBreakAfter: ultimaPagina ? "auto" : "always" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <EncabezadoInstitucional institucion={institucion} a={actaConEstudiante} />
         <tbody>
-          <tr><td style={{ border: "1px solid #000", padding: "6px 8px", textAlign: "center", fontWeight: "bold", fontSize: 15 }}>ACTA DE REUNIÓN</td></tr>
-        </tbody>
-      </table>
-
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 0 }}>
-        <tbody>
-          <tr>
-            {celdaTh({ children: "Fecha" })}{celdaTd({ children: a.fecha })}
-            {celdaTh({ children: "Inicio" })}{celdaTd({ children: a.hora_inicio || "—" })}
-            {celdaTh({ children: "Fin" })}{celdaTd({ children: a.hora_fin || "—" })}
-          </tr>
-          <tr>
-            {celdaTh({ children: "Lugar" })}{celdaTd({ children: a.lugar || "—", colSpan: 5 })}
-          </tr>
-          <tr>
-            {celdaTh({ children: "Asunto" })}{celdaTd({ children: a.asunto || a.motivo, colSpan: 5 })}
-          </tr>
-          <tr>
-            {celdaTh({ children: "Estudiante" })}{celdaTd({ children: estudiante.nombre, colSpan: 3 })}
-            {celdaTh({ children: "Grado" })}{celdaTd({ children: estudiante.grado_id })}
-          </tr>
-          <tr>
-            {celdaTh({ children: "Asistentes" })}{celdaTd({ children: a.asistentes || "—", colSpan: 3 })}
-            {celdaTh({ children: "Asist. Externos" })}{celdaTd({ children: a.asistentes_externos || "—" })}
-          </tr>
-          <tr>
-            {celdaTh({ children: "Fecha de Elaboración" })}{celdaTd({ children: a.fecha })}
-            {celdaTh({ children: "Elaborado por" })}{celdaTd({ children: a.elaborado_por || (a.profesores?.nombre ?? "—"), colSpan: 2 })}
-          </tr>
-          {a.proxima_reunion && (
-            <tr>
-              {celdaTh({ children: "Próxima Reunión" })}{celdaTd({ children: a.proxima_reunion, colSpan: 5 })}
-            </tr>
-          )}
-        </tbody>
-      </table>
-
-      <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 0 }}>
-        <tbody>
-          <tr><td style={{ border: "1px solid #000", padding: "6px 8px" }}>
-            <div style={{ fontWeight: "bold", fontSize: 12, marginBottom: 4 }}>AGENDA DE LA REUNIÓN</div>
+          <tr><td colSpan={8} style={{ border: "1px solid #000", borderTop: "none", padding: "10px 10px 4px" }}>
+            <div style={{ fontWeight: "bold", fontSize: 11.5, marginBottom: 4 }}>AGENDA DE LA REUNIÓN</div>
             {agendaItems.length > 0 ? (
-              <ol style={{ margin: "0 0 10px 18px", padding: 0, fontSize: 11 }}>
+              <ol style={{ margin: "0 0 10px 18px", padding: 0, fontSize: 10.5 }}>
                 {agendaItems.map((it, i) => <li key={i} style={{ marginBottom: 2 }}>{it}</li>)}
               </ol>
-            ) : <div style={{ fontSize: 11, marginBottom: 10 }}>—</div>}
+            ) : <div style={{ fontSize: 10.5, marginBottom: 10 }}>—</div>}
 
-            <div style={{ fontWeight: "bold", fontSize: 12, marginBottom: 4 }}>DESARROLLO DE LA AGENDA</div>
-            <div style={{ fontSize: 11, marginBottom: 10, whiteSpace: "pre-wrap" }}>{a.desarrollo_agenda || a.descripcion || "—"}</div>
+            <div style={{ fontWeight: "bold", fontSize: 11.5, marginBottom: 4 }}>DESARROLLO DE LA AGENDA</div>
+            <div style={{ fontSize: 10.5, marginBottom: 10, whiteSpace: "pre-wrap" }}>{a.desarrollo_agenda || a.descripcion || "—"}</div>
 
-            <div style={{ fontWeight: "bold", fontSize: 12, marginBottom: 4 }}>COMPROMISOS ADQUIRIDOS</div>
-            <div style={{ fontSize: 11, whiteSpace: "pre-wrap" }}>{a.compromisos || a.compromisos_academicos || a.compromisos_convivenciales || "—"}</div>
+            <div style={{ borderTop: "1px dashed #000", margin: "10px 0" }} />
+
+            <div style={{ fontWeight: "bold", fontSize: 11.5, marginBottom: 4 }}>COMPROMISOS ADQUIRIDOS</div>
+            <div style={{ fontSize: 10.5, marginBottom: 16, whiteSpace: "pre-wrap" }}>{a.compromisos || a.compromisos_academicos || a.compromisos_convivenciales || "—"}</div>
+
+            <table style={{ width: 320, margin: "0 auto 14px", borderCollapse: "collapse" }}><tbody>
+              <tr><td style={{ border: "1px solid #000", padding: "8px 14px" }}>
+                <div style={{ fontWeight: "bold", fontSize: 11.5, textAlign: "center", marginBottom: 14 }}>REVISÓ Y APROBÓ</div>
+                <div style={{ fontSize: 10.5, marginBottom: 18 }}>NOMBRE: __________________________</div>
+                <div style={{ fontSize: 10.5, marginBottom: 18 }}>CARGO: ___________________________</div>
+                <div style={{ fontSize: 10.5 }}>FIRMA: ___________________________</div>
+              </td></tr>
+            </tbody></table>
+
+            <div style={{ fontSize: 10.5 }}>En constancia se firma a satisfacción de todos los presentes.</div>
           </td></tr>
         </tbody>
       </table>
-
-      <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 0 }}>
-        <tbody>
-          <tr><td style={{ border: "1px solid #000", borderTop: "none", padding: "10px 8px" }}>
-            <div style={{ fontWeight: "bold", fontSize: 12, textAlign: "center", marginBottom: 30 }}>REVISÓ Y APROBÓ</div>
-            <div style={{ fontSize: 12, marginBottom: 22 }}>NOMBRE: _______________________________ (Acudiente de {estudiante.nombre})</div>
-            <div style={{ fontSize: 12, marginBottom: 22 }}>CARGO: ________________________________</div>
-            <div style={{ fontSize: 12, marginBottom: 10 }}>FIRMA: ________________________________</div>
-            <div style={{ fontSize: 11, textAlign: "center", marginTop: 20 }}>En constancia se firma a satisfacción de todos los presentes.</div>
-          </td></tr>
-        </tbody>
-      </table>
-
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "#444", marginTop: 10 }}>
-        <span>Página {numeroPagina} de {totalPaginas}</span>
-        <span>21-IF-001 · V.1</span>
-      </div>
+      <div className="print-footer">21-IF-001 · V.1</div>
     </div>
   );
 }
@@ -273,7 +275,7 @@ export function GenerarActaMultipleModal({ gradoId, onClose }) {
       <>
         {actasParaImprimir.map((par, i) => (
           <ActaInstitucionalPrintView key={par.acta.id} estudiante={par.estudiante} acta={par.acta} institucion={institucion}
-            numeroPagina={i + 1} totalPaginas={actasParaImprimir.length} ultimaPagina={i === actasParaImprimir.length - 1} />
+            ultimaPagina={i === actasParaImprimir.length - 1} />
         ))}
       </>,
       document.body
