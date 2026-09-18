@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import * as api from "../lib/api";
 import { FALTAS_MANUAL, NIVELACION_COMPROMISOS_DEFAULT } from "../lib/actasTemplates";
 
@@ -108,10 +109,11 @@ export function ActasModal({ estudiante, onClose }) {
         )}
       </div>
 
-      {actaImprimir && (
+      {actaImprimir && createPortal(
         actaImprimir.tipo === "Reunión de Padres"
           ? <ActaInstitucionalPrintView estudiante={estudiante} acta={actaImprimir} institucion={institucion} />
-          : <ActaPrintView estudiante={estudiante} acta={actaImprimir} institucion={institucion} />
+          : <ActaPrintView estudiante={estudiante} acta={actaImprimir} institucion={institucion} />,
+        document.body
       )}
     </div>
   );
@@ -267,13 +269,14 @@ export function GenerarActaMultipleModal({ gradoId, onClose }) {
   };
 
   if (actasParaImprimir) {
-    return (
-      <div>
+    return createPortal(
+      <>
         {actasParaImprimir.map((par, i) => (
           <ActaInstitucionalPrintView key={par.acta.id} estudiante={par.estudiante} acta={par.acta} institucion={institucion}
             numeroPagina={i + 1} totalPaginas={actasParaImprimir.length} ultimaPagina={i === actasParaImprimir.length - 1} />
         ))}
-      </div>
+      </>,
+      document.body
     );
   }
 
