@@ -1813,7 +1813,7 @@ function PortalEstudiante() {
   const [error, setError] = useState("");
   const [vista, setVista] = useState("inicio");
   const [grupoAbierto, setGrupoAbierto] = useState(null);
-  const irAEstudiante = (key) => { setVista(key); setGrupoAbierto(null); };
+  const irAEstudiante = (key) => { setVista(key); };
   const [nuevosLogros, setNuevosLogros] = useState([]);
   const [equipados, setEquipados] = useState({ marco: null, titulo: null });
   const [avatarConfig, setAvatarConfig] = useState(null);
@@ -2321,7 +2321,13 @@ function Panel({ session }) {
     } catch { return porDefecto; }
   };
   const [tab, setTab] = useState(() => leerGuardado("tab", "inicio"));
-  const [grupoAbierto, setGrupoAbierto] = useState(null);
+  const [grupoAbierto, setGrupoAbierto] = useState(() => {
+    const guardado = leerGuardado("grupoAbierto", undefined);
+    if (guardado !== undefined) return guardado;
+    const tabInicial = leerGuardado("tab", "inicio");
+    if (tabInicial === "inicio") return null;
+    return MENU_PANEL_GRUPOS.find((g) => g.key !== "inicio_grupo" && g.items.some((it) => it.key === tabInicial))?.key || null;
+  });
   const [subTabHerramientas, setSubTabHerramientas] = useState(() => leerGuardado("subTabHerramientas", "ruleta"));
   const [grado, setGrado] = useState(null);
   const [gradoActivo, setGradoActivo] = useState(() => leerGuardado("gradoActivo", null));
@@ -2339,6 +2345,7 @@ function Panel({ session }) {
   // Cada vez que cambia alguno de estos, se guarda solo — así la próxima
   // recarga arranca justo donde quedaste.
   useEffect(() => { localStorage.setItem("codice_tab", JSON.stringify(tab)); }, [tab]);
+  useEffect(() => { localStorage.setItem("codice_grupoAbierto", JSON.stringify(grupoAbierto)); }, [grupoAbierto]);
   useEffect(() => { localStorage.setItem("codice_subTabHerramientas", JSON.stringify(subTabHerramientas)); }, [subTabHerramientas]);
   useEffect(() => { if (gradoActivo !== null) localStorage.setItem("codice_gradoActivo", JSON.stringify(gradoActivo)); }, [gradoActivo]);
   useEffect(() => { localStorage.setItem("codice_periodoActivo", JSON.stringify(periodoActivo)); }, [periodoActivo]);
@@ -2365,7 +2372,6 @@ function Panel({ session }) {
 
   const irA = (key) => {
     setTab(key);
-    setGrupoAbierto(null);
     if (key === "estudiantes") { setGrado(null); setReino(null); setModoLista(false); }
   };
 
