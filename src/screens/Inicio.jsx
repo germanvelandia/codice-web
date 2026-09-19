@@ -220,7 +220,7 @@ function ReflexionesSinRevisarModal({ onClose }) {
   );
 }
 
-export function VistaInicio({ onIrA }) {
+export function VistaInicio({ onIrA, soloEncabezado, accionSuperior }) {
   const [stats, setStats] = useState(null);
   const [resumen, setResumen] = useState(null);
   const [cargando, setCargando] = useState(true);
@@ -286,6 +286,7 @@ export function VistaInicio({ onIrA }) {
       {/* Banner de bienvenida */}
       <div className="rounded-2xl overflow-hidden mb-4" style={{ background: "linear-gradient(135deg, #2d2450 0%, #1e1b30 60%, #14101f 100%)", border: "1px solid #7c3aed55" }}>
         <div className="p-6">
+          {accionSuperior}
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
               <div className="text-violet-200 text-sm">¡Bienvenido de vuelta{nombreDocente ? `, ${nombreDocente}` : ""}!</div>
@@ -321,6 +322,8 @@ export function VistaInicio({ onIrA }) {
 
       <ValorSemanaCard />
 
+      {!soloEncabezado && (
+      <>
       {/* Resumen del día */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
@@ -397,6 +400,8 @@ export function VistaInicio({ onIrA }) {
           )}
         </div>
       </div>
+      </>
+      )}
 
       {codiceAbierto && <ReflexionesSinRevisarModal onClose={() => setCodiceAbierto(false)} />}
     </div>
