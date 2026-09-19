@@ -116,6 +116,17 @@ function TarjetaMenu({ Icono, colores, label, onClick }) {
    grupoAbierto/onCambiarGrupo se manejan afuera para que el padre pueda
    mostrar el grupo abierto como una pantalla propia, sin mezclarlo con
    el resto del contenido de Inicio. */
+// Para usar como accionSuperior de VistaInicio — el link para volver al
+// primer nivel de secciones, ubicado junto a la fecha / Valor de la Semana.
+export function EnlaceTodasLasSecciones({ onCambiarGrupo, variante = "oscura" }) {
+  const estilos = variante === "oscura" ? "text-violet-200 hover:text-white" : "text-violet-500 hover:text-violet-700";
+  return (
+    <button onClick={() => onCambiarGrupo(null)} className={`flex items-center gap-1 text-xs font-semibold mb-2 ${estilos}`}>
+      <ChevronLeft size={14} /> Todas las secciones
+    </button>
+  );
+}
+
 export function NavegacionPorTarjetas({ grupos, onIr, grupoAbierto, onCambiarGrupo }) {
   // Grupos con un solo elemento van directo como tarjeta (sin nivel intermedio).
   const gruposVisibles = grupos.filter((g) => g.key !== "inicio_grupo");
@@ -126,9 +137,6 @@ export function NavegacionPorTarjetas({ grupos, onIr, grupoAbierto, onCambiarGru
     if (!grupo) return null;
     return (
       <div>
-        <button onClick={() => onCambiarGrupo(null)} className="flex items-center gap-1 text-xs font-semibold text-violet-500 mb-3">
-          <ChevronLeft size={14} /> Todas las secciones
-        </button>
         <h2 className="text-lg font-bold text-slate-800 mb-4">{grupo.icono} {grupo.label}</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {grupo.items.map((it, i) => (
