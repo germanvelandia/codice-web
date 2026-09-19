@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import * as XLSX from "xlsx";
 import * as api from "../lib/api";
 
@@ -795,6 +796,256 @@ function JuegoCrucigrama({ items, onTerminar }) {
   );
 }
 
+/* ==================== IMPRESIÓN — versiones en papel de cada formato ==================== */
+function EncabezadoImpresion({ titulo, subtitulo }) {
+  return (
+    <div style={{ textAlign: "center", marginBottom: 16 }}>
+      <div style={{ fontWeight: "bold", fontSize: 18 }}>{titulo}</div>
+      {subtitulo && <div style={{ fontSize: 11, color: "#64748b" }}>{subtitulo}</div>}
+      <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 6 }}>Nombre: _______________________________  Fecha: ____________</div>
+    </div>
+  );
+}
+
+function ImprimirCrucigrama({ setTitulo, items, conRespuestas }) {
+  const datos = generarCrucigrama(items);
+  if (!datos) return <p>No se pudo generar el crucigrama para imprimir.</p>;
+  const { filas, cols, colocadas } = datos;
+  const celdaLetra = {};
+  colocadas.forEach((p) => { for (let i = 0; i < p.palabra.length; i++) { const f = p.dir === "V" ? p.fila + i : p.fila; const c = p.dir === "H" ? p.col + i : p.col; celdaLetra[`${f},${c}`] = p.palabra[i]; } });
+  const numeroEnCelda = {}; colocadas.forEach((p) => { numeroEnCelda[`${p.fila},${p.col}`] = p.numero; });
+  const horizontales = colocadas.filter((p) => p.dir === "H").sort((a, b) => a.numero - b.numero);
+  const verticales = colocadas.filter((p) => p.dir === "V").sort((a, b) => a.numero - b.numero);
+
+  return (
+    <div>
+      <EncabezadoImpresion titulo={`Crucigrama — ${setTitulo}`} subtitulo={conRespuestas ? "Hoja de respuestas" : null} />
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+        <div>
+          {Array.from({ length: filas }, (_, f) => (
+            <div key={f} style={{ display: "flex" }}>
+              {Array.from({ length: cols }, (_, c) => {
+                const key = `${f},${c}`;
+                const tieneLetra = celdaLetra[key] !== undefined;
+                if (!tieneLetra) return <div key={c} style={{ width: 22, height: 22 }} />;
+                return (
+                  <div key={c} style={{ position: "relative", width: 22, height: 22, border: "1px solid #333", fontSize: 11, textAlign: "center", lineHeight: "22px", fontWeight: "bold" }}>
+                    {numeroEnCelda[key] && <span style={{ position: "absolute", top: -1, left: 1, fontSize: 6, fontWeight: "normal" }}>{numeroEnCelda[key]}</span>}
+                    {conRespuestas ? celdaLetra[key] : ""}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 24, fontSize: 11 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: "bold", marginBottom: 4 }}>HORIZONTALES</div>
+          {horizontales.map((p) => <div key={p.numero} style={{ marginBottom: 2 }}>{p.numero}. {p.definicion}</div>)}
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: "bold", marginBottom: 4 }}>VERTICALES</div>
+          {verticales.map((p) => <div key={p.numero} style={{ marginBottom: 2 }}>{p.numero}. {p.definicion}</div>)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ImprimirSopaDeLetras({ setTitulo, items, conRespuestas }) {
+  const { grid, colocadas } = generarSopaDeLetras(items.slice(0, 8).map((it) => it.termino));
+  const celdasResaltadas = conRespuestas ? colocadas.flatMap((p) => p.celdas) : [];
+  return (
+    <div>
+      <EncabezadoImpresion titulo={`Sopa de Letras — ${setTitulo}`} subtitulo={conRespuestas ? "Hoja de respuestas" : null} />
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+        <div>
+          {grid.map((fila, f) => (
+            <div key={f} style={{ display: "flex" }}>
+              {fila.map((letra, c) => {
+                const resaltada = celdasResaltadas.some(([ff, cc]) => ff === f && cc === c);
+                return <div key={c} style={{ width: 18, height: 18, border: "1px solid #ddd", fontSize: 10, textAlign: "center", lineHeight: "18px", fontWeight: "bold", background: resaltada ? "#e9d5ff" : "white" }}>{letra}</div>;
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, fontSize: 11, justifyContent: "center" }}>
+        {colocadas.map((p) => <span key={p.palabra} style={{ border: "1px solid #ccc", borderRadius: 12, padding: "2px 8px" }}>{p.palabra}</span>)}
+      </div>
+    </div>
+  );
+}
+
+function ImprimirQuiz({ setTitulo, items, conRespuestas }) {
+  const preguntas = barajar(items).map((it) => {
+    const distractores = barajar(items.filter((x) => x.id !== it.id)).slice(0, 3).map((x) => x.termino);
+    return { ...it, opciones: barajar([it.termino, ...distractores]) };
+  });
+  const LETRAS = ["A", "B", "C", "D"];
+  return (
+    <div>
+      <EncabezadoImpresion titulo={`Concurso de Preguntas — ${setTitulo}`} subtitulo={conRespuestas ? "Hoja de respuestas" : null} />
+      {preguntas.map((p, i) => (
+        <div key={p.id} style={{ marginBottom: 12, fontSize: 12 }}>
+          <div style={{ fontWeight: "bold", marginBottom: 3 }}>{i + 1}. {p.definicion}</div>
+          {p.opciones.map((op, j) => (
+            <div key={j} style={{ marginLeft: 14, color: conRespuestas && op === p.termino ? "#059669" : "#000", fontWeight: conRespuestas && op === p.termino ? "bold" : "normal" }}>
+              {conRespuestas && op === p.termino ? "✓ " : "○ "}{LETRAS[j]}) {op}
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ImprimirEmparejar({ setTitulo, items, conRespuestas }) {
+  const seleccion = items.slice(0, 10);
+  const izquierda = seleccion.map((it, i) => ({ ...it, letra: String.fromCharCode(65 + i) }));
+  const derecha = barajar(seleccion.map((it, i) => ({ ...it, numero: i + 1 })));
+  return (
+    <div>
+      <EncabezadoImpresion titulo={`Emparejar — ${setTitulo}`} subtitulo={conRespuestas ? "Hoja de respuestas" : "Uní cada término con su definición"} />
+      <div style={{ display: "flex", gap: 30, fontSize: 12 }}>
+        <div style={{ flex: 1 }}>
+          {izquierda.map((it) => <div key={it.id} style={{ marginBottom: 10 }}><b>{it.letra}.</b> {it.termino}</div>)}
+        </div>
+        <div style={{ flex: 1 }}>
+          {derecha.map((it) => <div key={it.id} style={{ marginBottom: 10 }}><b>{it.numero}.</b> {it.definicion}</div>)}
+        </div>
+      </div>
+      {conRespuestas && (
+        <div style={{ marginTop: 16, fontSize: 11, borderTop: "1px dashed #999", paddingTop: 8 }}>
+          <b>Respuestas:</b> {izquierda.map((it) => `${it.letra}-${derecha.find((d) => d.id === it.id).numero}`).join(", ")}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ImprimirOrdenarPalabras({ setTitulo, items, conRespuestas }) {
+  const seleccion = items.slice(0, 10);
+  return (
+    <div>
+      <EncabezadoImpresion titulo={`Ordenar Palabras — ${setTitulo}`} subtitulo={conRespuestas ? "Hoja de respuestas" : "Ordená las letras según la pista"} />
+      {seleccion.map((it, i) => {
+        const desordenadas = desordenar(it.termino).map((l) => l).join(" ");
+        return (
+          <div key={it.id} style={{ marginBottom: 10, fontSize: 12 }}>
+            <div>{i + 1}. <b style={{ letterSpacing: 2 }}>{desordenadas}</b> — <i>{it.definicion}</i></div>
+            <div style={{ borderBottom: "1px solid #999", width: 220, marginTop: 4, minHeight: 16 }}>{conRespuestas ? it.termino.toUpperCase() : ""}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ImprimirAhorcado({ setTitulo, items, conRespuestas }) {
+  const seleccion = items.slice(0, 10);
+  return (
+    <div>
+      <EncabezadoImpresion titulo={`Completar la Palabra — ${setTitulo}`} subtitulo={conRespuestas ? "Hoja de respuestas" : "Completá cada palabra según la pista"} />
+      {seleccion.map((it, i) => (
+        <div key={it.id} style={{ marginBottom: 12, fontSize: 12 }}>
+          <div style={{ marginBottom: 3 }}>{i + 1}. <i>{it.definicion}</i></div>
+          <div style={{ letterSpacing: 6, fontWeight: "bold" }}>
+            {normalizarPalabra(it.termino).split("").map((l, j) => <span key={j} style={{ display: "inline-block", width: 14, borderBottom: "1px solid #333", textAlign: "center" }}>{conRespuestas ? l : ""}</span>)}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ImprimirListaRepaso({ setTitulo, items, formatoLabel }) {
+  return (
+    <div>
+      <EncabezadoImpresion titulo={`${formatoLabel} — ${setTitulo}`} subtitulo="Lista de repaso (para leer en clase)" />
+      <ol style={{ fontSize: 12, paddingLeft: 18 }}>
+        {items.map((it) => (
+          <li key={it.id} style={{ marginBottom: 6 }}><b>{it.definicion}</b> → {it.termino}</li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+export function ImprimirSetModal({ set, onClose }) {
+  const [items, setItems] = useState(null);
+  const [formato, setFormato] = useState(null);
+  const [conRespuestas, setConRespuestas] = useState(false);
+  const [listoParaImprimir, setListoParaImprimir] = useState(false);
+
+  useEffect(() => { api.fetchItemsDeSet(set.id).then(setItems); }, [set]);
+
+  useEffect(() => {
+    if (!listoParaImprimir) return;
+    const id = setTimeout(() => window.print(), 200);
+    const onAfter = () => setListoParaImprimir(false);
+    window.addEventListener("afterprint", onAfter);
+    return () => { clearTimeout(id); window.removeEventListener("afterprint", onAfter); };
+  }, [listoParaImprimir]);
+
+  const FORMATOS_IMPRIMIBLES = [
+    { key: "crucigrama", label: "🧩 Crucigrama", min: 4 },
+    { key: "sopa", label: "🔍 Sopa de letras", min: 3 },
+    { key: "quiz", label: "📝 Concurso de preguntas", min: 4 },
+    { key: "emparejar", label: "🔗 Emparejar", min: 3 },
+    { key: "ordenar", label: "🔤 Ordenar palabras", min: 1 },
+    { key: "ahorcado", label: "🎯 Completar la palabra", min: 1 },
+    { key: "rueda", label: "🎡 Lista de repaso (Rueda)", min: 1 },
+    { key: "abrecajas", label: "📦 Lista de repaso (Abrecajas)", min: 1 },
+  ];
+
+  if (listoParaImprimir && items) {
+    return createPortal(
+      <div className="print-only" style={{ maxWidth: 700, margin: "0 auto", padding: "0 14px", fontFamily: "Arial, sans-serif", color: "#000" }}>
+        {formato === "crucigrama" && <><ImprimirCrucigrama setTitulo={set.titulo} items={items} conRespuestas={false} /><div style={{ pageBreakBefore: "always" }} /><ImprimirCrucigrama setTitulo={set.titulo} items={items} conRespuestas={true} /></>}
+        {formato === "sopa" && <><ImprimirSopaDeLetras setTitulo={set.titulo} items={items} conRespuestas={false} /><div style={{ pageBreakBefore: "always" }} /><ImprimirSopaDeLetras setTitulo={set.titulo} items={items} conRespuestas={true} /></>}
+        {formato === "quiz" && <><ImprimirQuiz setTitulo={set.titulo} items={items} conRespuestas={false} /><div style={{ pageBreakBefore: "always" }} /><ImprimirQuiz setTitulo={set.titulo} items={items} conRespuestas={true} /></>}
+        {formato === "emparejar" && <><ImprimirEmparejar setTitulo={set.titulo} items={items} conRespuestas={false} /><div style={{ pageBreakBefore: "always" }} /><ImprimirEmparejar setTitulo={set.titulo} items={items} conRespuestas={true} /></>}
+        {formato === "ordenar" && <><ImprimirOrdenarPalabras setTitulo={set.titulo} items={items} conRespuestas={false} /><div style={{ pageBreakBefore: "always" }} /><ImprimirOrdenarPalabras setTitulo={set.titulo} items={items} conRespuestas={true} /></>}
+        {formato === "ahorcado" && <><ImprimirAhorcado setTitulo={set.titulo} items={items} conRespuestas={false} /><div style={{ pageBreakBefore: "always" }} /><ImprimirAhorcado setTitulo={set.titulo} items={items} conRespuestas={true} /></>}
+        {formato === "rueda" && <ImprimirListaRepaso setTitulo={set.titulo} items={items} formatoLabel="Rueda Giratoria" />}
+        {formato === "abrecajas" && <ImprimirListaRepaso setTitulo={set.titulo} items={items} formatoLabel="Abrecajas" />}
+      </div>,
+      document.body
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4 no-print" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-md shadow-xl">
+        <div className="flex justify-between items-center mb-1">
+          <h3 className="font-bold text-slate-800">🖨️ Imprimir — {set.titulo}</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        {!items ? (
+          <p className="text-sm text-slate-400 py-4">Cargando…</p>
+        ) : (
+          <>
+            <p className="text-xs text-slate-400 mb-3">Elegí el formato — imprime la hoja del estudiante y, en la página siguiente, la hoja de respuestas.</p>
+            <div className="grid grid-cols-1 gap-2 mb-4">
+              {FORMATOS_IMPRIMIBLES.map((f) => (
+                <button key={f.key} disabled={items.length < f.min} onClick={() => setFormato(f.key)}
+                  className={`text-sm font-semibold px-4 py-2.5 rounded-xl border text-left ${formato === f.key ? "bg-violet-500 text-white border-violet-500" : "border-slate-200 text-slate-700 hover:bg-violet-50"} disabled:opacity-40`}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            <button disabled={!formato} onClick={() => setListoParaImprimir(true)} className="w-full text-sm font-semibold py-2.5 rounded-xl bg-violet-500 text-white disabled:opacity-40">
+              🖨️ Generar para imprimir
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function JugarSetModal({ set, estudianteId, onClose }) {
   const [items, setItems] = useState(null);
   const [formato, setFormato] = useState(null);
@@ -909,6 +1160,7 @@ export function VistaBancoContenido() {
   const [sets, setSets] = useState(null);
   const [editando, setEditando] = useState(null); // null = cerrado, {} = nuevo, set = editar
   const [jugando, setJugando] = useState(null);
+  const [imprimiendo, setImprimiendo] = useState(null);
 
   const cargar = () => api.fetchSetsDeContenido().then(setSets);
   useEffect(() => { cargar(); }, []);
@@ -942,6 +1194,7 @@ export function VistaBancoContenido() {
               <div className="text-[11px] text-slate-400 mb-2">{s.cantidad_items} par{s.cantidad_items !== 1 && "es"}</div>
               <div className="flex gap-1.5">
                 <button onClick={() => setJugando(s)} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white">▶️ Jugar</button>
+                <button onClick={() => setImprimiendo(s)} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-violet-200 text-violet-600">🖨️ Imprimir</button>
                 <button onClick={() => setEditando(s)} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600">✏️ Editar</button>
                 <button onClick={() => eliminar(s)} className="text-slate-300 hover:text-rose-500 px-1">🗑</button>
               </div>
@@ -952,6 +1205,7 @@ export function VistaBancoContenido() {
 
       {editando && <EditorSetModal set={editando.id ? editando : null} onClose={() => setEditando(null)} onGuardado={() => { setEditando(null); cargar(); }} />}
       {jugando && <JugarSetModal set={jugando} onClose={() => setJugando(null)} />}
+      {imprimiendo && <ImprimirSetModal set={imprimiendo} onClose={() => setImprimiendo(null)} />}
     </div>
   );
 }
