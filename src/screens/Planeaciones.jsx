@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import * as XLSX from "xlsx";
 import * as api from "../lib/api";
 import { agruparPorNivel, nivelYCurso } from "../lib/gamification";
 import { periodosDe } from "../lib/calificaciones";
@@ -111,12 +112,122 @@ function estadoInicialFormatoMaestro(base = {}) {
 
 // Formulario completo del Formato Maestro de Planeación Didáctica
 // Integrada (6 módulos) — se usa tanto para crear como para editar.
+// Genera y descarga una plantilla .xlsx con una hoja por módulo, lista
+// para llenar fuera de línea y volver a subir con "Importar desde Excel".
+function descargarPlantillaFormatoMaestro() {
+  const wb = XLSX.utils.book_new();
+
+  const datosGenerales = [
+    ["Campo", "Valor (completá esta columna)"],
+    ["Institución / Asignatura", "Ej: I.E. San José — Ciudadanía y Ética"],
+    ["Clase N°", "Ej: 2 - La Balanza Imparcial"],
+    ["Duración (minutos)", 60],
+    ["Caso / Problema integrador", "Descripción del caso dilemático de la sesión"],
+    ["DBA (código y enunciado)", ""],
+    ["Competencias Ciudadanas (separadas por coma)", "Pensamiento Social (COMP.07), Multiperspectivismo (COMP.08)"],
+    ["Desempeño Cognitivo", ""],
+    ["Desempeño Procedimental", ""],
+    ["Desempeño Actitudinal", ""],
+    ["Contenidos Curriculares (separados por coma)", "Art. 13 Igualdad, Dharma / Ahimsa"],
+    ["Nombre del Proyecto", ""],
+    ["Perfil de Jugadores", ""],
+    ["Nivel de Progresión (1-5)", ""],
+    ["Narrativa de la Sesión", ""],
+    ["Tipo de Escenario (real / real_ficcion / ficcion)", "real_ficcion"],
+    ["Reglas Generales (separadas por coma)", "Uso obligatorio de GP, Fe Pública como salud ética"],
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(datosGenerales), "Datos Generales");
+
+  const misiones = [["Misión", "Descripción"], ["Misión 1 (Tributaria)", "Pago de arancel inicial"], ["Misión 2 (Estratégica)", "Trueques y alianzas inter-reinos"]];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(misiones), "Misiones y Retos");
+
+  const zonas = [["Zona / Provincia", "Tipo de Recorrido", "Reto / Misión Asociada", "Contenido Curricular Vinculado"],
+    ["Zona 1: Fronteras de Oakhaven", "Lineal / Tributario", "Pago de arancel y alquiler de materiales", "Responsabilidad fiscal y deber cívico"]];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(zonas), "Zonas Escenario");
+
+  const roles = [["Avatar / Rol", "Función Operativa", "Responsabilidad Académica / Ética"],
+    ["Maestro del Gremio", "Líder estratega, administra GP/FP", "Coordinación general del equipo"]];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(roles), "Roles Economia");
+
+  const secuencia = [["Fase / Minutos", "Momento CÓDICE", "Dinámica Operativa", "Rol Docente"],
+    ["00–08 min", "VER / Apertura", "Cobro de tributo inicial y presentación del dilema", "Proyectar pantalla de inicio y plantear pregunta"]];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(secuencia), "Secuencia Didactica");
+
+  const evaluacion = [["Componente", "% Peso", "Evidencia Concreta", "Criterios de Evaluación"],
+    ["Cognitivo", 35, "Preguntas 1, 2 y 3 (Cara B)", "Rigor conceptual y calidad del Edicto de Concordia"],
+    ["Procedimental", 35, "Laberinto Vectorial (Cara A)", "Precisión sin tocar bordes negros"],
+    ["Actitudinal", 20, "Nivel de Fe Pública (FP)", "Juego limpio y diplomacia respetuosa"],
+    ["Coevaluación", 10, "Formulario de Valoración de Roles", "Calificación otorgada por el equipo"]];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(evaluacion), "Matriz Evaluacion");
+
+  XLSX.writeFile(wb, "plantilla_formato_maestro_planeacion.xlsx");
+}
+
+// Lee un .xlsx con la misma estructura de la plantilla y arma el objeto
+// de estado del Formato Maestro, listo para revisar antes de guardar.
+function importarPlantillaFormatoMaestro(file, onListo) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: "binary" });
+      const hoja = (nombre) => wb.Sheets[nombre] ? XLSX.utils.sheet_to_json(wb.Sheets[nombre], { header: 1 }) : [];
+      const filasATabla = (filas, claves) => filas.slice(1).filter((r) => r.length && r[0]).map((r) => Object.fromEntries(claves.map((k, i) => [k, r[i] !== undefined ? String(r[i]) : ""])));
+
+      const generales = hoja("Datos Generales");
+      const val = (etiqueta) => { const fila = generales.find((r) => String(r[0] || "").trim().toLowerCase().startsWith(etiqueta.toLowerCase())); return fila ? String(fila[1] ?? "").trim() : ""; };
+      const listaDe = (etiqueta) => val(etiqueta).split(",").map((s) => s.trim()).filter(Boolean);
+
+      const datos = estadoInicialFormatoMaestro({
+        institucion_asignatura: val("Institución"),
+        clase_numero: val("Clase N"),
+        duracion_minutos: parseInt(val("Duración"), 10) || 60,
+        caso_problema_integrador: val("Caso"),
+        dba: val("DBA"),
+        competencias_ciudadanas: listaDe("Competencias Ciudadanas"),
+        desempeno_cognitivo: val("Desempeño Cognitivo"),
+        desempeno_procedimental: val("Desempeño Procedimental"),
+        desempeno_actitudinal: val("Desempeño Actitudinal"),
+        contenidos_curriculares: listaDe("Contenidos Curriculares"),
+        nombre_proyecto: val("Nombre del Proyecto"),
+        perfil_jugadores: val("Perfil de Jugadores"),
+        nivel_progresion: val("Nivel de Progresión"),
+        narrativa_sesion: val("Narrativa"),
+        tipo_escenario: val("Tipo de Escenario") || "real_ficcion",
+        reglas_generales: listaDe("Reglas Generales"),
+        misiones_retos: filasATabla(hoja("Misiones y Retos"), ["nombre", "descripcion"]),
+        zonas_escenario: filasATabla(hoja("Zonas Escenario"), ["zona", "tipo_recorrido", "reto_mision", "contenido_vinculado"]),
+        roles_economia: filasATabla(hoja("Roles Economia"), ["avatar_rol", "funcion_operativa", "responsabilidad_academica"]),
+        secuencia_didactica: filasATabla(hoja("Secuencia Didactica"), ["fase_minutos", "momento_codice", "dinamica_operativa", "rol_docente"]),
+        matriz_evaluacion: filasATabla(hoja("Matriz Evaluacion"), ["componente", "peso_pct", "evidencia", "criterios"]),
+      });
+      onListo(datos);
+    } catch (err) {
+      alert("No se pudo leer el archivo. Verificá que sea la plantilla descargada desde acá, sin cambiar los nombres de las hojas.");
+    }
+  };
+  reader.readAsBinaryString(file);
+}
+
 function FormatoMaestroCampos({ datos, setDatos }) {
   const set = (clave, valor) => setDatos((prev) => ({ ...prev, [clave]: valor }));
   const toggleCompetencia = (c) => set("competencias_ciudadanas", datos.competencias_ciudadanas.includes(c) ? datos.competencias_ciudadanas.filter((x) => x !== c) : [...datos.competencias_ciudadanas, c]);
 
   return (
     <div>
+      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 mb-3 flex items-center justify-between flex-wrap gap-2">
+        <div className="text-xs text-emerald-700">📊 ¿Preferís llenar esto en Excel? Descargá la plantilla, completala fuera de línea, y subila acá.</div>
+        <div className="flex gap-1.5 shrink-0">
+          <button onClick={descargarPlantillaFormatoMaestro} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-500 text-white">📥 Descargar plantilla</button>
+          <label className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-emerald-300 text-emerald-700 cursor-pointer">
+            📤 Importar
+            <input type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => {
+              if (e.target.files[0]) importarPlantillaFormatoMaestro(e.target.files[0], setDatos);
+              e.target.value = "";
+            }} />
+          </label>
+        </div>
+      </div>
+
       <SeccionModulo numero="I" titulo="Datos generales y alineación curricular" subtitulo="Institución/asignatura, DBA, competencias y contenidos.">
         <div className="grid sm:grid-cols-2 gap-2 mb-2">
           <input value={datos.institucion_asignatura} onChange={(e) => set("institucion_asignatura", e.target.value)} placeholder="Institución / Asignatura"
@@ -879,6 +990,31 @@ function bloqueImpresion(titulo, contenido, opts = {}) {
   );
 }
 
+// Igual que bloqueImpresion, pero para los módulos que son tablas
+// (Zonas, Roles, Secuencia, Matriz de Evaluación).
+function tablaImpresion(titulo, columnas, filas, opts = {}) {
+  if (!filas || filas.length === 0) return null;
+  return (
+    <div className="print-avoid-break" style={{ marginBottom: 10 }}>
+      <div style={{ fontWeight: 700, fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, color: opts.accent || "#1e293b", marginBottom: 3 }}>{titulo}</div>
+      <table style={{ width: "100%", fontSize: 10.5, borderCollapse: "collapse" }}>
+        <thead>
+          <tr style={{ background: opts.bg || "#F5F3FF" }}>
+            {columnas.map((c) => <th key={c.clave} style={{ textAlign: "left", padding: "3px 6px", fontWeight: 700 }}>{c.titulo}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {filas.map((f, i) => (
+            <tr key={i} style={{ borderBottom: "1px solid #E2E8F0" }}>
+              {columnas.map((c) => <td key={c.clave} style={{ padding: "3px 6px", verticalAlign: "top" }}>{f[c.clave]}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function PlaneacionPrintView({ unidad, institucion, materiaNombre, gradoId, onCerrado }) {
   const [clases, setClases] = useState([]);
   const [tareas, setTareas] = useState([]);
@@ -938,6 +1074,61 @@ function PlaneacionPrintView({ unidad, institucion, materiaNombre, gradoId, onCe
 
       {dba.length > 0 && bloqueImpresion("DBA vinculados", dba.map((d) => `${d.codigo ? d.codigo + " — " : ""}${d.descripcion}`).join("\n"), { bg: "#EFF6FF", accent: "#2563EB" })}
       {competencias.length > 0 && bloqueImpresion("Competencias vinculadas", competencias.map((c) => `${c.codigo ? c.codigo + " — " : ""}${c.descripcion}`).join("\n"), { bg: "#F0FDFA", accent: "#0D9488" })}
+
+      {(unidad.caso_problema_integrador || unidad.dba || (unidad.competencias_ciudadanas || []).length > 0 || (unidad.contenidos_curriculares || []).length > 0) && (
+        <div className="print-avoid-break" style={{ marginBottom: 12 }}>
+          <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5, borderBottom: "1px solid #8B5CF6", paddingBottom: 2 }}>
+            Módulo I — Alineación curricular
+          </div>
+          {bloqueImpresion("Institución / Asignatura", unidad.institucion_asignatura)}
+          {bloqueImpresion("Clase N°", unidad.clase_numero)}
+          {bloqueImpresion("Duración", unidad.duracion_minutos ? `${unidad.duracion_minutos} minutos` : null)}
+          {bloqueImpresion("Caso / Problema integrador", unidad.caso_problema_integrador, { bg: "#F5F3FF", accent: "#7C3AED" })}
+          {bloqueImpresion("Derecho Básico de Aprendizaje (DBA)", unidad.dba)}
+          {(unidad.competencias_ciudadanas || []).length > 0 && bloqueImpresion("Competencias Ciudadanas", unidad.competencias_ciudadanas.join(" · "))}
+          {bloqueImpresion("Desempeños / Indicadores", [
+            unidad.desempeno_cognitivo && `1. Cognitivo: ${unidad.desempeno_cognitivo}`,
+            unidad.desempeno_procedimental && `2. Procedimental: ${unidad.desempeno_procedimental}`,
+            unidad.desempeno_actitudinal && `3. Actitudinal: ${unidad.desempeno_actitudinal}`,
+          ].filter(Boolean).join("\n"))}
+          {(unidad.contenidos_curriculares || []).length > 0 && bloqueImpresion("Contenidos Curriculares", unidad.contenidos_curriculares.map((c) => `• ${c}`).join("\n"))}
+        </div>
+      )}
+
+      {(unidad.nombre_proyecto || unidad.narrativa_sesion || (unidad.reglas_generales || []).length > 0 || (unidad.misiones_retos || []).length > 0) && (
+        <div className="print-avoid-break" style={{ marginBottom: 12 }}>
+          <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5, borderBottom: "1px solid #8B5CF6", paddingBottom: 2 }}>
+            Módulo II — Diseño gamificado y narrativa
+          </div>
+          {bloqueImpresion("Nombre del proyecto", unidad.nombre_proyecto)}
+          {bloqueImpresion("Perfil de jugadores", unidad.perfil_jugadores)}
+          {bloqueImpresion("Nivel de progresión", unidad.nivel_progresion ? `Nivel ${unidad.nivel_progresion} de 5` : null)}
+          {bloqueImpresion("Narrativa de la sesión", unidad.narrativa_sesion, { bg: "#F5F3FF", accent: "#7C3AED" })}
+          {bloqueImpresion("Tipo de escenario", unidad.tipo_escenario === "real" ? "Real" : unidad.tipo_escenario === "ficcion" ? "Ficción" : unidad.tipo_escenario ? "Real / Ficción" : null)}
+          {(unidad.reglas_generales || []).length > 0 && bloqueImpresion("Reglas generales de juego", unidad.reglas_generales.map((r, i) => `${i + 1}. ${r}`).join("\n"))}
+          {tablaImpresion("Misiones y retos", [{ clave: "nombre", titulo: "Misión" }, { clave: "descripcion", titulo: "Descripción" }], unidad.misiones_retos)}
+        </div>
+      )}
+
+      {tablaImpresion("Módulo III — Escenario, paisaje y zonas", [
+        { clave: "zona", titulo: "Zona / Provincia" }, { clave: "tipo_recorrido", titulo: "Tipo de recorrido" },
+        { clave: "reto_mision", titulo: "Reto / Misión" }, { clave: "contenido_vinculado", titulo: "Contenido vinculado" },
+      ], unidad.zonas_escenario)}
+
+      {tablaImpresion("Módulo IV — Roles de equipo y economía", [
+        { clave: "avatar_rol", titulo: "Avatar / Rol" }, { clave: "funcion_operativa", titulo: "Función operativa" },
+        { clave: "responsabilidad_academica", titulo: "Responsabilidad académica" },
+      ], unidad.roles_economia)}
+
+      {tablaImpresion("Módulo V — Secuencia didáctica integrada", [
+        { clave: "fase_minutos", titulo: "Fase / Minutos" }, { clave: "momento_codice", titulo: "Momento CÓDICE" },
+        { clave: "dinamica_operativa", titulo: "Dinámica operativa" }, { clave: "rol_docente", titulo: "Rol docente" },
+      ], unidad.secuencia_didactica)}
+
+      {tablaImpresion("Módulo VI — Matriz de evaluación", [
+        { clave: "componente", titulo: "Componente" }, { clave: "peso_pct", titulo: "% Peso" },
+        { clave: "evidencia", titulo: "Evidencia" }, { clave: "criterios", titulo: "Criterios" },
+      ], unidad.matriz_evaluacion)}
 
       {clases.length > 0 && (
         <div className="print-avoid-break" style={{ marginBottom: 12 }}>
