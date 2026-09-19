@@ -3,6 +3,7 @@ import * as api from "../lib/api";
 import { ActasModal } from "./Actas";
 import { InclusionBadge, FotoLightbox } from "./Estudiantes";
 import { agruparPorNivel, nivelYCurso, initials, reinoInfo } from "../lib/gamification";
+import { ClipboardCheck, BarChart, GraduationCap, Users, BookOpen } from "lucide-react";
 
 function MiniAvatar({ estudiante, size = 28 }) {
   const [ampliada, setAmpliada] = useState(false);
@@ -24,11 +25,24 @@ function MiniAvatar({ estudiante, size = 28 }) {
 }
 
 const CODIGOS = [
-  { code: "P", label: "Presente", color: "bg-emerald-500", light: "bg-emerald-50 text-emerald-700" },
-  { code: "R", label: "Retardo", color: "bg-amber-500", light: "bg-amber-50 text-amber-700" },
-  { code: "FI", label: "Falta injustificada", color: "bg-rose-500", light: "bg-rose-50 text-rose-700" },
-  { code: "FJ", label: "Falta justificada", color: "bg-blue-500", light: "bg-blue-50 text-blue-700" },
+  { code: "P", label: "Presente", color: "bg-emerald-500", light: "bg-emerald-50 text-emerald-700", pastelFondo: "#DCFCE7", pastelTexto: "#15803D" },
+  { code: "R", label: "Retardo", color: "bg-amber-500", light: "bg-amber-50 text-amber-700", pastelFondo: "#FEF3C7", pastelTexto: "#B45309" },
+  { code: "FI", label: "Falta injustificada", color: "bg-rose-500", light: "bg-rose-50 text-rose-700", pastelFondo: "#FEE2E2", pastelTexto: "#B91C1C" },
+  { code: "FJ", label: "Falta justificada", color: "bg-blue-500", light: "bg-blue-50 text-blue-700", pastelFondo: "#DBEAFE", pastelTexto: "#1D4ED8" },
 ];
+
+// Tarjeta compacta para seleccionar entre varias opciones (grado, reino,
+// materia, pestaña) — más chica que una tarjeta de menú porque acá puede
+// haber muchas opciones seguidas.
+function ChipSeleccionable({ activo, onClick, children, Icono }) {
+  return (
+    <button onClick={onClick}
+      className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl border transition-colors ${activo ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200 hover:border-violet-300"}`}>
+      {Icono && <Icono size={13} strokeWidth={2.2} />}
+      {children}
+    </button>
+  );
+}
 
 function hoyISO() {
   const d = new Date();
@@ -298,47 +312,86 @@ export function VistaAsistencia({ grados, gradoActivo }) {
       <h2 className="text-xl font-bold text-slate-800 mb-1">Control de Asistencia</h2>
       <p className="text-xs text-slate-400 mb-3">P = Presente · R = Retardo · FI = Falta injustificada · FJ = Falta justificada. Un segundo clic sobre el mismo código lo quita.</p>
 
-      <div className="flex gap-1 mb-4 rounded-full bg-white p-1 w-fit border border-slate-100 shadow-sm">
-        <button onClick={() => setVista("diaria")} className={`text-xs px-4 py-2 rounded-full ${vista === "diaria" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📋 Marcar asistencia</button>
-        <button onClick={() => setVista("totales")} className={`text-xs px-4 py-2 rounded-full ${vista === "totales" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📊 Totales por grado</button>
+      <div className="grid grid-cols-2 gap-3 mb-4 max-w-md">
+        <button onClick={() => setVista("diaria")}
+          className={`flex items-center gap-3 rounded-2xl border px-4 py-3.5 text-left transition-all ${vista === "diaria" ? "border-violet-300 bg-violet-50" : "border-slate-200 bg-white hover:border-slate-300"}`}>
+          <div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0" style={{ background: "#EDE9FE" }}>
+            <ClipboardCheck size={20} strokeWidth={2} color="#6D28D9" />
+          </div>
+          <span className="text-sm font-bold text-slate-800">Marcar asistencia</span>
+        </button>
+        <button onClick={() => setVista("totales")}
+          className={`flex items-center gap-3 rounded-2xl border px-4 py-3.5 text-left transition-all ${vista === "totales" ? "border-violet-300 bg-violet-50" : "border-slate-200 bg-white hover:border-slate-300"}`}>
+          <div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0" style={{ background: "#DBEAFE" }}>
+            <BarChart size={20} strokeWidth={2} color="#1D4ED8" />
+          </div>
+          <span className="text-sm font-bold text-slate-800">Totales por grado</span>
+        </button>
       </div>
 
       {vista === "totales" ? (
         <TotalesPorGrado grados={grados} />
       ) : (
         <>
-      <div className="flex flex-wrap gap-2 mb-3 items-center">
-        <select value={gradoId} onChange={(e) => { setGradoId(e.target.value); setReinoFiltro("Todos"); }} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
-          {grados.map((g) => <option key={g.id} value={g.id}>Grado {g.id}</option>)}
-        </select>
-        <select value={reinoFiltro} onChange={(e) => setReinoFiltro(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
-          {reinos.map((r) => <option key={r} value={r}>{r === "Todos" ? "Todos los grupos" : r}</option>)}
-        </select>
-        <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white" />
-        {!soloLectura && (
-          <button onClick={marcarTodos} className="text-xs font-semibold px-3 py-2 rounded-full bg-violet-500 text-white">Marcar todos Presentes</button>
-        )}
-      </div>
-
-      <div className="flex flex-wrap gap-2 mb-4 items-center">
-        <span className="text-xs uppercase tracking-wide text-slate-400">Materia:</span>
-        <select value={materiaId} onChange={(e) => setMateriaId(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
-          {materias.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.nombre}{m.docente_id !== usuarioId ? ` — ${m.profesores?.nombre || "otro docente"}` : " (mía)"}
-            </option>
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 mb-4">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wide">
+            <GraduationCap size={13} /> Grado
+          </div>
+          <div className="flex items-center gap-2">
+            <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="text-sm rounded-xl px-3 py-2 border border-slate-200 outline-none bg-white" />
+            {!soloLectura && (
+              <button onClick={marcarTodos} className="text-xs font-semibold px-3 py-2 rounded-xl bg-violet-500 text-white">✔ Marcar todos Presentes</button>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-1.5 mb-4">
+          {grados.map((g) => (
+            <ChipSeleccionable key={g.id} activo={gradoId === g.id} onClick={() => { setGradoId(g.id); setReinoFiltro("Todos"); }}>
+              Grado {g.id}
+            </ChipSeleccionable>
           ))}
-        </select>
-        {soloLectura && (
-          <span className="text-xs px-3 py-1.5 rounded-full bg-amber-50 text-amber-700">
-            👁️ Solo lectura — esta materia es de {materiaActual?.profesores?.nombre || "otro docente"}
-          </span>
-        )}
+        </div>
+
+        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">
+          <Users size={13} /> Grupo / Reino
+        </div>
+        <div className="flex flex-wrap gap-1.5 mb-4">
+          {reinos.map((r) => (
+            <ChipSeleccionable key={r} activo={reinoFiltro === r} onClick={() => setReinoFiltro(r)}>
+              {r === "Todos" ? "Todos los grupos" : r}
+            </ChipSeleccionable>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">
+          <BookOpen size={13} /> Materia
+        </div>
+        <div className="flex flex-wrap gap-1.5 items-center">
+          {materias.map((m) => (
+            <ChipSeleccionable key={m.id} activo={String(materiaId) === String(m.id)} onClick={() => setMateriaId(String(m.id))}>
+              {m.nombre}{m.docente_id !== usuarioId ? ` — ${m.profesores?.nombre || "otro docente"}` : " (mía)"}
+            </ChipSeleccionable>
+          ))}
+          {soloLectura && (
+            <span className="text-xs px-3 py-1.5 rounded-full bg-amber-50 text-amber-700">
+              👁️ Solo lectura — esta materia es de {materiaActual?.profesores?.nombre || "otro docente"}
+            </span>
+          )}
+        </div>
       </div>
 
-      <div className="flex gap-2 mb-4 flex-wrap">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4 max-w-xl">
         {CODIGOS.map((c) => (
-          <div key={c.code} className={`text-xs px-3 py-1.5 rounded-full ${c.light}`}>{c.code} · {conteoDia[c.code]}</div>
+          <div key={c.code} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-3 flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 font-bold text-xs" style={{ background: c.pastelFondo, color: c.pastelTexto }}>
+              {c.code}
+            </div>
+            <div>
+              <div className="text-lg font-bold text-slate-800 leading-none">{conteoDia[c.code]}</div>
+              <div className="text-[10px] text-slate-400">{c.label}</div>
+            </div>
+          </div>
         ))}
       </div>
 
