@@ -150,6 +150,8 @@ export function VistaRuleta({ grados, gradoActivo }) {
   const [modo, setModo] = useState("grado");
   const [reino, setReino] = useState("");
   const [estudiantes, setEstudiantes] = useState([]);
+  const [spinning, setSpinning] = useState(false);
+  const [mostrado, setMostrado] = useState(null); // item que se ve en pantalla en cada instante
   const [winner, setWinner] = useState(null);
   const [registrando, setRegistrando] = useState(null);
   const [registrado, setRegistrado] = useState(null);
@@ -177,6 +179,34 @@ export function VistaRuleta({ grados, gradoActivo }) {
     if (modo === "equipos") return reinos.map((r) => ({ label: r, estudianteId: null }));
     return [];
   }, [modo, estudiantes, reino, reinos]);
+
+  // Sorteo tipo "máquina": va mostrando nombres al azar cada vez más lento, y el
+  // ÚLTIMO que muestra es literalmente el mismo que se guarda como ganador — no hay
+  // ningún cálculo de ángulos/geometría de por medio, así nunca pueden desincronizarse.
+  const spin = () => {
+    if (items.length < 2 || spinning) return;
+    setSpinning(true);
+    setWinner(null);
+    setRegistrado(null);
+    const winnerIdx = Math.floor(Math.random() * items.length);
+    const duracionTotal = 2800;
+    const pasos = Math.max(18, Math.min(34, items.length * 2));
+    for (let i = 1; i <= pasos; i++) {
+      const frac = i / pasos;
+      const t = 1 - Math.pow(1 - frac, 3); // desacelera hacia el final
+      const esUltimo = i === pasos;
+      setTimeout(() => {
+        const idxMostrado = esUltimo ? winnerIdx : Math.floor(Math.random() * items.length);
+        setMostrado(items[idxMostrado]);
+        clack(0.15 - frac * 0.08);
+        if (esUltimo) {
+          setSpinning(false);
+          setWinner(items[winnerIdx]);
+          beep(900, 0.2, 0.2);
+        }
+      }, t * duracionTotal);
+    }
+  };
 
   const registrarParticipacion = async (accion) => {
     if (!winner?.estudianteId) return;
@@ -211,27 +241,43 @@ export function VistaRuleta({ grados, gradoActivo }) {
         )}
       </div>
 
-      <RuedaGrande items={items} tamano={400} onResultado={(item) => { setWinner(item); setRegistrado(null); }} />
-
-      {winner && (
-        <div className="text-center mt-6">
-          <div className="text-lg font-bold px-6 py-3 rounded-2xl bg-violet-100 text-violet-700 mb-3 inline-block">🎉 {winner.label}</div>
-          {winner.estudianteId && (
-            <div className="bg-white rounded-2xl border border-slate-100 p-3 max-w-sm mx-auto">
-              <div className="text-xs font-semibold text-slate-500 mb-2">Registrar participación</div>
-              <div className="flex flex-wrap gap-1.5 justify-center">
-                {accionesRapidas.map((a) => (
-                  <button key={a.id} disabled={registrando === a.id} onClick={() => registrarParticipacion(a)}
-                    className={`text-xs px-2.5 py-1.5 rounded-full ${a.xp >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-600"} disabled:opacity-50`}>
-                    {registrando === a.id ? "…" : a.label}
-                  </button>
-                ))}
-              </div>
-              {registrado && <p className="text-xs text-emerald-600 mt-2">✔ "{registrado}" registrada.</p>}
-            </div>
+      <div className="flex flex-col items-center gap-6">
+        <div className="rounded-3xl flex items-center justify-center text-center px-6"
+          style={{
+            width: 320, minHeight: 160, background: "linear-gradient(180deg, #EDE9FE 0%, #F5F3FF 100%)",
+            border: "4px solid #8B5CF6", boxShadow: spinning ? "0 0 0 6px rgba(139,92,246,0.15)" : "none",
+            transition: "box-shadow 0.2s",
+          }}>
+          {mostrado ? (
+            <span className="text-2xl font-bold text-violet-700 break-words" style={{ opacity: spinning ? 0.85 : 1 }}>{mostrado.label}</span>
+          ) : (
+            <span className="text-sm text-slate-400">Tocá "Girar" para sortear</span>
           )}
         </div>
-      )}
+        <button onClick={spin} disabled={spinning || items.length < 2} className="text-sm font-bold px-6 py-3 rounded-full bg-violet-500 text-white disabled:opacity-50">
+          {spinning ? "Sorteando…" : "🎲 Girar"}
+        </button>
+        {winner && !spinning && (
+          <div className="text-center">
+            <div className="text-lg font-bold px-6 py-3 rounded-2xl bg-violet-100 text-violet-700 mb-3">🎉 {winner.label}</div>
+            {winner.estudianteId && (
+              <div className="bg-white rounded-2xl border border-slate-100 p-3 max-w-sm">
+                <div className="text-xs font-semibold text-slate-500 mb-2">Registrar participación</div>
+                <div className="flex flex-wrap gap-1.5 justify-center">
+                  {accionesRapidas.map((a) => (
+                    <button key={a.id} disabled={registrando === a.id} onClick={() => registrarParticipacion(a)}
+                      className={`text-xs px-2.5 py-1.5 rounded-full ${a.xp >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-600"} disabled:opacity-50`}>
+                      {registrando === a.id ? "…" : a.label}
+                    </button>
+                  ))}
+                </div>
+                {registrado && <p className="text-xs text-emerald-600 mt-2">✔ "{registrado}" registrada.</p>}
+              </div>
+            )}
+          </div>
+        )}
+        {items.length < 2 && <p className="text-xs text-slate-400">Necesitas al menos 2 opciones para girar.</p>}
+      </div>
     </div>
   );
 }
@@ -256,6 +302,8 @@ export function VistaRuletaMonedas({ grados, gradoActivo }) {
   const [opciones, setOpciones] = useState([]);
   const [resultado, setResultado] = useState(null);
   const [aplicando, setAplicando] = useState(false);
+  const [spinning, setSpinning] = useState(false);
+  const [mostrado, setMostrado] = useState(null);
   const [manualValor, setManualValor] = useState("");
   const [aplicandoManual, setAplicandoManual] = useState(false);
 
@@ -277,8 +325,6 @@ export function VistaRuletaMonedas({ grados, gradoActivo }) {
     setOpciones(Array.from({ length: TOTAL_OPCIONES_RUEDA }, () => Math.round(min + Math.random() * (max - min))));
   };
   useEffect(() => { regenerar(); }, [rangoMin, rangoMax]);
-
-  const itemsRueda = useMemo(() => opciones.map((v) => ({ label: v > 0 ? `+${v}` : `${v}`, color: colorOpcion(v) })), [opciones]);
 
   const aplicarValor = async (valor) => {
     setAplicando(true);
@@ -305,6 +351,33 @@ export function VistaRuletaMonedas({ grados, gradoActivo }) {
     await aplicarValor(valor);
     setManualValor("");
     setAplicandoManual(false);
+  };
+
+  // Mismo formato de "máquina de sorteo" que la Ruleta del Códice: lo último que
+  // se muestra en pantalla es exactamente el mismo valor que se aplica.
+  const spin = () => {
+    if (spinning || opciones.length < 2) return;
+    if (objetivo === "uno" && !estudianteId) return;
+    setSpinning(true);
+    setResultado(null);
+    const idx = Math.floor(Math.random() * opciones.length);
+    const duracionTotal = 2800;
+    const pasos = Math.max(18, Math.min(34, opciones.length));
+    for (let i = 1; i <= pasos; i++) {
+      const frac = i / pasos;
+      const t = 1 - Math.pow(1 - frac, 3);
+      const esUltimo = i === pasos;
+      setTimeout(() => {
+        const idxMostrado = esUltimo ? idx : Math.floor(Math.random() * opciones.length);
+        setMostrado(opciones[idxMostrado]);
+        clack(0.15 - frac * 0.08);
+        if (esUltimo) {
+          setSpinning(false);
+          beep(900, 0.2, 0.2);
+          aplicarValor(opciones[idx]);
+        }
+      }, t * duracionTotal);
+    }
   };
 
   return (
@@ -360,18 +433,33 @@ export function VistaRuletaMonedas({ grados, gradoActivo }) {
         </div>
       </div>
 
-      <RuedaGrande items={itemsRueda} tamano={400} deshabilitado={objetivo === "uno" && !estudianteId} onResultado={(item, idx) => aplicarValor(opciones[idx])} />
-
-      {resultado !== null && !aplicando && (
-        <div className="text-center mt-6">
-          <div className={`inline-block text-lg font-bold px-6 py-3 rounded-2xl ${resultado >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+      <div className="flex flex-col items-center gap-6">
+        <div className="rounded-3xl flex items-center justify-center text-center px-6"
+          style={{
+            width: 280, minHeight: 140, background: "linear-gradient(180deg, #EDE9FE 0%, #F5F3FF 100%)",
+            border: "4px solid #8B5CF6", boxShadow: spinning ? "0 0 0 6px rgba(139,92,246,0.15)" : "none",
+            transition: "box-shadow 0.2s",
+          }}>
+          {mostrado !== null ? (
+            <span className="text-4xl font-bold" style={{ color: colorOpcion(mostrado), opacity: spinning ? 0.85 : 1 }}>
+              {mostrado > 0 ? `+${mostrado}` : mostrado}
+            </span>
+          ) : (
+            <span className="text-sm text-slate-400">Tocá "Girar" para sortear</span>
+          )}
+        </div>
+        <button onClick={spin} disabled={spinning || aplicando || opciones.length < 2 || (objetivo === "uno" && !estudianteId)}
+          className="text-sm font-bold px-6 py-3 rounded-full bg-violet-500 text-white disabled:opacity-50">
+          {spinning ? "Sorteando…" : aplicando ? "Aplicando…" : "🪙 Girar"}
+        </button>
+        {resultado !== null && !spinning && !aplicando && (
+          <div className={`text-lg font-bold px-6 py-3 rounded-2xl ${resultado >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
             {resultado > 0 ? `🎉 +${resultado} monedas` : resultado < 0 ? `😬 ${resultado} monedas` : "😐 Sin cambio"}
             {" — "}{objetivo === "uno" ? (visibles.find((s) => s.id === estudianteId)?.nombre || "") : `${visibles.length} estudiantes`}
           </div>
-        </div>
-      )}
-      {aplicando && <p className="text-center text-sm text-slate-400 mt-4">Aplicando…</p>}
-      {(objetivo === "uno" && !estudianteId) && <p className="text-center text-xs text-slate-400 mt-4">Elegí un estudiante para poder girar.</p>}
+        )}
+      </div>
+
     </div>
   );
 }
