@@ -81,6 +81,113 @@ function SeccionModulo({ numero, titulo, subtitulo, children }) {
   );
 }
 
+// Renglón de solo-lectura para el Formato Maestro completo (no imprime,
+// es para verlo en pantalla sin tener que entrar a editar).
+function FilaLectura({ etiqueta, children }) {
+  if (children === null || children === undefined || children === "" || (Array.isArray(children) && children.length === 0)) return null;
+  return (
+    <div className="mb-2">
+      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">{etiqueta}</div>
+      <div className="text-sm text-slate-700 whitespace-pre-line">{Array.isArray(children) ? children.map((c, i) => <div key={i}>• {c}</div>) : children}</div>
+    </div>
+  );
+}
+
+function TablaLectura({ columnas, filas }) {
+  if (!filas || filas.length === 0) return null;
+  return (
+    <div className="overflow-x-auto mb-2">
+      <table className="w-full text-xs border-collapse">
+        <thead><tr>{columnas.map((c) => <th key={c.clave} className="text-left px-2 py-1 font-bold text-slate-400 uppercase" style={{ fontSize: 9 }}>{c.titulo}</th>)}</tr></thead>
+        <tbody>
+          {filas.map((f, i) => (
+            <tr key={i} className="border-t border-slate-100">
+              {columnas.map((c) => <td key={c.clave} className="px-2 py-1.5 align-top text-slate-600">{f[c.clave]}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Muestra el Formato Maestro COMPLETO tal como quedó guardado, en
+// pantalla — sin necesidad de entrar a "editar" para verlo.
+function FormatoMaestroLectura({ unidad }) {
+  const tieneAlgo = unidad.caso_problema_integrador || unidad.dba || unidad.nombre_proyecto || unidad.narrativa_sesion ||
+    (unidad.competencias_ciudadanas || []).length > 0 || (unidad.contenidos_curriculares || []).length > 0 ||
+    (unidad.zonas_escenario || []).length > 0 || (unidad.roles_economia || []).length > 0 ||
+    (unidad.secuencia_didactica || []).length > 0 || (unidad.matriz_evaluacion || []).length > 0 ||
+    (unidad.misiones_retos || []).length > 0 || (unidad.reglas_generales || []).length > 0;
+
+  if (!tieneAlgo) return <p className="text-xs text-slate-400 py-2">Esta unidad todavía no tiene el Formato Maestro completado.</p>;
+
+  return (
+    <div>
+      <SeccionModulo numero="I" titulo="Datos generales y alineación curricular">
+        <FilaLectura etiqueta="Institución / Asignatura">{unidad.institucion_asignatura}</FilaLectura>
+        <FilaLectura etiqueta="Clase N°">{unidad.clase_numero}</FilaLectura>
+        <FilaLectura etiqueta="Duración">{unidad.duracion_minutos ? `${unidad.duracion_minutos} minutos` : null}</FilaLectura>
+        <FilaLectura etiqueta="Caso / Problema integrador">{unidad.caso_problema_integrador}</FilaLectura>
+        <FilaLectura etiqueta="DBA">{unidad.dba}</FilaLectura>
+        <FilaLectura etiqueta="Competencias Ciudadanas">{unidad.competencias_ciudadanas}</FilaLectura>
+        <FilaLectura etiqueta="Desempeño Cognitivo">{unidad.desempeno_cognitivo}</FilaLectura>
+        <FilaLectura etiqueta="Desempeño Procedimental">{unidad.desempeno_procedimental}</FilaLectura>
+        <FilaLectura etiqueta="Desempeño Actitudinal">{unidad.desempeno_actitudinal}</FilaLectura>
+        <FilaLectura etiqueta="Contenidos Curriculares">{unidad.contenidos_curriculares}</FilaLectura>
+      </SeccionModulo>
+
+      <SeccionModulo numero="II" titulo="Diseño del proyecto gamificado y narrativa">
+        <FilaLectura etiqueta="Nombre del proyecto">{unidad.nombre_proyecto}</FilaLectura>
+        <FilaLectura etiqueta="Perfil de jugadores">{unidad.perfil_jugadores}</FilaLectura>
+        <FilaLectura etiqueta="Nivel de progresión">{unidad.nivel_progresion ? `Nivel ${unidad.nivel_progresion} de 5` : null}</FilaLectura>
+        <FilaLectura etiqueta="Narrativa de la sesión">{unidad.narrativa_sesion}</FilaLectura>
+        <FilaLectura etiqueta="Tipo de escenario">{unidad.tipo_escenario === "real" ? "Real" : unidad.tipo_escenario === "ficcion" ? "Ficción" : unidad.tipo_escenario ? "Real / Ficción" : null}</FilaLectura>
+        <FilaLectura etiqueta="Reglas generales">{unidad.reglas_generales}</FilaLectura>
+        {(unidad.misiones_retos || []).length > 0 && <>
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Misiones y retos</div>
+          <TablaLectura columnas={[{ clave: "nombre", titulo: "Misión" }, { clave: "descripcion", titulo: "Descripción" }]} filas={unidad.misiones_retos} />
+        </>}
+      </SeccionModulo>
+
+      {(unidad.zonas_escenario || []).length > 0 && (
+        <SeccionModulo numero="III" titulo="Escenario, paisaje y zonas">
+          <TablaLectura columnas={[
+            { clave: "zona", titulo: "Zona" }, { clave: "tipo_recorrido", titulo: "Recorrido" },
+            { clave: "reto_mision", titulo: "Reto/Misión" }, { clave: "contenido_vinculado", titulo: "Contenido" },
+          ]} filas={unidad.zonas_escenario} />
+        </SeccionModulo>
+      )}
+
+      {(unidad.roles_economia || []).length > 0 && (
+        <SeccionModulo numero="IV" titulo="Roles de equipo y economía">
+          <TablaLectura columnas={[
+            { clave: "avatar_rol", titulo: "Avatar/Rol" }, { clave: "funcion_operativa", titulo: "Función" }, { clave: "responsabilidad_academica", titulo: "Responsabilidad" },
+          ]} filas={unidad.roles_economia} />
+        </SeccionModulo>
+      )}
+
+      {(unidad.secuencia_didactica || []).length > 0 && (
+        <SeccionModulo numero="V" titulo="Secuencia didáctica integrada">
+          <TablaLectura columnas={[
+            { clave: "fase_minutos", titulo: "Fase/Min" }, { clave: "momento_codice", titulo: "Momento" },
+            { clave: "dinamica_operativa", titulo: "Dinámica" }, { clave: "rol_docente", titulo: "Rol docente" },
+          ]} filas={unidad.secuencia_didactica} />
+        </SeccionModulo>
+      )}
+
+      {(unidad.matriz_evaluacion || []).length > 0 && (
+        <SeccionModulo numero="VI" titulo="Entregable y matriz de evaluación">
+          <TablaLectura columnas={[
+            { clave: "componente", titulo: "Componente" }, { clave: "peso_pct", titulo: "% Peso" },
+            { clave: "evidencia", titulo: "Evidencia" }, { clave: "criterios", titulo: "Criterios" },
+          ]} filas={unidad.matriz_evaluacion} />
+        </SeccionModulo>
+      )}
+    </div>
+  );
+}
+
 const COMPETENCIAS_CIUDADANAS_OPCIONES = ["Pensamiento Social (COMP.07)", "Multiperspectivismo (COMP.08)", "Reflexión Ética (COMP.09)"];
 const MOMENTOS_CODICE_OPCIONES = ["VER / Apertura", "JUZGAR / Organización", "JUZGAR / Simulación", "ACTUAR / Evidencia", "EVALUAR / Juicio", "SÍNTESIS / Cierre"];
 
@@ -92,9 +199,9 @@ function estadoInicialFormatoMaestro(base = {}) {
     caso_problema_integrador: base.caso_problema_integrador || "",
     dba: base.dba || "",
     competencias_ciudadanas: base.competencias_ciudadanas || [],
-    desempeno_cognitivo: base.desempeno_cognitivo || "",
-    desempeno_procedimental: base.desempeno_procedimental || "",
-    desempeno_actitudinal: base.desempeno_actitudinal || "",
+    desempeno_cognitivo: base.desempeno_cognitivo || [],
+    desempeno_procedimental: base.desempeno_procedimental || [],
+    desempeno_actitudinal: base.desempeno_actitudinal || [],
     contenidos_curriculares: base.contenidos_curriculares || [],
     nombre_proyecto: base.nombre_proyecto || "",
     perfil_jugadores: base.perfil_jugadores || "",
@@ -125,9 +232,9 @@ function descargarPlantillaFormatoMaestro() {
     ["Caso / Problema integrador", "Descripción del caso dilemático de la sesión"],
     ["DBA (código y enunciado)", ""],
     ["Competencias Ciudadanas (separadas por coma)", "Pensamiento Social (COMP.07), Multiperspectivismo (COMP.08)"],
-    ["Desempeño Cognitivo", ""],
-    ["Desempeño Procedimental", ""],
-    ["Desempeño Actitudinal", ""],
+    ["Desempeño Cognitivo (separados por coma si son varios)", ""],
+    ["Desempeño Procedimental (separados por coma si son varios)", ""],
+    ["Desempeño Actitudinal (separados por coma si son varios)", ""],
     ["Contenidos Curriculares (separados por coma)", "Art. 13 Igualdad, Dharma / Ahimsa"],
     ["Nombre del Proyecto", ""],
     ["Perfil de Jugadores", ""],
@@ -184,9 +291,9 @@ function importarPlantillaFormatoMaestro(file, onListo) {
         caso_problema_integrador: val("Caso"),
         dba: val("DBA"),
         competencias_ciudadanas: listaDe("Competencias Ciudadanas"),
-        desempeno_cognitivo: val("Desempeño Cognitivo"),
-        desempeno_procedimental: val("Desempeño Procedimental"),
-        desempeno_actitudinal: val("Desempeño Actitudinal"),
+        desempeno_cognitivo: listaDe("Desempeño Cognitivo"),
+        desempeno_procedimental: listaDe("Desempeño Procedimental"),
+        desempeno_actitudinal: listaDe("Desempeño Actitudinal"),
         contenidos_curriculares: listaDe("Contenidos Curriculares"),
         nombre_proyecto: val("Nombre del Proyecto"),
         perfil_jugadores: val("Perfil de Jugadores"),
@@ -210,7 +317,6 @@ function importarPlantillaFormatoMaestro(file, onListo) {
 
 function FormatoMaestroCampos({ datos, setDatos }) {
   const set = (clave, valor) => setDatos((prev) => ({ ...prev, [clave]: valor }));
-  const toggleCompetencia = (c) => set("competencias_ciudadanas", datos.competencias_ciudadanas.includes(c) ? datos.competencias_ciudadanas.filter((x) => x !== c) : [...datos.competencias_ciudadanas, c]);
 
   return (
     <div>
@@ -245,21 +351,21 @@ function FormatoMaestroCampos({ datos, setDatos }) {
         <input value={datos.dba} onChange={(e) => set("dba", e.target.value)} placeholder="Derecho Básico de Aprendizaje (DBA) — código y enunciado"
           className="w-full text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none mb-2" />
         <label className="text-xs text-slate-500 block mb-1">Competencias Ciudadanas trabajadas</label>
-        <div className="flex flex-wrap gap-1.5 mb-3">
-          {COMPETENCIAS_CIUDADANAS_OPCIONES.map((c) => (
-            <button key={c} onClick={() => toggleCompetencia(c)}
-              className={`text-xs px-3 py-1.5 rounded-full border ${datos.competencias_ciudadanas.includes(c) ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>
-              {c}
-            </button>
+        <div className="flex flex-wrap gap-1.5 mb-1.5">
+          {COMPETENCIAS_CIUDADANAS_OPCIONES.filter((c) => !datos.competencias_ciudadanas.includes(c)).map((c) => (
+            <button key={c} onClick={() => set("competencias_ciudadanas", [...datos.competencias_ciudadanas, c])}
+              className="text-[11px] px-2.5 py-1 rounded-full border border-dashed border-violet-300 text-violet-500">+ {c}</button>
           ))}
         </div>
-        <label className="text-xs text-slate-500 block mb-1">Desempeños / Indicadores</label>
-        <input value={datos.desempeno_cognitivo} onChange={(e) => set("desempeno_cognitivo", e.target.value)} placeholder="1. Cognitivo: indicador específico"
-          className="w-full text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none mb-1.5" />
-        <input value={datos.desempeno_procedimental} onChange={(e) => set("desempeno_procedimental", e.target.value)} placeholder="2. Procedimental: indicador de ejecución"
-          className="w-full text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none mb-1.5" />
-        <input value={datos.desempeno_actitudinal} onChange={(e) => set("desempeno_actitudinal", e.target.value)} placeholder="3. Actitudinal: criterio de convivencia"
-          className="w-full text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none mb-3" />
+        <div className="mb-3"><ListaTextoEditable items={datos.competencias_ciudadanas} onCambio={(v) => set("competencias_ciudadanas", v)} placeholder="Ej: Pensamiento Social (COMP.07)" /></div>
+
+        <label className="text-xs text-slate-500 block mb-1">Desempeños / Indicadores — Cognitivo</label>
+        <div className="mb-2"><ListaTextoEditable items={datos.desempeno_cognitivo} onCambio={(v) => set("desempeno_cognitivo", v)} placeholder="Indicador cognitivo específico" /></div>
+        <label className="text-xs text-slate-500 block mb-1">Desempeños / Indicadores — Procedimental</label>
+        <div className="mb-2"><ListaTextoEditable items={datos.desempeno_procedimental} onCambio={(v) => set("desempeno_procedimental", v)} placeholder="Indicador de ejecución en el juego" /></div>
+        <label className="text-xs text-slate-500 block mb-1">Desempeños / Indicadores — Actitudinal</label>
+        <div className="mb-3"><ListaTextoEditable items={datos.desempeno_actitudinal} onCambio={(v) => set("desempeno_actitudinal", v)} placeholder="Criterio de Fe Pública / Convivencia" /></div>
+
         <label className="text-xs text-slate-500 block mb-1">Contenidos Curriculares</label>
         <ListaTextoEditable items={datos.contenidos_curriculares} onCambio={(v) => set("contenidos_curriculares", v)} placeholder="Ej: Art. 13 Igualdad / Dharma - Ahimsa" />
       </SeccionModulo>
@@ -1055,10 +1161,10 @@ function cuerpoUnidadImpresion({ unidad, materiaNombre, gradoId, clases, tareas,
           {bloqueImpresion("Derecho Básico de Aprendizaje (DBA)", unidad.dba)}
           {(unidad.competencias_ciudadanas || []).length > 0 && bloqueImpresion("Competencias Ciudadanas", unidad.competencias_ciudadanas.join(" · "))}
           {bloqueImpresion("Desempeños / Indicadores", [
-            unidad.desempeno_cognitivo && `1. Cognitivo: ${unidad.desempeno_cognitivo}`,
-            unidad.desempeno_procedimental && `2. Procedimental: ${unidad.desempeno_procedimental}`,
-            unidad.desempeno_actitudinal && `3. Actitudinal: ${unidad.desempeno_actitudinal}`,
-          ].filter(Boolean).join("\n"))}
+            ...(unidad.desempeno_cognitivo || []).map((d) => `Cognitivo: ${d}`),
+            ...(unidad.desempeno_procedimental || []).map((d) => `Procedimental: ${d}`),
+            ...(unidad.desempeno_actitudinal || []).map((d) => `Actitudinal: ${d}`),
+          ].join("\n") || null)}
           {(unidad.contenidos_curriculares || []).length > 0 && bloqueImpresion("Contenidos Curriculares", unidad.contenidos_curriculares.map((c) => `• ${c}`).join("\n"))}
         </div>
       )}
@@ -1278,6 +1384,7 @@ function UnidadCard({ unidad, institucion, materiaNombre, materias, gradoId, gra
   const [estado, setEstado] = useState(unidad.estado);
   const [imprimiendo, setImprimiendo] = useState(false);
   const [formatoMaestroAbierto, setFormatoMaestroAbierto] = useState(false);
+  const [formatoLecturaAbierto, setFormatoLecturaAbierto] = useState(false);
   const [formatoMaestro, setFormatoMaestro] = useState(() => estadoInicialFormatoMaestro(unidad));
   const guardar = async () => {
     await api.editarPlaneacion(unidad.id, {
@@ -1390,17 +1497,12 @@ function UnidadCard({ unidad, institucion, materiaNombre, materias, gradoId, gra
             </div>
           )}
           {unidad.incluye_comarca && <ComarcaEnPlaneacion unidad={unidad} />}
-          {(unidad.caso_problema_integrador || unidad.narrativa_sesion || (unidad.zonas_escenario || []).length > 0 || (unidad.secuencia_didactica || []).length > 0) && (
-            <div className="mt-2 mb-2 bg-slate-50 rounded-xl p-3 space-y-1.5 text-xs">
-              <div className="text-xs font-bold text-slate-600 mb-1">📋 Formato Maestro de Planeación</div>
-              {unidad.caso_problema_integrador && <p><b className="text-slate-500">Caso/problema integrador:</b> {unidad.caso_problema_integrador}</p>}
-              {unidad.dba && <p><b className="text-slate-500">DBA:</b> {unidad.dba}</p>}
-              {(unidad.competencias_ciudadanas || []).length > 0 && <p><b className="text-slate-500">Competencias:</b> {unidad.competencias_ciudadanas.join(", ")}</p>}
-              {unidad.narrativa_sesion && <p className="bg-violet-50 rounded-lg p-2"><b className="text-violet-600">Narrativa:</b> {unidad.narrativa_sesion}</p>}
-              {(unidad.zonas_escenario || []).length > 0 && <p><b className="text-slate-500">Zonas del escenario:</b> {unidad.zonas_escenario.length} definidas</p>}
-              {(unidad.roles_economia || []).length > 0 && <p><b className="text-slate-500">Roles documentados:</b> {unidad.roles_economia.length}</p>}
-              {(unidad.secuencia_didactica || []).length > 0 && <p><b className="text-slate-500">Secuencia didáctica:</b> {unidad.secuencia_didactica.length} momentos ({unidad.duracion_minutos || 60} min totales)</p>}
-              {(unidad.matriz_evaluacion || []).length > 0 && <p><b className="text-slate-500">Matriz de evaluación:</b> {unidad.matriz_evaluacion.map((m) => `${m.componente} ${m.peso_pct}%`).join(" · ")}</p>}
+          {(unidad.caso_problema_integrador || unidad.narrativa_sesion || (unidad.zonas_escenario || []).length > 0 || (unidad.secuencia_didactica || []).length > 0 || (unidad.nombre_proyecto)) && (
+            <div className="mt-2 mb-2">
+              <button onClick={() => setFormatoLecturaAbierto((v) => !v)} className="text-xs font-bold text-violet-600 flex items-center gap-1">
+                {formatoLecturaAbierto ? "▾" : "▸"} 📋 Formato Maestro de Planeación Didáctica (6 módulos)
+              </button>
+              {formatoLecturaAbierto && <div className="mt-2"><FormatoMaestroLectura unidad={unidad} /></div>}
             </div>
           )}
           {unidad.objetivo && <p className="text-xs text-slate-500 mt-1"><b>Finalidad/objetivo:</b> {unidad.objetivo}</p>}
@@ -1460,7 +1562,7 @@ Devolveme ÚNICAMENTE un JSON válido (sin texto antes ni después, sin bloques 
 }`;
 
 function ImportarPlanIAModal({ materiaId, materias, gradoId, periodo, onCerrar, onImportado }) {
-  const [alcance, setAlcance] = useState("grado");
+  const gradoIdAGuardar = nivelYCurso(gradoId).nivel;
   const [materiasExtra, setMateriasExtra] = useState([]);
   const [texto, setTexto] = useState("");
   const [copiado, setCopiado] = useState(false);
@@ -1503,7 +1605,6 @@ function ImportarPlanIAModal({ materiaId, materias, gradoId, periodo, onCerrar, 
   const importar = async () => {
     setImportando(true);
     try {
-      const gradoIdAGuardar = alcance === "grado" ? nivel : gradoId;
       await api.crearUnidadConClases(
         { materia_id: materiaId, materias_extra: materiasExtra, grado_id: gradoIdAGuardar, periodo, titulo: previa.titulo, objetivo: previa.objetivo || null, orden: 999 },
         previa.clases
@@ -1566,14 +1667,6 @@ function ImportarPlanIAModal({ materiaId, materias, gradoId, periodo, onCerrar, 
               </div>
             )}
 
-            <div className="mt-3">
-              <label className="text-[11px] text-slate-500 block mb-1">Esta planeación aplica a</label>
-              <div className="flex gap-1 rounded-full bg-white p-1 w-fit border border-slate-200">
-                <button onClick={() => setAlcance("grado")} className={`text-xs px-3 py-1.5 rounded-full ${alcance === "grado" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🏫 Todo el grado {nivel}°</button>
-                <button onClick={() => setAlcance("curso")} className={`text-xs px-3 py-1.5 rounded-full ${alcance === "curso" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📍 Solo curso {gradoId}</button>
-              </div>
-            </div>
-
             <button disabled={importando} onClick={importar} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-emerald-500 text-white mt-3 disabled:opacity-60">
               {importando ? "Importando…" : "✔ Crear esta unidad con sus clases"}
             </button>
@@ -1600,7 +1693,6 @@ function ComarcaEnPlaneacion({ unidad }) {
 function NuevaUnidadForm({ materiaId, materias, gradoId, periodo, orden, onCancelar, onCreada }) {
   const [titulo, setTitulo] = useState("");
   const [objetivo, setObjetivo] = useState("");
-  const [alcance, setAlcance] = useState("grado"); // "grado" | "curso"
   const [materiasExtra, setMateriasExtra] = useState([]);
   const [guardando, setGuardando] = useState(false);
   const [incluyeMomentos, setIncluyeMomentos] = useState(false);
@@ -1622,7 +1714,7 @@ function NuevaUnidadForm({ materiaId, materias, gradoId, periodo, orden, onCance
   useEffect(() => { if (incluyeComarca) api.fetchComarcaEventos().then(setEventosComarca); }, [incluyeComarca]);
 
   const { nivel, curso } = nivelYCurso(gradoId);
-  const gradoIdAGuardar = alcance === "grado" ? nivel : gradoId;
+  const gradoIdAGuardar = nivel;
   const otrasMaterias = materias.filter((m) => m.id !== materiaId);
 
   const toggleMateriaExtra = (id) => setMateriasExtra((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
@@ -1767,18 +1859,9 @@ function NuevaUnidadForm({ materiaId, materias, gradoId, periodo, orden, onCance
       )}
 
       <div className="mb-3">
-        <label className="text-xs text-slate-500 block mb-1">Esta planeación aplica a</label>
-        <div className="flex gap-1 rounded-full bg-white p-1 w-fit border border-slate-200">
-          <button onClick={() => setAlcance("grado")} className={`text-xs px-3 py-1.5 rounded-full ${alcance === "grado" ? "bg-violet-500 text-white" : "text-slate-600"}`}>
-            🏫 Todo el grado {nivel}° (todos los cursos)
-          </button>
-          <button onClick={() => setAlcance("curso")} className={`text-xs px-3 py-1.5 rounded-full ${alcance === "curso" ? "bg-violet-500 text-white" : "text-slate-600"}`}>
-            📍 Solo el curso {gradoId}
-          </button>
-        </div>
-        {alcance === "grado" && (
-          <p className="text-[11px] text-slate-400 mt-1">Va a aparecer en todos los cursos del grado {nivel}° — usá el "Control por curso" dentro de cada clase para registrar en qué curso y fecha se dictó cada una.</p>
-        )}
+        <p className="text-[11px] text-slate-400 bg-slate-50 rounded-lg px-3 py-2">
+          🏫 Esta planeación es para todo el grado {nivel}° (todos sus cursos) — usá el "Control por curso" dentro de cada clase para registrar en qué curso y fecha se dictó cada una.
+        </p>
       </div>
       <div className="flex justify-end gap-2">
         <button onClick={onCancelar} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
@@ -2287,6 +2370,77 @@ export function VistaPlaneaciones({ grados, gradoActivo, periodoActivo, materiaA
       {importarIAAbierto && (
         <ImportarPlanIAModal materiaId={materiaId} materias={materias} gradoId={gradoId} periodo={periodo}
           onCerrar={() => setImportarIAAbierto(false)} onImportado={() => { setImportarIAAbierto(false); cargar(); }} />
+      )}
+    </div>
+  );
+}
+
+// Vista del estudiante — solo muestra las unidades marcadas como
+// "Publicado" por el docente; los borradores quedan ocultos.
+export function MiPlanDeEstudio({ estudianteInfo }) {
+  const [materias, setMaterias] = useState([]);
+  const [materiaId, setMateriaId] = useState("");
+  const [config, setConfig] = useState({ cantidad_periodos: 4, sistema_periodos: "bimestre" });
+  const [periodo, setPeriodo] = useState("1");
+  const [unidades, setUnidades] = useState(null);
+  const [abiertaId, setAbiertaId] = useState(null);
+
+  useEffect(() => { api.fetchMaterias().then((data) => { setMaterias(data); if (data[0]) setMateriaId(data[0].id); }); }, []);
+
+  useEffect(() => {
+    if (!materiaId) return;
+    api.fetchNotasConfig(materiaId).then((cfg) => { setConfig(cfg); if (cfg?.periodo_actual) setPeriodo(cfg.periodo_actual); });
+  }, [materiaId]);
+
+  useEffect(() => {
+    if (!materiaId || !estudianteInfo?.grado_id) return;
+    setUnidades(null);
+    api.fetchUnidades(materiaId, estudianteInfo.grado_id, periodo).then((data) => {
+      setUnidades(data.filter((u) => u.estado === "publicado"));
+    });
+  }, [materiaId, periodo, estudianteInfo?.grado_id]);
+
+  const listaPeriodos = periodosDe(config);
+
+  return (
+    <div>
+      <h3 className="font-bold text-slate-800 mb-1">📘 Mi Plan de Estudio</h3>
+      <p className="text-xs text-slate-400 mb-4">Las unidades que tu docente ya publicó para esta materia y periodo.</p>
+
+      <div className="flex flex-wrap gap-2 mb-4">
+        <select value={materiaId} onChange={(e) => setMateriaId(parseInt(e.target.value, 10))} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
+          {materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+        </select>
+        <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
+          {listaPeriodos.map((p) => <option key={p} value={p}>Periodo {p}{p === config.periodo_actual ? " (vigente)" : ""}</option>)}
+        </select>
+      </div>
+
+      {unidades === null ? (
+        <p className="text-sm text-slate-400">Cargando…</p>
+      ) : unidades.length === 0 ? (
+        <div className="text-sm text-slate-400 bg-white rounded-2xl p-6 text-center border border-dashed border-slate-200">
+          Tu docente todavía no publicó unidades para esta materia y periodo.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {unidades.map((u) => (
+            <div key={u.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-3">
+              <button onClick={() => setAbiertaId(abiertaId === u.id ? null : u.id)} className="w-full flex items-center justify-between text-left">
+                <span className="font-bold text-slate-800 text-sm">{u.titulo}</span>
+                <span className="text-xs text-violet-500">{abiertaId === u.id ? "Cerrar ▲" : "Ver ▼"}</span>
+              </button>
+              {u.objetivo && <p className="text-xs text-slate-500 mt-1">{u.objetivo}</p>}
+              {abiertaId === u.id && (
+                <div className="mt-3 pt-3 border-t border-slate-100">
+                  {u.contenido && <FilaLectura etiqueta="Contenidos">{u.contenido}</FilaLectura>}
+                  {u.problema_proyecto && <FilaLectura etiqueta="Problema / Proyecto">{u.problema_proyecto}</FilaLectura>}
+                  <FormatoMaestroLectura unidad={u} />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
