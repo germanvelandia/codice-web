@@ -1015,46 +1015,14 @@ function tablaImpresion(titulo, columnas, filas, opts = {}) {
   );
 }
 
-function PlaneacionPrintView({ unidad, institucion, materiaNombre, gradoId, onCerrado }) {
-  const [clases, setClases] = useState([]);
-  const [tareas, setTareas] = useState([]);
-  const [estandaresUnidad, setEstandaresUnidad] = useState([]);
-  const [cargando, setCargando] = useState(true);
-
-  useEffect(() => {
-    Promise.all([
-      api.fetchClases(unidad.id),
-      api.fetchTareas(unidad.id),
-      api.fetchEstandaresDePlaneacion(unidad.id),
-    ]).then(([cls, tsk, est]) => {
-      setClases(cls);
-      setTareas(tsk);
-      setEstandaresUnidad(est);
-      setCargando(false);
-    });
-  }, [unidad.id]);
-
-  useEffect(() => {
-    if (cargando) return;
-    const id = setTimeout(() => window.print(), 200);
-    const onAfter = () => onCerrado();
-    window.addEventListener("afterprint", onAfter);
-    return () => { clearTimeout(id); window.removeEventListener("afterprint", onAfter); };
-  }, [cargando]);
-
-  if (cargando) return null;
-
-  const dba = estandaresUnidad.filter((e) => e?.tipo === "dba");
-  const competencias = estandaresUnidad.filter((e) => e?.tipo === "competencia");
-
-  const contenido = (
-    <div className="print-only" style={{ maxWidth: "180mm", margin: "0 auto", padding: "0 0 14mm 0", fontFamily: "Georgia, 'Times New Roman', serif", color: "#1e293b" }}>
-      <div className="print-avoid-break" style={{ textAlign: "center", marginBottom: 14, borderBottom: "2px solid #8B5CF6", paddingBottom: 8 }}>
-        {institucion?.logo_url && <img src={institucion.logo_url} alt="Logo" style={{ maxHeight: 56, marginBottom: 6, display: "block", marginLeft: "auto", marginRight: "auto" }} />}
-        <div style={{ fontSize: 17, fontWeight: 700 }}>{institucion?.nombre}</div>
-        <div style={{ fontSize: 13, marginTop: 6, fontStyle: "italic" }}>Planeación de Clase</div>
-      </div>
-
+// Cuerpo completo de una unidad para impresión — función pura (no hook),
+// para poder reutilizarla tanto en la impresión de una sola planeación
+// como en "Imprimir todas". No incluye el encabezado institucional ni el
+// pie de página, que dependen de si es una hoja individual o parte de un
+// documento con portada propia.
+function cuerpoUnidadImpresion({ unidad, materiaNombre, gradoId, clases, tareas, dba, competencias }) {
+  return (
+    <>
       <table className="print-avoid-break" style={{ width: "100%", fontSize: 11.5, marginBottom: 12, borderCollapse: "collapse" }}>
         <tbody>
           <tr>
@@ -1165,9 +1133,133 @@ function PlaneacionPrintView({ unidad, institucion, materiaNombre, gradoId, onCe
           </table>
         </div>
       )}
+    </>
+  );
+}
+
+function PlaneacionPrintView({ unidad, institucion, materiaNombre, gradoId, onCerrado }) {
+  const [clases, setClases] = useState([]);
+  const [tareas, setTareas] = useState([]);
+  const [estandaresUnidad, setEstandaresUnidad] = useState([]);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      api.fetchClases(unidad.id),
+      api.fetchTareas(unidad.id),
+      api.fetchEstandaresDePlaneacion(unidad.id),
+    ]).then(([cls, tsk, est]) => {
+      setClases(cls);
+      setTareas(tsk);
+      setEstandaresUnidad(est);
+      setCargando(false);
+    });
+  }, [unidad.id]);
+
+  useEffect(() => {
+    if (cargando) return;
+    const id = setTimeout(() => window.print(), 200);
+    const onAfter = () => onCerrado();
+    window.addEventListener("afterprint", onAfter);
+    return () => { clearTimeout(id); window.removeEventListener("afterprint", onAfter); };
+  }, [cargando]);
+
+  if (cargando) return null;
+
+  const dba = estandaresUnidad.filter((e) => e?.tipo === "dba");
+  const competencias = estandaresUnidad.filter((e) => e?.tipo === "competencia");
+
+  const contenido = (
+    <div className="print-only" style={{ maxWidth: "180mm", margin: "0 auto", padding: "0 0 14mm 0", fontFamily: "Georgia, 'Times New Roman', serif", color: "#1e293b" }}>
+      <div className="print-avoid-break" style={{ textAlign: "center", marginBottom: 14, borderBottom: "2px solid #8B5CF6", paddingBottom: 8 }}>
+        {institucion?.logo_url && <img src={institucion.logo_url} alt="Logo" style={{ maxHeight: 56, marginBottom: 6, display: "block", marginLeft: "auto", marginRight: "auto" }} />}
+        <div style={{ fontSize: 17, fontWeight: 700 }}>{institucion?.nombre}</div>
+        <div style={{ fontSize: 13, marginTop: 6, fontStyle: "italic" }}>Planeación de Clase</div>
+      </div>
+
+      {cuerpoUnidadImpresion({ unidad, materiaNombre, gradoId, clases, tareas, dba, competencias })}
 
       <div className="print-footer">
         {institucion?.nombre} · {materiaNombre} · Grado {gradoId} · {unidad.titulo} · Generado {new Date().toLocaleDateString("es-CO")}
+      </div>
+    </div>
+  );
+
+  return createPortal(contenido, document.body);
+}
+
+// Imprime TODAS las unidades del filtro actual (materia + curso + periodo)
+// en un solo documento, con una portada institucional al inicio.
+function ImprimirTodasPlaneacionesModal({ unidades, institucion, materiaNombre, gradoId, periodo, onCerrado }) {
+  const [datosPorUnidad, setDatosPorUnidad] = useState(null);
+
+  useEffect(() => {
+    Promise.all(unidades.map((u) =>
+      Promise.all([api.fetchClases(u.id), api.fetchTareas(u.id), api.fetchEstandaresDePlaneacion(u.id)])
+        .then(([clases, tareas, estandares]) => ({
+          unidad: u, clases, tareas,
+          dba: estandares.filter((e) => e?.tipo === "dba"),
+          competencias: estandares.filter((e) => e?.tipo === "competencia"),
+        }))
+    )).then(setDatosPorUnidad);
+  }, [unidades]);
+
+  useEffect(() => {
+    if (!datosPorUnidad) return;
+    const id = setTimeout(() => window.print(), 250);
+    const onAfter = () => onCerrado();
+    window.addEventListener("afterprint", onAfter);
+    return () => { clearTimeout(id); window.removeEventListener("afterprint", onAfter); };
+  }, [datosPorUnidad]);
+
+  if (!datosPorUnidad) return null;
+
+  const fechaHoy = new Date().toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" });
+
+  const contenido = (
+    <div className="print-only" style={{ maxWidth: "180mm", margin: "0 auto", fontFamily: "Georgia, 'Times New Roman', serif", color: "#1e293b" }}>
+      {/* Portada institucional */}
+      <div className="print-avoid-break" style={{ minHeight: "220mm", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", pageBreakAfter: "always", border: "3px double #8B5CF6", padding: "30mm 15mm" }}>
+        {institucion?.logo_url && <img src={institucion.logo_url} alt="Logo" style={{ maxHeight: 90, marginBottom: 18 }} />}
+        <div style={{ fontSize: 13, letterSpacing: 2, textTransform: "uppercase", color: "#7C3AED", marginBottom: 6 }}>{institucion?.nombre || "Institución Educativa"}</div>
+        <div style={{ width: 60, height: 2, background: "#8B5CF6", margin: "10px 0 20px" }} />
+        <div style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>Documento Maestro de Planeación Didáctica</div>
+        <div style={{ fontSize: 15, fontStyle: "italic", color: "#475569", marginBottom: 30 }}>Compendio de unidades — {materiaNombre}</div>
+
+        <table style={{ fontSize: 13, borderCollapse: "collapse", marginBottom: 24 }}>
+          <tbody>
+            <tr><td style={{ fontWeight: 700, padding: "4px 12px 4px 0", textAlign: "right" }}>Materia:</td><td style={{ padding: "4px 0", textAlign: "left" }}>{materiaNombre}</td></tr>
+            <tr><td style={{ fontWeight: 700, padding: "4px 12px 4px 0", textAlign: "right" }}>Grado / Curso:</td><td style={{ padding: "4px 0", textAlign: "left" }}>{gradoId}</td></tr>
+            <tr><td style={{ fontWeight: 700, padding: "4px 12px 4px 0", textAlign: "right" }}>Periodo:</td><td style={{ padding: "4px 0", textAlign: "left" }}>{periodo}</td></tr>
+            <tr><td style={{ fontWeight: 700, padding: "4px 12px 4px 0", textAlign: "right" }}>N° de unidades:</td><td style={{ padding: "4px 0", textAlign: "left" }}>{unidades.length}</td></tr>
+            <tr><td style={{ fontWeight: 700, padding: "4px 12px 4px 0", textAlign: "right" }}>Fecha de generación:</td><td style={{ padding: "4px 0", textAlign: "left" }}>{fechaHoy}</td></tr>
+          </tbody>
+        </table>
+
+        <div style={{ fontSize: 11, color: "#94A3B8", marginTop: "auto" }}>Documento generado automáticamente por CÓDICE — Sistema de Planeación Didáctica</div>
+      </div>
+
+      {/* Índice */}
+      <div className="print-avoid-break" style={{ marginBottom: 16, pageBreakAfter: "always" }}>
+        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 10, borderBottom: "2px solid #8B5CF6", paddingBottom: 6 }}>Índice de unidades</div>
+        <ol style={{ fontSize: 12.5, lineHeight: 1.9, paddingLeft: 20 }}>
+          {unidades.map((u) => <li key={u.id}>{u.titulo}</li>)}
+        </ol>
+      </div>
+
+      {/* Cada unidad */}
+      {datosPorUnidad.map((d, i) => (
+        <div key={d.unidad.id} className="print-avoid-break" style={{ pageBreakAfter: i === datosPorUnidad.length - 1 ? "auto" : "always" }}>
+          <div className="print-avoid-break" style={{ textAlign: "center", marginBottom: 14, borderBottom: "2px solid #8B5CF6", paddingBottom: 8 }}>
+            <div style={{ fontSize: 10, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1 }}>Unidad {i + 1} de {datosPorUnidad.length}</div>
+            <div style={{ fontSize: 17, fontWeight: 700 }}>{d.unidad.titulo}</div>
+          </div>
+          {cuerpoUnidadImpresion({ unidad: d.unidad, materiaNombre, gradoId, clases: d.clases, tareas: d.tareas, dba: d.dba, competencias: d.competencias })}
+        </div>
+      ))}
+
+      <div className="print-footer">
+        {institucion?.nombre} · {materiaNombre} · Grado {gradoId} · Periodo {periodo} · Generado {fechaHoy}
       </div>
     </div>
   );
@@ -2065,6 +2157,7 @@ export function VistaPlaneaciones({ grados, gradoActivo, periodoActivo, materiaA
   const [estandaresAbierto, setEstandaresAbierto] = useState(false);
   const [vista, setVista] = useState("unidades"); // "unidades" | "calendario"
   const [importarIAAbierto, setImportarIAAbierto] = useState(false);
+  const [imprimiendoTodas, setImprimiendoTodas] = useState(false);
   const [soloVigente, setSoloVigente] = useState(true);
 
   useEffect(() => {
@@ -2173,7 +2266,19 @@ export function VistaPlaneaciones({ grados, gradoActivo, periodoActivo, materiaA
           Todavía no hay unidades/temas para este periodo. Creá la primera con "+ Nueva unidad/tema".
         </div>
       ) : (
-        unidades.map((u) => <UnidadCard key={u.id} unidad={u} institucion={institucion} materiaNombre={materias.find((m) => m.id === materiaId)?.nombre || ""} materias={materias} gradoId={gradoId} grados={grados} onCambio={cargar} />)
+        <>
+          <div className="flex justify-end mb-2">
+            <button onClick={() => setImprimiendoTodas(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700">
+              🖨️ Imprimir todas ({unidades.length})
+            </button>
+          </div>
+          {unidades.map((u) => <UnidadCard key={u.id} unidad={u} institucion={institucion} materiaNombre={materias.find((m) => m.id === materiaId)?.nombre || ""} materias={materias} gradoId={gradoId} grados={grados} onCambio={cargar} />)}
+        </>
+      )}
+      {imprimiendoTodas && (
+        <ImprimirTodasPlaneacionesModal unidades={unidades} institucion={institucion}
+          materiaNombre={materias.find((m) => m.id === materiaId)?.nombre || ""} gradoId={gradoId} periodo={periodo}
+          onCerrado={() => setImprimiendoTodas(false)} />
       )}
       {pendientesAbierto && (
         <PendientesModal materiaId={materiaId} materiaNombre={materias.find((m) => m.id === materiaId)?.nombre || ""} onClose={() => setPendientesAbierto(false)} />
