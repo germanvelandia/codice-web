@@ -1925,6 +1925,11 @@ function PortalEstudiante() {
                 </div>
               </div>
 
+              <div className="mb-4">
+                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">Todas las secciones</h3>
+                <NavegacionPorTarjetas grupos={MENU_CODICE_GRUPOS} onIr={irAEstudiante} grupoAbierto={null} onCambiarGrupo={setGrupoAbierto} />
+              </div>
+
               <ValorSemanaEstudiante />
               {estudianteInfo && <DesafioReinoEstudiante gradoId={estudianteInfo.grado_id} miReino={estudianteInfo.reino_actual || estudianteInfo.reino_original || "Sin grupo"} />}
               {estudianteInfo && <AvisoRendimiento estudianteId={estudianteInfo.id} />}
@@ -1945,11 +1950,6 @@ function PortalEstudiante() {
               </div>
               <div className="text-xs text-slate-500 bg-slate-50 rounded-xl p-3">
                 Presentes: {datos.presentes} · Retardos: {datos.retardos} · Faltas injustificadas: {datos.faltas_injustificadas} · Faltas justificadas: {datos.faltas_justificadas}
-              </div>
-
-              <div className="mt-6">
-                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">Todas las secciones</h3>
-                <NavegacionPorTarjetas grupos={MENU_CODICE_GRUPOS} onIr={irAEstudiante} grupoAbierto={null} onCambiarGrupo={setGrupoAbierto} />
               </div>
             </>
             )
@@ -2393,20 +2393,17 @@ function Panel({ session }) {
       <div className="p-6 max-w-6xl mx-auto">
         {tab === "inicio" && (
           grupoAbierto ? (
-            <>
-              <VistaInicio onIrA={irA} soloEncabezado accionSuperior={<EnlaceTodasLasSecciones onCambiarGrupo={setGrupoAbierto} />} />
-              <div className="mt-4">
-                <NavegacionPorTarjetas grupos={MENU_PANEL_GRUPOS} onIr={irA} grupoAbierto={grupoAbierto} onCambiarGrupo={setGrupoAbierto} />
-              </div>
-            </>
+            <VistaInicio onIrA={irA} soloEncabezado
+              accionSuperior={<EnlaceTodasLasSecciones onCambiarGrupo={setGrupoAbierto} />}
+              contenidoMedio={<NavegacionPorTarjetas grupos={MENU_PANEL_GRUPOS} onIr={irA} grupoAbierto={grupoAbierto} onCambiarGrupo={setGrupoAbierto} />} />
           ) : (
-            <>
-              <VistaInicio onIrA={irA} />
-              <div className="mt-6">
-                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">Todas las secciones</h3>
-                <NavegacionPorTarjetas grupos={MENU_PANEL_GRUPOS} onIr={irA} grupoAbierto={null} onCambiarGrupo={setGrupoAbierto} />
-              </div>
-            </>
+            <VistaInicio onIrA={irA}
+              contenidoMedio={
+                <div className="mb-2">
+                  <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">Todas las secciones</h3>
+                  <NavegacionPorTarjetas grupos={MENU_PANEL_GRUPOS} onIr={irA} grupoAbierto={null} onCambiarGrupo={setGrupoAbierto} />
+                </div>
+              } />
           )
         )}
         {tab === "entregasrevisar" && <VistaEntregasPorRevisar onIrAGrado={irAGradoDesdeRevisar} />}
