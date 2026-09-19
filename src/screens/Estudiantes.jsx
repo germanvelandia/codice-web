@@ -3,11 +3,12 @@ import { createPortal } from "react-dom";
 import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabaseClient";
 import { initials, nextLevel, reinoColor, reinoInfo, sugerirApellidos, colorGrado, REINO_COLORS, buscarEstudiantePorNombre } from "../lib/gamification";
+import { GraduationCap } from "lucide-react";
 import { EditorTexto, TextoEnriquecido } from "../components/RichText";
 
 // (REINO_COLORS ahora se importa directo desde gamification.js, ver arriba)
 import * as api from "../lib/api";
-import { ActasModal, GenerarActaMultipleModal, HistorialReunionesModal } from "./Actas";
+import { ActasModal } from "./Actas";
 import { RemisionModal } from "./Remision";
 import { ResumenEstudianteModal } from "./Resumen";
 import { ObservadorModal, ObservadorPorGradoModal } from "./Observador";
@@ -1981,8 +1982,6 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
   const [fotosMasivoAbierto, setFotosMasivoAbierto] = useState(false);
   const [importarDatosAbierto, setImportarDatosAbierto] = useState(false);
   const [observadoresGradoAbierto, setObservadoresGradoAbierto] = useState(false);
-  const [actaMultipleAbierta, setActaMultipleAbierta] = useState(false);
-  const [historialReunionesAbierto, setHistorialReunionesAbierto] = useState(false);
 
   const cargar = async () => {
     setCargando(true);
@@ -2064,8 +2063,6 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
             <button onClick={() => setFotosMasivoAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">📷 Subir fotos masivo</button>
             <button onClick={() => setImportarDatosAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">📥 Importar directorio y datos</button>
             <button onClick={() => setObservadoresGradoAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🖨️ Observadores del curso</button>
-            <button onClick={() => setActaMultipleAbierta(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700">📋 Generar Acta de Reunión</button>
-            <button onClick={() => setHistorialReunionesAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-violet-200 text-violet-600">🗂️ Reuniones anteriores</button>
             <button onClick={() => setPlanillaBlancoAbierta(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🖨️ Planilla en blanco</button>
             <button onClick={() => setImportarAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700">📥 Importar varios</button>
           </div>
@@ -2113,8 +2110,6 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
       {observadoresGradoAbierto && (
         <ObservadorPorGradoModal gradoId={gradoId} onClose={() => setObservadoresGradoAbierto(false)} />
       )}
-      {actaMultipleAbierta && <GenerarActaMultipleModal gradoId={gradoId} grados={grados} onClose={() => setActaMultipleAbierta(false)} />}
-      {historialReunionesAbierto && <HistorialReunionesModal onClose={() => setHistorialReunionesAbierto(false)} />}
 
       <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar estudiante…"
         className="w-full max-w-sm text-sm rounded-full px-4 py-2 border border-slate-200 outline-none mb-4" />
@@ -2460,6 +2455,18 @@ function ImportarDirectorioInstitucionalModal({ onClose }) {
   );
 }
 
+// Deriva un fondo pastel a partir del color propio de cada grado —
+// mezclando con blanco — para armar la tarjeta con el mismo estilo que
+// el resto de la plataforma, sin perder el código de color por curso.
+function pastelDeColor(hex) {
+  const limpio = (hex || "#8B5CF6").replace("#", "");
+  const r = parseInt(limpio.substring(0, 2), 16) || 139;
+  const g = parseInt(limpio.substring(2, 4), 16) || 92;
+  const b = parseInt(limpio.substring(4, 6), 16) || 246;
+  const mezclar = (canal) => Math.round(canal + (255 - canal) * 0.82);
+  return `rgb(${mezclar(r)}, ${mezclar(g)}, ${mezclar(b)})`;
+}
+
 export function VistaGrados({ onElegirGrado }) {
   const [grados, setGrados] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -2519,25 +2526,33 @@ export function VistaGrados({ onElegirGrado }) {
       {cargando ? (
         <div className="text-sm text-slate-400">Cargando…</div>
       ) : (
-        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))" }}>
+        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
           {grados.map((g) => {
             const color = colorGrado(g.id, grados);
+            const fondo = pastelDeColor(color);
             return (
-              <div key={g.id} className={`bg-white rounded-2xl p-5 shadow-sm border border-slate-100 text-center hover:shadow-md relative ${g.oculto ? "opacity-50" : ""}`}>
+              <div key={g.id} className={`bg-white rounded-2xl border border-slate-200 relative ${g.oculto ? "opacity-50" : ""}`}>
                 <button onClick={(e) => { e.stopPropagation(); setEditandoColorDe(editandoColorDe === g.id ? null : g.id); }}
-                  className="absolute top-2 right-2 w-4 h-4 rounded-full border border-white shadow" style={{ background: color }} title="Cambiar color" />
+                  className="absolute top-2 right-2 w-3.5 h-3.5 rounded-full border border-white shadow z-10" style={{ background: color }} title="Cambiar color" />
                 <button onClick={(e) => { e.stopPropagation(); eliminar(g.id); }}
-                  className="absolute top-2 left-2 text-xs text-slate-300 hover:text-rose-500" title="Eliminar este curso">🗑</button>
-                <button onClick={() => onElegirGrado(g.id)} className="w-full">
-                  <div className="text-2xl font-bold" style={{ color }}>{g.id}</div>
-                  <div className="text-xs text-slate-400 mt-1">Grado{g.oculto ? " · oculto" : ""}</div>
+                  className="absolute top-2 left-2 text-xs text-slate-300 hover:text-rose-500 z-10" title="Eliminar este curso">🗑</button>
+                <button onClick={() => onElegirGrado(g.id)} className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-slate-50 rounded-2xl">
+                  <div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0" style={{ background: fondo }}>
+                    <GraduationCap size={20} strokeWidth={2} color={color} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-bold text-slate-800 leading-tight">Grado</div>
+                    <div className="text-sm font-bold text-slate-800 leading-tight truncate">{g.id}{g.oculto ? " · oculto" : ""}</div>
+                  </div>
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); toggleOculto(g); }}
-                  className="mt-2 text-[11px] font-semibold px-2 py-1 rounded-full border border-slate-200 text-slate-500 hover:border-violet-300 hover:text-violet-600">
-                  {g.oculto ? "👁️ Mostrar" : "🙈 Ocultar"}
-                </button>
+                <div className="px-4 pb-3 -mt-1">
+                  <button onClick={(e) => { e.stopPropagation(); toggleOculto(g); }}
+                    className="text-[11px] font-semibold px-2 py-1 rounded-full border border-slate-200 text-slate-500 hover:border-violet-300 hover:text-violet-600">
+                    {g.oculto ? "👁️ Mostrar" : "🙈 Ocultar"}
+                  </button>
+                </div>
                 {editandoColorDe === g.id && (
-                  <div className="absolute z-10 top-8 right-2 bg-white rounded-xl shadow-lg border border-slate-100 p-2 grid grid-cols-4 gap-1.5" onClick={(e) => e.stopPropagation()}>
+                  <div className="absolute z-20 top-8 right-2 bg-white rounded-xl shadow-lg border border-slate-100 p-2 grid grid-cols-4 gap-1.5" onClick={(e) => e.stopPropagation()}>
                     {REINO_COLORS.map((c) => (
                       <button key={c} onClick={() => elegirColor(g.id, c)} className="w-6 h-6 rounded-full border border-slate-200" style={{ background: c }} />
                     ))}
