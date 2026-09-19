@@ -16,6 +16,64 @@ export function ContenidoLightbox({ html, onClose }) {
   );
 }
 
+const MESES_NOMBRE = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+const DIAS_CORTOS = ["D", "L", "M", "M", "J", "V", "S"];
+
+export function CalendarioPlaneaciones() {
+  const [horario, setHorario] = useState(null);
+  const [mesVisto, setMesVisto] = useState(() => { const h = new Date(); return { anio: h.getFullYear(), mes: h.getMonth() }; });
+
+  useEffect(() => { api.fetchHorarioDelDocente().then(setHorario); }, []);
+
+  const diasConClase = new Set((horario || []).map((h) => h.dia_semana));
+
+  const hoy = new Date();
+  const primerDiaMes = new Date(mesVisto.anio, mesVisto.mes, 1);
+  const diasEnMes = new Date(mesVisto.anio, mesVisto.mes + 1, 0).getDate();
+  const offsetInicio = primerDiaMes.getDay(); // 0=domingo
+
+  const celdas = [];
+  for (let i = 0; i < offsetInicio; i++) celdas.push(null);
+  for (let d = 1; d <= diasEnMes; d++) celdas.push(d);
+
+  const cambiarMes = (delta) => {
+    setMesVisto((prev) => {
+      const nuevaFecha = new Date(prev.anio, prev.mes + delta, 1);
+      return { anio: nuevaFecha.getFullYear(), mes: nuevaFecha.getMonth() };
+    });
+  };
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 h-full">
+      <div className="flex items-center justify-between mb-3">
+        <button onClick={() => cambiarMes(-1)} className="text-slate-400 hover:text-violet-600 px-1">‹</button>
+        <div className="text-sm font-bold text-slate-800">{MESES_NOMBRE[mesVisto.mes]} {mesVisto.anio}</div>
+        <button onClick={() => cambiarMes(1)} className="text-slate-400 hover:text-violet-600 px-1">›</button>
+      </div>
+      <div className="grid grid-cols-7 gap-1 text-center mb-1">
+        {DIAS_CORTOS.map((d, i) => <div key={i} className="text-[9px] font-bold text-slate-400">{d}</div>)}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {celdas.map((d, i) => {
+          if (d === null) return <div key={i} />;
+          const fechaCelda = new Date(mesVisto.anio, mesVisto.mes, d);
+          const esHoy = fechaCelda.toDateString() === hoy.toDateString();
+          const tieneClase = diasConClase.has(fechaCelda.getDay());
+          return (
+            <div key={i} className="flex flex-col items-center py-1">
+              <div className={`w-6 h-6 flex items-center justify-center rounded-full text-[11px] ${esHoy ? "bg-violet-500 text-white font-bold" : "text-slate-600"}`}>{d}</div>
+              {tieneClase && <div className={`w-1 h-1 rounded-full mt-0.5 ${esHoy ? "bg-violet-500" : "bg-violet-300"}`} />}
+            </div>
+          );
+        })}
+      </div>
+      <div className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
+        <div className="w-1.5 h-1.5 rounded-full bg-violet-300" /> Día con clase planeada
+      </div>
+    </div>
+  );
+}
+
 function ValorSemanaCard() {
   const [valor, setValor] = useState(null);
   const [editando, setEditando] = useState(false);
@@ -98,11 +156,15 @@ function ValorSemanaCard() {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-4 flex items-center gap-4">
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 flex flex-col items-center text-center gap-2 h-full">
+      <div className="w-full flex justify-between items-start">
+        <div className="text-[10px] font-bold text-violet-500 uppercase tracking-wide">Valor de la semana</div>
+        <button onClick={() => setEditando(true)} className="text-xs text-slate-400 hover:text-violet-600 shrink-0">✏️</button>
+      </div>
       {valor.html_contenido ? (
-        <div className="shrink-0 rounded-xl overflow-hidden cursor-pointer" style={{ maxWidth: 140 }} onClick={() => setAmpliado(true)} dangerouslySetInnerHTML={{ __html: valor.html_contenido }} />
+        <div className="rounded-xl overflow-hidden cursor-pointer" style={{ maxWidth: 120 }} onClick={() => setAmpliado(true)} dangerouslySetInnerHTML={{ __html: valor.html_contenido }} />
       ) : (
-        <div className="rounded-xl overflow-hidden shrink-0" style={{ width: 72, height: 72, background: "#F5F3FF" }}>
+        <div className="rounded-xl overflow-hidden shrink-0" style={{ width: 64, height: 64, background: "#F5F3FF" }}>
           {valor.imagen_url ? (
             <img src={valor.imagen_url} alt={valor.nombre || "Valor de la semana"} onClick={() => setAmpliado(true)} className="w-full h-full object-contain cursor-pointer" />
           ) : (
@@ -110,12 +172,10 @@ function ValorSemanaCard() {
           )}
         </div>
       )}
-      <div className="flex-1 min-w-0">
-        <div className="text-[10px] font-bold text-violet-500 uppercase tracking-wide">Valor de la semana</div>
+      <div className="min-w-0">
         <div className="text-base font-bold text-slate-800 truncate">{valor.nombre || "Sin definir todavía"}</div>
         {valor.descripcion && <div className="text-xs text-slate-500 mt-0.5">{valor.descripcion}</div>}
       </div>
-      <button onClick={() => setEditando(true)} className="text-xs text-slate-400 hover:text-violet-600 shrink-0">✏️</button>
       {ampliado && valor.html_contenido && <ContenidoLightbox html={valor.html_contenido} onClose={() => setAmpliado(false)} />}
       {ampliado && !valor.html_contenido && valor.imagen_url && <FotoLightbox url={valor.imagen_url} nombre={valor.nombre || "Valor de la semana"} onClose={() => setAmpliado(false)} />}
     </div>
@@ -220,7 +280,7 @@ function ReflexionesSinRevisarModal({ onClose }) {
   );
 }
 
-export function VistaInicio({ onIrA, soloEncabezado, accionSuperior }) {
+export function VistaInicio({ onIrA, soloEncabezado, accionSuperior, contenidoMedio }) {
   const [stats, setStats] = useState(null);
   const [resumen, setResumen] = useState(null);
   const [cargando, setCargando] = useState(true);
@@ -320,26 +380,11 @@ export function VistaInicio({ onIrA, soloEncabezado, accionSuperior }) {
         </div>
       </div>
 
-      <ValorSemanaCard />
+      {contenidoMedio}
 
       {!soloEncabezado && (
-      <>
-      {/* Resumen del día */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
-          <div className="font-bold text-slate-800 mb-3">Resumen del día</div>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-slate-500">📅 Clases de hoy</span><span className="font-semibold text-slate-700">{resumen.clasesHoy.length}</span></div>
-            <div className="flex justify-between"><span className="text-slate-500">🗓️ Eventos de hoy</span><span className="font-semibold text-slate-700">{resumen.eventosHoy.length}</span></div>
-            <div className="flex justify-between"><span className="text-slate-500">⚔️ Misiones publicadas</span><span className="font-semibold text-slate-700">{resumen.evaluacionesPublicadas}</span></div>
-            <div className="flex justify-between"><span className="text-slate-500">📝 Entregas por revisar</span><span className="font-semibold text-amber-600">{resumen.entregasPendientes}</span></div>
-            <div className="flex justify-between"><span className="text-slate-500">🔨 Tareas sin calificar</span><span className="font-semibold text-amber-600">{resumen.tareasSinCalificar}</span></div>
-            <div className="flex justify-between"><span className="text-slate-500">📖 Clases planeadas pendientes</span><span className="font-semibold text-amber-600">{resumen.clasesPendientes}</span></div>
-            <button onClick={() => setCodiceAbierto(true)} className="w-full flex justify-between hover:bg-slate-50 rounded px-1 -mx-1">
-              <span className="text-slate-500">📜 Reflexiones sin revisar</span><span className="font-semibold text-amber-600">{resumen.codiceSinRevisar}</span>
-            </button>
-          </div>
-        </div>
+        <ValorSemanaCard />
 
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
           <div className="font-bold text-slate-800 mb-3">Clases de hoy ({DIAS_NOMBRE[hoy.getDay()]})</div>
@@ -384,23 +429,8 @@ export function VistaInicio({ onIrA, soloEncabezado, accionSuperior }) {
           )}
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
-          <div className="font-bold text-slate-800 mb-3">Eventos de hoy</div>
-          {resumen.eventosHoy.length === 0 ? (
-            <p className="text-xs text-slate-400">No hay eventos del cronograma para hoy.</p>
-          ) : (
-            <div className="space-y-1.5">
-              {resumen.eventosHoy.map((e) => (
-                <div key={e.id} className="flex items-start gap-2 bg-slate-50 rounded-lg px-2.5 py-1.5 text-xs">
-                  <span className="w-2 h-2 rounded-full shrink-0 mt-1" style={{ background: TIPO_EVENTO_COLOR[e.tipo] || "#64748B" }} />
-                  <span className="font-semibold text-slate-700 min-w-0 break-words">{e.titulo}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <CalendarioPlaneaciones />
       </div>
-      </>
       )}
 
       {codiceAbierto && <ReflexionesSinRevisarModal onClose={() => setCodiceAbierto(false)} />}
