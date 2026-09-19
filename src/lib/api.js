@@ -333,6 +333,43 @@ export async function crearActasEnLote(estudianteIds, camposComunes) {
   return data;
 }
 
+// Lista las tandas de "Reunión de Padres" ya generadas (agrupadas por
+// reunion_lote_id), para poder volver a verlas/imprimirlas sin tener que
+// rehacerlas ni volver a elegir estudiantes.
+export async function fetchLotesDeReunion() {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("actas")
+    .select("reunion_lote_id, fecha, asunto, lugar, hora_inicio, hora_fin, estudiante_id, estudiantes(nombre, grado_id)")
+    .eq("tipo", "Reunión de Padres").eq("registrado_por", userData?.user?.id || null)
+    .not("reunion_lote_id", "is", null)
+    .order("fecha", { ascending: false });
+  if (error) throw error;
+
+  const porLote = {};
+  (data || []).forEach((fila) => {
+    if (!porLote[fila.reunion_lote_id]) {
+      porLote[fila.reunion_lote_id] = { loteId: fila.reunion_lote_id, fecha: fila.fecha, asunto: fila.asunto, lugar: fila.lugar, estudiantes: [] };
+    }
+    porLote[fila.reunion_lote_id].estudiantes.push({ id: fila.estudiante_id, nombre: fila.estudiantes?.nombre, grado_id: fila.estudiantes?.grado_id });
+  });
+  return Object.values(porLote).sort((a, b) => (a.fecha < b.fecha ? 1 : -1));
+}
+
+// Trae todas las actas de una tanda puntual, ya listas con su
+// estudiante, para reimprimirlas tal cual quedaron.
+export async function fetchActasDeLote(loteId) {
+  const { data, error } = await supabase.from("actas")
+    .select("*, estudiantes(id, nombre, grado_id)")
+    .eq("reunion_lote_id", loteId).order("id");
+  if (error) throw error;
+  return (data || []).map((acta) => ({ acta, estudiante: acta.estudiantes }));
+}
+
+export async function eliminarLoteDeReunion(loteId) {
+  const { error } = await supabase.from("actas").delete().eq("reunion_lote_id", loteId);
+  if (error) throw error;
+}
+
 export async function eliminarActa(id) {
   const { error } = await supabase.from("actas").delete().eq("id", id);
   if (error) throw error;
