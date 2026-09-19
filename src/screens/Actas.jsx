@@ -305,6 +305,89 @@ function ActaInstitucionalPrintView({ estudiante, acta, institucion, ultimaPagin
   );
 }
 
+export function HistorialReunionesModal({ onClose }) {
+  const [lotes, setLotes] = useState(null);
+  const [institucion, setInstitucion] = useState({ nombre: "Institución Educativa" });
+  const [actasParaImprimir, setActasParaImprimir] = useState(null);
+  const [borrando, setBorrando] = useState(null);
+
+  const cargar = () => api.fetchLotesDeReunion().then(setLotes);
+  useEffect(() => { cargar(); api.fetchInstitucion().then(setInstitucion); }, []);
+
+  useEffect(() => {
+    if (!actasParaImprimir) return;
+    const id = setTimeout(() => window.print(), 200);
+    const onAfter = () => setActasParaImprimir(null);
+    window.addEventListener("afterprint", onAfter);
+    return () => { clearTimeout(id); window.removeEventListener("afterprint", onAfter); };
+  }, [actasParaImprimir]);
+
+  const reimprimir = async (lote) => {
+    const pares = await api.fetchActasDeLote(lote.loteId);
+    setActasParaImprimir(pares);
+  };
+
+  const borrar = async (lote) => {
+    if (!confirm(`¿Eliminar esta reunión completa (${lote.estudiantes.length} acta(s))? No se puede deshacer.`)) return;
+    setBorrando(lote.loteId);
+    try {
+      await api.eliminarLoteDeReunion(lote.loteId);
+      cargar();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setBorrando(null);
+  };
+
+  if (actasParaImprimir) {
+    return createPortal(
+      <>
+        {actasParaImprimir.map((par, i) => (
+          <ActaInstitucionalPrintView key={par.acta.id} estudiante={par.estudiante} acta={par.acta} institucion={institucion}
+            ultimaPagina={i === actasParaImprimir.length - 1} />
+        ))}
+      </>,
+      document.body
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center p-4 no-print" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-1">
+          <h3 className="font-bold text-slate-800">🗂️ Reuniones de Padres — historial</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-400 mb-4">Volvé a cualquier reunión ya generada para reimprimirla, sin tener que rehacerla ni volver a elegir estudiantes.</p>
+
+        {lotes === null ? (
+          <p className="text-sm text-slate-400">Cargando…</p>
+        ) : lotes.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-6">Todavía no generaste ninguna Reunión de Padres.</p>
+        ) : (
+          <div className="space-y-2">
+            {lotes.map((lote) => (
+              <div key={lote.loteId} className="border border-slate-100 rounded-xl p-3">
+                <div className="flex justify-between items-start gap-2">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-800">{lote.asunto || "Sin asunto"}</div>
+                    <div className="text-xs text-slate-400">{lote.fecha} {lote.lugar ? `· ${lote.lugar}` : ""} · {lote.estudiantes.length} estudiante{lote.estudiantes.length !== 1 && "s"}</div>
+                    <div className="text-[11px] text-slate-400 mt-1">{lote.estudiantes.map((e) => e.nombre).join(", ")}</div>
+                  </div>
+                  <div className="flex gap-1.5 shrink-0">
+                    <button onClick={() => reimprimir(lote)} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white">🖨️ Reimprimir</button>
+                    <button disabled={borrando === lote.loteId} onClick={() => borrar(lote)} className="text-slate-300 hover:text-rose-500 px-1">🗑</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function GenerarActaMultipleModal({ gradoId, grados = [], onClose }) {
   const [cursosSeleccionados, setCursosSeleccionados] = useState([gradoId]);
   const [estudiantesPorCurso, setEstudiantesPorCurso] = useState({}); // { gradoId: [estudiantes] }
