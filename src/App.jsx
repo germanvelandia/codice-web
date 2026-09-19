@@ -44,7 +44,7 @@ import { VistaTableroSemanal } from "./screens/TableroSemanal";
 import { VistaInicio, ContenidoLightbox } from "./screens/Inicio";
 import { VistaComarcaOakhaven, TarjetaComarcaPublica, urlDeTarjeta, urlQR } from "./screens/ComarcaOakhaven";
 import { VistaBancoContenido, JugarSetModal, VistaBancoContenidoEstudiante } from "./screens/BancoContenido";
-import { InicioDocenteTarjetas, InicioEstudianteTarjetas } from "./screens/InicioTarjetas";
+import { NavegacionPorTarjetas, BotonVolverInicio } from "./screens/InicioTarjetas";
 import { EditorTexto, TextoEnriquecido, textoPlano } from "./components/RichText";
 import { InstitucionModal } from "./screens/Institucion";
 import { AdministracionModal } from "./screens/Administracion";
@@ -1105,9 +1105,6 @@ function MenuCodice({ activo, onCambiar, monedas, gradoId }) {
             <span className="text-sm font-bold text-amber-300">{monedas}</span>
           </div>
         )}
-        <button onClick={() => setMenuAbierto((v) => !v)} className="md:hidden text-violet-200 text-lg" title="Menú">
-          {menuAbierto ? "✕" : "☰"}
-        </button>
       </div>
 
       {ultimoAnuncio && (
@@ -1121,64 +1118,14 @@ function MenuCodice({ activo, onCambiar, monedas, gradoId }) {
         </button>
       )}
 
-      {/* Escritorio: categorías con submenú desplegable */}
-      <div className="hidden md:flex flex-wrap gap-1 px-3 py-2">
-        {MENU_CODICE_GRUPOS.map((grupo) => {
-          if (grupo.items.length === 1) {
-            const m = grupo.items[0];
-            return (
-              <button key={m.key} onClick={() => elegir(m.key)}
-                className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap flex items-center gap-1.5"
-                style={{ background: activo === m.key ? "rgba(139,92,246,0.35)" : "transparent", color: activo === m.key ? "#EDE9FE" : "#A78BFA" }}>
-                <span>{m.icono}</span> {m.label}
-              </button>
-            );
-          }
-          const activoEnGrupo = grupo.items.some((it) => it.key === activo);
-          return (
-            <div key={grupo.key} className="relative">
-              <button onClick={() => setSubmenuAbierto(submenuAbierto === grupo.key ? null : grupo.key)}
-                className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap flex items-center gap-1.5"
-                style={{ background: activoEnGrupo ? "rgba(139,92,246,0.35)" : "transparent", color: activoEnGrupo ? "#EDE9FE" : "#A78BFA" }}>
-                <span>{grupo.icono}</span> {grupo.label} <span className="text-[8px]">▾</span>
-              </button>
-              {submenuAbierto === grupo.key && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setSubmenuAbierto(null)} />
-                  <div className="absolute left-0 top-full mt-1 rounded-xl shadow-lg py-1 w-52 z-20" style={{ background: "#241f3d", border: "1px solid #4c1d95" }}>
-                    {grupo.items.map((m) => (
-                      <button key={m.key} onClick={() => elegir(m.key)}
-                        className="w-full text-left text-xs px-3 py-2 flex items-center gap-2"
-                        style={{ color: activo === m.key ? "#EDE9FE" : "#C4B5FD", fontWeight: activo === m.key ? 700 : 400, background: activo === m.key ? "rgba(139,92,246,0.25)" : "transparent" }}>
-                        <span>{m.icono}</span> {m.label}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Móvil: menú desplegable, agrupado por categoría */}
-      {menuAbierto && (
-        <div className="md:hidden px-3 py-3 space-y-2">
-          {MENU_CODICE_GRUPOS.map((grupo) => (
-            <div key={grupo.key}>
-              {grupo.items.length > 1 && <div className="text-[10px] font-bold text-violet-300 uppercase tracking-wide mb-1 px-1">{grupo.icono} {grupo.label}</div>}
-              <div className="grid grid-cols-3 gap-1.5">
-                {grupo.items.map((m) => (
-                  <button key={m.key} onClick={() => elegir(m.key)}
-                    className="text-[11px] px-2 py-2.5 rounded-xl flex flex-col items-center gap-1"
-                    style={{ background: activo === m.key ? "rgba(139,92,246,0.35)" : "rgba(255,255,255,0.05)", color: activo === m.key ? "#EDE9FE" : "#A78BFA" }}>
-                    <span className="text-base">{m.icono}</span>
-                    <span className="text-center leading-tight">{m.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
+      {/* La navegación ahora vive como cuadrícula de tarjetas en el
+          contenido de Inicio — acá solo queda un acceso rápido para
+          volver, visible en cualquier otra pantalla. */}
+      {activo !== "inicio" && (
+        <div className="px-3 py-2">
+          <button onClick={() => elegir("inicio")} className="text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5 w-fit" style={{ background: "rgba(139,92,246,0.25)", color: "#EDE9FE" }}>
+            ← Volver a Inicio
+          </button>
         </div>
       )}
     </div>
@@ -1994,8 +1941,8 @@ function PortalEstudiante() {
               </div>
 
               <div className="mt-6">
-                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">Acceso rápido</h3>
-                <InicioEstudianteTarjetas onIr={setVista} />
+                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">Todas las secciones</h3>
+                <NavegacionPorTarjetas grupos={MENU_CODICE_GRUPOS} onIr={setVista} />
               </div>
             </>
           )}
@@ -2323,75 +2270,17 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
         <div className="flex items-center gap-3 shrink-0">
           <button onClick={onAdmin} className="text-base" title="Docentes y mi cuenta">👤</button>
           <button onClick={onInstitucion} className="text-base" title="Institución">⚙️</button>
-          <button onClick={onSalir} className="text-base hidden md:inline" title="Cerrar sesión">🚪</button>
-          {/* Móvil: botón hamburguesa para desplegar el menú completo */}
-          <button onClick={() => setMenuAbierto((v) => !v)} className="md:hidden text-violet-200 text-lg" title="Menú">
-            {menuAbierto ? "✕" : "☰"}
-          </button>
+          <button onClick={onSalir} className="text-base" title="Cerrar sesión">🚪</button>
         </div>
       </div>
 
-      {/* Escritorio: categorías con submenú desplegable — mucho menos abarrotado */}
-      <div className="hidden md:flex flex-wrap gap-1 px-3 pb-2">
-        {MENU_PANEL_GRUPOS.map((grupo) => {
-          if (grupo.items.length === 1) {
-            const m = grupo.items[0];
-            return (
-              <button key={m.key} onClick={() => elegir(m.key)}
-                className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap flex items-center gap-1.5"
-                style={{ background: activo === m.key ? "rgba(139,92,246,0.35)" : "transparent", color: activo === m.key ? "#EDE9FE" : "#A78BFA" }}>
-                <span>{m.icono}</span> {m.label}
-              </button>
-            );
-          }
-          const activoEnGrupo = grupo.items.some((it) => it.key === activo);
-          return (
-            <div key={grupo.key} className="relative">
-              <button onClick={() => setSubmenuAbierto(submenuAbierto === grupo.key ? null : grupo.key)}
-                className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap flex items-center gap-1.5"
-                style={{ background: activoEnGrupo ? "rgba(139,92,246,0.35)" : "transparent", color: activoEnGrupo ? "#EDE9FE" : "#A78BFA" }}>
-                <span>{grupo.icono}</span> {grupo.label} <span className="text-[8px]">▾</span>
-              </button>
-              {submenuAbierto === grupo.key && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setSubmenuAbierto(null)} />
-                  <div className="absolute left-0 top-full mt-1 rounded-xl shadow-lg py-1 w-56 z-20" style={{ background: "#241f3d", border: "1px solid #4c1d95" }}>
-                    {grupo.items.map((m) => (
-                      <button key={m.key} onClick={() => { elegir(m.key); setSubmenuAbierto(null); }}
-                        className="w-full text-left text-xs px-3 py-2 flex items-center gap-2"
-                        style={{ color: activo === m.key ? "#EDE9FE" : "#C4B5FD", fontWeight: activo === m.key ? 700 : 400, background: activo === m.key ? "rgba(139,92,246,0.25)" : "transparent" }}>
-                        <span>{m.icono}</span> {m.label}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Móvil: menú desplegable, agrupado por categoría */}
-      {menuAbierto && (
-        <div className="md:hidden px-3 pb-3 space-y-2">
-          {MENU_PANEL_GRUPOS.map((grupo) => (
-            <div key={grupo.key}>
-              {grupo.items.length > 1 && <div className="text-[10px] font-bold text-violet-300 uppercase tracking-wide mb-1 px-1">{grupo.icono} {grupo.label}</div>}
-              <div className="grid grid-cols-3 gap-1.5">
-                {grupo.items.map((m) => (
-                  <button key={m.key} onClick={() => elegir(m.key)}
-                    className="text-[11px] px-2 py-2.5 rounded-xl flex flex-col items-center gap-1"
-                    style={{ background: activo === m.key ? "rgba(139,92,246,0.35)" : "rgba(255,255,255,0.05)", color: activo === m.key ? "#EDE9FE" : "#A78BFA" }}>
-                    <span className="text-base">{m.icono}</span>
-                    <span className="text-center leading-tight">{m.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-          <button onClick={onSalir} className="w-full text-[11px] px-2 py-2.5 rounded-xl flex items-center justify-center gap-2 text-rose-300" style={{ background: "rgba(255,255,255,0.05)" }}>
-            <span className="text-base">🚪</span>
-            <span>Cerrar sesión</span>
+      {/* La navegación ahora vive como cuadrícula de tarjetas en el
+          contenido de Inicio — acá solo queda un acceso rápido para
+          volver, visible en cualquier otra pantalla. */}
+      {activo !== "inicio" && (
+        <div className="px-3 pb-2">
+          <button onClick={() => elegir("inicio")} className="text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5 w-fit" style={{ background: "rgba(139,92,246,0.25)", color: "#EDE9FE" }}>
+            ← Volver a Inicio
           </button>
         </div>
       )}
@@ -2499,8 +2388,8 @@ function Panel({ session }) {
           <>
             <VistaInicio onIrA={irA} />
             <div className="mt-6">
-              <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">Acceso rápido</h3>
-              <InicioDocenteTarjetas onIr={irA} />
+              <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">Todas las secciones</h3>
+              <NavegacionPorTarjetas grupos={MENU_PANEL_GRUPOS} onIr={irA} />
             </div>
           </>
         )}
