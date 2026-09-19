@@ -7,7 +7,7 @@ import { EditorTexto, TextoEnriquecido } from "../components/RichText";
 
 // (REINO_COLORS ahora se importa directo desde gamification.js, ver arriba)
 import * as api from "../lib/api";
-import { ActasModal, GenerarActaMultipleModal } from "./Actas";
+import { ActasModal, GenerarActaMultipleModal, HistorialReunionesModal } from "./Actas";
 import { RemisionModal } from "./Remision";
 import { ResumenEstudianteModal } from "./Resumen";
 import { ObservadorModal, ObservadorPorGradoModal } from "./Observador";
@@ -1982,6 +1982,7 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
   const [importarDatosAbierto, setImportarDatosAbierto] = useState(false);
   const [observadoresGradoAbierto, setObservadoresGradoAbierto] = useState(false);
   const [actaMultipleAbierta, setActaMultipleAbierta] = useState(false);
+  const [historialReunionesAbierto, setHistorialReunionesAbierto] = useState(false);
 
   const cargar = async () => {
     setCargando(true);
@@ -2064,6 +2065,7 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
             <button onClick={() => setImportarDatosAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">📥 Importar directorio y datos</button>
             <button onClick={() => setObservadoresGradoAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🖨️ Observadores del curso</button>
             <button onClick={() => setActaMultipleAbierta(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700">📋 Generar Acta de Reunión</button>
+            <button onClick={() => setHistorialReunionesAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-violet-200 text-violet-600">🗂️ Reuniones anteriores</button>
             <button onClick={() => setPlanillaBlancoAbierta(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🖨️ Planilla en blanco</button>
             <button onClick={() => setImportarAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700">📥 Importar varios</button>
           </div>
@@ -2112,6 +2114,7 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
         <ObservadorPorGradoModal gradoId={gradoId} onClose={() => setObservadoresGradoAbierto(false)} />
       )}
       {actaMultipleAbierta && <GenerarActaMultipleModal gradoId={gradoId} grados={grados} onClose={() => setActaMultipleAbierta(false)} />}
+      {historialReunionesAbierto && <HistorialReunionesModal onClose={() => setHistorialReunionesAbierto(false)} />}
 
       <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar estudiante…"
         className="w-full max-w-sm text-sm rounded-full px-4 py-2 border border-slate-200 outline-none mb-4" />
