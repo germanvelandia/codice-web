@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   Home, Users, ClipboardCheck, BookOpen, FileText, Calendar, Clock, Award,
   Image, Gift, Trophy, TrendingUp, TrendingDown, Wrench, HelpCircle, Star,
@@ -112,21 +112,24 @@ function TarjetaMenu({ Icono, colores, label, onClick }) {
 /* ==================== Navegación de 2 niveles: Grupos → Elementos ====================
    Reemplaza la barra de navegación de arriba. Recibe la MISMA estructura
    de grupos que ya usaba la app (MENU_PANEL_GRUPOS / MENU_CODICE_GRUPOS)
-   y arma la cuadrícula sola — no hay que mantener una lista aparte. */
-export function NavegacionPorTarjetas({ grupos, onIr }) {
-  const [grupoAbierto, setGrupoAbierto] = useState(null);
-
+   y arma la cuadrícula sola — no hay que mantener una lista aparte.
+   grupoAbierto/onCambiarGrupo se manejan afuera para que el padre pueda
+   mostrar el grupo abierto como una pantalla propia, sin mezclarlo con
+   el resto del contenido de Inicio. */
+export function NavegacionPorTarjetas({ grupos, onIr, grupoAbierto, onCambiarGrupo }) {
   // Grupos con un solo elemento van directo como tarjeta (sin nivel intermedio).
   const gruposVisibles = grupos.filter((g) => g.key !== "inicio_grupo");
   const tarjetasNivel1 = gruposVisibles.flatMap((g) => g.items.length === 1 ? [{ ...g.items[0], esGrupo: false }] : [{ key: g.key, label: g.label, esGrupo: true }]);
 
   if (grupoAbierto) {
     const grupo = grupos.find((g) => g.key === grupoAbierto);
+    if (!grupo) return null;
     return (
       <div>
-        <button onClick={() => setGrupoAbierto(null)} className="flex items-center gap-1 text-xs font-semibold text-violet-500 mb-3">
+        <button onClick={() => onCambiarGrupo(null)} className="flex items-center gap-1 text-xs font-semibold text-violet-500 mb-3">
           <ChevronLeft size={14} /> Todas las secciones
         </button>
+        <h2 className="text-lg font-bold text-slate-800 mb-4">{grupo.icono} {grupo.label}</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {grupo.items.map((it, i) => (
             <TarjetaMenu key={it.key} Icono={obtenerIcono(it.key, false)} colores={PALETA[i % PALETA.length]} label={it.label} onClick={() => onIr(it.key)} />
@@ -140,7 +143,7 @@ export function NavegacionPorTarjetas({ grupos, onIr }) {
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
       {tarjetasNivel1.map((it, i) => (
         <TarjetaMenu key={it.key} Icono={obtenerIcono(it.key, it.esGrupo)} colores={PALETA[i % PALETA.length]} label={it.label}
-          onClick={() => it.esGrupo ? setGrupoAbierto(it.key) : onIr(it.key)} />
+          onClick={() => it.esGrupo ? onCambiarGrupo(it.key) : onIr(it.key)} />
       ))}
     </div>
   );
