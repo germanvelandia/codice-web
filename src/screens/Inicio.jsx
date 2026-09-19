@@ -281,17 +281,6 @@ export function VistaInicio({ onIrA }) {
     return { level: stats.nivel, pctNivel: pct };
   })();
 
-  const MODULOS = [
-    { key: "estudiantes", label: "Mi Reino", sub: "Tus estudiantes", icono: "🏰" },
-    { key: "calificaciones", label: "Códice", sub: "Notas y planillas", icono: "📖" },
-    { key: "evaluaciones", label: "Misiones", sub: "Evaluaciones", icono: "⚔️" },
-    { key: "proyectosforja", label: "La Forja", sub: "Proyectos y talleres", icono: "🔨" },
-    { key: "planeaciones", label: "Biblioteca", sub: "Planeaciones", icono: "📚" },
-    { key: "herramientas", label: "Herramientas", sub: "Ruleta, banco, temporizador", icono: "🛠️" },
-    { key: "horario", label: "Agenda", sub: "Horario y cronograma", icono: "🗓️" },
-    { key: "reportes", label: "Reportes", sub: "Análisis y estadísticas", icono: "📊" },
-  ];
-
   return (
     <div>
       {/* Banner de bienvenida */}
@@ -407,18 +396,6 @@ export function VistaInicio({ onIrA }) {
             </div>
           )}
         </div>
-      </div>
-
-      {/* Módulos principales */}
-      <div className="font-bold text-slate-800 mb-3">Módulos principales</div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {MODULOS.map((m) => (
-          <button key={m.key} onClick={() => onIrA(m.key)} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 text-left hover:border-violet-300 transition-colors">
-            <div className="text-2xl mb-1">{m.icono}</div>
-            <div className="text-sm font-bold text-slate-800">{m.label}</div>
-            <div className="text-[11px] text-slate-400">{m.sub}</div>
-          </button>
-        ))}
       </div>
 
       {codiceAbierto && <ReflexionesSinRevisarModal onClose={() => setCodiceAbierto(false)} />}
