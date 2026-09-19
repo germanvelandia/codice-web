@@ -6,7 +6,7 @@ import { bandaDesempeno, notaFinalPonderada } from "./lib/calificaciones";
 import { sonidoGirar, sonidoAcierto, sonidoError, sonidoLogro } from "./lib/sonidos";
 import { VistaGrados, VistaReinos, VistaEstudiantes, FotoLightbox } from "./screens/Estudiantes";
 import { VistaAsistencia } from "./screens/Asistencia";
-import { VistaRuleta, VistaRuletaMonedas, VistaTemporizador, VistaHerramientas } from "./screens/Herramientas";
+import { VistaRuleta, VistaRuletaMonedas, VistaTemporizador, DadoTool, CronometroTool, SemaforoTool, SorteoOrdenTool, GeneradorGruposTool, MarcadorPuntosTool, SelectorEstudianteTool, BingoTool } from "./screens/Herramientas";
 import { VistaAccionesMasivas } from "./screens/AccionesMasivas";
 import { VistaBanco } from "./screens/Banco";
 import { VistaAlbum, CartaCriatura } from "./screens/Album";
@@ -45,7 +45,7 @@ import { VistaInicio, ContenidoLightbox } from "./screens/Inicio";
 import { VistaComarcaOakhaven, TarjetaComarcaPublica, urlDeTarjeta, urlQR } from "./screens/ComarcaOakhaven";
 import { VistaBancoContenido, JugarSetModal, VistaBancoContenidoEstudiante } from "./screens/BancoContenido";
 import { NavegacionPorTarjetas, BotonVolverInicio, EnlaceTodasLasSecciones } from "./screens/InicioTarjetas";
-import { Star, Gift, Settings, Package, Image, FileText, Award, Trophy, Puzzle, BookOpen, HelpCircle, Archive, Clock, Wrench } from "lucide-react";
+import { Star, Gift, Settings, Package, Image, FileText, Award, Trophy, Puzzle, BookOpen, HelpCircle, Archive, Clock, Wrench, Palette, GraduationCap, Users } from "lucide-react";
 import { EditorTexto, TextoEnriquecido, textoPlano } from "./components/RichText";
 import { InstitucionModal } from "./screens/Institucion";
 import { AdministracionModal } from "./screens/Administracion";
@@ -2449,7 +2449,14 @@ function Panel({ session }) {
                 { key: "trivia", label: "Preguntados", Icono: HelpCircle, fondo: "#DBEAFE", color: "#1D4ED8" },
                 { key: "bancopreguntas", label: "Banco de Preguntas", Icono: Archive, fondo: "#FCE7F3", color: "#BE185D" },
                 { key: "temporizador", label: "Temporizador", Icono: Clock, fondo: "#FEF3C7", color: "#B45309" },
-                { key: "otras", label: "Otras herramientas", Icono: Wrench, fondo: "#EDE9FE", color: "#6D28D9" },
+                { key: "dado", label: "Dado", Icono: Package, fondo: "#EDE9FE", color: "#6D28D9" },
+                { key: "cronometro", label: "Cronómetro", Icono: Clock, fondo: "#DBEAFE", color: "#1D4ED8" },
+                { key: "semaforo", label: "Semáforo", Icono: Palette, fondo: "#DCFCE7", color: "#15803D" },
+                { key: "sorteoorden", label: "Sorteo de Orden / Parejas", Icono: Users, fondo: "#FCE7F3", color: "#BE185D" },
+                { key: "grupos", label: "Generador de Grupos", Icono: GraduationCap, fondo: "#FFEDD5", color: "#C2410C" },
+                { key: "marcador", label: "Marcador de Puntos", Icono: Award, fondo: "#E0E7FF", color: "#4338CA" },
+                { key: "selectorestudiante", label: "Selector de Estudiante", Icono: Star, fondo: "#CFFAFE", color: "#0E7490" },
+                { key: "bingo", label: "Bingo de Repaso", Icono: Puzzle, fondo: "#F3E8FF", color: "#7E22CE" },
               ].map((op) => (
                 <button key={op.key} onClick={() => setSubTabHerramientas(op.key)}
                   className={`flex items-center gap-2.5 rounded-2xl border px-3.5 py-3 text-left transition-all ${subTabHerramientas === op.key ? "border-violet-300 bg-violet-50" : "border-slate-200 bg-white hover:border-slate-300"}`}>
@@ -2474,7 +2481,14 @@ function Panel({ session }) {
             {subTabHerramientas === "trivia" && <VistaTriviaAdmin grados={grados} />}
             {subTabHerramientas === "bancopreguntas" && <VistaBancoPreguntas grados={grados} />}
             {subTabHerramientas === "temporizador" && <VistaTemporizador />}
-            {subTabHerramientas === "otras" && <VistaHerramientas grados={grados} />}
+            {subTabHerramientas === "dado" && <DadoTool />}
+            {subTabHerramientas === "cronometro" && <CronometroTool />}
+            {subTabHerramientas === "semaforo" && <SemaforoTool />}
+            {subTabHerramientas === "sorteoorden" && <SorteoOrdenTool grados={grados} />}
+            {subTabHerramientas === "grupos" && <GeneradorGruposTool grados={grados} />}
+            {subTabHerramientas === "marcador" && <MarcadorPuntosTool />}
+            {subTabHerramientas === "selectorestudiante" && <SelectorEstudianteTool grados={grados} />}
+            {subTabHerramientas === "bingo" && <BingoTool />}
           </>
         )}
         {tab === "roles" && <VistaRoles />}
