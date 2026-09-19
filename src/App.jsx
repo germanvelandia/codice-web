@@ -25,7 +25,7 @@ import { VistaRoles } from "./screens/Roles";
 import { VistaCalificaciones } from "./screens/Calificaciones";
 import { VistaReportes } from "./screens/Reportes";
 import { VistaHorario } from "./screens/Horario";
-import { VistaPlaneaciones } from "./screens/Planeaciones";
+import { VistaPlaneaciones, MiPlanDeEstudio } from "./screens/Planeaciones";
 import { VistaBiblioteca } from "./screens/Biblioteca";
 import { VistaAnotaciones } from "./screens/Anotaciones";
 import { VistaInclusionGeneral } from "./screens/InclusionGeneral";
@@ -1038,6 +1038,7 @@ const MENU_CODICE_GRUPOS = [
       { key: "misiones", label: "Misiones", icono: "⚔️" },
       { key: "forja", label: "Forja", icono: "🔨" },
       { key: "guias", label: "Guías", icono: "📘" },
+      { key: "planestudio", label: "Mi Plan de Estudio", icono: "📖" },
       { key: "biblioteca", label: "Biblioteca", icono: "📚" },
       { key: "proyectos", label: "Proyectos", icono: "📜" },
       { key: "historial", label: "Historial", icono: "🗂️" },
@@ -1975,6 +1976,8 @@ function PortalEstudiante() {
           {vista === "guias" && estudianteInfo && (
             <GuiasEstudiante gradoId={estudianteInfo.grado_id} estudianteId={estudianteInfo.id} />
           )}
+
+          {vista === "planestudio" && estudianteInfo && <MiPlanDeEstudio estudianteInfo={estudianteInfo} />}
 
           {vista === "codice" && estudianteInfo && (
             <CodiceEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />
