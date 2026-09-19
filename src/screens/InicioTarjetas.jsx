@@ -1,28 +1,98 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Home, Users, ClipboardCheck, BookOpen, Swords, Hammer, FileText, CalendarDays,
   Landmark, Puzzle, BarChart3, Wrench, BookText, ScrollText, Library, Archive,
-  TrendingUp, Trophy, Gift, Image, CircleHelp, Palette, User,
+  TrendingUp, Trophy, Gift, Image, CircleHelp, Palette, User, GraduationCap,
+  HeartHandshake, Settings, ClipboardList, NotebookPen, TrendingDown, IdCard,
+  Award, Backpack, CalendarClock, UserCog, Gamepad2, PartyPopper, Target,
+  ChevronLeft, LayoutGrid,
 } from "lucide-react";
 
-// Cada tarjeta: fondo pastel del círculo + color más saturado del ícono,
-// combinando siempre la misma familia de color (ej: verde claro + verde oscuro).
+// Un ícono de línea por cada sección que ya existe en la plataforma —
+// tanto de grupo como de elemento individual. Si algún día se agrega una
+// sección nueva y no está acá, se usa LayoutGrid como respaldo genérico
+// (nunca rompe, solo se ve menos específico).
+const ICONOS_ITEM = {
+  inicio: Home,
+  entregasrevisar: ClipboardList,
+  estudiantes: Users,
+  asistencia: ClipboardCheck,
+  calificaciones: BookOpen,
+  evaluaciones: Swords,
+  proyectosforja: Hammer,
+  planeaciones: FileText,
+  tablerosemanal: CalendarDays,
+  rubricas: Target,
+  guiasestudio: BookOpen,
+  actividadesprogramadas: Gamepad2,
+  biblioteca: Library,
+  anotaciones: NotebookPen,
+  inclusion: HeartHandshake,
+  bajasvida: TrendingDown,
+  direccioncurso: GraduationCap,
+  corregirnombres: IdCard,
+  niveles: Award,
+  objetos: Backpack,
+  horario: CalendarClock,
+  roles: UserCog,
+  reportes: BarChart3,
+  herramientas: Wrench,
+  comarca: Landmark,
+  bancocontenido: Puzzle,
+  // estudiante
+  codice: BookText,
+  notas: ScrollText,
+  misiones: Swords,
+  forja: Hammer,
+  guias: BookOpen,
+  proyectos: Archive,
+  historial: Archive,
+  ranking: TrendingUp,
+  salonhonor: Trophy,
+  recompensas: Gift,
+  album: Image,
+  preguntados: CircleHelp,
+  personaje: Palette,
+  perfil: User,
+};
+
+const ICONOS_GRUPO = {
+  inicio_grupo: Home,
+  academico: GraduationCap,
+  convivencial: HeartHandshake,
+  administracion: Settings,
+  herramientas_grupo: Wrench,
+  estudio: GraduationCap,
+  comunidad: Trophy,
+  diversion: PartyPopper,
+  cuenta: User,
+};
+
+function obtenerIcono(key, esGrupo) {
+  return (esGrupo ? ICONOS_GRUPO[key] : ICONOS_ITEM[key]) || LayoutGrid;
+}
+
+// Reparte el label en dos líneas de forma pareja, para que el texto en
+// negrita quede prolijo dentro de la tarjeta (igual que "Facultad de" +
+// nombre en el diseño original).
+function partirEnDosLineas(label) {
+  const palabras = label.split(" ");
+  if (palabras.length <= 1) return [label, null];
+  const mitad = Math.ceil(palabras.length / 2);
+  return [palabras.slice(0, mitad).join(" "), palabras.slice(mitad).join(" ")];
+}
+
 const PALETA = [
-  { fondo: "#DCFCE7", icono: "#15803D" }, // verde
-  { fondo: "#DBEAFE", icono: "#1D4ED8" }, // azul
-  { fondo: "#FCE7F3", icono: "#BE185D" }, // rosa
-  { fondo: "#FEF3C7", icono: "#B45309" }, // ámbar
-  { fondo: "#FEE2E2", icono: "#B91C1C" }, // rojo
-  { fondo: "#EDE9FE", icono: "#6D28D9" }, // violeta
-  { fondo: "#CCFBF1", icono: "#0F766E" }, // teal
-  { fondo: "#FFEDD5", icono: "#C2410C" }, // naranja
-  { fondo: "#E0E7FF", icono: "#4338CA" }, // índigo
-  { fondo: "#CFFAFE", icono: "#0E7490" }, // cian
-  { fondo: "#F3E8FF", icono: "#7E22CE" }, // púrpura
-  { fondo: "#F1F5F9", icono: "#475569" }, // gris
+  { fondo: "#DCFCE7", icono: "#15803D" }, { fondo: "#DBEAFE", icono: "#1D4ED8" },
+  { fondo: "#FCE7F3", icono: "#BE185D" }, { fondo: "#FEF3C7", icono: "#B45309" },
+  { fondo: "#FEE2E2", icono: "#B91C1C" }, { fondo: "#EDE9FE", icono: "#6D28D9" },
+  { fondo: "#CCFBF1", icono: "#0F766E" }, { fondo: "#FFEDD5", icono: "#C2410C" },
+  { fondo: "#E0E7FF", icono: "#4338CA" }, { fondo: "#CFFAFE", icono: "#0E7490" },
+  { fondo: "#F3E8FF", icono: "#7E22CE" }, { fondo: "#F1F5F9", icono: "#475569" },
 ];
 
-function TarjetaMenu({ Icono, colores, tituloLinea1, tituloLinea2, onClick }) {
+function TarjetaMenu({ Icono, colores, label, onClick }) {
+  const [linea1, linea2] = partirEnDosLineas(label);
   return (
     <button onClick={onClick}
       className="flex items-center gap-3 bg-white rounded-2xl border border-slate-200 px-4 py-3.5 text-left hover:border-slate-300 hover:shadow-sm transition-all">
@@ -30,62 +100,55 @@ function TarjetaMenu({ Icono, colores, tituloLinea1, tituloLinea2, onClick }) {
         <Icono size={20} strokeWidth={2} color={colores.icono} />
       </div>
       <div className="min-w-0">
-        <div className="text-sm font-bold text-slate-800 leading-tight truncate">{tituloLinea1}</div>
-        {tituloLinea2 && <div className="text-sm font-bold text-slate-800 leading-tight truncate">{tituloLinea2}</div>}
+        <div className="text-sm font-bold text-slate-800 leading-tight truncate">{linea1}</div>
+        {linea2 && <div className="text-sm font-bold text-slate-800 leading-tight truncate">{linea2}</div>}
       </div>
     </button>
   );
 }
 
-function CuadriculaTarjetas({ items, onIr }) {
+/* ==================== Navegación de 2 niveles: Grupos → Elementos ====================
+   Reemplaza la barra de navegación de arriba. Recibe la MISMA estructura
+   de grupos que ya usaba la app (MENU_PANEL_GRUPOS / MENU_CODICE_GRUPOS)
+   y arma la cuadrícula sola — no hay que mantener una lista aparte. */
+export function NavegacionPorTarjetas({ grupos, onIr }) {
+  const [grupoAbierto, setGrupoAbierto] = useState(null);
+
+  // Grupos con un solo elemento van directo como tarjeta (sin nivel intermedio).
+  const gruposVisibles = grupos.filter((g) => g.key !== "inicio_grupo");
+  const tarjetasNivel1 = gruposVisibles.flatMap((g) => g.items.length === 1 ? [{ ...g.items[0], esGrupo: false }] : [{ key: g.key, label: g.label, esGrupo: true }]);
+
+  if (grupoAbierto) {
+    const grupo = grupos.find((g) => g.key === grupoAbierto);
+    return (
+      <div>
+        <button onClick={() => setGrupoAbierto(null)} className="flex items-center gap-1 text-xs font-semibold text-violet-500 mb-3">
+          <ChevronLeft size={14} /> Todas las secciones
+        </button>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {grupo.items.map((it, i) => (
+            <TarjetaMenu key={it.key} Icono={obtenerIcono(it.key, false)} colores={PALETA[i % PALETA.length]} label={it.label} onClick={() => onIr(it.key)} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3" style={{ background: "#FAFAFA" }}>
-      {items.map((it, i) => (
-        <TarjetaMenu key={it.key} Icono={it.Icono} colores={PALETA[i % PALETA.length]}
-          tituloLinea1={it.linea1} tituloLinea2={it.linea2} onClick={() => onIr(it.key)} />
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      {tarjetasNivel1.map((it, i) => (
+        <TarjetaMenu key={it.key} Icono={obtenerIcono(it.key, it.esGrupo)} colores={PALETA[i % PALETA.length]} label={it.label}
+          onClick={() => it.esGrupo ? setGrupoAbierto(it.key) : onIr(it.key)} />
       ))}
     </div>
   );
 }
 
-/* ==================== Inicio del docente ==================== */
-export function InicioDocenteTarjetas({ onIr }) {
-  const items = [
-    { key: "estudiantes", Icono: Users, linea1: "Gestión de", linea2: "Estudiantes" },
-    { key: "asistencia", Icono: ClipboardCheck, linea1: "Registro de", linea2: "Asistencia" },
-    { key: "calificaciones", Icono: BookOpen, linea1: "Planillas de", linea2: "Calificaciones" },
-    { key: "evaluaciones", Icono: Swords, linea1: "Misiones y", linea2: "Evaluaciones" },
-    { key: "proyectosforja", Icono: Hammer, linea1: "La Forja —", linea2: "Proyectos" },
-    { key: "planeaciones", Icono: FileText, linea1: "Planeación de", linea2: "Clases" },
-    { key: "tablerosemanal", Icono: CalendarDays, linea1: "Tablero", linea2: "Semanal" },
-    { key: "comarca", Icono: Landmark, linea1: "Comarca de", linea2: "Oakhaven" },
-    { key: "bancocontenido", Icono: Puzzle, linea1: "Banco de", linea2: "Contenido" },
-    { key: "reportes", Icono: BarChart3, linea1: "Reportes e", linea2: "Indicadores" },
-    { key: "biblioteca", Icono: Library, linea1: "Biblioteca de", linea2: "Recursos" },
-    { key: "herramientas", Icono: Wrench, linea1: "Caja de", linea2: "Herramientas" },
-  ];
-  return <CuadriculaTarjetas items={items} onIr={onIr} />;
-}
-
-/* ==================== Inicio del estudiante ==================== */
-export function InicioEstudianteTarjetas({ onIr }) {
-  const items = [
-    { key: "codice", Icono: BookText, linea1: "Mi", linea2: "Códice" },
-    { key: "notas", Icono: ScrollText, linea1: "Mis", linea2: "Notas" },
-    { key: "misiones", Icono: Swords, linea1: "Mis", linea2: "Misiones" },
-    { key: "forja", Icono: Hammer, linea1: "La", linea2: "Forja" },
-    { key: "guias", Icono: BookOpen, linea1: "Guías de", linea2: "Estudio" },
-    { key: "biblioteca", Icono: Library, linea1: "Mi", linea2: "Biblioteca" },
-    { key: "proyectos", Icono: Archive, linea1: "Mis", linea2: "Proyectos" },
-    { key: "comarca", Icono: Landmark, linea1: "Mi", linea2: "Comarca" },
-    { key: "bancocontenido", Icono: Puzzle, linea1: "Juegos de", linea2: "Contenido" },
-    { key: "ranking", Icono: TrendingUp, linea1: "Ranking del", linea2: "Curso" },
-    { key: "salonhonor", Icono: Trophy, linea1: "Salón de", linea2: "Honor" },
-    { key: "recompensas", Icono: Gift, linea1: "Mis", linea2: "Recompensas" },
-    { key: "album", Icono: Image, linea1: "Mi", linea2: "Álbum" },
-    { key: "preguntados", Icono: CircleHelp, linea1: "Preguntados", linea2: null },
-    { key: "personaje", Icono: Palette, linea1: "Mi", linea2: "Personaje" },
-    { key: "perfil", Icono: User, linea1: "Mi", linea2: "Perfil" },
-  ];
-  return <CuadriculaTarjetas items={items} onIr={onIr} />;
+/* ==================== Botón para volver a Inicio ==================== */
+export function BotonVolverInicio({ onVolver }) {
+  return (
+    <button onClick={onVolver} className="flex items-center gap-1.5 text-xs font-semibold text-violet-500 mb-3 hover:text-violet-600">
+      <ChevronLeft size={14} /> Volver a Inicio
+    </button>
+  );
 }
