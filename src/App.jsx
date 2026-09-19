@@ -22,7 +22,6 @@ import { VistaObjetos, ObjetosEstudiante } from "./screens/Objetos";
 import { VistaActividadesProgramadas } from "./screens/ActividadesProgramadas";
 import { VistaGamificacionExtra } from "./screens/GamificacionExtra";
 import { VistaRoles } from "./screens/Roles";
-import { VistaComarcaOakhaven, TarjetaComarcaPublica, urlDeTarjeta, urlQR } from "./screens/ComarcaOakhaven";
 import { VistaCalificaciones } from "./screens/Calificaciones";
 import { VistaReportes } from "./screens/Reportes";
 import { VistaHorario } from "./screens/Horario";
@@ -43,6 +42,7 @@ import { VistaRubricas } from "./screens/Rubricas";
 import { VistaEntregasPorRevisar } from "./screens/EntregasPorRevisar";
 import { VistaTableroSemanal } from "./screens/TableroSemanal";
 import { VistaInicio, ContenidoLightbox } from "./screens/Inicio";
+import { VistaComarcaOakhaven, TarjetaComarcaPublica, urlDeTarjeta, urlQR } from "./screens/ComarcaOakhaven";
 import { EditorTexto, TextoEnriquecido, textoPlano } from "./components/RichText";
 import { InstitucionModal } from "./screens/Institucion";
 import { AdministracionModal } from "./screens/Administracion";
@@ -54,6 +54,7 @@ export default function App() {
   // Link dedicado para estudiantes: tu-sitio.vercel.app/#estudiante
   // No muestra ninguna opción de docente, ni espera sesión de Supabase.
   const soloEstudiante = typeof window !== "undefined" && window.location.hash === "#estudiante";
+  // Tarjeta pública de la Comarca de Oakhaven (QR) — tampoco espera sesión.
   const tarjetaComarca = typeof window !== "undefined" && window.location.hash.startsWith("#comarca-tarjeta");
 
   useEffect(() => {
@@ -2162,6 +2163,7 @@ const MENU_PANEL_GRUPOS = [
       { key: "guiasestudio", label: "Guías de Estudio", icono: "📘" },
       { key: "actividadesprogramadas", label: "Actividades Programadas", icono: "🎮" },
       { key: "biblioteca", label: "Biblioteca", icono: "📚" },
+      { key: "comarca", label: "Comarca de Oakhaven", icono: "🏛️" },
     ],
   },
   {
@@ -2179,7 +2181,6 @@ const MENU_PANEL_GRUPOS = [
       { key: "objetos", label: "Objetos", icono: "🎒" },
       { key: "horario", label: "Agenda", icono: "🗓️" },
       { key: "roles", label: "Roles", icono: "🎭" },
-      { key: "comarca", label: "Comarca de Oakhaven", icono: "🏛️" },
       { key: "reportes", label: "Reportes", icono: "📊" },
     ],
   },
@@ -2404,13 +2405,22 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
 }
 
 function Panel({ session }) {
-  const [tab, setTab] = useState("inicio");
-  const [subTabHerramientas, setSubTabHerramientas] = useState("ruleta");
+  // Guarda "dónde estabas" en el navegador, para que al recargar la
+  // página (F5, actualizar) siga en el mismo lugar en vez de volver al
+  // principio. Cada useState arranca leyendo lo último guardado.
+  const leerGuardado = (clave, porDefecto) => {
+    try {
+      const v = localStorage.getItem("codice_" + clave);
+      return v !== null ? JSON.parse(v) : porDefecto;
+    } catch { return porDefecto; }
+  };
+  const [tab, setTab] = useState(() => leerGuardado("tab", "inicio"));
+  const [subTabHerramientas, setSubTabHerramientas] = useState(() => leerGuardado("subTabHerramientas", "ruleta"));
   const [grado, setGrado] = useState(null);
-  const [gradoActivo, setGradoActivo] = useState(null);
-  const [periodoActivo, setPeriodoActivo] = useState("1");
+  const [gradoActivo, setGradoActivo] = useState(() => leerGuardado("gradoActivo", null));
+  const [periodoActivo, setPeriodoActivo] = useState(() => leerGuardado("periodoActivo", "1"));
   const [materias, setMaterias] = useState([]);
-  const [materiaActiva, setMateriaActiva] = useState(null);
+  const [materiaActiva, setMateriaActiva] = useState(() => leerGuardado("materiaActiva", null));
   const [reino, setReino] = useState(null);
   const [modoLista, setModoLista] = useState(false);
   const [grados, setGrados] = useState([]);
@@ -2418,6 +2428,14 @@ function Panel({ session }) {
   const [administracionAbierta, setAdministracionAbierta] = useState(false);
   const [institucion, setInstitucion] = useState(null);
   const [destinoBusqueda, setDestinoBusqueda] = useState(null);
+
+  // Cada vez que cambia alguno de estos, se guarda solo — así la próxima
+  // recarga arranca justo donde quedaste.
+  useEffect(() => { localStorage.setItem("codice_tab", JSON.stringify(tab)); }, [tab]);
+  useEffect(() => { localStorage.setItem("codice_subTabHerramientas", JSON.stringify(subTabHerramientas)); }, [subTabHerramientas]);
+  useEffect(() => { if (gradoActivo !== null) localStorage.setItem("codice_gradoActivo", JSON.stringify(gradoActivo)); }, [gradoActivo]);
+  useEffect(() => { localStorage.setItem("codice_periodoActivo", JSON.stringify(periodoActivo)); }, [periodoActivo]);
+  useEffect(() => { if (materiaActiva !== null) localStorage.setItem("codice_materiaActiva", JSON.stringify(materiaActiva)); }, [materiaActiva]);
 
   const irACalificacionesDesdeBusqueda = (estudiante) => {
     setTab("calificaciones");
@@ -2429,11 +2447,11 @@ function Panel({ session }) {
   useEffect(() => {
     api.asegurarProfesor().then(() => api.asegurarGradosBase()).then(() => api.fetchGrados()).then((data) => {
       setGrados(data);
-      setGradoActivo((prev) => prev || data[0]?.id || null);
+      setGradoActivo((prev) => (prev && data.some((g) => g.id === prev)) ? prev : (data[0]?.id || null));
     });
     api.fetchMaterias().then((data) => {
       setMaterias(data);
-      setMateriaActiva((prev) => prev || data[0]?.id || null);
+      setMateriaActiva((prev) => (prev && data.some((m) => m.id === prev)) ? prev : (data[0]?.id || null));
     });
     cargarInstitucion();
   }, []);
@@ -2528,7 +2546,6 @@ function Panel({ session }) {
           </>
         )}
         {tab === "roles" && <VistaRoles />}
-        {tab === "comarca" && grados.length > 0 && <VistaComarcaOakhaven grados={grados} gradoActivo={gradoActivo} />}
         {tab === "calificaciones" && grados.length > 0 && <VistaCalificaciones grados={grados} destinoBusqueda={destinoBusqueda} gradoActivo={gradoActivo} materiaActiva={materiaActiva} />}
         {tab === "reportes" && grados.length > 0 && <VistaReportes grados={grados} gradoActivo={gradoActivo} />}
         {tab === "horario" && grados.length > 0 && <VistaHorario grados={grados} />}
@@ -2536,6 +2553,7 @@ function Panel({ session }) {
         {tab === "tablerosemanal" && grados.length > 0 && <VistaTableroSemanal grados={grados} />}
         {tab === "rubricas" && <VistaRubricas />}
         {tab === "biblioteca" && grados.length > 0 && <VistaBiblioteca grados={grados} gradoActivo={gradoActivo} />}
+        {tab === "comarca" && grados.length > 0 && <VistaComarcaOakhaven grados={grados} gradoActivo={gradoActivo} />}
         {tab === "anotaciones" && <VistaAnotaciones />}
         {tab === "inclusion" && <VistaInclusionGeneral />}
         {tab === "bajasvida" && <VistaBajasVida />}
