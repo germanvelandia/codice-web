@@ -58,13 +58,98 @@ function boom() {
 // una ruleta real que gira rápido y va frenando (usa la misma curva del CSS).
 // (los sonidos de "clac" ahora se generan directo en cada spin(), ver más abajo)
 
+const COLORES_RUEDA = ["#8B5CF6", "#F59E0B", "#10B981", "#3B82F6", "#EF4444", "#EC4899", "#14B8A6", "#F97316", "#6366F1", "#84CC16", "#06B6D4", "#D946EF"];
+
+// Rueda giratoria grande, estilo Wordwall — gajos de colores en un círculo
+// real (SVG), con rotación física hasta el gajo ganador, y ese gajo queda
+// resaltado (más brillante, con borde y "explotado" hacia afuera) al frenar.
+function RuedaGrande({ items, tamano = 380, onResultado, deshabilitado = false }) {
+  const [anguloRueda, setAnguloRueda] = useState(0);
+  const [girando, setGirando] = useState(false);
+  const [ganadorIdx, setGanadorIdx] = useState(null);
+
+  const n = items.length;
+  const anguloPorGajo = n > 0 ? 360 / n : 0;
+  const mostrarTexto = n <= 16;
+
+  const girar = () => {
+    if (girando || n < 2 || deshabilitado) return;
+    setGirando(true);
+    setGanadorIdx(null);
+    const idx = Math.floor(Math.random() * n);
+    const vueltasExtra = 5 * 360;
+    const anguloFinal = vueltasExtra + (360 - (idx * anguloPorGajo + anguloPorGajo / 2));
+    setAnguloRueda((prev) => prev + anguloFinal);
+    // Tics de sonido que se van espaciando (simulan la fricción de una rueda real).
+    const pasos = Math.max(14, Math.min(28, n));
+    for (let i = 1; i <= pasos; i++) {
+      const frac = i / pasos;
+      const t = 1 - Math.pow(1 - frac, 3);
+      setTimeout(() => clack(0.15 - frac * 0.09), t * 3200);
+    }
+    setTimeout(() => {
+      setGirando(false);
+      setGanadorIdx(idx);
+      boom();
+      onResultado?.(items[idx], idx);
+    }, 3250);
+  };
+
+  const radio = tamano / 2;
+  const radioExplotado = 6; // cuánto se "empuja" el gajo ganador hacia afuera
+
+  return (
+    <div className="flex flex-col items-center gap-5">
+      <div className="relative" style={{ width: tamano, height: tamano }}>
+        <div className="absolute z-10 text-3xl" style={{ top: -8, left: "50%", transform: "translateX(-50%)" }}>🔻</div>
+        <div className="w-full h-full rounded-full overflow-visible shadow-xl"
+          style={{ transform: `rotate(${anguloRueda}deg)`, transition: girando ? "transform 3.2s cubic-bezier(0.15,0.85,0.25,1)" : "none" }}>
+          <svg viewBox={`0 0 ${tamano} ${tamano}`} className="w-full h-full">
+            {items.map((it, i) => {
+              const inicio = i * anguloPorGajo, fin = inicio + anguloPorGajo, medio = inicio + anguloPorGajo / 2;
+              const esGanador = ganadorIdx === i;
+              const offX = esGanador ? radioExplotado * Math.cos((Math.PI * medio) / 180) : 0;
+              const offY = esGanador ? radioExplotado * Math.sin((Math.PI * medio) / 180) : 0;
+              const cx = radio + offX, cy = radio + offY;
+              const x1 = cx + radio * Math.cos((Math.PI * inicio) / 180), y1 = cy + radio * Math.sin((Math.PI * inicio) / 180);
+              const x2 = cx + radio * Math.cos((Math.PI * fin) / 180), y2 = cy + radio * Math.sin((Math.PI * fin) / 180);
+              const largeArc = anguloPorGajo > 180 ? 1 : 0;
+              const color = it.color || COLORES_RUEDA[i % COLORES_RUEDA.length];
+              const xTexto = cx + radio * 0.65 * Math.cos((Math.PI * medio) / 180);
+              const yTexto = cy + radio * 0.65 * Math.sin((Math.PI * medio) / 180);
+              return (
+                <g key={i} style={{ filter: esGanador ? "drop-shadow(0 0 10px rgba(255,255,255,0.9))" : "none", transition: "filter 0.3s" }}>
+                  <path d={`M${cx},${cy} L${x1},${y1} A${radio},${radio} 0 ${largeArc},1 ${x2},${y2} Z`}
+                    fill={color} stroke={esGanador ? "#FFFFFF" : "#ffffff33"} strokeWidth={esGanador ? 4 : 1} />
+                  {mostrarTexto && anguloPorGajo > 8 && (
+                    <text x={xTexto} y={yTexto} fill="white" fontSize={Math.min(13, anguloPorGajo * 0.9)} fontWeight="bold"
+                      textAnchor="middle" dominantBaseline="middle"
+                      transform={`rotate(${medio + 90}, ${xTexto}, ${yTexto})`}>
+                      {it.label.length > 14 ? it.label.slice(0, 13) + "…" : it.label}
+                    </text>
+                  )}
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+        <div className="absolute rounded-full bg-white shadow-md flex items-center justify-center" style={{ width: 46, height: 46, top: "50%", left: "50%", transform: "translate(-50%,-50%)" }}>
+          <span className="text-xl">🎯</span>
+        </div>
+      </div>
+      <button onClick={girar} disabled={girando || n < 2 || deshabilitado} className="text-base font-bold px-8 py-3.5 rounded-full bg-violet-500 text-white disabled:opacity-50 shadow-lg">
+        {girando ? "Girando…" : "🎡 Girar"}
+      </button>
+      {n < 2 && <p className="text-xs text-slate-400">Necesitás al menos 2 opciones para girar.</p>}
+    </div>
+  );
+}
+
 export function VistaRuleta({ grados, gradoActivo }) {
   const [gradoId, setGradoId] = useState(gradoActivo || grados[0]?.id || "");
   const [modo, setModo] = useState("grado");
   const [reino, setReino] = useState("");
   const [estudiantes, setEstudiantes] = useState([]);
-  const [spinning, setSpinning] = useState(false);
-  const [mostrado, setMostrado] = useState(null); // item que se ve en pantalla en cada instante
   const [winner, setWinner] = useState(null);
   const [registrando, setRegistrando] = useState(null);
   const [registrado, setRegistrado] = useState(null);
@@ -92,34 +177,6 @@ export function VistaRuleta({ grados, gradoActivo }) {
     if (modo === "equipos") return reinos.map((r) => ({ label: r, estudianteId: null }));
     return [];
   }, [modo, estudiantes, reino, reinos]);
-
-  // Sorteo tipo "máquina": va mostrando nombres al azar cada vez más lento, y el
-  // ÚLTIMO que muestra es literalmente el mismo que se guarda como ganador — no hay
-  // ningún cálculo de ángulos/geometría de por medio, así nunca pueden desincronizarse.
-  const spin = () => {
-    if (items.length < 2 || spinning) return;
-    setSpinning(true);
-    setWinner(null);
-    setRegistrado(null);
-    const winnerIdx = Math.floor(Math.random() * items.length);
-    const duracionTotal = 2800;
-    const pasos = Math.max(18, Math.min(34, items.length * 2));
-    for (let i = 1; i <= pasos; i++) {
-      const frac = i / pasos;
-      const t = 1 - Math.pow(1 - frac, 3); // desacelera hacia el final
-      const esUltimo = i === pasos;
-      setTimeout(() => {
-        const idxMostrado = esUltimo ? winnerIdx : Math.floor(Math.random() * items.length);
-        setMostrado(items[idxMostrado]);
-        clack(0.15 - frac * 0.08);
-        if (esUltimo) {
-          setSpinning(false);
-          setWinner(items[winnerIdx]);
-          beep(900, 0.2, 0.2);
-        }
-      }, t * duracionTotal);
-    }
-  };
 
   const registrarParticipacion = async (accion) => {
     if (!winner?.estudianteId) return;
@@ -154,48 +211,37 @@ export function VistaRuleta({ grados, gradoActivo }) {
         )}
       </div>
 
-      <div className="flex flex-col items-center gap-6">
-        <div className="rounded-3xl flex items-center justify-center text-center px-6"
-          style={{
-            width: 320, minHeight: 160, background: "linear-gradient(180deg, #EDE9FE 0%, #F5F3FF 100%)",
-            border: "4px solid #8B5CF6", boxShadow: spinning ? "0 0 0 6px rgba(139,92,246,0.15)" : "none",
-            transition: "box-shadow 0.2s",
-          }}>
-          {mostrado ? (
-            <span className="text-2xl font-bold text-violet-700 break-words" style={{ opacity: spinning ? 0.85 : 1 }}>{mostrado.label}</span>
-          ) : (
-            <span className="text-sm text-slate-400">Tocá "Girar" para sortear</span>
+      <RuedaGrande items={items} tamano={400} onResultado={(item) => { setWinner(item); setRegistrado(null); }} />
+
+      {winner && (
+        <div className="text-center mt-6">
+          <div className="text-lg font-bold px-6 py-3 rounded-2xl bg-violet-100 text-violet-700 mb-3 inline-block">🎉 {winner.label}</div>
+          {winner.estudianteId && (
+            <div className="bg-white rounded-2xl border border-slate-100 p-3 max-w-sm mx-auto">
+              <div className="text-xs font-semibold text-slate-500 mb-2">Registrar participación</div>
+              <div className="flex flex-wrap gap-1.5 justify-center">
+                {accionesRapidas.map((a) => (
+                  <button key={a.id} disabled={registrando === a.id} onClick={() => registrarParticipacion(a)}
+                    className={`text-xs px-2.5 py-1.5 rounded-full ${a.xp >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-600"} disabled:opacity-50`}>
+                    {registrando === a.id ? "…" : a.label}
+                  </button>
+                ))}
+              </div>
+              {registrado && <p className="text-xs text-emerald-600 mt-2">✔ "{registrado}" registrada.</p>}
+            </div>
           )}
         </div>
-        <button onClick={spin} disabled={spinning || items.length < 2} className="text-sm font-bold px-6 py-3 rounded-full bg-violet-500 text-white disabled:opacity-50">
-          {spinning ? "Sorteando…" : "🎲 Girar"}
-        </button>
-        {winner && !spinning && (
-          <div className="text-center">
-            <div className="text-lg font-bold px-6 py-3 rounded-2xl bg-violet-100 text-violet-700 mb-3">🎉 {winner.label}</div>
-            {winner.estudianteId && (
-              <div className="bg-white rounded-2xl border border-slate-100 p-3 max-w-sm">
-                <div className="text-xs font-semibold text-slate-500 mb-2">Registrar participación</div>
-                <div className="flex flex-wrap gap-1.5 justify-center">
-                  {accionesRapidas.map((a) => (
-                    <button key={a.id} disabled={registrando === a.id} onClick={() => registrarParticipacion(a)}
-                      className={`text-xs px-2.5 py-1.5 rounded-full ${a.xp >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-600"} disabled:opacity-50`}>
-                      {registrando === a.id ? "…" : a.label}
-                    </button>
-                  ))}
-                </div>
-                {registrado && <p className="text-xs text-emerald-600 mt-2">✔ "{registrado}" registrada.</p>}
-              </div>
-            )}
-          </div>
-        )}
-        {items.length < 2 && <p className="text-xs text-slate-400">Necesitas al menos 2 opciones para girar.</p>}
-      </div>
+      )}
     </div>
   );
 }
 
-const OPCIONES_MONEDAS_DEFAULT = [10, 5, 3, -3, -5, 0, 15, -10];
+const PRESETS_PREMIOS = [
+  { label: "10", min: -5, max: 10 },
+  { label: "20", min: -10, max: 20 },
+  { label: "30", min: -15, max: 30 },
+];
+const TOTAL_OPCIONES_RUEDA = 25;
 
 export function VistaRuletaMonedas({ grados, gradoActivo }) {
   const [gradoId, setGradoId] = useState(gradoActivo || grados[0]?.id || "");
@@ -205,16 +251,13 @@ export function VistaRuletaMonedas({ grados, gradoActivo }) {
   const [estudianteId, setEstudianteId] = useState("");
 
   useEffect(() => { if (gradoActivo) setGradoId(gradoActivo); }, [gradoActivo]);
-  const [opciones, setOpciones] = useState(OPCIONES_MONEDAS_DEFAULT);
-  const [spinning, setSpinning] = useState(false);
-  const [mostrado, setMostrado] = useState(null);
+  const [rangoMin, setRangoMin] = useState(-10);
+  const [rangoMax, setRangoMax] = useState(15);
+  const [opciones, setOpciones] = useState([]);
   const [resultado, setResultado] = useState(null);
   const [aplicando, setAplicando] = useState(false);
   const [manualValor, setManualValor] = useState("");
   const [aplicandoManual, setAplicandoManual] = useState(false);
-  const [rangoMin, setRangoMin] = useState(-10);
-  const [rangoMax, setRangoMax] = useState(15);
-  const [rangoCantidad, setRangoCantidad] = useState(8);
 
   useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
   useEffect(() => { if (gradoId) api.fetchEstudiantesPorGrado(gradoId).then(setEstudiantes); }, [gradoId]);
@@ -225,17 +268,33 @@ export function VistaRuletaMonedas({ grados, gradoActivo }) {
 
   const colorOpcion = (v) => v > 0 ? "#22C55E" : v < 0 ? "#EF4444" : "#94A3B8";
 
-  const cambiarOpcion = (i, valor) => setOpciones((prev) => prev.map((o, idx) => idx === i ? (parseInt(valor, 10) || 0) : o));
-  const agregarOpcion = () => setOpciones((prev) => [...prev, 5]);
-  const quitarOpcion = (i) => setOpciones((prev) => prev.filter((_, idx) => idx !== i));
-
-  const generarPorRango = () => {
+  // La rueda siempre tiene 25 opciones — se regeneran solas cuando cambia
+  // el rango, y también se pueden volver a barajar con el mismo rango.
+  const regenerar = () => {
     const min = parseInt(rangoMin, 10) || 0;
     const max = parseInt(rangoMax, 10) || 0;
-    const cantidad = Math.max(2, Math.min(16, parseInt(rangoCantidad, 10) || 8));
-    if (min >= max) { alert("El mínimo debe ser menor que el máximo."); return; }
-    const nuevas = Array.from({ length: cantidad }, () => Math.round(min + Math.random() * (max - min)));
-    setOpciones(nuevas);
+    if (min >= max) return;
+    setOpciones(Array.from({ length: TOTAL_OPCIONES_RUEDA }, () => Math.round(min + Math.random() * (max - min))));
+  };
+  useEffect(() => { regenerar(); }, [rangoMin, rangoMax]);
+
+  const itemsRueda = useMemo(() => opciones.map((v) => ({ label: v > 0 ? `+${v}` : `${v}`, color: colorOpcion(v) })), [opciones]);
+
+  const aplicarValor = async (valor) => {
+    setAplicando(true);
+    try {
+      if (objetivo === "uno") {
+        await api.ajustarMonedas(estudianteId, valor);
+        await api.registrarHistorialGamificacion(estudianteId, { etiqueta: "🎡 Ruleta de Monedas", monedas: valor, categoria: "monedas" });
+      } else {
+        await api.ajustarMonedasMasivo(visibles.map((s) => s.id), valor);
+        await api.registrarHistorialGamificacionMasivo(visibles.map((s) => s.id), { etiqueta: "🎡 Ruleta de Monedas", monedas: valor, categoria: "monedas" });
+      }
+      setResultado(valor);
+    } catch (e) {
+      alert("Error al aplicar las monedas: " + e.message);
+    }
+    setAplicando(false);
   };
 
   const aplicarManual = async () => {
@@ -243,62 +302,9 @@ export function VistaRuletaMonedas({ grados, gradoActivo }) {
     if (isNaN(valor)) { alert("Escribí un número (puede ser negativo)."); return; }
     if (objetivo === "uno" && !estudianteId) return;
     setAplicandoManual(true);
-    try {
-      if (objetivo === "uno") {
-        await api.ajustarMonedas(estudianteId, valor);
-        await api.registrarHistorialGamificacion(estudianteId, { etiqueta: "🎡 Ruleta de Monedas (manual)", monedas: valor, categoria: "monedas" });
-      } else {
-        await api.ajustarMonedasMasivo(visibles.map((s) => s.id), valor);
-        await api.registrarHistorialGamificacionMasivo(visibles.map((s) => s.id), { etiqueta: "🎡 Ruleta de Monedas (manual)", monedas: valor, categoria: "monedas" });
-      }
-      setResultado(valor);
-      setManualValor("");
-    } catch (e) {
-      alert("Error al aplicar: " + e.message);
-    }
+    await aplicarValor(valor);
+    setManualValor("");
     setAplicandoManual(false);
-  };
-
-  // Mismo formato de "máquina de sorteo" que la Ruleta del Códice: lo último que
-  // se muestra en pantalla es exactamente el mismo valor que se aplica — sin
-  // geometría de por medio, no se pueden desincronizar.
-  const spin = () => {
-    if (spinning || opciones.length < 2) return;
-    if (objetivo === "uno" && !estudianteId) return;
-    setSpinning(true);
-    setResultado(null);
-    const idx = Math.floor(Math.random() * opciones.length);
-    const duracionTotal = 2800;
-    const pasos = Math.max(18, Math.min(34, opciones.length * 3));
-    for (let i = 1; i <= pasos; i++) {
-      const frac = i / pasos;
-      const t = 1 - Math.pow(1 - frac, 3);
-      const esUltimo = i === pasos;
-      setTimeout(async () => {
-        const idxMostrado = esUltimo ? idx : Math.floor(Math.random() * opciones.length);
-        setMostrado(opciones[idxMostrado]);
-        clack(0.15 - frac * 0.08);
-        if (esUltimo) {
-          setSpinning(false);
-          const valor = opciones[idx];
-          setResultado(valor);
-          beep(900, 0.2, 0.2);
-          setAplicando(true);
-          try {
-            if (objetivo === "uno") {
-              await api.ajustarMonedas(estudianteId, valor);
-              await api.registrarHistorialGamificacion(estudianteId, { etiqueta: "🎡 Ruleta de Monedas", monedas: valor, categoria: "monedas" });
-            } else {
-              await api.ajustarMonedasMasivo(visibles.map((s) => s.id), valor);
-              await api.registrarHistorialGamificacionMasivo(visibles.map((s) => s.id), { etiqueta: "🎡 Ruleta de Monedas", monedas: valor, categoria: "monedas" });
-            }
-          } catch (e) {
-            alert("Error al aplicar las monedas: " + e.message);
-          }
-          setAplicando(false);
-        }
-      }, t * duracionTotal);
-    }
   };
 
   return (
@@ -325,27 +331,21 @@ export function VistaRuletaMonedas({ grados, gradoActivo }) {
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-100 p-3 mb-4">
-        <div className="text-xs font-semibold text-slate-500 mb-2">Casillas del sorteo (monedas a dar o quitar)</div>
-        <div className="flex flex-wrap gap-1.5 mb-3">
-          {opciones.map((o, i) => (
-            <div key={i} className="flex items-center gap-1">
-              <input type="number" value={o} onChange={(e) => cambiarOpcion(i, e.target.value)}
-                className="w-16 text-xs text-center rounded-lg px-1 py-1 border border-slate-200 outline-none" style={{ color: colorOpcion(o) }} />
-              {opciones.length > 2 && <button onClick={() => quitarOpcion(i)} className="text-slate-300 hover:text-rose-500 text-xs">✕</button>}
-            </div>
+        <div className="text-xs font-semibold text-slate-500 mb-2">Cantidad de premios</div>
+        <div className="flex flex-wrap items-center gap-2">
+          {PRESETS_PREMIOS.map((p) => (
+            <button key={p.label} onClick={() => { setRangoMin(p.min); setRangoMax(p.max); }}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${rangoMin === p.min && rangoMax === p.max ? "bg-violet-500 text-white border-violet-500" : "border-slate-200 text-slate-600"}`}>
+              {p.label}
+            </button>
           ))}
-          <button onClick={agregarOpcion} className="text-xs text-violet-500 px-2">+ Casilla</button>
+          <span className="text-[11px] text-slate-400 ml-1">Min</span>
+          <input type="number" value={rangoMin} onChange={(e) => setRangoMin(e.target.value)} className="w-16 text-xs text-center rounded-lg px-1 py-1.5 border border-slate-200 outline-none" />
+          <span className="text-[11px] text-slate-400">Max</span>
+          <input type="number" value={rangoMax} onChange={(e) => setRangoMax(e.target.value)} className="w-16 text-xs text-center rounded-lg px-1 py-1.5 border border-slate-200 outline-none" />
+          <button onClick={regenerar} className="text-[11px] font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700 ml-auto">🔄 Rebarajar</button>
         </div>
-        <div className="flex items-center gap-2 flex-wrap bg-violet-50 rounded-lg p-2">
-          <span className="text-[11px] text-slate-500">O generar por rango:</span>
-          <input type="number" value={rangoMin} onChange={(e) => setRangoMin(e.target.value)} className="w-16 text-xs text-center rounded-lg px-1 py-1 border border-slate-200 outline-none" title="Mínimo (puede ser negativo)" />
-          <span className="text-[11px] text-slate-400">a</span>
-          <input type="number" value={rangoMax} onChange={(e) => setRangoMax(e.target.value)} className="w-16 text-xs text-center rounded-lg px-1 py-1 border border-slate-200 outline-none" title="Máximo" />
-          <span className="text-[11px] text-slate-400">·</span>
-          <input type="number" value={rangoCantidad} onChange={(e) => setRangoCantidad(e.target.value)} className="w-14 text-xs text-center rounded-lg px-1 py-1 border border-slate-200 outline-none" title="Cantidad de casillas" />
-          <span className="text-[11px] text-slate-400">casillas</span>
-          <button onClick={generarPorRango} className="text-[11px] font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white ml-auto">Generar</button>
-        </div>
+        <p className="text-[11px] text-slate-400 mt-2">La rueda siempre reparte {TOTAL_OPCIONES_RUEDA} valores al azar entre Min y Max.</p>
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-100 p-3 mb-4">
@@ -360,32 +360,18 @@ export function VistaRuletaMonedas({ grados, gradoActivo }) {
         </div>
       </div>
 
-      <div className="flex flex-col items-center gap-6">
-        <div className="rounded-3xl flex items-center justify-center text-center px-6"
-          style={{
-            width: 280, minHeight: 140, background: "linear-gradient(180deg, #EDE9FE 0%, #F5F3FF 100%)",
-            border: "4px solid #8B5CF6", boxShadow: spinning ? "0 0 0 6px rgba(139,92,246,0.15)" : "none",
-            transition: "box-shadow 0.2s",
-          }}>
-          {mostrado !== null ? (
-            <span className="text-4xl font-bold" style={{ color: colorOpcion(mostrado), opacity: spinning ? 0.85 : 1 }}>
-              {mostrado > 0 ? `+${mostrado}` : mostrado}
-            </span>
-          ) : (
-            <span className="text-sm text-slate-400">Tocá "Girar" para sortear</span>
-          )}
-        </div>
-        <button onClick={spin} disabled={spinning || aplicando || opciones.length < 2 || (objetivo === "uno" && !estudianteId)}
-          className="text-sm font-bold px-6 py-3 rounded-full bg-violet-500 text-white disabled:opacity-50">
-          {spinning ? "Sorteando…" : aplicando ? "Aplicando…" : "🪙 Girar"}
-        </button>
-        {resultado !== null && !spinning && !aplicando && (
-          <div className={`text-lg font-bold px-6 py-3 rounded-2xl ${resultado >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+      <RuedaGrande items={itemsRueda} tamano={400} deshabilitado={objetivo === "uno" && !estudianteId} onResultado={(item, idx) => aplicarValor(opciones[idx])} />
+
+      {resultado !== null && !aplicando && (
+        <div className="text-center mt-6">
+          <div className={`inline-block text-lg font-bold px-6 py-3 rounded-2xl ${resultado >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
             {resultado > 0 ? `🎉 +${resultado} monedas` : resultado < 0 ? `😬 ${resultado} monedas` : "😐 Sin cambio"}
             {" — "}{objetivo === "uno" ? (visibles.find((s) => s.id === estudianteId)?.nombre || "") : `${visibles.length} estudiantes`}
           </div>
-        )}
-      </div>
+        </div>
+      )}
+      {aplicando && <p className="text-center text-sm text-slate-400 mt-4">Aplicando…</p>}
+      {(objetivo === "uno" && !estudianteId) && <p className="text-center text-xs text-slate-400 mt-4">Elegí un estudiante para poder girar.</p>}
     </div>
   );
 }
