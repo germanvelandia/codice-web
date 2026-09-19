@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import * as XLSX from "xlsx";
 import * as api from "../lib/api";
 
 function barajar(arr) {
@@ -24,6 +25,27 @@ function EditorSetModal({ set, onClose, onGuardado }) {
 
   const actualizarItem = (i, campo, valor) => setItems((prev) => prev.map((it, idx) => idx === i ? { ...it, [campo]: valor } : it));
   const agregarItem = () => setItems((prev) => [...prev, { termino: "", definicion: "" }]);
+
+  const importarDeExcel = (file) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: "binary" });
+        const hoja = wb.Sheets[wb.SheetNames[0]];
+        const arr = XLSX.utils.sheet_to_json(hoja, { header: 1 });
+        // Salta la primera fila si parece encabezado (ej: "Término", "Palabra")
+        const primeraEsEncabezado = arr[0] && /t[ée]rmino|palabra|pregunta/i.test(String(arr[0][0] || ""));
+        const filas = arr.slice(primeraEsEncabezado ? 1 : 0)
+          .filter((r) => r.length && r[0] && r[1])
+          .map((r) => ({ termino: String(r[0]).trim(), definicion: String(r[1]).trim() }));
+        if (filas.length === 0) { alert("No encontré filas válidas — la primera columna debe ser el término y la segunda la definición."); return; }
+        setItems(filas);
+      } catch (err) {
+        alert("No se pudo leer el archivo. Verificá que sea un .xlsx o .csv válido, con el término en la columna A y la definición en la columna B.");
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
   const quitarItem = (i) => setItems((prev) => prev.filter((_, idx) => idx !== i));
 
   const guardar = async () => {
@@ -60,6 +82,14 @@ function EditorSetModal({ set, onClose, onGuardado }) {
           className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none" />
         <input value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Descripción (opcional)"
           className="w-full text-sm rounded-lg px-3 py-2 mb-4 border border-slate-200 outline-none" />
+
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 mb-4 flex items-center justify-between flex-wrap gap-2">
+          <div className="text-xs text-emerald-700">📊 ¿Ya tenés los pares en Excel? Subilo directo — columna A: término, columna B: definición.</div>
+          <label className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-500 text-white cursor-pointer shrink-0">
+            Subir Excel
+            <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(e) => { if (e.target.files[0]) importarDeExcel(e.target.files[0]); e.target.value = ""; }} />
+          </label>
+        </div>
 
         {cargando ? (
           <p className="text-sm text-slate-400">Cargando…</p>
@@ -591,6 +621,180 @@ function JuegoAbrecajas({ items, onTerminar }) {
   );
 }
 
+/* ==================== Juego: Crucigrama ==================== */
+function normalizarPalabra(palabra) {
+  return palabra.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-ZÑ]/g, "");
+}
+
+function generarCrucigrama(itemsOriginales) {
+  const items = itemsOriginales
+    .map((it) => ({ ...it, palabra: normalizarPalabra(it.termino) }))
+    .filter((it) => it.palabra.length >= 2)
+    .sort((a, b) => b.palabra.length - a.palabra.length);
+  if (items.length === 0) return null;
+
+  const TAM = 30;
+  const CENTRO = Math.floor(TAM / 2);
+  const grid = Array.from({ length: TAM }, () => Array(TAM).fill(null));
+  const colocadas = [];
+
+  const cabeHorizontal = (palabra, fila, col) => {
+    if (col < 0 || col + palabra.length > TAM || fila < 0 || fila >= TAM) return false;
+    if (grid[fila][col - 1] || grid[fila][col + palabra.length]) return false;
+    for (let i = 0; i < palabra.length; i++) {
+      const actual = grid[fila][col + i];
+      if (actual !== null) { if (actual !== palabra[i]) return false; }
+      else if (grid[fila - 1]?.[col + i] || grid[fila + 1]?.[col + i]) return false;
+    }
+    return true;
+  };
+
+  const cabeVertical = (palabra, fila, col) => {
+    if (fila < 0 || fila + palabra.length > TAM || col < 0 || col >= TAM) return false;
+    if (grid[fila - 1]?.[col] || grid[fila + palabra.length]?.[col]) return false;
+    for (let i = 0; i < palabra.length; i++) {
+      const actual = grid[fila + i][col];
+      if (actual !== null) { if (actual !== palabra[i]) return false; }
+      else if (grid[fila + i][col - 1] || grid[fila + i][col + 1]) return false;
+    }
+    return true;
+  };
+
+  const colocar = (palabra, fila, col, dir) => {
+    for (let i = 0; i < palabra.length; i++) {
+      if (dir === "H") grid[fila][col + i] = palabra[i];
+      else grid[fila + i][col] = palabra[i];
+    }
+  };
+
+  const primera = items[0];
+  const filaInicial = CENTRO, colInicial = CENTRO - Math.floor(primera.palabra.length / 2);
+  colocar(primera.palabra, filaInicial, colInicial, "H");
+  colocadas.push({ ...primera, fila: filaInicial, col: colInicial, dir: "H" });
+
+  for (let idx = 1; idx < items.length; idx++) {
+    const it = items[idx];
+    let mejorOpcion = null;
+    for (const colocada of colocadas) {
+      for (let i = 0; i < colocada.palabra.length && !mejorOpcion; i++) {
+        const letraColocada = colocada.palabra[i];
+        for (let j = 0; j < it.palabra.length && !mejorOpcion; j++) {
+          if (it.palabra[j] !== letraColocada) continue;
+          let fila, col, dir;
+          if (colocada.dir === "H") { fila = colocada.fila - j; col = colocada.col + i; dir = "V"; }
+          else { fila = colocada.fila + i; col = colocada.col - j; dir = "H"; }
+          const cabe = dir === "H" ? cabeHorizontal(it.palabra, fila, col) : cabeVertical(it.palabra, fila, col);
+          if (cabe) mejorOpcion = { fila, col, dir };
+        }
+      }
+      if (mejorOpcion) break;
+    }
+    if (mejorOpcion) {
+      colocar(it.palabra, mejorOpcion.fila, mejorOpcion.col, mejorOpcion.dir);
+      colocadas.push({ ...it, fila: mejorOpcion.fila, col: mejorOpcion.col, dir: mejorOpcion.dir });
+    }
+  }
+
+  if (colocadas.length < 2) return null;
+
+  let minF = TAM, maxF = 0, minC = TAM, maxC = 0;
+  colocadas.forEach((p) => {
+    const largoF = p.dir === "V" ? p.palabra.length : 1;
+    const largoC = p.dir === "H" ? p.palabra.length : 1;
+    minF = Math.min(minF, p.fila); maxF = Math.max(maxF, p.fila + largoF - 1);
+    minC = Math.min(minC, p.col); maxC = Math.max(maxC, p.col + largoC - 1);
+  });
+
+  const ajustadas = colocadas.map((p) => ({ ...p, fila: p.fila - minF, col: p.col - minC }));
+  const filas = maxF - minF + 1, cols = maxC - minC + 1;
+
+  const inicios = {};
+  ajustadas.forEach((p) => { const key = `${p.fila},${p.col}`; if (!inicios[key]) inicios[key] = { fila: p.fila, col: p.col }; });
+  const ordenados = Object.values(inicios).sort((a, b) => a.fila - b.fila || a.col - b.col);
+  const numeroDeCelda = {};
+  ordenados.forEach((c, i) => { numeroDeCelda[`${c.fila},${c.col}`] = i + 1; });
+
+  return { filas, cols, colocadas: ajustadas.map((p) => ({ ...p, numero: numeroDeCelda[`${p.fila},${p.col}`] })) };
+}
+
+function JuegoCrucigrama({ items, onTerminar }) {
+  const [datos] = useState(() => generarCrucigrama(items));
+  const [respuestas, setRespuestas] = useState({});
+  const [revisado, setRevisado] = useState(false);
+
+  if (!datos) return <p className="text-sm text-slate-400 text-center py-6">Este set no tiene suficientes palabras que se puedan cruzar entre sí para armar un crucigrama.</p>;
+
+  const { filas, cols, colocadas } = datos;
+  const celdaLetra = {}; // "f,c" -> letra correcta
+  colocadas.forEach((p) => {
+    for (let i = 0; i < p.palabra.length; i++) {
+      const f = p.dir === "V" ? p.fila + i : p.fila;
+      const c = p.dir === "H" ? p.col + i : p.col;
+      celdaLetra[`${f},${c}`] = p.palabra[i];
+    }
+  });
+  const numeroEnCelda = {};
+  colocadas.forEach((p) => { numeroEnCelda[`${p.fila},${p.col}`] = p.numero; });
+
+  const inputRefs = {};
+  const escribir = (f, c, valor) => {
+    const v = valor.toUpperCase().slice(-1).replace(/[^A-ZÑ]/g, "");
+    setRespuestas((prev) => ({ ...prev, [`${f},${c}`]: v }));
+  };
+
+  const revisar = () => {
+    setRevisado(true);
+    const total = Object.keys(celdaLetra).length;
+    const bien = Object.entries(celdaLetra).filter(([key, letra]) => respuestas[key] === letra).length;
+    onTerminar(Math.round((bien / total) * 100));
+  };
+
+  const horizontales = colocadas.filter((p) => p.dir === "H").sort((a, b) => a.numero - b.numero);
+  const verticales = colocadas.filter((p) => p.dir === "V").sort((a, b) => a.numero - b.numero);
+
+  return (
+    <div>
+      <div className="overflow-x-auto mb-4">
+        <div className="inline-block">
+          {Array.from({ length: filas }, (_, f) => (
+            <div key={f} className="flex">
+              {Array.from({ length: cols }, (_, c) => {
+                const key = `${f},${c}`;
+                const tieneLetra = celdaLetra[key] !== undefined;
+                if (!tieneLetra) return <div key={c} className="w-7 h-7 sm:w-8 sm:h-8" />;
+                const numero = numeroEnCelda[key];
+                const correcta = revisado && respuestas[key] === celdaLetra[key];
+                const incorrecta = revisado && respuestas[key] !== celdaLetra[key];
+                return (
+                  <div key={c} className="relative w-7 h-7 sm:w-8 sm:h-8 border border-slate-300">
+                    {numero && <span className="absolute top-0 left-0.5 text-[7px] text-slate-400 leading-none">{numero}</span>}
+                    <input maxLength={1} value={respuestas[key] || ""} disabled={revisado}
+                      onChange={(e) => escribir(f, c, e.target.value)}
+                      className={`w-full h-full text-center text-xs sm:text-sm font-bold outline-none ${correcta ? "bg-emerald-100 text-emerald-700" : incorrecta ? "bg-rose-100 text-rose-600" : "bg-white text-slate-800"}`} />
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-3 mb-4 text-xs">
+        <div>
+          <div className="font-bold text-slate-500 uppercase text-[10px] mb-1">Horizontales</div>
+          {horizontales.map((p) => <div key={p.numero} className="text-slate-600 mb-0.5">{p.numero}. {p.definicion}</div>)}
+        </div>
+        <div>
+          <div className="font-bold text-slate-500 uppercase text-[10px] mb-1">Verticales</div>
+          {verticales.map((p) => <div key={p.numero} className="text-slate-600 mb-0.5">{p.numero}. {p.definicion}</div>)}
+        </div>
+      </div>
+
+      {!revisado && <button onClick={revisar} className="w-full text-sm font-semibold py-2.5 rounded-xl bg-violet-500 text-white">Revisar</button>}
+    </div>
+  );
+}
+
 export function JugarSetModal({ set, estudianteId, onClose }) {
   const [items, setItems] = useState(null);
   const [formato, setFormato] = useState(null);
@@ -613,11 +817,12 @@ export function JugarSetModal({ set, estudianteId, onClose }) {
     { key: "rueda", label: "🎡 Rueda giratoria", min: 3 },
     { key: "quiz", label: "📝 Concurso de preguntas", min: 4 },
     { key: "abrecajas", label: "📦 Abrecajas", min: 3 },
+    { key: "crucigrama", label: "🧩 Crucigrama", min: 4 },
   ];
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto" style={{ maxWidth: formato === "sopa" ? 420 : 512 }}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto" style={{ maxWidth: formato === "sopa" ? 420 : formato === "crucigrama" ? 620 : 512 }}>
         <div className="flex justify-between items-center mb-1">
           <h3 className="font-bold text-slate-800">{set.titulo}</h3>
           <button onClick={onClose} className="text-slate-400">✕</button>
@@ -656,6 +861,7 @@ export function JugarSetModal({ set, estudianteId, onClose }) {
             {formato === "rueda" && <JuegoRueda items={items} onTerminar={terminar} />}
             {formato === "quiz" && <JuegoQuiz items={items} onTerminar={terminar} />}
             {formato === "abrecajas" && <JuegoAbrecajas items={items} onTerminar={terminar} />}
+            {formato === "crucigrama" && <JuegoCrucigrama items={items} onTerminar={terminar} />}
           </div>
         )}
       </div>
