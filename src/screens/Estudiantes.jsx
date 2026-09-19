@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabaseClient";
 import { initials, nextLevel, reinoColor, reinoInfo, sugerirApellidos, colorGrado, REINO_COLORS, buscarEstudiantePorNombre } from "../lib/gamification";
-import { GraduationCap } from "lucide-react";
+import { GraduationCap, Plus, Shield, Settings, Users, Image, Archive, FileText, BookOpen, Package } from "lucide-react";
 import { EditorTexto, TextoEnriquecido } from "../components/RichText";
 
 // (REINO_COLORS ahora se importa directo desde gamification.js, ver arriba)
@@ -1966,6 +1966,26 @@ function ImportarDatosPersonalesModal({ estudiantes, onClose, onGuardado }) {
   );
 }
 
+const PALETA_ACCIONES = [
+  { fondo: "#EDE9FE", icono: "#6D28D9" }, { fondo: "#DBEAFE", icono: "#1D4ED8" },
+  { fondo: "#DCFCE7", icono: "#15803D" }, { fondo: "#FCE7F3", icono: "#BE185D" },
+  { fondo: "#FEF3C7", icono: "#B45309" }, { fondo: "#E0E7FF", icono: "#4338CA" },
+  { fondo: "#CCFBF1", icono: "#0F766E" }, { fondo: "#FFEDD5", icono: "#C2410C" },
+  { fondo: "#F3E8FF", icono: "#7E22CE" },
+];
+
+function TarjetaAccion({ Icono, color, label, destacada, onClick }) {
+  return (
+    <button onClick={onClick}
+      className={`flex items-center gap-2.5 rounded-2xl border px-3.5 py-3 text-left hover:shadow-sm transition-all ${destacada ? "border-violet-300 bg-violet-50" : "border-slate-200 bg-white hover:border-slate-300"}`}>
+      <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: color.fondo }}>
+        <Icono size={16} strokeWidth={2} color={color.icono} />
+      </div>
+      <span className="text-xs font-bold text-slate-800 leading-tight">{label}</span>
+    </button>
+  );
+}
+
 export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVerGrupos }) {
   const [estudiantes, setEstudiantes] = useState([]);
   const [roles, setRoles] = useState([]);
@@ -1976,6 +1996,7 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
   const [nuevoReino, setNuevoReino] = useState("Sin grupo");
   const [importarAbierto, setImportarAbierto] = useState(false);
   const [codigosAbierto, setCodigosAbierto] = useState(false);
+  const [agregarAbierto, setAgregarAbierto] = useState(false);
   const [planillaBlancoAbierta, setPlanillaBlancoAbierta] = useState(false);
   const [ordenAbierto, setOrdenAbierto] = useState(false);
   const [directorioAbierto, setDirectorioAbierto] = useState(false);
@@ -2054,19 +2075,18 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
       </h2>
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 mb-4">
-        <div className="flex flex-wrap gap-2 items-center justify-between mb-2">
-          <div className="text-xs uppercase tracking-wide text-slate-400">Agregar estudiante</div>
-          <div className="flex gap-2">
-            <button onClick={() => setCodigosAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🔑 Ver códigos de acceso</button>
-            <button onClick={() => setOrdenAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🔤 Organizar orden alfabético</button>
-            <button onClick={() => setDirectorioAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">👪 Directorio de acudientes</button>
-            <button onClick={() => setFotosMasivoAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">📷 Subir fotos masivo</button>
-            <button onClick={() => setImportarDatosAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">📥 Importar directorio y datos</button>
-            <button onClick={() => setObservadoresGradoAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🖨️ Observadores del curso</button>
-            <button onClick={() => setPlanillaBlancoAbierta(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🖨️ Planilla en blanco</button>
-            <button onClick={() => setImportarAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700">📥 Importar varios</button>
-          </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-2">
+          <TarjetaAccion Icono={Plus} color={PALETA_ACCIONES[0]} label="Agregar Estudiante" destacada={agregarAbierto} onClick={() => setAgregarAbierto((v) => !v)} />
+          <TarjetaAccion Icono={Shield} color={PALETA_ACCIONES[1]} label="Ver códigos de acceso" onClick={() => setCodigosAbierto(true)} />
+          <TarjetaAccion Icono={Settings} color={PALETA_ACCIONES[2]} label="Organizar orden alfabético" onClick={() => setOrdenAbierto(true)} />
+          <TarjetaAccion Icono={Users} color={PALETA_ACCIONES[3]} label="Directorio de acudientes" onClick={() => setDirectorioAbierto(true)} />
+          <TarjetaAccion Icono={Image} color={PALETA_ACCIONES[4]} label="Subir fotos masivo" onClick={() => setFotosMasivoAbierto(true)} />
+          <TarjetaAccion Icono={Archive} color={PALETA_ACCIONES[5]} label="Importar directorio y datos" onClick={() => setImportarDatosAbierto(true)} />
+          <TarjetaAccion Icono={FileText} color={PALETA_ACCIONES[6]} label="Observadores del curso" onClick={() => setObservadoresGradoAbierto(true)} />
+          <TarjetaAccion Icono={BookOpen} color={PALETA_ACCIONES[7]} label="Planilla en blanco" onClick={() => setPlanillaBlancoAbierta(true)} />
+          <TarjetaAccion Icono={Package} color={PALETA_ACCIONES[8]} label="Importar varios" onClick={() => setImportarAbierto(true)} />
         </div>
+        {agregarAbierto && (
         <div className="flex flex-wrap gap-2">
           <input value={nuevoNombre} onChange={(e) => setNuevoNombre(e.target.value)} placeholder="Nombre del estudiante"
             className="flex-1 min-w-[180px] text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" />
@@ -2075,6 +2095,7 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
           </select>
           <button onClick={agregar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white">Agregar</button>
         </div>
+        )}
       </div>
       {importarAbierto && (
         <ImportarEstudiantesModal
