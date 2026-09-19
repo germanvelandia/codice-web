@@ -44,6 +44,7 @@ import { VistaTableroSemanal } from "./screens/TableroSemanal";
 import { VistaInicio, ContenidoLightbox } from "./screens/Inicio";
 import { VistaComarcaOakhaven, TarjetaComarcaPublica, urlDeTarjeta, urlQR } from "./screens/ComarcaOakhaven";
 import { VistaBancoContenido, JugarSetModal, VistaBancoContenidoEstudiante } from "./screens/BancoContenido";
+import { InicioDocenteTarjetas, InicioEstudianteTarjetas } from "./screens/InicioTarjetas";
 import { EditorTexto, TextoEnriquecido, textoPlano } from "./components/RichText";
 import { InstitucionModal } from "./screens/Institucion";
 import { AdministracionModal } from "./screens/Administracion";
@@ -1991,6 +1992,11 @@ function PortalEstudiante() {
               <div className="text-xs text-slate-500 bg-slate-50 rounded-xl p-3">
                 Presentes: {datos.presentes} · Retardos: {datos.retardos} · Faltas injustificadas: {datos.faltas_injustificadas} · Faltas justificadas: {datos.faltas_justificadas}
               </div>
+
+              <div className="mt-6">
+                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">Acceso rápido</h3>
+                <InicioEstudianteTarjetas onIr={setVista} />
+              </div>
             </>
           )}
 
@@ -2489,7 +2495,15 @@ function Panel({ session }) {
       {administracionAbierta && <AdministracionModal onClose={() => setAdministracionAbierta(false)} />}
 
       <div className="p-6 max-w-6xl mx-auto">
-        {tab === "inicio" && <VistaInicio onIrA={irA} />}
+        {tab === "inicio" && (
+          <>
+            <VistaInicio onIrA={irA} />
+            <div className="mt-6">
+              <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">Acceso rápido</h3>
+              <InicioDocenteTarjetas onIr={irA} />
+            </div>
+          </>
+        )}
         {tab === "entregasrevisar" && <VistaEntregasPorRevisar onIrAGrado={irAGradoDesdeRevisar} />}
         {tab === "estudiantes" && (
           <>
