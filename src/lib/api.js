@@ -794,6 +794,17 @@ export async function guardarAcudiente(estudianteId, campos) {
 }
 
 /* ---------------- Horario de clases ---------------- */
+// Trae TODO el horario del docente (sin filtrar por día), para poder
+// marcar en un calendario mensual qué fechas tienen clase programada.
+export async function fetchHorarioDelDocente() {
+  const { data: userData } = await supabase.auth.getUser();
+  const docenteId = userData?.user?.id;
+  if (!docenteId) return [];
+  const { data, error } = await supabase.from("horario").select("*, materias(nombre)").eq("docente_id", docenteId).order("dia_semana");
+  if (error) throw error;
+  return data || [];
+}
+
 export async function fetchHorario() {
   const [horarioRes, profesoresRes] = await Promise.all([
     supabase.from("horario").select("*, materias(nombre)").order("dia_semana").order("hora_inicio"),
