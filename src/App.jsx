@@ -43,6 +43,7 @@ import { VistaEntregasPorRevisar } from "./screens/EntregasPorRevisar";
 import { VistaTableroSemanal } from "./screens/TableroSemanal";
 import { VistaInicio, ContenidoLightbox } from "./screens/Inicio";
 import { VistaComarcaOakhaven, TarjetaComarcaPublica, urlDeTarjeta, urlQR } from "./screens/ComarcaOakhaven";
+import { VistaBancoContenido, JugarSetModal, VistaBancoContenidoEstudiante } from "./screens/BancoContenido";
 import { EditorTexto, TextoEnriquecido, textoPlano } from "./components/RichText";
 import { InstitucionModal } from "./screens/Institucion";
 import { AdministracionModal } from "./screens/Administracion";
@@ -1047,6 +1048,7 @@ const MENU_CODICE_GRUPOS = [
       { key: "recompensas", label: "Recompensas", icono: "🎁" },
       { key: "album", label: "Álbum", icono: "🎴" },
       { key: "comarca", label: "Mi Comarca", icono: "🏛️" },
+      { key: "bancocontenido", label: "Juegos de Contenido", icono: "🧩" },
     ],
   },
   {
@@ -2049,6 +2051,8 @@ function PortalEstudiante() {
 
           {vista === "comarca" && estudianteInfo && <MiComarcaEstudiante estudianteInfo={estudianteInfo} />}
 
+          {vista === "bancocontenido" && estudianteInfo && <VistaBancoContenidoEstudiante estudianteId={estudianteInfo.id} />}
+
           {vista === "ranking" && estudianteInfo && (
             <RankingEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />
           )}
@@ -2164,6 +2168,7 @@ const MENU_PANEL_GRUPOS = [
       { key: "actividadesprogramadas", label: "Actividades Programadas", icono: "🎮" },
       { key: "biblioteca", label: "Biblioteca", icono: "📚" },
       { key: "comarca", label: "Comarca de Oakhaven", icono: "🏛️" },
+      { key: "bancocontenido", label: "Banco de Contenido", icono: "🧩" },
     ],
   },
   {
@@ -2554,6 +2559,7 @@ function Panel({ session }) {
         {tab === "rubricas" && <VistaRubricas />}
         {tab === "biblioteca" && grados.length > 0 && <VistaBiblioteca grados={grados} gradoActivo={gradoActivo} />}
         {tab === "comarca" && grados.length > 0 && <VistaComarcaOakhaven grados={grados} gradoActivo={gradoActivo} />}
+        {tab === "bancocontenido" && <VistaBancoContenido />}
         {tab === "anotaciones" && <VistaAnotaciones />}
         {tab === "inclusion" && <VistaInclusionGeneral />}
         {tab === "bajasvida" && <VistaBajasVida />}
