@@ -4,7 +4,6 @@ import * as api from "../lib/api";
 import { agruparPorNivel, nivelYCurso } from "../lib/gamification";
 import { periodosDe } from "../lib/calificaciones";
 import { EditorTexto, TextoEnriquecido } from "../components/RichText";
-
 /* ==================== Helpers genéricos para el Formato Maestro ==================== */
 
 // Lista simple de textos (una fila = un ítem), con agregar/quitar.
@@ -236,6 +235,7 @@ function FormatoMaestroCampos({ datos, setDatos }) {
     </div>
   );
 }
+
 
 const ICONO_RECURSO = { drive: "📁", docs: "📄", forms: "📝", otro: "🔗" };
 const LABEL_RECURSO = { drive: "Google Drive", docs: "Google Docs", forms: "Google Forms", otro: "Enlace" };
@@ -544,7 +544,7 @@ const ESTADOS_DICTADO = [
   { key: "aplazada", label: "Aplazada", color: "#EF4444" },
 ];
 
-function DictadoControl({ claseId, grados }) {
+function DictadoControl({ claseId, grados, unidad }) {
   const [dictados, setDictados] = useState([]);
   const [agregando, setAgregando] = useState(false);
   const [gradoId, setGradoId] = useState("");
@@ -552,6 +552,33 @@ function DictadoControl({ claseId, grados }) {
   const [estado, setEstado] = useState("dictada");
   const [observacionAbiertaDe, setObservacionAbiertaDe] = useState(null);
   const [observacionTemp, setObservacionTemp] = useState({});
+  const [comarcaAbiertaDe, setComarcaAbiertaDe] = useState(null);
+  const [reinosDelCurso, setReinosDelCurso] = useState([]);
+  const [seleccionados, setSeleccionados] = useState([]);
+  const [cargandoReinos, setCargandoReinos] = useState(false);
+  const [lanzando, setLanzando] = useState(false);
+
+  const abrirComarcaDe = (dictado) => {
+    setComarcaAbiertaDe(dictado.id);
+    setCargandoReinos(true);
+    api.fetchReinosDelCurso(dictado.grado_id).then((r) => { setReinosDelCurso(r); setSeleccionados(r); setCargandoReinos(false); });
+  };
+
+  const toggleReino = (nombre) => setSeleccionados((prev) => prev.includes(nombre) ? prev.filter((r) => r !== nombre) : [...prev, nombre]);
+
+  const lanzarComarca = async (dictado) => {
+    if (seleccionados.length < 2) { alert("Elegí al menos 2 Reinos."); return; }
+    setLanzando(true);
+    try {
+      await api.iniciarComarcaDesdePlaneacion(unidad, dictado, seleccionados);
+      alert("¡Listo! La sesión ya está creada — andá a la pestaña \"Comarca de Oakhaven\" para jugarla.");
+      setComarcaAbiertaDe(null);
+      cargar();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setLanzando(false);
+  };
 
   const cargar = () => api.fetchDictados(claseId).then(setDictados);
   useEffect(() => { cargar(); }, [claseId]);
@@ -598,8 +625,41 @@ function DictadoControl({ claseId, grados }) {
                   <button onClick={() => setObservacionAbiertaDe(observacionAbiertaDe === d.id ? null : d.id)} className="text-[10px] text-violet-500 shrink-0">
                     {d.observacion ? "📝 Ver nota" : "+ Nota"}
                   </button>
+                  {unidad?.incluye_comarca && (
+                    d.comarca_sesion_id ? (
+                      <span className="text-[10px] text-emerald-600 font-semibold shrink-0">✓ 🏛️ Comarca vinculada</span>
+                    ) : (
+                      <button onClick={() => abrirComarcaDe(d)} className="text-[10px] text-violet-500 shrink-0">🏛️ Iniciar Comarca</button>
+                    )
+                  )}
                   <button onClick={() => quitar(d.id)} className="text-slate-300 hover:text-rose-500 ml-auto shrink-0">✕</button>
                 </div>
+                {comarcaAbiertaDe === d.id && (
+                  <div className="mt-1.5 bg-violet-50 rounded-lg p-2">
+                    {cargandoReinos ? (
+                      <p className="text-[11px] text-slate-400">Buscando los Reinos de este curso…</p>
+                    ) : reinosDelCurso.length === 0 ? (
+                      <p className="text-[11px] text-rose-500">Este curso todavía no tiene Reinos asignados a sus estudiantes.</p>
+                    ) : (
+                      <>
+                        <div className="flex flex-wrap gap-1.5 mb-2">
+                          {reinosDelCurso.map((r) => (
+                            <button key={r} onClick={() => toggleReino(r)}
+                              className={`text-[10px] font-semibold px-2 py-1 rounded-full border ${seleccionados.includes(r) ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-500 border-slate-200"}`}>
+                              {seleccionados.includes(r) ? "✓ " : ""}{r}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => setComarcaAbiertaDe(null)} className="text-[11px] text-slate-500">Cancelar</button>
+                          <button disabled={lanzando} onClick={() => lanzarComarca(d)} className="text-[11px] font-semibold px-2 py-1 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+                            {lanzando ? "Creando…" : "Fundar y vincular"}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
                 {observacionAbiertaDe === d.id && (
                   <div className="mt-1 flex gap-1.5">
                     <textarea value={observacionTemp[d.id] ?? d.observacion ?? ""} onChange={(e) => setObservacionTemp((prev) => ({ ...prev, [d.id]: e.target.value }))}
@@ -635,7 +695,7 @@ function DictadoControl({ claseId, grados }) {
   );
 }
 
-function ClasesLista({ unidadId, grados }) {
+function ClasesLista({ unidad, unidadId, grados }) {
   const [clases, setClases] = useState([]);
   const [agregando, setAgregando] = useState(false);
   const [editandoId, setEditandoId] = useState(null);
@@ -761,7 +821,7 @@ function ClasesLista({ unidadId, grados }) {
                 <SelectorEstandares planeacionId={c.id} tipo="competencia" />
               </div>
               <RecursosLista planeacionId={c.id} />
-              <DictadoControl claseId={c.id} grados={grados} />
+              <DictadoControl claseId={c.id} grados={grados} unidad={unidad} />
             </div>
           ))}
         </div>
@@ -934,14 +994,14 @@ function UnidadCard({ unidad, institucion, materiaNombre, materias, gradoId, gra
   const [orientacionesEvaluacion, setOrientacionesEvaluacion] = useState(unidad.orientaciones_evaluacion || "");
   const [estado, setEstado] = useState(unidad.estado);
   const [imprimiendo, setImprimiendo] = useState(false);
-  const [formatoAbierto, setFormatoAbierto] = useState(false);
-  const [formato, setFormato] = useState(() => estadoInicialFormatoMaestro(unidad));
+  const [formatoMaestroAbierto, setFormatoMaestroAbierto] = useState(false);
+  const [formatoMaestro, setFormatoMaestro] = useState(() => estadoInicialFormatoMaestro(unidad));
   const guardar = async () => {
     await api.editarPlaneacion(unidad.id, {
       titulo: titulo.trim(), objetivo: objetivo.trim() || null, contenido: contenido.trim() || null,
       problema_proyecto: problemaProyecto.trim() || null, orientaciones_evaluacion: orientacionesEvaluacion.trim() || null,
       estado,
-      ...formato,
+      ...formatoMaestro,
     });
     setEditando(false);
     onCambio();
@@ -1008,10 +1068,10 @@ function UnidadCard({ unidad, institucion, materiaNombre, materias, gradoId, gra
               placeholder="Criterios de valoración del portafolio de evidencias; lineamientos para exámenes, etc."
               className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none mt-1" />
           </div>
-          <button onClick={() => setFormatoAbierto((v) => !v)} className="text-xs font-semibold text-violet-600">
-            {formatoAbierto ? "▾" : "▸"} Formato Maestro de Planeación Didáctica (6 módulos)
+          <button onClick={() => setFormatoMaestroAbierto((v) => !v)} className="text-xs font-semibold text-violet-600">
+            {formatoMaestroAbierto ? "▾" : "▸"} Formato Maestro de Planeación Didáctica (6 módulos)
           </button>
-          {formatoAbierto && <FormatoMaestroCampos datos={formato} setDatos={setFormato} />}
+          {formatoMaestroAbierto && <FormatoMaestroCampos datos={formatoMaestro} setDatos={setFormatoMaestro} />}
           <div className="flex items-center gap-2">
             <select value={estado} onChange={(e) => setEstado(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none">
               <option value="borrador">Borrador</option>
@@ -1022,6 +1082,44 @@ function UnidadCard({ unidad, institucion, materiaNombre, materias, gradoId, gra
         </div>
       ) : (
         <>
+          {(unidad.incluye_momentos || unidad.formato === "mision") && (
+            <div className="mt-1 mb-2">
+              {unidad.area && (
+                <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full mb-2"
+                  style={{ background: unidad.area === "ET" ? "#EDE9FE" : unidad.area === "RE" ? "#FEF3C7" : "#DBEAFE", color: unidad.area === "ET" ? "#7C3AED" : unidad.area === "RE" ? "#B45309" : "#1D4ED8" }}>
+                  {unidad.area === "ET" ? "🏛️ Ética" : unidad.area === "RE" ? "✝️ Religión" : "⚜️ Integrada"}
+                </span>
+              )}
+              <div className="space-y-1">
+                {[
+                  { icono: "👁️", label: "VER", texto: unidad.momento_ver, xp: unidad.xp_ver },
+                  { icono: "⚖️", label: "JUZGAR", texto: unidad.momento_juzgar, xp: unidad.xp_juzgar },
+                  { icono: "🖐️", label: "ACTUAR", texto: unidad.momento_actuar, xp: unidad.xp_actuar },
+                  { icono: "🔨", label: "FORJA", texto: unidad.momento_forja, xp: unidad.xp_forja },
+                  { icono: "📢", label: "TESTIMONIAR", texto: unidad.momento_testimoniar, xp: unidad.xp_testimoniar },
+                  { icono: "📖", label: "MI CÓDICE", texto: unidad.momento_codice, xp: unidad.xp_codice },
+                ].filter((m) => m.texto).map((m) => (
+                  <div key={m.label} className="text-xs text-slate-600 bg-slate-50 rounded-lg px-2.5 py-1.5">
+                    <span className="font-bold">{m.icono} {m.label}</span> — {m.texto} <span className="text-violet-500 font-semibold">(+{m.xp} XP)</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {unidad.incluye_comarca && <ComarcaEnPlaneacion unidad={unidad} />}
+          {(unidad.caso_problema_integrador || unidad.narrativa_sesion || (unidad.zonas_escenario || []).length > 0 || (unidad.secuencia_didactica || []).length > 0) && (
+            <div className="mt-2 mb-2 bg-slate-50 rounded-xl p-3 space-y-1.5 text-xs">
+              <div className="text-xs font-bold text-slate-600 mb-1">📋 Formato Maestro de Planeación</div>
+              {unidad.caso_problema_integrador && <p><b className="text-slate-500">Caso/problema integrador:</b> {unidad.caso_problema_integrador}</p>}
+              {unidad.dba && <p><b className="text-slate-500">DBA:</b> {unidad.dba}</p>}
+              {(unidad.competencias_ciudadanas || []).length > 0 && <p><b className="text-slate-500">Competencias:</b> {unidad.competencias_ciudadanas.join(", ")}</p>}
+              {unidad.narrativa_sesion && <p className="bg-violet-50 rounded-lg p-2"><b className="text-violet-600">Narrativa:</b> {unidad.narrativa_sesion}</p>}
+              {(unidad.zonas_escenario || []).length > 0 && <p><b className="text-slate-500">Zonas del escenario:</b> {unidad.zonas_escenario.length} definidas</p>}
+              {(unidad.roles_economia || []).length > 0 && <p><b className="text-slate-500">Roles documentados:</b> {unidad.roles_economia.length}</p>}
+              {(unidad.secuencia_didactica || []).length > 0 && <p><b className="text-slate-500">Secuencia didáctica:</b> {unidad.secuencia_didactica.length} momentos ({unidad.duracion_minutos || 60} min totales)</p>}
+              {(unidad.matriz_evaluacion || []).length > 0 && <p><b className="text-slate-500">Matriz de evaluación:</b> {unidad.matriz_evaluacion.map((m) => `${m.componente} ${m.peso_pct}%`).join(" · ")}</p>}
+            </div>
+          )}
           {unidad.objetivo && <p className="text-xs text-slate-500 mt-1"><b>Finalidad/objetivo:</b> {unidad.objetivo}</p>}
           {unidad.contenido && <p className="text-xs text-slate-500 mt-1 whitespace-pre-line"><b>Contenidos:</b> {unidad.contenido}</p>}
           {unidad.problema_proyecto && (
@@ -1035,24 +1133,12 @@ function UnidadCard({ unidad, institucion, materiaNombre, materias, gradoId, gra
 
       {expandida && (
         <div className="mt-3 pt-3 border-t border-slate-100">
-          {(unidad.caso_problema_integrador || unidad.narrativa_sesion || (unidad.zonas_escenario || []).length > 0 || (unidad.secuencia_didactica || []).length > 0) && (
-            <div className="bg-slate-50 rounded-2xl p-3 mb-3 space-y-2 text-xs">
-              {unidad.caso_problema_integrador && <p><b className="text-slate-500">Caso/problema integrador:</b> {unidad.caso_problema_integrador}</p>}
-              {unidad.dba && <p><b className="text-slate-500">DBA:</b> {unidad.dba}</p>}
-              {(unidad.competencias_ciudadanas || []).length > 0 && <p><b className="text-slate-500">Competencias:</b> {unidad.competencias_ciudadanas.join(", ")}</p>}
-              {unidad.narrativa_sesion && <p className="bg-violet-50 rounded-lg p-2"><b className="text-violet-600">Narrativa:</b> {unidad.narrativa_sesion}</p>}
-              {(unidad.zonas_escenario || []).length > 0 && <p><b className="text-slate-500">Zonas del escenario:</b> {unidad.zonas_escenario.length} definidas</p>}
-              {(unidad.roles_economia || []).length > 0 && <p><b className="text-slate-500">Roles documentados:</b> {unidad.roles_economia.length}</p>}
-              {(unidad.secuencia_didactica || []).length > 0 && <p><b className="text-slate-500">Secuencia didáctica:</b> {unidad.secuencia_didactica.length} momentos ({unidad.duracion_minutos || 60} min totales)</p>}
-              {(unidad.matriz_evaluacion || []).length > 0 && <p><b className="text-slate-500">Matriz de evaluación:</b> {unidad.matriz_evaluacion.map((m) => `${m.componente} ${m.peso_pct}%`).join(" · ")}</p>}
-            </div>
-          )}
           <div className="flex flex-wrap gap-3 mb-2">
             <SelectorEstandares planeacionId={unidad.id} tipo="dba" />
             <SelectorEstandares planeacionId={unidad.id} tipo="competencia" />
           </div>
           <RecursosLista planeacionId={unidad.id} />
-          <ClasesLista unidadId={unidad.id} grados={grados} />
+          <ClasesLista unidad={unidad} unidadId={unidad.id} grados={grados} />
           <TareasLista planeacionId={unidad.id} />
         </div>
       )}
@@ -1215,14 +1301,42 @@ function ImportarPlanIAModal({ materiaId, materias, gradoId, periodo, onCerrar, 
   );
 }
 
+function ComarcaEnPlaneacion({ unidad }) {
+  return (
+    <div className="mt-2 mb-2 bg-gradient-to-r from-violet-50 to-fuchsia-50 border border-violet-200 rounded-xl p-3">
+      <div className="text-xs font-bold text-violet-700 mb-1.5">🏛️ Comarca de Oakhaven</div>
+      {unidad.comarca_dilema && <p className="text-xs text-slate-600 mb-1"><b>Dilema:</b> {unidad.comarca_dilema}</p>}
+      {unidad.comarca_pregunta_dilema && <p className="text-[11px] text-slate-500">1. {unidad.comarca_pregunta_dilema}</p>}
+      {unidad.comarca_pregunta_fundamentacion && <p className="text-[11px] text-slate-500">2. {unidad.comarca_pregunta_fundamentacion}</p>}
+      {unidad.comarca_pregunta_edicto && <p className="text-[11px] text-slate-500">3. {unidad.comarca_pregunta_edicto}</p>}
+      <p className="text-[11px] text-violet-500 mt-1.5">Para iniciar la sesión real, usá el botón "🏛️" junto al curso, en el Control por curso de abajo.</p>
+    </div>
+  );
+}
+
 function NuevaUnidadForm({ materiaId, materias, gradoId, periodo, orden, onCancelar, onCreada }) {
   const [titulo, setTitulo] = useState("");
   const [objetivo, setObjetivo] = useState("");
   const [alcance, setAlcance] = useState("grado"); // "grado" | "curso"
   const [materiasExtra, setMateriasExtra] = useState([]);
   const [guardando, setGuardando] = useState(false);
-  const [formatoAbierto, setFormatoAbierto] = useState(false);
-  const [formato, setFormato] = useState(() => estadoInicialFormatoMaestro());
+  const [incluyeMomentos, setIncluyeMomentos] = useState(false);
+  const [incluyeComarca, setIncluyeComarca] = useState(false);
+  const [incluyeFormatoMaestro, setIncluyeFormatoMaestro] = useState(false);
+  const [formatoMaestro, setFormatoMaestro] = useState(() => estadoInicialFormatoMaestro());
+  const [area, setArea] = useState("ET");
+  const [momentos, setMomentos] = useState({
+    ver: "", juzgar: "", actuar: "", forja: "", testimoniar: "", codice: "",
+  });
+  const [xp, setXp] = useState({ ver: 10, juzgar: 20, actuar: 20, forja: 50, testimoniar: 30, codice: 20 });
+  const [comarcaDilema, setComarcaDilema] = useState("");
+  const [comarcaPreguntaDilema, setComarcaPreguntaDilema] = useState("");
+  const [comarcaPreguntaFundamentacion, setComarcaPreguntaFundamentacion] = useState("");
+  const [comarcaPreguntaEdicto, setComarcaPreguntaEdicto] = useState("");
+  const [eventosComarca, setEventosComarca] = useState([]);
+  const [comarcaEventoId, setComarcaEventoId] = useState("");
+
+  useEffect(() => { if (incluyeComarca) api.fetchComarcaEventos().then(setEventosComarca); }, [incluyeComarca]);
 
   const { nivel, curso } = nivelYCurso(gradoId);
   const gradoIdAGuardar = alcance === "grado" ? nivel : gradoId;
@@ -1234,11 +1348,34 @@ function NuevaUnidadForm({ materiaId, materias, gradoId, periodo, orden, onCance
     if (!titulo.trim()) { alert("Escribe un título para la unidad/tema."); return; }
     setGuardando(true);
     try {
-      await api.crearPlaneacion({
+      const campos = {
         tipo: "unidad", materia_id: materiaId, materias_extra: materiasExtra, grado_id: gradoIdAGuardar, periodo,
         titulo: titulo.trim(), objetivo: objetivo.trim() || null, orden,
-        ...formato,
-      });
+        formato: incluyeMomentos ? "mision" : "generico", // se mantiene por compatibilidad con planeaciones viejas
+        incluye_momentos: incluyeMomentos, incluye_comarca: incluyeComarca,
+      };
+      if (incluyeMomentos) {
+        Object.assign(campos, {
+          area,
+          momento_ver: momentos.ver.trim() || null, xp_ver: parseInt(xp.ver, 10) || 0,
+          momento_juzgar: momentos.juzgar.trim() || null, xp_juzgar: parseInt(xp.juzgar, 10) || 0,
+          momento_actuar: momentos.actuar.trim() || null, xp_actuar: parseInt(xp.actuar, 10) || 0,
+          momento_forja: momentos.forja.trim() || null, xp_forja: parseInt(xp.forja, 10) || 0,
+          momento_testimoniar: momentos.testimoniar.trim() || null, xp_testimoniar: parseInt(xp.testimoniar, 10) || 0,
+          momento_codice: momentos.codice.trim() || null, xp_codice: parseInt(xp.codice, 10) || 0,
+        });
+      }
+      if (incluyeComarca) {
+        Object.assign(campos, {
+          comarca_dilema: comarcaDilema.trim() || null,
+          comarca_pregunta_dilema: comarcaPreguntaDilema.trim() || null,
+          comarca_pregunta_fundamentacion: comarcaPreguntaFundamentacion.trim() || null,
+          comarca_pregunta_edicto: comarcaPreguntaEdicto.trim() || null,
+          comarca_evento_id: comarcaEventoId ? parseInt(comarcaEventoId, 10) : null,
+        });
+      }
+      if (incluyeFormatoMaestro) Object.assign(campos, formatoMaestro);
+      await api.crearPlaneacion(campos);
       onCreada();
     } catch (e) {
       alert("Error al guardar: " + e.message);
@@ -1246,12 +1383,91 @@ function NuevaUnidadForm({ materiaId, materias, gradoId, periodo, orden, onCance
     setGuardando(false);
   };
 
+  const MOMENTOS_INFO = [
+    { key: "ver", icono: "👁️", label: "VER", placeholder: "Caso, dilema, imagen o experiencia que se presenta…" },
+    { key: "juzgar", icono: "⚖️", label: "JUZGAR", placeholder: "Fuente, marco ético/religioso o concepto para analizar…" },
+    { key: "actuar", icono: "🖐️", label: "ACTUAR", placeholder: "Decisión, postura o propuesta que toma el estudiante…" },
+    { key: "forja", icono: "🔨", label: "CREAR / FORJA", placeholder: "Producto concreto que van a construir…" },
+    { key: "testimoniar", icono: "📢", label: "TESTIMONIAR", placeholder: "Cómo van a presentar y defender lo aprendido…" },
+    { key: "codice", icono: "📖", label: "MI CÓDICE", placeholder: "Pregunta de reflexión para el diario personal…" },
+  ];
+
   return (
     <div className="bg-violet-50 rounded-2xl p-4 mb-3">
-      <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título de la unidad/tema (ej: Unidad 1 — Números racionales)"
+      <label className="text-xs text-slate-500 block mb-1">Esta clase incluye (podés marcar más de una)</label>
+      <div className="flex gap-1.5 flex-wrap mb-3">
+        <button onClick={() => setIncluyeMomentos((v) => !v)}
+          className={`text-xs px-3 py-1.5 rounded-full border ${incluyeMomentos ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>
+          {incluyeMomentos ? "✓ " : ""}⚔️ Momentos Ver-Juzgar-Actuar
+        </button>
+        <button onClick={() => setIncluyeComarca((v) => !v)}
+          className={`text-xs px-3 py-1.5 rounded-full border ${incluyeComarca ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>
+          {incluyeComarca ? "✓ " : ""}🏛️ Comarca de Oakhaven
+        </button>
+        <button onClick={() => setIncluyeFormatoMaestro((v) => !v)}
+          className={`text-xs px-3 py-1.5 rounded-full border ${incluyeFormatoMaestro ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>
+          {incluyeFormatoMaestro ? "✓ " : ""}📋 Formato Maestro (6 módulos)
+        </button>
+      </div>
+
+      <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder={incluyeMomentos ? "Nombre de la misión (ej: M01 · El Gobernante Ético)" : "Título de la unidad/tema (ej: Unidad 1 — Números racionales)"}
         className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
       <input value={objetivo} onChange={(e) => setObjetivo(e.target.value)} placeholder="Objetivo de aprendizaje (opcional)"
         className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none bg-white" />
+
+      {incluyeMomentos && (
+        <div className="mb-3">
+          <label className="text-xs text-slate-500 block mb-1">Área</label>
+          <div className="flex gap-1.5 mb-3">
+            <button onClick={() => setArea("ET")} className={`text-xs px-3 py-1.5 rounded-full border ${area === "ET" ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>🏛️ [ET] Ética</button>
+            <button onClick={() => setArea("RE")} className={`text-xs px-3 py-1.5 rounded-full border ${area === "RE" ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>✝️ [RE] Religión</button>
+            <button onClick={() => setArea("IN")} className={`text-xs px-3 py-1.5 rounded-full border ${area === "IN" ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>⚜️ [IN] Integrada</button>
+          </div>
+
+          <div className="space-y-2">
+            {MOMENTOS_INFO.map((m) => (
+              <div key={m.key} className="bg-white rounded-xl p-2.5 border border-slate-200">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-xs font-bold text-slate-600">{m.icono} {m.label}</span>
+                  <div className="flex items-center gap-1 ml-auto">
+                    <span className="text-[10px] text-slate-400">XP</span>
+                    <input type="number" value={xp[m.key]} onChange={(e) => setXp((prev) => ({ ...prev, [m.key]: e.target.value }))}
+                      className="w-14 text-xs text-center rounded px-1 py-0.5 border border-slate-200 outline-none" />
+                  </div>
+                </div>
+                <input value={momentos[m.key]} onChange={(e) => setMomentos((prev) => ({ ...prev, [m.key]: e.target.value }))}
+                  placeholder={m.placeholder} className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {incluyeComarca && (
+        <div className="mb-3 bg-white rounded-xl p-3 border border-violet-200">
+          <div className="text-xs font-bold text-violet-700 mb-2">🏛️ Preparación de la Comarca de Oakhaven</div>
+          <label className="text-[10px] text-slate-500 block mb-1">El dilema/tema que vas a plantear (se guarda como Carta de Destino inicial si no elegís una del catálogo)</label>
+          <textarea value={comarcaDilema} onChange={(e) => setComarcaDilema(e.target.value)} rows={2}
+            placeholder="Ej: El Acueducto Común se está secando — solo hay agua para 4 de los 6 Reinos este mes."
+            className="w-full text-xs rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none" />
+
+          <label className="text-[10px] text-slate-500 block mb-1">O elegí una carta puntual del catálogo (opcional)</label>
+          <select value={comarcaEventoId} onChange={(e) => setComarcaEventoId(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1.5 mb-3 border border-slate-200 outline-none bg-white">
+            <option value="">Usar el dilema de arriba</option>
+            {eventosComarca.map((ev) => <option key={ev.id} value={ev.id}>{ev.titulo}</option>)}
+          </select>
+
+          <div className="text-[10px] text-slate-500 font-semibold mb-1">Preguntas de la Cara B (el entregable de La Forja)</div>
+          <input value={comarcaPreguntaDilema} onChange={(e) => setComarcaPreguntaDilema(e.target.value)} placeholder="Pregunta 1 — El Dilema"
+            className="w-full text-xs rounded-lg px-2 py-1.5 mb-1.5 border border-slate-200 outline-none" />
+          <input value={comarcaPreguntaFundamentacion} onChange={(e) => setComarcaPreguntaFundamentacion(e.target.value)} placeholder="Pregunta 2 — Fundamentación"
+            className="w-full text-xs rounded-lg px-2 py-1.5 mb-1.5 border border-slate-200 outline-none" />
+          <input value={comarcaPreguntaEdicto} onChange={(e) => setComarcaPreguntaEdicto(e.target.value)} placeholder="Pregunta 3 — Edicto de Concordia"
+            className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+        </div>
+      )}
+
+      {incluyeFormatoMaestro && <FormatoMaestroCampos datos={formatoMaestro} setDatos={setFormatoMaestro} />}
 
       {otrasMaterias.length > 0 && (
         <div className="mb-3">
@@ -1281,16 +1497,10 @@ function NuevaUnidadForm({ materiaId, materias, gradoId, periodo, orden, onCance
           <p className="text-[11px] text-slate-400 mt-1">Va a aparecer en todos los cursos del grado {nivel}° — usá el "Control por curso" dentro de cada clase para registrar en qué curso y fecha se dictó cada una.</p>
         )}
       </div>
-
-      <button onClick={() => setFormatoAbierto((v) => !v)} className="text-xs font-semibold text-violet-600 mb-3">
-        {formatoAbierto ? "▾" : "▸"} Formato Maestro de Planeación Didáctica (6 módulos — opcional pero recomendado)
-      </button>
-      {formatoAbierto && <FormatoMaestroCampos datos={formato} setDatos={setFormato} />}
-
       <div className="flex justify-end gap-2">
         <button onClick={onCancelar} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
         <button disabled={guardando} onClick={guardar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
-          {guardando ? "Guardando…" : "Crear unidad"}
+          {guardando ? "Guardando…" : "Crear planeación"}
         </button>
       </div>
     </div>
