@@ -5,6 +5,238 @@ import { agruparPorNivel, nivelYCurso } from "../lib/gamification";
 import { periodosDe } from "../lib/calificaciones";
 import { EditorTexto, TextoEnriquecido } from "../components/RichText";
 
+/* ==================== Helpers genéricos para el Formato Maestro ==================== */
+
+// Lista simple de textos (una fila = un ítem), con agregar/quitar.
+function ListaTextoEditable({ items, onCambio, placeholder }) {
+  const actualizar = (i, valor) => onCambio(items.map((it, idx) => (idx === i ? valor : it)));
+  const agregar = () => onCambio([...items, ""]);
+  const quitar = (i) => onCambio(items.filter((_, idx) => idx !== i));
+  return (
+    <div className="space-y-1.5">
+      {items.map((it, i) => (
+        <div key={i} className="flex items-center gap-1.5">
+          <input value={it} onChange={(e) => actualizar(i, e.target.value)} placeholder={placeholder}
+            className="flex-1 text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none" />
+          <button onClick={() => quitar(i)} className="text-slate-300 hover:text-rose-500 text-xs shrink-0">✕</button>
+        </div>
+      ))}
+      <button onClick={agregar} className="text-xs font-semibold text-violet-500">+ Agregar</button>
+    </div>
+  );
+}
+
+// Tabla editable genérica — columnas definidas por el llamador, filas
+// libres (agregar/quitar). Cada fila es un objeto plano con esas claves.
+function TablaEditable({ columnas, filas, onCambio, filaVacia }) {
+  const actualizarCelda = (i, clave, valor) => onCambio(filas.map((f, idx) => (idx === i ? { ...f, [clave]: valor } : f)));
+  const agregarFila = () => onCambio([...filas, { ...filaVacia }]);
+  const quitarFila = (i) => onCambio(filas.filter((_, idx) => idx !== i));
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs border-separate" style={{ borderSpacing: "0 6px" }}>
+        <thead>
+          <tr>
+            {columnas.map((c) => <th key={c.clave} className="text-left px-2 font-bold text-slate-400 uppercase tracking-wide" style={{ fontSize: 10 }}>{c.titulo}</th>)}
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {filas.map((fila, i) => (
+            <tr key={i} className="bg-white">
+              {columnas.map((c) => (
+                <td key={c.clave} className="px-1 py-1 align-top">
+                  {c.tipo === "textarea" ? (
+                    <textarea value={fila[c.clave] || ""} onChange={(e) => actualizarCelda(i, c.clave, e.target.value)} rows={2}
+                      className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none resize-none" style={{ minWidth: 140 }} />
+                  ) : c.tipo === "numero" ? (
+                    <input type="number" value={fila[c.clave] ?? ""} onChange={(e) => actualizarCelda(i, c.clave, e.target.value)}
+                      className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" style={{ minWidth: 70 }} />
+                  ) : (
+                    <input value={fila[c.clave] || ""} onChange={(e) => actualizarCelda(i, c.clave, e.target.value)}
+                      className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" style={{ minWidth: 140 }} />
+                  )}
+                </td>
+              ))}
+              <td className="align-top pt-2"><button onClick={() => quitarFila(i)} className="text-slate-300 hover:text-rose-500">✕</button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <button onClick={agregarFila} className="text-xs font-semibold text-violet-500 mt-1">+ Agregar fila</button>
+    </div>
+  );
+}
+
+function SeccionModulo({ numero, titulo, subtitulo, children }) {
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-3">
+      <div className="mb-3">
+        <div className="text-[10px] font-bold text-violet-500 uppercase tracking-wide">Módulo {numero}</div>
+        <h4 className="text-sm font-bold text-slate-800">{titulo}</h4>
+        {subtitulo && <p className="text-[11px] text-slate-400 mt-0.5">{subtitulo}</p>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+const COMPETENCIAS_CIUDADANAS_OPCIONES = ["Pensamiento Social (COMP.07)", "Multiperspectivismo (COMP.08)", "Reflexión Ética (COMP.09)"];
+const MOMENTOS_CODICE_OPCIONES = ["VER / Apertura", "JUZGAR / Organización", "JUZGAR / Simulación", "ACTUAR / Evidencia", "EVALUAR / Juicio", "SÍNTESIS / Cierre"];
+
+function estadoInicialFormatoMaestro(base = {}) {
+  return {
+    institucion_asignatura: base.institucion_asignatura || "",
+    clase_numero: base.clase_numero || "",
+    duracion_minutos: base.duracion_minutos ?? 60,
+    caso_problema_integrador: base.caso_problema_integrador || "",
+    dba: base.dba || "",
+    competencias_ciudadanas: base.competencias_ciudadanas || [],
+    desempeno_cognitivo: base.desempeno_cognitivo || "",
+    desempeno_procedimental: base.desempeno_procedimental || "",
+    desempeno_actitudinal: base.desempeno_actitudinal || "",
+    contenidos_curriculares: base.contenidos_curriculares || [],
+    nombre_proyecto: base.nombre_proyecto || "",
+    perfil_jugadores: base.perfil_jugadores || "",
+    nivel_progresion: base.nivel_progresion ?? "",
+    narrativa_sesion: base.narrativa_sesion || "",
+    tipo_escenario: base.tipo_escenario || "real_ficcion",
+    reglas_generales: base.reglas_generales || [],
+    misiones_retos: base.misiones_retos || [],
+    zonas_escenario: base.zonas_escenario || [],
+    roles_economia: base.roles_economia || [],
+    secuencia_didactica: base.secuencia_didactica || [],
+    matriz_evaluacion: base.matriz_evaluacion || [],
+  };
+}
+
+// Formulario completo del Formato Maestro de Planeación Didáctica
+// Integrada (6 módulos) — se usa tanto para crear como para editar.
+function FormatoMaestroCampos({ datos, setDatos }) {
+  const set = (clave, valor) => setDatos((prev) => ({ ...prev, [clave]: valor }));
+  const toggleCompetencia = (c) => set("competencias_ciudadanas", datos.competencias_ciudadanas.includes(c) ? datos.competencias_ciudadanas.filter((x) => x !== c) : [...datos.competencias_ciudadanas, c]);
+
+  return (
+    <div>
+      <SeccionModulo numero="I" titulo="Datos generales y alineación curricular" subtitulo="Institución/asignatura, DBA, competencias y contenidos.">
+        <div className="grid sm:grid-cols-2 gap-2 mb-2">
+          <input value={datos.institucion_asignatura} onChange={(e) => set("institucion_asignatura", e.target.value)} placeholder="Institución / Asignatura"
+            className="text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none" />
+          <input value={datos.clase_numero} onChange={(e) => set("clase_numero", e.target.value)} placeholder="Clase N° (ej: 2 - La Balanza Imparcial)"
+            className="text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none" />
+        </div>
+        <div className="flex items-center gap-2 mb-2">
+          <label className="text-xs text-slate-500 shrink-0">Duración (min)</label>
+          <input type="number" value={datos.duracion_minutos} onChange={(e) => set("duracion_minutos", parseInt(e.target.value, 10) || 0)}
+            className="w-20 text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+        </div>
+        <textarea value={datos.caso_problema_integrador} onChange={(e) => set("caso_problema_integrador", e.target.value)} rows={2} placeholder="Caso / Problema integrador de la sesión"
+          className="w-full text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none mb-2 resize-none" />
+        <input value={datos.dba} onChange={(e) => set("dba", e.target.value)} placeholder="Derecho Básico de Aprendizaje (DBA) — código y enunciado"
+          className="w-full text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none mb-2" />
+        <label className="text-xs text-slate-500 block mb-1">Competencias Ciudadanas trabajadas</label>
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {COMPETENCIAS_CIUDADANAS_OPCIONES.map((c) => (
+            <button key={c} onClick={() => toggleCompetencia(c)}
+              className={`text-xs px-3 py-1.5 rounded-full border ${datos.competencias_ciudadanas.includes(c) ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>
+              {c}
+            </button>
+          ))}
+        </div>
+        <label className="text-xs text-slate-500 block mb-1">Desempeños / Indicadores</label>
+        <input value={datos.desempeno_cognitivo} onChange={(e) => set("desempeno_cognitivo", e.target.value)} placeholder="1. Cognitivo: indicador específico"
+          className="w-full text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none mb-1.5" />
+        <input value={datos.desempeno_procedimental} onChange={(e) => set("desempeno_procedimental", e.target.value)} placeholder="2. Procedimental: indicador de ejecución"
+          className="w-full text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none mb-1.5" />
+        <input value={datos.desempeno_actitudinal} onChange={(e) => set("desempeno_actitudinal", e.target.value)} placeholder="3. Actitudinal: criterio de convivencia"
+          className="w-full text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none mb-3" />
+        <label className="text-xs text-slate-500 block mb-1">Contenidos Curriculares</label>
+        <ListaTextoEditable items={datos.contenidos_curriculares} onCambio={(v) => set("contenidos_curriculares", v)} placeholder="Ej: Art. 13 Igualdad / Dharma - Ahimsa" />
+      </SeccionModulo>
+
+      <SeccionModulo numero="II" titulo="Diseño del proyecto gamificado y narrativa" subtitulo="Opcional si la clase no usa una narrativa/juego — dejalo en blanco si no aplica.">
+        <div className="grid sm:grid-cols-2 gap-2 mb-2">
+          <input value={datos.nombre_proyecto} onChange={(e) => set("nombre_proyecto", e.target.value)} placeholder="Nombre del proyecto/sesión"
+            className="text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none" />
+          <input value={datos.perfil_jugadores} onChange={(e) => set("perfil_jugadores", e.target.value)} placeholder="Perfil de jugadores/estudiantes"
+            className="text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none" />
+        </div>
+        <div className="flex items-center gap-2 mb-2">
+          <label className="text-xs text-slate-500 shrink-0">Nivel de progresión (1-5)</label>
+          <input type="number" min={1} max={5} value={datos.nivel_progresion} onChange={(e) => set("nivel_progresion", e.target.value)}
+            className="w-16 text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+        </div>
+        <textarea value={datos.narrativa_sesion} onChange={(e) => set("narrativa_sesion", e.target.value)} rows={2} placeholder="Narrativa de la sesión — 3-4 líneas ambientando el desafío"
+          className="w-full text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none mb-2 resize-none" />
+        <label className="text-xs text-slate-500 block mb-1">Tipo de escenario</label>
+        <div className="flex gap-1 rounded-full bg-slate-50 p-1 w-fit mb-3">
+          {[{ v: "real", l: "Real" }, { v: "real_ficcion", l: "Real/Ficción" }, { v: "ficcion", l: "Ficción" }].map((o) => (
+            <button key={o.v} onClick={() => set("tipo_escenario", o.v)} className={`text-xs px-3 py-1.5 rounded-full ${datos.tipo_escenario === o.v ? "bg-violet-500 text-white" : "text-slate-600"}`}>{o.l}</button>
+          ))}
+        </div>
+        <label className="text-xs text-slate-500 block mb-1">Reglas generales de juego</label>
+        <div className="mb-3"><ListaTextoEditable items={datos.reglas_generales} onCambio={(v) => set("reglas_generales", v)} placeholder="Ej: Uso obligatorio de GP para alquiler de herramientas" /></div>
+        <label className="text-xs text-slate-500 block mb-1">Misiones y retos</label>
+        <TablaEditable
+          columnas={[{ clave: "nombre", titulo: "Misión" }, { clave: "descripcion", titulo: "Descripción", tipo: "textarea" }]}
+          filas={datos.misiones_retos} onCambio={(v) => set("misiones_retos", v)} filaVacia={{ nombre: "", descripcion: "" }} />
+      </SeccionModulo>
+
+      <SeccionModulo numero="III" titulo="Escenario, paisaje y zonas" subtitulo="Deja la tabla vacía si la clase no tiene zonas/estaciones.">
+        <TablaEditable
+          columnas={[
+            { clave: "zona", titulo: "Zona / Provincia" },
+            { clave: "tipo_recorrido", titulo: "Tipo de recorrido" },
+            { clave: "reto_mision", titulo: "Reto / Misión asociada", tipo: "textarea" },
+            { clave: "contenido_vinculado", titulo: "Contenido curricular vinculado", tipo: "textarea" },
+          ]}
+          filas={datos.zonas_escenario} onCambio={(v) => set("zonas_escenario", v)}
+          filaVacia={{ zona: "", tipo_recorrido: "", reto_mision: "", contenido_vinculado: "" }} />
+      </SeccionModulo>
+
+      <SeccionModulo numero="IV" titulo="Roles de equipo, economía y soporte" subtitulo="Los 7 roles de la Comarca ya vienen precargados en las sesiones — usá esta tabla si querés documentarlos en la planeación.">
+        <TablaEditable
+          columnas={[
+            { clave: "avatar_rol", titulo: "Avatar / Rol" },
+            { clave: "funcion_operativa", titulo: "Función operativa", tipo: "textarea" },
+            { clave: "responsabilidad_academica", titulo: "Responsabilidad académica/ética", tipo: "textarea" },
+          ]}
+          filas={datos.roles_economia} onCambio={(v) => set("roles_economia", v)}
+          filaVacia={{ avatar_rol: "", funcion_operativa: "", responsabilidad_academica: "" }} />
+      </SeccionModulo>
+
+      <SeccionModulo numero="V" titulo="Secuencia didáctica integrada" subtitulo="El momento CÓDICE ayuda a alinear con Ver-Juzgar-Actuar-Evaluar-Síntesis.">
+        <TablaEditable
+          columnas={[
+            { clave: "fase_minutos", titulo: "Fase / Minutos" },
+            { clave: "momento_codice", titulo: "Momento CÓDICE" },
+            { clave: "dinamica_operativa", titulo: "Dinámica operativa", tipo: "textarea" },
+            { clave: "rol_docente", titulo: "Rol docente", tipo: "textarea" },
+          ]}
+          filas={datos.secuencia_didactica} onCambio={(v) => set("secuencia_didactica", v)}
+          filaVacia={{ fase_minutos: "", momento_codice: MOMENTOS_CODICE_OPCIONES[0], dinamica_operativa: "", rol_docente: "" }} />
+        <p className="text-[10px] text-slate-400 mt-1">Momentos sugeridos: {MOMENTOS_CODICE_OPCIONES.join(" · ")}</p>
+      </SeccionModulo>
+
+      <SeccionModulo numero="VI" titulo="Entregable académico y matriz de evaluación" subtitulo="El % de peso debería sumar 100 entre todos los componentes.">
+        <TablaEditable
+          columnas={[
+            { clave: "componente", titulo: "Componente" },
+            { clave: "peso_pct", titulo: "% Peso", tipo: "numero" },
+            { clave: "evidencia", titulo: "Evidencia concreta", tipo: "textarea" },
+            { clave: "criterios", titulo: "Criterios de evaluación", tipo: "textarea" },
+          ]}
+          filas={datos.matriz_evaluacion} onCambio={(v) => set("matriz_evaluacion", v)}
+          filaVacia={{ componente: "", peso_pct: "", evidencia: "", criterios: "" }} />
+        {datos.matriz_evaluacion.length > 0 && (() => {
+          const suma = datos.matriz_evaluacion.reduce((a, f) => a + (parseInt(f.peso_pct, 10) || 0), 0);
+          return <p className={`text-[11px] mt-2 ${suma === 100 ? "text-emerald-600" : "text-amber-600"}`}>Suma actual: {suma}% {suma !== 100 && "(debería sumar 100%)"}</p>;
+        })()}
+      </SeccionModulo>
+    </div>
+  );
+}
+
 const ICONO_RECURSO = { drive: "📁", docs: "📄", forms: "📝", otro: "🔗" };
 const LABEL_RECURSO = { drive: "Google Drive", docs: "Google Docs", forms: "Google Forms", otro: "Enlace" };
 const TIPOS_TAREA = [
@@ -312,7 +544,7 @@ const ESTADOS_DICTADO = [
   { key: "aplazada", label: "Aplazada", color: "#EF4444" },
 ];
 
-function DictadoControl({ claseId, grados, unidad }) {
+function DictadoControl({ claseId, grados }) {
   const [dictados, setDictados] = useState([]);
   const [agregando, setAgregando] = useState(false);
   const [gradoId, setGradoId] = useState("");
@@ -320,33 +552,6 @@ function DictadoControl({ claseId, grados, unidad }) {
   const [estado, setEstado] = useState("dictada");
   const [observacionAbiertaDe, setObservacionAbiertaDe] = useState(null);
   const [observacionTemp, setObservacionTemp] = useState({});
-  const [comarcaAbiertaDe, setComarcaAbiertaDe] = useState(null);
-  const [reinosDelCurso, setReinosDelCurso] = useState([]);
-  const [seleccionados, setSeleccionados] = useState([]);
-  const [cargandoReinos, setCargandoReinos] = useState(false);
-  const [lanzando, setLanzando] = useState(false);
-
-  const abrirComarcaDe = (dictado) => {
-    setComarcaAbiertaDe(dictado.id);
-    setCargandoReinos(true);
-    api.fetchReinosDelCurso(dictado.grado_id).then((r) => { setReinosDelCurso(r); setSeleccionados(r); setCargandoReinos(false); });
-  };
-
-  const toggleReino = (nombre) => setSeleccionados((prev) => prev.includes(nombre) ? prev.filter((r) => r !== nombre) : [...prev, nombre]);
-
-  const lanzarComarca = async (dictado) => {
-    if (seleccionados.length < 2) { alert("Elegí al menos 2 Reinos."); return; }
-    setLanzando(true);
-    try {
-      await api.iniciarComarcaDesdePlaneacion(unidad, dictado, seleccionados);
-      alert("¡Listo! La sesión ya está creada — andá a la pestaña \"Comarca de Oakhaven\" para jugarla.");
-      setComarcaAbiertaDe(null);
-      cargar();
-    } catch (e) {
-      alert("Error: " + e.message);
-    }
-    setLanzando(false);
-  };
 
   const cargar = () => api.fetchDictados(claseId).then(setDictados);
   useEffect(() => { cargar(); }, [claseId]);
@@ -393,41 +598,8 @@ function DictadoControl({ claseId, grados, unidad }) {
                   <button onClick={() => setObservacionAbiertaDe(observacionAbiertaDe === d.id ? null : d.id)} className="text-[10px] text-violet-500 shrink-0">
                     {d.observacion ? "📝 Ver nota" : "+ Nota"}
                   </button>
-                  {unidad?.incluye_comarca && (
-                    d.comarca_sesion_id ? (
-                      <span className="text-[10px] text-emerald-600 font-semibold shrink-0">✓ 🏛️ Comarca vinculada</span>
-                    ) : (
-                      <button onClick={() => abrirComarcaDe(d)} className="text-[10px] text-violet-500 shrink-0">🏛️ Iniciar Comarca</button>
-                    )
-                  )}
                   <button onClick={() => quitar(d.id)} className="text-slate-300 hover:text-rose-500 ml-auto shrink-0">✕</button>
                 </div>
-                {comarcaAbiertaDe === d.id && (
-                  <div className="mt-1.5 bg-violet-50 rounded-lg p-2">
-                    {cargandoReinos ? (
-                      <p className="text-[11px] text-slate-400">Buscando los Reinos de este curso…</p>
-                    ) : reinosDelCurso.length === 0 ? (
-                      <p className="text-[11px] text-rose-500">Este curso todavía no tiene Reinos asignados a sus estudiantes.</p>
-                    ) : (
-                      <>
-                        <div className="flex flex-wrap gap-1.5 mb-2">
-                          {reinosDelCurso.map((r) => (
-                            <button key={r} onClick={() => toggleReino(r)}
-                              className={`text-[10px] font-semibold px-2 py-1 rounded-full border ${seleccionados.includes(r) ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-500 border-slate-200"}`}>
-                              {seleccionados.includes(r) ? "✓ " : ""}{r}
-                            </button>
-                          ))}
-                        </div>
-                        <div className="flex gap-2">
-                          <button onClick={() => setComarcaAbiertaDe(null)} className="text-[11px] text-slate-500">Cancelar</button>
-                          <button disabled={lanzando} onClick={() => lanzarComarca(d)} className="text-[11px] font-semibold px-2 py-1 rounded-lg bg-violet-500 text-white disabled:opacity-60">
-                            {lanzando ? "Creando…" : "Fundar y vincular"}
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
                 {observacionAbiertaDe === d.id && (
                   <div className="mt-1 flex gap-1.5">
                     <textarea value={observacionTemp[d.id] ?? d.observacion ?? ""} onChange={(e) => setObservacionTemp((prev) => ({ ...prev, [d.id]: e.target.value }))}
@@ -463,7 +635,7 @@ function DictadoControl({ claseId, grados, unidad }) {
   );
 }
 
-function ClasesLista({ unidad, unidadId, grados }) {
+function ClasesLista({ unidadId, grados }) {
   const [clases, setClases] = useState([]);
   const [agregando, setAgregando] = useState(false);
   const [editandoId, setEditandoId] = useState(null);
@@ -589,7 +761,7 @@ function ClasesLista({ unidad, unidadId, grados }) {
                 <SelectorEstandares planeacionId={c.id} tipo="competencia" />
               </div>
               <RecursosLista planeacionId={c.id} />
-              <DictadoControl claseId={c.id} grados={grados} unidad={unidad} />
+              <DictadoControl claseId={c.id} grados={grados} />
             </div>
           ))}
         </div>
@@ -762,11 +934,14 @@ function UnidadCard({ unidad, institucion, materiaNombre, materias, gradoId, gra
   const [orientacionesEvaluacion, setOrientacionesEvaluacion] = useState(unidad.orientaciones_evaluacion || "");
   const [estado, setEstado] = useState(unidad.estado);
   const [imprimiendo, setImprimiendo] = useState(false);
+  const [formatoAbierto, setFormatoAbierto] = useState(false);
+  const [formato, setFormato] = useState(() => estadoInicialFormatoMaestro(unidad));
   const guardar = async () => {
     await api.editarPlaneacion(unidad.id, {
       titulo: titulo.trim(), objetivo: objetivo.trim() || null, contenido: contenido.trim() || null,
       problema_proyecto: problemaProyecto.trim() || null, orientaciones_evaluacion: orientacionesEvaluacion.trim() || null,
       estado,
+      ...formato,
     });
     setEditando(false);
     onCambio();
@@ -833,6 +1008,10 @@ function UnidadCard({ unidad, institucion, materiaNombre, materias, gradoId, gra
               placeholder="Criterios de valoración del portafolio de evidencias; lineamientos para exámenes, etc."
               className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none mt-1" />
           </div>
+          <button onClick={() => setFormatoAbierto((v) => !v)} className="text-xs font-semibold text-violet-600">
+            {formatoAbierto ? "▾" : "▸"} Formato Maestro de Planeación Didáctica (6 módulos)
+          </button>
+          {formatoAbierto && <FormatoMaestroCampos datos={formato} setDatos={setFormato} />}
           <div className="flex items-center gap-2">
             <select value={estado} onChange={(e) => setEstado(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none">
               <option value="borrador">Borrador</option>
@@ -843,31 +1022,6 @@ function UnidadCard({ unidad, institucion, materiaNombre, materias, gradoId, gra
         </div>
       ) : (
         <>
-          {(unidad.incluye_momentos || unidad.formato === "mision") && (
-            <div className="mt-1 mb-2">
-              {unidad.area && (
-                <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full mb-2"
-                  style={{ background: unidad.area === "ET" ? "#EDE9FE" : unidad.area === "RE" ? "#FEF3C7" : "#DBEAFE", color: unidad.area === "ET" ? "#7C3AED" : unidad.area === "RE" ? "#B45309" : "#1D4ED8" }}>
-                  {unidad.area === "ET" ? "🏛️ Ética" : unidad.area === "RE" ? "✝️ Religión" : "⚜️ Integrada"}
-                </span>
-              )}
-              <div className="space-y-1">
-                {[
-                  { icono: "👁️", label: "VER", texto: unidad.momento_ver, xp: unidad.xp_ver },
-                  { icono: "⚖️", label: "JUZGAR", texto: unidad.momento_juzgar, xp: unidad.xp_juzgar },
-                  { icono: "🖐️", label: "ACTUAR", texto: unidad.momento_actuar, xp: unidad.xp_actuar },
-                  { icono: "🔨", label: "FORJA", texto: unidad.momento_forja, xp: unidad.xp_forja },
-                  { icono: "📢", label: "TESTIMONIAR", texto: unidad.momento_testimoniar, xp: unidad.xp_testimoniar },
-                  { icono: "📖", label: "MI CÓDICE", texto: unidad.momento_codice, xp: unidad.xp_codice },
-                ].filter((m) => m.texto).map((m) => (
-                  <div key={m.label} className="text-xs text-slate-600 bg-slate-50 rounded-lg px-2.5 py-1.5">
-                    <span className="font-bold">{m.icono} {m.label}</span> — {m.texto} <span className="text-violet-500 font-semibold">(+{m.xp} XP)</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {unidad.incluye_comarca && <ComarcaEnPlaneacion unidad={unidad} />}
           {unidad.objetivo && <p className="text-xs text-slate-500 mt-1"><b>Finalidad/objetivo:</b> {unidad.objetivo}</p>}
           {unidad.contenido && <p className="text-xs text-slate-500 mt-1 whitespace-pre-line"><b>Contenidos:</b> {unidad.contenido}</p>}
           {unidad.problema_proyecto && (
@@ -881,12 +1035,24 @@ function UnidadCard({ unidad, institucion, materiaNombre, materias, gradoId, gra
 
       {expandida && (
         <div className="mt-3 pt-3 border-t border-slate-100">
+          {(unidad.caso_problema_integrador || unidad.narrativa_sesion || (unidad.zonas_escenario || []).length > 0 || (unidad.secuencia_didactica || []).length > 0) && (
+            <div className="bg-slate-50 rounded-2xl p-3 mb-3 space-y-2 text-xs">
+              {unidad.caso_problema_integrador && <p><b className="text-slate-500">Caso/problema integrador:</b> {unidad.caso_problema_integrador}</p>}
+              {unidad.dba && <p><b className="text-slate-500">DBA:</b> {unidad.dba}</p>}
+              {(unidad.competencias_ciudadanas || []).length > 0 && <p><b className="text-slate-500">Competencias:</b> {unidad.competencias_ciudadanas.join(", ")}</p>}
+              {unidad.narrativa_sesion && <p className="bg-violet-50 rounded-lg p-2"><b className="text-violet-600">Narrativa:</b> {unidad.narrativa_sesion}</p>}
+              {(unidad.zonas_escenario || []).length > 0 && <p><b className="text-slate-500">Zonas del escenario:</b> {unidad.zonas_escenario.length} definidas</p>}
+              {(unidad.roles_economia || []).length > 0 && <p><b className="text-slate-500">Roles documentados:</b> {unidad.roles_economia.length}</p>}
+              {(unidad.secuencia_didactica || []).length > 0 && <p><b className="text-slate-500">Secuencia didáctica:</b> {unidad.secuencia_didactica.length} momentos ({unidad.duracion_minutos || 60} min totales)</p>}
+              {(unidad.matriz_evaluacion || []).length > 0 && <p><b className="text-slate-500">Matriz de evaluación:</b> {unidad.matriz_evaluacion.map((m) => `${m.componente} ${m.peso_pct}%`).join(" · ")}</p>}
+            </div>
+          )}
           <div className="flex flex-wrap gap-3 mb-2">
             <SelectorEstandares planeacionId={unidad.id} tipo="dba" />
             <SelectorEstandares planeacionId={unidad.id} tipo="competencia" />
           </div>
           <RecursosLista planeacionId={unidad.id} />
-          <ClasesLista unidad={unidad} unidadId={unidad.id} grados={grados} />
+          <ClasesLista unidadId={unidad.id} grados={grados} />
           <TareasLista planeacionId={unidad.id} />
         </div>
       )}
@@ -1049,40 +1215,14 @@ function ImportarPlanIAModal({ materiaId, materias, gradoId, periodo, onCerrar, 
   );
 }
 
-function ComarcaEnPlaneacion({ unidad }) {
-  return (
-    <div className="mt-2 mb-2 bg-gradient-to-r from-violet-50 to-fuchsia-50 border border-violet-200 rounded-xl p-3">
-      <div className="text-xs font-bold text-violet-700 mb-1.5">🏛️ Comarca de Oakhaven</div>
-      {unidad.comarca_dilema && <p className="text-xs text-slate-600 mb-1"><b>Dilema:</b> {unidad.comarca_dilema}</p>}
-      {unidad.comarca_pregunta_dilema && <p className="text-[11px] text-slate-500">1. {unidad.comarca_pregunta_dilema}</p>}
-      {unidad.comarca_pregunta_fundamentacion && <p className="text-[11px] text-slate-500">2. {unidad.comarca_pregunta_fundamentacion}</p>}
-      {unidad.comarca_pregunta_edicto && <p className="text-[11px] text-slate-500">3. {unidad.comarca_pregunta_edicto}</p>}
-      <p className="text-[11px] text-violet-500 mt-1.5">Para iniciar la sesión real, usá el botón "🏛️" junto al curso, en el Control por curso de abajo.</p>
-    </div>
-  );
-}
-
 function NuevaUnidadForm({ materiaId, materias, gradoId, periodo, orden, onCancelar, onCreada }) {
   const [titulo, setTitulo] = useState("");
   const [objetivo, setObjetivo] = useState("");
   const [alcance, setAlcance] = useState("grado"); // "grado" | "curso"
   const [materiasExtra, setMateriasExtra] = useState([]);
   const [guardando, setGuardando] = useState(false);
-  const [incluyeMomentos, setIncluyeMomentos] = useState(false);
-  const [incluyeComarca, setIncluyeComarca] = useState(false);
-  const [area, setArea] = useState("ET");
-  const [momentos, setMomentos] = useState({
-    ver: "", juzgar: "", actuar: "", forja: "", testimoniar: "", codice: "",
-  });
-  const [xp, setXp] = useState({ ver: 10, juzgar: 20, actuar: 20, forja: 50, testimoniar: 30, codice: 20 });
-  const [comarcaDilema, setComarcaDilema] = useState("");
-  const [comarcaPreguntaDilema, setComarcaPreguntaDilema] = useState("");
-  const [comarcaPreguntaFundamentacion, setComarcaPreguntaFundamentacion] = useState("");
-  const [comarcaPreguntaEdicto, setComarcaPreguntaEdicto] = useState("");
-  const [eventosComarca, setEventosComarca] = useState([]);
-  const [comarcaEventoId, setComarcaEventoId] = useState("");
-
-  useEffect(() => { if (incluyeComarca) api.fetchComarcaEventos().then(setEventosComarca); }, [incluyeComarca]);
+  const [formatoAbierto, setFormatoAbierto] = useState(false);
+  const [formato, setFormato] = useState(() => estadoInicialFormatoMaestro());
 
   const { nivel, curso } = nivelYCurso(gradoId);
   const gradoIdAGuardar = alcance === "grado" ? nivel : gradoId;
@@ -1094,33 +1234,11 @@ function NuevaUnidadForm({ materiaId, materias, gradoId, periodo, orden, onCance
     if (!titulo.trim()) { alert("Escribe un título para la unidad/tema."); return; }
     setGuardando(true);
     try {
-      const campos = {
+      await api.crearPlaneacion({
         tipo: "unidad", materia_id: materiaId, materias_extra: materiasExtra, grado_id: gradoIdAGuardar, periodo,
         titulo: titulo.trim(), objetivo: objetivo.trim() || null, orden,
-        formato: incluyeMomentos ? "mision" : "generico", // se mantiene por compatibilidad con planeaciones viejas
-        incluye_momentos: incluyeMomentos, incluye_comarca: incluyeComarca,
-      };
-      if (incluyeMomentos) {
-        Object.assign(campos, {
-          area,
-          momento_ver: momentos.ver.trim() || null, xp_ver: parseInt(xp.ver, 10) || 0,
-          momento_juzgar: momentos.juzgar.trim() || null, xp_juzgar: parseInt(xp.juzgar, 10) || 0,
-          momento_actuar: momentos.actuar.trim() || null, xp_actuar: parseInt(xp.actuar, 10) || 0,
-          momento_forja: momentos.forja.trim() || null, xp_forja: parseInt(xp.forja, 10) || 0,
-          momento_testimoniar: momentos.testimoniar.trim() || null, xp_testimoniar: parseInt(xp.testimoniar, 10) || 0,
-          momento_codice: momentos.codice.trim() || null, xp_codice: parseInt(xp.codice, 10) || 0,
-        });
-      }
-      if (incluyeComarca) {
-        Object.assign(campos, {
-          comarca_dilema: comarcaDilema.trim() || null,
-          comarca_pregunta_dilema: comarcaPreguntaDilema.trim() || null,
-          comarca_pregunta_fundamentacion: comarcaPreguntaFundamentacion.trim() || null,
-          comarca_pregunta_edicto: comarcaPreguntaEdicto.trim() || null,
-          comarca_evento_id: comarcaEventoId ? parseInt(comarcaEventoId, 10) : null,
-        });
-      }
-      await api.crearPlaneacion(campos);
+        ...formato,
+      });
       onCreada();
     } catch (e) {
       alert("Error al guardar: " + e.message);
@@ -1128,85 +1246,12 @@ function NuevaUnidadForm({ materiaId, materias, gradoId, periodo, orden, onCance
     setGuardando(false);
   };
 
-  const MOMENTOS_INFO = [
-    { key: "ver", icono: "👁️", label: "VER", placeholder: "Caso, dilema, imagen o experiencia que se presenta…" },
-    { key: "juzgar", icono: "⚖️", label: "JUZGAR", placeholder: "Fuente, marco ético/religioso o concepto para analizar…" },
-    { key: "actuar", icono: "🖐️", label: "ACTUAR", placeholder: "Decisión, postura o propuesta que toma el estudiante…" },
-    { key: "forja", icono: "🔨", label: "CREAR / FORJA", placeholder: "Producto concreto que van a construir…" },
-    { key: "testimoniar", icono: "📢", label: "TESTIMONIAR", placeholder: "Cómo van a presentar y defender lo aprendido…" },
-    { key: "codice", icono: "📖", label: "MI CÓDICE", placeholder: "Pregunta de reflexión para el diario personal…" },
-  ];
-
   return (
     <div className="bg-violet-50 rounded-2xl p-4 mb-3">
-      <label className="text-xs text-slate-500 block mb-1">Esta clase incluye (podés marcar más de una)</label>
-      <div className="flex gap-1.5 flex-wrap mb-3">
-        <button onClick={() => setIncluyeMomentos((v) => !v)}
-          className={`text-xs px-3 py-1.5 rounded-full border ${incluyeMomentos ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>
-          {incluyeMomentos ? "✓ " : ""}⚔️ Momentos Ver-Juzgar-Actuar
-        </button>
-        <button onClick={() => setIncluyeComarca((v) => !v)}
-          className={`text-xs px-3 py-1.5 rounded-full border ${incluyeComarca ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>
-          {incluyeComarca ? "✓ " : ""}🏛️ Comarca de Oakhaven
-        </button>
-      </div>
-
-      <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder={incluyeMomentos ? "Nombre de la misión (ej: M01 · El Gobernante Ético)" : "Título de la unidad/tema (ej: Unidad 1 — Números racionales)"}
+      <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título de la unidad/tema (ej: Unidad 1 — Números racionales)"
         className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
       <input value={objetivo} onChange={(e) => setObjetivo(e.target.value)} placeholder="Objetivo de aprendizaje (opcional)"
         className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none bg-white" />
-
-      {incluyeMomentos && (
-        <div className="mb-3">
-          <label className="text-xs text-slate-500 block mb-1">Área</label>
-          <div className="flex gap-1.5 mb-3">
-            <button onClick={() => setArea("ET")} className={`text-xs px-3 py-1.5 rounded-full border ${area === "ET" ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>🏛️ [ET] Ética</button>
-            <button onClick={() => setArea("RE")} className={`text-xs px-3 py-1.5 rounded-full border ${area === "RE" ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>✝️ [RE] Religión</button>
-            <button onClick={() => setArea("IN")} className={`text-xs px-3 py-1.5 rounded-full border ${area === "IN" ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>⚜️ [IN] Integrada</button>
-          </div>
-
-          <div className="space-y-2">
-            {MOMENTOS_INFO.map((m) => (
-              <div key={m.key} className="bg-white rounded-xl p-2.5 border border-slate-200">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className="text-xs font-bold text-slate-600">{m.icono} {m.label}</span>
-                  <div className="flex items-center gap-1 ml-auto">
-                    <span className="text-[10px] text-slate-400">XP</span>
-                    <input type="number" value={xp[m.key]} onChange={(e) => setXp((prev) => ({ ...prev, [m.key]: e.target.value }))}
-                      className="w-14 text-xs text-center rounded px-1 py-0.5 border border-slate-200 outline-none" />
-                  </div>
-                </div>
-                <input value={momentos[m.key]} onChange={(e) => setMomentos((prev) => ({ ...prev, [m.key]: e.target.value }))}
-                  placeholder={m.placeholder} className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {incluyeComarca && (
-        <div className="mb-3 bg-white rounded-xl p-3 border border-violet-200">
-          <div className="text-xs font-bold text-violet-700 mb-2">🏛️ Preparación de la Comarca de Oakhaven</div>
-          <label className="text-[10px] text-slate-500 block mb-1">El dilema/tema que vas a plantear (se guarda como Carta de Destino inicial si no elegís una del catálogo)</label>
-          <textarea value={comarcaDilema} onChange={(e) => setComarcaDilema(e.target.value)} rows={2}
-            placeholder="Ej: El Acueducto Común se está secando — solo hay agua para 4 de los 6 Reinos este mes."
-            className="w-full text-xs rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none" />
-
-          <label className="text-[10px] text-slate-500 block mb-1">O elegí una carta puntual del catálogo (opcional)</label>
-          <select value={comarcaEventoId} onChange={(e) => setComarcaEventoId(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1.5 mb-3 border border-slate-200 outline-none bg-white">
-            <option value="">Usar el dilema de arriba</option>
-            {eventosComarca.map((ev) => <option key={ev.id} value={ev.id}>{ev.titulo}</option>)}
-          </select>
-
-          <div className="text-[10px] text-slate-500 font-semibold mb-1">Preguntas de la Cara B (el entregable de La Forja)</div>
-          <input value={comarcaPreguntaDilema} onChange={(e) => setComarcaPreguntaDilema(e.target.value)} placeholder="Pregunta 1 — El Dilema"
-            className="w-full text-xs rounded-lg px-2 py-1.5 mb-1.5 border border-slate-200 outline-none" />
-          <input value={comarcaPreguntaFundamentacion} onChange={(e) => setComarcaPreguntaFundamentacion(e.target.value)} placeholder="Pregunta 2 — Fundamentación"
-            className="w-full text-xs rounded-lg px-2 py-1.5 mb-1.5 border border-slate-200 outline-none" />
-          <input value={comarcaPreguntaEdicto} onChange={(e) => setComarcaPreguntaEdicto(e.target.value)} placeholder="Pregunta 3 — Edicto de Concordia"
-            className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-        </div>
-      )}
 
       {otrasMaterias.length > 0 && (
         <div className="mb-3">
@@ -1236,10 +1281,16 @@ function NuevaUnidadForm({ materiaId, materias, gradoId, periodo, orden, onCance
           <p className="text-[11px] text-slate-400 mt-1">Va a aparecer en todos los cursos del grado {nivel}° — usá el "Control por curso" dentro de cada clase para registrar en qué curso y fecha se dictó cada una.</p>
         )}
       </div>
+
+      <button onClick={() => setFormatoAbierto((v) => !v)} className="text-xs font-semibold text-violet-600 mb-3">
+        {formatoAbierto ? "▾" : "▸"} Formato Maestro de Planeación Didáctica (6 módulos — opcional pero recomendado)
+      </button>
+      {formatoAbierto && <FormatoMaestroCampos datos={formato} setDatos={setFormato} />}
+
       <div className="flex justify-end gap-2">
         <button onClick={onCancelar} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
         <button disabled={guardando} onClick={guardar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
-          {guardando ? "Guardando…" : "Crear planeación"}
+          {guardando ? "Guardando…" : "Crear unidad"}
         </button>
       </div>
     </div>
