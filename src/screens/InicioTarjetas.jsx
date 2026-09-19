@@ -1,48 +1,50 @@
 import React, { useState } from "react";
 import {
-  Home, Users, ClipboardCheck, BookOpen, Swords, Hammer, FileText, CalendarDays,
-  Landmark, Puzzle, BarChart3, Wrench, BookText, ScrollText, Library, Archive,
-  TrendingUp, Trophy, Gift, Image, CircleHelp, Palette, User, GraduationCap,
-  HeartHandshake, Settings, ClipboardList, NotebookPen, TrendingDown, IdCard,
-  Award, Backpack, CalendarClock, UserCog, Gamepad2, PartyPopper, Target,
-  ChevronLeft, LayoutGrid,
+  Home, Users, ClipboardCheck, BookOpen, FileText, Calendar, Clock, Award,
+  Image, Gift, Trophy, TrendingUp, TrendingDown, Wrench, HelpCircle, Star,
+  Edit, BarChart, Package, Shield, Heart, Puzzle, Palette, Archive, User,
+  Settings, ClipboardList, GraduationCap, Hammer, Smile, ChevronLeft, LayoutGrid,
 } from "lucide-react";
 
 // Un ícono de línea por cada sección que ya existe en la plataforma —
-// tanto de grupo como de elemento individual. Si algún día se agrega una
-// sección nueva y no está acá, se usa LayoutGrid como respaldo genérico
-// (nunca rompe, solo se ve menos específico).
+// tanto de grupo como de elemento individual. Elegidos deliberadamente
+// entre los nombres MÁS clásicos y antiguos de la librería (evitando
+// variantes nuevas tipo "X2"/"X3" o combinaciones recientes), porque
+// no hay forma de verificar en este entorno qué versión exacta de
+// lucide-react tenés instalada. Si algún día se agrega una sección
+// nueva y no está acá, se usa LayoutGrid como respaldo genérico (nunca
+// rompe el build, solo se ve menos específico).
 const ICONOS_ITEM = {
   inicio: Home,
   entregasrevisar: ClipboardList,
   estudiantes: Users,
   asistencia: ClipboardCheck,
   calificaciones: BookOpen,
-  evaluaciones: Swords,
+  evaluaciones: Award,
   proyectosforja: Hammer,
   planeaciones: FileText,
-  tablerosemanal: CalendarDays,
-  rubricas: Target,
+  tablerosemanal: Calendar,
+  rubricas: Star,
   guiasestudio: BookOpen,
-  actividadesprogramadas: Gamepad2,
-  biblioteca: Library,
-  anotaciones: NotebookPen,
-  inclusion: HeartHandshake,
+  actividadesprogramadas: Smile,
+  biblioteca: BookOpen,
+  anotaciones: Edit,
+  inclusion: Heart,
   bajasvida: TrendingDown,
   direccioncurso: GraduationCap,
-  corregirnombres: IdCard,
+  corregirnombres: User,
   niveles: Award,
-  objetos: Backpack,
-  horario: CalendarClock,
-  roles: UserCog,
-  reportes: BarChart3,
+  objetos: Package,
+  horario: Clock,
+  roles: Settings,
+  reportes: BarChart,
   herramientas: Wrench,
-  comarca: Landmark,
+  comarca: Shield,
   bancocontenido: Puzzle,
   // estudiante
-  codice: BookText,
-  notas: ScrollText,
-  misiones: Swords,
+  codice: BookOpen,
+  notas: FileText,
+  misiones: Award,
   forja: Hammer,
   guias: BookOpen,
   proyectos: Archive,
@@ -51,7 +53,7 @@ const ICONOS_ITEM = {
   salonhonor: Trophy,
   recompensas: Gift,
   album: Image,
-  preguntados: CircleHelp,
+  preguntados: HelpCircle,
   personaje: Palette,
   perfil: User,
 };
@@ -59,12 +61,12 @@ const ICONOS_ITEM = {
 const ICONOS_GRUPO = {
   inicio_grupo: Home,
   academico: GraduationCap,
-  convivencial: HeartHandshake,
+  convivencial: Heart,
   administracion: Settings,
   herramientas_grupo: Wrench,
   estudio: GraduationCap,
   comunidad: Trophy,
-  diversion: PartyPopper,
+  diversion: Smile,
   cuenta: User,
 };
 
