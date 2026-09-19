@@ -4095,6 +4095,71 @@ export async function fetchTodosLosEstudiantesActivos() {
   return ordenarPorApellido(data || []);
 }
 
+/* ==================== Banco de Contenido (estilo Wordwall) ==================== */
+// Para el portal del estudiante — sin sesión de docente, ve todos los
+// sets disponibles (la lectura ya es abierta por política de RLS).
+export async function fetchSetsDeContenidoPublico() {
+  const { data, error } = await supabase.from("banco_contenido_sets")
+    .select("*, banco_contenido_items(id)").order("creado_en", { ascending: false });
+  if (error) throw error;
+  return (data || []).map((s) => ({ ...s, cantidad_items: s.banco_contenido_items.length })).filter((s) => s.cantidad_items >= 3);
+}
+
+export async function fetchSetsDeContenido() {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("banco_contenido_sets")
+    .select("*, banco_contenido_items(id)")
+    .eq("docente_id", userData?.user?.id || null).order("creado_en", { ascending: false });
+  if (error) throw error;
+  return (data || []).map((s) => ({ ...s, cantidad_items: s.banco_contenido_items.length }));
+}
+
+export async function crearSetDeContenido(titulo, descripcion, materiaId) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("banco_contenido_sets")
+    .insert({ titulo: titulo.trim(), descripcion: descripcion?.trim() || null, materia_id: materiaId || null, docente_id: userData?.user?.id || null })
+    .select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function editarSetDeContenido(id, campos) {
+  const { error } = await supabase.from("banco_contenido_sets").update(campos).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarSetDeContenido(id) {
+  const { error } = await supabase.from("banco_contenido_sets").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function fetchItemsDeSet(setId) {
+  const { data, error } = await supabase.from("banco_contenido_items").select("*").eq("set_id", setId).order("orden");
+  if (error) throw error;
+  return data || [];
+}
+
+// Reemplaza TODOS los pares de un set de una sola vez — más simple que
+// editar de a uno cuando se está armando el contenido.
+export async function guardarItemsDeSet(setId, items) {
+  await supabase.from("banco_contenido_items").delete().eq("set_id", setId);
+  if (items.length === 0) return;
+  const filas = items.map((it, i) => ({ set_id: setId, termino: it.termino.trim(), definicion: it.definicion.trim(), orden: i }));
+  const { error } = await supabase.from("banco_contenido_items").insert(filas);
+  if (error) throw error;
+}
+
+export async function registrarIntentoBancoContenido(setId, estudianteId, formato, puntaje) {
+  const { error } = await supabase.from("banco_contenido_intentos").insert({ set_id: setId, estudiante_id: estudianteId, formato, puntaje });
+  if (error) throw error;
+  // Recompensa chica en monedas, proporcional al puntaje sacado.
+  if (puntaje >= 50) {
+    const monedas = puntaje >= 80 ? 10 : 5;
+    await ajustarMonedas(estudianteId, monedas);
+  }
+}
+
+
 export async function fetchInstitucion() {
   const { data, error } = await supabase.from("institucion").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
