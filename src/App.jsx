@@ -1078,8 +1078,6 @@ const ICONO_MAPA = {
 
 function MenuCodice({ activo, onCambiar, monedas, gradoId }) {
   const [ultimoAnuncio, setUltimoAnuncio] = useState(null);
-  const [menuAbierto, setMenuAbierto] = useState(false);
-  const [submenuAbierto, setSubmenuAbierto] = useState(null);
 
   useEffect(() => {
     if (!gradoId) return;
@@ -1088,8 +1086,6 @@ function MenuCodice({ activo, onCambiar, monedas, gradoId }) {
 
   const elegir = (key) => {
     onCambiar(key);
-    setMenuAbierto(false);
-    setSubmenuAbierto(null);
   };
 
   return (
@@ -2206,8 +2202,6 @@ function FondoArcadeDocente() {
 }
 
 function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstitucion, onSalir, onBuscarEstudiante, grados, gradoActivo, onCambiarGradoActivo, periodoActivo, onCambiarPeriodoActivo, materias, materiaActiva, onCambiarMateriaActiva }) {
-  const [menuAbierto, setMenuAbierto] = useState(false);
-  const [submenuAbierto, setSubmenuAbierto] = useState(null);
   const [nombreDocente, setNombreDocente] = useState("");
   const [editandoNombre, setEditandoNombre] = useState(false);
   const [nombreTemp, setNombreTemp] = useState("");
@@ -2228,7 +2222,6 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
 
   const elegir = (key) => {
     onCambiar(key);
-    setMenuAbierto(false);
   };
 
   return (
