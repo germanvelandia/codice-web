@@ -656,16 +656,231 @@ function SorteoOrdenTool({ grados }) {
   );
 }
 
+function GeneradorGruposTool({ grados }) {
+  const [gradoId, setGradoId] = useState(grados[0]?.id || "");
+  const [estudiantes, setEstudiantes] = useState([]);
+  const [numGrupos, setNumGrupos] = useState(4);
+  const [grupos, setGrupos] = useState(null);
+
+  useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
+  useEffect(() => { if (gradoId) api.fetchEstudiantesPorGrado(gradoId).then(setEstudiantes); }, [gradoId]);
+
+  const generar = () => {
+    const mezclados = [...estudiantes].sort(() => Math.random() - 0.5);
+    const n = Math.max(2, Math.min(numGrupos, mezclados.length || 2));
+    const resultado = Array.from({ length: n }, () => []);
+    mezclados.forEach((s, i) => resultado[i % n].push(s.nombre));
+    beep(500, 0.08);
+    setGrupos(resultado);
+  };
+
+  return (
+    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+      <h3 className="font-bold text-slate-800 mb-3">🧩 Generador de grupos al azar</h3>
+      <div className="flex flex-wrap gap-2 mb-3 items-center">
+        <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none">
+          {grados.map((g) => <option key={g.id} value={g.id}>Grado {g.id}</option>)}
+        </select>
+        <label className="text-xs text-slate-500">N° de grupos</label>
+        <input type="number" min={2} max={12} value={numGrupos} onChange={(e) => setNumGrupos(parseInt(e.target.value, 10) || 2)}
+          className="w-16 text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+        <button onClick={generar} disabled={estudiantes.length === 0} className="text-sm font-semibold px-4 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-50">Generar</button>
+      </div>
+      {grupos && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {grupos.map((g, i) => (
+            <div key={i} className="bg-violet-50 rounded-xl p-2.5">
+              <div className="text-xs font-bold text-violet-600 mb-1">Grupo {i + 1}</div>
+              <ol className="text-xs text-slate-600 list-decimal list-inside space-y-0.5">
+                {g.map((nombre, j) => <li key={j}>{nombre}</li>)}
+              </ol>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MarcadorPuntosTool() {
+  const [equipos, setEquipos] = useState([{ nombre: "Equipo 1", puntos: 0 }, { nombre: "Equipo 2", puntos: 0 }]);
+  const [nombreNuevo, setNombreNuevo] = useState("");
+
+  const sumar = (i, delta) => setEquipos((prev) => prev.map((e, idx) => idx === i ? { ...e, puntos: Math.max(0, e.puntos + delta) } : e));
+  const agregar = () => {
+    if (!nombreNuevo.trim()) return;
+    setEquipos((prev) => [...prev, { nombre: nombreNuevo.trim(), puntos: 0 }]);
+    setNombreNuevo("");
+  };
+  const quitar = (i) => setEquipos((prev) => prev.filter((_, idx) => idx !== i));
+  const reiniciar = () => setEquipos((prev) => prev.map((e) => ({ ...e, puntos: 0 })));
+
+  return (
+    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+      <h3 className="font-bold text-slate-800 mb-3">🏆 Marcador de puntos</h3>
+      <div className="space-y-2 mb-3">
+        {equipos.map((e, i) => (
+          <div key={i} className="flex items-center gap-2 bg-slate-50 rounded-xl p-2">
+            <span className="text-sm font-semibold text-slate-700 flex-1 truncate">{e.nombre}</span>
+            <button onClick={() => sumar(i, -1)} className="w-7 h-7 rounded-lg bg-white border border-slate-200 text-slate-500 font-bold">−</button>
+            <span className="text-lg font-bold text-violet-600 w-10 text-center">{e.puntos}</span>
+            <button onClick={() => sumar(i, 1)} className="w-7 h-7 rounded-lg bg-violet-500 text-white font-bold">+</button>
+            <button onClick={() => quitar(i)} className="text-slate-300 hover:text-rose-500 px-1">🗑</button>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input value={nombreNuevo} onChange={(e) => setNombreNuevo(e.target.value)} placeholder="Nombre del equipo" onKeyDown={(e) => e.key === "Enter" && agregar()}
+          className="flex-1 text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none" />
+        <button onClick={agregar} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-100 text-violet-700">+ Agregar</button>
+        <button onClick={reiniciar} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 text-slate-500">↺ Reiniciar</button>
+      </div>
+    </div>
+  );
+}
+
+function SelectorEstudianteTool({ grados }) {
+  const [gradoId, setGradoId] = useState(grados[0]?.id || "");
+  const [estudiantes, setEstudiantes] = useState([]);
+  const [salidos, setSalidos] = useState([]);
+  const [elegido, setElegido] = useState(null);
+  const [girando, setGirando] = useState(false);
+  const [noRepetir, setNoRepetir] = useState(true);
+
+  useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
+  useEffect(() => { if (gradoId) api.fetchEstudiantesPorGrado(gradoId).then((est) => { setEstudiantes(est); setSalidos([]); setElegido(null); }); }, [gradoId]);
+
+  const disponibles = noRepetir ? estudiantes.filter((s) => !salidos.includes(s.id)) : estudiantes;
+
+  const elegir = () => {
+    if (disponibles.length === 0) return;
+    setGirando(true);
+    let vueltas = 0;
+    const intervalo = setInterval(() => {
+      setElegido(disponibles[Math.floor(Math.random() * disponibles.length)]);
+      clack(0.1);
+      vueltas++;
+      if (vueltas > 12) {
+        clearInterval(intervalo);
+        const final = disponibles[Math.floor(Math.random() * disponibles.length)];
+        setElegido(final);
+        setSalidos((prev) => [...prev, final.id]);
+        setGirando(false);
+        boom();
+      }
+    }, 90);
+  };
+
+  return (
+    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+      <h3 className="font-bold text-slate-800 mb-3">🙋 Selector de estudiante al azar</h3>
+      <div className="flex flex-wrap gap-2 mb-3 items-center">
+        <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none">
+          {grados.map((g) => <option key={g.id} value={g.id}>Grado {g.id}</option>)}
+        </select>
+        <label className="flex items-center gap-1.5 text-xs text-slate-500">
+          <input type="checkbox" checked={noRepetir} onChange={(e) => { setNoRepetir(e.target.checked); setSalidos([]); }} />
+          No repetir hasta que salgan todos
+        </label>
+      </div>
+      <div className="bg-violet-50 rounded-xl p-6 text-center mb-3 min-h-[70px] flex items-center justify-center">
+        <span className={`text-xl font-bold text-violet-700 ${girando ? "opacity-60" : ""}`}>{elegido ? elegido.nombre : "¿Quién sigue?"}</span>
+      </div>
+      <div className="flex items-center justify-between">
+        <button onClick={elegir} disabled={girando || disponibles.length === 0} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">
+          {girando ? "Eligiendo…" : "🎲 Elegir"}
+        </button>
+        {noRepetir && <span className="text-xs text-slate-400">Quedan {disponibles.length} de {estudiantes.length}</span>}
+      </div>
+      {noRepetir && salidos.length > 0 && (
+        <button onClick={() => setSalidos([])} className="text-xs text-slate-400 mt-2">↺ Reiniciar lista de salidos</button>
+      )}
+    </div>
+  );
+}
+
+function BingoTool() {
+  const [textoItems, setTextoItems] = useState("");
+  const [carton, setCarton] = useState(null);
+  const [bolsa, setBolsa] = useState([]);
+  const [salidos, setSalidos] = useState([]);
+  const [ultimo, setUltimo] = useState(null);
+
+  const items = textoItems.split("\n").map((l) => l.trim()).filter(Boolean);
+
+  const generarCarton = () => {
+    if (items.length < 9) { alert("Escribí al menos 9 palabras/preguntas (una por línea) para armar el cartón."); return; }
+    const mezclados = [...items].sort(() => Math.random() - 0.5).slice(0, 9);
+    setCarton(mezclados);
+    setBolsa([...items].sort(() => Math.random() - 0.5));
+    setSalidos([]);
+    setUltimo(null);
+  };
+
+  const sacar = () => {
+    const restantes = bolsa.filter((b) => !salidos.includes(b));
+    if (restantes.length === 0) return;
+    const elegido = restantes[Math.floor(Math.random() * restantes.length)];
+    setSalidos((prev) => [...prev, elegido]);
+    setUltimo(elegido);
+    beep(600, 0.1);
+  };
+
+  return (
+    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 md:col-span-2">
+      <h3 className="font-bold text-slate-800 mb-3">🎯 Bingo de preguntas/repaso</h3>
+      {!carton ? (
+        <>
+          <p className="text-xs text-slate-400 mb-2">Escribí una palabra, término o pregunta corta por línea (mínimo 9).</p>
+          <textarea value={textoItems} onChange={(e) => setTextoItems(e.target.value)} rows={5} placeholder={"Fotosíntesis\nCélula\nMitocondria\n..."}
+            className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none mb-2" />
+          <button onClick={generarCarton} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white">Generar cartón y empezar</button>
+        </>
+      ) : (
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div>
+            <div className="text-xs text-slate-400 mb-2">Cartón (compartilo en pantalla)</div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {carton.map((it, i) => {
+                const marcado = salidos.includes(it);
+                return (
+                  <div key={i} className={`aspect-square rounded-lg flex items-center justify-center text-center text-[11px] font-semibold p-1 ${marcado ? "bg-emerald-500 text-white" : "bg-slate-50 text-slate-600"}`}>
+                    {it}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-slate-400 mb-2">Bolsa: {bolsa.length - salidos.length} de {bolsa.length} sin salir</div>
+            <div className="bg-violet-50 rounded-xl p-5 text-center mb-2 min-h-[60px] flex items-center justify-center">
+              <span className="text-base font-bold text-violet-700">{ultimo || "—"}</span>
+            </div>
+            <button onClick={sacar} disabled={bolsa.length - salidos.length === 0} className="w-full text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50 mb-2">
+              🎱 Sacar uno
+            </button>
+            <button onClick={() => setCarton(null)} className="w-full text-xs text-slate-400">↺ Empezar de nuevo (nueva lista)</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function VistaHerramientas({ grados }) {
   return (
     <div>
       <h2 className="text-xl font-bold text-slate-800 mb-1">Herramientas de Clase</h2>
-      <p className="text-sm text-slate-400 mb-4">Cuatro utilidades más para usar junto a la Ruleta y el Temporizador.</p>
+      <p className="text-sm text-slate-400 mb-4">Utilidades para usar junto a la Ruleta y el Temporizador.</p>
       <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
         <DadoTool />
         <CronometroTool />
         <SemaforoTool />
         <SorteoOrdenTool grados={grados} />
+        <GeneradorGruposTool grados={grados} />
+        <MarcadorPuntosTool />
+        <SelectorEstudianteTool grados={grados} />
+        <BingoTool />
       </div>
     </div>
   );
