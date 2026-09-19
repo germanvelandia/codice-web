@@ -508,7 +508,7 @@ export function VistaTemporizador() {
   );
 }
 
-function DadoTool() {
+export function DadoTool() {
   const [numDados, setNumDados] = useState(1);
   const [caras, setCaras] = useState(6);
   const [resultados, setResultados] = useState([]);
@@ -548,7 +548,7 @@ function DadoTool() {
   );
 }
 
-function CronometroTool() {
+export function CronometroTool() {
   const [ms, setMs] = useState(0);
   const [running, setRunning] = useState(false);
   const [laps, setLaps] = useState([]);
@@ -587,7 +587,7 @@ function CronometroTool() {
   );
 }
 
-function SemaforoTool() {
+export function SemaforoTool() {
   const ESTADOS = [
     { key: "verde", label: "Trabajo en equipo", color: "#22C55E" },
     { key: "amarillo", label: "Voz baja", color: "#F59E0B" },
@@ -611,7 +611,7 @@ function SemaforoTool() {
   );
 }
 
-function SorteoOrdenTool({ grados }) {
+export function SorteoOrdenTool({ grados }) {
   const [gradoId, setGradoId] = useState(grados[0]?.id || "");
   const [estudiantes, setEstudiantes] = useState([]);
   const [modo, setModo] = useState("orden");
@@ -656,7 +656,7 @@ function SorteoOrdenTool({ grados }) {
   );
 }
 
-function GeneradorGruposTool({ grados }) {
+export function GeneradorGruposTool({ grados }) {
   const [gradoId, setGradoId] = useState(grados[0]?.id || "");
   const [estudiantes, setEstudiantes] = useState([]);
   const [numGrupos, setNumGrupos] = useState(4);
@@ -702,7 +702,7 @@ function GeneradorGruposTool({ grados }) {
   );
 }
 
-function MarcadorPuntosTool() {
+export function MarcadorPuntosTool() {
   const [equipos, setEquipos] = useState([{ nombre: "Equipo 1", puntos: 0 }, { nombre: "Equipo 2", puntos: 0 }]);
   const [nombreNuevo, setNombreNuevo] = useState("");
 
@@ -739,7 +739,7 @@ function MarcadorPuntosTool() {
   );
 }
 
-function SelectorEstudianteTool({ grados }) {
+export function SelectorEstudianteTool({ grados }) {
   const [gradoId, setGradoId] = useState(grados[0]?.id || "");
   const [estudiantes, setEstudiantes] = useState([]);
   const [salidos, setSalidos] = useState([]);
@@ -799,7 +799,7 @@ function SelectorEstudianteTool({ grados }) {
   );
 }
 
-function BingoTool() {
+export function BingoTool() {
   const [textoItems, setTextoItems] = useState("");
   const [carton, setCarton] = useState(null);
   const [bolsa, setBolsa] = useState([]);
