@@ -44,7 +44,7 @@ import { VistaTableroSemanal } from "./screens/TableroSemanal";
 import { VistaInicio, ContenidoLightbox } from "./screens/Inicio";
 import { VistaComarcaOakhaven, TarjetaComarcaPublica, urlDeTarjeta, urlQR } from "./screens/ComarcaOakhaven";
 import { VistaBancoContenido, JugarSetModal, VistaBancoContenidoEstudiante } from "./screens/BancoContenido";
-import { NavegacionPorTarjetas, BotonVolverInicio } from "./screens/InicioTarjetas";
+import { NavegacionPorTarjetas, BotonVolverInicio, EnlaceTodasLasSecciones } from "./screens/InicioTarjetas";
 import { EditorTexto, TextoEnriquecido, textoPlano } from "./components/RichText";
 import { InstitucionModal } from "./screens/Institucion";
 import { AdministracionModal } from "./screens/Administracion";
@@ -1871,7 +1871,13 @@ function PortalEstudiante() {
         <div className="bg-white rounded-2xl shadow-lg p-6">
           {vista === "inicio" && (
             grupoAbierto ? (
-              <NavegacionPorTarjetas grupos={MENU_CODICE_GRUPOS} onIr={irAEstudiante} grupoAbierto={grupoAbierto} onCambiarGrupo={setGrupoAbierto} />
+              <>
+                <EnlaceTodasLasSecciones onCambiarGrupo={setGrupoAbierto} variante="clara" />
+                <ValorSemanaEstudiante />
+                <div className="mt-4">
+                  <NavegacionPorTarjetas grupos={MENU_CODICE_GRUPOS} onIr={irAEstudiante} grupoAbierto={grupoAbierto} onCambiarGrupo={setGrupoAbierto} />
+                </div>
+              </>
             ) : (
             <>
               <div className="flex items-center gap-3 mb-4 pb-4 border-b border-slate-100">
@@ -2387,7 +2393,12 @@ function Panel({ session }) {
       <div className="p-6 max-w-6xl mx-auto">
         {tab === "inicio" && (
           grupoAbierto ? (
-            <NavegacionPorTarjetas grupos={MENU_PANEL_GRUPOS} onIr={irA} grupoAbierto={grupoAbierto} onCambiarGrupo={setGrupoAbierto} />
+            <>
+              <VistaInicio onIrA={irA} soloEncabezado accionSuperior={<EnlaceTodasLasSecciones onCambiarGrupo={setGrupoAbierto} />} />
+              <div className="mt-4">
+                <NavegacionPorTarjetas grupos={MENU_PANEL_GRUPOS} onIr={irA} grupoAbierto={grupoAbierto} onCambiarGrupo={setGrupoAbierto} />
+              </div>
+            </>
           ) : (
             <>
               <VistaInicio onIrA={irA} />
