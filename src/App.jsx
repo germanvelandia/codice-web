@@ -1811,6 +1811,8 @@ function PortalEstudiante() {
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState("");
   const [vista, setVista] = useState("inicio");
+  const [grupoAbierto, setGrupoAbierto] = useState(null);
+  const irAEstudiante = (key) => { setVista(key); setGrupoAbierto(null); };
   const [nuevosLogros, setNuevosLogros] = useState([]);
   const [equipados, setEquipados] = useState({ marco: null, titulo: null });
   const [avatarConfig, setAvatarConfig] = useState(null);
@@ -1864,10 +1866,13 @@ function PortalEstudiante() {
             </div>
           </div>
         )}
-        <MenuCodice activo={vista} onCambiar={setVista} monedas={datos.monedas} gradoId={datos.grado_id} />
+        <MenuCodice activo={vista} onCambiar={irAEstudiante} monedas={datos.monedas} gradoId={datos.grado_id} />
 
         <div className="bg-white rounded-2xl shadow-lg p-6">
           {vista === "inicio" && (
+            grupoAbierto ? (
+              <NavegacionPorTarjetas grupos={MENU_CODICE_GRUPOS} onIr={irAEstudiante} grupoAbierto={grupoAbierto} onCambiarGrupo={setGrupoAbierto} />
+            ) : (
             <>
               <div className="flex items-center gap-3 mb-4 pb-4 border-b border-slate-100">
                 <div className="flex items-center gap-2 shrink-0">
@@ -1938,9 +1943,10 @@ function PortalEstudiante() {
 
               <div className="mt-6">
                 <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">Todas las secciones</h3>
-                <NavegacionPorTarjetas grupos={MENU_CODICE_GRUPOS} onIr={setVista} />
+                <NavegacionPorTarjetas grupos={MENU_CODICE_GRUPOS} onIr={irAEstudiante} grupoAbierto={null} onCambiarGrupo={setGrupoAbierto} />
               </div>
             </>
+            )
           )}
 
           {vista === "misiones" && estudianteInfo && (
@@ -2308,6 +2314,7 @@ function Panel({ session }) {
     } catch { return porDefecto; }
   };
   const [tab, setTab] = useState(() => leerGuardado("tab", "inicio"));
+  const [grupoAbierto, setGrupoAbierto] = useState(null);
   const [subTabHerramientas, setSubTabHerramientas] = useState(() => leerGuardado("subTabHerramientas", "ruleta"));
   const [grado, setGrado] = useState(null);
   const [gradoActivo, setGradoActivo] = useState(() => leerGuardado("gradoActivo", null));
@@ -2351,6 +2358,7 @@ function Panel({ session }) {
 
   const irA = (key) => {
     setTab(key);
+    setGrupoAbierto(null);
     if (key === "estudiantes") { setGrado(null); setReino(null); setModoLista(false); }
   };
 
@@ -2378,13 +2386,17 @@ function Panel({ session }) {
 
       <div className="p-6 max-w-6xl mx-auto">
         {tab === "inicio" && (
-          <>
-            <VistaInicio onIrA={irA} />
-            <div className="mt-6">
-              <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">Todas las secciones</h3>
-              <NavegacionPorTarjetas grupos={MENU_PANEL_GRUPOS} onIr={irA} />
-            </div>
-          </>
+          grupoAbierto ? (
+            <NavegacionPorTarjetas grupos={MENU_PANEL_GRUPOS} onIr={irA} grupoAbierto={grupoAbierto} onCambiarGrupo={setGrupoAbierto} />
+          ) : (
+            <>
+              <VistaInicio onIrA={irA} />
+              <div className="mt-6">
+                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">Todas las secciones</h3>
+                <NavegacionPorTarjetas grupos={MENU_PANEL_GRUPOS} onIr={irA} grupoAbierto={null} onCambiarGrupo={setGrupoAbierto} />
+              </div>
+            </>
+          )
         )}
         {tab === "entregasrevisar" && <VistaEntregasPorRevisar onIrAGrado={irAGradoDesdeRevisar} />}
         {tab === "estudiantes" && (
