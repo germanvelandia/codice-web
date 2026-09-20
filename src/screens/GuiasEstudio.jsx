@@ -436,6 +436,64 @@ function imprimirGuia(guia, institucion) {
   ventana.document.close();
 }
 
+// Duplica una guía completa (tal cual quedó armada) hacia uno o varios
+// otros cursos — sin tener que rehacerla desde cero.
+function DuplicarGuiaModal({ guia, gradoActual, grados, onCerrar, onDuplicada }) {
+  const [seleccionados, setSeleccionados] = useState([]);
+  const [duplicando, setDuplicando] = useState(false);
+  const otrosGrados = grados.filter((g) => String(g.id) !== String(gradoActual));
+
+  const toggle = (id) => setSeleccionados((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+
+  const duplicar = async () => {
+    if (seleccionados.length === 0) return;
+    setDuplicando(true);
+    try {
+      const { id, creado_en, docente_id, ...resto } = guia;
+      for (const gradoId of seleccionados) {
+        await api.crearGuiaEstudio({ ...resto, grado_id: gradoId });
+      }
+      onDuplicada();
+    } catch (e) {
+      alert("Error al duplicar: " + e.message);
+    }
+    setDuplicando(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onCerrar}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl">
+        <div className="flex justify-between items-center mb-1">
+          <h3 className="font-bold text-slate-800">⧉ Duplicar guía</h3>
+          <button onClick={onCerrar} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-400 mb-3">"{guia.titulo}" — elegí a qué otro(s) curso(s) copiarla (podés elegir varios).</p>
+
+        {otrosGrados.length === 0 ? (
+          <p className="text-sm text-slate-400 py-4">No hay otros cursos disponibles.</p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5 mb-4">
+            {otrosGrados.map((g) => (
+              <button key={g.id} onClick={() => toggle(g.id)}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${seleccionados.includes(g.id) ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>
+                {seleccionados.includes(g.id) ? "✓ " : ""}Curso {g.id}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <button onClick={onCerrar} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
+          <button disabled={duplicando || seleccionados.length === 0} onClick={duplicar}
+            className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">
+            {duplicando ? "Duplicando…" : `Duplicar a ${seleccionados.length || ""} curso${seleccionados.length === 1 ? "" : "s"}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function VistaGuiasEstudio({ grados, gradoActivo, periodoActivo, materiaActiva }) {
   const [materias, setMaterias] = useState([]);
   const [materiaId, setMateriaId] = useState(materiaActiva || "");
@@ -447,6 +505,7 @@ export function VistaGuiasEstudio({ grados, gradoActivo, periodoActivo, materiaA
   const [formAbierto, setFormAbierto] = useState(false);
   const [editando, setEditando] = useState(null);
   const [promptAbierto, setPromptAbierto] = useState(false);
+  const [duplicandoGuia, setDuplicandoGuia] = useState(null);
 
   useEffect(() => { if (gradoActivo) setGradoId(gradoActivo); }, [gradoActivo]);
   useEffect(() => { if (materiaActiva) setMateriaId(materiaActiva); }, [materiaActiva]);
@@ -530,6 +589,7 @@ export function VistaGuiasEstudio({ grados, gradoActivo, periodoActivo, materiaA
                 </div>
                 <div className="flex gap-1.5 shrink-0">
                   <button onClick={() => imprimirGuia(g, institucion)} className="text-xs text-slate-400 hover:text-violet-600">🖨️</button>
+                  <button onClick={() => setDuplicandoGuia(g)} className="text-xs text-slate-400 hover:text-violet-600" title="Duplicar a otro curso">⧉</button>
                   <button onClick={() => { setEditando(g); setFormAbierto(true); }} className="text-xs text-slate-400 hover:text-violet-600">✏️</button>
                   <button onClick={() => eliminar(g.id)} className="text-xs text-slate-400 hover:text-rose-500">🗑</button>
                 </div>
@@ -537,6 +597,11 @@ export function VistaGuiasEstudio({ grados, gradoActivo, periodoActivo, materiaA
             </div>
           ))}
         </div>
+      )}
+      {duplicandoGuia && (
+        <DuplicarGuiaModal guia={duplicandoGuia} gradoActual={gradoId} grados={grados}
+          onCerrar={() => setDuplicandoGuia(null)}
+          onDuplicada={() => { setDuplicandoGuia(null); alert("Guía duplicada correctamente."); }} />
       )}
     </div>
   );
