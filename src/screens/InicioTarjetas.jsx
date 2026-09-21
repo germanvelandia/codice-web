@@ -127,7 +127,7 @@ export function EnlaceTodasLasSecciones({ onCambiarGrupo, variante = "oscura" })
   );
 }
 
-export function NavegacionPorTarjetas({ grupos, onIr, grupoAbierto, onCambiarGrupo }) {
+export function NavegacionPorTarjetas({ grupos, onIr, grupoAbierto, onCambiarGrupo, variante = "oscura" }) {
   // Grupos con un solo elemento van directo como tarjeta (sin nivel intermedio).
   const gruposVisibles = grupos.filter((g) => g.key !== "inicio_grupo");
   const tarjetasNivel1 = gruposVisibles.flatMap((g) => g.items.length === 1 ? [{ ...g.items[0], esGrupo: false }] : [{ key: g.key, label: g.label, esGrupo: true }]);
@@ -137,7 +137,7 @@ export function NavegacionPorTarjetas({ grupos, onIr, grupoAbierto, onCambiarGru
     if (!grupo) return null;
     return (
       <div>
-        <h2 className="text-lg font-bold text-slate-800 mb-4">{grupo.icono} {grupo.label}</h2>
+        <h2 className={`text-lg font-bold mb-4 ${variante === "oscura" ? "text-white" : "text-slate-800"}`}>{grupo.icono} {grupo.label}</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {grupo.items.map((it, i) => (
             <TarjetaMenu key={it.key} Icono={obtenerIcono(it.key, false)} colores={PALETA[i % PALETA.length]} label={it.label} onClick={() => onIr(it.key)} />
