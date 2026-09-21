@@ -5,6 +5,7 @@ import * as api from "../lib/api";
 import { agruparPorNivel, nivelYCurso } from "../lib/gamification";
 import { periodosDe } from "../lib/calificaciones";
 import { EditorTexto, TextoEnriquecido } from "../components/RichText";
+import { BitacoraClaseModal } from "./Inicio";
 /* ==================== Helpers genéricos para el Formato Maestro ==================== */
 
 // Lista simple de textos (una fila = un ítem), con agregar/quitar.
@@ -912,10 +913,11 @@ function DictadoControl({ claseId, grados, unidad }) {
   );
 }
 
-function ClasesLista({ unidad, unidadId, grados }) {
+function ClasesLista({ unidad, unidadId, grados, materiaNombre }) {
   const [clases, setClases] = useState([]);
   const [agregando, setAgregando] = useState(false);
   const [editandoId, setEditandoId] = useState(null);
+  const [bitacoraAbierta, setBitacoraAbierta] = useState(null); // { fecha }
   const [modo, setModo] = useState("agil"); // "agil" | "completo"
   const [titulo, setTitulo] = useState("");
   const [fecha, setFecha] = useState("");
@@ -999,6 +1001,9 @@ function ClasesLista({ unidad, unidadId, grados }) {
                   {c.duracion_minutos && <span className="text-slate-400"> · {c.duracion_minutos} min</span>}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                  {c.fecha && (
+                    <button onClick={() => setBitacoraAbierta({ fecha: c.fecha })} className="text-[10px] font-semibold text-violet-500">📔 Bitácora</button>
+                  )}
                   <button onClick={() => empezarEdicionClase(c)} className="text-slate-300 hover:text-violet-600 text-xs">✏️</button>
                   <button onClick={() => quitar(c.id)} className="text-slate-300 hover:text-rose-500 text-xs">✕</button>
                 </div>
@@ -1081,6 +1086,10 @@ function ClasesLista({ unidad, unidadId, grados }) {
         </div>
       ) : (
         <button onClick={() => setAgregando(true)} className="text-[11px] text-violet-500">+ Agregar clase</button>
+      )}
+      {bitacoraAbierta && (
+        <BitacoraClaseModal gradoId={unidad.grado_id} materiaId={unidad.materia_id} materiaNombre={materiaNombre}
+          fechaInicial={bitacoraAbierta.fecha} onCerrar={() => setBitacoraAbierta(null)} />
       )}
     </div>
   );
@@ -1523,7 +1532,7 @@ function UnidadCard({ unidad, institucion, materiaNombre, materias, gradoId, gra
             <SelectorEstandares planeacionId={unidad.id} tipo="competencia" />
           </div>
           <RecursosLista planeacionId={unidad.id} />
-          <ClasesLista unidad={unidad} unidadId={unidad.id} grados={grados} />
+          <ClasesLista unidad={unidad} unidadId={unidad.id} grados={grados} materiaNombre={materiaNombre} />
           <TareasLista planeacionId={unidad.id} />
         </div>
       )}
