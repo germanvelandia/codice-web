@@ -222,7 +222,7 @@ export function VistaRuleta({ grados, gradoActivo }) {
 
   return (
     <div>
-      <h2 className="text-xl font-bold text-slate-800 mb-1">La Ruleta del Códice</h2>
+      <h2 className="text-xl font-bold text-white mb-1">La Ruleta del Códice</h2>
       <p className="text-sm text-slate-400 mb-4">Sortea un estudiante de todo el grado, de un reino, o un reino/equipo completo.</p>
 
       <div className="flex flex-wrap gap-2 mb-6">
@@ -382,7 +382,7 @@ export function VistaRuletaMonedas({ grados, gradoActivo }) {
 
   return (
     <div>
-      <h2 className="text-xl font-bold text-slate-800 mb-1">🪙 Ruleta de Monedas</h2>
+      <h2 className="text-xl font-bold text-white mb-1">🪙 Ruleta de Monedas</h2>
       <p className="text-sm text-slate-400 mb-4">Gira para dar (o quitar) monedas a un estudiante puntual, o a todo el grupo visible a la vez.</p>
 
       <div className="flex flex-wrap gap-2 mb-4">
@@ -508,7 +508,7 @@ export function VistaTemporizador() {
 
   return (
     <div className="flex flex-col items-center">
-      <h2 className="text-xl font-bold text-slate-800 mb-1">Temporizador del Aula</h2>
+      <h2 className="text-xl font-bold text-white mb-1">Temporizador del Aula</h2>
       <p className="text-sm text-slate-400 mb-4">Agrega tiempo manualmente durante actividades o retos.</p>
 
       <div className="flex gap-1 rounded-full bg-violet-50 p-1 mb-6">
@@ -944,7 +944,7 @@ export function BingoTool() {
 export function VistaHerramientas({ grados }) {
   return (
     <div>
-      <h2 className="text-xl font-bold text-slate-800 mb-1">Herramientas de Clase</h2>
+      <h2 className="text-xl font-bold text-white mb-1">Herramientas de Clase</h2>
       <p className="text-sm text-slate-400 mb-4">Utilidades para usar junto a la Ruleta y el Temporizador.</p>
       <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
         <DadoTool />
