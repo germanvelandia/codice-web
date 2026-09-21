@@ -2070,7 +2070,7 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
         <button onClick={onVolver} className="text-sm text-violet-500">← Grados</button>
         {onVerGrupos && <button onClick={onVerGrupos} className="text-sm text-violet-500">👪 Ver por grupos/reinos</button>}
       </div>
-      <h2 className="text-xl font-bold text-slate-800 mb-4">
+      <h2 className="text-xl font-bold text-white mb-4">
         {reinoFiltro ? reinoFiltro : `Grado ${gradoId} — todos los estudiantes`}
       </h2>
 
@@ -2319,7 +2319,7 @@ export function VistaReinos({ gradoId, onElegirReino, onVerTodos, onVolver }) {
     <div>
       <button onClick={onVolver} className="text-sm text-violet-500 mb-3">← Grados</button>
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <h2 className="text-xl font-bold text-slate-800">Grado {gradoId} — Reinos</h2>
+        <h2 className="text-xl font-bold text-white">Grado {gradoId} — Reinos</h2>
         <div className="flex gap-2">
           <button onClick={() => setEditando({ nombre: "" })} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700">+ Nuevo reino</button>
           <button onClick={onVerTodos} className="text-sm text-violet-500 font-semibold">Ver listado completo →</button>
@@ -2535,7 +2535,7 @@ export function VistaGrados({ onElegirGrado }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <h2 className="text-xl font-bold text-slate-800">Grados</h2>
+        <h2 className="text-xl font-bold text-white">Grados</h2>
         <div className="flex gap-2">
           <input value={nuevoGrado} onChange={(e) => setNuevoGrado(e.target.value)} placeholder="Nuevo grado (ej: 1004)"
             className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none w-40" />
