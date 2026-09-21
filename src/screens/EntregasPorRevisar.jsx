@@ -30,7 +30,7 @@ export function VistaEntregasPorRevisar({ onIrAGrado }) {
 
   return (
     <div>
-      <h2 className="text-xl font-bold text-slate-800 mb-1">📝 Entregas por revisar {total > 0 && <span className="text-violet-500">({total})</span>}</h2>
+      <h2 className="text-xl font-bold text-white mb-1">📝 Entregas por revisar {total > 0 && <span className="text-violet-500">({total})</span>}</h2>
       <p className="text-sm text-slate-400 mb-1">Cruza Misiones y Proyectos/Forja de todas tus materias y cursos, para no tener que ir uno por uno a buscar qué falta.</p>
       <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2 mb-4">
         ⚠️ Ojo con la diferencia: en <b>Misiones</b>, "pendiente" significa que el estudiante ya entregó y falta que publiques la nota. En <b>Proyectos/Forja</b>, significa que ese estudiante todavía no tiene nota — puede que ni haya entregado nada, la app no distingue eso.
