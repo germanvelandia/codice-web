@@ -1877,7 +1877,7 @@ function PortalEstudiante() {
                 <EnlaceTodasLasSecciones onCambiarGrupo={setGrupoAbierto} variante="clara" />
                 <ValorSemanaEstudiante />
                 <div className="mt-4">
-                  <NavegacionPorTarjetas grupos={MENU_CODICE_GRUPOS} onIr={irAEstudiante} grupoAbierto={grupoAbierto} onCambiarGrupo={setGrupoAbierto} />
+                  <NavegacionPorTarjetas grupos={MENU_CODICE_GRUPOS} onIr={irAEstudiante} grupoAbierto={grupoAbierto} onCambiarGrupo={setGrupoAbierto} variante="clara" />
                 </div>
               </>
             ) : (
@@ -1929,7 +1929,7 @@ function PortalEstudiante() {
 
               <div className="mb-4">
                 <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">Todas las secciones</h3>
-                <NavegacionPorTarjetas grupos={MENU_CODICE_GRUPOS} onIr={irAEstudiante} grupoAbierto={null} onCambiarGrupo={setGrupoAbierto} />
+                <NavegacionPorTarjetas grupos={MENU_CODICE_GRUPOS} onIr={irAEstudiante} grupoAbierto={null} onCambiarGrupo={setGrupoAbierto} variante="clara" />
               </div>
 
               <ValorSemanaEstudiante />
