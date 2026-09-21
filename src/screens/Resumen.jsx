@@ -46,12 +46,15 @@ function ResumenPrintView({ datos, institucion, observaciones, onCerrado }) {
             </tr>
           </thead>
           <tbody>
-            {materias.map((m) => (
-              <tr key={m.id}>
-                <td style={{ border: "1px solid #000", padding: 4 }}>{m.nombre}</td>
-                {periodos.map((p) => <td key={p} style={{ border: "1px solid #000", padding: 4, textAlign: "center" }}>{notasPorMateriaPeriodo[m.id]?.[p] ?? "—"}</td>)}
-              </tr>
-            ))}
+            {materias.map((m) => {
+              const esMia = m.docente_id === datos.miDocenteId;
+              return (
+                <tr key={m.id}>
+                  <td style={{ border: "1px solid #000", padding: 4 }}>{m.nombre}</td>
+                  {periodos.map((p) => <td key={p} style={{ border: "1px solid #000", padding: 4, textAlign: "center" }}>{esMia ? (notasPorMateriaPeriodo[m.id]?.[p] ?? "—") : "🔒"}</td>)}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}
@@ -145,12 +148,19 @@ export function ResumenEstudianteModal({ estudiante, onClose }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {datos.materias.map((m) => (
-                      <tr key={m.id} className="odd:bg-white even:bg-slate-50">
-                        <td className="px-2 py-1">{m.nombre}</td>
-                        {datos.periodos.map((p) => <td key={p} className="text-center px-2 py-1">{datos.notasPorMateriaPeriodo[m.id]?.[p] ?? "—"}</td>)}
-                      </tr>
-                    ))}
+                    {datos.materias.map((m) => {
+                      const esMia = m.docente_id === datos.miDocenteId;
+                      return (
+                        <tr key={m.id} className="odd:bg-white even:bg-slate-50">
+                          <td className="px-2 py-1">{m.nombre}</td>
+                          {datos.periodos.map((p) => (
+                            <td key={p} className="text-center px-2 py-1" title={esMia ? undefined : "Nota de otra materia — solo la ve el docente que la puso"}>
+                              {esMia ? (datos.notasPorMateriaPeriodo[m.id]?.[p] ?? "—") : "🔒"}
+                            </td>
+                          ))}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
