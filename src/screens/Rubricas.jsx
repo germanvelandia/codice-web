@@ -272,7 +272,7 @@ export function VistaRubricas() {
     <div>
       <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">🎯 Rúbricas</h2>
+          <h2 className="text-xl font-bold text-white">🎯 Rúbricas</h2>
           <p className="text-sm text-slate-400">Armá tus rúbricas una sola vez acá, y después cargalas en cualquier proyecto, taller, o columna de la Planilla.</p>
         </div>
         <button onClick={() => { setEditando(null); setFormAbierto((v) => !v); }} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white shrink-0">
