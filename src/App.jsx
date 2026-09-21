@@ -2162,6 +2162,10 @@ const MENU_PANEL_GRUPOS = [
 ];
 // Lista plana — se sigue usando donde hace falta el conjunto completo sin agrupar.
 const MENU_PANEL = MENU_PANEL_GRUPOS.flatMap((g) => g.items);
+// Estas 6 solo las puede ver/usar un docente marcado como administrador
+// (es_admin en profesores) — todo lo demás sigue disponible para
+// cualquier docente, incluida la Planilla de Calificaciones.
+const CLAVES_SOLO_ADMIN = ["corregirnombres", "niveles", "objetos", "horario", "roles", "reportes"];
 
 function BuscadorEstudiantesGlobal({ onSeleccionar }) {
   const [query, setQuery] = useState("");
@@ -2217,7 +2221,7 @@ function FondoArcadeDocente() {
   return <div className="fixed inset-0 -z-10" style={{ background: "#1a1533" }} />;
 }
 
-function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstitucion, onSalir, onBuscarEstudiante, grados, gradoActivo, onCambiarGradoActivo, periodoActivo, onCambiarPeriodoActivo, materias, materiaActiva, onCambiarMateriaActiva }) {
+function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstitucion, onSalir, onBuscarEstudiante, grados, gradoActivo, onCambiarGradoActivo, periodoActivo, onCambiarPeriodoActivo, materias, materiaActiva, onCambiarMateriaActiva, esAdmin }) {
   const [nombreDocente, setNombreDocente] = useState("");
   const [editandoNombre, setEditandoNombre] = useState(false);
   const [nombreTemp, setNombreTemp] = useState("");
@@ -2277,8 +2281,8 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
         )}
 
         <div className="flex items-center gap-3 shrink-0">
-          <button onClick={onAdmin} className="text-base" title="Docentes y mi cuenta">👤</button>
-          <button onClick={onInstitucion} className="text-base" title="Institución">⚙️</button>
+          <button onClick={onAdmin} className="text-base" title={esAdmin ? "Docentes y mi cuenta" : "Mi cuenta"}>👤</button>
+          {esAdmin && <button onClick={onInstitucion} className="text-base" title="Institución">⚙️</button>}
           <button onClick={onSalir} className="text-base" title="Cerrar sesión">🚪</button>
         </div>
       </div>
@@ -2324,6 +2328,8 @@ function Panel({ session }) {
     } catch { return porDefecto; }
   };
   const [tab, setTab] = useState(() => leerGuardado("tab", "inicio"));
+  const [esAdmin, setEsAdmin] = useState(null); // null = todavía no se sabe
+  useEffect(() => { api.fetchMiPerfil().then((p) => setEsAdmin(!!p?.es_admin)); }, []);
   const [grupoAbierto, setGrupoAbierto] = useState(() => {
     const guardado = leerGuardado("grupoAbierto", undefined);
     if (guardado !== undefined) return guardado;
@@ -2374,9 +2380,21 @@ function Panel({ session }) {
   }, []);
 
   const irA = (key) => {
+    if (CLAVES_SOLO_ADMIN.includes(key) && !esAdmin) return; // por si quedó guardada de antes, o alguien fuerza la navegación
     setTab(key);
     if (key === "estudiantes") { setGrado(null); setReino(null); setModoLista(false); }
   };
+
+  // Si el docente no es administrador, el grupo "Administración" ni
+  // siquiera aparece en la cuadrícula de secciones.
+  const menuPanelVisible = esAdmin ? MENU_PANEL_GRUPOS : MENU_PANEL_GRUPOS.filter((g) => g.key !== "administracion");
+
+  // Si por localStorage quedó guardada una pantalla de administrador y
+  // ahora resulta que no lo es (o cambiaron de cuenta en el mismo
+  // navegador), lo manda de vuelta a Inicio apenas se sabe el rol.
+  useEffect(() => {
+    if (esAdmin === false && CLAVES_SOLO_ADMIN.includes(tab)) { setTab("inicio"); setGrupoAbierto(null); }
+  }, [esAdmin]);
 
   // Desde "Entregas por revisar": salta directo a Misiones o Proyectos/Forja,
   // ya con el curso, la materia y el periodo correctos seleccionados arriba.
@@ -2395,7 +2413,7 @@ function Panel({ session }) {
         onSalir={() => supabase.auth.signOut()} onBuscarEstudiante={irACalificacionesDesdeBusqueda}
         grados={grados} gradoActivo={gradoActivo} onCambiarGradoActivo={setGradoActivo}
         periodoActivo={periodoActivo} onCambiarPeriodoActivo={setPeriodoActivo}
-        materias={materias} materiaActiva={materiaActiva} onCambiarMateriaActiva={setMateriaActiva} />
+        materias={materias} materiaActiva={materiaActiva} onCambiarMateriaActiva={setMateriaActiva} esAdmin={esAdmin} />
 
       {institucionAbierta && <InstitucionModal onClose={() => { setInstitucionAbierta(false); cargarInstitucion(); }} />}
       {administracionAbierta && <AdministracionModal onClose={() => setAdministracionAbierta(false)} />}
@@ -2405,13 +2423,13 @@ function Panel({ session }) {
           grupoAbierto ? (
             <VistaInicio onIrA={irA} soloEncabezado
               accionSuperior={<EnlaceTodasLasSecciones onCambiarGrupo={setGrupoAbierto} />}
-              contenidoMedio={<NavegacionPorTarjetas grupos={MENU_PANEL_GRUPOS} onIr={irA} grupoAbierto={grupoAbierto} onCambiarGrupo={setGrupoAbierto} />} />
+              contenidoMedio={<NavegacionPorTarjetas grupos={menuPanelVisible} onIr={irA} grupoAbierto={grupoAbierto} onCambiarGrupo={setGrupoAbierto} />} />
           ) : (
             <VistaInicio onIrA={irA}
               contenidoMedio={
                 <div className="mb-2">
                   <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">Todas las secciones</h3>
-                  <NavegacionPorTarjetas grupos={MENU_PANEL_GRUPOS} onIr={irA} grupoAbierto={null} onCambiarGrupo={setGrupoAbierto} />
+                  <NavegacionPorTarjetas grupos={menuPanelVisible} onIr={irA} grupoAbierto={null} onCambiarGrupo={setGrupoAbierto} />
                 </div>
               } />
           )
