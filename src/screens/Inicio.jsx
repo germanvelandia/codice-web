@@ -128,7 +128,7 @@ function TarjetaBitacora({ entrada, onEditar, onEliminar }) {
 
 // Modal principal de la bitácora — lista las entradas anteriores como
 // tarjetas, y permite agregar una nueva para la fecha indicada.
-function BitacoraClaseModal({ gradoId, materiaId, materiaNombre, fechaInicial, onCerrar }) {
+export function BitacoraClaseModal({ gradoId, materiaId, materiaNombre, fechaInicial, onCerrar }) {
   const [entradas, setEntradas] = useState(null);
   const [formAbierto, setFormAbierto] = useState(false);
   const [editando, setEditando] = useState(null);
