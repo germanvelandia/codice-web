@@ -309,7 +309,7 @@ export function VistaAsistencia({ grados, gradoActivo }) {
 
   return (
     <div>
-      <h2 className="text-xl font-bold text-slate-800 mb-1">Control de Asistencia</h2>
+      <h2 className="text-xl font-bold text-white mb-1">Control de Asistencia</h2>
       <p className="text-xs text-slate-400 mb-3">P = Presente · R = Retardo · FI = Falta injustificada · FJ = Falta justificada. Un segundo clic sobre el mismo código lo quita.</p>
 
       <div className="grid grid-cols-2 gap-3 mb-4 max-w-md">
