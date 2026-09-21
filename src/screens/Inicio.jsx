@@ -19,9 +19,10 @@ export function ContenidoLightbox({ html, onClose }) {
 const MESES_NOMBRE = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 const DIAS_CORTOS = ["D", "L", "M", "M", "J", "V", "S"];
 
-export function CalendarioPlaneaciones() {
+export function CalendarioPlaneaciones({ onAbrirBitacora }) {
   const [horario, setHorario] = useState(null);
   const [mesVisto, setMesVisto] = useState(() => { const h = new Date(); return { anio: h.getFullYear(), mes: h.getMonth() }; });
+  const [selectorDia, setSelectorDia] = useState(null); // { fecha, clases: [...] }
 
   useEffect(() => { api.fetchHorarioDelDocente().then(setHorario); }, []);
 
@@ -43,8 +44,21 @@ export function CalendarioPlaneaciones() {
     });
   };
 
+  const clickDia = (d) => {
+    const fechaCelda = new Date(mesVisto.anio, mesVisto.mes, d);
+    const clasesDelDia = (horario || []).filter((h) => h.dia_semana === fechaCelda.getDay());
+    if (clasesDelDia.length === 0) return;
+    const fechaISO = `${fechaCelda.getFullYear()}-${String(fechaCelda.getMonth() + 1).padStart(2, "0")}-${String(fechaCelda.getDate()).padStart(2, "0")}`;
+    if (clasesDelDia.length === 1) {
+      const h = clasesDelDia[0];
+      onAbrirBitacora({ gradoId: h.grado_id, materiaId: h.materia_id || null, materiaNombre: h.materias?.nombre, fecha: fechaISO });
+    } else {
+      setSelectorDia({ fecha: fechaISO, clases: clasesDelDia });
+    }
+  };
+
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 h-full">
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 h-full relative">
       <div className="flex items-center justify-between mb-3">
         <button onClick={() => cambiarMes(-1)} className="text-slate-400 hover:text-violet-600 px-1">‹</button>
         <div className="text-sm font-bold text-slate-800">{MESES_NOMBRE[mesVisto.mes]} {mesVisto.anio}</div>
@@ -60,15 +74,147 @@ export function CalendarioPlaneaciones() {
           const esHoy = fechaCelda.toDateString() === hoy.toDateString();
           const tieneClase = diasConClase.has(fechaCelda.getDay());
           return (
-            <div key={i} className="flex flex-col items-center py-1">
+            <button key={i} onClick={() => clickDia(d)} disabled={!tieneClase} className="flex flex-col items-center py-1 rounded-lg hover:bg-violet-50 disabled:hover:bg-transparent">
               <div className={`w-6 h-6 flex items-center justify-center rounded-full text-[11px] ${esHoy ? "bg-violet-500 text-white font-bold" : "text-slate-600"}`}>{d}</div>
               {tieneClase && <div className={`w-1 h-1 rounded-full mt-0.5 ${esHoy ? "bg-violet-500" : "bg-violet-300"}`} />}
-            </div>
+            </button>
           );
         })}
       </div>
       <div className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
-        <div className="w-1.5 h-1.5 rounded-full bg-violet-300" /> Día con clase planeada
+        <div className="w-1.5 h-1.5 rounded-full bg-violet-300" /> Día con clase planeada — tocá un día para su bitácora
+      </div>
+
+      {selectorDia && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={() => setSelectorDia(null)}>
+          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-4 w-full max-w-xs shadow-xl">
+            <div className="flex justify-between items-center mb-3">
+              <h4 className="text-sm font-bold text-slate-800">¿Qué clase?</h4>
+              <button onClick={() => setSelectorDia(null)} className="text-slate-400">✕</button>
+            </div>
+            <div className="space-y-1.5">
+              {selectorDia.clases.map((h) => (
+                <button key={h.id} onClick={() => { onAbrirBitacora({ gradoId: h.grado_id, materiaId: h.materia_id || null, materiaNombre: h.materias?.nombre, fecha: selectorDia.fecha }); setSelectorDia(null); }}
+                  className="w-full text-left text-xs bg-slate-50 hover:bg-violet-50 rounded-lg px-3 py-2">
+                  <span className="font-semibold text-slate-700">{h.materias?.nombre || "Sin materia"}</span>
+                  <span className="text-slate-400"> · Grado {h.grado_id}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Tarjeta de una entrada de bitácora (una clase ya registrada).
+function TarjetaBitacora({ entrada, onEditar, onEliminar }) {
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 p-3.5">
+      <div className="flex items-start justify-between gap-2 mb-1.5">
+        <div className="text-xs font-bold text-violet-600">{new Date(entrada.fecha + "T00:00:00").toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" })}</div>
+        <div className="flex gap-1 shrink-0">
+          <button onClick={() => onEditar(entrada)} className="text-xs text-slate-300 hover:text-violet-600">✏️</button>
+          <button onClick={() => onEliminar(entrada)} className="text-xs text-slate-300 hover:text-rose-500">🗑</button>
+        </div>
+      </div>
+      {entrada.tema && <div className="text-sm font-bold text-slate-800 mb-1">📖 {entrada.tema}</div>}
+      {entrada.actividades_realizadas && <p className="text-xs text-slate-600 mb-1 whitespace-pre-line">{entrada.actividades_realizadas}</p>}
+      {entrada.observaciones && <p className="text-xs text-slate-400 italic whitespace-pre-line">{entrada.observaciones}</p>}
+    </div>
+  );
+}
+
+// Modal principal de la bitácora — lista las entradas anteriores como
+// tarjetas, y permite agregar una nueva para la fecha indicada.
+function BitacoraClaseModal({ gradoId, materiaId, materiaNombre, fechaInicial, onCerrar }) {
+  const [entradas, setEntradas] = useState(null);
+  const [formAbierto, setFormAbierto] = useState(false);
+  const [editando, setEditando] = useState(null);
+  const [fecha, setFecha] = useState(fechaInicial);
+  const [tema, setTema] = useState("");
+  const [actividades, setActividades] = useState("");
+  const [observaciones, setObservaciones] = useState("");
+  const [guardando, setGuardando] = useState(false);
+
+  const cargar = () => api.fetchBitacorasDeClase(gradoId, materiaId).then(setEntradas);
+  useEffect(() => { cargar(); }, [gradoId, materiaId]);
+
+  const abrirNueva = () => {
+    setEditando(null); setFecha(fechaInicial); setTema(""); setActividades(""); setObservaciones("");
+    setFormAbierto(true);
+  };
+  const abrirEditar = (e) => {
+    setEditando(e); setFecha(e.fecha); setTema(e.tema || ""); setActividades(e.actividades_realizadas || ""); setObservaciones(e.observaciones || "");
+    setFormAbierto(true);
+  };
+
+  const guardar = async () => {
+    if (!tema.trim() && !actividades.trim()) { alert("Contá al menos el tema o qué se hizo en la clase."); return; }
+    setGuardando(true);
+    try {
+      const campos = { grado_id: gradoId, materia_id: materiaId || null, fecha, tema: tema.trim() || null, actividades_realizadas: actividades.trim() || null, observaciones: observaciones.trim() || null };
+      if (editando) await api.editarBitacoraClase(editando.id, campos);
+      else await api.crearBitacoraClase(campos);
+      setFormAbierto(false);
+      cargar();
+    } catch (e) {
+      alert("Error al guardar: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  const eliminar = async (e) => {
+    if (!confirm("¿Eliminar esta entrada de la bitácora?")) return;
+    await api.eliminarBitacoraClase(e.id);
+    cargar();
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onCerrar}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-slate-50 rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-1">
+          <h3 className="font-bold text-slate-800">📔 Bitácora de clase</h3>
+          <button onClick={onCerrar} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-400 mb-4">Grado {gradoId}{materiaNombre ? ` · ${materiaNombre}` : ""}</p>
+
+        {formAbierto ? (
+          <div className="bg-white rounded-2xl border border-violet-200 p-4 mb-4">
+            <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Fecha</label>
+            <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
+            <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Tema visto</label>
+            <input value={tema} onChange={(e) => setTema(e.target.value)} placeholder="Ej: Ecuaciones de primer grado"
+              className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
+            <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Qué se hizo</label>
+            <textarea value={actividades} onChange={(e) => setActividades(e.target.value)} rows={3} placeholder="Actividades realizadas en la clase"
+              className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none resize-none" />
+            <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Observaciones (opcional)</label>
+            <textarea value={observaciones} onChange={(e) => setObservaciones(e.target.value)} rows={2} placeholder="Cómo salió, qué faltó, para retomar la próxima"
+              className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none resize-none" />
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setFormAbierto(false)} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
+              <button disabled={guardando} onClick={guardar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+                {guardando ? "Guardando…" : editando ? "Guardar cambios" : "Agregar entrada"}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button onClick={abrirNueva} className="w-full text-sm font-semibold py-2.5 rounded-2xl border-2 border-dashed border-violet-200 text-violet-500 mb-4 hover:bg-violet-50">
+            + Agregar lo que se hizo hoy
+          </button>
+        )}
+
+        {entradas === null ? (
+          <p className="text-xs text-slate-400">Cargando…</p>
+        ) : entradas.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-4">Todavía no hay entradas en esta bitácora.</p>
+        ) : (
+          <div className="space-y-2">
+            {entradas.map((e) => <TarjetaBitacora key={e.id} entrada={e} onEditar={abrirEditar} onEliminar={eliminar} />)}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -289,6 +435,7 @@ export function VistaInicio({ onIrA, soloEncabezado, accionSuperior, contenidoMe
   const [pendientesHoy, setPendientesHoy] = useState({});
   const [marcandoId, setMarcandoId] = useState(null);
   const [observacionAbiertaId, setObservacionAbiertaId] = useState(null);
+  const [bitacoraAbierta, setBitacoraAbierta] = useState(null); // { gradoId, materiaId, materiaNombre, fecha }
   const [observacionTemp, setObservacionTemp] = useState("");
 
   useEffect(() => {
@@ -329,6 +476,7 @@ export function VistaInicio({ onIrA, soloEncabezado, accionSuperior, contenidoMe
 
   const hoy = new Date();
   const fechaLegible = hoy.toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const fechaHoyISO = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
 
   if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
 
@@ -422,6 +570,8 @@ export function VistaInicio({ onIrA, soloEncabezado, accionSuperior, contenidoMe
                         )}
                       </div>
                     )}
+                    <button onClick={() => setBitacoraAbierta({ gradoId: h.grado_id, materiaId: h.materia_id || null, materiaNombre: h.materias?.nombre, fecha: fechaHoyISO })}
+                      className="text-[10px] font-semibold text-violet-500 mt-1.5">📔 Bitácora de esta clase</button>
                   </div>
                 );
               })}
@@ -429,11 +579,15 @@ export function VistaInicio({ onIrA, soloEncabezado, accionSuperior, contenidoMe
           )}
         </div>
 
-        <CalendarioPlaneaciones />
+        <CalendarioPlaneaciones onAbrirBitacora={setBitacoraAbierta} />
       </div>
       )}
 
       {codiceAbierto && <ReflexionesSinRevisarModal onClose={() => setCodiceAbierto(false)} />}
+      {bitacoraAbierta && (
+        <BitacoraClaseModal gradoId={bitacoraAbierta.gradoId} materiaId={bitacoraAbierta.materiaId} materiaNombre={bitacoraAbierta.materiaNombre}
+          fechaInicial={bitacoraAbierta.fecha} onCerrar={() => setBitacoraAbierta(null)} />
+      )}
     </div>
   );
 }
