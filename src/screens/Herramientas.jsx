@@ -875,17 +875,25 @@ export function SelectorEstudianteTool({ grados }) {
 
 export function BingoTool() {
   const [textoItems, setTextoItems] = useState("");
-  const [carton, setCarton] = useState(null);
+  const [cantidadCartones, setCantidadCartones] = useState(4);
+  const [cartones, setCartones] = useState(null); // [[9 items], [9 items], ...]
+  const [cartonVisto, setCartonVisto] = useState(0);
   const [bolsa, setBolsa] = useState([]);
   const [salidos, setSalidos] = useState([]);
   const [ultimo, setUltimo] = useState(null);
 
   const items = textoItems.split("\n").map((l) => l.trim()).filter(Boolean);
 
-  const generarCarton = () => {
-    if (items.length < 9) { alert("Escribí al menos 9 palabras/preguntas (una por línea) para armar el cartón."); return; }
-    const mezclados = [...items].sort(() => Math.random() - 0.5).slice(0, 9);
-    setCarton(mezclados);
+  // Cada cartón se arma con su propia mezcla al azar — si hay más de 9
+  // términos, además pueden tocarle términos distintos a cada uno; si
+  // hay justo 9, comparten los mismos términos pero en otro orden, lo
+  // que igual hace que cada equipo complete línea en un momento distinto.
+  const generarCartones = () => {
+    if (items.length < 9) { alert("Escribí al menos 9 palabras/preguntas (una por línea) para armar los cartones."); return; }
+    const n = Math.max(2, Math.min(20, cantidadCartones));
+    const nuevos = Array.from({ length: n }, () => [...items].sort(() => Math.random() - 0.5).slice(0, 9));
+    setCartones(nuevos);
+    setCartonVisto(0);
     setBolsa([...items].sort(() => Math.random() - 0.5));
     setSalidos([]);
     setUltimo(null);
@@ -903,19 +911,29 @@ export function BingoTool() {
   return (
     <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 md:col-span-2">
       <h3 className="font-bold text-slate-800 mb-3">🎯 Bingo de preguntas/repaso</h3>
-      {!carton ? (
+      {!cartones ? (
         <>
           <p className="text-xs text-slate-400 mb-2">Escribí una palabra, término o pregunta corta por línea (mínimo 9).</p>
           <textarea value={textoItems} onChange={(e) => setTextoItems(e.target.value)} rows={5} placeholder={"Fotosíntesis\nCélula\nMitocondria\n..."}
             className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none mb-2" />
-          <button onClick={generarCarton} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white">Generar cartón y empezar</button>
+          <div className="flex items-center gap-2 mb-2">
+            <label className="text-xs text-slate-500">N° de cartones distintos (uno por equipo/grupo)</label>
+            <input type="number" min={2} max={20} value={cantidadCartones} onChange={(e) => setCantidadCartones(parseInt(e.target.value, 10) || 2)}
+              className="w-16 text-xs text-center rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+          </div>
+          <button onClick={generarCartones} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white">Generar cartones y empezar</button>
         </>
       ) : (
         <div className="grid sm:grid-cols-2 gap-4">
           <div>
-            <div className="text-xs text-slate-400 mb-2">Cartón (compartilo en pantalla)</div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-xs text-slate-400">Cartón por equipo (compartilo en pantalla)</div>
+              <select value={cartonVisto} onChange={(e) => setCartonVisto(parseInt(e.target.value, 10))} className="text-xs rounded-lg px-2 py-1 border border-slate-200 outline-none">
+                {cartones.map((_, i) => <option key={i} value={i}>Equipo {i + 1}</option>)}
+              </select>
+            </div>
             <div className="grid grid-cols-3 gap-1.5">
-              {carton.map((it, i) => {
+              {cartones[cartonVisto].map((it, i) => {
                 const marcado = salidos.includes(it);
                 return (
                   <div key={i} className={`aspect-square rounded-lg flex items-center justify-center text-center text-[11px] font-semibold p-1 ${marcado ? "bg-emerald-500 text-white" : "bg-slate-50 text-slate-600"}`}>
@@ -924,6 +942,7 @@ export function BingoTool() {
                 );
               })}
             </div>
+            <p className="text-[10px] text-slate-400 mt-1.5">Cada equipo tiene su propio cartón — pasá entre ellos con el selector de arriba para verificar un "¡Bingo!"</p>
           </div>
           <div>
             <div className="text-xs text-slate-400 mb-2">Bolsa: {bolsa.length - salidos.length} de {bolsa.length} sin salir</div>
@@ -933,7 +952,7 @@ export function BingoTool() {
             <button onClick={sacar} disabled={bolsa.length - salidos.length === 0} className="w-full text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50 mb-2">
               🎱 Sacar uno
             </button>
-            <button onClick={() => setCarton(null)} className="w-full text-xs text-slate-400">↺ Empezar de nuevo (nueva lista)</button>
+            <button onClick={() => setCartones(null)} className="w-full text-xs text-slate-400">↺ Empezar de nuevo (nueva lista)</button>
           </div>
         </div>
       )}
