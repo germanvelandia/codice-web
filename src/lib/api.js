@@ -1665,7 +1665,8 @@ export async function fetchResumenEntregasPorRevisar() {
 
 /* ---------------- Tablero Semanal (semana × curso, por periodo) ---------------- */
 export async function fetchTableroSemanal(gradosIds, periodo) {
-  const { data, error } = await supabase.from("tablero_semanal").select("*").in("grado_id", gradosIds).eq("periodo", periodo).order("semana");
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("tablero_semanal").select("*").eq("docente_id", userData?.user?.id || null).in("grado_id", gradosIds).eq("periodo", periodo).order("semana");
   if (error) throw error;
   return data || [];
 }
@@ -1679,15 +1680,18 @@ export async function guardarCeldaTablero(gradoId, periodo, semana, campos) {
   if (error) throw error;
 }
 
-// Borra el contenido de una sola celda (curso + semana puntual).
+// Borra el contenido de una sola celda (curso + semana puntual) — SOLO la
+// tuya, para no borrar sin querer lo que cargó otro docente esa semana.
 export async function eliminarCeldaTablero(gradoId, periodo, semana) {
-  const { error } = await supabase.from("tablero_semanal").delete().eq("grado_id", gradoId).eq("periodo", periodo).eq("semana", semana);
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("tablero_semanal").delete().eq("docente_id", userData?.user?.id || null).eq("grado_id", gradoId).eq("periodo", periodo).eq("semana", semana);
   if (error) throw error;
 }
 
-// Borra la fila completa de una semana (todos los cursos de ese grado, en ese periodo).
+// Borra la fila completa de una semana (todos los cursos de ese grado, en ese periodo) — solo la tuya.
 export async function eliminarSemanaTablero(gradosIds, periodo, semana) {
-  const { error } = await supabase.from("tablero_semanal").delete().in("grado_id", gradosIds).eq("periodo", periodo).eq("semana", semana);
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("tablero_semanal").delete().eq("docente_id", userData?.user?.id || null).in("grado_id", gradosIds).eq("periodo", periodo).eq("semana", semana);
   if (error) throw error;
 }
 
@@ -1695,19 +1699,22 @@ export async function eliminarSemanaTablero(gradosIds, periodo, semana) {
 // completó el Tablero en el periodo equivocado. Si el destino ya tiene
 // datos para el mismo curso+semana, esos se reemplazan (se avisa antes).
 export async function fetchConteoTablero(gradosIds, periodo) {
-  const { count, error } = await supabase.from("tablero_semanal").select("*", { count: "exact", head: true }).in("grado_id", gradosIds).eq("periodo", periodo);
+  const { data: userData } = await supabase.auth.getUser();
+  const { count, error } = await supabase.from("tablero_semanal").select("*", { count: "exact", head: true }).eq("docente_id", userData?.user?.id || null).in("grado_id", gradosIds).eq("periodo", periodo);
   if (error) throw error;
   return count || 0;
 }
 
 export async function moverTableroAPeriodo(gradosIds, periodoOrigen, periodoDestino) {
-  // Saca del destino cualquier celda que choque en curso+semana con lo que se va a mover.
-  const { data: origen, error: e1 } = await supabase.from("tablero_semanal").select("grado_id, semana").in("grado_id", gradosIds).eq("periodo", periodoOrigen);
+  const { data: userData } = await supabase.auth.getUser();
+  const miId = userData?.user?.id || null;
+  // Saca del destino cualquier celda TUYA que choque en curso+semana con lo que se va a mover.
+  const { data: origen, error: e1 } = await supabase.from("tablero_semanal").select("grado_id, semana").eq("docente_id", miId).in("grado_id", gradosIds).eq("periodo", periodoOrigen);
   if (e1) throw e1;
   for (const fila of origen || []) {
-    await supabase.from("tablero_semanal").delete().eq("grado_id", fila.grado_id).eq("periodo", periodoDestino).eq("semana", fila.semana);
+    await supabase.from("tablero_semanal").delete().eq("docente_id", miId).eq("grado_id", fila.grado_id).eq("periodo", periodoDestino).eq("semana", fila.semana);
   }
-  const { error: e2 } = await supabase.from("tablero_semanal").update({ periodo: periodoDestino }).in("grado_id", gradosIds).eq("periodo", periodoOrigen);
+  const { error: e2 } = await supabase.from("tablero_semanal").update({ periodo: periodoDestino }).eq("docente_id", miId).in("grado_id", gradosIds).eq("periodo", periodoOrigen);
   if (e2) throw e2;
 }
 
@@ -2455,8 +2462,9 @@ export async function guardarValorSemanal(campos) {
 
 /* ---------------- Anuncios (tablero de mensajes) ---------------- */
 export async function fetchAnuncios() {
+  const { data: userData } = await supabase.auth.getUser();
   const [anunciosRes, profesoresRes] = await Promise.all([
-    supabase.from("anuncios").select("*").order("fijado", { ascending: false }).order("creado_en", { ascending: false }),
+    supabase.from("anuncios").select("*").eq("docente_id", userData?.user?.id || null).order("fijado", { ascending: false }).order("creado_en", { ascending: false }),
     supabase.from("profesores").select("id, nombre"),
   ]);
   if (anunciosRes.error) throw anunciosRes.error;
@@ -3021,13 +3029,18 @@ export async function eliminarAccionGamificacion(id) {
 }
 
 /* ---------------- Biblioteca (enlaces por grado completo) ---------------- */
+// Solo los recursos que YO agregué — un docente no ve los de otra
+// materia/otro docente, aunque sean del mismo grado.
 export async function fetchBibliotecaRecursos() {
-  const { data, error } = await supabase.from("biblioteca_recursos").select("*").order("nivel").order("creado_en", { ascending: false });
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("biblioteca_recursos").select("*").eq("docente_id", userData?.user?.id || null).order("nivel").order("creado_en", { ascending: false });
   if (error) throw error;
   return data || [];
 }
 
-// Para el estudiante: solo lo de su propio grado (nivel)
+// Para el estudiante: TODOS los recursos de su grado (nivel), de
+// cualquier docente que los haya agregado — acá sí se ven combinados,
+// porque desde el estudiante son simplemente "recursos de mi grado".
 export async function fetchBibliotecaPorNivel(nivel) {
   const { data, error } = await supabase.from("biblioteca_recursos").select("*").eq("nivel", nivel).order("categoria").order("creado_en", { ascending: false });
   if (error) throw error;
@@ -3173,8 +3186,9 @@ export async function fetchObservadorDataGrado(gradoId) {
 
 /* ---------------- Consignas del Códice (pregunta general para todo un grado) ---------------- */
 export async function fetchConsignasCodice() {
+  const { data: userData } = await supabase.auth.getUser();
   const [consignasRes, materiasRes] = await Promise.all([
-    supabase.from("codice_consignas").select("*").order("creado_en", { ascending: false }),
+    supabase.from("codice_consignas").select("*").eq("docente_id", userData?.user?.id || null).order("creado_en", { ascending: false }),
     supabase.from("materias").select("id, nombre"),
   ]);
   if (consignasRes.error) throw consignasRes.error;
@@ -3245,7 +3259,8 @@ export async function eliminarTriviaCategoria(id) {
 }
 
 export async function fetchTriviaPreguntas(categoriaId) {
-  const { data, error } = await supabase.from("trivia_preguntas").select("*").eq("categoria_id", categoriaId).order("creado_en", { ascending: false });
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("trivia_preguntas").select("*").eq("categoria_id", categoriaId).eq("docente_id", userData?.user?.id || null).order("creado_en", { ascending: false });
   if (error) throw error;
   return data || [];
 }
@@ -3328,7 +3343,8 @@ export async function fetchRankingCoronas(gradoId) {
 
 /* ---------------- 🗂️ Banco de preguntas (reutilizable en Misiones) ---------------- */
 export async function fetchBancoPreguntas(materiaId, tema, nivel) {
-  let query = supabase.from("banco_preguntas").select("*").order("creado_en", { ascending: false });
+  const { data: userData } = await supabase.auth.getUser();
+  let query = supabase.from("banco_preguntas").select("*").eq("docente_id", userData?.user?.id || null).order("creado_en", { ascending: false });
   if (materiaId) query = query.eq("materia_id", materiaId);
   if (tema) query = query.eq("tema", tema);
   if (nivel) query = query.eq("nivel", nivel);
@@ -3338,7 +3354,8 @@ export async function fetchBancoPreguntas(materiaId, tema, nivel) {
 }
 
 export async function fetchNivelesBanco(materiaId) {
-  let query = supabase.from("banco_preguntas").select("nivel");
+  const { data: userData } = await supabase.auth.getUser();
+  let query = supabase.from("banco_preguntas").select("nivel").eq("docente_id", userData?.user?.id || null);
   if (materiaId) query = query.eq("materia_id", materiaId);
   const { data, error } = await query;
   if (error) throw error;
@@ -3346,7 +3363,8 @@ export async function fetchNivelesBanco(materiaId) {
 }
 
 export async function fetchTemasBanco(materiaId, nivel) {
-  let query = supabase.from("banco_preguntas").select("tema");
+  const { data: userData } = await supabase.auth.getUser();
+  let query = supabase.from("banco_preguntas").select("tema").eq("docente_id", userData?.user?.id || null);
   if (materiaId) query = query.eq("materia_id", materiaId);
   if (nivel) query = query.eq("nivel", nivel);
   const { data, error } = await query;
@@ -3662,10 +3680,11 @@ export async function fetchPanelDireccionCurso(gradoId) {
 
 /* ---------------- 📞 Citaciones a padres ---------------- */
 export async function fetchCitacionesPorCurso(gradoId) {
+  const { data: userData } = await supabase.auth.getUser();
   const estudiantes = await fetchEstudiantesPorGrado(gradoId);
   const ids = estudiantes.map((e) => e.id);
   if (ids.length === 0) return [];
-  const { data, error } = await supabase.from("citaciones_padres").select("*").in("estudiante_id", ids).order("fecha_citacion", { ascending: false });
+  const { data, error } = await supabase.from("citaciones_padres").select("*").in("estudiante_id", ids).eq("docente_id", userData?.user?.id || null).order("fecha_citacion", { ascending: false });
   if (error) throw error;
   const nombrePorId = {}; estudiantes.forEach((e) => { nombrePorId[e.id] = e.nombre; });
   return (data || []).map((c) => ({ ...c, estudiante_nombre: nombrePorId[c.estudiante_id] }));
@@ -3776,7 +3795,8 @@ export async function guardarEstadoMateria(gradoId, materiaNombre, estudianteId,
 
 /* ---------------- 🧑‍🏫 Tutorías individuales ---------------- */
 export async function fetchTutoriasEstudiante(estudianteId) {
-  const { data, error } = await supabase.from("tutorias_individuales").select("*").eq("estudiante_id", estudianteId).order("fecha", { ascending: false });
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("tutorias_individuales").select("*").eq("estudiante_id", estudianteId).eq("docente_id", userData?.user?.id || null).order("fecha", { ascending: false });
   if (error) throw error;
   return data || [];
 }
@@ -4933,8 +4953,10 @@ export async function registrarAccion(estudianteId, accion) {
 }
 
 /* ---------------- Rúbricas (catálogo reutilizable) ---------------- */
+// Solo tus propias rúbricas — no las de otros docentes.
 export async function fetchRubricasCatalogo() {
-  const { data, error } = await supabase.from("rubricas_catalogo").select("*").order("nombre");
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("rubricas_catalogo").select("*").eq("docente_id", userData?.user?.id || null).order("nombre");
   if (error) throw error;
   return data || [];
 }
