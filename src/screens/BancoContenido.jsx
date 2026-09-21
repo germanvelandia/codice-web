@@ -1174,7 +1174,7 @@ export function VistaBancoContenido() {
   return (
     <div>
       <div className="flex justify-between items-center mb-1">
-        <h2 className="text-lg font-bold text-slate-800">🧩 Banco de Contenido</h2>
+        <h2 className="text-lg font-bold text-white">🧩 Banco de Contenido</h2>
         <button onClick={() => setEditando({})} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">+ Nuevo set</button>
       </div>
       <p className="text-xs text-slate-400 mb-4">Cargá un contenido una sola vez, y jugalo en Emparejar, Ahorcado, Ordenar palabras — y más formatos que se van a ir sumando.</p>
