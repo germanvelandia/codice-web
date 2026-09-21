@@ -2221,7 +2221,7 @@ function FondoArcadeDocente() {
   return <div className="fixed inset-0 -z-10" style={{ background: "#1a1533" }} />;
 }
 
-function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstitucion, onSalir, onBuscarEstudiante, grados, gradoActivo, onCambiarGradoActivo, periodoActivo, onCambiarPeriodoActivo, materias, materiaActiva, onCambiarMateriaActiva, esAdmin }) {
+function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstitucion, onSalir, onBuscarEstudiante, grados, gradoActivo, onCambiarGradoActivo, periodoActivo, onCambiarPeriodoActivo, materias, materiaActiva, onCambiarMateriaActiva, esAdmin, esAdminReal, previsualizandoDocente, onCambiarPrevisualizacion }) {
   const [nombreDocente, setNombreDocente] = useState("");
   const [editandoNombre, setEditandoNombre] = useState(false);
   const [nombreTemp, setNombreTemp] = useState("");
@@ -2281,6 +2281,13 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
         )}
 
         <div className="flex items-center gap-3 shrink-0">
+          {esAdminReal && (
+            <button onClick={() => onCambiarPrevisualizacion((v) => !v)}
+              className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${previsualizandoDocente ? "bg-amber-400 text-slate-900 border-amber-400" : "border-white/20 text-violet-200"}`}
+              title="Como administrador, podés previsualizar la app tal como la ve un docente regular, sin perder tu permiso real.">
+              {previsualizandoDocente ? "👤 Viendo como docente — Volver a admin" : "🔍 Ver como docente"}
+            </button>
+          )}
           <button onClick={onAdmin} className="text-base" title={esAdmin ? "Docentes y mi cuenta" : "Mi cuenta"}>👤</button>
           {esAdmin && <button onClick={onInstitucion} className="text-base" title="Institución">⚙️</button>}
           <button onClick={onSalir} className="text-base" title="Cerrar sesión">🚪</button>
@@ -2329,6 +2336,12 @@ function Panel({ session }) {
   };
   const [tab, setTab] = useState(() => leerGuardado("tab", "inicio"));
   const [esAdmin, setEsAdmin] = useState(null); // null = todavía no se sabe
+  const [previsualizandoDocente, setPrevisualizandoDocente] = useState(false);
+  // El valor "efectivo" es el que se usa en TODA la app para decidir qué
+  // mostrar — si un administrador activa "Ver como docente", esto se
+  // comporta exactamente como si no fuera admin, sin tocar su permiso
+  // real en la base de datos (con recargar la página vuelve a la normalidad).
+  const esAdminEfectivo = esAdmin && !previsualizandoDocente;
   useEffect(() => { api.fetchMiPerfil().then((p) => setEsAdmin(!!p?.es_admin)); }, []);
   const [grupoAbierto, setGrupoAbierto] = useState(() => {
     const guardado = leerGuardado("grupoAbierto", undefined);
@@ -2380,21 +2393,21 @@ function Panel({ session }) {
   }, []);
 
   const irA = (key) => {
-    if (CLAVES_SOLO_ADMIN.includes(key) && !esAdmin) return; // por si quedó guardada de antes, o alguien fuerza la navegación
+    if (CLAVES_SOLO_ADMIN.includes(key) && !esAdminEfectivo) return; // por si quedó guardada de antes, o alguien fuerza la navegación
     setTab(key);
     if (key === "estudiantes") { setGrado(null); setReino(null); setModoLista(false); }
   };
 
   // Si el docente no es administrador, el grupo "Administración" ni
   // siquiera aparece en la cuadrícula de secciones.
-  const menuPanelVisible = esAdmin ? MENU_PANEL_GRUPOS : MENU_PANEL_GRUPOS.filter((g) => g.key !== "administracion");
+  const menuPanelVisible = esAdminEfectivo ? MENU_PANEL_GRUPOS : MENU_PANEL_GRUPOS.filter((g) => g.key !== "administracion");
 
   // Si por localStorage quedó guardada una pantalla de administrador y
-  // ahora resulta que no lo es (o cambiaron de cuenta en el mismo
-  // navegador), lo manda de vuelta a Inicio apenas se sabe el rol.
+  // ahora resulta que no lo es (o activó "Ver como docente"), lo manda
+  // de vuelta a Inicio apenas se sabe el rol efectivo.
   useEffect(() => {
-    if (esAdmin === false && CLAVES_SOLO_ADMIN.includes(tab)) { setTab("inicio"); setGrupoAbierto(null); }
-  }, [esAdmin]);
+    if (!esAdminEfectivo && CLAVES_SOLO_ADMIN.includes(tab)) { setTab("inicio"); setGrupoAbierto(null); }
+  }, [esAdminEfectivo]);
 
   // Desde "Entregas por revisar": salta directo a Misiones o Proyectos/Forja,
   // ya con el curso, la materia y el periodo correctos seleccionados arriba.
@@ -2413,7 +2426,8 @@ function Panel({ session }) {
         onSalir={() => supabase.auth.signOut()} onBuscarEstudiante={irACalificacionesDesdeBusqueda}
         grados={grados} gradoActivo={gradoActivo} onCambiarGradoActivo={setGradoActivo}
         periodoActivo={periodoActivo} onCambiarPeriodoActivo={setPeriodoActivo}
-        materias={materias} materiaActiva={materiaActiva} onCambiarMateriaActiva={setMateriaActiva} esAdmin={esAdmin} />
+        materias={materias} materiaActiva={materiaActiva} onCambiarMateriaActiva={setMateriaActiva}
+        esAdmin={esAdminEfectivo} esAdminReal={esAdmin} previsualizandoDocente={previsualizandoDocente} onCambiarPrevisualizacion={setPrevisualizandoDocente} />
 
       {institucionAbierta && <InstitucionModal onClose={() => { setInstitucionAbierta(false); cargarInstitucion(); }} />}
       {administracionAbierta && <AdministracionModal onClose={() => setAdministracionAbierta(false)} />}
