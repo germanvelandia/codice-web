@@ -5714,3 +5714,44 @@ export async function guardarBilletesReino(sesionId, reinoId, conteos) {
 // (crearComarcaProducto y editarComarcaProducto ya aceptan cualquier campo
 // extra en el objeto "campos"/"cambios" — reino_dueno_nombre se manda igual
 // que el resto, no hace falta una función aparte.)
+
+
+/* ==================== 📔 Bitácora de clase ====================
+   Registro más completo de "qué se hizo" en una clase puntual — tema,
+   actividades realizadas y observaciones. Separado de la marca de
+   Dictada/Cambió/Aplazada que ya existía en Inicio. */
+
+export async function fetchBitacorasDeClase(gradoId, materiaId) {
+  const { data: userData } = await supabase.auth.getUser();
+  let query = supabase.from("bitacora_clases").select("*").eq("docente_id", userData?.user?.id || null).eq("grado_id", gradoId).order("fecha", { ascending: false });
+  if (materiaId) query = query.eq("materia_id", materiaId);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+// Todas tus bitácoras de un día puntual, sin importar grado/materia —
+// para cuando entrás desde un día del calendario.
+export async function fetchBitacorasDelDia(fecha) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("bitacora_clases").select("*, materias(nombre)").eq("docente_id", userData?.user?.id || null).eq("fecha", fecha).order("creado_en");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearBitacoraClase(campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("bitacora_clases").insert({ ...campos, docente_id: userData?.user?.id || null }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function editarBitacoraClase(id, cambios) {
+  const { error } = await supabase.from("bitacora_clases").update({ ...cambios, actualizado_en: new Date().toISOString() }).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarBitacoraClase(id) {
+  const { error } = await supabase.from("bitacora_clases").delete().eq("id", id);
+  if (error) throw error;
+}
