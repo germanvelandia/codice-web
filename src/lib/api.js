@@ -3107,11 +3107,12 @@ export async function fetchAcudiente(estudianteId) {
 // anotaciones (privadas), asistencia y gamificación — todo junto.
 export async function fetchResumenEstudiante(estudianteId) {
   const { data: userData } = await supabase.auth.getUser();
+  const miId = userData?.user?.id || null;
   const [estudianteRes, notasRes, anotaciones, asistencia, progresoRes, logrosRes] = await Promise.all([
     supabase.from("estudiantes").select("*").eq("id", estudianteId).maybeSingle(),
     supabase.from("notas_finales_periodo").select("*, materias(nombre, docente_id)").eq("estudiante_id", estudianteId),
     fetchAnotaciones(estudianteId),
-    fetchEstadisticasAsistencia(estudianteId),
+    fetchEstadisticasAsistencia(estudianteId, miId),
     supabase.from("progreso").select("*").eq("estudiante_id", estudianteId).maybeSingle(),
     fetchLogrosEstudiante(estudianteId),
   ]);
@@ -3134,7 +3135,7 @@ export async function fetchResumenEstudiante(estudianteId) {
     anotaciones, asistencia,
     progreso: progresoRes.data || { xp: 0, vida: 100, monedas: 0 },
     logros: logrosRes,
-    miDocenteId: userData?.user?.id || null,
+    miDocenteId: miId,
   };
 }
 
@@ -4878,12 +4879,19 @@ export async function marcarTodosPresentes(estudianteIds, fecha, materiaId = nul
   await Promise.all(estudianteIds.map((id) => marcarAsistencia(id, fecha, "P", null, materiaId)));
 }
 
-export async function fetchEstadisticasAsistencia(estudianteId) {
-  const { data, error } = await supabase.from("asistencia").select("codigo").eq("estudiante_id", estudianteId);
+// Si se pasa soloDeDocenteId, cuenta solo la asistencia tomada en
+// materias de ESE docente (para que el Resumen académico de un
+// estudiante no mezcle la asistencia de otras clases). Sin ese
+// parámetro, sigue agregando todo — así es como lo necesitan las Actas
+// (procesos convivenciales, donde sí importa el panorama completo).
+export async function fetchEstadisticasAsistencia(estudianteId, soloDeDocenteId = null) {
+  let query = supabase.from("asistencia").select("codigo, materias(docente_id)").eq("estudiante_id", estudianteId);
+  const { data, error } = await query;
   if (error) throw error;
-  const total = (data || []).length;
+  const filas = soloDeDocenteId ? (data || []).filter((f) => f.materias?.docente_id === soloDeDocenteId) : (data || []);
+  const total = filas.length;
   const conteo = { P: 0, R: 0, FI: 0, FJ: 0 };
-  (data || []).forEach((f) => { conteo[f.codigo] = (conteo[f.codigo] || 0) + 1; });
+  filas.forEach((f) => { conteo[f.codigo] = (conteo[f.codigo] || 0) + 1; });
   const pct = total > 0 ? Math.round((conteo.P / total) * 100) : null;
   return { ...conteo, total, pct };
 }
