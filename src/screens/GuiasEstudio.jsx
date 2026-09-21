@@ -533,7 +533,7 @@ export function VistaGuiasEstudio({ grados, gradoActivo, periodoActivo, materiaA
 
   return (
     <div>
-      <h3 className="font-bold text-slate-800 mb-1">📘 Guías de estudio</h3>
+      <h3 className="font-bold text-white mb-1">📘 Guías de estudio</h3>
       <p className="text-xs text-slate-400 mb-3">Guía pedagógica completa (identificación, metas, teoría, actividades, recursos y autoevaluación) — visible e imprimible para los estudiantes del curso.</p>
 
       <div className="flex flex-wrap gap-2 mb-3">
