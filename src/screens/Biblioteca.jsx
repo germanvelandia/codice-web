@@ -102,7 +102,7 @@ export function VistaBiblioteca({ grados, gradoActivo }) {
     <div>
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">📚 Biblioteca</h2>
+          <h2 className="text-xl font-bold text-white">📚 Biblioteca</h2>
           <p className="text-sm text-slate-400">Enlaces informativos, organizados por grado completo — los ven todos los cursos de ese grado.</p>
         </div>
         <div className="flex gap-2">
