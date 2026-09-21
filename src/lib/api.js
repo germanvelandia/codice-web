@@ -3106,9 +3106,10 @@ export async function fetchAcudiente(estudianteId) {
 // Resumen imprimible de un estudiante: notas por periodo, sus propias
 // anotaciones (privadas), asistencia y gamificación — todo junto.
 export async function fetchResumenEstudiante(estudianteId) {
+  const { data: userData } = await supabase.auth.getUser();
   const [estudianteRes, notasRes, anotaciones, asistencia, progresoRes, logrosRes] = await Promise.all([
     supabase.from("estudiantes").select("*").eq("id", estudianteId).maybeSingle(),
-    supabase.from("notas_finales_periodo").select("*, materias(nombre)").eq("estudiante_id", estudianteId),
+    supabase.from("notas_finales_periodo").select("*, materias(nombre, docente_id)").eq("estudiante_id", estudianteId),
     fetchAnotaciones(estudianteId),
     fetchEstadisticasAsistencia(estudianteId),
     supabase.from("progreso").select("*").eq("estudiante_id", estudianteId).maybeSingle(),
@@ -3120,12 +3121,12 @@ export async function fetchResumenEstudiante(estudianteId) {
   const materiasMap = {};
   const notasPorMateriaPeriodo = {};
   (notasRes.data || []).forEach((n) => {
-    if (!materiasMap[n.materia_id]) materiasMap[n.materia_id] = n.materias?.nombre || `Materia ${n.materia_id}`;
+    if (!materiasMap[n.materia_id]) materiasMap[n.materia_id] = { nombre: n.materias?.nombre || `Materia ${n.materia_id}`, docente_id: n.materias?.docente_id || null };
     notasPorMateriaPeriodo[n.materia_id] = notasPorMateriaPeriodo[n.materia_id] || {};
     notasPorMateriaPeriodo[n.materia_id][n.periodo] = n.nota;
   });
   const periodos = Array.from(new Set((notasRes.data || []).map((n) => n.periodo))).sort();
-  const materias = Object.entries(materiasMap).map(([id, nombre]) => ({ id, nombre })).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  const materias = Object.entries(materiasMap).map(([id, m]) => ({ id, nombre: m.nombre, docente_id: m.docente_id })).sort((a, b) => a.nombre.localeCompare(b.nombre));
 
   return {
     estudiante: estudianteRes.data,
@@ -3133,6 +3134,7 @@ export async function fetchResumenEstudiante(estudianteId) {
     anotaciones, asistencia,
     progreso: progresoRes.data || { xp: 0, vida: 100, monedas: 0 },
     logros: logrosRes,
+    miDocenteId: userData?.user?.id || null,
   };
 }
 
