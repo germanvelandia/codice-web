@@ -245,7 +245,7 @@ export function VistaTableroSemanal({ grados }) {
     <div>
       <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">🗓️ Tablero Semanal por Curso</h2>
+          <h2 className="text-xl font-bold text-white">🗓️ Tablero Semanal por Curso</h2>
           <p className="text-sm text-slate-400">Los cursos de un mismo grado no tienen por qué ir al mismo ritmo — cada celda es independiente.</p>
         </div>
         <div className="flex gap-2 flex-wrap">
