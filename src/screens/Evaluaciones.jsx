@@ -345,6 +345,7 @@ function NuevaEvaluacionForm({ materiaId, gradoId, periodo, categorias, evaluaci
   const [indicaciones, setIndicaciones] = useState(evaluacion?.indicaciones?.length ? evaluacion.indicaciones : [""]);
   const [fechaApertura, setFechaApertura] = useState(evaluacion?.fecha_apertura || "");
   const [fechaCierre, setFechaCierre] = useState(evaluacion?.fecha_cierre || "");
+  const [horaCierre, setHoraCierre] = useState(evaluacion?.hora_cierre || "");
   const [intentos, setIntentos] = useState(evaluacion?.intentos_permitidos ? String(evaluacion.intentos_permitidos) : evaluacion ? "ilimitado" : "1");
   const [tiempoLimite, setTiempoLimite] = useState(evaluacion?.tiempo_limite_minutos ? String(evaluacion.tiempo_limite_minutos) : "");
   const [categoriaId, setCategoriaId] = useState(evaluacion?.categoria_id ? String(evaluacion.categoria_id) : "");
@@ -363,7 +364,7 @@ function NuevaEvaluacionForm({ materiaId, gradoId, periodo, categorias, evaluaci
       const campos = {
         titulo: titulo.trim(), descripcion: descripcion.trim() || null,
         indicaciones: indicaciones.map((i) => i.trim()).filter(Boolean),
-        fecha_apertura: fechaApertura || null, fecha_cierre: fechaCierre || null,
+        fecha_apertura: fechaApertura || null, fecha_cierre: fechaCierre || null, hora_cierre: fechaCierre ? (horaCierre || null) : null,
         intentos_permitidos: intentos === "ilimitado" ? null : parseInt(intentos, 10),
         tiempo_limite_minutos: tiempoLimite ? parseInt(tiempoLimite, 10) : null,
         categoria_id: categoriaId ? parseInt(categoriaId, 10) : null,
@@ -417,6 +418,11 @@ function NuevaEvaluacionForm({ materiaId, gradoId, periodo, categorias, evaluaci
         <div>
           <label className="text-xs text-slate-500 block mb-1">Cierra</label>
           <input type="date" value={fechaCierre} onChange={(e) => setFechaCierre(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
+          {fechaCierre && (
+            <input type="time" value={horaCierre} onChange={(e) => setHoraCierre(e.target.value)} placeholder="Hora (opcional, si no cierra a las 23:59)"
+              title="Hora exacta de cierre — si lo dejás vacío, cierra a las 23:59 de ese día"
+              className="w-full text-sm rounded-lg px-3 py-2 mt-1.5 border border-slate-200 outline-none bg-white" />
+          )}
         </div>
       </div>
       <div className="grid grid-cols-2 gap-2 mb-3">
