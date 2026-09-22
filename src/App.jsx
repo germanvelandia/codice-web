@@ -6,7 +6,7 @@ import { bandaDesempeno, notaFinalPonderada } from "./lib/calificaciones";
 import { sonidoGirar, sonidoAcierto, sonidoError, sonidoLogro } from "./lib/sonidos";
 import { VistaGrados, VistaReinos, VistaEstudiantes, FotoLightbox } from "./screens/Estudiantes";
 import { VistaAsistencia } from "./screens/Asistencia";
-import { VistaRuleta, VistaRuletaMonedas, VistaTemporizador, DadoTool, CronometroTool, SemaforoTool, SorteoOrdenTool, GeneradorGruposTool, MarcadorPuntosTool, SelectorEstudianteTool, BingoTool } from "./screens/Herramientas";
+import { VistaRuleta, VistaRuletaMonedas, VistaTemporizador, VistaHerramientas } from "./screens/Herramientas";
 import { VistaAccionesMasivas } from "./screens/AccionesMasivas";
 import { VistaBanco } from "./screens/Banco";
 import { VistaAlbum, CartaCriatura } from "./screens/Album";
@@ -25,7 +25,7 @@ import { VistaRoles } from "./screens/Roles";
 import { VistaCalificaciones } from "./screens/Calificaciones";
 import { VistaReportes } from "./screens/Reportes";
 import { VistaHorario } from "./screens/Horario";
-import { VistaPlaneaciones, MiPlanDeEstudio } from "./screens/Planeaciones";
+import { VistaPlaneaciones } from "./screens/Planeaciones";
 import { VistaBiblioteca } from "./screens/Biblioteca";
 import { VistaAnotaciones } from "./screens/Anotaciones";
 import { VistaInclusionGeneral } from "./screens/InclusionGeneral";
@@ -42,10 +42,6 @@ import { VistaRubricas } from "./screens/Rubricas";
 import { VistaEntregasPorRevisar } from "./screens/EntregasPorRevisar";
 import { VistaTableroSemanal } from "./screens/TableroSemanal";
 import { VistaInicio, ContenidoLightbox } from "./screens/Inicio";
-import { VistaComarcaOakhaven, TarjetaComarcaPublica, urlDeTarjeta, urlQR } from "./screens/ComarcaOakhaven";
-import { VistaBancoContenido, JugarSetModal, VistaBancoContenidoEstudiante } from "./screens/BancoContenido";
-import { NavegacionPorTarjetas, BotonVolverInicio, EnlaceTodasLasSecciones } from "./screens/InicioTarjetas";
-import { Star, Gift, Settings, Package, Image, FileText, Award, Trophy, Puzzle, BookOpen, HelpCircle, Archive, Clock, Wrench, Palette, GraduationCap, Users } from "lucide-react";
 import { EditorTexto, TextoEnriquecido, textoPlano } from "./components/RichText";
 import { InstitucionModal } from "./screens/Institucion";
 import { AdministracionModal } from "./screens/Administracion";
@@ -57,11 +53,9 @@ export default function App() {
   // Link dedicado para estudiantes: tu-sitio.vercel.app/#estudiante
   // No muestra ninguna opción de docente, ni espera sesión de Supabase.
   const soloEstudiante = typeof window !== "undefined" && window.location.hash === "#estudiante";
-  // Tarjeta pública de la Comarca de Oakhaven (QR) — tampoco espera sesión.
-  const tarjetaComarca = typeof window !== "undefined" && window.location.hash.startsWith("#comarca-tarjeta");
 
   useEffect(() => {
-    if (soloEstudiante || tarjetaComarca) return;
+    if (soloEstudiante) return;
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setLoading(false);
@@ -69,8 +63,6 @@ export default function App() {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
     return () => listener.subscription.unsubscribe();
   }, []);
-
-  if (tarjetaComarca) return <TarjetaComarcaPublica />;
 
   if (soloEstudiante) {
     return (
@@ -182,6 +174,16 @@ function AccessGate() {
   );
 }
 
+const COLORES_OPCION = [
+  { bg: "#e11d48", borde: "#9f1239" }, { bg: "#2563eb", borde: "#1e40af" },
+  { bg: "#d97706", borde: "#b45309" }, { bg: "#059669", borde: "#065f46" },
+];
+
+function formatearTiempo(seg) {
+  const m = Math.floor(seg / 60), s = seg % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 function TomarEvaluacion({ evaluacion, estudianteId, onCerrar }) {
   const [intentoId, setIntentoId] = useState(null);
   const [preguntas, setPreguntas] = useState([]);
@@ -190,6 +192,10 @@ function TomarEvaluacion({ evaluacion, estudianteId, onCerrar }) {
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState(false);
   const [errorInicio, setErrorInicio] = useState("");
+  const [empezado, setEmpezado] = useState(false);
+  const [indice, setIndice] = useState(0);
+  const [segundosRestantes, setSegundosRestantes] = useState(null);
+  const [respuestaCortaTemp, setRespuestaCortaTemp] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -197,6 +203,7 @@ function TomarEvaluacion({ evaluacion, estudianteId, onCerrar }) {
         const { intentoId: id, preguntas: p } = await api.iniciarIntentoConAleatorias(evaluacion, estudianteId);
         setIntentoId(id);
         setPreguntas(p);
+        if (evaluacion.tiempo_limite_minutos) setSegundosRestantes(evaluacion.tiempo_limite_minutos * 60);
       } catch (e) {
         setErrorInicio(e.message);
       }
@@ -207,7 +214,6 @@ function TomarEvaluacion({ evaluacion, estudianteId, onCerrar }) {
   const responder = (preguntaId, valor) => setRespuestas((prev) => ({ ...prev, [preguntaId]: valor }));
 
   const enviar = async () => {
-    if (!confirm("¿Entregar la evaluación? No vas a poder cambiar tus respuestas después.")) return;
     setEnviando(true);
     try {
       const payload = preguntas.map((p) => ({ pregunta_id: p.id, respuesta: respuestas[p.id] || "" }));
@@ -219,72 +225,120 @@ function TomarEvaluacion({ evaluacion, estudianteId, onCerrar }) {
     setEnviando(false);
   };
 
+  // Cronómetro general de toda la prueba — al llegar a cero, entrega
+  // automáticamente lo que esté respondido hasta ese momento.
+  useEffect(() => {
+    if (!empezado || segundosRestantes === null || enviado || enviando) return;
+    if (segundosRestantes <= 0) { enviar(); return; }
+    const id = setTimeout(() => setSegundosRestantes((s) => s - 1), 1000);
+    return () => clearTimeout(id);
+  }, [empezado, segundosRestantes, enviado, enviando]);
+
+  const empezar = () => { setEmpezado(true); setIndice(0); };
+
+  const preguntaActual = preguntas[indice];
+  const esUltima = indice === preguntas.length - 1;
+
+  const siguiente = () => {
+    if (preguntaActual?.tipo === "respuesta_corta") { responder(preguntaActual.id, respuestaCortaTemp); }
+    setRespuestaCortaTemp("");
+    if (esUltima) {
+      if (!confirm("¿Entregar la evaluación? No vas a poder cambiar tus respuestas después.")) return;
+      enviar();
+    } else {
+      setIndice((i) => i + 1);
+    }
+  };
+
+  const elegirOpcion = (texto) => {
+    responder(preguntaActual.id, texto);
+    setTimeout(() => {
+      if (esUltima) { enviar(); } else { setIndice((i) => i + 1); }
+    }, 220); // breve pausa para que se vea el "clic", sin revelar si acertó
+  };
+
+  const tema = { fondo: "linear-gradient(135deg, #0f0c29, #302b63, #24243e)" };
+
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
-      <div className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4 overflow-y-auto" style={{ background: tema.fondo }}>
+      <div className="w-full max-w-lg my-auto" style={{ fontFamily: "'Poppins', -apple-system, sans-serif" }}>
         {cargando ? (
-          <div className="text-sm text-slate-400">Cargando…</div>
+          <div className="rounded-3xl p-8 text-center text-white" style={{ background: "rgba(30,27,75,0.75)" }}>Cargando…</div>
         ) : errorInicio ? (
-          <>
-            <p className="text-sm text-rose-500 mb-3">{errorInicio}</p>
-            <button onClick={onCerrar} className="text-sm px-4 py-2 rounded-lg bg-violet-500 text-white">Cerrar</button>
-          </>
-        ) : enviado ? (
-          <div className="text-center py-6">
-            <div className="text-3xl mb-2">✅</div>
-            <p className="text-sm text-slate-700 mb-1">¡Entregado!</p>
-            <p className="text-xs text-slate-400 mb-4">Tu docente va a revisar y publicar tu nota pronto.</p>
-            <button onClick={onCerrar} className="text-sm px-4 py-2 rounded-lg bg-violet-500 text-white">Cerrar</button>
+          <div className="rounded-3xl p-6 text-center" style={{ background: "rgba(30,27,75,0.75)", border: "1px solid rgba(139,92,246,0.3)" }}>
+            <p className="text-sm text-rose-300 mb-4">{errorInicio}</p>
+            <button onClick={onCerrar} className="w-full py-3 rounded-xl font-bold text-white" style={{ background: "linear-gradient(to right, #7c3aed, #db2777)" }}>Cerrar</button>
           </div>
-        ) : (
-          <>
-            <h3 className="font-bold text-slate-800 mb-2">⚔️ {evaluacion.titulo}</h3>
-            {(evaluacion.descripcion || (evaluacion.indicaciones && evaluacion.indicaciones.length > 0) || evaluacion.tiempo_limite_minutos) && (
-              <div className="bg-violet-50 rounded-2xl p-4 mb-4">
-                {evaluacion.descripcion && <TextoEnriquecido html={evaluacion.descripcion} className="text-xs text-slate-600 mb-3" />}
-                {evaluacion.indicaciones && evaluacion.indicaciones.length > 0 && (
-                  <>
-                    <div className="text-[11px] font-bold text-violet-700 uppercase tracking-wide mb-1.5">Indicaciones</div>
-                    <ul className="space-y-1.5 mb-1">
-                      {evaluacion.indicaciones.map((ind, i) => (
-                        <li key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                          <span className="text-violet-400 shrink-0">✓</span>
-                          <span className="leading-relaxed">{ind}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-                {evaluacion.tiempo_limite_minutos && (
-                  <div className="text-[11px] font-semibold text-violet-700 mt-2">⏱ Tiempo sugerido: {evaluacion.tiempo_limite_minutos} minutos</div>
-                )}
+        ) : enviado ? (
+          <div className="rounded-3xl p-8 text-center" style={{ background: "rgba(30,27,75,0.75)", border: "1px solid rgba(139,92,246,0.3)" }}>
+            <div className="text-5xl mb-3">✅</div>
+            <div className="text-2xl font-extrabold text-white mb-2">¡Entregado!</div>
+            <p className="text-sm text-slate-300 mb-6">Tu docente va a revisar y publicar tu nota pronto.</p>
+            <button onClick={onCerrar} className="w-full py-3 rounded-xl font-bold text-white" style={{ background: "linear-gradient(to right, #7c3aed, #db2777)" }}>Cerrar</button>
+          </div>
+        ) : !empezado ? (
+          <div className="rounded-3xl p-7 text-center" style={{ background: "rgba(30,27,75,0.75)", border: "1px solid rgba(139,92,246,0.3)" }}>
+            <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-lg text-white mb-4" style={{ background: "#7c3aed" }}>Evaluación</span>
+            <h1 className="text-2xl font-extrabold mb-3" style={{ background: "linear-gradient(to right, #c084fc, #f472b6, #fde047)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+              {evaluacion.titulo}
+            </h1>
+            {evaluacion.descripcion && <TextoEnriquecido html={evaluacion.descripcion} className="text-sm text-slate-300 mb-4 text-left" />}
+            {evaluacion.indicaciones && evaluacion.indicaciones.length > 0 && (
+              <div className="text-left mb-4 rounded-2xl p-4" style={{ background: "rgba(15,13,42,0.6)", border: "1px solid rgba(139,92,246,0.3)" }}>
+                <div className="text-[11px] font-bold uppercase tracking-wide mb-2" style={{ color: "#d8b4fe" }}>Indicaciones</div>
+                <ul className="space-y-1.5">
+                  {evaluacion.indicaciones.map((ind, i) => (
+                    <li key={i} className="flex items-start gap-2 text-xs text-slate-300"><span className="text-violet-400 shrink-0">✓</span><span>{ind}</span></li>
+                  ))}
+                </ul>
               </div>
             )}
-            <div className="space-y-3 mb-4">
-              {preguntas.map((p, i) => (
-                <div key={p.id} className="border border-slate-100 rounded-xl p-3">
-                  <div className="text-sm font-medium text-slate-800 mb-2">{i + 1}. {p.enunciado}</div>
-                  {p.tipo === "respuesta_corta" ? (
-                    <textarea value={respuestas[p.id] || ""} onChange={(e) => responder(p.id, e.target.value)} rows={2}
-                      className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" />
-                  ) : (
-                    <div className="space-y-1.5">
-                      {(p.opciones || []).map((o, j) => (
-                        <label key={j} className="flex items-center gap-2 text-sm">
-                          <input type="radio" name={`p-${p.id}`} checked={respuestas[p.id] === o.texto} onChange={() => responder(p.id, o.texto)} />
-                          {o.texto}
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
+            {evaluacion.tiempo_limite_minutos && (
+              <p className="text-xs font-semibold mb-5" style={{ color: "#f472b6" }}>⏱ Tenés {evaluacion.tiempo_limite_minutos} minutos en total desde que empieces.</p>
+            )}
+            <button onClick={empezar} className="w-full py-4 rounded-xl font-extrabold text-white text-lg" style={{ background: "linear-gradient(to right, #7c3aed, #db2777)" }}>¡Comenzar! 🚀</button>
+            <button onClick={onCerrar} className="w-full text-xs text-slate-400 mt-3">Cancelar (no se guarda nada)</button>
+          </div>
+        ) : (
+          <div>
+            <div className="flex justify-between items-center mb-4 rounded-2xl px-5 py-3" style={{ background: "rgba(30,27,75,0.6)", border: "1px solid rgba(139,92,246,0.3)" }}>
+              <span className="text-[11px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-lg text-white" style={{ background: "#7c3aed" }}>
+                Pregunta {indice + 1}/{preguntas.length}
+              </span>
+              {segundosRestantes !== null && (
+                <span className="text-lg font-extrabold" style={{ color: segundosRestantes <= 30 ? "#fb7185" : "#f472b6" }}>{formatearTiempo(segundosRestantes)}</span>
+              )}
             </div>
-            <button disabled={enviando} onClick={enviar} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
-              {enviando ? "Entregando…" : "Entregar evaluación"}
-            </button>
-            <button onClick={onCerrar} className="w-full text-xs text-slate-400 mt-2">Cancelar (no se guarda nada)</button>
-          </>
+
+            <div className="rounded-3xl p-7 mb-5 text-center min-h-[110px] flex items-center justify-center" style={{ background: "rgba(30,27,75,0.85)", border: "1px solid rgba(139,92,246,0.4)" }}>
+              <span className="text-white text-base font-bold whitespace-pre-line">{preguntaActual.enunciado}</span>
+            </div>
+
+            {preguntaActual.tipo === "respuesta_corta" ? (
+              <div>
+                <textarea value={respuestaCortaTemp} onChange={(e) => setRespuestaCortaTemp(e.target.value)} rows={4} placeholder="Escribí tu respuesta…"
+                  className="w-full text-sm rounded-2xl px-4 py-3 mb-3 outline-none text-white" style={{ background: "rgba(15,13,42,0.9)", border: "1px solid #7c3aed" }} />
+                <button onClick={siguiente} className="w-full py-3.5 rounded-xl font-bold text-white" style={{ background: "linear-gradient(to right, #7c3aed, #db2777)" }}>
+                  {esUltima ? "Finalizar evaluación" : "Siguiente →"}
+                </button>
+              </div>
+            ) : (
+              <div className="grid gap-3" style={{ gridTemplateColumns: (preguntaActual.opciones || []).length > 2 ? "1fr 1fr" : "1fr" }}>
+                {(preguntaActual.opciones || []).map((o, j) => {
+                  const color = COLORES_OPCION[j % COLORES_OPCION.length];
+                  const marcada = respuestas[preguntaActual.id] === o.texto;
+                  return (
+                    <button key={j} onClick={() => elegirOpcion(o.texto)}
+                      className="flex items-center gap-3 p-5 rounded-2xl font-bold text-white text-left"
+                      style={{ background: color.bg, borderBottom: `5px solid ${color.borde}`, outline: marcada ? "3px solid white" : "none" }}>
+                      <span className="w-8 h-8 rounded-lg flex items-center justify-center text-xs shrink-0" style={{ background: "rgba(0,0,0,0.2)" }}>{String.fromCharCode(65 + j)}</span>
+                      <span>{o.texto}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -781,8 +835,19 @@ function EvaluacionesEstudiante({ estudianteId, gradoId }) {
 
   useEffect(() => {
     api.fetchEvaluacionesDisponibles(gradoId).then((data) => {
-      const hoy = new Date().toISOString().slice(0, 10);
-      const vigentes = data.filter((e) => (!e.fecha_apertura || e.fecha_apertura <= hoy) && (!e.fecha_cierre || e.fecha_cierre >= hoy));
+      const ahora = new Date();
+      const hoy = ahora.toISOString().slice(0, 10);
+      const vigentes = data.filter((e) => {
+        if (e.fecha_apertura && e.fecha_apertura > hoy) return false;
+        if (!e.fecha_cierre) return true;
+        if (e.fecha_cierre > hoy) return true;
+        if (e.fecha_cierre < hoy) return false;
+        // Es justo el día de cierre: si además tiene hora_cierre, hay que
+        // respetarla exacta; sin hora, sigue abierta hasta las 23:59.
+        if (!e.hora_cierre) return true;
+        const limite = new Date(`${e.fecha_cierre}T${e.hora_cierre}`);
+        return ahora <= limite;
+      });
       setEvaluaciones(vigentes);
       setCargando(false);
     });
@@ -1038,7 +1103,6 @@ const MENU_CODICE_GRUPOS = [
       { key: "misiones", label: "Misiones", icono: "⚔️" },
       { key: "forja", label: "Forja", icono: "🔨" },
       { key: "guias", label: "Guías", icono: "📘" },
-      { key: "planestudio", label: "Mi Plan de Estudio", icono: "📖" },
       { key: "biblioteca", label: "Biblioteca", icono: "📚" },
       { key: "proyectos", label: "Proyectos", icono: "📜" },
       { key: "historial", label: "Historial", icono: "🗂️" },
@@ -1050,8 +1114,6 @@ const MENU_CODICE_GRUPOS = [
       { key: "salonhonor", label: "Salón de Honor", icono: "🏆" },
       { key: "recompensas", label: "Recompensas", icono: "🎁" },
       { key: "album", label: "Álbum", icono: "🎴" },
-      { key: "comarca", label: "Mi Comarca", icono: "🏛️" },
-      { key: "bancocontenido", label: "Juegos de Contenido", icono: "🧩" },
     ],
   },
   {
@@ -1080,6 +1142,8 @@ const ICONO_MAPA = {
 
 function MenuCodice({ activo, onCambiar, monedas, gradoId }) {
   const [ultimoAnuncio, setUltimoAnuncio] = useState(null);
+  const [menuAbierto, setMenuAbierto] = useState(false);
+  const [submenuAbierto, setSubmenuAbierto] = useState(null);
 
   useEffect(() => {
     if (!gradoId) return;
@@ -1088,6 +1152,8 @@ function MenuCodice({ activo, onCambiar, monedas, gradoId }) {
 
   const elegir = (key) => {
     onCambiar(key);
+    setMenuAbierto(false);
+    setSubmenuAbierto(null);
   };
 
   return (
@@ -1103,6 +1169,9 @@ function MenuCodice({ activo, onCambiar, monedas, gradoId }) {
             <span className="text-sm font-bold text-amber-300">{monedas}</span>
           </div>
         )}
+        <button onClick={() => setMenuAbierto((v) => !v)} className="md:hidden text-violet-200 text-lg" title="Menú">
+          {menuAbierto ? "✕" : "☰"}
+        </button>
       </div>
 
       {ultimoAnuncio && (
@@ -1116,14 +1185,64 @@ function MenuCodice({ activo, onCambiar, monedas, gradoId }) {
         </button>
       )}
 
-      {/* La navegación ahora vive como cuadrícula de tarjetas en el
-          contenido de Inicio — acá solo queda un acceso rápido para
-          volver, visible en cualquier otra pantalla. */}
-      {activo !== "inicio" && (
-        <div className="px-3 py-2">
-          <button onClick={() => elegir("inicio")} className="text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5 w-fit" style={{ background: "rgba(139,92,246,0.25)", color: "#EDE9FE" }}>
-            ← Volver a Inicio
-          </button>
+      {/* Escritorio: categorías con submenú desplegable */}
+      <div className="hidden md:flex flex-wrap gap-1 px-3 py-2">
+        {MENU_CODICE_GRUPOS.map((grupo) => {
+          if (grupo.items.length === 1) {
+            const m = grupo.items[0];
+            return (
+              <button key={m.key} onClick={() => elegir(m.key)}
+                className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap flex items-center gap-1.5"
+                style={{ background: activo === m.key ? "rgba(139,92,246,0.35)" : "transparent", color: activo === m.key ? "#EDE9FE" : "#A78BFA" }}>
+                <span>{m.icono}</span> {m.label}
+              </button>
+            );
+          }
+          const activoEnGrupo = grupo.items.some((it) => it.key === activo);
+          return (
+            <div key={grupo.key} className="relative">
+              <button onClick={() => setSubmenuAbierto(submenuAbierto === grupo.key ? null : grupo.key)}
+                className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap flex items-center gap-1.5"
+                style={{ background: activoEnGrupo ? "rgba(139,92,246,0.35)" : "transparent", color: activoEnGrupo ? "#EDE9FE" : "#A78BFA" }}>
+                <span>{grupo.icono}</span> {grupo.label} <span className="text-[8px]">▾</span>
+              </button>
+              {submenuAbierto === grupo.key && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setSubmenuAbierto(null)} />
+                  <div className="absolute left-0 top-full mt-1 rounded-xl shadow-lg py-1 w-52 z-20" style={{ background: "#241f3d", border: "1px solid #4c1d95" }}>
+                    {grupo.items.map((m) => (
+                      <button key={m.key} onClick={() => elegir(m.key)}
+                        className="w-full text-left text-xs px-3 py-2 flex items-center gap-2"
+                        style={{ color: activo === m.key ? "#EDE9FE" : "#C4B5FD", fontWeight: activo === m.key ? 700 : 400, background: activo === m.key ? "rgba(139,92,246,0.25)" : "transparent" }}>
+                        <span>{m.icono}</span> {m.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Móvil: menú desplegable, agrupado por categoría */}
+      {menuAbierto && (
+        <div className="md:hidden px-3 py-3 space-y-2">
+          {MENU_CODICE_GRUPOS.map((grupo) => (
+            <div key={grupo.key}>
+              {grupo.items.length > 1 && <div className="text-[10px] font-bold text-violet-300 uppercase tracking-wide mb-1 px-1">{grupo.icono} {grupo.label}</div>}
+              <div className="grid grid-cols-3 gap-1.5">
+                {grupo.items.map((m) => (
+                  <button key={m.key} onClick={() => elegir(m.key)}
+                    className="text-[11px] px-2 py-2.5 rounded-xl flex flex-col items-center gap-1"
+                    style={{ background: activo === m.key ? "rgba(139,92,246,0.35)" : "rgba(255,255,255,0.05)", color: activo === m.key ? "#EDE9FE" : "#A78BFA" }}>
+                    <span className="text-base">{m.icono}</span>
+                    <span className="text-center leading-tight">{m.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -1759,53 +1878,6 @@ function PreguntadosEstudiante({ estudianteId }) {
   );
 }
 
-function MiComarcaEstudiante({ estudianteInfo }) {
-  const [sesion, setSesion] = useState(undefined); // undefined = cargando, null = no hay
-  const [reino, setReino] = useState(null);
-
-  useEffect(() => {
-    if (!estudianteInfo?.grado_id) return;
-    api.fetchSesionActivaDelGrado(estudianteInfo.grado_id).then(async (s) => {
-      setSesion(s);
-      if (s) {
-        const reinos = await api.fetchTodosLosReinosDeSesionPublico(s.id);
-        const nombreReino = (estudianteInfo.reino_actual || estudianteInfo.reino_original || "").trim().toLowerCase();
-        setReino(reinos.find((r) => r.nombre.trim().toLowerCase() === nombreReino) || null);
-      }
-    });
-  }, [estudianteInfo?.grado_id]);
-
-  const abrirMiTarjeta = () => {
-    window.location.href = urlDeTarjeta(sesion.id, reino.id, estudianteInfo.id);
-  };
-
-  if (sesion === undefined) return <div className="text-sm text-slate-400">Cargando…</div>;
-
-  return (
-    <div>
-      <h3 className="font-bold text-slate-800 mb-1">🏛️ Mi Comarca</h3>
-      <p className="text-xs text-slate-400 mb-4">Tu tarjeta en vivo de la sesión de la Comarca de Oakhaven de tu curso.</p>
-
-      {!sesion ? (
-        <div className="text-sm text-slate-400 bg-slate-50 rounded-2xl p-6 text-center border border-dashed border-slate-200">
-          Tu curso no tiene ninguna sesión de la Comarca activa en este momento.
-        </div>
-      ) : !reino ? (
-        <div className="text-sm text-slate-400 bg-slate-50 rounded-2xl p-6 text-center border border-dashed border-slate-200">
-          Hay una sesión activa, pero tu Reino todavía no está en ella — hablá con tu docente.
-        </div>
-      ) : (
-        <div className="flex flex-col items-center bg-gradient-to-b from-violet-50 to-white rounded-2xl p-5 border border-violet-100">
-          <div className="text-3xl mb-1">{reino.emoji}</div>
-          <div className="font-bold text-slate-800 mb-3">{reino.nombre}</div>
-          <img src={urlQR(urlDeTarjeta(sesion.id, reino.id, estudianteInfo.id))} alt="Mi QR de la Comarca" className="rounded-xl mb-3 shadow-sm" />
-          <button onClick={abrirMiTarjeta} className="text-sm font-semibold px-4 py-2 rounded-xl bg-violet-500 text-white">Ver mi tarjeta ahora</button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function PortalEstudiante() {
   const [codigo, setCodigo] = useState("");
   const [datos, setDatos] = useState(null);
@@ -1813,8 +1885,6 @@ function PortalEstudiante() {
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState("");
   const [vista, setVista] = useState("inicio");
-  const [grupoAbierto, setGrupoAbierto] = useState(null);
-  const irAEstudiante = (key) => { setVista(key); };
   const [nuevosLogros, setNuevosLogros] = useState([]);
   const [equipados, setEquipados] = useState({ marco: null, titulo: null });
   const [avatarConfig, setAvatarConfig] = useState(null);
@@ -1868,19 +1938,10 @@ function PortalEstudiante() {
             </div>
           </div>
         )}
-        <MenuCodice activo={vista} onCambiar={irAEstudiante} monedas={datos.monedas} gradoId={datos.grado_id} />
+        <MenuCodice activo={vista} onCambiar={setVista} monedas={datos.monedas} gradoId={datos.grado_id} />
 
         <div className="bg-white rounded-2xl shadow-lg p-6">
           {vista === "inicio" && (
-            grupoAbierto ? (
-              <>
-                <EnlaceTodasLasSecciones onCambiarGrupo={setGrupoAbierto} variante="clara" />
-                <ValorSemanaEstudiante />
-                <div className="mt-4">
-                  <NavegacionPorTarjetas grupos={MENU_CODICE_GRUPOS} onIr={irAEstudiante} grupoAbierto={grupoAbierto} onCambiarGrupo={setGrupoAbierto} variante="clara" />
-                </div>
-              </>
-            ) : (
             <>
               <div className="flex items-center gap-3 mb-4 pb-4 border-b border-slate-100">
                 <div className="flex items-center gap-2 shrink-0">
@@ -1927,11 +1988,6 @@ function PortalEstudiante() {
                 </div>
               </div>
 
-              <div className="mb-4">
-                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">Todas las secciones</h3>
-                <NavegacionPorTarjetas grupos={MENU_CODICE_GRUPOS} onIr={irAEstudiante} grupoAbierto={null} onCambiarGrupo={setGrupoAbierto} variante="clara" />
-              </div>
-
               <ValorSemanaEstudiante />
               {estudianteInfo && <DesafioReinoEstudiante gradoId={estudianteInfo.grado_id} miReino={estudianteInfo.reino_actual || estudianteInfo.reino_original || "Sin grupo"} />}
               {estudianteInfo && <AvisoRendimiento estudianteId={estudianteInfo.id} />}
@@ -1954,7 +2010,6 @@ function PortalEstudiante() {
                 Presentes: {datos.presentes} · Retardos: {datos.retardos} · Faltas injustificadas: {datos.faltas_injustificadas} · Faltas justificadas: {datos.faltas_justificadas}
               </div>
             </>
-            )
           )}
 
           {vista === "misiones" && estudianteInfo && (
@@ -1976,8 +2031,6 @@ function PortalEstudiante() {
           {vista === "guias" && estudianteInfo && (
             <GuiasEstudiante gradoId={estudianteInfo.grado_id} estudianteId={estudianteInfo.id} />
           )}
-
-          {vista === "planestudio" && estudianteInfo && <MiPlanDeEstudio estudianteInfo={estudianteInfo} />}
 
           {vista === "codice" && estudianteInfo && (
             <CodiceEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />
@@ -2013,10 +2066,6 @@ function PortalEstudiante() {
           {vista === "album" && estudianteInfo && (
             <AlbumEstudiante estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} />
           )}
-
-          {vista === "comarca" && estudianteInfo && <MiComarcaEstudiante estudianteInfo={estudianteInfo} />}
-
-          {vista === "bancocontenido" && estudianteInfo && <VistaBancoContenidoEstudiante estudianteId={estudianteInfo.id} />}
 
           {vista === "ranking" && estudianteInfo && (
             <RankingEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />
@@ -2132,8 +2181,6 @@ const MENU_PANEL_GRUPOS = [
       { key: "guiasestudio", label: "Guías de Estudio", icono: "📘" },
       { key: "actividadesprogramadas", label: "Actividades Programadas", icono: "🎮" },
       { key: "biblioteca", label: "Biblioteca", icono: "📚" },
-      { key: "comarca", label: "Comarca de Oakhaven", icono: "🏛️" },
-      { key: "bancocontenido", label: "Banco de Contenido", icono: "🧩" },
     ],
   },
   {
@@ -2162,10 +2209,6 @@ const MENU_PANEL_GRUPOS = [
 ];
 // Lista plana — se sigue usando donde hace falta el conjunto completo sin agrupar.
 const MENU_PANEL = MENU_PANEL_GRUPOS.flatMap((g) => g.items);
-// Estas 6 solo las puede ver/usar un docente marcado como administrador
-// (es_admin en profesores) — todo lo demás sigue disponible para
-// cualquier docente, incluida la Planilla de Calificaciones.
-const CLAVES_SOLO_ADMIN = ["corregirnombres", "niveles", "objetos", "horario", "roles", "reportes"];
 
 function BuscadorEstudiantesGlobal({ onSeleccionar }) {
   const [query, setQuery] = useState("");
@@ -2221,7 +2264,9 @@ function FondoArcadeDocente() {
   return <div className="fixed inset-0 -z-10" style={{ background: "#1a1533" }} />;
 }
 
-function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstitucion, onSalir, onBuscarEstudiante, grados, gradoActivo, onCambiarGradoActivo, periodoActivo, onCambiarPeriodoActivo, materias, materiaActiva, onCambiarMateriaActiva, esAdmin, esAdminReal, previsualizandoDocente, onCambiarPrevisualizacion }) {
+function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstitucion, onSalir, onBuscarEstudiante, grados, gradoActivo, onCambiarGradoActivo, periodoActivo, onCambiarPeriodoActivo, materias, materiaActiva, onCambiarMateriaActiva }) {
+  const [menuAbierto, setMenuAbierto] = useState(false);
+  const [submenuAbierto, setSubmenuAbierto] = useState(null);
   const [nombreDocente, setNombreDocente] = useState("");
   const [editandoNombre, setEditandoNombre] = useState(false);
   const [nombreTemp, setNombreTemp] = useState("");
@@ -2242,6 +2287,7 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
 
   const elegir = (key) => {
     onCambiar(key);
+    setMenuAbierto(false);
   };
 
   return (
@@ -2281,26 +2327,77 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
         )}
 
         <div className="flex items-center gap-3 shrink-0">
-          {esAdminReal && (
-            <button onClick={() => onCambiarPrevisualizacion((v) => !v)}
-              className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${previsualizandoDocente ? "bg-amber-400 text-slate-900 border-amber-400" : "border-white/20 text-violet-200"}`}
-              title="Como administrador, podés previsualizar la app tal como la ve un docente regular, sin perder tu permiso real.">
-              {previsualizandoDocente ? "👤 Viendo como docente — Volver a admin" : "🔍 Ver como docente"}
-            </button>
-          )}
-          <button onClick={onAdmin} className="text-base" title={esAdmin ? "Docentes y mi cuenta" : "Mi cuenta"}>👤</button>
-          {esAdmin && <button onClick={onInstitucion} className="text-base" title="Institución">⚙️</button>}
-          <button onClick={onSalir} className="text-base" title="Cerrar sesión">🚪</button>
+          <button onClick={onAdmin} className="text-base" title="Docentes y mi cuenta">👤</button>
+          <button onClick={onInstitucion} className="text-base" title="Institución">⚙️</button>
+          <button onClick={onSalir} className="text-base hidden md:inline" title="Cerrar sesión">🚪</button>
+          {/* Móvil: botón hamburguesa para desplegar el menú completo */}
+          <button onClick={() => setMenuAbierto((v) => !v)} className="md:hidden text-violet-200 text-lg" title="Menú">
+            {menuAbierto ? "✕" : "☰"}
+          </button>
         </div>
       </div>
 
-      {/* La navegación ahora vive como cuadrícula de tarjetas en el
-          contenido de Inicio — acá solo queda un acceso rápido para
-          volver, visible en cualquier otra pantalla. */}
-      {activo !== "inicio" && (
-        <div className="px-3 pb-2">
-          <button onClick={() => elegir("inicio")} className="text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5 w-fit" style={{ background: "rgba(139,92,246,0.25)", color: "#EDE9FE" }}>
-            ← Volver a Inicio
+      {/* Escritorio: categorías con submenú desplegable — mucho menos abarrotado */}
+      <div className="hidden md:flex flex-wrap gap-1 px-3 pb-2">
+        {MENU_PANEL_GRUPOS.map((grupo) => {
+          if (grupo.items.length === 1) {
+            const m = grupo.items[0];
+            return (
+              <button key={m.key} onClick={() => elegir(m.key)}
+                className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap flex items-center gap-1.5"
+                style={{ background: activo === m.key ? "rgba(139,92,246,0.35)" : "transparent", color: activo === m.key ? "#EDE9FE" : "#A78BFA" }}>
+                <span>{m.icono}</span> {m.label}
+              </button>
+            );
+          }
+          const activoEnGrupo = grupo.items.some((it) => it.key === activo);
+          return (
+            <div key={grupo.key} className="relative">
+              <button onClick={() => setSubmenuAbierto(submenuAbierto === grupo.key ? null : grupo.key)}
+                className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap flex items-center gap-1.5"
+                style={{ background: activoEnGrupo ? "rgba(139,92,246,0.35)" : "transparent", color: activoEnGrupo ? "#EDE9FE" : "#A78BFA" }}>
+                <span>{grupo.icono}</span> {grupo.label} <span className="text-[8px]">▾</span>
+              </button>
+              {submenuAbierto === grupo.key && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setSubmenuAbierto(null)} />
+                  <div className="absolute left-0 top-full mt-1 rounded-xl shadow-lg py-1 w-56 z-20" style={{ background: "#241f3d", border: "1px solid #4c1d95" }}>
+                    {grupo.items.map((m) => (
+                      <button key={m.key} onClick={() => { elegir(m.key); setSubmenuAbierto(null); }}
+                        className="w-full text-left text-xs px-3 py-2 flex items-center gap-2"
+                        style={{ color: activo === m.key ? "#EDE9FE" : "#C4B5FD", fontWeight: activo === m.key ? 700 : 400, background: activo === m.key ? "rgba(139,92,246,0.25)" : "transparent" }}>
+                        <span>{m.icono}</span> {m.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Móvil: menú desplegable, agrupado por categoría */}
+      {menuAbierto && (
+        <div className="md:hidden px-3 pb-3 space-y-2">
+          {MENU_PANEL_GRUPOS.map((grupo) => (
+            <div key={grupo.key}>
+              {grupo.items.length > 1 && <div className="text-[10px] font-bold text-violet-300 uppercase tracking-wide mb-1 px-1">{grupo.icono} {grupo.label}</div>}
+              <div className="grid grid-cols-3 gap-1.5">
+                {grupo.items.map((m) => (
+                  <button key={m.key} onClick={() => elegir(m.key)}
+                    className="text-[11px] px-2 py-2.5 rounded-xl flex flex-col items-center gap-1"
+                    style={{ background: activo === m.key ? "rgba(139,92,246,0.35)" : "rgba(255,255,255,0.05)", color: activo === m.key ? "#EDE9FE" : "#A78BFA" }}>
+                    <span className="text-base">{m.icono}</span>
+                    <span className="text-center leading-tight">{m.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+          <button onClick={onSalir} className="w-full text-[11px] px-2 py-2.5 rounded-xl flex items-center justify-center gap-2 text-rose-300" style={{ background: "rgba(255,255,255,0.05)" }}>
+            <span className="text-base">🚪</span>
+            <span>Cerrar sesión</span>
           </button>
         </div>
       )}
@@ -2325,37 +2422,13 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
 }
 
 function Panel({ session }) {
-  // Guarda "dónde estabas" en el navegador, para que al recargar la
-  // página (F5, actualizar) siga en el mismo lugar en vez de volver al
-  // principio. Cada useState arranca leyendo lo último guardado.
-  const leerGuardado = (clave, porDefecto) => {
-    try {
-      const v = localStorage.getItem("codice_" + clave);
-      return v !== null ? JSON.parse(v) : porDefecto;
-    } catch { return porDefecto; }
-  };
-  const [tab, setTab] = useState(() => leerGuardado("tab", "inicio"));
-  const [esAdmin, setEsAdmin] = useState(null); // null = todavía no se sabe
-  const [previsualizandoDocente, setPrevisualizandoDocente] = useState(false);
-  // El valor "efectivo" es el que se usa en TODA la app para decidir qué
-  // mostrar — si un administrador activa "Ver como docente", esto se
-  // comporta exactamente como si no fuera admin, sin tocar su permiso
-  // real en la base de datos (con recargar la página vuelve a la normalidad).
-  const esAdminEfectivo = esAdmin && !previsualizandoDocente;
-  useEffect(() => { api.fetchMiPerfil().then((p) => setEsAdmin(!!p?.es_admin)); }, []);
-  const [grupoAbierto, setGrupoAbierto] = useState(() => {
-    const guardado = leerGuardado("grupoAbierto", undefined);
-    if (guardado !== undefined) return guardado;
-    const tabInicial = leerGuardado("tab", "inicio");
-    if (tabInicial === "inicio") return null;
-    return MENU_PANEL_GRUPOS.find((g) => g.key !== "inicio_grupo" && g.items.some((it) => it.key === tabInicial))?.key || null;
-  });
-  const [subTabHerramientas, setSubTabHerramientas] = useState(() => leerGuardado("subTabHerramientas", "ruleta"));
+  const [tab, setTab] = useState("inicio");
+  const [subTabHerramientas, setSubTabHerramientas] = useState("ruleta");
   const [grado, setGrado] = useState(null);
-  const [gradoActivo, setGradoActivo] = useState(() => leerGuardado("gradoActivo", null));
-  const [periodoActivo, setPeriodoActivo] = useState(() => leerGuardado("periodoActivo", "1"));
+  const [gradoActivo, setGradoActivo] = useState(null);
+  const [periodoActivo, setPeriodoActivo] = useState("1");
   const [materias, setMaterias] = useState([]);
-  const [materiaActiva, setMateriaActiva] = useState(() => leerGuardado("materiaActiva", null));
+  const [materiaActiva, setMateriaActiva] = useState(null);
   const [reino, setReino] = useState(null);
   const [modoLista, setModoLista] = useState(false);
   const [grados, setGrados] = useState([]);
@@ -2363,15 +2436,6 @@ function Panel({ session }) {
   const [administracionAbierta, setAdministracionAbierta] = useState(false);
   const [institucion, setInstitucion] = useState(null);
   const [destinoBusqueda, setDestinoBusqueda] = useState(null);
-
-  // Cada vez que cambia alguno de estos, se guarda solo — así la próxima
-  // recarga arranca justo donde quedaste.
-  useEffect(() => { localStorage.setItem("codice_tab", JSON.stringify(tab)); }, [tab]);
-  useEffect(() => { localStorage.setItem("codice_grupoAbierto", JSON.stringify(grupoAbierto)); }, [grupoAbierto]);
-  useEffect(() => { localStorage.setItem("codice_subTabHerramientas", JSON.stringify(subTabHerramientas)); }, [subTabHerramientas]);
-  useEffect(() => { if (gradoActivo !== null) localStorage.setItem("codice_gradoActivo", JSON.stringify(gradoActivo)); }, [gradoActivo]);
-  useEffect(() => { localStorage.setItem("codice_periodoActivo", JSON.stringify(periodoActivo)); }, [periodoActivo]);
-  useEffect(() => { if (materiaActiva !== null) localStorage.setItem("codice_materiaActiva", JSON.stringify(materiaActiva)); }, [materiaActiva]);
 
   const irACalificacionesDesdeBusqueda = (estudiante) => {
     setTab("calificaciones");
@@ -2383,31 +2447,19 @@ function Panel({ session }) {
   useEffect(() => {
     api.asegurarProfesor().then(() => api.asegurarGradosBase()).then(() => api.fetchGrados()).then((data) => {
       setGrados(data);
-      setGradoActivo((prev) => (prev && data.some((g) => g.id === prev)) ? prev : (data[0]?.id || null));
+      setGradoActivo((prev) => prev || data[0]?.id || null);
     });
     api.fetchMaterias().then((data) => {
       setMaterias(data);
-      setMateriaActiva((prev) => (prev && data.some((m) => m.id === prev)) ? prev : (data[0]?.id || null));
+      setMateriaActiva((prev) => prev || data[0]?.id || null);
     });
     cargarInstitucion();
   }, []);
 
   const irA = (key) => {
-    if (CLAVES_SOLO_ADMIN.includes(key) && !esAdminEfectivo) return; // por si quedó guardada de antes, o alguien fuerza la navegación
     setTab(key);
     if (key === "estudiantes") { setGrado(null); setReino(null); setModoLista(false); }
   };
-
-  // Si el docente no es administrador, el grupo "Administración" ni
-  // siquiera aparece en la cuadrícula de secciones.
-  const menuPanelVisible = esAdminEfectivo ? MENU_PANEL_GRUPOS : MENU_PANEL_GRUPOS.filter((g) => g.key !== "administracion");
-
-  // Si por localStorage quedó guardada una pantalla de administrador y
-  // ahora resulta que no lo es (o activó "Ver como docente"), lo manda
-  // de vuelta a Inicio apenas se sabe el rol efectivo.
-  useEffect(() => {
-    if (!esAdminEfectivo && CLAVES_SOLO_ADMIN.includes(tab)) { setTab("inicio"); setGrupoAbierto(null); }
-  }, [esAdminEfectivo]);
 
   // Desde "Entregas por revisar": salta directo a Misiones o Proyectos/Forja,
   // ya con el curso, la materia y el periodo correctos seleccionados arriba.
@@ -2426,28 +2478,13 @@ function Panel({ session }) {
         onSalir={() => supabase.auth.signOut()} onBuscarEstudiante={irACalificacionesDesdeBusqueda}
         grados={grados} gradoActivo={gradoActivo} onCambiarGradoActivo={setGradoActivo}
         periodoActivo={periodoActivo} onCambiarPeriodoActivo={setPeriodoActivo}
-        materias={materias} materiaActiva={materiaActiva} onCambiarMateriaActiva={setMateriaActiva}
-        esAdmin={esAdminEfectivo} esAdminReal={esAdmin} previsualizandoDocente={previsualizandoDocente} onCambiarPrevisualizacion={setPrevisualizandoDocente} />
+        materias={materias} materiaActiva={materiaActiva} onCambiarMateriaActiva={setMateriaActiva} />
 
       {institucionAbierta && <InstitucionModal onClose={() => { setInstitucionAbierta(false); cargarInstitucion(); }} />}
       {administracionAbierta && <AdministracionModal onClose={() => setAdministracionAbierta(false)} />}
 
       <div className="p-6 max-w-6xl mx-auto">
-        {tab === "inicio" && (
-          grupoAbierto ? (
-            <VistaInicio onIrA={irA} soloEncabezado
-              accionSuperior={<EnlaceTodasLasSecciones onCambiarGrupo={setGrupoAbierto} />}
-              contenidoMedio={<NavegacionPorTarjetas grupos={menuPanelVisible} onIr={irA} grupoAbierto={grupoAbierto} onCambiarGrupo={setGrupoAbierto} />} />
-          ) : (
-            <VistaInicio onIrA={irA}
-              contenidoMedio={
-                <div className="mb-2">
-                  <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">Todas las secciones</h3>
-                  <NavegacionPorTarjetas grupos={menuPanelVisible} onIr={irA} grupoAbierto={null} onCambiarGrupo={setGrupoAbierto} />
-                </div>
-              } />
-          )
-        )}
+        {tab === "inicio" && <VistaInicio onIrA={irA} />}
         {tab === "entregasrevisar" && <VistaEntregasPorRevisar onIrAGrado={irAGradoDesdeRevisar} />}
         {tab === "estudiantes" && (
           <>
@@ -2474,39 +2511,22 @@ function Panel({ session }) {
         {tab === "asistencia" && grados.length > 0 && <VistaAsistencia grados={grados} gradoActivo={gradoActivo} />}
         {tab === "herramientas" && grados.length > 0 && (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 mb-6">
-              {[
-                { key: "ruleta", label: "Ruleta", Icono: Star, fondo: "#EDE9FE", color: "#6D28D9" },
-                { key: "ruletamonedas", label: "Ruleta de Monedas", Icono: Gift, fondo: "#FEF3C7", color: "#B45309" },
-                { key: "accionesmasivas", label: "Acciones Masivas", Icono: Settings, fondo: "#DBEAFE", color: "#1D4ED8" },
-                { key: "banco", label: "Banco", Icono: Package, fondo: "#DCFCE7", color: "#15803D" },
-                { key: "album", label: "Álbum", Icono: Image, fondo: "#FCE7F3", color: "#BE185D" },
-                { key: "anuncios", label: "Anuncios", Icono: FileText, fondo: "#FFEDD5", color: "#C2410C" },
-                { key: "logros", label: "Logros", Icono: Award, fondo: "#E0E7FF", color: "#4338CA" },
-                { key: "salonhonor", label: "Salón de Honor", Icono: Trophy, fondo: "#CFFAFE", color: "#0E7490" },
-                { key: "diplomas", label: "Diplomas", Icono: Award, fondo: "#F3E8FF", color: "#7E22CE" },
-                { key: "gamext", label: "Desafíos / Misiones / Cosméticos", Icono: Puzzle, fondo: "#F1F5F9", color: "#475569" },
-                { key: "consignas", label: "Consignas del Códice", Icono: BookOpen, fondo: "#DCFCE7", color: "#15803D" },
-                { key: "trivia", label: "Preguntados", Icono: HelpCircle, fondo: "#DBEAFE", color: "#1D4ED8" },
-                { key: "bancopreguntas", label: "Banco de Preguntas", Icono: Archive, fondo: "#FCE7F3", color: "#BE185D" },
-                { key: "temporizador", label: "Temporizador", Icono: Clock, fondo: "#FEF3C7", color: "#B45309" },
-                { key: "dado", label: "Dado", Icono: Package, fondo: "#EDE9FE", color: "#6D28D9" },
-                { key: "cronometro", label: "Cronómetro", Icono: Clock, fondo: "#DBEAFE", color: "#1D4ED8" },
-                { key: "semaforo", label: "Semáforo", Icono: Palette, fondo: "#DCFCE7", color: "#15803D" },
-                { key: "sorteoorden", label: "Sorteo de Orden / Parejas", Icono: Users, fondo: "#FCE7F3", color: "#BE185D" },
-                { key: "grupos", label: "Generador de Grupos", Icono: GraduationCap, fondo: "#FFEDD5", color: "#C2410C" },
-                { key: "marcador", label: "Marcador de Puntos", Icono: Award, fondo: "#E0E7FF", color: "#4338CA" },
-                { key: "selectorestudiante", label: "Selector de Estudiante", Icono: Star, fondo: "#CFFAFE", color: "#0E7490" },
-                { key: "bingo", label: "Bingo de Repaso", Icono: Puzzle, fondo: "#F3E8FF", color: "#7E22CE" },
-              ].map((op) => (
-                <button key={op.key} onClick={() => setSubTabHerramientas(op.key)}
-                  className={`flex items-center gap-2.5 rounded-2xl border px-3.5 py-3 text-left transition-all ${subTabHerramientas === op.key ? "border-violet-300 bg-violet-50" : "border-slate-200 bg-white hover:border-slate-300"}`}>
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: op.fondo }}>
-                    <op.Icono size={16} strokeWidth={2} color={op.color} />
-                  </div>
-                  <span className="text-xs font-bold text-slate-800 leading-tight">{op.label}</span>
-                </button>
-              ))}
+            <div className="flex flex-wrap gap-1.5 mb-6 rounded-2xl bg-white p-2 w-full border border-slate-100 shadow-sm">
+              <button onClick={() => setSubTabHerramientas("ruleta")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "ruleta" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🎡 Ruleta</button>
+              <button onClick={() => setSubTabHerramientas("ruletamonedas")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "ruletamonedas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🪙 Ruleta de Monedas</button>
+              <button onClick={() => setSubTabHerramientas("accionesmasivas")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "accionesmasivas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🎯 Acciones Masivas</button>
+              <button onClick={() => setSubTabHerramientas("banco")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "banco" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🏦 Banco</button>
+              <button onClick={() => setSubTabHerramientas("album")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "album" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🖼️ Álbum</button>
+              <button onClick={() => setSubTabHerramientas("anuncios")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "anuncios" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📣 Anuncios</button>
+              <button onClick={() => setSubTabHerramientas("logros")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "logros" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🏆 Logros</button>
+              <button onClick={() => setSubTabHerramientas("salonhonor")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "salonhonor" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🥇 Salón de Honor</button>
+              <button onClick={() => setSubTabHerramientas("diplomas")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "diplomas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🏅 Diplomas</button>
+              <button onClick={() => setSubTabHerramientas("gamext")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "gamext" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🕹️ Desafíos/Misiones/Cosméticos</button>
+              <button onClick={() => setSubTabHerramientas("consignas")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "consignas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📜 Consignas del Códice</button>
+              <button onClick={() => setSubTabHerramientas("trivia")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "trivia" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🎡 Preguntados</button>
+              <button onClick={() => setSubTabHerramientas("bancopreguntas")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "bancopreguntas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🗂️ Banco de Preguntas</button>
+              <button onClick={() => setSubTabHerramientas("temporizador")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "temporizador" ? "bg-violet-500 text-white" : "text-slate-600"}`}>⏱️ Temporizador</button>
+              <button onClick={() => setSubTabHerramientas("otras")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "otras" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🧰 Otras herramientas</button>
             </div>
             {subTabHerramientas === "ruleta" && <VistaRuleta grados={grados} gradoActivo={gradoActivo} />}
             {subTabHerramientas === "ruletamonedas" && <VistaRuletaMonedas grados={grados} gradoActivo={gradoActivo} />}
@@ -2522,14 +2542,7 @@ function Panel({ session }) {
             {subTabHerramientas === "trivia" && <VistaTriviaAdmin grados={grados} />}
             {subTabHerramientas === "bancopreguntas" && <VistaBancoPreguntas grados={grados} />}
             {subTabHerramientas === "temporizador" && <VistaTemporizador />}
-            {subTabHerramientas === "dado" && <DadoTool />}
-            {subTabHerramientas === "cronometro" && <CronometroTool />}
-            {subTabHerramientas === "semaforo" && <SemaforoTool />}
-            {subTabHerramientas === "sorteoorden" && <SorteoOrdenTool grados={grados} />}
-            {subTabHerramientas === "grupos" && <GeneradorGruposTool grados={grados} />}
-            {subTabHerramientas === "marcador" && <MarcadorPuntosTool />}
-            {subTabHerramientas === "selectorestudiante" && <SelectorEstudianteTool grados={grados} />}
-            {subTabHerramientas === "bingo" && <BingoTool />}
+            {subTabHerramientas === "otras" && <VistaHerramientas grados={grados} />}
           </>
         )}
         {tab === "roles" && <VistaRoles />}
@@ -2540,8 +2553,6 @@ function Panel({ session }) {
         {tab === "tablerosemanal" && grados.length > 0 && <VistaTableroSemanal grados={grados} />}
         {tab === "rubricas" && <VistaRubricas />}
         {tab === "biblioteca" && grados.length > 0 && <VistaBiblioteca grados={grados} gradoActivo={gradoActivo} />}
-        {tab === "comarca" && grados.length > 0 && <VistaComarcaOakhaven grados={grados} gradoActivo={gradoActivo} />}
-        {tab === "bancocontenido" && <VistaBancoContenido />}
         {tab === "anotaciones" && <VistaAnotaciones />}
         {tab === "inclusion" && <VistaInclusionGeneral />}
         {tab === "bajasvida" && <VistaBajasVida />}
