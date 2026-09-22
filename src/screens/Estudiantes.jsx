@@ -1026,8 +1026,8 @@ function AreaEstudiante({ estudiante, progreso, grados, onClose, onAbrir }) {
         <button onClick={onClose} className="text-sm text-violet-500 mb-4">← Volver</button>
 
         <div className="flex items-center gap-4 mb-6">
-          {estudiante.foto_url ? (
-            <img src={estudiante.foto_url} alt={estudiante.nombre} className="w-16 h-16 rounded-full object-cover border-2 border-violet-100" />
+          {api.urlFotoEstudiante(estudiante) ? (
+            <img src={api.urlFotoEstudiante(estudiante)} alt={estudiante.nombre} className="w-16 h-16 rounded-full object-cover border-2 border-violet-100" />
           ) : (
             <div className="w-16 h-16 rounded-full bg-violet-100 flex items-center justify-center text-2xl font-bold text-violet-500">
               {estudiante.nombre?.[0] || "?"}
@@ -1150,8 +1150,8 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
       <div className="absolute top-2 left-2"><InclusionBadge estudiante={estudiante} /></div>
 
       <div className="relative shrink-0 mb-2">
-        {estudiante.foto_url ? (
-          <img src={estudiante.foto_url} alt={estudiante.nombre} onClick={() => setFotoAmpliada(true)}
+        {api.urlFotoEstudiante(estudiante) ? (
+          <img src={api.urlFotoEstudiante(estudiante)} alt={estudiante.nombre} onClick={() => setFotoAmpliada(true)}
             className="w-14 h-14 object-cover rounded-full border border-slate-100 cursor-pointer" />
         ) : infoReino.logo_url ? (
           <img src={infoReino.logo_url} alt="" className="w-14 h-14 object-contain rounded-full border border-slate-100" />
@@ -1165,7 +1165,7 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
           <span className="text-white text-[9px]">{subiendoFoto ? "…" : "📷"}</span>
           <input type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files[0]) subirFoto(e.target.files[0]); }} />
         </label>
-        {estudiante.foto_url && (
+        {api.urlFotoEstudiante(estudiante) && (
           <button onClick={quitarFoto} className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-500 flex items-center justify-center" title="Quitar foto">
             <span className="text-white text-[9px]">✕</span>
           </button>
@@ -1232,8 +1232,8 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
       {documentoAbierto && (
         <DocumentoModal estudiante={estudiante} onClose={() => setDocumentoAbierto(false)} onGuardado={onTrasladado} />
       )}
-      {fotoAmpliada && estudiante.foto_url && (
-        <FotoLightbox url={estudiante.foto_url} nombre={estudiante.nombre} onClose={() => setFotoAmpliada(false)} />
+      {fotoAmpliada && api.urlFotoEstudiante(estudiante) && (
+        <FotoLightbox url={api.urlFotoEstudiante(estudiante)} nombre={estudiante.nombre} onClose={() => setFotoAmpliada(false)} />
       )}
       {areaAbierta && (
         <AreaEstudiante
