@@ -2253,7 +2253,7 @@ export function VistaPlaneaciones({ grados, gradoActivo, periodoActivo, materiaA
   const [soloVigente, setSoloVigente] = useState(true);
 
   useEffect(() => {
-    api.fetchMaterias().then((data) => { setMaterias(data); if (data[0]) setMateriaId(data[0].id); });
+    api.fetchMisMaterias().then((data) => { setMaterias(data); if (data[0]) setMateriaId(data[0].id); });
     api.fetchInstitucion().then(setInstitucion);
   }, []);
   useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
