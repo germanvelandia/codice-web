@@ -6,7 +6,7 @@ import { bandaDesempeno, notaFinalPonderada } from "./lib/calificaciones";
 import { sonidoGirar, sonidoAcierto, sonidoError, sonidoLogro } from "./lib/sonidos";
 import { VistaGrados, VistaReinos, VistaEstudiantes, FotoLightbox } from "./screens/Estudiantes";
 import { VistaAsistencia } from "./screens/Asistencia";
-import { VistaRuleta, VistaRuletaMonedas, VistaTemporizador, VistaHerramientas } from "./screens/Herramientas";
+import { VistaRuleta, VistaRuletaMonedas, VistaTemporizador, DadoTool, CronometroTool, SemaforoTool, SorteoOrdenTool, GeneradorGruposTool, MarcadorPuntosTool, SelectorEstudianteTool, BingoTool } from "./screens/Herramientas";
 import { VistaAccionesMasivas } from "./screens/AccionesMasivas";
 import { VistaBanco } from "./screens/Banco";
 import { VistaAlbum, CartaCriatura } from "./screens/Album";
@@ -43,6 +43,7 @@ import { VistaEntregasPorRevisar } from "./screens/EntregasPorRevisar";
 import { VistaTableroSemanal } from "./screens/TableroSemanal";
 import { VistaInicio, ContenidoLightbox } from "./screens/Inicio";
 import { NavegacionPorTarjetas, BotonVolverInicio, EnlaceTodasLasSecciones } from "./screens/InicioTarjetas";
+import { Star, Gift, Settings, Package, Image, FileText, Award, Trophy, Puzzle, BookOpen, HelpCircle, Archive, Clock, Palette, GraduationCap, Users } from "lucide-react";
 import { EditorTexto, TextoEnriquecido, textoPlano } from "./components/RichText";
 import { InstitucionModal } from "./screens/Institucion";
 import { AdministracionModal } from "./screens/Administracion";
@@ -2453,22 +2454,39 @@ function Panel({ session }) {
         {tab === "asistencia" && grados.length > 0 && <VistaAsistencia grados={grados} gradoActivo={gradoActivo} />}
         {tab === "herramientas" && grados.length > 0 && (
           <>
-            <div className="flex flex-wrap gap-1.5 mb-6 rounded-2xl bg-white p-2 w-full border border-slate-100 shadow-sm">
-              <button onClick={() => setSubTabHerramientas("ruleta")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "ruleta" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🎡 Ruleta</button>
-              <button onClick={() => setSubTabHerramientas("ruletamonedas")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "ruletamonedas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🪙 Ruleta de Monedas</button>
-              <button onClick={() => setSubTabHerramientas("accionesmasivas")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "accionesmasivas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🎯 Acciones Masivas</button>
-              <button onClick={() => setSubTabHerramientas("banco")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "banco" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🏦 Banco</button>
-              <button onClick={() => setSubTabHerramientas("album")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "album" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🖼️ Álbum</button>
-              <button onClick={() => setSubTabHerramientas("anuncios")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "anuncios" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📣 Anuncios</button>
-              <button onClick={() => setSubTabHerramientas("logros")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "logros" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🏆 Logros</button>
-              <button onClick={() => setSubTabHerramientas("salonhonor")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "salonhonor" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🥇 Salón de Honor</button>
-              <button onClick={() => setSubTabHerramientas("diplomas")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "diplomas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🏅 Diplomas</button>
-              <button onClick={() => setSubTabHerramientas("gamext")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "gamext" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🕹️ Desafíos/Misiones/Cosméticos</button>
-              <button onClick={() => setSubTabHerramientas("consignas")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "consignas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📜 Consignas del Códice</button>
-              <button onClick={() => setSubTabHerramientas("trivia")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "trivia" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🎡 Preguntados</button>
-              <button onClick={() => setSubTabHerramientas("bancopreguntas")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "bancopreguntas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🗂️ Banco de Preguntas</button>
-              <button onClick={() => setSubTabHerramientas("temporizador")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "temporizador" ? "bg-violet-500 text-white" : "text-slate-600"}`}>⏱️ Temporizador</button>
-              <button onClick={() => setSubTabHerramientas("otras")} className={`text-xs px-3 py-1.5 rounded-full ${subTabHerramientas === "otras" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🧰 Otras herramientas</button>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 mb-6">
+              {[
+                { key: "ruleta", label: "Ruleta", Icono: Star, fondo: "#EDE9FE", color: "#6D28D9" },
+                { key: "ruletamonedas", label: "Ruleta de Monedas", Icono: Gift, fondo: "#FEF3C7", color: "#B45309" },
+                { key: "accionesmasivas", label: "Acciones Masivas", Icono: Settings, fondo: "#DBEAFE", color: "#1D4ED8" },
+                { key: "banco", label: "Banco", Icono: Package, fondo: "#DCFCE7", color: "#15803D" },
+                { key: "album", label: "Álbum", Icono: Image, fondo: "#FCE7F3", color: "#BE185D" },
+                { key: "anuncios", label: "Anuncios", Icono: FileText, fondo: "#FFEDD5", color: "#C2410C" },
+                { key: "logros", label: "Logros", Icono: Award, fondo: "#E0E7FF", color: "#4338CA" },
+                { key: "salonhonor", label: "Salón de Honor", Icono: Trophy, fondo: "#CFFAFE", color: "#0E7490" },
+                { key: "diplomas", label: "Diplomas", Icono: Award, fondo: "#F3E8FF", color: "#7E22CE" },
+                { key: "gamext", label: "Desafíos / Misiones / Cosméticos", Icono: Puzzle, fondo: "#F1F5F9", color: "#475569" },
+                { key: "consignas", label: "Consignas del Códice", Icono: BookOpen, fondo: "#DCFCE7", color: "#15803D" },
+                { key: "trivia", label: "Preguntados", Icono: HelpCircle, fondo: "#DBEAFE", color: "#1D4ED8" },
+                { key: "bancopreguntas", label: "Banco de Preguntas", Icono: Archive, fondo: "#FCE7F3", color: "#BE185D" },
+                { key: "temporizador", label: "Temporizador", Icono: Clock, fondo: "#FEF3C7", color: "#B45309" },
+                { key: "dado", label: "Dado", Icono: Package, fondo: "#EDE9FE", color: "#6D28D9" },
+                { key: "cronometro", label: "Cronómetro", Icono: Clock, fondo: "#DBEAFE", color: "#1D4ED8" },
+                { key: "semaforo", label: "Semáforo", Icono: Palette, fondo: "#DCFCE7", color: "#15803D" },
+                { key: "sorteoorden", label: "Sorteo de Orden / Parejas", Icono: Users, fondo: "#FCE7F3", color: "#BE185D" },
+                { key: "grupos", label: "Generador de Grupos", Icono: GraduationCap, fondo: "#FFEDD5", color: "#C2410C" },
+                { key: "marcador", label: "Marcador de Puntos", Icono: Award, fondo: "#E0E7FF", color: "#4338CA" },
+                { key: "selectorestudiante", label: "Selector de Estudiante", Icono: Star, fondo: "#CFFAFE", color: "#0E7490" },
+                { key: "bingo", label: "Bingo de Repaso", Icono: Puzzle, fondo: "#F3E8FF", color: "#7E22CE" },
+              ].map((op) => (
+                <button key={op.key} onClick={() => setSubTabHerramientas(op.key)}
+                  className={`flex items-center gap-2.5 rounded-2xl border px-3.5 py-3 text-left transition-all ${subTabHerramientas === op.key ? "border-violet-300 bg-violet-50" : "border-slate-200 bg-white hover:border-slate-300"}`}>
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: op.fondo }}>
+                    <op.Icono size={16} strokeWidth={2} color={op.color} />
+                  </div>
+                  <span className="text-xs font-bold text-slate-800 leading-tight">{op.label}</span>
+                </button>
+              ))}
             </div>
             {subTabHerramientas === "ruleta" && <VistaRuleta grados={grados} gradoActivo={gradoActivo} />}
             {subTabHerramientas === "ruletamonedas" && <VistaRuletaMonedas grados={grados} gradoActivo={gradoActivo} />}
@@ -2484,7 +2502,14 @@ function Panel({ session }) {
             {subTabHerramientas === "trivia" && <VistaTriviaAdmin grados={grados} />}
             {subTabHerramientas === "bancopreguntas" && <VistaBancoPreguntas grados={grados} />}
             {subTabHerramientas === "temporizador" && <VistaTemporizador />}
-            {subTabHerramientas === "otras" && <VistaHerramientas grados={grados} />}
+            {subTabHerramientas === "dado" && <DadoTool />}
+            {subTabHerramientas === "cronometro" && <CronometroTool />}
+            {subTabHerramientas === "semaforo" && <SemaforoTool />}
+            {subTabHerramientas === "sorteoorden" && <SorteoOrdenTool grados={grados} />}
+            {subTabHerramientas === "grupos" && <GeneradorGruposTool grados={grados} />}
+            {subTabHerramientas === "marcador" && <MarcadorPuntosTool />}
+            {subTabHerramientas === "selectorestudiante" && <SelectorEstudianteTool grados={grados} />}
+            {subTabHerramientas === "bingo" && <BingoTool />}
           </>
         )}
         {tab === "roles" && <VistaRoles />}
