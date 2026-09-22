@@ -4217,6 +4217,16 @@ export async function guardarInstitucion(campos) {
 
 /* ==================== CALIFICACIONES ==================== */
 
+// Solo TUS propias materias — para selectores donde el docente elige
+// entre "las mías" (crear/editar planeaciones, etc.), no el catálogo
+// completo de la institución.
+export async function fetchMisMaterias() {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("materias").select("*").eq("docente_id", userData?.user?.id || null).order("nombre");
+  if (error) throw error;
+  return data || [];
+}
+
 export async function fetchMaterias() {
   const { data, error } = await supabase.from("materias").select("*, profesores(nombre)").order("nombre");
   if (error) throw error;
