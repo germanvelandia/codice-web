@@ -125,6 +125,80 @@ function ListaDocentes({ miPerfil, onCambio }) {
   );
 }
 
+// Migración segura de fotos: NO borra nada, solo copia las fotos viejas
+// (guardadas como texto largo/base64) hacia el almacenamiento de
+// archivos, para que la base de datos pese mucho menos y la app cargue
+// más rápido con muchos estudiantes.
+function MigrarFotosPanel() {
+  const [pendientes, setPendientes] = useState(null);
+  const [migrando, setMigrando] = useState(false);
+  const [progreso, setProgreso] = useState(0);
+  const [errores, setErrores] = useState([]);
+  const [terminado, setTerminado] = useState(false);
+
+  const cargar = () => api.fetchEstudiantesConFotoSinMigrar().then(setPendientes);
+  useEffect(() => { cargar(); }, []);
+
+  const migrarTodas = async () => {
+    setMigrando(true);
+    setProgreso(0);
+    setErrores([]);
+    setTerminado(false);
+    const erroresNuevos = [];
+    for (let i = 0; i < pendientes.length; i++) {
+      try {
+        await api.migrarFotoEstudianteAStorage(pendientes[i]);
+      } catch (e) {
+        erroresNuevos.push({ nombre: pendientes[i].nombre, error: e.message });
+      }
+      setProgreso(i + 1);
+    }
+    setErrores(erroresNuevos);
+    setMigrando(false);
+    setTerminado(true);
+    cargar();
+  };
+
+  if (pendientes === null) return null;
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-4">
+      <h3 className="font-bold text-slate-800 mb-1">📸 Migrar fotos al almacenamiento</h3>
+      <p className="text-xs text-slate-400 mb-3">
+        Mueve las fotos guardadas como texto largo (base64) a un almacenamiento de archivos aparte — no borra ni altera ninguna foto existente,
+        solo hace una copia optimizada. Si algo falla, la foto original se sigue viendo exactamente igual que antes.
+      </p>
+
+      {pendientes.length === 0 ? (
+        <p className="text-xs text-emerald-600">✔ No quedan fotos pendientes por migrar.</p>
+      ) : (
+        <>
+          <p className="text-xs text-slate-500 mb-3">{pendientes.length} foto{pendientes.length === 1 ? "" : "s"} pendiente{pendientes.length === 1 ? "" : "s"} de migrar.</p>
+          {migrando ? (
+            <div>
+              <div className="w-full bg-slate-100 rounded-full h-2 mb-2 overflow-hidden">
+                <div className="h-full bg-violet-500" style={{ width: `${(progreso / pendientes.length) * 100}%` }} />
+              </div>
+              <p className="text-xs text-slate-400">Migrando {progreso} de {pendientes.length}…</p>
+            </div>
+          ) : (
+            <button onClick={migrarTodas} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white">
+              Migrar {pendientes.length} foto{pendientes.length === 1 ? "" : "s"}
+            </button>
+          )}
+          {terminado && errores.length === 0 && <p className="text-xs text-emerald-600 mt-2">✔ Migración completa, sin errores.</p>}
+          {errores.length > 0 && (
+            <div className="mt-3 bg-rose-50 rounded-lg p-3">
+              <p className="text-xs font-semibold text-rose-600 mb-1">{errores.length} no se pudieron migrar (sus fotos originales siguen intactas):</p>
+              {errores.map((e, i) => <p key={i} className="text-[11px] text-rose-500">• {e.nombre}: {e.error}</p>)}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export function AdministracionModal({ onClose }) {
   const [miPerfil, setMiPerfil] = useState(null);
   const [cargando, setCargando] = useState(true);
@@ -156,6 +230,7 @@ export function AdministracionModal({ onClose }) {
                 <VistaPromocion />
               </div>
             )}
+            {miPerfil?.es_admin && <MigrarFotosPanel />}
           </>
         )}
       </div>
