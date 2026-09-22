@@ -5775,3 +5775,46 @@ export async function eliminarBitacoraClase(id) {
   const { error } = await supabase.from("bitacora_clases").delete().eq("id", id);
   if (error) throw error;
 }
+
+/* ==================== 📸 Migración de fotos a Storage ====================
+   No toca ni borra "foto_url" (el base64 viejo) — solo llena
+   "foto_storage_url" al lado. La app prioriza la nueva si existe. */
+
+// Devuelve la URL "buena" a mostrar: la de Storage si ya se migró esa
+// foto, o la vieja (base64) si todavía no. Nunca rompe nada.
+export function urlFotoEstudiante(estudiante) {
+  return estudiante?.foto_storage_url || estudiante?.foto_url || null;
+}
+
+// Estudiantes que tienen foto vieja en base64 pero TODAVÍA no fueron
+// migrados a Storage — son los candidatos a migrar.
+export async function fetchEstudiantesConFotoSinMigrar() {
+  const { data, error } = await supabase.from("estudiantes").select("id, nombre, foto_url, foto_storage_url")
+    .not("foto_url", "is", null).is("foto_storage_url", null);
+  if (error) throw error;
+  // Filtra por si acaso alguna quedó vacía ("") en vez de null.
+  return (data || []).filter((e) => e.foto_url && e.foto_url.startsWith("data:"));
+}
+
+// Sube UNA foto (que ya está en base64 en foto_url) a Storage, y guarda
+// el link nuevo en foto_storage_url — sin tocar foto_url para nada.
+export async function migrarFotoEstudianteAStorage(estudiante) {
+  const base64 = estudiante.foto_url;
+  const match = base64.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+  if (!match) throw new Error("La foto no tiene el formato esperado — se deja como está.");
+  const [, mime, datos] = match;
+  const extension = mime.split("/")[1].replace("jpeg", "jpg");
+  const binario = atob(datos);
+  const bytes = new Uint8Array(binario.length);
+  for (let i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
+  const blob = new Blob([bytes], { type: mime });
+
+  const ruta = `${estudiante.id}-${Date.now()}.${extension}`;
+  const { error: errorSubida } = await supabase.storage.from("fotos-estudiantes").upload(ruta, blob, { contentType: mime, upsert: true });
+  if (errorSubida) throw errorSubida;
+
+  const { data: urlData } = supabase.storage.from("fotos-estudiantes").getPublicUrl(ruta);
+  const { error: errorGuardar } = await supabase.from("estudiantes").update({ foto_storage_url: urlData.publicUrl }).eq("id", estudiante.id);
+  if (errorGuardar) throw errorGuardar;
+  return urlData.publicUrl;
+}
