@@ -2292,25 +2292,6 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
           <BuscadorEstudiantesGlobal onSeleccionar={onBuscarEstudiante} />
         </div>
 
-        {grados && grados.length > 0 && (
-          <select value={gradoActivo || ""} onChange={(e) => onCambiarGradoActivo(e.target.value)}
-            className="text-xs font-semibold rounded-full px-3 py-2 border outline-none shrink-0" style={{ borderColor: "#7c3aed88", color: "#DDD6FE", background: "rgba(139,92,246,0.15)" }} title="Curso activo — se aplica a Asistencia, Herramientas, Calificaciones y más">
-            {grados.map((g) => <option key={g.id} value={g.id}>🎓 Curso {g.id}</option>)}
-          </select>
-        )}
-
-        <select value={periodoActivo} onChange={(e) => onCambiarPeriodoActivo(e.target.value)}
-          className="text-xs font-semibold rounded-full px-3 py-2 border outline-none shrink-0" style={{ borderColor: "#7c3aed88", color: "#DDD6FE", background: "rgba(139,92,246,0.15)" }} title="Periodo activo">
-          {["1", "2", "3", "4"].map((p) => <option key={p} value={p}>📅 Periodo {p}</option>)}
-        </select>
-
-        {materias && materias.length > 0 && (
-          <select value={materiaActiva || ""} onChange={(e) => onCambiarMateriaActiva(parseInt(e.target.value, 10))}
-            className="text-xs font-semibold rounded-full px-3 py-2 border outline-none shrink-0 max-w-[140px]" style={{ borderColor: "#7c3aed88", color: "#DDD6FE", background: "rgba(139,92,246,0.15)" }} title="Materia activa">
-            {materias.map((m) => <option key={m.id} value={m.id}>📖 {m.nombre}</option>)}
-          </select>
-        )}
-
         <div className="flex items-center gap-3 shrink-0">
           {esAdmin && (
             <button onClick={() => onCambiarPrevisualizacion((v) => !v)}
