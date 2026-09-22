@@ -42,6 +42,7 @@ import { VistaRubricas } from "./screens/Rubricas";
 import { VistaEntregasPorRevisar } from "./screens/EntregasPorRevisar";
 import { VistaTableroSemanal } from "./screens/TableroSemanal";
 import { VistaInicio, ContenidoLightbox } from "./screens/Inicio";
+import { NavegacionPorTarjetas, BotonVolverInicio, EnlaceTodasLasSecciones } from "./screens/InicioTarjetas";
 import { EditorTexto, TextoEnriquecido, textoPlano } from "./components/RichText";
 import { InstitucionModal } from "./screens/Institucion";
 import { AdministracionModal } from "./screens/Administracion";
@@ -1169,9 +1170,6 @@ function MenuCodice({ activo, onCambiar, monedas, gradoId }) {
             <span className="text-sm font-bold text-amber-300">{monedas}</span>
           </div>
         )}
-        <button onClick={() => setMenuAbierto((v) => !v)} className="md:hidden text-violet-200 text-lg" title="Menú">
-          {menuAbierto ? "✕" : "☰"}
-        </button>
       </div>
 
       {ultimoAnuncio && (
@@ -1185,64 +1183,11 @@ function MenuCodice({ activo, onCambiar, monedas, gradoId }) {
         </button>
       )}
 
-      {/* Escritorio: categorías con submenú desplegable */}
-      <div className="hidden md:flex flex-wrap gap-1 px-3 py-2">
-        {MENU_CODICE_GRUPOS.map((grupo) => {
-          if (grupo.items.length === 1) {
-            const m = grupo.items[0];
-            return (
-              <button key={m.key} onClick={() => elegir(m.key)}
-                className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap flex items-center gap-1.5"
-                style={{ background: activo === m.key ? "rgba(139,92,246,0.35)" : "transparent", color: activo === m.key ? "#EDE9FE" : "#A78BFA" }}>
-                <span>{m.icono}</span> {m.label}
-              </button>
-            );
-          }
-          const activoEnGrupo = grupo.items.some((it) => it.key === activo);
-          return (
-            <div key={grupo.key} className="relative">
-              <button onClick={() => setSubmenuAbierto(submenuAbierto === grupo.key ? null : grupo.key)}
-                className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap flex items-center gap-1.5"
-                style={{ background: activoEnGrupo ? "rgba(139,92,246,0.35)" : "transparent", color: activoEnGrupo ? "#EDE9FE" : "#A78BFA" }}>
-                <span>{grupo.icono}</span> {grupo.label} <span className="text-[8px]">▾</span>
-              </button>
-              {submenuAbierto === grupo.key && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setSubmenuAbierto(null)} />
-                  <div className="absolute left-0 top-full mt-1 rounded-xl shadow-lg py-1 w-52 z-20" style={{ background: "#241f3d", border: "1px solid #4c1d95" }}>
-                    {grupo.items.map((m) => (
-                      <button key={m.key} onClick={() => elegir(m.key)}
-                        className="w-full text-left text-xs px-3 py-2 flex items-center gap-2"
-                        style={{ color: activo === m.key ? "#EDE9FE" : "#C4B5FD", fontWeight: activo === m.key ? 700 : 400, background: activo === m.key ? "rgba(139,92,246,0.25)" : "transparent" }}>
-                        <span>{m.icono}</span> {m.label}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Móvil: menú desplegable, agrupado por categoría */}
-      {menuAbierto && (
-        <div className="md:hidden px-3 py-3 space-y-2">
-          {MENU_CODICE_GRUPOS.map((grupo) => (
-            <div key={grupo.key}>
-              {grupo.items.length > 1 && <div className="text-[10px] font-bold text-violet-300 uppercase tracking-wide mb-1 px-1">{grupo.icono} {grupo.label}</div>}
-              <div className="grid grid-cols-3 gap-1.5">
-                {grupo.items.map((m) => (
-                  <button key={m.key} onClick={() => elegir(m.key)}
-                    className="text-[11px] px-2 py-2.5 rounded-xl flex flex-col items-center gap-1"
-                    style={{ background: activo === m.key ? "rgba(139,92,246,0.35)" : "rgba(255,255,255,0.05)", color: activo === m.key ? "#EDE9FE" : "#A78BFA" }}>
-                    <span className="text-base">{m.icono}</span>
-                    <span className="text-center leading-tight">{m.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
+      {activo !== "inicio" && (
+        <div className="px-3 py-2">
+          <button onClick={() => elegir("inicio")} className="text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5 w-fit" style={{ background: "rgba(139,92,246,0.25)", color: "#EDE9FE" }}>
+            ← Volver a Inicio
+          </button>
         </div>
       )}
     </div>
@@ -1885,6 +1830,8 @@ function PortalEstudiante() {
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState("");
   const [vista, setVista] = useState("inicio");
+  const [grupoAbierto, setGrupoAbierto] = useState(null);
+  const irAEstudiante = (key) => { setVista(key); };
   const [nuevosLogros, setNuevosLogros] = useState([]);
   const [equipados, setEquipados] = useState({ marco: null, titulo: null });
   const [avatarConfig, setAvatarConfig] = useState(null);
@@ -1938,10 +1885,19 @@ function PortalEstudiante() {
             </div>
           </div>
         )}
-        <MenuCodice activo={vista} onCambiar={setVista} monedas={datos.monedas} gradoId={datos.grado_id} />
+        <MenuCodice activo={vista} onCambiar={irAEstudiante} monedas={datos.monedas} gradoId={datos.grado_id} />
 
         <div className="bg-white rounded-2xl shadow-lg p-6">
           {vista === "inicio" && (
+            grupoAbierto ? (
+              <>
+                <EnlaceTodasLasSecciones onCambiarGrupo={setGrupoAbierto} variante="clara" />
+                <ValorSemanaEstudiante />
+                <div className="mt-4">
+                  <NavegacionPorTarjetas grupos={MENU_CODICE_GRUPOS} onIr={irAEstudiante} grupoAbierto={grupoAbierto} onCambiarGrupo={setGrupoAbierto} />
+                </div>
+              </>
+            ) : (
             <>
               <div className="flex items-center gap-3 mb-4 pb-4 border-b border-slate-100">
                 <div className="flex items-center gap-2 shrink-0">
@@ -2009,7 +1965,13 @@ function PortalEstudiante() {
               <div className="text-xs text-slate-500 bg-slate-50 rounded-xl p-3">
                 Presentes: {datos.presentes} · Retardos: {datos.retardos} · Faltas injustificadas: {datos.faltas_injustificadas} · Faltas justificadas: {datos.faltas_justificadas}
               </div>
+
+              <div className="mt-6">
+                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">Todas las secciones</h3>
+                <NavegacionPorTarjetas grupos={MENU_CODICE_GRUPOS} onIr={irAEstudiante} grupoAbierto={null} onCambiarGrupo={setGrupoAbierto} />
+              </div>
             </>
+            )
           )}
 
           {vista === "misiones" && estudianteInfo && (
@@ -2209,6 +2171,7 @@ const MENU_PANEL_GRUPOS = [
 ];
 // Lista plana — se sigue usando donde hace falta el conjunto completo sin agrupar.
 const MENU_PANEL = MENU_PANEL_GRUPOS.flatMap((g) => g.items);
+const CLAVES_SOLO_ADMIN = ["corregirnombres", "niveles", "objetos", "horario", "roles", "reportes"];
 
 function BuscadorEstudiantesGlobal({ onSeleccionar }) {
   const [query, setQuery] = useState("");
@@ -2264,7 +2227,7 @@ function FondoArcadeDocente() {
   return <div className="fixed inset-0 -z-10" style={{ background: "#1a1533" }} />;
 }
 
-function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstitucion, onSalir, onBuscarEstudiante, grados, gradoActivo, onCambiarGradoActivo, periodoActivo, onCambiarPeriodoActivo, materias, materiaActiva, onCambiarMateriaActiva }) {
+function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstitucion, onSalir, onBuscarEstudiante, grados, gradoActivo, onCambiarGradoActivo, periodoActivo, onCambiarPeriodoActivo, materias, materiaActiva, onCambiarMateriaActiva, esAdmin, esAdminEfectivo, previsualizandoDocente, onCambiarPrevisualizacion }) {
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [submenuAbierto, setSubmenuAbierto] = useState(null);
   const [nombreDocente, setNombreDocente] = useState("");
@@ -2327,77 +2290,26 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
         )}
 
         <div className="flex items-center gap-3 shrink-0">
-          <button onClick={onAdmin} className="text-base" title="Docentes y mi cuenta">👤</button>
-          <button onClick={onInstitucion} className="text-base" title="Institución">⚙️</button>
-          <button onClick={onSalir} className="text-base hidden md:inline" title="Cerrar sesión">🚪</button>
-          {/* Móvil: botón hamburguesa para desplegar el menú completo */}
-          <button onClick={() => setMenuAbierto((v) => !v)} className="md:hidden text-violet-200 text-lg" title="Menú">
-            {menuAbierto ? "✕" : "☰"}
-          </button>
+          {esAdmin && (
+            <button onClick={() => onCambiarPrevisualizacion((v) => !v)}
+              className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${previsualizandoDocente ? "bg-amber-400 text-slate-900 border-amber-400" : "border-white/20 text-violet-200"}`}
+              title="Como administrador, podés previsualizar la app tal como la ve un docente regular, sin perder tu permiso real.">
+              {previsualizandoDocente ? "👤 Viendo como docente — Volver a admin" : "🔍 Ver como docente"}
+            </button>
+          )}
+          <button onClick={onAdmin} className="text-base" title={esAdminEfectivo ? "Docentes y mi cuenta" : "Mi cuenta"}>👤</button>
+          {esAdminEfectivo && <button onClick={onInstitucion} className="text-base" title="Institución">⚙️</button>}
+          <button onClick={onSalir} className="text-base" title="Cerrar sesión">🚪</button>
         </div>
       </div>
 
-      {/* Escritorio: categorías con submenú desplegable — mucho menos abarrotado */}
-      <div className="hidden md:flex flex-wrap gap-1 px-3 pb-2">
-        {MENU_PANEL_GRUPOS.map((grupo) => {
-          if (grupo.items.length === 1) {
-            const m = grupo.items[0];
-            return (
-              <button key={m.key} onClick={() => elegir(m.key)}
-                className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap flex items-center gap-1.5"
-                style={{ background: activo === m.key ? "rgba(139,92,246,0.35)" : "transparent", color: activo === m.key ? "#EDE9FE" : "#A78BFA" }}>
-                <span>{m.icono}</span> {m.label}
-              </button>
-            );
-          }
-          const activoEnGrupo = grupo.items.some((it) => it.key === activo);
-          return (
-            <div key={grupo.key} className="relative">
-              <button onClick={() => setSubmenuAbierto(submenuAbierto === grupo.key ? null : grupo.key)}
-                className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap flex items-center gap-1.5"
-                style={{ background: activoEnGrupo ? "rgba(139,92,246,0.35)" : "transparent", color: activoEnGrupo ? "#EDE9FE" : "#A78BFA" }}>
-                <span>{grupo.icono}</span> {grupo.label} <span className="text-[8px]">▾</span>
-              </button>
-              {submenuAbierto === grupo.key && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setSubmenuAbierto(null)} />
-                  <div className="absolute left-0 top-full mt-1 rounded-xl shadow-lg py-1 w-56 z-20" style={{ background: "#241f3d", border: "1px solid #4c1d95" }}>
-                    {grupo.items.map((m) => (
-                      <button key={m.key} onClick={() => { elegir(m.key); setSubmenuAbierto(null); }}
-                        className="w-full text-left text-xs px-3 py-2 flex items-center gap-2"
-                        style={{ color: activo === m.key ? "#EDE9FE" : "#C4B5FD", fontWeight: activo === m.key ? 700 : 400, background: activo === m.key ? "rgba(139,92,246,0.25)" : "transparent" }}>
-                        <span>{m.icono}</span> {m.label}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Móvil: menú desplegable, agrupado por categoría */}
-      {menuAbierto && (
-        <div className="md:hidden px-3 pb-3 space-y-2">
-          {MENU_PANEL_GRUPOS.map((grupo) => (
-            <div key={grupo.key}>
-              {grupo.items.length > 1 && <div className="text-[10px] font-bold text-violet-300 uppercase tracking-wide mb-1 px-1">{grupo.icono} {grupo.label}</div>}
-              <div className="grid grid-cols-3 gap-1.5">
-                {grupo.items.map((m) => (
-                  <button key={m.key} onClick={() => elegir(m.key)}
-                    className="text-[11px] px-2 py-2.5 rounded-xl flex flex-col items-center gap-1"
-                    style={{ background: activo === m.key ? "rgba(139,92,246,0.35)" : "rgba(255,255,255,0.05)", color: activo === m.key ? "#EDE9FE" : "#A78BFA" }}>
-                    <span className="text-base">{m.icono}</span>
-                    <span className="text-center leading-tight">{m.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-          <button onClick={onSalir} className="w-full text-[11px] px-2 py-2.5 rounded-xl flex items-center justify-center gap-2 text-rose-300" style={{ background: "rgba(255,255,255,0.05)" }}>
-            <span className="text-base">🚪</span>
-            <span>Cerrar sesión</span>
+      {/* La navegación ahora vive como cuadrícula de tarjetas en el
+          contenido de Inicio — acá solo queda un acceso rápido para
+          volver, visible en cualquier otra pantalla. */}
+      {activo !== "inicio" && (
+        <div className="px-3 pb-2">
+          <button onClick={() => elegir("inicio")} className="text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5 w-fit" style={{ background: "rgba(139,92,246,0.25)", color: "#EDE9FE" }}>
+            ← Volver a Inicio
           </button>
         </div>
       )}
@@ -2423,6 +2335,11 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
 
 function Panel({ session }) {
   const [tab, setTab] = useState("inicio");
+  const [grupoAbierto, setGrupoAbierto] = useState(null);
+  const [esAdmin, setEsAdmin] = useState(null); // null = todavía no se sabe
+  const [previsualizandoDocente, setPrevisualizandoDocente] = useState(false);
+  const esAdminEfectivo = esAdmin && !previsualizandoDocente;
+  useEffect(() => { api.fetchMiPerfil().then((p) => setEsAdmin(!!p?.es_admin)); }, []);
   const [subTabHerramientas, setSubTabHerramientas] = useState("ruleta");
   const [grado, setGrado] = useState(null);
   const [gradoActivo, setGradoActivo] = useState(null);
@@ -2457,9 +2374,16 @@ function Panel({ session }) {
   }, []);
 
   const irA = (key) => {
+    if (CLAVES_SOLO_ADMIN.includes(key) && !esAdminEfectivo) return;
     setTab(key);
     if (key === "estudiantes") { setGrado(null); setReino(null); setModoLista(false); }
   };
+
+  const menuPanelVisible = esAdminEfectivo ? MENU_PANEL_GRUPOS : MENU_PANEL_GRUPOS.filter((g) => g.key !== "administracion");
+
+  useEffect(() => {
+    if (!esAdminEfectivo && CLAVES_SOLO_ADMIN.includes(tab)) { setTab("inicio"); setGrupoAbierto(null); }
+  }, [esAdminEfectivo]);
 
   // Desde "Entregas por revisar": salta directo a Misiones o Proyectos/Forja,
   // ya con el curso, la materia y el periodo correctos seleccionados arriba.
@@ -2478,13 +2402,28 @@ function Panel({ session }) {
         onSalir={() => supabase.auth.signOut()} onBuscarEstudiante={irACalificacionesDesdeBusqueda}
         grados={grados} gradoActivo={gradoActivo} onCambiarGradoActivo={setGradoActivo}
         periodoActivo={periodoActivo} onCambiarPeriodoActivo={setPeriodoActivo}
-        materias={materias} materiaActiva={materiaActiva} onCambiarMateriaActiva={setMateriaActiva} />
+        materias={materias} materiaActiva={materiaActiva} onCambiarMateriaActiva={setMateriaActiva}
+        esAdmin={esAdmin} esAdminEfectivo={esAdminEfectivo} previsualizandoDocente={previsualizandoDocente} onCambiarPrevisualizacion={setPrevisualizandoDocente} />
 
       {institucionAbierta && <InstitucionModal onClose={() => { setInstitucionAbierta(false); cargarInstitucion(); }} />}
       {administracionAbierta && <AdministracionModal onClose={() => setAdministracionAbierta(false)} />}
 
       <div className="p-6 max-w-6xl mx-auto">
-        {tab === "inicio" && <VistaInicio onIrA={irA} />}
+        {tab === "inicio" && (
+          grupoAbierto ? (
+            <VistaInicio onIrA={irA} soloEncabezado
+              accionSuperior={<EnlaceTodasLasSecciones onCambiarGrupo={setGrupoAbierto} />}
+              contenidoMedio={<NavegacionPorTarjetas grupos={menuPanelVisible} onIr={irA} grupoAbierto={grupoAbierto} onCambiarGrupo={setGrupoAbierto} />} />
+          ) : (
+            <VistaInicio onIrA={irA}
+              contenidoMedio={
+                <div className="mb-2">
+                  <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">Todas las secciones</h3>
+                  <NavegacionPorTarjetas grupos={menuPanelVisible} onIr={irA} grupoAbierto={null} onCambiarGrupo={setGrupoAbierto} />
+                </div>
+              } />
+          )
+        )}
         {tab === "entregasrevisar" && <VistaEntregasPorRevisar onIrAGrado={irAGradoDesdeRevisar} />}
         {tab === "estudiantes" && (
           <>
