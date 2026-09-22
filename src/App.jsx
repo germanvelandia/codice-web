@@ -283,7 +283,12 @@ function TomarEvaluacion({ evaluacion, estudianteId, onCerrar }) {
             <h1 className="text-2xl font-extrabold mb-3" style={{ background: "linear-gradient(to right, #c084fc, #f472b6, #fde047)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
               {evaluacion.titulo}
             </h1>
-            {evaluacion.descripcion && <TextoEnriquecido html={evaluacion.descripcion} className="text-sm text-slate-300 mb-4 text-left" />}
+            {evaluacion.descripcion && (
+              <div className="text-sm mb-4 text-left texto-oscuro-forzado">
+                <style>{`.texto-oscuro-forzado, .texto-oscuro-forzado * { color: #e2e8f0 !important; }`}</style>
+                <TextoEnriquecido html={evaluacion.descripcion} />
+              </div>
+            )}
             {evaluacion.indicaciones && evaluacion.indicaciones.length > 0 && (
               <div className="text-left mb-4 rounded-2xl p-4" style={{ background: "rgba(15,13,42,0.6)", border: "1px solid rgba(139,92,246,0.3)" }}>
                 <div className="text-[11px] font-bold uppercase tracking-wide mb-2" style={{ color: "#d8b4fe" }}>Indicaciones</div>
@@ -1141,7 +1146,7 @@ const ICONO_MAPA = {
   proyectos: "🏹", ranking: "👑", recompensas: "💎", salonhonor: "🏆",
 };
 
-function MenuCodice({ activo, onCambiar, monedas, gradoId }) {
+function MenuCodice({ activo, onCambiar, monedas, gradoId, onCerrarSesion }) {
   const [ultimoAnuncio, setUltimoAnuncio] = useState(null);
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [submenuAbierto, setSubmenuAbierto] = useState(null);
@@ -1170,6 +1175,7 @@ function MenuCodice({ activo, onCambiar, monedas, gradoId }) {
             <span className="text-sm font-bold text-amber-300">{monedas}</span>
           </div>
         )}
+        <button onClick={onCerrarSesion} className="text-violet-300 text-sm" title="Cerrar sesión">🚪</button>
       </div>
 
       {ultimoAnuncio && (
@@ -1824,7 +1830,7 @@ function PreguntadosEstudiante({ estudianteId }) {
 }
 
 function PortalEstudiante() {
-  const [codigo, setCodigo] = useState("");
+  const [codigo, setCodigo] = useState(() => localStorage.getItem("codice_estudiante_codigo") || "");
   const [datos, setDatos] = useState(null);
   const [estudianteInfo, setEstudianteInfo] = useState(null);
   const [cargando, setCargando] = useState(false);
@@ -1849,6 +1855,7 @@ function PortalEstudiante() {
       if (!res) { setError("Código no encontrado. Verifica con tu docente."); setDatos(null); }
       else {
         setDatos(res);
+        localStorage.setItem("codice_estudiante_codigo", codigo.trim());
         const info = await api.fetchEstudiantePorCodigo(codigo);
         setEstudianteInfo(info);
         if (info) {
@@ -1863,6 +1870,21 @@ function PortalEstudiante() {
       setError("Ocurrió un error: " + e.message);
     }
     setCargando(false);
+  };
+
+  // Si ya había una sesión guardada (mismo navegador), la restaura sola
+  // al cargar la página — así un refresco no saca al estudiante afuera.
+  useEffect(() => {
+    if (codigo && !datos) consultar();
+  }, []);
+
+  const cerrarSesion = () => {
+    if (!confirm("¿Cerrar sesión? Vas a tener que ingresar tu código de nuevo la próxima vez.")) return;
+    localStorage.removeItem("codice_estudiante_codigo");
+    setCodigo("");
+    setDatos(null);
+    setEstudianteInfo(null);
+    setVista("inicio");
   };
 
   if (datos) {
@@ -1885,7 +1907,7 @@ function PortalEstudiante() {
             </div>
           </div>
         )}
-        <MenuCodice activo={vista} onCambiar={irAEstudiante} monedas={datos.monedas} gradoId={datos.grado_id} />
+        <MenuCodice activo={vista} onCambiar={irAEstudiante} monedas={datos.monedas} gradoId={datos.grado_id} onCerrarSesion={cerrarSesion} />
 
         <div className="bg-white rounded-2xl shadow-lg p-6">
           {vista === "inicio" && (
