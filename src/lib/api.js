@@ -1104,6 +1104,16 @@ export async function crearPreguntaConBanco(campos, guardarEnBanco, materiaId, t
 // evaluación tiene preguntas aleatorias configuradas, le sortea un
 // subconjunto propio a este intento puntual — estable durante todo el intento.
 export async function iniciarIntentoConAleatorias(evaluacion, estudianteId) {
+  // Si ya pasó la fecha/hora de cierre, no deja ni empezar — así no alcanza
+  // con que la tarjeta siga visible por una recarga vieja de la página.
+  if (evaluacion.fecha_cierre) {
+    const ahora = new Date();
+    const limite = evaluacion.hora_cierre
+      ? new Date(`${evaluacion.fecha_cierre}T${evaluacion.hora_cierre}`)
+      : new Date(`${evaluacion.fecha_cierre}T23:59:59`);
+    if (ahora > limite) throw new Error("Esta evaluación ya cerró — no se puede presentar.");
+  }
+
   // Si el estudiante tiene Falta Injustificada (FI) hoy en esta materia,
   // no lo deja empezar la evaluación.
   const hoy = new Date().toISOString().slice(0, 10);
