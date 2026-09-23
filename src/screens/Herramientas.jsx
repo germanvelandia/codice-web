@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import * as api from "../lib/api";
 
 let audioCtx = null;
@@ -871,6 +872,189 @@ export function SelectorEstudianteTool({ grados }) {
       )}
     </div>
   );
+}
+
+function mezclarArray(arr) {
+  const copia = [...arr];
+  for (let i = copia.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copia[i], copia[j]] = [copia[j], copia[i]];
+  }
+  return copia;
+}
+
+const LETRAS = ["A", "B", "C", "D"];
+
+function PreguntaFormaForm({ onAgregar }) {
+  const [enunciado, setEnunciado] = useState("");
+  const [opciones, setOpciones] = useState(["", "", "", ""]);
+  const [correctaIdx, setCorrectaIdx] = useState(0);
+
+  const agregar = () => {
+    if (!enunciado.trim() || opciones.some((o) => !o.trim())) { alert("Completá el enunciado y las 4 opciones."); return; }
+    onAgregar({ enunciado: enunciado.trim(), opciones: opciones.map((o) => o.trim()), correctaIdx });
+    setEnunciado(""); setOpciones(["", "", "", ""]); setCorrectaIdx(0);
+  };
+
+  return (
+    <div className="bg-violet-50 rounded-xl p-3 mb-3">
+      <textarea value={enunciado} onChange={(e) => setEnunciado(e.target.value)} rows={2} placeholder="Enunciado de la pregunta"
+        className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none mb-2 bg-white" />
+      <div className="space-y-1.5 mb-2">
+        {opciones.map((op, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <input type="radio" name="correcta" checked={correctaIdx === i} onChange={() => setCorrectaIdx(i)} title="Marcar como correcta" />
+            <span className="text-xs font-bold text-slate-400 w-4">{LETRAS[i]}</span>
+            <input value={op} onChange={(e) => setOpciones((prev) => prev.map((o, j) => (j === i ? e.target.value : o)))} placeholder={`Opción ${LETRAS[i]}`}
+              className="flex-1 text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
+          </div>
+        ))}
+      </div>
+      <button onClick={agregar} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white">+ Agregar pregunta</button>
+    </div>
+  );
+}
+
+// Genera N "formas" (A, B, C…) con el mismo banco de preguntas, pero
+// cada una con el orden de preguntas Y de opciones revuelto distinto —
+// así, sentados uno al lado del otro, no ven la misma pregunta en el
+// mismo lugar. La letra "correcta" de la hoja de respuestas se recalcula
+// para cada forma según dónde terminó cayendo la opción correcta.
+export function FormasExamenTool() {
+  const [titulo, setTitulo] = useState("");
+  const [preguntas, setPreguntas] = useState([]);
+  const [cantidadFormas, setCantidadFormas] = useState(4);
+  const [formas, setFormas] = useState(null);
+  const [imprimiendo, setImprimiendo] = useState(false);
+
+  const quitarPregunta = (i) => setPreguntas((prev) => prev.filter((_, idx) => idx !== i));
+
+  const generarFormas = () => {
+    if (preguntas.length < 2) { alert("Agregá al menos 2 preguntas."); return; }
+    const n = Math.max(2, Math.min(6, cantidadFormas));
+    const nuevas = Array.from({ length: n }, () => {
+      const ordenPreguntas = mezclarArray(preguntas.map((_, i) => i));
+      return ordenPreguntas.map((idxOriginal) => {
+        const p = preguntas[idxOriginal];
+        const indicesOpciones = mezclarArray(p.opciones.map((_, i) => i));
+        const opcionesNuevas = indicesOpciones.map((i) => p.opciones[i]);
+        const letraCorrecta = LETRAS[indicesOpciones.indexOf(p.correctaIdx)];
+        return { enunciado: p.enunciado, opciones: opcionesNuevas, letraCorrecta };
+      });
+    });
+    setFormas(nuevas);
+  };
+
+  return (
+    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 md:col-span-2">
+      <h3 className="font-bold text-slate-800 mb-1">📝 Formas de Examen (A/B/C/D)</h3>
+      <p className="text-xs text-slate-400 mb-3">Mismas preguntas para todo el curso, pero con el orden de preguntas y de opciones revuelto distinto en cada forma — para imprimir y evitar copias entre compañeros.</p>
+
+      {!formas ? (
+        <>
+          <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título del examen (ej: Evaluación de Periodo 3 — Ética)"
+            className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none mb-3" />
+
+          {preguntas.length > 0 && (
+            <div className="space-y-1.5 mb-3">
+              {preguntas.map((p, i) => (
+                <div key={i} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2 text-xs">
+                  <span className="text-slate-600">{i + 1}. {p.enunciado}</span>
+                  <button onClick={() => quitarPregunta(i)} className="text-slate-300 hover:text-rose-500 shrink-0 ml-2">✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <PreguntaFormaForm onAgregar={(p) => setPreguntas((prev) => [...prev, p])} />
+
+          <div className="flex items-center gap-2 mb-3">
+            <label className="text-xs text-slate-500">N° de formas distintas (A, B, C…)</label>
+            <input type="number" min={2} max={6} value={cantidadFormas} onChange={(e) => setCantidadFormas(parseInt(e.target.value, 10) || 2)}
+              className="w-16 text-xs text-center rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+          </div>
+          <button onClick={generarFormas} disabled={preguntas.length < 2} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">
+            Generar {Math.max(2, Math.min(6, cantidadFormas))} formas
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="text-xs text-emerald-600 mb-3">✔ {formas.length} formas generadas, con {preguntas.length} preguntas cada una.</p>
+          <div className="flex gap-2">
+            <button onClick={() => setImprimiendo(true)} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white">🖨️ Imprimir todas las formas</button>
+            <button onClick={() => setFormas(null)} className="text-sm text-slate-400">↺ Volver a editar preguntas</button>
+          </div>
+        </>
+      )}
+
+      {imprimiendo && <ImprimirFormasExamen titulo={titulo || "Evaluación"} formas={formas} onCerrado={() => setImprimiendo(false)} />}
+    </div>
+  );
+}
+
+function ImprimirFormasExamen({ titulo, formas, onCerrado }) {
+  useEffect(() => {
+    const id = setTimeout(() => window.print(), 200);
+    const onAfter = () => onCerrado();
+    window.addEventListener("afterprint", onAfter);
+    return () => { clearTimeout(id); window.removeEventListener("afterprint", onAfter); };
+  }, []);
+
+  const contenido = (
+    <div className="print-only" style={{ maxWidth: "180mm", margin: "0 auto", fontFamily: "Arial, sans-serif", color: "#1e293b" }}>
+      {formas.map((forma, i) => (
+        <div key={i} className="print-avoid-break" style={{ pageBreakAfter: "always" }}>
+          <div style={{ textAlign: "center", borderBottom: "2px solid #000", paddingBottom: 8, marginBottom: 14 }}>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>{titulo}</div>
+            <div style={{ fontSize: 13, marginTop: 4 }}>FORMA {LETRAS[i]}</div>
+          </div>
+          <table style={{ width: "100%", fontSize: 11, borderCollapse: "collapse", marginBottom: 16 }}>
+            <tbody>
+              <tr>
+                <td style={{ border: "1px solid #000", padding: 4, fontWeight: 700, width: "16%" }}>Nombre</td>
+                <td style={{ border: "1px solid #000", padding: 4 }} colSpan={3}></td>
+              </tr>
+              <tr>
+                <td style={{ border: "1px solid #000", padding: 4, fontWeight: 700 }}>Curso</td>
+                <td style={{ border: "1px solid #000", padding: 4 }}></td>
+                <td style={{ border: "1px solid #000", padding: 4, fontWeight: 700 }}>Fecha</td>
+                <td style={{ border: "1px solid #000", padding: 4 }}></td>
+              </tr>
+            </tbody>
+          </table>
+          {forma.map((p, j) => (
+            <div key={j} className="print-avoid-break" style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>{j + 1}. {p.enunciado}</div>
+              {p.opciones.map((op, k) => (
+                <div key={k} style={{ fontSize: 12, marginLeft: 14, marginBottom: 2 }}>{LETRAS[k]}. {op}</div>
+              ))}
+            </div>
+          ))}
+        </div>
+      ))}
+
+      {/* Hoja de respuestas del docente — una tabla por forma */}
+      <div className="print-avoid-break">
+        <div style={{ textAlign: "center", borderBottom: "2px solid #000", paddingBottom: 8, marginBottom: 14 }}>
+          <div style={{ fontWeight: 700, fontSize: 16 }}>{titulo} — Hoja de respuestas (docente)</div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(${formas.length}, 1fr)`, gap: 12 }}>
+          {formas.map((forma, i) => (
+            <div key={i}>
+              <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 4, textAlign: "center" }}>FORMA {LETRAS[i]}</div>
+              {forma.map((p, j) => (
+                <div key={j} style={{ fontSize: 11, display: "flex", justifyContent: "space-between", borderBottom: "1px solid #ddd", padding: "2px 4px" }}>
+                  <span>{j + 1}.</span><span style={{ fontWeight: 700 }}>{p.letraCorrecta}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  return createPortal(contenido, document.body);
 }
 
 export function BingoTool() {
