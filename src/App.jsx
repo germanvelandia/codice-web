@@ -44,6 +44,7 @@ import { VistaTableroSemanal } from "./screens/TableroSemanal";
 import { VistaInicio, ContenidoLightbox } from "./screens/Inicio";
 import { NavegacionPorTarjetas, BotonVolverInicio, EnlaceTodasLasSecciones } from "./screens/InicioTarjetas";
 import { Star, Gift, Settings, Package, Image, FileText, Award, Trophy, Puzzle, BookOpen, HelpCircle, Archive, Clock, Palette, GraduationCap, Users } from "lucide-react";
+import { VistaComarcaOakhaven, TarjetaComarcaPublica, urlDeTarjeta, urlQR } from "./screens/ComarcaOakhaven";
 import { EditorTexto, TextoEnriquecido, textoPlano } from "./components/RichText";
 import { InstitucionModal } from "./screens/Institucion";
 import { AdministracionModal } from "./screens/Administracion";
@@ -55,9 +56,10 @@ export default function App() {
   // Link dedicado para estudiantes: tu-sitio.vercel.app/#estudiante
   // No muestra ninguna opción de docente, ni espera sesión de Supabase.
   const soloEstudiante = typeof window !== "undefined" && window.location.hash === "#estudiante";
+  const esTarjetaComarca = typeof window !== "undefined" && window.location.hash.startsWith("#comarca-tarjeta");
 
   useEffect(() => {
-    if (soloEstudiante) return;
+    if (soloEstudiante || esTarjetaComarca) return;
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setLoading(false);
@@ -65,6 +67,10 @@ export default function App() {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
     return () => listener.subscription.unsubscribe();
   }, []);
+
+  if (esTarjetaComarca) {
+    return <TarjetaComarcaPublica />;
+  }
 
   if (soloEstudiante) {
     return (
@@ -1121,6 +1127,7 @@ const MENU_CODICE_GRUPOS = [
       { key: "salonhonor", label: "Salón de Honor", icono: "🏆" },
       { key: "recompensas", label: "Recompensas", icono: "🎁" },
       { key: "album", label: "Álbum", icono: "🎴" },
+      { key: "comarca", label: "Mi Comarca", icono: "🏛️" },
     ],
   },
   {
@@ -1830,6 +1837,47 @@ function PreguntadosEstudiante({ estudianteId }) {
   );
 }
 
+// El estudiante ve su propio código QR para abrir su tarjeta de la
+// Comarca de Oakhaven en cualquier dispositivo, sin tener que iniciar
+// sesión ahí — solo necesita la sesión activa de su grado.
+function MiComarcaEstudiante({ estudianteInfo }) {
+  const [sesion, setSesion] = useState(null);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    if (!estudianteInfo?.grado_id) return;
+    api.fetchSesionActivaDelGrado(estudianteInfo.grado_id).then((s) => { setSesion(s); setCargando(false); });
+  }, [estudianteInfo?.grado_id]);
+
+  const reinoId = estudianteInfo?.reino_actual || estudianteInfo?.reino_original;
+
+  if (cargando) return <p className="text-sm text-slate-400">Cargando…</p>;
+
+  if (!sesion || !reinoId) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-4xl mb-2">🏛️</div>
+        <p className="text-sm text-slate-400">Tu docente todavía no abrió una sesión de la Comarca de Oakhaven para tu curso.</p>
+      </div>
+    );
+  }
+
+  const link = urlDeTarjeta(sesion.id, reinoId, estudianteInfo.id);
+
+  return (
+    <div className="text-center py-4">
+      <div className="text-4xl mb-2">🏛️</div>
+      <h3 className="font-bold text-slate-800 mb-1">Mi Comarca de Oakhaven</h3>
+      <p className="text-xs text-slate-400 mb-4">Escaneá este código (o tocá el botón) para ver tu tarjeta con tus GP, FP y objetos.</p>
+      <img src={urlQR(link)} alt="Código QR de tu tarjeta" className="mx-auto rounded-xl border border-slate-200 mb-4" />
+      <a href={link} target="_blank" rel="noreferrer" className="inline-block text-sm font-semibold px-5 py-2.5 rounded-lg bg-violet-500 text-white">
+        Ver mi tarjeta ahora
+      </a>
+    </div>
+  );
+}
+
+
 function PortalEstudiante() {
   const [codigo, setCodigo] = useState(() => localStorage.getItem("codice_estudiante_codigo") || "");
   const [datos, setDatos] = useState(null);
@@ -2052,6 +2100,8 @@ function PortalEstudiante() {
             <AlbumEstudiante estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} />
           )}
 
+          {vista === "comarca" && estudianteInfo && <MiComarcaEstudiante estudianteInfo={estudianteInfo} />}
+
           {vista === "ranking" && estudianteInfo && (
             <RankingEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />
           )}
@@ -2166,6 +2216,7 @@ const MENU_PANEL_GRUPOS = [
       { key: "guiasestudio", label: "Guías de Estudio", icono: "📘" },
       { key: "actividadesprogramadas", label: "Actividades Programadas", icono: "🎮" },
       { key: "biblioteca", label: "Biblioteca", icono: "📚" },
+      { key: "comarca", label: "Comarca de Oakhaven", icono: "🏛️" },
     ],
   },
   {
@@ -2520,6 +2571,7 @@ function Panel({ session }) {
         {tab === "tablerosemanal" && grados.length > 0 && <VistaTableroSemanal grados={grados} />}
         {tab === "rubricas" && <VistaRubricas />}
         {tab === "biblioteca" && grados.length > 0 && <VistaBiblioteca grados={grados} gradoActivo={gradoActivo} />}
+        {tab === "comarca" && grados.length > 0 && <VistaComarcaOakhaven grados={grados} gradoActivo={gradoActivo} />}
         {tab === "anotaciones" && <VistaAnotaciones />}
         {tab === "inclusion" && <VistaInclusionGeneral />}
         {tab === "bajasvida" && <VistaBajasVida />}
