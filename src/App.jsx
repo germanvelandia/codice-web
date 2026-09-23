@@ -6,7 +6,7 @@ import { bandaDesempeno, notaFinalPonderada } from "./lib/calificaciones";
 import { sonidoGirar, sonidoAcierto, sonidoError, sonidoLogro } from "./lib/sonidos";
 import { VistaGrados, VistaReinos, VistaEstudiantes, FotoLightbox } from "./screens/Estudiantes";
 import { VistaAsistencia } from "./screens/Asistencia";
-import { VistaRuleta, VistaRuletaMonedas, VistaTemporizador, DadoTool, CronometroTool, SemaforoTool, SorteoOrdenTool, GeneradorGruposTool, MarcadorPuntosTool, SelectorEstudianteTool, BingoTool } from "./screens/Herramientas";
+import { VistaRuleta, VistaRuletaMonedas, VistaTemporizador, DadoTool, CronometroTool, SemaforoTool, SorteoOrdenTool, GeneradorGruposTool, MarcadorPuntosTool, SelectorEstudianteTool, BingoTool, FormasExamenTool } from "./screens/Herramientas";
 import { VistaAccionesMasivas } from "./screens/AccionesMasivas";
 import { VistaBanco } from "./screens/Banco";
 import { VistaAlbum, CartaCriatura } from "./screens/Album";
@@ -2529,6 +2529,7 @@ function Panel({ session }) {
                 { key: "marcador", label: "Marcador de Puntos", Icono: Award, fondo: "#E0E7FF", color: "#4338CA" },
                 { key: "selectorestudiante", label: "Selector de Estudiante", Icono: Star, fondo: "#CFFAFE", color: "#0E7490" },
                 { key: "bingo", label: "Bingo de Repaso", Icono: Puzzle, fondo: "#F3E8FF", color: "#7E22CE" },
+                { key: "formasexamen", label: "Formas de Examen (A/B/C/D)", Icono: FileText, fondo: "#FEE2E2", color: "#B91C1C" },
               ].map((op) => (
                 <button key={op.key} onClick={() => setSubTabHerramientas(op.key)}
                   className={`flex items-center gap-2.5 rounded-2xl border px-3.5 py-3 text-left transition-all ${subTabHerramientas === op.key ? "border-violet-300 bg-violet-50" : "border-slate-200 bg-white hover:border-slate-300"}`}>
@@ -2561,6 +2562,7 @@ function Panel({ session }) {
             {subTabHerramientas === "marcador" && <MarcadorPuntosTool />}
             {subTabHerramientas === "selectorestudiante" && <SelectorEstudianteTool grados={grados} />}
             {subTabHerramientas === "bingo" && <BingoTool />}
+            {subTabHerramientas === "formasexamen" && <FormasExamenTool />}
           </>
         )}
         {tab === "roles" && <VistaRoles />}
