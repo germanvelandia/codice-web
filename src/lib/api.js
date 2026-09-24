@@ -105,6 +105,15 @@ export async function fetchHistorialPromociones() {
   return data || [];
 }
 
+// A diferencia de fetchEstudiantesPorGrado, esta trae TODOS — activos e
+// inactivos ("quitados") — para poder vaciar un curso del todo antes de
+// eliminarlo (eliminarGrado se niega si queda cualquiera de los dos).
+export async function fetchTodosLosEstudiantesDelGrado(gradoId) {
+  const { data, error } = await supabase.from("estudiantes").select("id, nombre").eq("grado_id", gradoId);
+  if (error) throw error;
+  return data || [];
+}
+
 export async function eliminarGrado(id) {
   const { count, error: e1 } = await supabase.from("estudiantes").select("id", { count: "exact", head: true }).eq("grado_id", id);
   if (e1) throw e1;
