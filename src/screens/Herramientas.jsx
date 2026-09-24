@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import * as XLSX from "xlsx";
 import * as api from "../lib/api";
 
 let audioCtx = null;
@@ -920,12 +921,121 @@ function PreguntaFormaForm({ onAgregar }) {
 // así, sentados uno al lado del otro, no ven la misma pregunta en el
 // mismo lugar. La letra "correcta" de la hoja de respuestas se recalcula
 // para cada forma según dónde terminó cayendo la opción correcta.
+// Misma plantilla/columnas que ya usa el Banco de Preguntas, para que
+// una planilla armada para uno sirva para el otro.
+function descargarPlantillaFormas() {
+  const filas = [
+    ["Enunciado", "Opción A", "Opción B", "Opción C", "Opción D", "Correcta (A/B/C/D)"],
+    ["¿Cuál es el resultado de 2x + 3 = 7?", "x=1", "x=2", "x=3", "x=4", "B"],
+  ];
+  const hoja = XLSX.utils.aoa_to_sheet(filas);
+  hoja["!cols"] = filas[0].map(() => ({ wch: 22 }));
+  const libro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(libro, hoja, "Preguntas");
+  XLSX.writeFile(libro, "plantilla_formas_examen.xlsx");
+}
+
+function importarExcelFormas(file, onListo) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: "binary" });
+      const hoja = wb.Sheets[wb.SheetNames[0]];
+      const filas = XLSX.utils.sheet_to_json(hoja, { defval: "" });
+      const nuevas = filas.map((f) => {
+        const enunciado = (f["Enunciado"] || "").toString().trim();
+        const opciones = [
+          (f["Opción A"] || f["Opcion A"] || "").toString().trim(),
+          (f["Opción B"] || f["Opcion B"] || "").toString().trim(),
+          (f["Opción C"] || f["Opcion C"] || "").toString().trim(),
+          (f["Opción D"] || f["Opcion D"] || "").toString().trim(),
+        ];
+        const letra = (f["Correcta (A/B/C/D)"] || f["Correcta"] || "").toString().trim().toUpperCase();
+        const correctaIdx = Math.max(0, LETRAS.indexOf(letra));
+        return { enunciado, opciones, correctaIdx };
+      }).filter((p) => p.enunciado && p.opciones.every((o) => o));
+      if (nuevas.length === 0) { alert("No se encontraron filas completas. Revisá que uses la plantilla."); return; }
+      onListo(nuevas);
+    } catch (err) {
+      alert("No se pudo leer el archivo: " + err.message);
+    }
+  };
+  reader.readAsBinaryString(file);
+}
+
+// Deja elegir materia (y opcionalmente nivel/tema) y trae preguntas
+// directo del Banco de Preguntas ya cargado, marcando cuáles importar.
+function BancoSelectorModal({ onCerrar, onImportar }) {
+  const [materias, setMaterias] = useState([]);
+  const [materiaId, setMateriaId] = useState("");
+  const [preguntasBanco, setPreguntasBanco] = useState([]);
+  const [seleccionadas, setSeleccionadas] = useState([]);
+  const [cargando, setCargando] = useState(false);
+
+  useEffect(() => { api.fetchMisMaterias().then((d) => { setMaterias(d); if (d[0]) setMateriaId(d[0].id); }); }, []);
+  useEffect(() => {
+    if (!materiaId) return;
+    setCargando(true);
+    api.fetchBancoPreguntas(materiaId, null, null).then((d) => { setPreguntasBanco(d); setSeleccionadas([]); setCargando(false); });
+  }, [materiaId]);
+
+  const toggle = (id) => setSeleccionadas((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+
+  const importar = () => {
+    const elegidas = preguntasBanco.filter((p) => seleccionadas.includes(p.id)).map((p) => ({
+      enunciado: p.enunciado,
+      opciones: p.opciones.map((o) => o.texto),
+      correctaIdx: p.opciones.findIndex((o) => o.correcta),
+    }));
+    onImportar(elegidas);
+    onCerrar();
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onCerrar}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-slate-800">🗂️ Traer del Banco de Preguntas</h3>
+          <button onClick={onCerrar} className="text-slate-400">✕</button>
+        </div>
+        <select value={materiaId} onChange={(e) => setMateriaId(parseInt(e.target.value, 10))} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none mb-3">
+          {materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+        </select>
+
+        {cargando ? (
+          <p className="text-xs text-slate-400">Cargando…</p>
+        ) : preguntasBanco.length === 0 ? (
+          <p className="text-xs text-slate-400">No hay preguntas en el banco de esta materia todavía.</p>
+        ) : (
+          <div className="space-y-1.5 mb-3">
+            {preguntasBanco.map((p) => (
+              <label key={p.id} className="flex items-start gap-2 bg-slate-50 rounded-lg px-3 py-2 text-xs cursor-pointer">
+                <input type="checkbox" checked={seleccionadas.includes(p.id)} onChange={() => toggle(p.id)} className="mt-0.5" />
+                <span className="text-slate-600">{p.enunciado}{p.tema ? <span className="text-slate-400"> — {p.tema}</span> : null}</span>
+              </label>
+            ))}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <button onClick={onCerrar} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
+          <button disabled={seleccionadas.length === 0} onClick={importar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">
+            Importar {seleccionadas.length || ""} pregunta{seleccionadas.length === 1 ? "" : "s"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 export function FormasExamenTool() {
   const [titulo, setTitulo] = useState("");
   const [preguntas, setPreguntas] = useState([]);
   const [cantidadFormas, setCantidadFormas] = useState(4);
   const [formas, setFormas] = useState(null);
   const [imprimiendo, setImprimiendo] = useState(false);
+  const [bancoAbierto, setBancoAbierto] = useState(false);
 
   const quitarPregunta = (i) => setPreguntas((prev) => prev.filter((_, idx) => idx !== i));
 
@@ -966,6 +1076,18 @@ export function FormasExamenTool() {
             </div>
           )}
 
+          <div className="flex flex-wrap gap-2 mb-3">
+            <button onClick={descargarPlantillaFormas} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700">📥 Descargar plantilla Excel</button>
+            <label className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-emerald-300 text-emerald-700 cursor-pointer">
+              📤 Importar Excel
+              <input type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => {
+                if (e.target.files[0]) importarExcelFormas(e.target.files[0], (nuevas) => setPreguntas((prev) => [...prev, ...nuevas]));
+                e.target.value = "";
+              }} />
+            </label>
+            <button onClick={() => setBancoAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-50 text-violet-700">🗂️ Traer del Banco de Preguntas</button>
+          </div>
+
           <PreguntaFormaForm onAgregar={(p) => setPreguntas((prev) => [...prev, p])} />
 
           <div className="flex items-center gap-2 mb-3">
@@ -988,6 +1110,9 @@ export function FormasExamenTool() {
       )}
 
       {imprimiendo && <ImprimirFormasExamen titulo={titulo || "Evaluación"} formas={formas} onCerrado={() => setImprimiendo(false)} />}
+      {bancoAbierto && (
+        <BancoSelectorModal onCerrar={() => setBancoAbierto(false)} onImportar={(nuevas) => setPreguntas((prev) => [...prev, ...nuevas])} />
+      )}
     </div>
   );
 }
