@@ -186,6 +186,14 @@ export async function quitarEstudiante(id) {
   if (error) throw error;
 }
 
+// Igual que quitarEstudiante, pero para varios a la vez — para dar de
+// baja un curso completo sin tener que hacerlo uno por uno. Sigue
+// siendo reversible desde la papelera, igual que el de a uno.
+export async function quitarEstudiantesVarios(ids) {
+  const { error } = await supabase.from("estudiantes").update({ activo: false }).in("id", ids);
+  if (error) throw error;
+}
+
 // Papelera de estudiantes — trae a todos los que están "quitados" (activo:
 // false) de cualquier curso, para poder restaurarlos sin depender de
 // Supabase directamente.
@@ -205,6 +213,13 @@ export async function restaurarEstudiante(id) {
 // vuelta atrás desde acá.
 export async function eliminarEstudiantePermanente(id) {
   const { error } = await supabase.from("estudiantes").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// Borra varios estudiantes de una sola vez — para cuando se da de baja
+// un curso completo, en vez de tener que borrar uno por uno.
+export async function eliminarEstudiantesPermanente(ids) {
+  const { error } = await supabase.from("estudiantes").delete().in("id", ids);
   if (error) throw error;
 }
 
