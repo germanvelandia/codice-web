@@ -2003,6 +2003,10 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
   const [fotosMasivoAbierto, setFotosMasivoAbierto] = useState(false);
   const [importarDatosAbierto, setImportarDatosAbierto] = useState(false);
   const [observadoresGradoAbierto, setObservadoresGradoAbierto] = useState(false);
+  const [modoSeleccion, setModoSeleccion] = useState(false);
+  const [seleccionados, setSeleccionados] = useState([]);
+  const [eliminandoVarios, setEliminandoVarios] = useState(false);
+  const [confirmacionTexto, setConfirmacionTexto] = useState("");
 
   const cargar = async () => {
     setCargando(true);
@@ -2049,6 +2053,24 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
     cargar();
   };
 
+  const toggleSeleccion = (id) => setSeleccionados((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  const seleccionarTodos = () => setSeleccionados(visibles.map((s) => s.id));
+
+  const quitarVarios = async () => {
+    if (confirmacionTexto.trim().toUpperCase() !== "QUITAR") { alert('Escribí exactamente "QUITAR" para confirmar.'); return; }
+    setEliminandoVarios(true);
+    try {
+      await api.quitarEstudiantesVarios(seleccionados);
+      setModoSeleccion(false);
+      setSeleccionados([]);
+      setConfirmacionTexto("");
+      cargar();
+    } catch (e) {
+      alert("Error al quitar: " + e.message);
+    }
+    setEliminandoVarios(false);
+  };
+
   const cambiarReino = async (id, reino) => {
     await api.cambiarReino(id, reino);
     setEstudiantes((prev) => prev.map((s) => (s.id === id ? { ...s, reino_actual: reino } : s)));
@@ -2085,6 +2107,8 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
           <TarjetaAccion Icono={FileText} color={PALETA_ACCIONES[6]} label="Observadores del curso" onClick={() => setObservadoresGradoAbierto(true)} />
           <TarjetaAccion Icono={BookOpen} color={PALETA_ACCIONES[7]} label="Planilla en blanco" onClick={() => setPlanillaBlancoAbierta(true)} />
           <TarjetaAccion Icono={Package} color={PALETA_ACCIONES[8]} label="Importar varios" onClick={() => setImportarAbierto(true)} />
+          <TarjetaAccion Icono={Archive} color={{ fondo: "#FEE2E2", icono: "#B91C1C" }} label={modoSeleccion ? "Cancelar selección" : "Quitar varios"} destacada={modoSeleccion}
+            onClick={() => { setModoSeleccion((v) => !v); setSeleccionados([]); setConfirmacionTexto(""); }} />
         </div>
         {agregarAbierto && (
         <div className="flex flex-wrap gap-2">
@@ -2135,10 +2159,40 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
       <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar estudiante…"
         className="w-full max-w-sm text-sm rounded-full px-4 py-2 border border-slate-200 outline-none mb-4" />
 
+      {modoSeleccion && (
+        <div className="bg-rose-50 border border-rose-200 rounded-2xl p-3 mb-4">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <span className="text-xs font-semibold text-rose-700">{seleccionados.length} de {visibles.length} seleccionados</span>
+            <button onClick={seleccionarTodos} className="text-xs font-semibold text-violet-600 underline">Seleccionar todo el curso</button>
+            <button onClick={() => setSeleccionados([])} className="text-xs text-slate-400">Ninguno</button>
+          </div>
+          {seleccionados.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-rose-700">Escribí <b>QUITAR</b> para confirmar:</span>
+              <input value={confirmacionTexto} onChange={(e) => setConfirmacionTexto(e.target.value)} placeholder="QUITAR"
+                className="text-xs rounded-lg px-2 py-1.5 border border-rose-300 outline-none w-28" />
+              <button disabled={eliminandoVarios} onClick={quitarVarios} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-rose-500 text-white disabled:opacity-50">
+                {eliminandoVarios ? "Quitando…" : `Quitar ${seleccionados.length} estudiante${seleccionados.length === 1 ? "" : "s"}`}
+              </button>
+              <span className="text-[11px] text-slate-400">Es reversible — quedan en la Papelera de estudiantes.</span>
+            </div>
+          )}
+        </div>
+      )}
+
       {cargando ? (
         <div className="text-sm text-slate-400">Cargando…</div>
       ) : visibles.length === 0 ? (
         <div className="text-sm text-slate-400">No hay estudiantes todavía. Agrega el primero arriba.</div>
+      ) : modoSeleccion ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+          {visibles.map((s) => (
+            <label key={s.id} className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 cursor-pointer ${seleccionados.includes(s.id) ? "border-rose-300 bg-rose-50" : "border-slate-200 bg-white"}`}>
+              <input type="checkbox" checked={seleccionados.includes(s.id)} onChange={() => toggleSeleccion(s.id)} />
+              <span className="text-xs font-semibold text-slate-700 truncate">{s.nombre}</span>
+            </label>
+          ))}
+        </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
           {visibles.map((s) => (
