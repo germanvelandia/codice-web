@@ -5314,11 +5314,60 @@ export async function tirarDado(sesionId, provincias) {
 // Reparte el recurso de cada provincia que coincida con el número del
 // dado (y no esté bloqueada por el Ladrón) al Reino dueño. Las "Ciudades"
 // dan el doble.
+// ==================== 🏰 Niveles de Villa del Reino ====================
+// 10 niveles en 3 eras, con costo en GP creciente y bonificación de
+// producción a partir de ciertos niveles (independiente del sistema de
+// Villa→Ciudad de las provincias, que sigue funcionando igual).
+export const VILLA_NIVELES = [
+  { nivel: 1, nombre: "Campamento Nómada", era: "Asentamiento", icono: "🏕️", costoParaSubir: 30, multiplicador: 1 },
+  { nivel: 2, nombre: "Aldea de Madera", era: "Asentamiento", icono: "🛖", costoParaSubir: 60, multiplicador: 1 },
+  { nivel: 3, nombre: "Aldea Fortificada", era: "Asentamiento", icono: "🏘️", costoParaSubir: 120, multiplicador: 1 },
+  { nivel: 4, nombre: "Poblado Comercial", era: "Expansión y Comercio", icono: "🏪", costoParaSubir: 240, multiplicador: 1 },
+  { nivel: 5, nombre: "Villa Minera / Agrícola", era: "Expansión y Comercio", icono: "⛏️", costoParaSubir: 480, multiplicador: 2 },
+  { nivel: 6, nombre: "Ciudadela de Piedra", era: "Expansión y Comercio", icono: "🏯", costoParaSubir: 960, multiplicador: 2 },
+  { nivel: 7, nombre: "Gran Urbe Amurallada", era: "Expansión y Comercio", icono: "🏰", costoParaSubir: 1500, multiplicador: 2 },
+  { nivel: 8, nombre: "Ducado Legendario", era: "Imperio", icono: "👑", costoParaSubir: 2200, multiplicador: 3 },
+  { nivel: 9, nombre: "Capital de las Artes y las Ciencias", era: "Imperio", icono: "🎭", costoParaSubir: 3000, multiplicador: 3 },
+  { nivel: 10, nombre: "Imperio Legendario de Oakhaven", era: "Imperio", icono: "🏛️", costoParaSubir: null, multiplicador: 3 },
+];
+
+export function infoNivelVilla(nivel) {
+  return VILLA_NIVELES.find((v) => v.nivel === nivel) || VILLA_NIVELES[0];
+}
+
+// Sube el nivel de Villa del Reino en uno — le cobra el GP del nivel
+// actual (validando que le alcance), y no deja pasar del nivel 10.
+export async function mejorarVillaReino(sesionId, reinoId, nivelActual) {
+  const info = infoNivelVilla(nivelActual);
+  if (!info.costoParaSubir) throw new Error("Este Reino ya alcanzó el Imperio Legendario — no hay más niveles.");
+  await ajustarEconomiaReino(sesionId, reinoId, "gp", -info.costoParaSubir, `Villa: ${info.nombre} → ${infoNivelVilla(nivelActual + 1).nombre}`);
+  const { error } = await supabase.from("comarca_reinos").update({ nivel_villa: nivelActual + 1 }).eq("id", reinoId);
+  if (error) throw error;
+}
+
+// El docente puede fijar el nivel manualmente, sin cobrar GP (para
+// correcciones o eventos especiales).
+export async function establecerNivelVillaManual(reinoId, nivel) {
+  const nivelValido = Math.max(1, Math.min(10, parseInt(nivel, 10) || 1));
+  const { error } = await supabase.from("comarca_reinos").update({ nivel_villa: nivelValido }).eq("id", reinoId);
+  if (error) throw error;
+}
+
 export async function producirPorDado(sesionId, numero, provincias) {
   const provinciasQueProducen = provincias.filter((p) => p.numero_dado === numero && !p.bloqueada && p.reino_actual_id);
   const detalle = [];
+  if (provinciasQueProducen.length === 0) return detalle;
+
+  // Trae el nivel de Villa de cada Reino dueño involucrado, de una sola vez.
+  const idsReinos = Array.from(new Set(provinciasQueProducen.map((p) => p.reino_actual_id)));
+  const { data: reinosData, error: eReinos } = await supabase.from("comarca_reinos").select("id, nivel_villa").in("id", idsReinos);
+  if (eReinos) throw eReinos;
+  const multiplicadorDeReino = {};
+  (reinosData || []).forEach((r) => { multiplicadorDeReino[r.id] = infoNivelVilla(r.nivel_villa || 1).multiplicador; });
+
   for (const p of provinciasQueProducen) {
-    const cantidad = p.nivel === "ciudad" ? 2 : 1;
+    const base = p.nivel === "ciudad" ? 2 : 1;
+    const cantidad = base * (multiplicadorDeReino[p.reino_actual_id] || 1);
     await sumarRecursoAReino(sesionId, p.reino_actual_id, p.recurso, cantidad);
     detalle.push({ reinoId: p.reino_actual_id, recurso: p.recurso, cantidad, provinciaNombre: p.nombre.split("— ")[1] || p.nombre });
   }
