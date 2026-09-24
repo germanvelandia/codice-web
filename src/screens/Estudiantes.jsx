@@ -2577,12 +2577,27 @@ export function VistaGrados({ onElegirGrado }) {
   };
 
   const eliminar = async (gradoId) => {
-    if (!confirm(`¿Eliminar el curso ${gradoId}? Solo se puede si ya no tiene estudiantes. Si preferís no borrarlo, usá "Ocultar" en vez de esto.`)) return;
+    if (!confirm(`¿Eliminar el curso ${gradoId}? Si preferís no borrarlo, usá "Ocultar" en vez de esto.`)) return;
     try {
       await api.eliminarGrado(gradoId);
       cargar();
+      return;
     } catch (e) {
-      alert(e.message);
+      // Todavía tiene estudiantes (activos o solo "quitados") — se ofrece
+      // borrarlos también, de forma permanente, para poder seguir.
+      const restantes = await api.fetchTodosLosEstudiantesDelGrado(gradoId);
+      if (restantes.length === 0) { alert(e.message); return; }
+      const confirmacion = prompt(
+        `El curso ${gradoId} todavía tiene ${restantes.length} estudiante(s) registrados (algunos pueden estar "quitados" pero sus datos siguen ahí).\n\nPara eliminar el curso, también hay que eliminarlos a ELLOS de forma PERMANENTE (no queda en ninguna papelera).\n\nEscribí ELIMINAR para confirmar ambas cosas:`
+      );
+      if ((confirmacion || "").trim().toUpperCase() !== "ELIMINAR") return;
+      try {
+        await api.eliminarEstudiantesPermanente(restantes.map((s) => s.id));
+        await api.eliminarGrado(gradoId);
+        cargar();
+      } catch (e2) {
+        alert("Error al eliminar: " + e2.message);
+      }
     }
   };
 
