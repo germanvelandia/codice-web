@@ -66,6 +66,97 @@ function SubirImagenReino({ reino, onGuardado }) {
   );
 }
 
+// Modal de mejora de Villa — muestra el nivel actual, el costo del
+// siguiente, y el "mapa" completo de los 10 niveles en sus 3 eras. El
+// docente además puede fijar el nivel a mano, sin cobrar GP.
+function MejorarVillaModal({ sesion, reino, onClose, onCambio }) {
+  const nivelActual = reino.nivel_villa || 1;
+  const infoActual = api.infoNivelVilla(nivelActual);
+  const infoSiguiente = nivelActual < 10 ? api.infoNivelVilla(nivelActual + 1) : null;
+  const [subiendo, setSubiendo] = useState(false);
+  const [ajusteManualAbierto, setAjusteManualAbierto] = useState(false);
+  const [nivelManual, setNivelManual] = useState(nivelActual);
+
+  const mejorar = async () => {
+    if (!infoSiguiente) return;
+    if (reino.gp < infoActual.costoParaSubir) { alert(`A ${reino.nombre} le faltan GP — tiene ${reino.gp}, necesita ${infoActual.costoParaSubir}.`); return; }
+    if (!confirm(`¿Subir a ${reino.nombre} a "${infoSiguiente.nombre}" por ${infoActual.costoParaSubir} GP?`)) return;
+    setSubiendo(true);
+    try {
+      await api.mejorarVillaReino(sesion.id, reino.id, nivelActual);
+      onCambio();
+      onClose();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setSubiendo(false);
+  };
+
+  const guardarManual = async () => {
+    await api.establecerNivelVillaManual(reino.id, nivelManual);
+    onCambio();
+    setAjusteManualAbierto(false);
+  };
+
+  const eras = ["Asentamiento", "Expansión y Comercio", "Imperio"];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-md max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-1">
+          <h3 className="font-bold text-slate-800">🏰 Villa de {reino.nombre}</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+
+        <div className="bg-violet-50 rounded-2xl p-4 text-center my-3">
+          <div className="text-4xl mb-1">{infoActual.icono}</div>
+          <div className="font-bold text-slate-800">{infoActual.nombre}</div>
+          <div className="text-[11px] text-slate-400">Nivel {nivelActual}/10 · {infoActual.era}</div>
+          {infoActual.multiplicador > 1 && <div className="text-[11px] font-semibold text-emerald-600 mt-1">✨ Produce x{infoActual.multiplicador} por cada número de dado</div>}
+        </div>
+
+        {infoSiguiente ? (
+          <button disabled={subiendo} onClick={mejorar} className="w-full text-sm font-semibold px-4 py-3 rounded-xl bg-violet-500 text-white disabled:opacity-50 mb-3">
+            {subiendo ? "…" : `⬆️ Subir a "${infoSiguiente.nombre}" — ${infoActual.costoParaSubir} GP`}
+          </button>
+        ) : (
+          <p className="text-center text-sm font-semibold text-amber-600 mb-3">🏆 ¡Ya alcanzó el máximo nivel!</p>
+        )}
+
+        <div className="space-y-3 mb-3">
+          {eras.map((era) => (
+            <div key={era}>
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">{era}</div>
+              <div className="grid grid-cols-5 gap-1">
+                {api.VILLA_NIVELES.filter((v) => v.era === era).map((v) => (
+                  <div key={v.nivel} className={`text-center rounded-lg py-1.5 ${v.nivel === nivelActual ? "bg-violet-500 text-white" : v.nivel < nivelActual ? "bg-emerald-50 text-emerald-700" : "bg-slate-50 text-slate-400"}`} title={v.nombre}>
+                    <div className="text-sm">{v.icono}</div>
+                    <div className="text-[9px] font-bold">{v.nivel}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {!ajusteManualAbierto ? (
+          <button onClick={() => setAjusteManualAbierto(true)} className="text-[11px] text-slate-400 underline">✏️ Cambiar el nivel manualmente (sin cobrar GP)</button>
+        ) : (
+          <div className="bg-slate-50 rounded-xl p-3">
+            <label className="text-[10px] text-slate-500 block mb-1">Fijar nivel (1 a 10)</label>
+            <div className="flex gap-2">
+              <input type="number" min={1} max={10} value={nivelManual} onChange={(e) => setNivelManual(e.target.value)}
+                className="w-20 text-sm text-center rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+              <button onClick={guardarManual} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white">Guardar</button>
+              <button onClick={() => setAjusteManualAbierto(false)} className="text-xs text-slate-400 px-2">Cancelar</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function AjustarEconomiaModal({ sesion, reino, billetesDeSesion, onClose, onCambio }) {
   const [tipo, setTipo] = useState("gp");
   const [modo, setModo] = useState("rapido"); // "rapido" | "billetes"
@@ -1687,6 +1778,7 @@ function TableroSesion({ sesion: sesionInicial, onVolver }) {
   const [tirandoDado, setTirandoDado] = useState(false);
   const [resultadoDado, setResultadoDado] = useState(null);
   const [ajustandoEconomiaDe, setAjustandoEconomiaDe] = useState(null);
+  const [mejorandoVillaDe, setMejorandoVillaDe] = useState(null);
   const [transfiriendo, setTransfiriendo] = useState(null);
   const [bancoAbierto, setBancoAbierto] = useState(false);
   const [truequesAbierto, setTruequesAbierto] = useState(false);
@@ -1806,6 +1898,13 @@ function TableroSesion({ sesion: sesionInicial, onVolver }) {
               </div>
               <div className="p-3">
                 <div className="font-bold text-slate-800 text-sm mb-1">{reino.emoji} {reino.nombre}</div>
+                <button onClick={() => setMejorandoVillaDe(reino)} className="w-full text-left flex items-center gap-1.5 bg-slate-50 rounded-lg px-2 py-1.5 mb-2 hover:bg-violet-50">
+                  <span className="text-lg">{api.infoNivelVilla(reino.nivel_villa || 1).icono}</span>
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-bold text-slate-700 truncate">{api.infoNivelVilla(reino.nivel_villa || 1).nombre}</div>
+                    <div className="text-[9px] text-slate-400">Nivel {reino.nivel_villa || 1}/10 — {api.infoNivelVilla(reino.nivel_villa || 1).era}</div>
+                  </div>
+                </button>
                 <div className="flex gap-2 mb-2">
                   <button onClick={() => setAjustandoEconomiaDe(reino)} className="text-[11px] font-semibold px-2 py-1 rounded-full bg-amber-100 text-amber-700">🪙 {reino.gp} GP</button>
                   <button onClick={() => setAjustandoEconomiaDe(reino)} className="text-[11px] font-semibold px-2 py-1 rounded-full bg-violet-100 text-violet-700">🕊️ {reino.fp} FP</button>
@@ -1828,6 +1927,7 @@ function TableroSesion({ sesion: sesionInicial, onVolver }) {
       </div>
 
       {ajustandoEconomiaDe && <AjustarEconomiaModal sesion={sesion} reino={ajustandoEconomiaDe} billetesDeSesion={billetes} onClose={() => setAjustandoEconomiaDe(null)} onCambio={cargar} />}
+      {mejorandoVillaDe && <MejorarVillaModal sesion={sesion} reino={mejorandoVillaDe} onClose={() => setMejorandoVillaDe(null)} onCambio={cargar} />}
       {transfiriendo && <TransferirProvinciaModal provincia={transfiriendo} reinos={reinos} onClose={() => setTransfiriendo(null)} onCambio={cargar} />}
       {bancoAbierto && <BancoModal sesion={sesion} reinos={reinos} onClose={() => setBancoAbierto(false)} onCambio={cargar} />}
       {truequesAbierto && <TruequesModal sesion={sesion} reinos={reinos} inventario={inventario} recursos={recursos} onClose={() => setTruequesAbierto(false)} onCambio={cargar} />}
