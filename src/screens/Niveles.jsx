@@ -53,7 +53,7 @@ export function VistaNiveles() {
       {cargando ? (
         <div className="text-sm text-slate-400">Cargando…</div>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-100 divide-y divide-slate-100 mb-4">
+        <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 mb-4">
           {niveles.map((n) => (
             <div key={n.id} className="flex items-center gap-3 px-4 py-3">
               {editandoId === n.id ? (
