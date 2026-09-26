@@ -60,7 +60,7 @@ function boom() {
 // una ruleta real que gira rápido y va frenando (usa la misma curva del CSS).
 // (los sonidos de "clac" ahora se generan directo en cada spin(), ver más abajo)
 
-const COLORES_RUEDA = ["#8B5CF6", "#F59E0B", "#10B981", "#3B82F6", "#EF4444", "#EC4899", "#14B8A6", "#F97316", "#6366F1", "#84CC16", "#06B6D4", "#D946EF"];
+const COLORES_RUEDA = ["#2F55A4", "#F59E0B", "#10B981", "#3B82F6", "#EF4444", "#17264D", "#14B8A6", "#F97316", "#6366F1", "#84CC16", "#06B6D4", "#D946EF"];
 
 // Rueda giratoria grande, estilo Wordwall — gajos de colores en un círculo
 // real (SVG), con rotación física hasta el gajo ganador, y ese gajo queda
@@ -246,8 +246,8 @@ export function VistaRuleta({ grados, gradoActivo }) {
       <div className="flex flex-col items-center gap-6">
         <div className="rounded-3xl flex items-center justify-center text-center px-6"
           style={{
-            width: 320, minHeight: 160, background: "linear-gradient(180deg, #EDE9FE 0%, #F5F3FF 100%)",
-            border: "4px solid #8B5CF6", boxShadow: spinning ? "0 0 0 6px rgba(139,92,246,0.15)" : "none",
+            width: 320, minHeight: 160, background: "linear-gradient(180deg, #E8EEF8 0%, #E8EEF8 100%)",
+            border: "4px solid #2F55A4", boxShadow: spinning ? "0 0 0 6px rgba(47,85,164,0.15)" : "none",
             transition: "box-shadow 0.2s",
           }}>
           {mostrado ? (
@@ -438,8 +438,8 @@ export function VistaRuletaMonedas({ grados, gradoActivo }) {
       <div className="flex flex-col items-center gap-6">
         <div className="rounded-3xl flex items-center justify-center text-center px-6"
           style={{
-            width: 280, minHeight: 140, background: "linear-gradient(180deg, #EDE9FE 0%, #F5F3FF 100%)",
-            border: "4px solid #8B5CF6", boxShadow: spinning ? "0 0 0 6px rgba(139,92,246,0.15)" : "none",
+            width: 280, minHeight: 140, background: "linear-gradient(180deg, #E8EEF8 0%, #E8EEF8 100%)",
+            border: "4px solid #2F55A4", boxShadow: spinning ? "0 0 0 6px rgba(47,85,164,0.15)" : "none",
             transition: "box-shadow 0.2s",
           }}>
           {mostrado !== null ? (
@@ -530,7 +530,7 @@ export function VistaTemporizador() {
           <div style={{ width: 140, height: 200 }} className="relative">
             {/* Cuerpo del reloj de arena */}
             <svg viewBox="0 0 140 200" width="140" height="200">
-              <polygon points="15,10 125,10 70,100 125,190 15,190 70,100" fill="none" stroke="#8B5CF6" strokeWidth="6" strokeLinejoin="round" />
+              <polygon points="15,10 125,10 70,100 125,190 15,190 70,100" fill="none" stroke="#2F55A4" strokeWidth="6" strokeLinejoin="round" />
               {/* Arena arriba (disminuye) */}
               <clipPath id="clipArriba"><polygon points="15,10 125,10 70,100" /></clipPath>
               <rect x="15" y={10 + 90 * (1 - fraccionRestante)} width="110" height={90 * fraccionRestante} fill="#F59E0B" clipPath="url(#clipArriba)" />
@@ -1217,10 +1217,10 @@ export function BingoTool() {
     beep(600, 0.1);
   };
 
-  const COLORES_BINGO = ["#EF4444", "#F59E0B", "#8B5CF6", "#10B981", "#3B82F6"];
+  const COLORES_BINGO = ["#EF4444", "#F59E0B", "#2F55A4", "#10B981", "#3B82F6"];
 
   return (
-    <div className="rounded-3xl p-5 md:col-span-2 relative overflow-hidden" style={{ background: "linear-gradient(135deg, #FDF4FF 0%, #F5F3FF 50%, #EFF6FF 100%)", border: "2px solid #E9D5FF" }}>
+    <div className="rounded-3xl p-5 md:col-span-2 relative overflow-hidden" style={{ background: "linear-gradient(135deg, #E8EEF8 0%, #f9f6ee 50%, #E8EEF8 100%)", border: "2px solid #a7b8db" }}>
       <div className="absolute top-3 right-4 text-2xl opacity-70">🎉</div>
       <div className="absolute bottom-3 left-4 text-2xl opacity-50">🎊</div>
       <h3 className="font-extrabold text-slate-800 mb-3 text-lg flex items-center gap-2">
@@ -1236,7 +1236,7 @@ export function BingoTool() {
             <input type="number" min={2} max={20} value={cantidadCartones} onChange={(e) => setCantidadCartones(parseInt(e.target.value, 10) || 2)}
               className="w-16 text-xs text-center rounded-lg px-2 py-1.5 border border-violet-200 outline-none bg-white" />
           </div>
-          <button onClick={generarCartones} className="text-sm font-bold px-5 py-2.5 rounded-full text-white shadow-md" style={{ background: "linear-gradient(to right, #8B5CF6, #EC4899)" }}>
+          <button onClick={generarCartones} className="text-sm font-bold px-5 py-2.5 rounded-full text-white shadow-md" style={{ background: "linear-gradient(to right, #2F55A4, #17264D)" }}>
             🎲 Generar cartones y empezar
           </button>
         </>
@@ -1269,10 +1269,10 @@ export function BingoTool() {
           </div>
           <div>
             <div className="text-xs font-semibold text-slate-500 mb-2">🎒 Bolsa: {bolsa.length - salidos.length} de {bolsa.length} sin salir</div>
-            <div className="rounded-2xl p-6 text-center mb-3 min-h-[70px] flex items-center justify-center shadow-inner" style={{ background: "linear-gradient(135deg, #EDE9FE, #FCE7F3)", border: "2px dashed #C4B5FD" }}>
-              <span className="text-lg font-extrabold" style={{ color: "#7C3AED" }}>{ultimo || "🎈 —"}</span>
+            <div className="rounded-2xl p-6 text-center mb-3 min-h-[70px] flex items-center justify-center shadow-inner" style={{ background: "linear-gradient(135deg, #E8EEF8, #f1e7d5)", border: "2px dashed #829aca" }}>
+              <span className="text-lg font-extrabold" style={{ color: "#28478a" }}>{ultimo || "🎈 —"}</span>
             </div>
-            <button onClick={sacar} disabled={bolsa.length - salidos.length === 0} className="w-full text-sm font-bold px-4 py-2.5 rounded-full text-white shadow-md disabled:opacity-40 mb-2" style={{ background: "linear-gradient(to right, #8B5CF6, #EC4899)" }}>
+            <button onClick={sacar} disabled={bolsa.length - salidos.length === 0} className="w-full text-sm font-bold px-4 py-2.5 rounded-full text-white shadow-md disabled:opacity-40 mb-2" style={{ background: "linear-gradient(to right, #2F55A4, #17264D)" }}>
               🎱 Sacar uno
             </button>
             <button onClick={() => setCartones(null)} className="w-full text-xs text-slate-400">↺ Empezar de nuevo (nueva lista)</button>
