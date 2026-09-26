@@ -99,7 +99,7 @@ function DarObjetoPanel({ objetos, grados, gradoActivo }) {
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 p-4">
+    <div className="bg-white rounded-2xl border border-slate-200 p-4">
       <h3 className="font-bold text-slate-800 mb-3">🎁 Entregar un objeto</h3>
       <div className="flex flex-wrap gap-2 mb-3">
         <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
@@ -113,7 +113,7 @@ function DarObjetoPanel({ objetos, grados, gradoActivo }) {
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 mb-3 max-h-56 overflow-y-auto">
         {estudiantes.map((e) => (
-          <label key={e.id} className={`flex items-center gap-1.5 text-xs rounded-lg px-2 py-1.5 border ${seleccionados.has(e.id) ? "bg-violet-50 border-violet-200" : "border-slate-100"}`}>
+          <label key={e.id} className={`flex items-center gap-1.5 text-xs rounded-lg px-2 py-1.5 border ${seleccionados.has(e.id) ? "bg-violet-50 border-violet-200" : "border-slate-200"}`}>
             <input type="checkbox" checked={seleccionados.has(e.id)} onChange={() => toggle(e.id)} />
             <span className="truncate">{e.nombre}</span>
           </label>
@@ -159,7 +159,7 @@ export function VistaObjetos({ grados, gradoActivo }) {
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
           {objetos.map((o) => (
-            <div key={o.id} className="bg-white rounded-2xl border border-slate-100 p-3">
+            <div key={o.id} className="bg-white rounded-2xl border border-slate-200 p-3">
               <div className="flex justify-between items-start">
                 <div className="text-2xl">{o.emoji}</div>
                 <div className="flex gap-1.5">
@@ -239,7 +239,7 @@ export function ObjetosEstudiante({ estudianteId, monedas, onMonedasActualizadas
             const o = item.objetos_catalogo;
             if (!o) return null;
             return (
-              <div key={item.id} className="bg-white rounded-xl border border-slate-100 p-2.5 text-center">
+              <div key={item.id} className="bg-white rounded-xl border border-slate-200 p-2.5 text-center">
                 <div className="text-2xl">{o.emoji}</div>
                 <div className="text-xs font-semibold text-slate-700 mt-1">{o.nombre}</div>
                 <div className="text-[10px] text-slate-400">Tenés: {item.cantidad}</div>
@@ -261,7 +261,7 @@ export function ObjetosEstudiante({ estudianteId, monedas, onMonedasActualizadas
       <p className="text-xs text-slate-400 mb-2">🪙 Tenés {monedas} monedas.</p>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         {tienda.map((o) => (
-          <div key={o.id} className="bg-white rounded-xl border border-slate-100 p-2.5 text-center">
+          <div key={o.id} className="bg-white rounded-xl border border-slate-200 p-2.5 text-center">
             <div className="text-2xl">{o.emoji}</div>
             <div className="text-xs font-semibold text-slate-700 mt-1">{o.nombre}</div>
             {o.efecto_vida > 0 && <div className="text-[10px] text-emerald-600">+{o.efecto_vida} ❤️ al usarlo</div>}
