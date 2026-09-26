@@ -1,9 +1,22 @@
+@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&family=Figtree:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 html, body, #root {
   height: 100%;
+}
+
+/* Tipografía institucional: Source Serif 4 en títulos (tono clásico e
+   institucional), Figtree en el resto (muy legible en celular). Se
+   aplica por etiqueta para que alcance a toda la app sin tener que
+   agregar clases una por una en cada pantalla. */
+body {
+  font-family: 'Figtree', -apple-system, "Segoe UI", sans-serif;
+}
+h1, h2, h3 {
+  font-family: 'Source Serif 4', Georgia, serif;
 }
 
 .print-only {
