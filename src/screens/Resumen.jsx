@@ -140,7 +140,7 @@ export function ResumenEstudianteModal({ estudiante, onClose }) {
               <p className="text-xs text-slate-400 mb-3">Sin notas registradas.</p>
             ) : (
               <div className="overflow-x-auto mb-3">
-                <table className="w-full text-xs border border-slate-100 rounded-lg">
+                <table className="w-full text-xs border border-slate-200 rounded-lg">
                   <thead>
                     <tr className="bg-slate-50">
                       <th className="text-left px-2 py-1">Materia</th>
