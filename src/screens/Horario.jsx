@@ -251,11 +251,11 @@ function CalendarioHorario({ visible, modo, grados, onEditar }) {
   }, [visible]);
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 overflow-x-auto">
+    <div className="bg-white rounded-2xl border border-slate-200 overflow-x-auto">
       <div style={{ minWidth: 640 }}>
         <div className="grid" style={{ gridTemplateColumns: "50px repeat(6, 1fr)" }}>
           <div />
-          {DIAS.map((d) => <div key={d} className="text-center text-xs font-bold text-slate-600 py-2 border-b border-slate-100">{d.slice(0, 3)}</div>)}
+          {DIAS.map((d) => <div key={d} className="text-center text-xs font-bold text-slate-600 py-2 border-b border-slate-200">{d.slice(0, 3)}</div>)}
         </div>
         <div className="grid relative" style={{ gridTemplateColumns: "50px repeat(6, 1fr)", height: horas.length * alturaHora }}>
           <div className="relative">
@@ -264,7 +264,7 @@ function CalendarioHorario({ visible, modo, grados, onEditar }) {
             ))}
           </div>
           {[1, 2, 3, 4, 5, 6].map((dia) => (
-            <div key={dia} className="relative border-l border-slate-100">
+            <div key={dia} className="relative border-l border-slate-200">
               {horas.map((h, i) => <div key={h} className="absolute w-full border-t border-slate-50" style={{ top: i * alturaHora }} />)}
               {porDia[dia].map((clase) => {
                 const base = horas[0];
@@ -327,11 +327,11 @@ function HorarioSemanal({ grados, materias, usuarioId }) {
     <div>
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div className="flex flex-wrap gap-2">
-          <div className="flex gap-1 rounded-full bg-white p-1 w-fit border border-slate-100">
+          <div className="flex gap-1 rounded-full bg-white p-1 w-fit border border-slate-200">
             <button onClick={() => setModo("mio")} className={`text-xs px-3 py-1.5 rounded-full ${modo === "mio" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Mi horario</button>
             <button onClick={() => setModo("todos")} className={`text-xs px-3 py-1.5 rounded-full ${modo === "todos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Todos los docentes</button>
           </div>
-          <div className="flex gap-1 rounded-full bg-white p-1 w-fit border border-slate-100">
+          <div className="flex gap-1 rounded-full bg-white p-1 w-fit border border-slate-200">
             <button onClick={() => setVista("calendario")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "calendario" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📅 Calendario</button>
             <button onClick={() => setVista("lista")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "lista" ? "bg-violet-500 text-white" : "text-slate-600"}`}>☰ Lista</button>
           </div>
@@ -358,7 +358,7 @@ function HorarioSemanal({ grados, materias, usuarioId }) {
       ) : (
         <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
           {DIAS.map((dia, i) => (
-            <div key={dia} className="bg-white rounded-2xl border border-slate-100 p-3">
+            <div key={dia} className="bg-white rounded-2xl border border-slate-200 p-3">
               <div className="text-xs font-bold text-slate-700 mb-2">{dia}</div>
               {porDia[i + 1].length === 0 ? (
                 <div className="text-[11px] text-slate-300">Sin clases</div>
@@ -494,7 +494,7 @@ function CalendarioMensual({ eventos, mesActual, onCambiarMes, diaSeleccionado, 
   const eventosDelDia = (fechaStr) => eventos.filter((e) => e.fecha <= fechaStr && (e.fecha_fin || e.fecha) >= fechaStr);
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 p-3">
+    <div className="bg-white rounded-2xl border border-slate-200 p-3">
       <div className="flex items-center justify-between mb-3">
         <button onClick={() => onCambiarMes(-1)} className="text-slate-400 hover:text-violet-600 px-2 text-lg">‹</button>
         <div className="font-bold text-slate-800 capitalize">{MESES_NOMBRE[mesActual.getMonth()]} {mesActual.getFullYear()}</div>
@@ -593,7 +593,7 @@ function Cronograma({ grados }) {
     <div>
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div className="flex gap-2 flex-wrap">
-          <div className="flex gap-1 rounded-full bg-white p-1 w-fit border border-slate-100">
+          <div className="flex gap-1 rounded-full bg-white p-1 w-fit border border-slate-200">
             <button onClick={() => setVista("calendario")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "calendario" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📅 Calendario</button>
             <button onClick={() => setVista("lista")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "lista" ? "bg-violet-500 text-white" : "text-slate-600"}`}>☰ Lista</button>
           </div>
@@ -671,7 +671,7 @@ export function VistaHorario({ grados }) {
 
   return (
     <div>
-      <div className="flex gap-1 mb-4 rounded-full bg-white p-1 w-fit border border-slate-100">
+      <div className="flex gap-1 mb-4 rounded-full bg-white p-1 w-fit border border-slate-200">
         <button onClick={() => setTab("horario")} className={`text-sm px-4 py-2 rounded-full ${tab === "horario" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📅 Horario semanal</button>
         <button onClick={() => setTab("cronograma")} className={`text-sm px-4 py-2 rounded-full ${tab === "cronograma" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🗓️ Cronograma</button>
       </div>
