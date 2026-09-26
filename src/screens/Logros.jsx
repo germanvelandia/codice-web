@@ -125,7 +125,7 @@ function DuplicadosLogrosModal({ onClose, onCambio }) {
         ) : (
           <div className="space-y-4">
             {grupos.map((grupo, i) => (
-              <div key={i} className="border border-slate-100 rounded-xl p-3">
+              <div key={i} className="border border-slate-200 rounded-xl p-3">
                 <div className="text-sm font-semibold text-slate-700 mb-2">"{grupo[0].nombre}" — {grupo.length} versiones</div>
                 <div className="space-y-1.5">
                   {grupo.map((l) => (
@@ -148,6 +148,7 @@ function DuplicadosLogrosModal({ onClose, onCambio }) {
     </div>
   );
 }
+
 
 export function VistaLogros() {
   const [logros, setLogros] = useState([]);
@@ -193,7 +194,7 @@ export function VistaLogros() {
           {logros.map((l) => {
             const tipoInfo = TIPOS_LOGRO.find((t) => t.key === l.tipo);
             return (
-              <div key={l.id} className={`bg-white rounded-2xl border p-3 ${l.activo ? "border-slate-100" : "border-slate-100 opacity-50"}`}>
+              <div key={l.id} className={`bg-white rounded-2xl border p-3 ${l.activo ? "border-slate-200" : "border-slate-200 opacity-50"}`}>
                 <div className="flex justify-between items-start">
                   <div className="text-3xl">{l.emoji}</div>
                   <div className="flex gap-1.5">
