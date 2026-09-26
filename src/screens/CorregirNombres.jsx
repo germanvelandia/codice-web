@@ -102,7 +102,7 @@ export function VistaCorregirNombres() {
       {cargando ? (
         <div className="text-sm text-slate-400">Cargando…</div>
       ) : paso === 1 ? (
-        <div className="bg-white rounded-2xl border border-slate-100 p-4">
+        <div className="bg-white rounded-2xl border border-slate-200 p-4">
           <p className="text-xs text-slate-500 mb-3">
             1. Descargá la plantilla con los {estudiantes.length} estudiantes activos de todos los cursos.<br />
             2. Completá SOLO las columnas "Nombre correcto" y/o "Apellidos correctos" en las filas que necesiten arreglo — dejá el resto vacío.<br />
@@ -115,7 +115,7 @@ export function VistaCorregirNombres() {
           <input type="file" accept=".xlsx,.xls" onChange={(e) => e.target.files[0] && procesarArchivo(e.target.files[0])} className="text-sm" />
         </div>
       ) : paso === 2 ? (
-        <div className="bg-white rounded-2xl border border-slate-100 p-4">
+        <div className="bg-white rounded-2xl border border-slate-200 p-4">
           <p className="text-xs text-slate-500 mb-3">Se detectaron {cambios.length} cambio(s) — revisalos antes de confirmar. Desmarcá los que no quieras aplicar.</p>
           <div className="space-y-1.5 mb-4 max-h-96 overflow-y-auto">
             {cambios.map((c, i) => (
@@ -143,7 +143,7 @@ export function VistaCorregirNombres() {
           )}
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-100 p-4">
+        <div className="bg-white rounded-2xl border border-slate-200 p-4">
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 mb-3">
             <p className="text-sm font-semibold text-emerald-700">✔ Listo</p>
             <p className="text-xs text-emerald-600 mt-1">Se corrigieron {resultado.hechos} de {resultado.total} estudiante(s).</p>
@@ -159,4 +159,4 @@ export function VistaCorregirNombres() {
       )}
     </div>
   );
-} 
+}
