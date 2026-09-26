@@ -102,7 +102,7 @@ function TablaLectura({ columnas, filas }) {
         <thead><tr>{columnas.map((c) => <th key={c.clave} className="text-left px-2 py-1 font-bold text-slate-400 uppercase" style={{ fontSize: 9 }}>{c.titulo}</th>)}</tr></thead>
         <tbody>
           {filas.map((f, i) => (
-            <tr key={i} className="border-t border-slate-100">
+            <tr key={i} className="border-t border-slate-200">
               {columnas.map((c) => <td key={c.clave} className="px-2 py-1.5 align-top text-slate-600">{f[c.clave]}</td>)}
             </tr>
           ))}
@@ -704,7 +704,7 @@ function TareasLista({ planeacionId }) {
   const quitar = async (id) => { if (!confirm("¿Eliminar esta tarea?")) return; await api.eliminarTarea(id); cargar(); };
 
   return (
-    <div className="mt-3 border-t border-slate-100 pt-3">
+    <div className="mt-3 border-t border-slate-200 pt-3">
       <div className="text-xs font-semibold text-slate-500 mb-2">Tareas (evidencias de aprendizaje)</div>
       {tareas.length > 0 && (
         <div className="space-y-1.5 mb-2">
@@ -824,7 +824,7 @@ function DictadoControl({ claseId, grados, unidad }) {
   const quitar = async (id) => { await api.eliminarDictado(id); cargar(); };
 
   return (
-    <div className="mt-2 pt-2 border-t border-slate-100">
+    <div className="mt-2 pt-2 border-t border-slate-200">
       <div className="text-[10px] font-semibold text-slate-400 uppercase mb-1">Control por curso — lo que realmente pasó en el aula</div>
       {dictados.length > 0 && (
         <div className="space-y-1.5 mb-1.5">
@@ -993,7 +993,7 @@ function ClasesLista({ unidad, unidadId, grados, materiaNombre }) {
       {clases.length > 0 && (
         <div className="space-y-2 mb-2">
           {clases.map((c, i) => (
-            <div key={c.id} className="bg-white border border-slate-100 rounded-lg p-2.5">
+            <div key={c.id} className="bg-white border border-slate-200 rounded-lg p-2.5">
               <div className="flex justify-between items-start">
                 <div className="text-xs">
                   <span className="font-semibold text-slate-700">Clase {i + 1}: {c.titulo}</span>
@@ -1413,7 +1413,7 @@ function UnidadCard({ unidad, institucion, materiaNombre, materias, gradoId, gra
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 mb-3">
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-3">
       <div className="flex justify-between items-start gap-2">
         <div className="min-w-0 flex-1">
           {editando ? (
@@ -1526,7 +1526,7 @@ function UnidadCard({ unidad, institucion, materiaNombre, materias, gradoId, gra
       )}
 
       {expandida && (
-        <div className="mt-3 pt-3 border-t border-slate-100">
+        <div className="mt-3 pt-3 border-t border-slate-200">
           <div className="flex flex-wrap gap-3 mb-2">
             <SelectorEstandares planeacionId={unidad.id} tipo="dba" />
             <SelectorEstandares planeacionId={unidad.id} tipo="competencia" />
@@ -1969,7 +1969,7 @@ function CalendarioClases({ materiaId, gradoId, periodo, onAbrirUnidad }) {
 
   return (
     <div className="grid md:grid-cols-2 gap-4">
-      <div className="bg-white rounded-2xl border border-slate-100 p-3">
+      <div className="bg-white rounded-2xl border border-slate-200 p-3">
         <div className="flex items-center justify-between mb-3">
           <button onClick={() => setMesActual((p) => new Date(p.getFullYear(), p.getMonth() - 1, 1))} className="text-slate-400 hover:text-violet-600 px-2 text-lg">‹</button>
           <div className="font-bold text-slate-800 capitalize">{MESES_NOMBRE_PLAN[mesActual.getMonth()]} {mesActual.getFullYear()}</div>
@@ -2006,7 +2006,7 @@ function CalendarioClases({ materiaId, gradoId, periodo, onAbrirUnidad }) {
         ) : (
           <div className="space-y-2 mb-2">
             {clasesSeleccionado.map((c) => (
-              <button key={c.id} onClick={() => onAbrirUnidad(c.unidad_id)} className="w-full text-left bg-white rounded-xl border border-slate-100 p-3 hover:border-violet-200">
+              <button key={c.id} onClick={() => onAbrirUnidad(c.unidad_id)} className="w-full text-left bg-white rounded-xl border border-slate-200 p-3 hover:border-violet-200">
                 <div className="text-sm font-semibold text-slate-800">{c.titulo}</div>
                 <div className="text-[11px] text-violet-500">{c.unidad_titulo}</div>
                 {c.momento_desarrollo && <TextoEnriquecido html={c.momento_desarrollo} className="text-[11px] text-slate-500 mt-1 line-clamp-2" />}
@@ -2434,14 +2434,14 @@ export function MiPlanDeEstudio({ estudianteInfo }) {
       ) : (
         <div className="space-y-2">
           {unidades.map((u) => (
-            <div key={u.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-3">
+            <div key={u.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3">
               <button onClick={() => setAbiertaId(abiertaId === u.id ? null : u.id)} className="w-full flex items-center justify-between text-left">
                 <span className="font-bold text-slate-800 text-sm">{u.titulo}</span>
                 <span className="text-xs text-violet-500">{abiertaId === u.id ? "Cerrar ▲" : "Ver ▼"}</span>
               </button>
               {u.objetivo && <p className="text-xs text-slate-500 mt-1">{u.objetivo}</p>}
               {abiertaId === u.id && (
-                <div className="mt-3 pt-3 border-t border-slate-100">
+                <div className="mt-3 pt-3 border-t border-slate-200">
                   {u.contenido && <FilaLectura etiqueta="Contenidos">{u.contenido}</FilaLectura>}
                   {u.problema_proyecto && <FilaLectura etiqueta="Problema / Proyecto">{u.problema_proyecto}</FilaLectura>}
                   <FormatoMaestroLectura unidad={u} />
