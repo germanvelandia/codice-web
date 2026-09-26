@@ -1837,7 +1837,7 @@ function TableroSesion({ sesion: sesionInicial, onVolver }) {
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div>
           <h2 className="text-xl font-bold text-white">🗺️ {sesion.titulo}</h2>
-          <p className="text-sm text-slate-400">Curso {sesion.grado_id} · {sesion.fecha} · {sesion.estado === "activa" ? "🟢 En juego" : "⚪ Finalizada"}</p>
+          <p className="text-sm text-white/80">Curso {sesion.grado_id} · {sesion.fecha} · {sesion.estado === "activa" ? "🟢 En juego" : "⚪ Finalizada"}</p>
         </div>
         <div className="flex gap-2">
           <button onClick={() => setMapaAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-violet-100 text-violet-700">🗺️ Ver Mapa</button>
@@ -2138,7 +2138,7 @@ export function VistaComarcaOakhaven({ grados, gradoActivo }) {
       <div className="flex items-center justify-between mb-1">
         <div>
           <h2 className="text-xl font-bold text-white">🏛️ Comarca de Oakhaven</h2>
-          <p className="text-sm text-slate-400">6 Reinos rivales, provincias en disputa, y una economía viva — para vivirlo en el aula.</p>
+          <p className="text-sm text-white/80">6 Reinos rivales, provincias en disputa, y una economía viva — para vivirlo en el aula.</p>
         </div>
         <button onClick={() => setCreandoAbierto((v) => !v)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">
           {creandoAbierto ? "Cerrar" : "+ Nueva sesión"}
