@@ -67,7 +67,7 @@ function DesafioCard({ desafio, onCambio }) {
   const eliminar = async () => { if (!confirm(`¿Eliminar el desafío "${desafio.titulo}"?`)) return; await api.eliminarDesafioReino(desafio.id); onCambio(); };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 mb-3">
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-3">
       <div className="flex justify-between items-start">
         <div>
           <h4 className="font-bold text-slate-800">⚔️ {desafio.titulo}</h4>
@@ -219,7 +219,7 @@ function PanelMicroMisiones() {
       ) : (
         <div className="space-y-2">
           {misiones.map((m) => (
-            <div key={m.id} className={`bg-white rounded-2xl border p-3 flex justify-between items-start ${m.activo ? "border-slate-100" : "border-slate-100 opacity-50"}`}>
+            <div key={m.id} className={`bg-white rounded-2xl border p-3 flex justify-between items-start ${m.activo ? "border-slate-200" : "border-slate-200 opacity-50"}`}>
               <div>
                 <div className="text-sm font-semibold text-slate-800">{m.tipo === "diaria" ? "☀️" : "📅"} {m.titulo}</div>
                 {m.descripcion && <TextoEnriquecido html={m.descripcion} className="text-xs text-slate-500 mt-0.5" />}
@@ -354,7 +354,7 @@ function DuplicadosCosmeticosModal({ onClose, onCambio }) {
         ) : (
           <div className="space-y-4">
             {grupos.map((grupo, i) => (
-              <div key={i} className="border border-slate-100 rounded-xl p-3">
+              <div key={i} className="border border-slate-200 rounded-xl p-3">
                 <div className="text-sm font-semibold text-slate-700 mb-2">"{grupo[0].nombre}" — {grupo.length} versiones</div>
                 <div className="space-y-1.5">
                   {grupo.map((c) => (
@@ -408,7 +408,7 @@ function PanelCosmeticos() {
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {items.map((c) => (
-            <div key={c.id} className={`bg-white rounded-2xl border p-3 ${c.activo ? "border-slate-100" : "border-slate-100 opacity-50"}`}>
+            <div key={c.id} className={`bg-white rounded-2xl border p-3 ${c.activo ? "border-slate-200" : "border-slate-200 opacity-50"}`}>
               <div className="flex justify-between items-start">
                 {c.tipo === "marco" ? (
                   <div className="w-8 h-8 rounded-full border-4" style={{ borderColor: c.valor }} />
@@ -437,7 +437,7 @@ export function VistaGamificacionExtra({ grados }) {
   const [tab, setTab] = useState("desafios");
   return (
     <div>
-      <div className="flex gap-1 mb-4 rounded-full bg-white p-1 w-fit border border-slate-100 shadow-sm">
+      <div className="flex gap-1 mb-4 rounded-full bg-white p-1 w-fit border border-slate-200 shadow-sm">
         <button onClick={() => setTab("desafios")} className={`text-xs px-4 py-2 rounded-full ${tab === "desafios" ? "bg-violet-500 text-white" : "text-slate-600"}`}>⚔️ Desafíos de Reino</button>
         <button onClick={() => setTab("misiones")} className={`text-xs px-4 py-2 rounded-full ${tab === "misiones" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🎯 Misiones diarias/semanales</button>
         <button onClick={() => setTab("cosmeticos")} className={`text-xs px-4 py-2 rounded-full ${tab === "cosmeticos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🎨 Cosméticos</button>
