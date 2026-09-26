@@ -2598,29 +2598,6 @@ function Panel({ session }) {
         {tab === "asistencia" && grados.length > 0 && <VistaAsistencia grados={grados} gradoActivo={gradoActivo} />}
         {tab === "herramientas" && grados.length > 0 && (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 mb-6">
-              {[
-                { key: "accionesmasivas", label: "Acciones Masivas", Icono: Settings, fondo: "#DBEAFE", color: "#1D4ED8" },
-                { key: "anuncios", label: "Anuncios", Icono: FileText, fondo: "#FFEDD5", color: "#C2410C" },
-                { key: "trivia", label: "Preguntados", Icono: HelpCircle, fondo: "#DBEAFE", color: "#1D4ED8" },
-                { key: "temporizador", label: "Temporizador", Icono: Clock, fondo: "#FEF3C7", color: "#B45309" },
-                { key: "dado", label: "Dado", Icono: Package, fondo: "#E8EEF8", color: "#223b74" },
-                { key: "cronometro", label: "Cronómetro", Icono: Clock, fondo: "#DBEAFE", color: "#1D4ED8" },
-                { key: "semaforo", label: "Semáforo", Icono: Palette, fondo: "#DCFCE7", color: "#15803D" },
-                { key: "sorteoorden", label: "Sorteo de Orden / Parejas", Icono: Users, fondo: "#f1e7d5", color: "#BE185D" },
-                { key: "grupos", label: "Generador de Grupos", Icono: GraduationCap, fondo: "#FFEDD5", color: "#C2410C" },
-                { key: "marcador", label: "Marcador de Puntos", Icono: Award, fondo: "#E0E7FF", color: "#4338CA" },
-                { key: "selectorestudiante", label: "Selector de Estudiante", Icono: Star, fondo: "#CFFAFE", color: "#0E7490" },
-              ].map((op) => (
-                <button key={op.key} onClick={() => setSubTabHerramientas(op.key)}
-                  className={`flex items-center gap-2.5 rounded-2xl border px-3.5 py-3 text-left transition-all ${subTabHerramientas === op.key ? "border-violet-300 bg-violet-50" : "border-slate-200 bg-white hover:border-slate-300"}`}>
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: op.fondo }}>
-                    <op.Icono size={16} strokeWidth={2} color={op.color} />
-                  </div>
-                  <span className="text-xs font-bold text-slate-800 leading-tight">{op.label}</span>
-                </button>
-              ))}
-            </div>
             {subTabHerramientas === "ruleta" && <VistaRuleta grados={grados} gradoActivo={gradoActivo} />}
             {subTabHerramientas === "ruletamonedas" && <VistaRuletaMonedas grados={grados} gradoActivo={gradoActivo} />}
             {subTabHerramientas === "accionesmasivas" && <VistaAccionesMasivas grados={grados} gradoActivo={gradoActivo} />}
