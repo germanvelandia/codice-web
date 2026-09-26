@@ -1210,7 +1210,7 @@ function SidebarTarjetasEstudiante({ activo, onCambiar, monedas, gradoId, onCerr
 
   return (
     <>
-      <div className="hidden md:block w-[240px] shrink-0 sticky top-0 h-screen">{contenido}</div>
+      <div className="hidden md:block w-[210px] shrink-0 sticky top-0 h-screen">{contenido}</div>
 
       <div className="md:hidden sticky top-0 z-30 flex items-center justify-between px-4 py-2.5" style={{ background: "#17264D" }}>
         <button onClick={() => elegir("inicio")} className="flex items-center gap-2">
@@ -1983,8 +1983,8 @@ function PortalEstudiante() {
         <SidebarTarjetasEstudiante activo={vista} onCambiar={irAEstudiante} monedas={datos.monedas} gradoId={datos.grado_id} onCerrarSesion={cerrarSesion}
           menuAbierto={menuMovilAbierto} onCerrarMenu={(abrir) => setMenuMovilAbierto(!!abrir)} />
 
-        <div className="flex-1 min-w-0 p-4 md:p-6">
-        <div className="bg-white rounded-2xl shadow-lg p-6">
+        <div className="flex-1 min-w-0 p-3 md:p-5">
+        <div className="bg-white rounded-2xl shadow-lg p-4 md:p-6 w-full">
           {vista === "inicio" && (
             <>
               <div className="flex items-center gap-3 mb-4 pb-4 border-b border-slate-100">
@@ -2010,7 +2010,7 @@ function PortalEstudiante() {
                     <span className="text-slate-400">Grado {datos.grado_id} · {datos.grupo}</span>
                   </div>
                 </div>
-                <div className="w-32 shrink-0 hidden sm:block">
+                <div className="flex-1 max-w-xs shrink-0 hidden sm:block">
                   <div className="flex justify-between text-[10px] text-slate-500 mb-1">
                     <span className="font-semibold text-violet-600">{level.name}</span>
                     <span>{next ? `${datos.xp}/${next.min}` : "máx"}</span>
@@ -2495,7 +2495,7 @@ function SidebarTarjetas({ activo, onCambiar, email, institucion, onAdmin, onIns
   return (
     <>
       {/* Escritorio: fija, siempre visible */}
-      <div className="hidden md:block w-[240px] shrink-0 sticky top-0 h-screen">{contenido}</div>
+      <div className="hidden md:block w-[210px] shrink-0 sticky top-0 h-screen">{contenido}</div>
 
       {/* Móvil: barra angosta con hamburguesa + cajón deslizante */}
       <div className="md:hidden sticky top-0 z-30 flex items-center justify-between px-4 py-2.5" style={{ background: "#17264D" }}>
