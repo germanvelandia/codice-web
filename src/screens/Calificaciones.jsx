@@ -31,9 +31,9 @@ function MenuTarjetas({ abierto, onCerrar, opciones, alinear = "right" }) {
   return (
     <>
       <div className="fixed inset-0 z-10" onClick={onCerrar} />
-      <div className={`absolute ${alinear === "right" ? "right-0" : "left-0"} top-full mt-1.5 bg-white rounded-2xl shadow-lg border border-slate-100 p-2 z-20 grid grid-cols-1 gap-1`} style={{ minWidth: 220 }}>
+      <div className={`absolute ${alinear === "right" ? "right-0" : "left-0"} top-full mt-1.5 bg-white rounded-2xl shadow-lg border border-slate-200 p-2 z-20 grid grid-cols-1 gap-1`} style={{ minWidth: 220 }}>
         {opciones.map((op, i) => op.separador ? (
-          <div key={i} className="border-t border-slate-100 my-1" />
+          <div key={i} className="border-t border-slate-200 my-1" />
         ) : (
           <button key={i} onClick={() => { onCerrar(); op.onClick(); }}
             className={`flex items-center gap-2.5 text-left text-xs font-semibold px-2.5 py-2 rounded-xl hover:bg-slate-50 ${op.peligro ? "text-rose-500 hover:bg-rose-50" : "text-slate-700"}`}>
@@ -192,7 +192,7 @@ function BarraMateria({ materias, materiaActualId, setMateriaActualId, onCambio,
       </div>
 
       {duplicando && (
-        <div className="flex gap-1.5 items-center mt-2 pt-2 border-t border-slate-100">
+        <div className="flex gap-1.5 items-center mt-2 pt-2 border-t border-slate-200">
           <span className="text-xs text-slate-400 shrink-0">Nombre de la copia:</span>
           <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej: Ética 2026" autoFocus className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none flex-1 min-w-0" />
           <button onClick={duplicar} className="text-xs px-3 py-1.5 rounded-lg bg-violet-500 text-white shrink-0">Duplicar</button>
@@ -201,7 +201,7 @@ function BarraMateria({ materias, materiaActualId, setMateriaActualId, onCambio,
       )}
 
       {copiando && (
-        <div className="flex gap-1.5 items-center mt-2 pt-2 border-t border-slate-100">
+        <div className="flex gap-1.5 items-center mt-2 pt-2 border-t border-slate-200">
           <span className="text-xs text-slate-400 shrink-0">Copiar notas desde:</span>
           <select value={copiarDesdeId} onChange={(e) => setCopiarDesdeId(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none flex-1 min-w-0">
             <option value="">Elige…</option>
@@ -215,7 +215,7 @@ function BarraMateria({ materias, materiaActualId, setMateriaActualId, onCambio,
   );
 
   if (sinTarjeta) return contenido;
-  return <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 mb-4">{contenido}</div>;
+  return <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-3 mb-4">{contenido}</div>;
 }
 
 function PanelCategorias({ materiaId, categorias, onCambio }) {
@@ -512,7 +512,7 @@ function ImportarMoodleModal({ materiaId, gradoId, periodo, categorias, periodos
               ))}
             </div>
 
-            <div className="border border-slate-100 rounded-xl overflow-hidden mb-3">
+            <div className="border border-slate-200 rounded-xl overflow-hidden mb-3">
               <table className="w-full text-xs">
                 <thead className="bg-slate-50">
                   <tr>
@@ -528,7 +528,7 @@ function ImportarMoodleModal({ materiaId, gradoId, periodo, categorias, periodos
                 </thead>
                 <tbody>
                   {encabezados.filter((h) => h !== colNombre).map((h) => (
-                    <tr key={h} className="border-t border-slate-100">
+                    <tr key={h} className="border-t border-slate-200">
                       <td className="px-3 py-2">
                         <input type="checkbox" checked={!!config[h]?.incluir}
                           onChange={(e) => setConfig((prev) => ({ ...prev, [h]: { ...prev[h], incluir: e.target.checked } }))} />
@@ -1388,7 +1388,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
 
   return (
     <div>
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 mb-3">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-3 mb-3">
         <div className="flex flex-wrap items-center gap-1.5 mb-2">
           <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="🔍 Buscar estudiante…"
             className="text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none w-48" />
@@ -1403,7 +1403,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
                   <Users size={12} />{r === "Todos" ? "Todos los grupos" : r}
                 </button>
               ))}
-              <div className="border-t border-slate-100 my-1" />
+              <div className="border-t border-slate-200 my-1" />
               <label className="flex items-center gap-2 px-2.5 py-1.5 text-xs font-semibold text-slate-600">
                 <input type="checkbox" checked={soloPerdiendo} onChange={(e) => setSoloPerdiendo(e.target.checked)} />
                 Ver solo quienes van perdiendo
@@ -1442,7 +1442,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
       {cargando ? (
         <div className="text-sm text-slate-400">Cargando…</div>
       ) : (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-x-auto">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-x-auto">
           <table className="w-full text-xs" style={{ borderCollapse: "separate", borderSpacing: 0 }}>
             <thead>
               <tr>
@@ -1456,9 +1456,9 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
                 <th className="sticky top-0 z-10 bg-slate-50"></th>
               </tr>
               <tr>
-                <th className="sticky left-0 top-0 z-20 bg-slate-50 text-left px-3 py-2 border-b border-slate-100 min-w-[220px]">Estudiante</th>
+                <th className="sticky left-0 top-0 z-20 bg-slate-50 text-left px-3 py-2 border-b border-slate-200 min-w-[220px]">Estudiante</th>
                 {actividadesOrdenadas.map((a) => (
-                  <th key={a.id} className={`sticky top-0 z-10 px-3 py-2 border-b border-slate-100 min-w-[110px] ${seleccionando && seleccionadas.includes(a.id) ? "bg-rose-50" : ""}`}
+                  <th key={a.id} className={`sticky top-0 z-10 px-3 py-2 border-b border-slate-200 min-w-[110px] ${seleccionando && seleccionadas.includes(a.id) ? "bg-rose-50" : ""}`}
                     style={!seleccionando ? { background: `${colorPorActividad[a.id]}14` } : {}}>
                     <div className="flex items-center justify-center gap-1" title={[a.fecha, a.descripcion ? textoPlano(a.descripcion) : null].filter(Boolean).join(" — ") || undefined}>
                       {seleccionando && (
@@ -1479,7 +1479,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
                     </div>
                   </th>
                 ))}
-                <th className="sticky top-0 z-10 px-3 py-2 border-b border-slate-100 bg-slate-50">Nota Final</th>
+                <th className="sticky top-0 z-10 px-3 py-2 border-b border-slate-200 bg-slate-50">Nota Final</th>
               </tr>
             </thead>
             <tbody>
@@ -1676,13 +1676,13 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
       {cargando ? (
         <div className="text-sm text-slate-400">Cargando…</div>
       ) : (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-x-auto">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-x-auto">
           <table className="w-full text-xs" style={{ borderCollapse: "separate", borderSpacing: 0 }}>
             <thead>
               <tr>
-                <th className="sticky left-0 top-0 z-20 text-left px-3 py-2 border-b border-slate-100 bg-slate-50 min-w-[220px]">Estudiante</th>
-                {periodos.map((p) => <th key={p} className="sticky top-0 z-10 px-3 py-2 border-b border-slate-100 bg-slate-50">Periodo {p}</th>)}
-                <th className="sticky top-0 z-10 px-3 py-2 border-b border-slate-100 bg-slate-50">Promedio</th>
+                <th className="sticky left-0 top-0 z-20 text-left px-3 py-2 border-b border-slate-200 bg-slate-50 min-w-[220px]">Estudiante</th>
+                {periodos.map((p) => <th key={p} className="sticky top-0 z-10 px-3 py-2 border-b border-slate-200 bg-slate-50">Periodo {p}</th>)}
+                <th className="sticky top-0 z-10 px-3 py-2 border-b border-slate-200 bg-slate-50">Promedio</th>
               </tr>
             </thead>
             <tbody>
@@ -1772,13 +1772,13 @@ function Estadisticas({ materiaId, config, categorias, estudiantes, gradoId, per
     <div>
       <div className="grid gap-2 mb-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))" }}>
         {[["Promedio", stats.media], ["Desv. estándar", stats.desviacion], ["Mediana", stats.mediana], ["Mínimo", stats.min], ["Máximo", stats.max]].map(([label, val]) => (
-          <div key={label} className="bg-white rounded-xl p-3 text-center shadow-sm border border-slate-100">
+          <div key={label} className="bg-white rounded-xl p-3 text-center shadow-sm border border-slate-200">
             <div className="text-xl font-bold text-violet-600">{val ?? "—"}</div>
             <div className="text-[10px] uppercase tracking-wide text-slate-400 mt-1">{label}</div>
           </div>
         ))}
       </div>
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
         <div className="text-sm font-semibold text-slate-700 mb-3">Notas por estudiante — Periodo {periodo}</div>
         {estudiantes.length === 0 ? (
           <div className="text-sm text-slate-400">No hay estudiantes en este grado.</div>
@@ -1950,8 +1950,8 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
 
   return (
     <div>
-      <h2 className="text-xl font-bold text-white mb-1">Planilla de Notas</h2>
-      <p className="text-xs text-white/80 mb-3">Esta planilla es privada de tu cuenta — otros docentes que usen este enlace no ven ni afectan tus calificaciones.</p>
+      <h2 className="text-xl font-bold text-slate-800 mb-1">Planilla de Notas</h2>
+      <p className="text-xs text-slate-400 mb-3">Esta planilla es privada de tu cuenta — otros docentes que usen este enlace no ven ni afectan tus calificaciones.</p>
 
       <div className="flex flex-wrap items-start gap-2 mb-4">
         <PasoMenu titulo="Materia" Icono={BookOpen} abierto={pasoAbierto === "materia" || !materiaActualId}
@@ -2099,7 +2099,7 @@ function ConfigEscala({ materiaId, config, onGuardado }) {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 max-w-md">
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 max-w-md">
       <div className="grid grid-cols-3 gap-2 mb-3">
         <div>
           <label className="text-xs text-slate-500 block mb-1">Escala mínima</label>
