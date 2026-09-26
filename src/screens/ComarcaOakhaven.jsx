@@ -385,7 +385,7 @@ function ReajustarProvinciasModal({ sesion, reinos, provincias, onClose, onCambi
         </div>
 
         {reinoActivo && (
-          <div className="border border-slate-100 rounded-xl p-3">
+          <div className="border border-slate-200 rounded-xl p-3">
             <label className="text-xs text-slate-500 block mb-1">Arquetipo temático de {reinoActivo.nombre}</label>
             <select value={reinoActivo.arquetipo_id || ""} onChange={(e) => cambiarArquetipo(e.target.value)} disabled={guardando}
               className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none bg-white">
@@ -658,7 +658,7 @@ function BancoModal({ sesion, reinos, onClose, onCambio }) {
         ) : (
           <div className="grid grid-cols-2 gap-2">
             {productos.map((p) => (
-              <div key={p.id} className="border border-slate-100 rounded-xl p-2.5 text-center relative">
+              <div key={p.id} className="border border-slate-200 rounded-xl p-2.5 text-center relative">
                 <div className="absolute top-1 right-1 flex gap-1">
                   <button onClick={() => empezarEdicion(p)} className="text-[10px] text-slate-300 hover:text-violet-600">✏️</button>
                   <button onClick={() => eliminarProducto(p)} className="text-[10px] text-slate-300 hover:text-rose-500">🗑</button>
@@ -804,7 +804,7 @@ function TruequesModal({ sesion, reinos, inventario, recursos, onClose, onCambio
         ) : (
           <div className="space-y-2">
             {trueques.map((t) => (
-              <div key={t.id} className="border border-slate-100 rounded-xl p-2.5 text-xs">
+              <div key={t.id} className="border border-slate-200 rounded-xl p-2.5 text-xs">
                 <div className="font-semibold text-slate-700">{t.oferta?.emoji} {t.oferta?.nombre} ⇄ {t.destino?.emoji} {t.destino?.nombre}</div>
                 <div className="text-slate-500 mt-1">
                   Ofrece: {t.gp_ofrecido > 0 && `🪙${t.gp_ofrecido} `}{t.ofrecido && `${t.ofrecido.emoji} ${t.ofrecido.nombre} `}{t.recurso_ofrecido && `${t.cantidad_recurso_ofrecida} ${t.recurso_ofrecido}`}
@@ -946,7 +946,7 @@ function MisionesSecretasModal({ sesion, reinos, onClose }) {
         {misiones.length > 0 && (
           <div className="space-y-3">
             {reinos.map((reino) => (
-              <div key={reino.id} className="border border-slate-100 rounded-xl p-3">
+              <div key={reino.id} className="border border-slate-200 rounded-xl p-3">
                 <div className="font-bold text-slate-800 text-sm mb-2">{reino.emoji} {reino.nombre}</div>
                 <div className="space-y-1">
                   {misionesDe(reino.id).map((m) => (
@@ -1042,7 +1042,7 @@ function InventarioImprimibleModal({ reinos, inventario, onClose }) {
                     <thead><tr className="text-left text-slate-400"><th className="pb-1">Producto</th><th className="pb-1 text-right">Cantidad</th></tr></thead>
                     <tbody>
                       {items.map((i) => (
-                        <tr key={i.id} className="border-t border-slate-100">
+                        <tr key={i.id} className="border-t border-slate-200">
                           <td className="py-1">{i.comarca_productos?.emoji} {i.comarca_productos?.nombre}</td>
                           <td className="py-1 text-right font-semibold">{i.cantidad}</td>
                         </tr>
@@ -1157,7 +1157,7 @@ function DuelosModal({ sesion, reinos, provincias, onClose, onCambio }) {
             {duelos.map((d) => {
               const ronda = siguienteRonda(d);
               return (
-                <div key={d.id} className="border border-slate-100 rounded-xl p-3 text-xs">
+                <div key={d.id} className="border border-slate-200 rounded-xl p-3 text-xs">
                   <div className="flex justify-between items-start">
                     <div className="font-semibold text-slate-700">{d.retador?.emoji} {d.retador?.nombre} 🆚 {d.retado?.emoji} {d.retado?.nombre}</div>
                     {d.estado === "en_curso" && <button onClick={() => eliminar(d)} className="text-slate-300 hover:text-rose-500">🗑</button>}
@@ -1311,7 +1311,7 @@ function RolesModal({ sesion, reinos, onClose }) {
           const reino = reinos.find((r) => r.id === reinoActivoId) || reinos[0];
           if (!reino) return null;
           return (
-            <div className="border border-slate-100 rounded-xl p-3">
+            <div className="border border-slate-200 rounded-xl p-3">
               <div className="font-bold text-slate-800 text-sm mb-2">{reino.emoji} {reino.nombre}</div>
               {estudiantesDe(reino).length === 0 ? (
                 <p className="text-xs text-slate-400">Ningún estudiante de este curso tiene este Reino asignado.</p>
@@ -1323,7 +1323,7 @@ function RolesModal({ sesion, reinos, onClose }) {
                     const infoComarcaActual = rolActual ? api.COMARCA_ROLES.find((rc) => rc.nombre === rolActual.nombre) : null;
                     const editando = editandoRolDe === est.id;
                     return (
-                      <div key={est.id} className="bg-white border border-slate-100 rounded-xl p-3">
+                      <div key={est.id} className="bg-white border border-slate-200 rounded-xl p-3">
                         <div className="flex items-center justify-between gap-2 mb-2">
                           <span className="text-sm font-semibold text-slate-800 flex-1 min-w-0 truncate">{est.nombre}</span>
                           {recienGuardadoId === est.id && <span className="text-[10px] text-emerald-600 font-semibold shrink-0">✓ Guardado</span>}
@@ -1414,7 +1414,7 @@ function RecursosModal({ sesion, reinos, recursos, onClose, onCambio }) {
           {reinos.map((r) => {
             const suyos = recursos.filter((x) => x.reino_id === r.id && x.cantidad > 0);
             return (
-              <div key={r.id} className="border border-slate-100 rounded-xl p-3">
+              <div key={r.id} className="border border-slate-200 rounded-xl p-3">
                 <div className="font-bold text-slate-800 text-sm mb-2">{r.emoji} {r.nombre}</div>
                 {suyos.length === 0 ? (
                   <p className="text-xs text-slate-400">Todavía no juntó recursos.</p>
@@ -1505,7 +1505,7 @@ function QRModal({ sesion, reinos, onClose }) {
         {vista === "reinos" ? (
           <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
             {reinos.map((r) => (
-              <div key={r.id} className="border border-slate-100 rounded-xl p-3 text-center">
+              <div key={r.id} className="border border-slate-200 rounded-xl p-3 text-center">
                 <img src={urlQR(urlDeTarjeta(sesion.id, r.id))} alt={`QR ${r.nombre}`} className="mx-auto mb-2 rounded-lg" />
                 <div className="text-xs font-semibold text-slate-700">{r.emoji} {r.nombre}</div>
               </div>
@@ -1519,7 +1519,7 @@ function QRModal({ sesion, reinos, onClose }) {
               const reino = reinoDe(est);
               const rol = rolDe(est);
               return (
-                <div key={est.id} className="border border-slate-100 rounded-xl p-3 text-center">
+                <div key={est.id} className="border border-slate-200 rounded-xl p-3 text-center">
                   <img src={urlQR(urlDeTarjeta(sesion.id, reino.id, est.id))} alt={`QR ${est.nombre}`} className="mx-auto mb-2 rounded-lg" />
                   <div className="text-xs font-semibold text-slate-700">{nombreMostrado(est)}</div>
                   <div className="text-[10px] text-slate-400">{rol.info?.emoji || "🎭"} {rol.nombre} · {reino?.nombre}</div>
@@ -1581,7 +1581,7 @@ function DadoReveladoModal({ resultado, reinos, onClose }) {
           {esLadron ? (
             <>
               <div className="text-5xl mb-2">🔒</div>
-              <h2 className="text-xl font-bold text-white mb-2">¡Salió el Ladrón!</h2>
+              <h2 className="text-xl font-bold text-slate-800 mb-2">¡Salió el Ladrón!</h2>
               {provinciaBloqueada ? (
                 <p className="text-sm text-rose-100">Bloqueó: <b>{provinciaBloqueada.nombre.split("— ")[1] || provinciaBloqueada.nombre}</b> — no va a producir hasta el próximo 7.</p>
               ) : (
@@ -1591,13 +1591,13 @@ function DadoReveladoModal({ resultado, reinos, onClose }) {
           ) : Object.keys(porReino).length === 0 ? (
             <>
               <div className="text-5xl mb-2">🌾</div>
-              <h2 className="text-xl font-bold text-white mb-2">Ninguna provincia produjo</h2>
+              <h2 className="text-xl font-bold text-slate-800 mb-2">Ninguna provincia produjo</h2>
               <p className="text-sm text-blue-100">Ningún Reino tiene una provincia con el número {dado} en este momento.</p>
             </>
           ) : (
             <>
               <div className="text-5xl mb-3">🌾</div>
-              <h2 className="text-lg font-bold text-white mb-3">¡Producción!</h2>
+              <h2 className="text-lg font-bold text-slate-800 mb-3">¡Producción!</h2>
               <div className="space-y-2 text-left">
                 {Object.entries(porReino).map(([reinoId, items]) => {
                   const reino = reinos.find((r) => String(r.id) === String(reinoId));
@@ -1836,8 +1836,8 @@ function TableroSesion({ sesion: sesionInicial, onVolver }) {
 
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div>
-          <h2 className="text-xl font-bold text-white">🗺️ {sesion.titulo}</h2>
-          <p className="text-sm text-white/80">Curso {sesion.grado_id} · {sesion.fecha} · {sesion.estado === "activa" ? "🟢 En juego" : "⚪ Finalizada"}</p>
+          <h2 className="text-xl font-bold text-slate-800">🗺️ {sesion.titulo}</h2>
+          <p className="text-sm text-slate-400">Curso {sesion.grado_id} · {sesion.fecha} · {sesion.estado === "activa" ? "🟢 En juego" : "⚪ Finalizada"}</p>
         </div>
         <div className="flex gap-2">
           <button onClick={() => setMapaAbierto(true)} className="text-xs font-semibold px-3 py-2 rounded-full bg-violet-100 text-violet-700">🗺️ Ver Mapa</button>
@@ -1884,7 +1884,7 @@ function TableroSesion({ sesion: sesionInicial, onVolver }) {
         {reinos.map((reino) => {
           const susProvincias = provincias.filter((p) => p.reino_actual_id === reino.id);
           return (
-            <div key={reino.id} className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
+            <div key={reino.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
               <div className="relative h-24 bg-gradient-to-br from-violet-100 to-fuchsia-100 flex items-center justify-center">
                 {reino.imagen_url ? (
                   <img src={reino.imagen_url} alt={reino.nombre} className="w-full h-full object-cover" />
@@ -1912,7 +1912,7 @@ function TableroSesion({ sesion: sesionInicial, onVolver }) {
                 <div className="text-[10px] text-slate-400 mb-1">Provincias controladas: {susProvincias.length}/24</div>
                 <button onClick={() => setMapaAbierto(true)} className="text-[10px] text-slate-400 hover:text-violet-600 mb-2 underline">Ver detalle en el mapa →</button>
                 {inventario.filter((i) => i.reino_id === reino.id && i.cantidad > 0).length > 0 && (
-                  <div className="flex flex-wrap gap-1 pt-1.5 border-t border-slate-100">
+                  <div className="flex flex-wrap gap-1 pt-1.5 border-t border-slate-200">
                     {inventario.filter((i) => i.reino_id === reino.id && i.cantidad > 0).map((i) => (
                       <span key={i.id} title={i.comarca_productos?.nombre} className="text-[10px] bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded-full">
                         {i.comarca_productos?.emoji} x{i.cantidad}
@@ -2137,8 +2137,8 @@ export function VistaComarcaOakhaven({ grados, gradoActivo }) {
     <div>
       <div className="flex items-center justify-between mb-1">
         <div>
-          <h2 className="text-xl font-bold text-white">🏛️ Comarca de Oakhaven</h2>
-          <p className="text-sm text-white/80">6 Reinos rivales, provincias en disputa, y una economía viva — para vivirlo en el aula.</p>
+          <h2 className="text-xl font-bold text-slate-800">🏛️ Comarca de Oakhaven</h2>
+          <p className="text-sm text-slate-400">6 Reinos rivales, provincias en disputa, y una economía viva — para vivirlo en el aula.</p>
         </div>
         <button onClick={() => setCreandoAbierto((v) => !v)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">
           {creandoAbierto ? "Cerrar" : "+ Nueva sesión"}
@@ -2146,7 +2146,7 @@ export function VistaComarcaOakhaven({ grados, gradoActivo }) {
       </div>
 
       {!cargando && (
-        <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 my-3">
+        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 my-3">
           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">✅ Checklist — ¿qué cursos ya tienen su Comarca?</div>
           <div className="flex flex-wrap gap-1.5">
             {grados.map((g) => {
@@ -2220,7 +2220,7 @@ export function VistaComarcaOakhaven({ grados, gradoActivo }) {
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
           {sesiones.map((s) => (
-            <div key={s.id} onClick={() => setSesionAbierta(s)} className="bg-white rounded-2xl border border-slate-100 p-4 text-left hover:border-violet-300 cursor-pointer relative">
+            <div key={s.id} onClick={() => setSesionAbierta(s)} className="bg-white rounded-2xl border border-slate-200 p-4 text-left hover:border-violet-300 cursor-pointer relative">
               <div className="flex justify-between items-start gap-2">
                 <div className="font-bold text-slate-800">{s.titulo}</div>
                 <div className="flex gap-1.5 shrink-0">
