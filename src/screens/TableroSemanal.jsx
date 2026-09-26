@@ -246,7 +246,7 @@ export function VistaTableroSemanal({ grados }) {
       <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
         <div>
           <h2 className="text-xl font-bold text-white">🗓️ Tablero Semanal por Curso</h2>
-          <p className="text-sm text-slate-400">Los cursos de un mismo grado no tienen por qué ir al mismo ritmo — cada celda es independiente.</p>
+          <p className="text-sm text-white/80">Los cursos de un mismo grado no tienen por qué ir al mismo ritmo — cada celda es independiente.</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <select value={nivelActual} onChange={(e) => setNivelActual(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
