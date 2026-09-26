@@ -90,7 +90,7 @@ function CanjesPendientes() {
   const visibles = soloPendientes ? canjes.filter((c) => c.estado === "pendiente") : canjes;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-bold text-slate-800">Canjes de estudiantes</h3>
         <label className="flex items-center gap-1.5 text-xs text-slate-500">
@@ -178,7 +178,7 @@ export function VistaBanco() {
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
           {premios.map((p) => (
-            <div key={p.id} className={`bg-white rounded-2xl border p-3 ${p.activo ? "border-slate-100" : "border-slate-100 opacity-50"}`}>
+            <div key={p.id} className={`bg-white rounded-2xl border p-3 ${p.activo ? "border-slate-200" : "border-slate-200 opacity-50"}`}>
               <div className="flex justify-between items-start">
                 <div className="text-2xl">{p.emoji}</div>
                 <div className="flex gap-1.5">
