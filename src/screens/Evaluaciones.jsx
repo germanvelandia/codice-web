@@ -166,7 +166,7 @@ function PreguntasEditor({ evaluacionId, materiaId, gradoId }) {
               <NuevaPreguntaForm key={p.id} evaluacionId={evaluacionId} pregunta={p}
                 onCancelar={() => setEditando(null)} onCreada={() => { setEditando(null); cargar(); }} />
             ) : (
-              <div key={p.id} className="bg-white border border-slate-100 rounded-lg p-2.5">
+              <div key={p.id} className="bg-white border border-slate-200 rounded-lg p-2.5">
                 <div className="flex justify-between items-start">
                   <div className="text-xs text-slate-700">
                     <b>{i + 1}.</b> {p.enunciado} <span className="text-slate-400">({p.puntos} pts · {TIPOS_PREGUNTA.find((t) => t.key === p.tipo)?.label})</span>
@@ -318,7 +318,7 @@ function ResultadosEvaluacion({ evaluacion, onCerrar }) {
             <div className="text-sm font-semibold text-slate-800 mb-2">{intentoAbierto.estudiante_nombre} — {intentoAbierto.puntaje_obtenido ?? "—"}/{intentoAbierto.puntaje_maximo ?? "—"} pts</div>
             <div className="space-y-2">
               {respuestas.map((r) => (
-                <div key={r.id} className="border border-slate-100 rounded-lg p-2.5">
+                <div key={r.id} className="border border-slate-200 rounded-lg p-2.5">
                   <div className="text-xs font-semibold text-slate-700">{r.evaluacion_preguntas?.enunciado}</div>
                   <div className="text-xs text-slate-600 mt-1">Respondió: <b>{r.respuesta || "(sin responder)"}</b></div>
                   {r.evaluacion_preguntas?.tipo === "respuesta_corta" ? (
@@ -566,7 +566,7 @@ function EvaluacionCard({ evaluacion, materias, grados, categorias, onCambio }) 
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 mb-3">
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-3">
       <div className="flex justify-between items-start gap-2">
         <div>
           <div className="flex items-center gap-2">
