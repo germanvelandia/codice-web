@@ -229,7 +229,7 @@ function AjusteConSeguimiento({ ajuste, onEliminado }) {
   };
 
   return (
-    <div className="border border-slate-100 rounded-lg p-3">
+    <div className="border border-slate-200 rounded-lg p-3">
       <div className="flex justify-between items-start">
         <div className="min-w-0">
           <div className="text-xs font-semibold text-violet-700">{ajuste.area_asignatura || "General"}{ajuste.tipo_apoyo ? ` · Apoyo ${ajuste.tipo_apoyo.toLowerCase()}` : ""}</div>
@@ -245,7 +245,7 @@ function AjusteConSeguimiento({ ajuste, onEliminado }) {
       </div>
 
       {expandido && (
-        <div className="mt-2 pt-2 border-t border-slate-100">
+        <div className="mt-2 pt-2 border-t border-slate-200">
           <div className="bg-slate-50 rounded-lg p-2 mb-2">
             <textarea value={nota} onChange={(e) => setNota(e.target.value)} rows={2} placeholder="¿Funcionó el ajuste? Observación libre…"
               className="w-full text-xs rounded-lg px-2 py-1.5 mb-1.5 border border-slate-200 outline-none" />
@@ -265,7 +265,7 @@ function AjusteConSeguimiento({ ajuste, onEliminado }) {
           ) : (
             <div className="space-y-1.5">
               {seguimientos.map((s) => (
-                <div key={s.id} className="text-[11px] bg-white border border-slate-100 rounded-lg p-2">
+                <div key={s.id} className="text-[11px] bg-white border border-slate-200 rounded-lg p-2">
                   <div className="flex justify-between">
                     <span className="text-slate-400">{s.fecha}{s.periodo_academico ? ` · ${s.periodo_academico}` : ""} · {s.autor_nombre}</span>
                     {s.requiere_modificacion && <span className="text-amber-600 font-semibold">⚠ Requiere modificar</span>}
@@ -741,7 +741,7 @@ export function InclusionModal({ estudiante, materiaId, onClose, onGuardado }) {
           {guardando ? "Guardando…" : "Guardar"}
         </button>
 
-        <div className="border-t border-slate-100 pt-4">
+        <div className="border-t border-slate-200 pt-4">
           <div className="text-xs font-semibold text-slate-600 mb-2">Bitácora de seguimiento</div>
 
           <div className="bg-violet-50 rounded-lg p-3 mb-3">
@@ -763,7 +763,7 @@ export function InclusionModal({ estudiante, materiaId, onClose, onGuardado }) {
           ) : (
             <div className="space-y-2">
               {seguimientos.map((s) => (
-                <div key={s.id} className="border border-slate-100 rounded-lg p-2">
+                <div key={s.id} className="border border-slate-200 rounded-lg p-2">
                   <div className="flex justify-between items-start">
                     <div className="text-[11px] font-semibold text-violet-600">{s.tipo} · {s.fecha}{s.materias?.nombre ? ` · ${s.materias.nombre}` : ""}</div>
                     <button onClick={() => borrarSeguimiento(s.id)} className="text-[10px] text-slate-300 hover:text-rose-500">✕</button>
@@ -1053,7 +1053,7 @@ function AreaEstudiante({ estudiante, progreso, grados, onClose, onAbrir }) {
                 <div className="space-y-2">
                   {cat.items.map((item) => (
                     <button key={item.key} onClick={() => onAbrir[item.key]()}
-                      className="w-full flex items-center gap-2.5 bg-white rounded-xl border border-slate-100 shadow-sm px-3 py-2.5 text-left hover:shadow-md transition"
+                      className="w-full flex items-center gap-2.5 bg-white rounded-xl border border-slate-200 shadow-sm px-3 py-2.5 text-left hover:shadow-md transition"
                       style={{ borderColor: `${color}30` }}>
                       <span className="text-lg">{item.icono}</span>
                       <span className="text-sm font-medium text-slate-700">{item.label}</span>
@@ -1065,7 +1065,7 @@ function AreaEstudiante({ estudiante, progreso, grados, onClose, onAbrir }) {
           })}
         </div>
 
-        <div className="mt-8 pt-4 border-t border-slate-100">
+        <div className="mt-8 pt-4 border-t border-slate-200">
           <button onClick={() => { if (confirm(`¿Quitar a ${estudiante.nombre} de la lista?`)) { onAbrir.quitar(); onClose(); } }}
             className="text-xs text-rose-500 hover:text-rose-600">🗑 Quitar de la lista</button>
         </div>
@@ -1145,16 +1145,16 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
   };
 
   return (
-    <div className="relative rounded-2xl p-3 shadow-sm border min-w-0 flex flex-col items-center text-center"
-      style={{ background: "#FFFFFF", borderColor: `${infoReino.color}55` }}>
+    <div className="relative rounded-2xl p-3 shadow-sm border-2 min-w-0 flex flex-col items-center text-center"
+      style={{ background: `${infoReino.color}0D`, borderColor: `${infoReino.color}66` }}>
       <div className="absolute top-2 left-2"><InclusionBadge estudiante={estudiante} /></div>
 
       <div className="relative shrink-0 mb-2">
         {api.urlFotoEstudiante(estudiante) ? (
           <img src={api.urlFotoEstudiante(estudiante)} alt={estudiante.nombre} onClick={() => setFotoAmpliada(true)}
-            className="w-14 h-14 object-cover rounded-full border border-slate-100 cursor-pointer" />
+            className="w-14 h-14 object-cover rounded-full border border-slate-200 cursor-pointer" />
         ) : infoReino.logo_url ? (
-          <img src={infoReino.logo_url} alt="" className="w-14 h-14 object-contain rounded-full border border-slate-100" />
+          <img src={infoReino.logo_url} alt="" className="w-14 h-14 object-contain rounded-full border border-slate-200" />
         ) : (
           <div className="w-14 h-14 rounded-full flex items-center justify-center text-sm font-bold"
             style={{ background: `${infoReino.color}22`, color: infoReino.color }}>
@@ -2092,11 +2092,11 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
         <button onClick={onVolver} className="text-sm text-violet-500">← Grados</button>
         {onVerGrupos && <button onClick={onVerGrupos} className="text-sm text-violet-500">👪 Ver por grupos/reinos</button>}
       </div>
-      <h2 className="text-xl font-bold text-white mb-4">
+      <h2 className="text-xl font-bold text-slate-800 mb-4">
         {reinoFiltro ? reinoFiltro : `Grado ${gradoId} — todos los estudiantes`}
       </h2>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 mb-4">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-3 mb-4">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-2">
           <TarjetaAccion Icono={Plus} color={PALETA_ACCIONES[0]} label="Agregar Estudiante" destacada={agregarAbierto} onClick={() => setAgregarAbierto((v) => !v)} />
           <TarjetaAccion Icono={Shield} color={PALETA_ACCIONES[1]} label="Ver códigos de acceso" onClick={() => setCodigosAbierto(true)} />
@@ -2318,7 +2318,7 @@ function ReinoEditorModal({ reino, gradoId, otrosReinos, onClose, onGuardado }) 
           {guardando ? "Guardando…" : "Guardar"}
         </button>
 
-        <div className="border-t border-slate-100 mt-4 pt-4">
+        <div className="border-t border-slate-200 mt-4 pt-4">
           <div className="text-xs font-semibold text-rose-600 mb-2">Retirar este grupo (ya no continúa)</div>
           <label className="text-xs text-slate-500 block mb-1">Mover a sus estudiantes a:</label>
           <select value={destinoRetiro} onChange={(e) => setDestinoRetiro(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none">
@@ -2373,7 +2373,7 @@ export function VistaReinos({ gradoId, onElegirReino, onVerTodos, onVolver }) {
     <div>
       <button onClick={onVolver} className="text-sm text-violet-500 mb-3">← Grados</button>
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <h2 className="text-xl font-bold text-white">Grado {gradoId} — Reinos</h2>
+        <h2 className="text-xl font-bold text-slate-800">Grado {gradoId} — Reinos</h2>
         <div className="flex gap-2">
           <button onClick={() => setEditando({ nombre: "" })} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700">+ Nuevo reino</button>
           <button onClick={onVerTodos} className="text-sm text-violet-500 font-semibold">Ver listado completo →</button>
@@ -2604,7 +2604,7 @@ export function VistaGrados({ onElegirGrado }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <h2 className="text-xl font-bold text-white">Grados</h2>
+        <h2 className="text-xl font-bold text-slate-800">Grados</h2>
         <div className="flex gap-2">
           <input value={nuevoGrado} onChange={(e) => setNuevoGrado(e.target.value)} placeholder="Nuevo grado (ej: 1004)"
             className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none w-40" />
@@ -2642,7 +2642,7 @@ export function VistaGrados({ onElegirGrado }) {
                   </button>
                 </div>
                 {editandoColorDe === g.id && (
-                  <div className="absolute z-20 top-8 right-2 bg-white rounded-xl shadow-lg border border-slate-100 p-2 grid grid-cols-4 gap-1.5" onClick={(e) => e.stopPropagation()}>
+                  <div className="absolute z-20 top-8 right-2 bg-white rounded-xl shadow-lg border border-slate-200 p-2 grid grid-cols-4 gap-1.5" onClick={(e) => e.stopPropagation()}>
                     {REINO_COLORS.map((c) => (
                       <button key={c} onClick={() => elegirColor(g.id, c)} className="w-6 h-6 rounded-full border border-slate-200" style={{ background: c }} />
                     ))}
