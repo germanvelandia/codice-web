@@ -116,7 +116,7 @@ export function InstitucionModal({ onClose }) {
               </div>
             </div>
 
-            <div className="border-t border-slate-100 pt-3 mt-1">
+            <div className="border-t border-slate-200 pt-3 mt-1">
               <p className="text-xs text-slate-500 font-semibold mb-2">Datos oficiales (para documentos formales como el formato de remisión)</p>
               <label className="text-xs text-slate-500 block mb-1">Resolución de licencia de funcionamiento</label>
               <input value={resolucion} onChange={(e) => setResolucion(e.target.value)} placeholder="Ej: Resolución No. 4601 de Noviembre 16 de 2007"
