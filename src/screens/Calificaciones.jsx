@@ -219,7 +219,6 @@ function BarraMateria({ materias, materiaActualId, setMateriaActualId, onCambio,
 }
 
 function PanelCategorias({ materiaId, categorias, onCambio }) {
-  const [abierto, setAbierto] = useState(false);
   const [nombre, setNombre] = useState("");
   const [porcentaje, setPorcentaje] = useState(25);
   const sumaTotal = categorias.reduce((a, c) => a + c.porcentaje, 0);
@@ -233,28 +232,22 @@ function PanelCategorias({ materiaId, categorias, onCambio }) {
   const eliminar = async (id) => { await api.eliminarCategoria(id); onCambio(); };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 mb-4">
-      <button onClick={() => setAbierto((v) => !v)} className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-        {abierto ? "▾" : "▸"} Categorías de evaluación {sumaTotal !== 100 && <span className="text-xs text-amber-600">(suman {sumaTotal}%, deberían sumar 100%)</span>}
-      </button>
-      {abierto && (
-        <div className="mt-3">
-          <div className="flex flex-wrap gap-2 mb-3">
-            {categorias.map((c) => (
-              <div key={c.id} className="flex items-center gap-2 bg-violet-50 rounded-full px-3 py-1.5 text-xs">
-                <span>{c.nombre} ({c.porcentaje}%)</span>
-                <button onClick={() => eliminar(c.id)} className="text-slate-400 hover:text-rose-500">✕</button>
-              </div>
-            ))}
-            {categorias.length === 0 && <span className="text-xs text-slate-400">Sin categorías todavía.</span>}
+    <div className="min-w-[260px]">
+      {sumaTotal !== 100 && <p className="text-xs text-amber-600 mb-2">Suman {sumaTotal}% — deberían sumar 100%</p>}
+      <div className="flex flex-wrap gap-2 mb-3">
+        {categorias.map((c) => (
+          <div key={c.id} className="flex items-center gap-2 bg-violet-50 rounded-full px-3 py-1.5 text-xs">
+            <span>{c.nombre} ({c.porcentaje}%)</span>
+            <button onClick={() => eliminar(c.id)} className="text-slate-400 hover:text-rose-500">✕</button>
           </div>
-          <div className="flex gap-2">
-            <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre (ej: Talleres)" className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none flex-1" />
-            <input type="number" value={porcentaje} onChange={(e) => setPorcentaje(parseInt(e.target.value || "0", 10))} className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none w-20" />
-            <button onClick={crear} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white">Crear</button>
-          </div>
-        </div>
-      )}
+        ))}
+        {categorias.length === 0 && <span className="text-xs text-slate-400">Sin categorías todavía.</span>}
+      </div>
+      <div className="flex gap-2">
+        <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre (ej: Talleres)" className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none flex-1 min-w-0" />
+        <input type="number" value={porcentaje} onChange={(e) => setPorcentaje(parseInt(e.target.value || "0", 10))} className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none w-16" />
+        <button onClick={crear} className="text-sm font-semibold px-3 py-2 rounded-lg bg-violet-500 text-white shrink-0">Crear</button>
+      </div>
     </div>
   );
 }
@@ -1872,7 +1865,9 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
   const [comentariosAbiertos, setComentariosAbiertos] = useState(false);
   const [estudiantes, setEstudiantes] = useState([]);
   const [cargando, setCargando] = useState(true);
-  const [pasoAbierto, setPasoAbierto] = useState(null); // "materia" | "grado" | "periodo" | null (todo colapsado)
+  const [pasoAbierto, setPasoAbierto] = useState(null); // "materia" | "grado" | "periodo" | "categorias" | "vista" | null
+  const [actividadModalAbierto, setActividadModalAbierto] = useState(false);
+  const [refrescoPlanilla, setRefrescoPlanilla] = useState(0);
 
   // Curso activo elegido en la barra superior — no pisa el salto puntual
   // que hace el buscador global de estudiantes (ver el efecto de abajo).
@@ -1999,9 +1994,42 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
                   <input type="checkbox" checked={soloVigente} onChange={(e) => setSoloVigente(e.target.checked)} />
                   Ocultar periodos anteriores
                 </label>
-                <ChipCal onClick={() => setComentariosAbiertos(true)}>💬 Comentarios por desempeño</ChipCal>
               </div>
             </PasoMenu>
+
+            <PasoMenu titulo="Categorías" Icono={Award} abierto={pasoAbierto === "categorias"}
+              resumen={categorias.length > 0 ? `${categorias.length} categoría${categorias.length === 1 ? "" : "s"}` : "Sin definir"}
+              onAbrir={() => setPasoAbierto(pasoAbierto === "categorias" ? null : "categorias")} onCerrar={() => setPasoAbierto(null)}>
+              <PanelCategorias materiaId={materiaActualId} categorias={categorias} onCambio={cargarConfigYCategorias} />
+            </PasoMenu>
+
+            <PasoMenu titulo="Vista" Icono={FileText} abierto={pasoAbierto === "vista"}
+              resumen={{ planilla: "Planilla", boletin: "Boletín / Nivelación", estadisticas: "Estadísticas", config: "Escala y periodos" }[subVista]}
+              onAbrir={() => setPasoAbierto(pasoAbierto === "vista" ? null : "vista")} onCerrar={() => setPasoAbierto(null)} ancho="min-w-[220px]">
+              <div className="flex flex-col gap-1">
+                {[
+                  { key: "planilla", label: "Planilla", Icono: FileText, fondo: "#E8EEF8", color: "#28478a" },
+                  { key: "boletin", label: "Boletín / Nivelación", Icono: Award, fondo: "#E8EEF8", color: "#28478a" },
+                  { key: "estadisticas", label: "Estadísticas", Icono: BarChart, fondo: "#DCFCE7", color: "#15803D" },
+                  { key: "config", label: "Escala y periodos", Icono: Settings, fondo: "#FFEDD5", color: "#C2410C" },
+                ].map((op) => (
+                  <button key={op.key} onClick={() => { setSubVista(op.key); setPasoAbierto(null); }}
+                    className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-left ${subVista === op.key ? "bg-violet-50" : "hover:bg-slate-50"}`}>
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={{ background: op.fondo }}><op.Icono size={13} color={op.color} /></div>
+                    <span className="text-xs font-bold text-slate-800">{op.label}</span>
+                  </button>
+                ))}
+              </div>
+            </PasoMenu>
+
+            <button onClick={() => setActividadModalAbierto(true)}
+              className="flex items-center gap-1.5 rounded-xl border border-dashed border-violet-300 text-violet-600 px-3 py-2 text-xs font-bold shrink-0 hover:bg-violet-50">
+              + Actividad
+            </button>
+            <button onClick={() => setComentariosAbiertos(true)}
+              className="flex items-center gap-1.5 rounded-xl border border-slate-200 text-slate-600 px-3 py-2 text-xs font-bold shrink-0 hover:bg-slate-50">
+              💬 Comentarios
+            </button>
           </>
         )}
       </div>
@@ -2019,35 +2047,8 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
             </div>
           )}
 
-          <PanelCategorias materiaId={materiaActualId} categorias={categorias} onCambio={cargarConfigYCategorias} />
-
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 mb-4">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <button onClick={() => setSubVista("planilla")}
-                className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition-all ${subVista === "planilla" ? "border-violet-300 bg-violet-50" : "border-slate-200 bg-white hover:border-slate-300"}`}>
-                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: "#EDE9FE" }}><FileText size={15} color="#6D28D9" /></div>
-                <span className="text-xs font-bold text-slate-800">Planilla</span>
-              </button>
-              <button onClick={() => setSubVista("boletin")}
-                className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition-all ${subVista === "boletin" ? "border-violet-300 bg-violet-50" : "border-slate-200 bg-white hover:border-slate-300"}`}>
-                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: "#DBEAFE" }}><Award size={15} color="#1D4ED8" /></div>
-                <span className="text-xs font-bold text-slate-800">Boletín / Nivelación</span>
-              </button>
-              <button onClick={() => setSubVista("estadisticas")}
-                className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition-all ${subVista === "estadisticas" ? "border-violet-300 bg-violet-50" : "border-slate-200 bg-white hover:border-slate-300"}`}>
-                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: "#DCFCE7" }}><BarChart size={15} color="#15803D" /></div>
-                <span className="text-xs font-bold text-slate-800">Estadísticas</span>
-              </button>
-              <button onClick={() => setSubVista("config")}
-                className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition-all ${subVista === "config" ? "border-violet-300 bg-violet-50" : "border-slate-200 bg-white hover:border-slate-300"}`}>
-                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: "#FFEDD5" }}><Settings size={15} color="#C2410C" /></div>
-                <span className="text-xs font-bold text-slate-800">Escala y periodos</span>
-              </button>
-            </div>
-          </div>
-
           {subVista === "planilla" && (
-            <Planilla materiaId={materiaActualId} config={config} categorias={categorias} estudiantes={estudiantes} gradoId={gradoId} grados={grados} periodo={periodo} materias={materias} onCambioCategorias={cargarConfigYCategorias} estudianteDestacadoId={destinoBusqueda?.estudianteId} />
+            <Planilla key={refrescoPlanilla} materiaId={materiaActualId} config={config} categorias={categorias} estudiantes={estudiantes} gradoId={gradoId} grados={grados} periodo={periodo} materias={materias} onCambioCategorias={cargarConfigYCategorias} estudianteDestacadoId={destinoBusqueda?.estudianteId} />
           )}
           {subVista === "boletin" && (
             <Boletin materiaId={materiaActualId} config={config} categorias={categorias} estudiantes={estudiantes} gradoId={gradoId} guardarActual={guardarNotasFinalesActual} />
@@ -2059,6 +2060,11 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
             <ConfigEscala materiaId={materiaActualId} config={config} onGuardado={cargarConfigYCategorias} />
           )}
           {comentariosAbiertos && <ComentariosDesempenoModal onClose={() => setComentariosAbiertos(false)} />}
+          {actividadModalAbierto && (
+            <ActividadModal materiaId={materiaActualId} gradoId={gradoId} periodo={periodo} categorias={categorias} editar={null}
+              onClose={() => setActividadModalAbierto(false)}
+              onGuardada={() => { setActividadModalAbierto(false); setRefrescoPlanilla((n) => n + 1); setSubVista("planilla"); }} />
+          )}
         </>
       )}
     </div>
