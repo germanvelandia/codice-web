@@ -119,7 +119,7 @@ export function VistaAccionesMasivas({ grados, gradoActivo }) {
       {cargando ? (
         <div className="text-sm text-slate-400">Cargando…</div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 mb-4 max-h-56 overflow-y-auto bg-white rounded-2xl border border-slate-100 p-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 mb-4 max-h-56 overflow-y-auto bg-white rounded-2xl border border-slate-200 p-3">
           {visibles.map((s) => (
             <label key={s.id} className={`flex items-center gap-1.5 text-xs rounded-lg px-2 py-1.5 cursor-pointer ${seleccionados.has(s.id) ? "bg-violet-50 text-violet-700" : "text-slate-600"}`}>
               <input type="checkbox" checked={seleccionados.has(s.id)} onChange={() => toggleUno(s.id)} />
@@ -137,7 +137,7 @@ export function VistaAccionesMasivas({ grados, gradoActivo }) {
       </div>
 
       {(pestaña === "oro" || pestaña === "experiencia" || pestaña === "vida") && (
-        <div className="bg-white rounded-2xl border border-slate-100 p-4">
+        <div className="bg-white rounded-2xl border border-slate-200 p-4">
           <label className="text-xs text-slate-500 block mb-1">
             {pestaña === "oro" ? "Monedas a dar (negativo para quitar)" : pestaña === "experiencia" ? "Puntos de experiencia a dar (negativo para quitar)" : "Puntos de vida a dar (negativo para quitar)"}
           </label>
@@ -158,7 +158,7 @@ export function VistaAccionesMasivas({ grados, gradoActivo }) {
       )}
 
       {pestaña === "comportamiento" && (
-        <div className="bg-white rounded-2xl border border-slate-100 p-4">
+        <div className="bg-white rounded-2xl border border-slate-200 p-4">
           <div className="flex gap-1 rounded-full bg-slate-100 p-1 w-fit mb-3">
             <button onClick={() => { setCategoriaComportamiento("convivencial"); setComportamientoId(""); }} className={`text-xs px-3 py-1.5 rounded-full ${categoriaComportamiento === "convivencial" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Convivencial</button>
             <button onClick={() => { setCategoriaComportamiento("academico"); setComportamientoId(""); }} className={`text-xs px-3 py-1.5 rounded-full ${categoriaComportamiento === "academico" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Académico</button>
