@@ -439,7 +439,7 @@ function JuegoSopaDeLetras({ items, onTerminar }) {
                     if (el?.dataset?.fc) setCeldaActual(el.dataset.fc.split(",").map(Number));
                   }}
                   data-fc={`${f},${c}`}
-                  className={`w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center text-[11px] font-bold border border-slate-100 cursor-pointer ${enc ? "bg-emerald-200 text-emerald-800" : enRuta ? "bg-violet-200" : "text-slate-600"}`}>
+                  className={`w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center text-[11px] font-bold border border-slate-200 cursor-pointer ${enc ? "bg-emerald-200 text-emerald-800" : enRuta ? "bg-violet-200" : "text-slate-600"}`}>
                   {letra}
                 </div>
               );
@@ -1141,7 +1141,7 @@ export function VistaBancoContenidoEstudiante({ estudianteId }) {
       ) : (
         <div className="grid sm:grid-cols-2 gap-3">
           {sets.map((s) => (
-            <button key={s.id} onClick={() => setJugando(s)} className="text-left border border-slate-100 rounded-xl p-3 hover:border-violet-300 hover:bg-violet-50">
+            <button key={s.id} onClick={() => setJugando(s)} className="text-left border border-slate-200 rounded-xl p-3 hover:border-violet-300 hover:bg-violet-50">
               <div className="font-semibold text-slate-800 text-sm mb-0.5">{s.titulo}</div>
               {s.descripcion && <p className="text-xs text-slate-400 mb-1.5">{s.descripcion}</p>}
               <div className="text-[11px] text-violet-500 font-semibold">▶️ Jugar · {s.cantidad_items} pares</div>
@@ -1174,7 +1174,7 @@ export function VistaBancoContenido() {
   return (
     <div>
       <div className="flex justify-between items-center mb-1">
-        <h2 className="text-lg font-bold text-white">🧩 Banco de Contenido</h2>
+        <h2 className="text-lg font-bold text-slate-800">🧩 Banco de Contenido</h2>
         <button onClick={() => setEditando({})} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">+ Nuevo set</button>
       </div>
       <p className="text-xs text-slate-400 mb-4">Cargá un contenido una sola vez, y jugalo en Emparejar, Ahorcado, Ordenar palabras — y más formatos que se van a ir sumando.</p>
@@ -1188,7 +1188,7 @@ export function VistaBancoContenido() {
       ) : (
         <div className="grid sm:grid-cols-2 gap-3">
           {sets.map((s) => (
-            <div key={s.id} className="border border-slate-100 rounded-xl p-3">
+            <div key={s.id} className="border border-slate-200 rounded-xl p-3">
               <div className="font-semibold text-slate-800 text-sm mb-0.5">{s.titulo}</div>
               {s.descripcion && <p className="text-xs text-slate-400 mb-1.5">{s.descripcion}</p>}
               <div className="text-[11px] text-slate-400 mb-2">{s.cantidad_items} par{s.cantidad_items !== 1 && "es"}</div>
