@@ -1229,6 +1229,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
   const [observacionMasivaAbierta, setObservacionMasivaAbierta] = useState(false);
   const [reinoFiltro, setReinoFiltro] = useState("Todos");
   const [soloPerdiendo, setSoloPerdiendo] = useState(false);
+  const [pasoTablaAbierto, setPasoTablaAbierto] = useState(null);
   const [busqueda, setBusqueda] = useState("");
   const [seleccionando, setSeleccionando] = useState(false);
   const [seleccionadas, setSeleccionadas] = useState([]);
@@ -1388,21 +1389,31 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
   return (
     <div>
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 mb-3">
-        <div className="flex flex-wrap items-center gap-1.5 mb-3">
+        <div className="flex flex-wrap items-center gap-1.5 mb-2">
           <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="🔍 Buscar estudiante…"
             className="text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none w-48" />
-          {reinos.map((r) => (
-            <ChipCal key={r} activo={reinoFiltro === r} onClick={() => setReinoFiltro(r)}>
-              <Users size={12} />{r === "Todos" ? "Todos los grupos" : r}
-            </ChipCal>
-          ))}
-          <ChipCal Icono={TrendingDown} activo={soloPerdiendo} onClick={() => setSoloPerdiendo((v) => !v)}>
-            {soloPerdiendo ? "Viendo solo quienes van perdiendo" : "Ver solo quienes van perdiendo"}
-          </ChipCal>
+
+          <PasoMenu titulo="Grupo" Icono={Users} abierto={pasoTablaAbierto === "grupo"}
+            resumen={reinoFiltro === "Todos" ? "Todos los grupos" : reinoFiltro}
+            onAbrir={() => setPasoTablaAbierto(pasoTablaAbierto === "grupo" ? null : "grupo")} onCerrar={() => setPasoTablaAbierto(null)}>
+            <div className="flex flex-col gap-1 min-w-[180px]">
+              {reinos.map((r) => (
+                <button key={r} onClick={() => { setReinoFiltro(r); setPasoTablaAbierto(null); }}
+                  className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs font-semibold ${reinoFiltro === r ? "bg-violet-50 text-violet-700" : "text-slate-600 hover:bg-slate-50"}`}>
+                  <Users size={12} />{r === "Todos" ? "Todos los grupos" : r}
+                </button>
+              ))}
+              <div className="border-t border-slate-100 my-1" />
+              <label className="flex items-center gap-2 px-2.5 py-1.5 text-xs font-semibold text-slate-600">
+                <input type="checkbox" checked={soloPerdiendo} onChange={(e) => setSoloPerdiendo(e.target.checked)} />
+                Ver solo quienes van perdiendo
+              </label>
+            </div>
+          </PasoMenu>
+
           <div className="text-xs text-slate-400 ml-auto">{actividades.length} actividad{actividades.length === 1 ? "" : "es"} · {estudiantesVisibles.length} estudiante{estudiantesVisibles.length === 1 ? "" : "s"}</div>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          <ChipCal Icono={Plus} destacado onClick={() => { setActividadEditar(null); setModalAbierto(true); }}>Nueva actividad</ChipCal>
           <ChipCal Icono={Edit} onClick={() => setNotaMasivaAbierta(true)}>Nota masiva</ChipCal>
           <ChipCal Icono={FileText} onClick={() => setObservacionMasivaAbierta(true)}>Observación masiva</ChipCal>
 
