@@ -232,7 +232,7 @@ export function VistaInclusionGeneral() {
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {visibles.map((e) => (
-            <button key={e.id} onClick={() => setAbiertoPara(e)} className="bg-white rounded-2xl border border-slate-100 p-3 text-left hover:border-violet-200 hover:shadow-sm">
+            <button key={e.id} onClick={() => setAbiertoPara(e)} className="bg-white rounded-2xl border border-slate-200 p-3 text-left hover:border-violet-200 hover:shadow-sm">
               <div className="flex items-center gap-2 mb-1">
                 {e.foto_url ? (
                   <img src={e.foto_url} alt={e.nombre} className="w-9 h-9 rounded-full object-cover" />
