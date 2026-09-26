@@ -345,7 +345,7 @@ export function VistaBancoPreguntas({ grados = [] }) {
           <p className="text-xs text-slate-400 mb-2">{visibles.length} pregunta(s)</p>
           <div className="space-y-2">
             {visibles.map((p) => (
-              <div key={p.id} className={`bg-white rounded-xl border p-3 ${seleccionando && seleccionadas.includes(p.id) ? "border-violet-400 bg-violet-50/40" : "border-slate-100"}`}>
+              <div key={p.id} className={`bg-white rounded-xl border p-3 ${seleccionando && seleccionadas.includes(p.id) ? "border-violet-400 bg-violet-50/40" : "border-slate-200"}`}>
                 <div className="flex justify-between items-start gap-2">
                   <div className="flex items-start gap-2 min-w-0">
                     {seleccionando && (
