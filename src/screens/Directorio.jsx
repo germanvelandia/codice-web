@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
 import * as api from "../lib/api";
+import { buscarEstudiantePorNombre } from "../lib/gamification";
 
 function AcudienteEditModal({ estudiante, acudiente, onClose, onGuardado }) {
   const [nombrePadre, setNombrePadre] = useState(acudiente?.nombre_padre || "");
@@ -95,6 +96,8 @@ export function DirectorioModal({ gradoId, onClose }) {
   const [filas, setFilas] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [editando, setEditando] = useState(null); // { estudiante, acudiente }
+  const [importando, setImportando] = useState(false);
+  const [resultadoImport, setResultadoImport] = useState(null);
 
   const cargar = () => {
     setCargando(true);
@@ -104,7 +107,7 @@ export function DirectorioModal({ gradoId, onClose }) {
 
   const exportar = () => {
     const datos = filas.map(({ estudiante: s, acudiente: a }) => ({
-      Estudiante: s.nombre, Grupo: s.reino_actual || s.reino_original || "",
+      Estudiante: s.nombre, Grupo: s.reino_actual || s.reino_original || "", Documento: s.documento || "",
       "Nombre padre": a?.nombre_padre || "", "Teléfono padre": a?.telefono_padre || "",
       "Nombre madre": a?.nombre_madre || "", "Teléfono madre": a?.telefono_madre || "",
       "Contacto emergencia": a?.contacto_emergencia_nombre || "", "Teléfono emergencia": a?.contacto_emergencia_telefono || "",
@@ -115,6 +118,51 @@ export function DirectorioModal({ gradoId, onClose }) {
     XLSX.writeFile(wb, `Directorio_acudientes_${gradoId}.xlsx`);
   };
 
+  const importarArchivo = async (file) => {
+    setImportando(true);
+    setResultadoImport(null);
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const hoja = wb.Sheets[wb.SheetNames[0]];
+      const filasExcel = XLSX.utils.sheet_to_json(hoja, { defval: "" });
+
+      const estudiantesGrado = filas.map((f) => f.estudiante);
+      let actualizados = 0;
+      const sinEmparejar = [];
+
+      for (const fila of filasExcel) {
+        const nombreExcel = fila["Estudiante"] || fila["estudiante"] || fila["Nombre"] || "";
+        if (!nombreExcel.trim()) continue;
+        const est = buscarEstudiantePorNombre(nombreExcel, estudiantesGrado);
+        if (!est) { sinEmparejar.push(nombreExcel); continue; }
+
+        const documento = fila["Documento"] || fila["documento"] || "";
+        if (documento.toString().trim()) {
+          await api.guardarDocumento(est.id, documento.toString());
+        }
+
+        await api.guardarAcudiente(est.id, {
+          nombre_padre: (fila["Nombre padre"] || "").toString().trim() || null,
+          telefono_padre: (fila["Teléfono padre"] || fila["Telefono padre"] || "").toString().trim() || null,
+          nombre_madre: (fila["Nombre madre"] || "").toString().trim() || null,
+          telefono_madre: (fila["Teléfono madre"] || fila["Telefono madre"] || "").toString().trim() || null,
+          contacto_emergencia_nombre: (fila["Contacto emergencia"] || "").toString().trim() || null,
+          contacto_emergencia_telefono: (fila["Teléfono emergencia"] || fila["Telefono emergencia"] || "").toString().trim() || null,
+          contacto_emergencia_relacion: (fila["Parentesco emergencia"] || "").toString().trim() || null,
+          direccion: (fila["Dirección"] || fila["Direccion"] || "").toString().trim() || null,
+        });
+        actualizados++;
+      }
+
+      setResultadoImport({ actualizados, sinEmparejar });
+      cargar();
+    } catch (e) {
+      alert("Error al importar: " + e.message);
+    }
+    setImportando(false);
+  };
+
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} className="bg-slate-50 rounded-2xl p-5 w-full max-w-4xl max-h-[85vh] overflow-y-auto shadow-xl">
@@ -122,22 +170,43 @@ export function DirectorioModal({ gradoId, onClose }) {
           <h3 className="font-bold text-slate-800">👪 Directorio de acudientes — Grado {gradoId}</h3>
           <div className="flex items-center gap-3">
             <button onClick={exportar} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">📊 Exportar Excel</button>
+            <label className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700 cursor-pointer">
+              {importando ? "Importando…" : "📥 Importar Excel"}
+              <input type="file" accept=".xlsx,.xls" className="hidden" disabled={importando}
+                onChange={(e) => { if (e.target.files[0]) importarArchivo(e.target.files[0]); e.target.value = ""; }} />
+            </label>
             <button onClick={onClose} className="text-slate-400">✕</button>
           </div>
         </div>
 
+        <p className="text-[11px] text-slate-400 mb-3">
+          Para importar: exportá primero el Excel de este grado, completá las columnas de padre/madre/emergencia/documento
+          en Excel, y volvé a subirlo acá — empareja los estudiantes por nombre automáticamente.
+        </p>
+
+        {resultadoImport && (
+          <div className="bg-emerald-50 text-emerald-700 text-xs rounded-lg p-3 mb-3">
+            ✔️ Se actualizaron {resultadoImport.actualizados} estudiante(s).
+            {resultadoImport.sinEmparejar.length > 0 && (
+              <div className="text-amber-700 mt-1">
+                ⚠️ No se pudo emparejar por nombre: {resultadoImport.sinEmparejar.join(", ")}
+              </div>
+            )}
+          </div>
+        )}
+
         {cargando ? (
           <div className="text-sm text-slate-400">Cargando…</div>
         ) : (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-x-auto">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-x-auto">
             <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  <th className="text-left px-3 py-2 border-b border-slate-100 bg-slate-50">Estudiante</th>
-                  <th className="text-left px-3 py-2 border-b border-slate-100 bg-slate-50">Padre</th>
-                  <th className="text-left px-3 py-2 border-b border-slate-100 bg-slate-50">Madre</th>
-                  <th className="text-left px-3 py-2 border-b border-slate-100 bg-slate-50">Emergencia</th>
-                  <th className="px-3 py-2 border-b border-slate-100 bg-slate-50"></th>
+                  <th className="text-left px-3 py-2 border-b border-slate-200 bg-slate-50">Estudiante</th>
+                  <th className="text-left px-3 py-2 border-b border-slate-200 bg-slate-50">Padre</th>
+                  <th className="text-left px-3 py-2 border-b border-slate-200 bg-slate-50">Madre</th>
+                  <th className="text-left px-3 py-2 border-b border-slate-200 bg-slate-50">Emergencia</th>
+                  <th className="px-3 py-2 border-b border-slate-200 bg-slate-50"></th>
                 </tr>
               </thead>
               <tbody>
