@@ -50,7 +50,7 @@ export function VistaRoles() {
       <h2 className="text-xl font-bold text-slate-800 mb-1">Roles de Clase</h2>
       <p className="text-sm text-slate-400 mb-4">Crea los roles (líder, secretario, vocero, etc.) y asígnalos a cada estudiante desde la tarjeta de Estudiantes.</p>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-4">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 mb-4">
         <div className="text-xs uppercase tracking-wide text-slate-400 mb-2">Crear nuevo rol</div>
         <div className="flex flex-wrap gap-2">
           <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre del rol (ej: Líder)"
@@ -68,7 +68,7 @@ export function VistaRoles() {
       ) : (
         <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
           {roles.map((r) => (
-            <div key={r.id} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
+            <div key={r.id} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
               {editandoId === r.id ? (
                 <div>
                   <input value={nombreEdicion} onChange={(e) => setNombreEdicion(e.target.value)} autoFocus
