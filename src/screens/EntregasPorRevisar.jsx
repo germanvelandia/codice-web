@@ -30,8 +30,8 @@ export function VistaEntregasPorRevisar({ onIrAGrado }) {
 
   return (
     <div>
-      <h2 className="text-xl font-bold text-white mb-1">📝 Entregas por revisar {total > 0 && <span className="text-violet-500">({total})</span>}</h2>
-      <p className="text-sm text-white/80 mb-1">Cruza Misiones y Proyectos/Forja de todas tus materias y cursos, para no tener que ir uno por uno a buscar qué falta.</p>
+      <h2 className="text-xl font-bold text-slate-800 mb-1">📝 Entregas por revisar {total > 0 && <span className="text-violet-500">({total})</span>}</h2>
+      <p className="text-sm text-slate-400 mb-1">Cruza Misiones y Proyectos/Forja de todas tus materias y cursos, para no tener que ir uno por uno a buscar qué falta.</p>
       <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2 mb-4">
         ⚠️ Ojo con la diferencia: en <b>Misiones</b>, "pendiente" significa que el estudiante ya entregó y falta que publiques la nota. En <b>Proyectos/Forja</b>, significa que ese estudiante todavía no tiene nota — puede que ni haya entregado nada, la app no distingue eso.
       </p>
@@ -44,7 +44,7 @@ export function VistaEntregasPorRevisar({ onIrAGrado }) {
             const g = porGrado[gradoId];
             const totalGrado = g.evaluaciones.reduce((a, e) => a + e.cantidad, 0) + g.tareas.reduce((a, t) => a + t.cantidad, 0);
             return (
-              <div key={gradoId} className="bg-white rounded-2xl border border-slate-100 p-4">
+              <div key={gradoId} className="bg-white rounded-2xl border border-slate-200 p-4">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="font-bold text-slate-800">🎓 Curso {gradoId}</h3>
                   <span className="text-xs font-semibold text-violet-600 bg-violet-50 px-2.5 py-1 rounded-full">{totalGrado} pendiente{totalGrado !== 1 ? "s" : ""}</span>
