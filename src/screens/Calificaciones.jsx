@@ -1951,7 +1951,7 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
   return (
     <div>
       <h2 className="text-xl font-bold text-white mb-1">Planilla de Notas</h2>
-      <p className="text-xs text-violet-600 mb-3">Esta planilla es privada de tu cuenta — otros docentes que usen este enlace no ven ni afectan tus calificaciones.</p>
+      <p className="text-xs text-white/80 mb-3">Esta planilla es privada de tu cuenta — otros docentes que usen este enlace no ven ni afectan tus calificaciones.</p>
 
       <div className="flex flex-wrap items-start gap-2 mb-4">
         <PasoMenu titulo="Materia" Icono={BookOpen} abierto={pasoAbierto === "materia" || !materiaActualId}
