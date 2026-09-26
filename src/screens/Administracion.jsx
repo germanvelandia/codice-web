@@ -24,7 +24,7 @@ function MiCuenta({ miPerfil }) {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-4">
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 mb-4">
       <h3 className="font-bold text-slate-800 mb-1">Mi cuenta</h3>
       <p className="text-xs text-slate-400 mb-3">{miPerfil?.nombre} · {miPerfil?.email}{miPerfil?.es_admin && " · 👑 Administrador"}</p>
 
@@ -73,15 +73,15 @@ function ListaDocentes({ miPerfil, onCambio }) {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-x-auto">
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-x-auto">
       <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
         <thead>
           <tr>
-            <th className="text-left px-3 py-2 border-b border-slate-100 bg-slate-50">Docente</th>
-            <th className="text-left px-3 py-2 border-b border-slate-100 bg-slate-50">Correo</th>
-            <th className="text-left px-3 py-2 border-b border-slate-100 bg-slate-50">Materias</th>
-            <th className="text-left px-3 py-2 border-b border-slate-100 bg-slate-50">Rol</th>
-            {miPerfil?.es_admin && <th className="text-left px-3 py-2 border-b border-slate-100 bg-slate-50"></th>}
+            <th className="text-left px-3 py-2 border-b border-slate-200 bg-slate-50">Docente</th>
+            <th className="text-left px-3 py-2 border-b border-slate-200 bg-slate-50">Correo</th>
+            <th className="text-left px-3 py-2 border-b border-slate-200 bg-slate-50">Materias</th>
+            <th className="text-left px-3 py-2 border-b border-slate-200 bg-slate-50">Rol</th>
+            {miPerfil?.es_admin && <th className="text-left px-3 py-2 border-b border-slate-200 bg-slate-50"></th>}
           </tr>
         </thead>
         <tbody>
@@ -162,7 +162,7 @@ function MigrarFotosPanel() {
   if (pendientes === null) return null;
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-4">
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 mb-4">
       <h3 className="font-bold text-slate-800 mb-1">📸 Migrar fotos al almacenamiento</h3>
       <p className="text-xs text-slate-400 mb-3">
         Mueve las fotos guardadas como texto largo (base64) a un almacenamiento de archivos aparte — no borra ni altera ninguna foto existente,
@@ -226,7 +226,7 @@ export function AdministracionModal({ onClose }) {
             <ListaDocentes miPerfil={miPerfil} onCambio={cargarPerfil} />
 
             {miPerfil?.es_admin && (
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mt-4">
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 mt-4">
                 <VistaPromocion />
               </div>
             )}
