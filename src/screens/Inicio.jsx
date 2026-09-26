@@ -4,7 +4,7 @@ import * as api from "../lib/api";
 import { FotoLightbox } from "./Estudiantes";
 
 const DIAS_NOMBRE = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
-const TIPO_EVENTO_COLOR = { institucional: "#8B5CF6", academico: "#7C3AED", convivencial: "#DB2777", festivo: "#F59E0B", otro: "#64748B" };
+const TIPO_EVENTO_COLOR = { institucional: "#2F55A4", academico: "#28478a", convivencial: "#17264D", festivo: "#F59E0B", otro: "#64748B" };
 
 export function ContenidoLightbox({ html, onClose }) {
   return createPortal(
@@ -310,7 +310,7 @@ function ValorSemanaCard() {
       {valor.html_contenido ? (
         <div className="rounded-xl overflow-hidden cursor-pointer" style={{ maxWidth: 120 }} onClick={() => setAmpliado(true)} dangerouslySetInnerHTML={{ __html: valor.html_contenido }} />
       ) : (
-        <div className="rounded-xl overflow-hidden shrink-0" style={{ width: 64, height: 64, background: "#F5F3FF" }}>
+        <div className="rounded-xl overflow-hidden shrink-0" style={{ width: 64, height: 64, background: "#E8EEF8" }}>
           {valor.imagen_url ? (
             <img src={valor.imagen_url} alt={valor.nombre || "Valor de la semana"} onClick={() => setAmpliado(true)} className="w-full h-full object-contain cursor-pointer" />
           ) : (
@@ -492,7 +492,7 @@ export function VistaInicio({ onIrA, soloEncabezado, accionSuperior, contenidoMe
   return (
     <div>
       {/* Banner de bienvenida */}
-      <div className="rounded-2xl overflow-hidden mb-4" style={{ background: "linear-gradient(135deg, #2d2450 0%, #1e1b30 60%, #14101f 100%)", border: "1px solid #7c3aed55" }}>
+      <div className="rounded-2xl overflow-hidden mb-4" style={{ background: "linear-gradient(135deg, #1c2f5e 0%, #0f1932 60%, #0a1226 100%)", border: "1px solid #28478a55" }}>
         <div className="p-6">
           {accionSuperior}
           <div className="flex items-center justify-between flex-wrap gap-4">
