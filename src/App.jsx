@@ -1983,7 +1983,7 @@ function PortalEstudiante() {
         <SidebarTarjetasEstudiante activo={vista} onCambiar={irAEstudiante} monedas={datos.monedas} gradoId={datos.grado_id} onCerrarSesion={cerrarSesion}
           menuAbierto={menuMovilAbierto} onCerrarMenu={(abrir) => setMenuMovilAbierto(!!abrir)} />
 
-        <div className="flex-1 min-w-0 bg-white rounded-2xl shadow-lg p-4 md:p-6 m-2 md:m-3">
+        <div className="flex-1 min-w-0 p-5 md:p-10">
           {vista === "inicio" && (
             <>
               <div className="flex items-center gap-3 mb-4 pb-4 border-b border-slate-100">
@@ -2596,7 +2596,7 @@ function Panel({ session }) {
       {institucionAbierta && <InstitucionModal onClose={() => { setInstitucionAbierta(false); cargarInstitucion(); }} />}
       {administracionAbierta && <AdministracionModal onClose={() => setAdministracionAbierta(false)} />}
 
-      <div className="flex-1 min-w-0 p-4 md:p-6">
+      <div className="flex-1 min-w-0 p-5 md:p-10">
         {tab === "inicio" && <VistaInicio onIrA={irA} />}
         {tab === "entregasrevisar" && <MarcoSeccion zonaLabel="Académico — Entregas por revisar" icono="🎓"><VistaEntregasPorRevisar onIrAGrado={irAGradoDesdeRevisar} /></MarcoSeccion>}
         {tab === "estudiantes" && (
