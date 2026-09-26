@@ -58,7 +58,7 @@ export function CalendarioPlaneaciones({ onAbrirBitacora }) {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 h-full relative">
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 h-full relative">
       <div className="flex items-center justify-between mb-3">
         <button onClick={() => cambiarMes(-1)} className="text-slate-400 hover:text-violet-600 px-1">‹</button>
         <div className="text-sm font-bold text-slate-800">{MESES_NOMBRE[mesVisto.mes]} {mesVisto.anio}</div>
@@ -265,7 +265,7 @@ function ValorSemanaCard() {
 
   if (editando) {
     return (
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-4">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 mb-4">
         <div className="font-bold text-slate-800 mb-3">🌟 Valor de la semana</div>
 
         <div className="flex gap-1 rounded-full bg-violet-50 p-1 w-fit mb-3">
@@ -302,7 +302,7 @@ function ValorSemanaCard() {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 flex flex-col items-center text-center gap-2 h-full">
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col items-center text-center gap-2 h-full">
       <div className="w-full flex justify-between items-start">
         <div className="text-[10px] font-bold text-violet-500 uppercase tracking-wide">Valor de la semana</div>
         <button onClick={() => setEditando(true)} className="text-xs text-slate-400 hover:text-violet-600 shrink-0">✏️</button>
@@ -377,7 +377,7 @@ function EntradaCodicePendiente({ entrada, onCambio }) {
   const marcarRevisada = async () => { await api.marcarCodiceRevisado(entrada.id); onCambio(); };
 
   return (
-    <div className="bg-white rounded-xl border border-slate-100 p-3">
+    <div className="bg-white rounded-xl border border-slate-200 p-3">
       <div className="flex justify-between items-start gap-2">
         <div className="min-w-0">
           <div className="text-xs text-slate-400">{entrada.fecha}{entrada.materia_nombre ? ` · ${entrada.materia_nombre}` : ""}</div>
@@ -534,7 +534,7 @@ export function VistaInicio({ onIrA, soloEncabezado, accionSuperior, contenidoMe
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         <ValorSemanaCard />
 
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
           <div className="font-bold text-slate-800 mb-3">Clases de hoy ({DIAS_NOMBRE[hoy.getDay()]})</div>
           {resumen.clasesHoy.length === 0 ? (
             <p className="text-xs text-slate-400">No tenés clases registradas para hoy en tu Horario.</p>
