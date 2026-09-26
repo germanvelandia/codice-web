@@ -657,7 +657,7 @@ function TareaCard({ tarea, categorias, materias, grados, config, onCambio }) {
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 mb-3">
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-3">
       <div className="flex justify-between items-start">
         <div>
           <h4 className="font-bold text-slate-800">{tarea.titulo}</h4>
@@ -721,7 +721,7 @@ export function VistaProyectosForja({ grados, gradoActivo, periodoActivo, materi
 
   return (
     <div>
-      <div className="flex gap-1 mb-4 rounded-full bg-white p-1 w-fit border border-slate-100 shadow-sm">
+      <div className="flex gap-1 mb-4 rounded-full bg-white p-1 w-fit border border-slate-200 shadow-sm">
         <button onClick={() => setTipo("proyecto")} className={`text-xs px-4 py-2 rounded-full ${tipo === "proyecto" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📜 Proyectos</button>
         <button onClick={() => setTipo("forja")} className={`text-xs px-4 py-2 rounded-full ${tipo === "forja" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🔨 Forja</button>
       </div>
