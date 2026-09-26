@@ -35,7 +35,7 @@ function BuscadorAnotaciones({ onSeleccionar }) {
         placeholder="🔍 Buscar estudiante por nombre…"
         className="w-full text-sm rounded-full px-4 py-2.5 border border-slate-200 outline-none bg-white" />
       {abierto && query.trim().length >= 2 && (
-        <div className="absolute z-30 top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-lg border border-slate-100 max-h-64 overflow-y-auto" onMouseLeave={() => setAbierto(false)}>
+        <div className="absolute z-30 top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-lg border border-slate-200 max-h-64 overflow-y-auto" onMouseLeave={() => setAbierto(false)}>
           {buscando ? (
             <div className="text-xs text-slate-400 p-3">Buscando…</div>
           ) : resultados.length === 0 ? (
@@ -135,7 +135,7 @@ function PanelAnotacionesEstudiante({ estudiante, onVolver }) {
           onGuardado={() => { setFormAbierto(false); setEditando(null); cargar(); }} />
       )}
 
-      <div className="flex gap-1 mb-3 rounded-full bg-white p-1 w-fit border border-slate-100">
+      <div className="flex gap-1 mb-3 rounded-full bg-white p-1 w-fit border border-slate-200">
         <button onClick={() => setFiltro("todas")} className={`text-xs px-3 py-1.5 rounded-full ${filtro === "todas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Todas</button>
         {CATEGORIAS.map((c) => (
           <button key={c.key} onClick={() => setFiltro(c.key)} className={`text-xs px-3 py-1.5 rounded-full ${filtro === c.key ? "bg-violet-500 text-white" : "text-slate-600"}`}>{c.emoji} {c.label}</button>
@@ -151,7 +151,7 @@ function PanelAnotacionesEstudiante({ estudiante, onVolver }) {
           {visibles.map((a) => {
             const info = CATEGORIAS.find((c) => c.key === a.categoria);
             return (
-              <div key={a.id} className="bg-white rounded-xl border border-slate-100 p-3" style={{ borderLeft: `4px solid ${info.color}` }}>
+              <div key={a.id} className="bg-white rounded-xl border border-slate-200 p-3" style={{ borderLeft: `4px solid ${info.color}` }}>
                 <div className="flex justify-between items-start gap-2">
                   <div>
                     <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: `${info.color}22`, color: info.color }}>{info.emoji} {info.label}</span>
