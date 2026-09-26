@@ -166,8 +166,8 @@ export function VistaActividadesProgramadas({ grados }) {
     <div>
       <div className="flex items-center justify-between mb-1">
         <div>
-          <h2 className="text-xl font-bold text-white">📅 Actividades Programadas</h2>
-          <p className="text-sm text-white/80">Programá una actividad, vinculala a la Planilla de uno o varios cursos, y definí qué recompensa le da al estudiante si aprueba.</p>
+          <h2 className="text-xl font-bold text-slate-800">📅 Actividades Programadas</h2>
+          <p className="text-sm text-slate-400">Programá una actividad, vinculala a la Planilla de uno o varios cursos, y definí qué recompensa le da al estudiante si aprueba.</p>
         </div>
         <button onClick={() => { setEditando(null); setFormAbierto((v) => !v); }} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white shrink-0">
           {formAbierto ? "Cerrar" : "+ Nueva actividad"}
@@ -185,7 +185,7 @@ export function VistaActividadesProgramadas({ grados }) {
       ) : actividades.length === 0 ? (
         <p className="text-sm text-slate-400 text-center py-6">Todavía no hay actividades programadas.</p>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-100 overflow-x-auto">
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-slate-50 text-slate-500 text-left">
@@ -201,7 +201,7 @@ export function VistaActividadesProgramadas({ grados }) {
             </thead>
             <tbody>
               {actividades.map((a) => (
-                <tr key={a.id} className="border-t border-slate-100">
+                <tr key={a.id} className="border-t border-slate-200">
                   <td className="px-3 py-2 whitespace-nowrap">{a.fecha || "—"}</td>
                   <td className="px-3 py-2 font-medium text-slate-700">{a.nombre}<div className="text-[10px] text-slate-400">{a.materias?.nombre}</div></td>
                   <td className="px-3 py-2">{a.actividades_programadas_cursos?.map((c) => c.grado_id).join(", ") || "—"}</td>
