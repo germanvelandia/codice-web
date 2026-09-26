@@ -69,7 +69,35 @@ function MiniAvatarCal({ estudiante, size = 22 }) {
   );
 }
 
-function BarraMateria({ materias, materiaActualId, setMateriaActualId, onCambio }) {
+// Contenedor de cada paso del asistente (Materia → Grado y Curso →
+// Periodo). Cerrado, muestra un resumen tocable para volver a cambiar
+// esa elección; abierto, muestra el selector completo.
+function PasoMenu({ titulo, Icono, resumen, abierto, onAbrir, children }) {
+  if (!abierto) {
+    return (
+      <button onClick={onAbrir} className="w-full flex items-center justify-between bg-white rounded-2xl shadow-sm border border-slate-100 px-4 py-2.5 mb-2.5 hover:border-violet-200 text-left">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-[11px] font-bold shrink-0">✓</span>
+          <div className="min-w-0">
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">{titulo}</div>
+            <div className="text-sm font-bold text-slate-700 truncate">{resumen}</div>
+          </div>
+        </div>
+        <span className="text-xs font-semibold text-violet-500 shrink-0 ml-2">Cambiar ›</span>
+      </button>
+    );
+  }
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-violet-200 p-3 mb-2.5">
+      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wide mb-2.5">
+        {Icono && <Icono size={13} />} {titulo}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function BarraMateria({ materias, materiaActualId, setMateriaActualId, onCambio, onSeleccion, sinTarjeta }) {
   const [creando, setCreando] = useState(false);
   const [nombre, setNombre] = useState("");
   const [duplicando, setDuplicando] = useState(false);
@@ -119,14 +147,16 @@ function BarraMateria({ materias, materiaActualId, setMateriaActualId, onCambio 
     onCambio();
   };
 
-  return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 mb-4">
-      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wide mb-2.5">
-        <BookOpen size={13} /> Materia
-      </div>
+  const contenido = (
+    <>
+      {!sinTarjeta && (
+        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wide mb-2.5">
+          <BookOpen size={13} /> Materia
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-1.5">
         {materias.length > 0 && !renombrando && materias.map((m) => (
-          <ChipCal key={m.id} activo={materiaActualId === m.id} onClick={() => setMateriaActualId(m.id)}>{m.nombre}</ChipCal>
+          <ChipCal key={m.id} activo={materiaActualId === m.id} onClick={() => { setMateriaActualId(m.id); onSeleccion?.(); }}>{m.nombre}</ChipCal>
         ))}
 
         {renombrando && (
@@ -183,8 +213,11 @@ function BarraMateria({ materias, materiaActualId, setMateriaActualId, onCambio 
           <button onClick={() => setCopiando(false)} className="text-xs px-2 py-1.5 text-slate-400 shrink-0">✕</button>
         </div>
       )}
-    </div>
+    </>
   );
+
+  if (sinTarjeta) return contenido;
+  return <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 mb-4">{contenido}</div>;
 }
 
 function PanelCategorias({ materiaId, categorias, onCambio }) {
@@ -1421,7 +1454,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
                 <th className="sticky top-0 z-10 bg-slate-50"></th>
               </tr>
               <tr>
-                <th className="sticky left-0 top-0 z-20 bg-slate-50 text-left px-3 py-2 border-b border-slate-100">Estudiante</th>
+                <th className="sticky left-0 top-0 z-20 bg-slate-50 text-left px-3 py-2 border-b border-slate-100 min-w-[220px]">Estudiante</th>
                 {actividadesOrdenadas.map((a) => (
                   <th key={a.id} className={`sticky top-0 z-10 px-3 py-2 border-b border-slate-100 min-w-[110px] ${seleccionando && seleccionadas.includes(a.id) ? "bg-rose-50" : ""}`}
                     style={!seleccionando ? { background: `${colorPorActividad[a.id]}14` } : {}}>
@@ -1456,7 +1489,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
                   <tr key={s.id} ref={destacado ? (el) => el?.scrollIntoView({ behavior: "smooth", block: "center" }) : null}
                     className={destacado ? "bg-amber-100" : "odd:bg-white even:bg-slate-50"}
                     style={destacado ? { boxShadow: "inset 0 0 0 2px #F59E0B" } : undefined}>
-                    <td className="sticky left-0 bg-inherit text-left px-3 py-2 font-medium text-slate-700"><MiniAvatarCal estudiante={s} />{s.nombre} <InclusionBadge estudiante={s} size="text-xs" /></td>
+                    <td className="sticky left-0 bg-inherit text-left px-3 py-2 font-medium text-slate-700 min-w-[220px]"><MiniAvatarCal estudiante={s} />{s.nombre} <InclusionBadge estudiante={s} size="text-xs" /></td>
                     {actividadesOrdenadas.map((a) => {
                       const v = valorDeActividad(a, s.id);
                       const b = bandaDesempeno(v, config);
@@ -1645,7 +1678,7 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
           <table className="w-full text-xs" style={{ borderCollapse: "separate", borderSpacing: 0 }}>
             <thead>
               <tr>
-                <th className="sticky left-0 top-0 z-20 text-left px-3 py-2 border-b border-slate-100 bg-slate-50">Estudiante</th>
+                <th className="sticky left-0 top-0 z-20 text-left px-3 py-2 border-b border-slate-100 bg-slate-50 min-w-[220px]">Estudiante</th>
                 {periodos.map((p) => <th key={p} className="sticky top-0 z-10 px-3 py-2 border-b border-slate-100 bg-slate-50">Periodo {p}</th>)}
                 <th className="sticky top-0 z-10 px-3 py-2 border-b border-slate-100 bg-slate-50">Promedio</th>
               </tr>
@@ -1659,7 +1692,7 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
                 const bandaProm = bandaDesempeno(prom, config);
                 return (
                   <tr key={s.id} className="odd:bg-white even:bg-slate-50">
-                    <td className="text-left px-3 py-2 font-medium text-slate-700"><MiniAvatarCal estudiante={s} />{s.nombre} <InclusionBadge estudiante={s} size="text-xs" /></td>
+                    <td className="text-left px-3 py-2 font-medium text-slate-700 min-w-[220px]"><MiniAvatarCal estudiante={s} />{s.nombre} <InclusionBadge estudiante={s} size="text-xs" /></td>
                     {periodos.map((p) => {
                       const n = notaGuardada(s.id, p);
                       const b = bandaDesempeno(n, config);
@@ -1841,6 +1874,7 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
   const [comentariosAbiertos, setComentariosAbiertos] = useState(false);
   const [estudiantes, setEstudiantes] = useState([]);
   const [cargando, setCargando] = useState(true);
+  const [pasoAbierto, setPasoAbierto] = useState(null); // "materia" | "grado" | "periodo" | null (todo colapsado)
 
   // Curso activo elegido en la barra superior — no pisa el salto puntual
   // que hace el buscador global de estudiantes (ver el efecto de abajo).
@@ -1915,7 +1949,10 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
       <h2 className="text-xl font-bold text-white mb-1">Planilla de Notas</h2>
       <p className="text-xs text-violet-600 mb-3">Esta planilla es privada de tu cuenta — otros docentes que usen este enlace no ven ni afectan tus calificaciones.</p>
 
-      <BarraMateria materias={materias} materiaActualId={materiaActualId} setMateriaActualId={setMateriaActualId} onCambio={cargarMaterias} />
+      <PasoMenu titulo="Materia" Icono={BookOpen} abierto={pasoAbierto === "materia" || !materiaActualId}
+        resumen={materias.find((m) => m.id === materiaActualId)?.nombre || "—"} onAbrir={() => setPasoAbierto("materia")}>
+        <BarraMateria materias={materias} materiaActualId={materiaActualId} setMateriaActualId={setMateriaActualId} onCambio={cargarMaterias} onSeleccion={() => setPasoAbierto("grado")} sinTarjeta />
+      </PasoMenu>
 
       {!materiaActualId ? (
         <div className="text-sm text-slate-400 bg-white rounded-2xl p-6 text-center border border-dashed border-slate-200">
@@ -1932,11 +1969,9 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
 
           <PanelCategorias materiaId={materiaActualId} categorias={categorias} onCambio={cargarConfigYCategorias} />
 
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 mb-4">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wide mb-2.5">
-              <GraduationCap size={13} /> Grado y curso
-            </div>
-            <div className="flex flex-wrap gap-1.5 mb-3">
+          <PasoMenu titulo="Grado y curso" Icono={GraduationCap} abierto={pasoAbierto === "grado"}
+            resumen={`Grado ${nivelYCurso(gradoId).nivel}° — Curso ${gradoId}`} onAbrir={() => setPasoAbierto("grado")}>
+            <div className="flex flex-wrap gap-1.5">
               {(() => {
                 const niveles = agruparPorNivel(grados);
                 const { nivel: nivelActual } = nivelYCurso(gradoId);
@@ -1950,21 +1985,21 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
                     ))}
                     <div className="w-px bg-slate-200 mx-1" />
                     {cursosDelNivel.map((g) => (
-                      <ChipCal key={g.id} activo={gradoId === g.id} onClick={() => setGradoId(g.id)}>Curso {g.id}</ChipCal>
+                      <ChipCal key={g.id} activo={gradoId === g.id} onClick={() => { setGradoId(g.id); setPasoAbierto("periodo"); }}>Curso {g.id}</ChipCal>
                     ))}
                   </>
                 );
               })()}
             </div>
+          </PasoMenu>
 
-            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wide mb-2.5">
-              <Calendar size={13} /> Periodo
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5 mb-3">
+          <PasoMenu titulo="Periodo" Icono={Calendar} abierto={pasoAbierto === "periodo"}
+            resumen={`Periodo ${periodo}${periodo === config.periodo_actual ? " (vigente)" : ""}`} onAbrir={() => setPasoAbierto("periodo")}>
+            <div className="flex flex-wrap items-center gap-1.5">
               {periodosDe(config)
                 .filter((p) => !soloVigente || parseInt(p, 10) >= parseInt(config.periodo_actual || "1", 10))
                 .map((p) => (
-                  <ChipCal key={p} activo={periodo === p} onClick={() => setPeriodo(p)}>
+                  <ChipCal key={p} activo={periodo === p} onClick={() => { setPeriodo(p); setPasoAbierto(null); }}>
                     Periodo {p}{p === config.periodo_actual ? " (vigente)" : ""}
                   </ChipCal>
                 ))}
@@ -1977,7 +2012,9 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
               </label>
               <ChipCal onClick={() => setComentariosAbiertos(true)}>💬 Comentarios por desempeño</ChipCal>
             </div>
+          </PasoMenu>
 
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 mb-4">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <button onClick={() => setSubVista("planilla")}
                 className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition-all ${subVista === "planilla" ? "border-violet-300 bg-violet-50" : "border-slate-200 bg-white hover:border-slate-300"}`}>
