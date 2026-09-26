@@ -224,8 +224,8 @@ export function VistaRuleta({ grados, gradoActivo }) {
 
   return (
     <div>
-      <h2 className="text-xl font-bold text-white mb-1">La Ruleta del Códice</h2>
-      <p className="text-sm text-white/80 mb-4">Sortea un estudiante de todo el grado, de un reino, o un reino/equipo completo.</p>
+      <h2 className="text-xl font-bold text-slate-800 mb-1">La Ruleta del Códice</h2>
+      <p className="text-sm text-slate-400 mb-4">Sortea un estudiante de todo el grado, de un reino, o un reino/equipo completo.</p>
 
       <div className="flex flex-wrap gap-2 mb-6">
         <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
@@ -263,7 +263,7 @@ export function VistaRuleta({ grados, gradoActivo }) {
           <div className="text-center">
             <div className="text-lg font-bold px-6 py-3 rounded-2xl bg-violet-100 text-violet-700 mb-3">🎉 {winner.label}</div>
             {winner.estudianteId && (
-              <div className="bg-white rounded-2xl border border-slate-100 p-3 max-w-sm">
+              <div className="bg-white rounded-2xl border border-slate-200 p-3 max-w-sm">
                 <div className="text-xs font-semibold text-slate-500 mb-2">Registrar participación</div>
                 <div className="flex flex-wrap gap-1.5 justify-center">
                   {accionesRapidas.map((a) => (
@@ -384,8 +384,8 @@ export function VistaRuletaMonedas({ grados, gradoActivo }) {
 
   return (
     <div>
-      <h2 className="text-xl font-bold text-white mb-1">🪙 Ruleta de Monedas</h2>
-      <p className="text-sm text-white/80 mb-4">Gira para dar (o quitar) monedas a un estudiante puntual, o a todo el grupo visible a la vez.</p>
+      <h2 className="text-xl font-bold text-slate-800 mb-1">🪙 Ruleta de Monedas</h2>
+      <p className="text-sm text-slate-400 mb-4">Gira para dar (o quitar) monedas a un estudiante puntual, o a todo el grupo visible a la vez.</p>
 
       <div className="flex flex-wrap gap-2 mb-4">
         <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
@@ -405,7 +405,7 @@ export function VistaRuletaMonedas({ grados, gradoActivo }) {
         )}
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-100 p-3 mb-4">
+      <div className="bg-white rounded-2xl border border-slate-200 p-3 mb-4">
         <div className="text-xs font-semibold text-slate-500 mb-2">Cantidad de premios</div>
         <div className="flex flex-wrap items-center gap-2">
           {PRESETS_PREMIOS.map((p) => (
@@ -423,7 +423,7 @@ export function VistaRuletaMonedas({ grados, gradoActivo }) {
         <p className="text-[11px] text-slate-400 mt-2">La rueda siempre reparte {TOTAL_OPCIONES_RUEDA} valores al azar entre Min y Max.</p>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-100 p-3 mb-4">
+      <div className="bg-white rounded-2xl border border-slate-200 p-3 mb-4">
         <div className="text-xs font-semibold text-slate-500 mb-2">O aplicar manualmente, sin girar</div>
         <div className="flex items-center gap-2">
           <input type="number" value={manualValor} onChange={(e) => setManualValor(e.target.value)} placeholder="Ej: 10 o -5"
@@ -510,8 +510,8 @@ export function VistaTemporizador() {
 
   return (
     <div className="flex flex-col items-center">
-      <h2 className="text-xl font-bold text-white mb-1">Temporizador del Aula</h2>
-      <p className="text-sm text-white/80 mb-4">Agrega tiempo manualmente durante actividades o retos.</p>
+      <h2 className="text-xl font-bold text-slate-800 mb-1">Temporizador del Aula</h2>
+      <p className="text-sm text-slate-400 mb-4">Agrega tiempo manualmente durante actividades o retos.</p>
 
       <div className="flex gap-1 rounded-full bg-violet-50 p-1 mb-6">
         <button onClick={() => setEstilo("digital")} className={`text-xs px-3 py-1.5 rounded-full ${estilo === "digital" ? "bg-violet-500 text-white" : "text-slate-600"}`}>⏱ Digital</button>
@@ -602,7 +602,7 @@ export function DadoTool() {
   };
 
   return (
-    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
       <h3 className="font-bold text-slate-800 mb-3">🎲 Dado</h3>
       <div className="flex gap-2 mb-3">
         <select value={numDados} onChange={(e) => setNumDados(parseInt(e.target.value, 10))} className="text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none">
@@ -646,7 +646,7 @@ export function CronometroTool() {
   };
 
   return (
-    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
       <h3 className="font-bold text-slate-800 mb-3">⏱ Cronómetro</h3>
       <div className="text-3xl font-bold text-slate-800 mb-3 tabular-nums">{fmt(ms)}</div>
       <div className="flex gap-2 mb-2">
@@ -673,7 +673,7 @@ export function SemaforoTool() {
   const actual = ESTADOS.find((e) => e.key === estado);
 
   return (
-    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
       <h3 className="font-bold text-slate-800 mb-3">🚦 Semáforo de silencio</h3>
       <div className="flex justify-center gap-3 mb-3">
         {ESTADOS.map((e) => (
@@ -711,7 +711,7 @@ export function SorteoOrdenTool({ grados }) {
   };
 
   return (
-    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 md:col-span-2">
+    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 md:col-span-2">
       <h3 className="font-bold text-slate-800 mb-3">👥 Sorteo de orden / parejas</h3>
       <div className="flex flex-wrap gap-2 mb-3">
         <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none">
@@ -751,7 +751,7 @@ export function GeneradorGruposTool({ grados }) {
   };
 
   return (
-    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
       <h3 className="font-bold text-slate-800 mb-3">🧩 Generador de grupos al azar</h3>
       <div className="flex flex-wrap gap-2 mb-3 items-center">
         <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none">
@@ -792,7 +792,7 @@ export function MarcadorPuntosTool() {
   const reiniciar = () => setEquipos((prev) => prev.map((e) => ({ ...e, puntos: 0 })));
 
   return (
-    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
       <h3 className="font-bold text-slate-800 mb-3">🏆 Marcador de puntos</h3>
       <div className="space-y-2 mb-3">
         {equipos.map((e, i) => (
@@ -848,7 +848,7 @@ export function SelectorEstudianteTool({ grados }) {
   };
 
   return (
-    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
       <h3 className="font-bold text-slate-800 mb-3">🙋 Selector de estudiante al azar</h3>
       <div className="flex flex-wrap gap-2 mb-3 items-center">
         <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none">
@@ -1056,7 +1056,7 @@ export function FormasExamenTool() {
   };
 
   return (
-    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 md:col-span-2">
+    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 md:col-span-2">
       <h3 className="font-bold text-slate-800 mb-1">📝 Formas de Examen (A/B/C/D)</h3>
       <p className="text-xs text-slate-400 mb-3">Mismas preguntas para todo el curso, pero con el orden de preguntas y de opciones revuelto distinto en cada forma — para imprimir y evitar copias entre compañeros.</p>
 
@@ -1286,8 +1286,8 @@ export function BingoTool() {
 export function VistaHerramientas({ grados }) {
   return (
     <div>
-      <h2 className="text-xl font-bold text-white mb-1">Herramientas de Clase</h2>
-      <p className="text-sm text-white/80 mb-4">Utilidades para usar junto a la Ruleta y el Temporizador.</p>
+      <h2 className="text-xl font-bold text-slate-800 mb-1">Herramientas de Clase</h2>
+      <p className="text-sm text-slate-400 mb-4">Utilidades para usar junto a la Ruleta y el Temporizador.</p>
       <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
         <DadoTool />
         <CronometroTool />
