@@ -121,7 +121,7 @@ export function VistaConsignasCodice({ grados }) {
       ) : (
         <div className="space-y-2">
           {consignas.map((c) => (
-            <div key={c.id} className={`bg-white rounded-2xl border p-4 ${c.activa ? "border-slate-100" : "border-slate-100 opacity-50"}`}>
+            <div key={c.id} className={`bg-white rounded-2xl border p-4 ${c.activa ? "border-slate-200" : "border-slate-200 opacity-50"}`}>
               <div className="flex justify-between items-start gap-2">
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
