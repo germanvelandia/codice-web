@@ -122,7 +122,7 @@ function TotalesPorGrado({ grados }) {
         totales.length === 0 ? (
           <div className="text-sm text-slate-400 bg-white rounded-2xl p-6 text-center border border-dashed border-slate-200">Todavía no hay registros de asistencia.</div>
         ) : (
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-x-auto">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50">
@@ -162,7 +162,7 @@ function TotalesPorGrado({ grados }) {
         return totalesEstudianteFiltrados.length === 0 ? (
         <div className="text-sm text-slate-400 bg-white rounded-2xl p-6 text-center border border-dashed border-slate-200">No hay estudiantes que coincidan con el filtro.</div>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-x-auto">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50">
@@ -309,8 +309,8 @@ export function VistaAsistencia({ grados, gradoActivo }) {
 
   return (
     <div>
-      <h2 className="text-xl font-bold text-white mb-1">Control de Asistencia</h2>
-      <p className="text-xs text-white/80 mb-3">P = Presente · R = Retardo · FI = Falta injustificada · FJ = Falta justificada. Un segundo clic sobre el mismo código lo quita.</p>
+      <h2 className="text-xl font-bold text-slate-800 mb-1">Control de Asistencia</h2>
+      <p className="text-xs text-slate-400 mb-3">P = Presente · R = Retardo · FI = Falta injustificada · FJ = Falta justificada. Un segundo clic sobre el mismo código lo quita.</p>
 
       <div className="grid grid-cols-2 gap-3 mb-4 max-w-md">
         <button onClick={() => setVista("diaria")}
@@ -333,7 +333,7 @@ export function VistaAsistencia({ grados, gradoActivo }) {
         <TotalesPorGrado grados={grados} />
       ) : (
         <>
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 mb-4">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-4">
         <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
           <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wide">
             <GraduationCap size={13} /> Grado
@@ -383,7 +383,7 @@ export function VistaAsistencia({ grados, gradoActivo }) {
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4 max-w-xl">
         {CODIGOS.map((c) => (
-          <div key={c.code} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-3 flex items-center gap-2.5">
+          <div key={c.code} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 font-bold text-xs" style={{ background: c.pastelFondo, color: c.pastelTexto }}>
               {c.code}
             </div>
@@ -498,7 +498,7 @@ function ConsolidadoAsistenciaModal({ estudiante, onClose }) {
                 <div className="text-xs text-slate-400">Sin registros de asistencia todavía.</div>
               )}
               {Object.entries(datos.porMateria).map(([nombreMateria, m]) => (
-                <div key={nombreMateria} className="border border-slate-100 rounded-lg p-2">
+                <div key={nombreMateria} className="border border-slate-200 rounded-lg p-2">
                   <div className="text-xs font-semibold text-slate-700">{nombreMateria}{m.docente ? ` — ${m.docente}` : ""}</div>
                   <div className="text-[11px] text-slate-500 mt-0.5">
                     P:{m.P || 0} · R:{m.R || 0} · FI:{m.FI || 0} · FJ:{m.FJ || 0} · Total: {m.total}
