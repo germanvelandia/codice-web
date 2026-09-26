@@ -61,7 +61,7 @@ export function ActasModal({ estudiante, onClose }) {
         ) : (
           <div className="space-y-3">
             {actas.map((a) => (
-              <div key={a.id} className="border border-slate-100 rounded-xl p-3">
+              <div key={a.id} className="border border-slate-200 rounded-xl p-3">
                 <div className="flex justify-between items-start">
                   <div>
                     <div className="text-sm font-semibold text-slate-800">
@@ -367,7 +367,7 @@ export function HistorialReunionesModal({ onClose }) {
         ) : (
           <div className="space-y-2">
             {lotes.map((lote) => (
-              <div key={lote.loteId} className="border border-slate-100 rounded-xl p-3">
+              <div key={lote.loteId} className="border border-slate-200 rounded-xl p-3">
                 <div className="flex justify-between items-start gap-2">
                   <div>
                     <div className="text-sm font-semibold text-slate-800">{lote.asunto || "Sin asunto"}</div>
