@@ -346,7 +346,7 @@ export function VistaDiplomas({ grados, gradoActivo }) {
       {cargando ? (
         <div className="text-sm text-slate-400">Cargando…</div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 mb-4 max-h-52 overflow-y-auto bg-white rounded-2xl border border-slate-100 p-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 mb-4 max-h-52 overflow-y-auto bg-white rounded-2xl border border-slate-200 p-3">
           {estudiantes.map((s) => (
             <label key={s.id} className={`flex items-center gap-1.5 text-xs rounded-lg px-2 py-1.5 cursor-pointer ${seleccionados.has(s.id) ? "bg-violet-50 text-violet-700" : "text-slate-600"}`}>
               <input type="checkbox" checked={seleccionados.has(s.id)} onChange={() => toggleUno(s.id)} />
@@ -356,7 +356,7 @@ export function VistaDiplomas({ grados, gradoActivo }) {
         </div>
       )}
 
-      <div className="bg-white rounded-2xl border border-slate-100 p-4 mb-4">
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-4">
         <label className="text-xs text-slate-500 block mb-1">Asignatura (define los 3 íconos de las esquinas y el fondo decorativo)</label>
         <div className="flex flex-wrap gap-1.5 mb-2">
           {Object.entries(asignaturasCombinadas).map(([key, a]) => (
