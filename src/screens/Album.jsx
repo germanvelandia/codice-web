@@ -230,7 +230,7 @@ function DuplicadosModal({ onClose, onCambio }) {
         ) : (
           <div className="space-y-4">
             {grupos.map((grupo, i) => (
-              <div key={i} className="border border-slate-100 rounded-xl p-3">
+              <div key={i} className="border border-slate-200 rounded-xl p-3">
                 <div className="text-sm font-semibold text-slate-700 mb-2">"{grupo[0].nombre}" — {grupo.length} versiones</div>
                 <div className="space-y-1.5">
                   {grupo.map((c) => (
