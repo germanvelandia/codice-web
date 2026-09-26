@@ -2288,6 +2288,15 @@ const MENU_PANEL_GRUPOS = [
 // Lista plana — se sigue usando donde hace falta el conjunto completo sin agrupar.
 const MENU_PANEL = MENU_PANEL_GRUPOS.flatMap((g) => g.items);
 const CLAVES_SOLO_ADMIN = ["corregirnombres", "niveles", "objetos", "horario", "roles", "reportes"];
+const NOMBRES_HERRAMIENTAS = {
+  ruleta: "Ruleta", ruletamonedas: "Ruleta de Monedas", accionesmasivas: "Acciones Masivas", banco: "Banco",
+  album: "Álbum", anuncios: "Anuncios", logros: "Logros", salonhonor: "Salón de Honor", diplomas: "Diplomas",
+  gamext: "Desafíos / Misiones / Cosméticos", consignas: "Consignas del Códice", trivia: "Preguntados",
+  bancopreguntas: "Banco de Preguntas", temporizador: "Temporizador", dado: "Dado", cronometro: "Cronómetro",
+  semaforo: "Semáforo", sorteoorden: "Sorteo de Orden / Parejas", grupos: "Generador de Grupos",
+  marcador: "Marcador de Puntos", selectorestudiante: "Selector de Estudiante", bingo: "Bingo de Repaso",
+  formasexamen: "Formas de Examen (A/B/C/D)",
+};
 
 function BuscadorEstudiantesGlobal({ onSeleccionar }) {
   const [query, setQuery] = useState("");
@@ -2597,10 +2606,19 @@ function Panel({ session }) {
         )}
         {tab === "asistencia" && grados.length > 0 && <VistaAsistencia grados={grados} gradoActivo={gradoActivo} />}
         {tab === "herramientas" && grados.length > 0 && (
-          <>
-            {subTabHerramientas === "ruleta" && <VistaRuleta grados={grados} gradoActivo={gradoActivo} />}
-            {subTabHerramientas === "ruletamonedas" && <VistaRuletaMonedas grados={grados} gradoActivo={gradoActivo} />}
-            {subTabHerramientas === "accionesmasivas" && <VistaAccionesMasivas grados={grados} gradoActivo={gradoActivo} />}
+          <div className="rounded-[28px] p-1" style={{ background: "linear-gradient(135deg, #2F55A4, #B8892B)" }}>
+            <div className="rounded-[24px] p-4 md:p-6" style={{ background: "linear-gradient(160deg, #17264D 0%, #223b74 100%)" }}>
+              <div className="flex items-center gap-2.5 mb-4 px-1">
+                <span className="text-2xl">🎮</span>
+                <div>
+                  <div className="text-[10px] font-extrabold tracking-wide uppercase" style={{ color: "#f1e7d5" }}>Zona de Herramientas</div>
+                  <div className="text-lg font-extrabold text-white">{NOMBRES_HERRAMIENTAS[subTabHerramientas] || "Herramienta"}</div>
+                </div>
+              </div>
+              <div className="rounded-2xl bg-white p-4 md:p-5">
+                {subTabHerramientas === "ruleta" && <VistaRuleta grados={grados} gradoActivo={gradoActivo} />}
+                {subTabHerramientas === "ruletamonedas" && <VistaRuletaMonedas grados={grados} gradoActivo={gradoActivo} />}
+                {subTabHerramientas === "accionesmasivas" && <VistaAccionesMasivas grados={grados} gradoActivo={gradoActivo} />}
             {subTabHerramientas === "banco" && <VistaBanco />}
             {subTabHerramientas === "album" && <VistaAlbum />}
             {subTabHerramientas === "anuncios" && <VistaAnuncios grados={grados} />}
@@ -2619,9 +2637,11 @@ function Panel({ session }) {
             {subTabHerramientas === "grupos" && <GeneradorGruposTool grados={grados} />}
             {subTabHerramientas === "marcador" && <MarcadorPuntosTool />}
             {subTabHerramientas === "selectorestudiante" && <SelectorEstudianteTool grados={grados} />}
-            {subTabHerramientas === "bingo" && <BingoTool />}
-            {subTabHerramientas === "formasexamen" && <FormasExamenTool />}
-          </>
+                {subTabHerramientas === "bingo" && <BingoTool />}
+                {subTabHerramientas === "formasexamen" && <FormasExamenTool />}
+              </div>
+            </div>
+          </div>
         )}
         {tab === "roles" && <VistaRoles />}
         {tab === "calificaciones" && grados.length > 0 && <VistaCalificaciones grados={grados} destinoBusqueda={destinoBusqueda} gradoActivo={gradoActivo} materiaActiva={materiaActiva} />}
