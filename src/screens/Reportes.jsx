@@ -211,7 +211,7 @@ export function VistaReportes({ grados, gradoActivo }) {
       </div>
 
       {vistaActiva === "accesos" ? (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-4">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 mb-4">
           <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
             <div>
               <div className="font-semibold text-slate-700">Quiénes entraron a CÓDICE</div>
@@ -245,7 +245,7 @@ export function VistaReportes({ grados, gradoActivo }) {
                   </thead>
                   <tbody>
                     {accesos.map((e) => (
-                      <tr key={e.id} className={`border-t border-slate-100 ${e.totalAccesos === 0 ? "bg-rose-50/50" : ""}`}>
+                      <tr key={e.id} className={`border-t border-slate-200 ${e.totalAccesos === 0 ? "bg-rose-50/50" : ""}`}>
                         <td className="px-3 py-2">{e.nombre}</td>
                         <td className="text-center px-3 py-2">{e.totalAccesos}</td>
                         <td className="px-3 py-2">
@@ -261,7 +261,7 @@ export function VistaReportes({ grados, gradoActivo }) {
         </div>
       ) : (
       <>
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-4">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 mb-4">
         <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
           <div>
             <div className="font-semibold text-slate-700">Control transversal — todas las materias</div>
@@ -293,9 +293,9 @@ export function VistaReportes({ grados, gradoActivo }) {
             <table className="text-xs w-full" style={{ borderCollapse: "separate", borderSpacing: 0 }}>
               <thead>
                 <tr>
-                  <th className="sticky left-0 top-0 z-20 bg-slate-50 text-left px-3 py-2 border-b border-slate-100">Estudiante</th>
+                  <th className="sticky left-0 top-0 z-20 bg-slate-50 text-left px-3 py-2 border-b border-slate-200">Estudiante</th>
                   {transversal.materias.map((m) => (
-                    <th key={m.id} className="sticky top-0 z-10 text-center px-3 py-2 border-b border-slate-100 bg-slate-50 whitespace-nowrap">
+                    <th key={m.id} className="sticky top-0 z-10 text-center px-3 py-2 border-b border-slate-200 bg-slate-50 whitespace-nowrap">
                       {m.nombre}{m.docente ? <div className="text-[9px] text-slate-400 font-normal">{m.docente}</div> : null}
                     </th>
                   ))}
@@ -328,7 +328,7 @@ export function VistaReportes({ grados, gradoActivo }) {
         )}
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-4">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 mb-4">
         <div className="font-semibold text-slate-700 mb-3">Reporte por grado</div>
         <div className="flex flex-wrap gap-2 items-center">
           <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none">
@@ -341,7 +341,7 @@ export function VistaReportes({ grados, gradoActivo }) {
         <p className="text-xs text-slate-400 mt-2">Incluye: grupo, nivel, XP, vida, monedas y asistencia de cada estudiante.</p>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
         <div className="font-semibold text-slate-700 mb-3">Reporte por estudiante</div>
         <div className="flex flex-wrap gap-2 items-center">
           <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none">
