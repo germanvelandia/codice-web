@@ -17,7 +17,7 @@ export function VistaSalonHonor() {
       <p className="text-sm text-slate-400 mb-4">Ranking institucional — cruza todos los grados a la vez.</p>
 
       <div className="grid md:grid-cols-2 gap-4 mb-4">
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
           <div className="font-bold text-slate-800 mb-3">⭐ Más XP acumulada</div>
           {datos.topXp.length === 0 ? (
             <p className="text-xs text-slate-400">Todavía no hay datos.</p>
@@ -37,7 +37,7 @@ export function VistaSalonHonor() {
           )}
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
           <div className="font-bold text-slate-800 mb-3">🏅 Más insignias</div>
           {datos.topInsignias.length === 0 ? (
             <p className="text-xs text-slate-400">Todavía no hay insignias desbloqueadas.</p>
@@ -58,7 +58,7 @@ export function VistaSalonHonor() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
         <div className="font-bold text-slate-800 mb-3">📜 Muro de logros recientes</div>
         {datos.muroReciente.length === 0 ? (
           <p className="text-xs text-slate-400">Todavía no se desbloqueó ningún logro.</p>
@@ -80,4 +80,4 @@ export function VistaSalonHonor() {
       </div>
     </div>
   );
-} 
+}
