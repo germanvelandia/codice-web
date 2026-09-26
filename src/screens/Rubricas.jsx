@@ -272,8 +272,8 @@ export function VistaRubricas() {
     <div>
       <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
         <div>
-          <h2 className="text-xl font-bold text-white">🎯 Rúbricas</h2>
-          <p className="text-sm text-white/80">Armá tus rúbricas una sola vez acá, y después cargalas en cualquier proyecto, taller, o columna de la Planilla.</p>
+          <h2 className="text-xl font-bold text-slate-800">🎯 Rúbricas</h2>
+          <p className="text-sm text-slate-400">Armá tus rúbricas una sola vez acá, y después cargalas en cualquier proyecto, taller, o columna de la Planilla.</p>
         </div>
         <button onClick={() => { setEditando(null); setFormAbierto((v) => !v); }} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white shrink-0">
           {formAbierto ? "Cerrar" : "+ Nueva rúbrica"}
@@ -306,7 +306,7 @@ export function VistaRubricas() {
       ) : (
         <div className="grid sm:grid-cols-2 gap-3">
           {rubricas.map((r) => (
-            <div key={r.id} className="bg-white rounded-2xl border border-slate-100 p-4">
+            <div key={r.id} className="bg-white rounded-2xl border border-slate-200 p-4">
               <div className="flex justify-between items-start mb-2">
                 <h4 className="font-bold text-slate-800">{r.nombre}</h4>
                 <div className="flex gap-1.5 shrink-0">
