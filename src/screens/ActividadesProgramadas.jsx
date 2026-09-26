@@ -167,7 +167,7 @@ export function VistaActividadesProgramadas({ grados }) {
       <div className="flex items-center justify-between mb-1">
         <div>
           <h2 className="text-xl font-bold text-white">📅 Actividades Programadas</h2>
-          <p className="text-sm text-slate-400">Programá una actividad, vinculala a la Planilla de uno o varios cursos, y definí qué recompensa le da al estudiante si aprueba.</p>
+          <p className="text-sm text-white/80">Programá una actividad, vinculala a la Planilla de uno o varios cursos, y definí qué recompensa le da al estudiante si aprueba.</p>
         </div>
         <button onClick={() => { setEditando(null); setFormAbierto((v) => !v); }} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white shrink-0">
           {formAbierto ? "Cerrar" : "+ Nueva actividad"}
