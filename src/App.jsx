@@ -1180,7 +1180,7 @@ function SidebarTarjetasEstudiante({ activo, onCambiar, monedas, gradoId, onCerr
       <div className="flex-1 overflow-y-auto px-3 pb-3">
         <TarjetaMenuLateral icono="🏠" label="Inicio" activo={activo === "inicio"} onClick={() => elegir("inicio")} fondo="#E8EEF8" />
 
-        {MENU_CODICE_GRUPOS.map((grupo) => (
+        {MENU_CODICE_GRUPOS.filter((g) => g.key !== "inicio_grupo").map((grupo) => (
           <div key={grupo.key} className="mt-3">
             <div className="text-[9px] font-bold uppercase tracking-wide px-2.5 mb-1" style={{ color: "#829aca" }}>{grupo.icono} {grupo.label}</div>
             {grupo.items.map((it) => (
@@ -2044,72 +2044,72 @@ function PortalEstudiante() {
           )}
 
           {vista === "misiones" && estudianteInfo && (
-            <>
+            <MarcoSeccion zonaLabel="Estudio — Misiones" icono="🎓">
               <div className="mb-4"><MapaTerritoriosEstudiante estudianteId={estudianteInfo.id} nombre={datos.nombre} xp={datos.xp} /></div>
               <MicroMisionesEstudiante estudianteId={estudianteInfo.id} onCambio={() => consultar()} />
               <EvaluacionesEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />
-            </>
+            </MarcoSeccion>
           )}
 
           {vista === "proyectos" && estudianteInfo && (
-            <ProyectosEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />
+            <MarcoSeccion zonaLabel="Estudio — Proyectos" icono="🎓"><ProyectosEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} /></MarcoSeccion>
           )}
 
           {vista === "forja" && estudianteInfo && (
-            <ForjaEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />
+            <MarcoSeccion zonaLabel="Estudio — Forja" icono="🎓"><ForjaEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} /></MarcoSeccion>
           )}
 
           {vista === "guias" && estudianteInfo && (
-            <GuiasEstudiante gradoId={estudianteInfo.grado_id} estudianteId={estudianteInfo.id} />
+            <MarcoSeccion zonaLabel="Estudio — Guías" icono="🎓"><GuiasEstudiante gradoId={estudianteInfo.grado_id} estudianteId={estudianteInfo.id} /></MarcoSeccion>
           )}
 
           {vista === "codice" && estudianteInfo && (
-            <CodiceEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />
+            <MarcoSeccion zonaLabel="Estudio — Códice" icono="🎓"><CodiceEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} /></MarcoSeccion>
           )}
 
           {vista === "biblioteca" && estudianteInfo && (
-            <BibliotecaEstudiante gradoId={estudianteInfo.grado_id} />
+            <MarcoSeccion zonaLabel="Estudio — Biblioteca" icono="🎓"><BibliotecaEstudiante gradoId={estudianteInfo.grado_id} /></MarcoSeccion>
           )}
 
           {vista === "notas" && estudianteInfo && (
-            <MisNotas estudianteId={estudianteInfo.id} />
+            <MarcoSeccion zonaLabel="Estudio — Notas" icono="🎓"><MisNotas estudianteId={estudianteInfo.id} /></MarcoSeccion>
           )}
 
           {vista === "personaje" && estudianteInfo && (
-            <VistaPersonaje estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} />
+            <MarcoSeccion zonaLabel="Diversión — Personaje" icono="🎡"><VistaPersonaje estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} /></MarcoSeccion>
           )}
 
           {vista === "historial" && estudianteInfo && (
-            <HistorialPuntosEstudiante estudianteId={estudianteInfo.id} />
+            <MarcoSeccion zonaLabel="Estudio — Historial" icono="🎓"><HistorialPuntosEstudiante estudianteId={estudianteInfo.id} /></MarcoSeccion>
           )}
 
           {vista === "recompensas" && estudianteInfo && (
-            <>
+            <MarcoSeccion zonaLabel="Comunidad — Recompensas" icono="🏆">
               <BancoEstudiante estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} />
               <ObjetosEstudiante estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} />
-            </>
+            </MarcoSeccion>
           )}
 
           {vista === "preguntados" && estudianteInfo && (
-            <PreguntadosEstudiante estudianteId={estudianteInfo.id} />
+            <MarcoSeccion zonaLabel="Diversión — Preguntados" icono="🎡"><PreguntadosEstudiante estudianteId={estudianteInfo.id} /></MarcoSeccion>
           )}
 
           {vista === "album" && estudianteInfo && (
-            <AlbumEstudiante estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} />
+            <MarcoSeccion zonaLabel="Comunidad — Álbum" icono="🏆"><AlbumEstudiante estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} /></MarcoSeccion>
           )}
 
-          {vista === "comarca" && estudianteInfo && <MiComarcaEstudiante estudianteInfo={estudianteInfo} />}
+          {vista === "comarca" && estudianteInfo && <MarcoSeccion zonaLabel="Comunidad — Mi Comarca" icono="🏆"><MiComarcaEstudiante estudianteInfo={estudianteInfo} /></MarcoSeccion>}
 
           {vista === "ranking" && estudianteInfo && (
-            <RankingEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />
+            <MarcoSeccion zonaLabel="Comunidad — Ranking" icono="🏆"><RankingEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} /></MarcoSeccion>
           )}
 
           {vista === "salonhonor" && estudianteInfo && (
-            <SalonHonorEstudiante estudianteId={estudianteInfo.id} />
+            <MarcoSeccion zonaLabel="Comunidad — Salón de Honor" icono="🏆"><SalonHonorEstudiante estudianteId={estudianteInfo.id} /></MarcoSeccion>
           )}
 
           {vista === "perfil" && estudianteInfo && (
-            <div>
+            <MarcoSeccion zonaLabel="Mi cuenta — Perfil" icono="👤">
               <h3 className="font-bold text-slate-800 mb-3">👤 Mi perfil</h3>
               <div className="space-y-2 text-sm mb-5">
                 <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-400">Nombre</span><span className="font-semibold text-slate-700">{datos.nombre}</span></div>
@@ -2123,11 +2123,11 @@ function PortalEstudiante() {
                 <CosmeticosEstudiante estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} />
               </div>
               <HistorialEstudiante estudianteId={estudianteInfo.id} />
-            </div>
+            </MarcoSeccion>
           )}
 
           {vista === "mensajes" && estudianteInfo && (
-            <AnunciosEstudiante gradoId={estudianteInfo.grado_id} />
+            <MarcoSeccion zonaLabel="Mensajes" icono="✉️"><AnunciosEstudiante gradoId={estudianteInfo.grado_id} /></MarcoSeccion>
           )}
 
           <button onClick={() => { setDatos(null); setCodigo(""); setEstudianteInfo(null); setVista("inicio"); }} className="w-full text-xs text-violet-500 mt-4">← Consultar otro código</button>
@@ -2377,7 +2377,7 @@ function TarjetaMenuLateral({ icono, label, activo, onClick, fondo, color }) {
       <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm" style={{ background: activo ? (fondo || "#E8EEF8") : "rgba(255,255,255,0.12)" }}>
         {icono}
       </div>
-      <span className={`text-xs font-bold leading-tight ${activo ? "text-[#17264D]" : "text-[#E8EEF8]"}`}>{label}</span>
+      <span className={`text-sm font-bold leading-tight ${activo ? "text-[#17264D]" : "text-[#E8EEF8]"}`}>{label}</span>
     </button>
   );
 }
