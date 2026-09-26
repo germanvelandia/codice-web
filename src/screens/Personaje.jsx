@@ -122,7 +122,7 @@ export function VistaPersonaje({ estudianteId, monedas, onMonedasActualizadas })
       </div>
 
       {(tab === "pelo" || tab === "atuendo") && (
-        <div className="bg-white rounded-2xl border border-slate-100 p-3 mb-2">
+        <div className="bg-white rounded-2xl border border-slate-200 p-3 mb-2">
           <p className="text-xs text-slate-500 mb-2">Color {tab === "pelo" ? "de pelo" : "del atuendo"} (gratis una vez que tengas el estilo)</p>
           <div className="flex flex-wrap gap-2">
             {Object.entries(tab === "pelo" ? COLORES_PELO_HEX : COLORES_ATUENDO_HEX).map(([nombre, hex]) => (
@@ -140,7 +140,7 @@ export function VistaPersonaje({ estudianteId, monedas, onMonedasActualizadas })
           const desbloqueada = estaDesbloqueada(parte);
           const equipada = idEquipadoDeTab === parte.id;
           return (
-            <div key={parte.id} className={`rounded-2xl border p-3 text-center ${equipada ? "border-violet-400 bg-violet-50" : "border-slate-100 bg-white"}`}>
+            <div key={parte.id} className={`rounded-2xl border p-3 text-center ${equipada ? "border-violet-400 bg-violet-50" : "border-slate-200 bg-white"}`}>
               <div className="flex justify-center mb-1.5">
                 <svg viewBox="0 0 145 135" width="80" height="75" dangerouslySetInnerHTML={{ __html: previaDeItem(parte) }} />
               </div>
