@@ -516,7 +516,7 @@ export function NotasDireccionCurso({ gradoId }) {
         <p className="text-xs text-amber-600 mb-2">Todavía no hay materias configuradas para este curso — agregá la primera con el botón (+) en la tabla de abajo.</p>
       )}
 
-      <div className="overflow-x-auto bg-white rounded-2xl shadow-sm border border-slate-100">
+      <div className="overflow-x-auto bg-white rounded-2xl shadow-sm border border-slate-200">
         <table className="text-xs border-collapse">
           <thead>
             <tr>
