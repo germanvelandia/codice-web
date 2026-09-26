@@ -2288,6 +2288,25 @@ const MENU_PANEL_GRUPOS = [
 // Lista plana — se sigue usando donde hace falta el conjunto completo sin agrupar.
 const MENU_PANEL = MENU_PANEL_GRUPOS.flatMap((g) => g.items);
 const CLAVES_SOLO_ADMIN = ["corregirnombres", "niveles", "objetos", "horario", "roles", "reportes"];
+// Marco decorativo reutilizable — mismo lenguaje visual del "Zona de
+// Herramientas" (degradado azul/dorado, encabezado oscuro, contenido en
+// tarjeta blanca adentro), para las demás zonas de la app.
+function MarcoSeccion({ zonaLabel, icono, children }) {
+  return (
+    <div className="rounded-[28px] p-1" style={{ background: "linear-gradient(135deg, #2F55A4, #B8892B)" }}>
+      <div className="rounded-[24px] p-4 md:p-6" style={{ background: "linear-gradient(160deg, #17264D 0%, #223b74 100%)" }}>
+        <div className="flex items-center gap-2.5 mb-4 px-1">
+          <span className="text-2xl">{icono}</span>
+          <div className="text-base font-extrabold text-white">{zonaLabel}</div>
+        </div>
+        <div className="rounded-2xl bg-white p-4 md:p-5">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const NOMBRES_HERRAMIENTAS = {
   ruleta: "Ruleta", ruletamonedas: "Ruleta de Monedas", accionesmasivas: "Acciones Masivas", banco: "Banco",
   album: "Álbum", anuncios: "Anuncios", logros: "Logros", salonhonor: "Salón de Honor", diplomas: "Diplomas",
@@ -2581,9 +2600,9 @@ function Panel({ session }) {
 
       <div className="flex-1 min-w-0 p-4 md:p-6">
         {tab === "inicio" && <VistaInicio onIrA={irA} />}
-        {tab === "entregasrevisar" && <VistaEntregasPorRevisar onIrAGrado={irAGradoDesdeRevisar} />}
+        {tab === "entregasrevisar" && <MarcoSeccion zonaLabel="Académico — Entregas por revisar" icono="🎓"><VistaEntregasPorRevisar onIrAGrado={irAGradoDesdeRevisar} /></MarcoSeccion>}
         {tab === "estudiantes" && (
-          <>
+          <MarcoSeccion zonaLabel="Académico — Estudiantes" icono="🎓">
             {!grado && <VistaGrados onElegirGrado={(g) => { setGrado(g); setReino(null); setModoLista(true); }} />}
             {grado && !modoLista && !reino && (
               <VistaReinos
@@ -2602,9 +2621,9 @@ function Panel({ session }) {
                 onVerGrupos={() => { setReino(null); setModoLista(false); }}
               />
             )}
-          </>
+          </MarcoSeccion>
         )}
-        {tab === "asistencia" && grados.length > 0 && <VistaAsistencia grados={grados} gradoActivo={gradoActivo} />}
+        {tab === "asistencia" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Asistencia" icono="🎓"><VistaAsistencia grados={grados} gradoActivo={gradoActivo} /></MarcoSeccion>}
         {tab === "herramientas" && grados.length > 0 && (
           <div className="rounded-[28px] p-1" style={{ background: "linear-gradient(135deg, #2F55A4, #B8892B)" }}>
             <div className="rounded-[24px] p-4 md:p-6" style={{ background: "linear-gradient(160deg, #17264D 0%, #223b74 100%)" }}>
@@ -2644,25 +2663,29 @@ function Panel({ session }) {
           </div>
         )}
         {tab === "roles" && <VistaRoles />}
-        {tab === "calificaciones" && grados.length > 0 && <VistaCalificaciones grados={grados} destinoBusqueda={destinoBusqueda} gradoActivo={gradoActivo} materiaActiva={materiaActiva} />}
+        {tab === "calificaciones" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Planillas" icono="🎓"><VistaCalificaciones grados={grados} destinoBusqueda={destinoBusqueda} gradoActivo={gradoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
         {tab === "reportes" && grados.length > 0 && <VistaReportes grados={grados} gradoActivo={gradoActivo} />}
         {tab === "horario" && grados.length > 0 && <VistaHorario grados={grados} />}
-        {tab === "planeaciones" && grados.length > 0 && <VistaPlaneaciones grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} />}
-        {tab === "tablerosemanal" && grados.length > 0 && <VistaTableroSemanal grados={grados} />}
-        {tab === "rubricas" && <VistaRubricas />}
-        {tab === "biblioteca" && grados.length > 0 && <VistaBiblioteca grados={grados} gradoActivo={gradoActivo} />}
-        {tab === "comarca" && grados.length > 0 && <VistaComarcaOakhaven grados={grados} gradoActivo={gradoActivo} />}
-        {tab === "anotaciones" && <VistaAnotaciones />}
-        {tab === "inclusion" && <VistaInclusionGeneral />}
-        {tab === "bajasvida" && <VistaBajasVida />}
+        {tab === "planeaciones" && grados.length > 0 && <MarcoSeccion zonaLabel="Planeación — Planeaciones" icono="🗺️"><VistaPlaneaciones grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
+        {tab === "tablerosemanal" && grados.length > 0 && <MarcoSeccion zonaLabel="Planeación — Tablero Semanal" icono="🗺️"><VistaTableroSemanal grados={grados} /></MarcoSeccion>}
+        {tab === "rubricas" && <MarcoSeccion zonaLabel="Planeación — Rúbricas" icono="🗺️"><VistaRubricas /></MarcoSeccion>}
+        {tab === "biblioteca" && grados.length > 0 && <MarcoSeccion zonaLabel="Planeación — Biblioteca" icono="🗺️"><VistaBiblioteca grados={grados} gradoActivo={gradoActivo} /></MarcoSeccion>}
+        {tab === "comarca" && grados.length > 0 && (
+          <MarcoSeccion zonaLabel="Comarca de Oakhaven" icono="🏛️">
+            <VistaComarcaOakhaven grados={grados} gradoActivo={gradoActivo} />
+          </MarcoSeccion>
+        )}
+        {tab === "anotaciones" && <MarcoSeccion zonaLabel="Convivencial — Anotaciones" icono="🤝"><VistaAnotaciones /></MarcoSeccion>}
+        {tab === "inclusion" && <MarcoSeccion zonaLabel="Convivencial — Inclusión" icono="🤝"><VistaInclusionGeneral /></MarcoSeccion>}
+        {tab === "bajasvida" && <MarcoSeccion zonaLabel="Convivencial — Bajas de Vida" icono="🤝"><VistaBajasVida /></MarcoSeccion>}
         {tab === "corregirnombres" && <VistaCorregirNombres />}
         {tab === "niveles" && <VistaNiveles />}
         {tab === "objetos" && <VistaObjetos grados={grados} gradoActivo={gradoActivo} />}
-        {tab === "direccioncurso" && <VistaDireccionCurso grados={grados} gradoActivo={gradoActivo} />}
-        {tab === "guiasestudio" && <VistaGuiasEstudio grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} />}
-        {tab === "actividadesprogramadas" && <VistaActividadesProgramadas grados={grados} />}
-        {tab === "evaluaciones" && grados.length > 0 && <VistaEvaluaciones grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} />}
-        {tab === "proyectosforja" && grados.length > 0 && <VistaProyectosForja grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} />}
+        {tab === "direccioncurso" && <MarcoSeccion zonaLabel="Convivencial — Dirección de Curso" icono="🤝"><VistaDireccionCurso grados={grados} gradoActivo={gradoActivo} /></MarcoSeccion>}
+        {tab === "guiasestudio" && <MarcoSeccion zonaLabel="Planeación — Guías de Estudio" icono="🗺️"><VistaGuiasEstudio grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
+        {tab === "actividadesprogramadas" && <MarcoSeccion zonaLabel="Planeación — Actividades Programadas" icono="🗺️"><VistaActividadesProgramadas grados={grados} /></MarcoSeccion>}
+        {tab === "evaluaciones" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Misiones" icono="🎓"><VistaEvaluaciones grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
+        {tab === "proyectosforja" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — La Forja" icono="🎓"><VistaProyectosForja grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
       </div>
     </div>
   );
