@@ -2222,13 +2222,6 @@ const MENU_PANEL_GRUPOS = [
       { key: "calificaciones", label: "Planillas", icono: "📖" },
       { key: "evaluaciones", label: "Misiones", icono: "⚔️" },
       { key: "proyectosforja", label: "La Forja", icono: "🔨" },
-      { key: "planeaciones", label: "Planeaciones", icono: "📝" },
-      { key: "tablerosemanal", label: "Tablero Semanal", icono: "🗓️" },
-      { key: "rubricas", label: "Rúbricas", icono: "🎯" },
-      { key: "guiasestudio", label: "Guías de Estudio", icono: "📘" },
-      { key: "actividadesprogramadas", label: "Actividades Programadas", icono: "🎮" },
-      { key: "biblioteca", label: "Biblioteca", icono: "📚" },
-      { key: "comarca", label: "Comarca de Oakhaven", icono: "🏛️" },
     ],
   },
   {
@@ -2237,6 +2230,33 @@ const MENU_PANEL_GRUPOS = [
       { key: "inclusion", label: "Inclusión", icono: "🧩" },
       { key: "bajasvida", label: "Bajas de Vida", icono: "📉" },
       { key: "direccioncurso", label: "Dirección de Curso", icono: "🎓" },
+    ],
+  },
+  {
+    key: "planeacion", label: "Planeación", icono: "🗺️", items: [
+      { key: "planeaciones", label: "Planeaciones", icono: "📝" },
+      { key: "tablerosemanal", label: "Tablero Semanal", icono: "🗓️" },
+      { key: "rubricas", label: "Rúbricas", icono: "🎯" },
+      { key: "guiasestudio", label: "Guías de Estudio", icono: "📘" },
+      { key: "biblioteca", label: "Biblioteca", icono: "📚" },
+      { key: "actividadesprogramadas", label: "Actividades Programadas", icono: "🎮" },
+      { key: "herr_bancopreguntas", label: "Banco de Preguntas", icono: "🗂️" },
+      { key: "herr_consignas", label: "Consignas del Códice", icono: "📜" },
+      { key: "herr_formasexamen", label: "Formas de Examen (A/B/C/D)", icono: "📝" },
+    ],
+  },
+  {
+    key: "gamificacion", label: "Gamificación", icono: "🎮", items: [
+      { key: "comarca", label: "Comarca de Oakhaven", icono: "🏛️" },
+      { key: "herr_ruleta", label: "Ruleta", icono: "🎡" },
+      { key: "herr_ruletamonedas", label: "Ruleta de Monedas", icono: "🪙" },
+      { key: "herr_banco", label: "Banco", icono: "🏦" },
+      { key: "herr_album", label: "Álbum", icono: "🖼️" },
+      { key: "herr_logros", label: "Logros", icono: "🏆" },
+      { key: "herr_salonhonor", label: "Salón de Honor", icono: "🥇" },
+      { key: "herr_diplomas", label: "Diplomas", icono: "🏅" },
+      { key: "herr_gamext", label: "Desafíos/Misiones/Cosméticos", icono: "🕹️" },
+      { key: "herr_bingo", label: "Bingo de Repaso", icono: "🎯" },
     ],
   },
   {
@@ -2251,7 +2271,17 @@ const MENU_PANEL_GRUPOS = [
   },
   {
     key: "herramientas_grupo", label: "Herramientas", icono: "🛠️", items: [
-      { key: "herramientas", label: "Herramientas", icono: "🛠️" },
+      { key: "herr_accionesmasivas", label: "Acciones Masivas", icono: "🎯" },
+      { key: "herr_anuncios", label: "Anuncios", icono: "📣" },
+      { key: "herr_trivia", label: "Preguntados", icono: "🎡" },
+      { key: "herr_temporizador", label: "Temporizador", icono: "⏱️" },
+      { key: "herr_dado", label: "Dado", icono: "🎲" },
+      { key: "herr_cronometro", label: "Cronómetro", icono: "⏲️" },
+      { key: "herr_semaforo", label: "Semáforo", icono: "🚦" },
+      { key: "herr_sorteoorden", label: "Sorteo de Orden/Parejas", icono: "🔀" },
+      { key: "herr_grupos", label: "Generador de Grupos", icono: "👥" },
+      { key: "herr_marcador", label: "Marcador de Puntos", icono: "🔢" },
+      { key: "herr_selectorestudiante", label: "Selector de Estudiante", icono: "🎯" },
     ],
   },
 ];
@@ -2332,6 +2362,25 @@ function SidebarTarjetas({ activo, onCambiar, email, institucion, onAdmin, onIns
   const [nombreDocente, setNombreDocente] = useState("");
   const [editandoNombre, setEditandoNombre] = useState(false);
   const [nombreTemp, setNombreTemp] = useState("");
+  // Grupos desplegados — por defecto, solo el que contiene la sección
+  // activa; los demás quedan colapsados hasta que se les haga clic.
+  const [gruposAbiertos, setGruposAbiertos] = useState(() => {
+    const inicial = grupos.find((g) => g.items.some((it) => it.key === activo));
+    return new Set(inicial ? [inicial.key] : []);
+  });
+  const toggleGrupo = (key) => setGruposAbiertos((prev) => {
+    const nuevo = new Set(prev);
+    if (nuevo.has(key)) nuevo.delete(key); else nuevo.add(key);
+    return nuevo;
+  });
+  // Si la sección activa cambia a una de un grupo todavía cerrado, ese
+  // grupo se abre solo (por ejemplo, al entrar por un atajo o al volver).
+  useEffect(() => {
+    const contenedor = grupos.find((g) => g.items.some((it) => it.key === activo));
+    if (contenedor && !gruposAbiertos.has(contenedor.key)) {
+      setGruposAbiertos((prev) => new Set(prev).add(contenedor.key));
+    }
+  }, [activo]);
 
   useEffect(() => { api.fetchMiPerfil().then((p) => setNombreDocente(p?.nombre || "")); }, []);
 
@@ -2367,14 +2416,20 @@ function SidebarTarjetas({ activo, onCambiar, email, institucion, onAdmin, onIns
       <div className="flex-1 overflow-y-auto px-3 pb-3">
         <TarjetaMenuLateral icono="🏠" label="Inicio" activo={activo === "inicio"} onClick={() => elegir("inicio")} fondo="#E8EEF8" />
 
-        {grupos.map((grupo) => (
-          <div key={grupo.key} className="mt-3">
-            <div className="text-[9px] font-bold uppercase tracking-wide px-2.5 mb-1" style={{ color: "#829aca" }}>{grupo.icono} {grupo.label}</div>
-            {grupo.items.map((it) => (
-              <TarjetaMenuLateral key={it.key} icono={it.icono} label={it.label} activo={activo === it.key} onClick={() => elegir(it.key)} />
-            ))}
-          </div>
-        ))}
+        {grupos.filter((g) => g.key !== "inicio_grupo").map((grupo) => {
+          const abierto = gruposAbiertos.has(grupo.key);
+          return (
+            <div key={grupo.key} className="mt-2">
+              <button onClick={() => toggleGrupo(grupo.key)} className="w-full flex items-center justify-between px-2.5 py-1 mb-1 rounded-lg hover:bg-white/5">
+                <span className="text-[9px] font-bold uppercase tracking-wide" style={{ color: "#829aca" }}>{grupo.icono} {grupo.label}</span>
+                <span className="text-[8px]" style={{ color: "#829aca" }}>{abierto ? "▾" : "▸"}</span>
+              </button>
+              {abierto && grupo.items.map((it) => (
+                <TarjetaMenuLateral key={it.key} icono={it.icono} label={it.label} activo={activo === it.key} onClick={() => elegir(it.key)} />
+              ))}
+            </div>
+          );
+        })}
       </div>
 
       <div className="p-3 pt-2 border-t border-white/10">
@@ -2475,9 +2530,19 @@ function Panel({ session }) {
 
   const irA = (key) => {
     if (CLAVES_SOLO_ADMIN.includes(key) && !esAdminEfectivo) return;
+    if (key.startsWith("herr_")) {
+      setTab("herramientas");
+      setSubTabHerramientas(key.slice(5));
+      return;
+    }
     setTab(key);
     if (key === "estudiantes") { setGrado(null); setReino(null); setModoLista(false); }
   };
+
+  // Para que el menú resalte bien el ítem activo cuando estás en una
+  // herramienta específica (en vez de mostrar "Herramientas" resaltado
+  // en general sin distinguir cuál).
+  const claveActivaMenu = tab === "herramientas" ? `herr_${subTabHerramientas}` : tab;
 
   const menuPanelVisible = esAdminEfectivo ? MENU_PANEL_GRUPOS : MENU_PANEL_GRUPOS.filter((g) => g.key !== "administracion");
 
@@ -2496,7 +2561,7 @@ function Panel({ session }) {
 
   return (
     <div className="min-h-screen flex" style={{ background: "#FBFBFD" }}>
-      <SidebarTarjetas activo={tab} onCambiar={irA} email={session.user.email} institucion={institucion}
+      <SidebarTarjetas activo={claveActivaMenu} onCambiar={irA} email={session.user.email} institucion={institucion}
         onAdmin={() => setAdministracionAbierta(true)} onInstitucion={() => setInstitucionAbierta(true)}
         onSalir={() => supabase.auth.signOut()} onBuscarEstudiante={irACalificacionesDesdeBusqueda}
         esAdmin={esAdmin} esAdminEfectivo={esAdminEfectivo} previsualizandoDocente={previsualizandoDocente} onCambiarPrevisualizacion={setPrevisualizandoDocente}
@@ -2535,19 +2600,9 @@ function Panel({ session }) {
           <>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 mb-6">
               {[
-                { key: "ruleta", label: "Ruleta", Icono: Star, fondo: "#E8EEF8", color: "#223b74" },
-                { key: "ruletamonedas", label: "Ruleta de Monedas", Icono: Gift, fondo: "#FEF3C7", color: "#B45309" },
                 { key: "accionesmasivas", label: "Acciones Masivas", Icono: Settings, fondo: "#DBEAFE", color: "#1D4ED8" },
-                { key: "banco", label: "Banco", Icono: Package, fondo: "#DCFCE7", color: "#15803D" },
-                { key: "album", label: "Álbum", Icono: Image, fondo: "#f1e7d5", color: "#BE185D" },
                 { key: "anuncios", label: "Anuncios", Icono: FileText, fondo: "#FFEDD5", color: "#C2410C" },
-                { key: "logros", label: "Logros", Icono: Award, fondo: "#E0E7FF", color: "#4338CA" },
-                { key: "salonhonor", label: "Salón de Honor", Icono: Trophy, fondo: "#CFFAFE", color: "#0E7490" },
-                { key: "diplomas", label: "Diplomas", Icono: Award, fondo: "#E8EEF8", color: "#7E22CE" },
-                { key: "gamext", label: "Desafíos / Misiones / Cosméticos", Icono: Puzzle, fondo: "#F1F5F9", color: "#475569" },
-                { key: "consignas", label: "Consignas del Códice", Icono: BookOpen, fondo: "#DCFCE7", color: "#15803D" },
                 { key: "trivia", label: "Preguntados", Icono: HelpCircle, fondo: "#DBEAFE", color: "#1D4ED8" },
-                { key: "bancopreguntas", label: "Banco de Preguntas", Icono: Archive, fondo: "#f1e7d5", color: "#BE185D" },
                 { key: "temporizador", label: "Temporizador", Icono: Clock, fondo: "#FEF3C7", color: "#B45309" },
                 { key: "dado", label: "Dado", Icono: Package, fondo: "#E8EEF8", color: "#223b74" },
                 { key: "cronometro", label: "Cronómetro", Icono: Clock, fondo: "#DBEAFE", color: "#1D4ED8" },
@@ -2556,8 +2611,6 @@ function Panel({ session }) {
                 { key: "grupos", label: "Generador de Grupos", Icono: GraduationCap, fondo: "#FFEDD5", color: "#C2410C" },
                 { key: "marcador", label: "Marcador de Puntos", Icono: Award, fondo: "#E0E7FF", color: "#4338CA" },
                 { key: "selectorestudiante", label: "Selector de Estudiante", Icono: Star, fondo: "#CFFAFE", color: "#0E7490" },
-                { key: "bingo", label: "Bingo de Repaso", Icono: Puzzle, fondo: "#E8EEF8", color: "#7E22CE" },
-                { key: "formasexamen", label: "Formas de Examen (A/B/C/D)", Icono: FileText, fondo: "#FEE2E2", color: "#B91C1C" },
               ].map((op) => (
                 <button key={op.key} onClick={() => setSubTabHerramientas(op.key)}
                   className={`flex items-center gap-2.5 rounded-2xl border px-3.5 py-3 text-left transition-all ${subTabHerramientas === op.key ? "border-violet-300 bg-violet-50" : "border-slate-200 bg-white hover:border-slate-300"}`}>
