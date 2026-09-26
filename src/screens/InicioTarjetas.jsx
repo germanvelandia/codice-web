@@ -86,11 +86,11 @@ function partirEnDosLineas(label) {
 
 const PALETA = [
   { fondo: "#DCFCE7", icono: "#15803D" }, { fondo: "#DBEAFE", icono: "#1D4ED8" },
-  { fondo: "#FCE7F3", icono: "#BE185D" }, { fondo: "#FEF3C7", icono: "#B45309" },
-  { fondo: "#FEE2E2", icono: "#B91C1C" }, { fondo: "#EDE9FE", icono: "#6D28D9" },
+  { fondo: "#f1e7d5", icono: "#BE185D" }, { fondo: "#FEF3C7", icono: "#B45309" },
+  { fondo: "#FEE2E2", icono: "#B91C1C" }, { fondo: "#E8EEF8", icono: "#223b74" },
   { fondo: "#CCFBF1", icono: "#0F766E" }, { fondo: "#FFEDD5", icono: "#C2410C" },
   { fondo: "#E0E7FF", icono: "#4338CA" }, { fondo: "#CFFAFE", icono: "#0E7490" },
-  { fondo: "#F3E8FF", icono: "#7E22CE" }, { fondo: "#F1F5F9", icono: "#475569" },
+  { fondo: "#E8EEF8", icono: "#7E22CE" }, { fondo: "#F1F5F9", icono: "#475569" },
 ];
 
 function TarjetaMenu({ Icono, colores, label, onClick }) {
