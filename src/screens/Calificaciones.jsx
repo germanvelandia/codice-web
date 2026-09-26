@@ -10,45 +10,6 @@ import { ActasModal } from "./Actas";
 import { InclusionBadge, FotoLightbox } from "./Estudiantes";
 import { EditorTexto, TextoEnriquecido, textoPlano } from "../components/RichText";
 import { calcularNotaRubrica, SelectorRubrica } from "../components/Rubrica";
-import { BookOpen, Edit, Archive, GraduationCap, Calendar, FileText, Award, BarChart, Settings, Users, TrendingDown, Plus } from "lucide-react";
-
-// Tarjeta compacta para elegir entre varias opciones (materia, curso,
-// periodo, pestaña) — mismo estilo en toda la app.
-function ChipCal({ activo, onClick, children, Icono, destacado }) {
-  return (
-    <button onClick={onClick}
-      className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl border transition-colors ${activo ? "bg-violet-500 text-white border-violet-500" : destacado ? "bg-violet-50 text-violet-700 border-violet-200" : "bg-white text-slate-600 border-slate-200 hover:border-violet-300"}`}>
-      {Icono && <Icono size={13} strokeWidth={2.2} />}
-      {children}
-    </button>
-  );
-}
-
-// Menú "⋯ Más" convertido en tarjetas — reemplaza la lista de texto
-// desplegable por un pequeño grid de opciones con ícono.
-function MenuTarjetas({ abierto, onCerrar, opciones, alinear = "right" }) {
-  if (!abierto) return null;
-  return (
-    <>
-      <div className="fixed inset-0 z-10" onClick={onCerrar} />
-      <div className={`absolute ${alinear === "right" ? "right-0" : "left-0"} top-full mt-1.5 bg-white rounded-2xl shadow-lg border border-slate-200 p-2 z-20 grid grid-cols-1 gap-1`} style={{ minWidth: 220 }}>
-        {opciones.map((op, i) => op.separador ? (
-          <div key={i} className="border-t border-slate-200 my-1" />
-        ) : (
-          <button key={i} onClick={() => { onCerrar(); op.onClick(); }}
-            className={`flex items-center gap-2.5 text-left text-xs font-semibold px-2.5 py-2 rounded-xl hover:bg-slate-50 ${op.peligro ? "text-rose-500 hover:bg-rose-50" : "text-slate-700"}`}>
-            {op.Icono ? (
-              <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={{ background: op.peligro ? "#FEE2E2" : "#EDE9FE" }}>
-                <op.Icono size={13} strokeWidth={2.2} color={op.peligro ? "#B91C1C" : "#6D28D9"} />
-              </div>
-            ) : <span className="w-7 text-center shrink-0">{op.emoji}</span>}
-            {op.label}
-          </button>
-        ))}
-      </div>
-    </>
-  );
-}
 
 function MiniAvatarCal({ estudiante, size = 22 }) {
   const [ampliada, setAmpliada] = useState(false);
@@ -69,33 +30,7 @@ function MiniAvatarCal({ estudiante, size = 22 }) {
   );
 }
 
-// Paso del asistente como "chip" compacto en una fila horizontal — al
-// tocarlo despliega su selector como un menú flotante debajo, sin
-// empujar el resto de la página hacia abajo.
-function PasoMenu({ titulo, Icono, resumen, abierto, onAbrir, onCerrar, ancho, children }) {
-  return (
-    <div className="relative shrink-0">
-      <button onClick={onAbrir} className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-left transition-all ${abierto ? "border-violet-400 bg-violet-50" : "border-slate-200 bg-white hover:border-slate-300"}`}>
-        {Icono && <Icono size={14} className="text-slate-400 shrink-0" />}
-        <div className="min-w-0">
-          <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide leading-none mb-0.5">{titulo}</div>
-          <div className="text-xs font-bold text-slate-700 truncate max-w-[170px]">{resumen}</div>
-        </div>
-        <span className="text-[9px] text-slate-400 shrink-0">{abierto ? "▲" : "▼"}</span>
-      </button>
-      {abierto && (
-        <>
-          <div className="fixed inset-0 z-20" onClick={onCerrar} />
-          <div onClick={(e) => e.stopPropagation()} className={`absolute left-0 top-full mt-1.5 bg-white rounded-2xl shadow-lg border border-violet-200 p-3 z-30 ${ancho || "min-w-[280px]"}`}>
-            {children}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function BarraMateria({ materias, materiaActualId, setMateriaActualId, onCambio, onSeleccion, sinTarjeta }) {
+function BarraMateria({ materias, materiaActualId, setMateriaActualId, onCambio }) {
   const [creando, setCreando] = useState(false);
   const [nombre, setNombre] = useState("");
   const [duplicando, setDuplicando] = useState(false);
@@ -145,17 +80,15 @@ function BarraMateria({ materias, materiaActualId, setMateriaActualId, onCambio,
     onCambio();
   };
 
-  const contenido = (
-    <>
-      {!sinTarjeta && (
-        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wide mb-2.5">
-          <BookOpen size={13} /> Materia
-        </div>
-      )}
-      <div className="flex flex-wrap items-center gap-1.5">
-        {materias.length > 0 && !renombrando && materias.map((m) => (
-          <ChipCal key={m.id} activo={materiaActualId === m.id} onClick={() => { setMateriaActualId(m.id); onSeleccion?.(); }}>{m.nombre}</ChipCal>
-        ))}
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-3 mb-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs uppercase tracking-wide text-slate-400 shrink-0">Materia:</span>
+        {materias.length > 0 && !renombrando && (
+          <select value={materiaActualId || ""} onChange={(e) => setMateriaActualId(parseInt(e.target.value, 10))} className="text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none">
+            {materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+          </select>
+        )}
 
         {renombrando && (
           <div className="flex gap-1">
@@ -168,7 +101,7 @@ function BarraMateria({ materias, materiaActualId, setMateriaActualId, onCambio,
         )}
 
         {!creando ? (
-          <ChipCal Icono={Plus} destacado onClick={() => setCreando(true)}>Nueva materia</ChipCal>
+          <button onClick={() => setCreando(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700 shrink-0">+ Nueva materia</button>
         ) : (
           <div className="flex gap-1">
             <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre (ej: Ética)" autoFocus className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
@@ -179,14 +112,22 @@ function BarraMateria({ materias, materiaActualId, setMateriaActualId, onCambio,
 
         {materiaActualId && !renombrando && (
           <div className="relative ml-auto shrink-0">
-            <ChipCal onClick={() => setMenuAbierto((v) => !v)}>⋯ Más</ChipCal>
-            <MenuTarjetas abierto={menuAbierto} onCerrar={() => setMenuAbierto(false)} opciones={[
-              { Icono: Edit, label: "Renombrar materia", onClick: () => { const actual = materias.find((m) => m.id === materiaActualId); setNombreRenombrar(actual?.nombre || ""); setRenombrando(true); } },
-              { Icono: Archive, label: "Duplicar como nueva", onClick: () => setDuplicando(true) },
-              ...(materias.length > 1 ? [{ Icono: Archive, label: "Copiar notas desde otra materia", onClick: () => setCopiando(true) }] : []),
-              { separador: true },
-              { emoji: "🗑", label: "Eliminar esta materia", peligro: true, onClick: eliminar },
-            ]} />
+            <button onClick={() => setMenuAbierto((v) => !v)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">⋯ Más</button>
+            {menuAbierto && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setMenuAbierto(false)} />
+                <div className="absolute right-0 top-full mt-1 bg-white rounded-xl shadow-lg border border-slate-200 py-1 w-56 z-20">
+                  <button onClick={() => { setMenuAbierto(false); const actual = materias.find((m) => m.id === materiaActualId); setNombreRenombrar(actual?.nombre || ""); setRenombrando(true); }}
+                    className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">✏️ Renombrar materia</button>
+                  <button onClick={() => { setMenuAbierto(false); setDuplicando(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">⧉ Duplicar como nueva</button>
+                  {materias.length > 1 && (
+                    <button onClick={() => { setMenuAbierto(false); setCopiando(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">⇥ Copiar notas desde otra materia</button>
+                  )}
+                  <div className="border-t border-slate-200 my-1" />
+                  <button onClick={() => { setMenuAbierto(false); eliminar(); }} className="w-full text-left text-xs px-3 py-2 hover:bg-rose-50 text-rose-500">🗑 Eliminar esta materia</button>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -211,14 +152,12 @@ function BarraMateria({ materias, materiaActualId, setMateriaActualId, onCambio,
           <button onClick={() => setCopiando(false)} className="text-xs px-2 py-1.5 text-slate-400 shrink-0">✕</button>
         </div>
       )}
-    </>
+    </div>
   );
-
-  if (sinTarjeta) return contenido;
-  return <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-3 mb-4">{contenido}</div>;
 }
 
 function PanelCategorias({ materiaId, categorias, onCambio }) {
+  const [abierto, setAbierto] = useState(false);
   const [nombre, setNombre] = useState("");
   const [porcentaje, setPorcentaje] = useState(25);
   const sumaTotal = categorias.reduce((a, c) => a + c.porcentaje, 0);
@@ -232,22 +171,28 @@ function PanelCategorias({ materiaId, categorias, onCambio }) {
   const eliminar = async (id) => { await api.eliminarCategoria(id); onCambio(); };
 
   return (
-    <div className="min-w-[260px]">
-      {sumaTotal !== 100 && <p className="text-xs text-amber-600 mb-2">Suman {sumaTotal}% — deberían sumar 100%</p>}
-      <div className="flex flex-wrap gap-2 mb-3">
-        {categorias.map((c) => (
-          <div key={c.id} className="flex items-center gap-2 bg-violet-50 rounded-full px-3 py-1.5 text-xs">
-            <span>{c.nombre} ({c.porcentaje}%)</span>
-            <button onClick={() => eliminar(c.id)} className="text-slate-400 hover:text-rose-500">✕</button>
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-3 mb-4">
+      <button onClick={() => setAbierto((v) => !v)} className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+        {abierto ? "▾" : "▸"} Categorías de evaluación {sumaTotal !== 100 && <span className="text-xs text-amber-600">(suman {sumaTotal}%, deberían sumar 100%)</span>}
+      </button>
+      {abierto && (
+        <div className="mt-3">
+          <div className="flex flex-wrap gap-2 mb-3">
+            {categorias.map((c) => (
+              <div key={c.id} className="flex items-center gap-2 bg-violet-50 rounded-full px-3 py-1.5 text-xs">
+                <span>{c.nombre} ({c.porcentaje}%)</span>
+                <button onClick={() => eliminar(c.id)} className="text-slate-400 hover:text-rose-500">✕</button>
+              </div>
+            ))}
+            {categorias.length === 0 && <span className="text-xs text-slate-400">Sin categorías todavía.</span>}
           </div>
-        ))}
-        {categorias.length === 0 && <span className="text-xs text-slate-400">Sin categorías todavía.</span>}
-      </div>
-      <div className="flex gap-2">
-        <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre (ej: Talleres)" className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none flex-1 min-w-0" />
-        <input type="number" value={porcentaje} onChange={(e) => setPorcentaje(parseInt(e.target.value || "0", 10))} className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none w-16" />
-        <button onClick={crear} className="text-sm font-semibold px-3 py-2 rounded-lg bg-violet-500 text-white shrink-0">Crear</button>
-      </div>
+          <div className="flex gap-2">
+            <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre (ej: Talleres)" className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none flex-1" />
+            <input type="number" value={porcentaje} onChange={(e) => setPorcentaje(parseInt(e.target.value || "0", 10))} className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none w-20" />
+            <button onClick={crear} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white">Crear</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1229,7 +1174,6 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
   const [observacionMasivaAbierta, setObservacionMasivaAbierta] = useState(false);
   const [reinoFiltro, setReinoFiltro] = useState("Todos");
   const [soloPerdiendo, setSoloPerdiendo] = useState(false);
-  const [pasoTablaAbierto, setPasoTablaAbierto] = useState(null);
   const [busqueda, setBusqueda] = useState("");
   const [seleccionando, setSeleccionando] = useState(false);
   const [seleccionadas, setSeleccionadas] = useState([]);
@@ -1389,52 +1333,46 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
   return (
     <div>
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-3 mb-3">
-        <div className="flex flex-wrap items-center gap-1.5 mb-2">
+        <div className="flex flex-wrap items-center gap-2 mb-2">
           <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="🔍 Buscar estudiante…"
             className="text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none w-48" />
-
-          <PasoMenu titulo="Grupo" Icono={Users} abierto={pasoTablaAbierto === "grupo"}
-            resumen={reinoFiltro === "Todos" ? "Todos los grupos" : reinoFiltro}
-            onAbrir={() => setPasoTablaAbierto(pasoTablaAbierto === "grupo" ? null : "grupo")} onCerrar={() => setPasoTablaAbierto(null)}>
-            <div className="flex flex-col gap-1 min-w-[180px]">
-              {reinos.map((r) => (
-                <button key={r} onClick={() => { setReinoFiltro(r); setPasoTablaAbierto(null); }}
-                  className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs font-semibold ${reinoFiltro === r ? "bg-violet-50 text-violet-700" : "text-slate-600 hover:bg-slate-50"}`}>
-                  <Users size={12} />{r === "Todos" ? "Todos los grupos" : r}
-                </button>
-              ))}
-              <div className="border-t border-slate-200 my-1" />
-              <label className="flex items-center gap-2 px-2.5 py-1.5 text-xs font-semibold text-slate-600">
-                <input type="checkbox" checked={soloPerdiendo} onChange={(e) => setSoloPerdiendo(e.target.checked)} />
-                Ver solo quienes van perdiendo
-              </label>
-            </div>
-          </PasoMenu>
-
+          <select value={reinoFiltro} onChange={(e) => setReinoFiltro(e.target.value)} className="text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none">
+            {reinos.map((r) => <option key={r} value={r}>{r === "Todos" ? "Todos los grupos" : r}</option>)}
+          </select>
+          <button onClick={() => setSoloPerdiendo((v) => !v)}
+            className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${soloPerdiendo ? "bg-rose-500 text-white border-rose-500" : "border-rose-200 text-rose-600"}`}>
+            🔴 {soloPerdiendo ? "Viendo solo quienes van perdiendo" : "Ver solo quienes van perdiendo"}
+          </button>
           <div className="text-xs text-slate-400 ml-auto">{actividades.length} actividad{actividades.length === 1 ? "" : "es"} · {estudiantesVisibles.length} estudiante{estudiantesVisibles.length === 1 ? "" : "s"}</div>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <ChipCal Icono={Edit} onClick={() => setNotaMasivaAbierta(true)}>Nota masiva</ChipCal>
-          <ChipCal Icono={FileText} onClick={() => setObservacionMasivaAbierta(true)}>Observación masiva</ChipCal>
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={() => { setActividadEditar(null); setModalAbierto(true); }} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">+ Nueva actividad</button>
+          <button onClick={() => setNotaMasivaAbierta(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🖊 Nota masiva</button>
+          <button onClick={() => setObservacionMasivaAbierta(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">📝 Observación masiva</button>
 
           {seleccionando ? (
             <>
               <button onClick={eliminarSeleccionadas} disabled={seleccionadas.length === 0}
-                className="text-xs font-semibold px-3 py-2 rounded-xl bg-rose-500 text-white disabled:opacity-40">
+                className="text-xs font-semibold px-3 py-1.5 rounded-full bg-rose-500 text-white disabled:opacity-40">
                 🗑 Eliminar {seleccionadas.length > 0 ? `(${seleccionadas.length})` : ""}
               </button>
-              <ChipCal onClick={() => { setSeleccionando(false); setSeleccionadas([]); }}>Cancelar</ChipCal>
+              <button onClick={() => { setSeleccionando(false); setSeleccionadas([]); }} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">Cancelar</button>
             </>
           ) : (
             <div className="relative">
-              <ChipCal onClick={() => setMenuHerramientasAbierto((v) => !v)}>⋯ Más acciones</ChipCal>
-              <MenuTarjetas abierto={menuHerramientasAbierto} onCerrar={() => setMenuHerramientasAbierto(false)} alinear="left" opciones={[
-                { Icono: Archive, label: "Copiar columnas de otra materia", onClick: () => setCopiarColumnasAbierto(true) },
-                { Icono: FileText, label: "Copiar planilla a otro curso", onClick: () => setCopiarPlanillaAbierto(true) },
-                { Icono: Archive, label: "Importar de Moodle/Excel", onClick: () => setImportarMoodleAbierto(true) },
-                { separador: true },
-                { emoji: "🗑", label: "Borrar varias columnas", peligro: true, onClick: () => setSeleccionando(true) },
-              ]} />
+              <button onClick={() => setMenuHerramientasAbierto((v) => !v)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">⋯ Más acciones</button>
+              {menuHerramientasAbierto && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setMenuHerramientasAbierto(false)} />
+                  <div className="absolute left-0 top-full mt-1 bg-white rounded-xl shadow-lg border border-slate-200 py-1 w-64 z-20">
+                    <button onClick={() => { setMenuHerramientasAbierto(false); setCopiarColumnasAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📑 Copiar columnas de otra materia</button>
+                    <button onClick={() => { setMenuHerramientasAbierto(false); setCopiarPlanillaAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📋 Copiar planilla a otro curso</button>
+                    <button onClick={() => { setMenuHerramientasAbierto(false); setImportarMoodleAbierto(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50">📥 Importar de Moodle/Excel</button>
+                    <div className="border-t border-slate-200 my-1" />
+                    <button onClick={() => { setMenuHerramientasAbierto(false); setSeleccionando(true); }} className="w-full text-left text-xs px-3 py-2 hover:bg-rose-50 text-rose-500">🗑 Borrar varias columnas</button>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -1456,7 +1394,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
                 <th className="sticky top-0 z-10 bg-slate-50"></th>
               </tr>
               <tr>
-                <th className="sticky left-0 top-0 z-20 bg-slate-50 text-left px-3 py-2 border-b border-slate-200 min-w-[220px]">Estudiante</th>
+                <th className="sticky left-0 top-0 z-20 bg-slate-50 text-left px-3 py-2 border-b border-slate-200">Estudiante</th>
                 {actividadesOrdenadas.map((a) => (
                   <th key={a.id} className={`sticky top-0 z-10 px-3 py-2 border-b border-slate-200 min-w-[110px] ${seleccionando && seleccionadas.includes(a.id) ? "bg-rose-50" : ""}`}
                     style={!seleccionando ? { background: `${colorPorActividad[a.id]}14` } : {}}>
@@ -1491,7 +1429,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
                   <tr key={s.id} ref={destacado ? (el) => el?.scrollIntoView({ behavior: "smooth", block: "center" }) : null}
                     className={destacado ? "bg-amber-100" : "odd:bg-white even:bg-slate-50"}
                     style={destacado ? { boxShadow: "inset 0 0 0 2px #F59E0B" } : undefined}>
-                    <td className="sticky left-0 bg-inherit text-left px-3 py-2 font-medium text-slate-700 min-w-[220px]"><MiniAvatarCal estudiante={s} />{s.nombre} <InclusionBadge estudiante={s} size="text-xs" /></td>
+                    <td className="sticky left-0 bg-inherit text-left px-3 py-2 font-medium text-slate-700"><MiniAvatarCal estudiante={s} />{s.nombre} <InclusionBadge estudiante={s} size="text-xs" /></td>
                     {actividadesOrdenadas.map((a) => {
                       const v = valorDeActividad(a, s.id);
                       const b = bandaDesempeno(v, config);
@@ -1663,9 +1601,10 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
       <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
         <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="🔍 Buscar estudiante…"
           className="text-xs rounded-full px-3 py-2 border border-slate-200 outline-none w-44 shrink-0" />
-        <ChipCal Icono={TrendingDown} activo={soloPerdiendo} onClick={() => setSoloPerdiendo((v) => !v)}>
-          {soloPerdiendo ? "Viendo solo quienes van perdiendo" : "Ver solo quienes van perdiendo"}
-        </ChipCal>
+        <button onClick={() => setSoloPerdiendo((v) => !v)}
+          className={`text-xs font-semibold px-3 py-2 rounded-full border shrink-0 ${soloPerdiendo ? "bg-rose-500 text-white border-rose-500" : "border-rose-200 text-rose-600"}`}>
+          🔴 {soloPerdiendo ? "Viendo solo quienes van perdiendo" : "Ver solo quienes van perdiendo"}
+        </button>
         <p className="text-[11px] text-slate-400 flex-1 min-w-[220px]">
           💡 Hacé clic en cualquier nota para editarla a mano (útil al migrar notas de otra planilla). El botón de la derecha recalcula con la fórmula y <b>sobreescribe</b> las notas de ese periodo — usalo solo si querés volver a calcular automáticamente.
         </p>
@@ -1680,7 +1619,7 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
           <table className="w-full text-xs" style={{ borderCollapse: "separate", borderSpacing: 0 }}>
             <thead>
               <tr>
-                <th className="sticky left-0 top-0 z-20 text-left px-3 py-2 border-b border-slate-200 bg-slate-50 min-w-[220px]">Estudiante</th>
+                <th className="sticky left-0 top-0 z-20 text-left px-3 py-2 border-b border-slate-200 bg-slate-50">Estudiante</th>
                 {periodos.map((p) => <th key={p} className="sticky top-0 z-10 px-3 py-2 border-b border-slate-200 bg-slate-50">Periodo {p}</th>)}
                 <th className="sticky top-0 z-10 px-3 py-2 border-b border-slate-200 bg-slate-50">Promedio</th>
               </tr>
@@ -1694,7 +1633,7 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
                 const bandaProm = bandaDesempeno(prom, config);
                 return (
                   <tr key={s.id} className="odd:bg-white even:bg-slate-50">
-                    <td className="text-left px-3 py-2 font-medium text-slate-700 min-w-[220px]"><MiniAvatarCal estudiante={s} />{s.nombre} <InclusionBadge estudiante={s} size="text-xs" /></td>
+                    <td className="text-left px-3 py-2 font-medium text-slate-700"><MiniAvatarCal estudiante={s} />{s.nombre} <InclusionBadge estudiante={s} size="text-xs" /></td>
                     {periodos.map((p) => {
                       const n = notaGuardada(s.id, p);
                       const b = bandaDesempeno(n, config);
@@ -1876,9 +1815,6 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
   const [comentariosAbiertos, setComentariosAbiertos] = useState(false);
   const [estudiantes, setEstudiantes] = useState([]);
   const [cargando, setCargando] = useState(true);
-  const [pasoAbierto, setPasoAbierto] = useState(null); // "materia" | "grado" | "periodo" | "categorias" | "vista" | null
-  const [actividadModalAbierto, setActividadModalAbierto] = useState(false);
-  const [refrescoPlanilla, setRefrescoPlanilla] = useState(0);
 
   // Curso activo elegido en la barra superior — no pisa el salto puntual
   // que hace el buscador global de estudiantes (ver el efecto de abajo).
@@ -1951,99 +1887,9 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
   return (
     <div>
       <h2 className="text-xl font-bold text-slate-800 mb-1">Planilla de Notas</h2>
-      <p className="text-xs text-slate-400 mb-3">Esta planilla es privada de tu cuenta — otros docentes que usen este enlace no ven ni afectan tus calificaciones.</p>
+      <p className="text-xs text-violet-600 mb-3">Esta planilla es privada de tu cuenta — otros docentes que usen este enlace no ven ni afectan tus calificaciones.</p>
 
-      <div className="flex flex-wrap items-start gap-2 mb-4">
-        <PasoMenu titulo="Materia" Icono={BookOpen} abierto={pasoAbierto === "materia" || !materiaActualId}
-          resumen={materias.find((m) => m.id === materiaActualId)?.nombre || "—"}
-          onAbrir={() => setPasoAbierto(pasoAbierto === "materia" ? null : "materia")} onCerrar={() => setPasoAbierto(null)} ancho="min-w-[320px]">
-          <BarraMateria materias={materias} materiaActualId={materiaActualId} setMateriaActualId={setMateriaActualId} onCambio={cargarMaterias} onSeleccion={() => setPasoAbierto("grado")} sinTarjeta />
-        </PasoMenu>
-
-        {materiaActualId && (
-          <>
-            <PasoMenu titulo="Grado y curso" Icono={GraduationCap} abierto={pasoAbierto === "grado"}
-              resumen={`Grado ${nivelYCurso(gradoId).nivel}° — Curso ${gradoId}`}
-              onAbrir={() => setPasoAbierto(pasoAbierto === "grado" ? null : "grado")} onCerrar={() => setPasoAbierto(null)}>
-              <div className="flex flex-wrap gap-1.5">
-                {(() => {
-                  const niveles = agruparPorNivel(grados);
-                  const { nivel: nivelActual } = nivelYCurso(gradoId);
-                  const cursosDelNivel = niveles.find((n) => n.nivel === nivelActual)?.cursos || [];
-                  return (
-                    <>
-                      {niveles.map((n) => (
-                        <ChipCal key={n.nivel} activo={nivelActual === n.nivel} onClick={() => { if (n.cursos[0]) setGradoId(n.cursos[0].id); }}>
-                          Grado {n.nivel}°
-                        </ChipCal>
-                      ))}
-                      <div className="w-px bg-slate-200 mx-1" />
-                      {cursosDelNivel.map((g) => (
-                        <ChipCal key={g.id} activo={gradoId === g.id} onClick={() => { setGradoId(g.id); setPasoAbierto("periodo"); }}>Curso {g.id}</ChipCal>
-                      ))}
-                    </>
-                  );
-                })()}
-              </div>
-            </PasoMenu>
-
-            <PasoMenu titulo="Periodo" Icono={Calendar} abierto={pasoAbierto === "periodo"}
-              resumen={`Periodo ${periodo}${periodo === config.periodo_actual ? " (vigente)" : ""}`}
-              onAbrir={() => setPasoAbierto(pasoAbierto === "periodo" ? null : "periodo")} onCerrar={() => setPasoAbierto(null)} ancho="min-w-[320px]">
-              <div className="flex flex-wrap items-center gap-1.5">
-                {periodosDe(config)
-                  .filter((p) => !soloVigente || parseInt(p, 10) >= parseInt(config.periodo_actual || "1", 10))
-                  .map((p) => (
-                    <ChipCal key={p} activo={periodo === p} onClick={() => { setPeriodo(p); setPasoAbierto(null); }}>
-                      Periodo {p}{p === config.periodo_actual ? " (vigente)" : ""}
-                    </ChipCal>
-                  ))}
-                {periodo !== config.periodo_actual && (
-                  <ChipCal destacado onClick={marcarPeriodoVigente}>📌 Marcar como vigente</ChipCal>
-                )}
-                <label className="flex items-center gap-1.5 text-xs text-slate-500 shrink-0 ml-2">
-                  <input type="checkbox" checked={soloVigente} onChange={(e) => setSoloVigente(e.target.checked)} />
-                  Ocultar periodos anteriores
-                </label>
-              </div>
-            </PasoMenu>
-
-            <PasoMenu titulo="Categorías" Icono={Award} abierto={pasoAbierto === "categorias"}
-              resumen={categorias.length > 0 ? `${categorias.length} categoría${categorias.length === 1 ? "" : "s"}` : "Sin definir"}
-              onAbrir={() => setPasoAbierto(pasoAbierto === "categorias" ? null : "categorias")} onCerrar={() => setPasoAbierto(null)}>
-              <PanelCategorias materiaId={materiaActualId} categorias={categorias} onCambio={cargarConfigYCategorias} />
-            </PasoMenu>
-
-            <PasoMenu titulo="Vista" Icono={FileText} abierto={pasoAbierto === "vista"}
-              resumen={{ planilla: "Planilla", boletin: "Boletín / Nivelación", estadisticas: "Estadísticas", config: "Escala y periodos" }[subVista]}
-              onAbrir={() => setPasoAbierto(pasoAbierto === "vista" ? null : "vista")} onCerrar={() => setPasoAbierto(null)} ancho="min-w-[220px]">
-              <div className="flex flex-col gap-1">
-                {[
-                  { key: "planilla", label: "Planilla", Icono: FileText, fondo: "#E8EEF8", color: "#28478a" },
-                  { key: "boletin", label: "Boletín / Nivelación", Icono: Award, fondo: "#E8EEF8", color: "#28478a" },
-                  { key: "estadisticas", label: "Estadísticas", Icono: BarChart, fondo: "#DCFCE7", color: "#15803D" },
-                  { key: "config", label: "Escala y periodos", Icono: Settings, fondo: "#FFEDD5", color: "#C2410C" },
-                ].map((op) => (
-                  <button key={op.key} onClick={() => { setSubVista(op.key); setPasoAbierto(null); }}
-                    className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-left ${subVista === op.key ? "bg-violet-50" : "hover:bg-slate-50"}`}>
-                    <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={{ background: op.fondo }}><op.Icono size={13} color={op.color} /></div>
-                    <span className="text-xs font-bold text-slate-800">{op.label}</span>
-                  </button>
-                ))}
-              </div>
-            </PasoMenu>
-
-            <button onClick={() => setActividadModalAbierto(true)}
-              className="flex items-center gap-1.5 rounded-xl border border-dashed border-violet-300 text-violet-600 px-3 py-2 text-xs font-bold shrink-0 hover:bg-violet-50">
-              + Actividad
-            </button>
-            <button onClick={() => setComentariosAbiertos(true)}
-              className="flex items-center gap-1.5 rounded-xl border border-slate-200 text-slate-600 px-3 py-2 text-xs font-bold shrink-0 hover:bg-slate-50">
-              💬 Comentarios
-            </button>
-          </>
-        )}
-      </div>
+      <BarraMateria materias={materias} materiaActualId={materiaActualId} setMateriaActualId={setMateriaActualId} onCambio={cargarMaterias} />
 
       {!materiaActualId ? (
         <div className="text-sm text-slate-400 bg-white rounded-2xl p-6 text-center border border-dashed border-slate-200">
@@ -2058,8 +1904,52 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
             </div>
           )}
 
+          <PanelCategorias materiaId={materiaActualId} categorias={categorias} onCambio={cargarConfigYCategorias} />
+
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-3 mb-4">
+            <div className="flex flex-wrap gap-2 items-center mb-2">
+              {(() => {
+                const niveles = agruparPorNivel(grados);
+                const { nivel: nivelActual } = nivelYCurso(gradoId);
+                const cursosDelNivel = niveles.find((n) => n.nivel === nivelActual)?.cursos || [];
+                return (
+                  <>
+                    <select value={nivelActual} onChange={(e) => {
+                      const nuevoNivel = niveles.find((n) => n.nivel === e.target.value);
+                      if (nuevoNivel?.cursos[0]) setGradoId(nuevoNivel.cursos[0].id);
+                    }} className="text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none">
+                      {niveles.map((n) => <option key={n.nivel} value={n.nivel}>Grado {n.nivel}°</option>)}
+                    </select>
+                    <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none">
+                      {cursosDelNivel.map((g) => <option key={g.id} value={g.id}>Curso {g.id}</option>)}
+                    </select>
+                  </>
+                );
+              })()}
+              <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className="text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none">
+                {periodosDe(config)
+                  .filter((p) => !soloVigente || parseInt(p, 10) >= parseInt(config.periodo_actual || "1", 10))
+                  .map((p) => <option key={p} value={p}>Periodo {p}{p === config.periodo_actual ? " (vigente)" : ""}</option>)}
+              </select>
+              {periodo !== config.periodo_actual && (
+                <button onClick={marcarPeriodoVigente} title="Marcar este periodo como el vigente para esta materia" className="text-xs px-2.5 py-1.5 rounded-full bg-violet-100 text-violet-700 shrink-0">📌 Marcar como vigente</button>
+              )}
+              <label className="flex items-center gap-1.5 text-xs text-slate-500 shrink-0">
+                <input type="checkbox" checked={soloVigente} onChange={(e) => setSoloVigente(e.target.checked)} />
+                Ocultar periodos anteriores
+              </label>
+              <button onClick={() => setComentariosAbiertos(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600 ml-auto">💬 Comentarios por desempeño</button>
+            </div>
+            <div className="flex gap-1 rounded-full bg-violet-50 p-1 w-fit flex-wrap">
+              <button onClick={() => setSubVista("planilla")} className={`text-xs px-3 py-1.5 rounded-full ${subVista === "planilla" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Planilla</button>
+              <button onClick={() => setSubVista("boletin")} className={`text-xs px-3 py-1.5 rounded-full ${subVista === "boletin" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Boletín / Nivelación</button>
+              <button onClick={() => setSubVista("estadisticas")} className={`text-xs px-3 py-1.5 rounded-full ${subVista === "estadisticas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Estadísticas</button>
+              <button onClick={() => setSubVista("config")} className={`text-xs px-3 py-1.5 rounded-full ${subVista === "config" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Escala y periodos</button>
+            </div>
+          </div>
+
           {subVista === "planilla" && (
-            <Planilla key={refrescoPlanilla} materiaId={materiaActualId} config={config} categorias={categorias} estudiantes={estudiantes} gradoId={gradoId} grados={grados} periodo={periodo} materias={materias} onCambioCategorias={cargarConfigYCategorias} estudianteDestacadoId={destinoBusqueda?.estudianteId} />
+            <Planilla materiaId={materiaActualId} config={config} categorias={categorias} estudiantes={estudiantes} gradoId={gradoId} grados={grados} periodo={periodo} materias={materias} onCambioCategorias={cargarConfigYCategorias} estudianteDestacadoId={destinoBusqueda?.estudianteId} />
           )}
           {subVista === "boletin" && (
             <Boletin materiaId={materiaActualId} config={config} categorias={categorias} estudiantes={estudiantes} gradoId={gradoId} guardarActual={guardarNotasFinalesActual} />
@@ -2071,11 +1961,6 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
             <ConfigEscala materiaId={materiaActualId} config={config} onGuardado={cargarConfigYCategorias} />
           )}
           {comentariosAbiertos && <ComentariosDesempenoModal onClose={() => setComentariosAbiertos(false)} />}
-          {actividadModalAbierto && (
-            <ActividadModal materiaId={materiaActualId} gradoId={gradoId} periodo={periodo} categorias={categorias} editar={null}
-              onClose={() => setActividadModalAbierto(false)}
-              onGuardada={() => { setActividadModalAbierto(false); setRefrescoPlanilla((n) => n + 1); setSubVista("planilla"); }} />
-          )}
         </>
       )}
     </div>
