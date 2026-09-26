@@ -173,7 +173,7 @@ function PreguntasDeCategoria({ categoria, grados, onVolver }) {
       ) : (
         <div className="space-y-2">
           {preguntas.map((p) => (
-            <div key={p.id} className="bg-white rounded-xl border border-slate-100 p-3">
+            <div key={p.id} className="bg-white rounded-xl border border-slate-200 p-3">
               <div className="flex justify-between items-start gap-2">
                 <p className="text-sm text-slate-700">{p.pregunta}</p>
                 <div className="flex gap-1.5 shrink-0">
