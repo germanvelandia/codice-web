@@ -104,7 +104,7 @@ function Centered({ children }) {
 // estandartes en SVG, puramente decorativo, detrás del formulario de acceso.
 // Silueta de castillo chico, reutilizable para armar un horizonte con
 // varios — recibe posición, escala y color para variar la profundidad.
-function Castillito({ x, y, escala = 1, color = "#4c1d95", opacity = 1 }) {
+function Castillito({ x, y, escala = 1, color = "#223b74", opacity = 1 }) {
   return (
     <g transform={`translate(${x},${y}) scale(${escala})`} opacity={opacity}>
       <rect x="0" y="35" width="70" height="45" fill={color} />
@@ -122,28 +122,28 @@ function Castillito({ x, y, escala = 1, color = "#4c1d95", opacity = 1 }) {
 
 function FondoCastillo() {
   return (
-    <div className="fixed inset-0 -z-10 overflow-hidden" style={{ background: "linear-gradient(180deg, #7c3aed 0%, #a78bfa 35%, #ddd6fe 65%, #fef3c7 100%)" }}>
+    <div className="fixed inset-0 -z-10 overflow-hidden" style={{ background: "linear-gradient(180deg, #28478a 0%, #5474b5 35%, #a7b8db 65%, #fef3c7 100%)" }}>
       <svg viewBox="0 0 800 400" preserveAspectRatio="xMidYMax slice" className="absolute bottom-0 left-0 w-full h-full opacity-90">
         {/* Sol/luna */}
         <circle cx="670" cy="70" r="38" fill="#FDE68A" opacity="0.9" />
         {/* Colinas traseras */}
         <path d="M0,260 Q150,210 300,250 T600,240 T800,260 L800,400 L0,400 Z" fill="#5b21b6" opacity="0.55" />
         {/* Horizonte de castillos chicos, a lo lejos */}
-        <Castillito x={30} y={195} escala={0.75} color="#6d28d9" opacity={0.5} />
-        <Castillito x={520} y={200} escala={0.6} color="#6d28d9" opacity={0.45} />
-        <Castillito x={640} y={190} escala={0.8} color="#6d28d9" opacity={0.5} />
+        <Castillito x={30} y={195} escala={0.75} color="#223b74" opacity={0.5} />
+        <Castillito x={520} y={200} escala={0.6} color="#223b74" opacity={0.45} />
+        <Castillito x={640} y={190} escala={0.8} color="#223b74" opacity={0.5} />
         {/* Colinas delanteras */}
-        <path d="M0,300 Q200,250 400,290 T800,290 L800,400 L0,400 Z" fill="#4c1d95" opacity="0.75" />
+        <path d="M0,300 Q200,250 400,290 T800,290 L800,400 L0,400 Z" fill="#223b74" opacity="0.75" />
         {/* Castillo central, principal */}
         <g transform="translate(300,190)">
           <rect x="0" y="60" width="200" height="110" fill="#3730a3" />
           <rect x="-20" y="30" width="45" height="140" fill="#312e81" />
           <rect x="175" y="30" width="45" height="140" fill="#312e81" />
-          <polygon points="2.5,30 2.5,0 25,15" fill="#7c3aed" />
-          <polygon points="197.5,30 197.5,0 175,15" fill="#7c3aed" />
+          <polygon points="2.5,30 2.5,0 25,15" fill="#28478a" />
+          <polygon points="197.5,30 197.5,0 175,15" fill="#28478a" />
           <rect x="85" y="100" width="30" height="70" fill="#1e1b4b" rx="15" />
-          <rect x="20" y="80" width="20" height="25" fill="#a78bfa" opacity="0.8" />
-          <rect x="160" y="80" width="20" height="25" fill="#a78bfa" opacity="0.8" />
+          <rect x="20" y="80" width="20" height="25" fill="#5474b5" opacity="0.8" />
+          <rect x="160" y="80" width="20" height="25" fill="#5474b5" opacity="0.8" />
           {[0, 40, 80, 120, 160, 200].map((x) => (
             <rect key={x} x={x - 8} y="52" width="16" height="12" fill="#3730a3" />
           ))}
@@ -153,12 +153,12 @@ function FondoCastillo() {
         <Castillito x={630} y={235} escala={1} color="#5b21b6" />
         {/* Torres solitarias pequeñas */}
         <g transform="translate(90,240)">
-          <rect x="0" y="20" width="34" height="70" fill="#6d28d9" />
-          <polygon points="-4,20 38,20 17,0" fill="#a78bfa" />
+          <rect x="0" y="20" width="34" height="70" fill="#223b74" />
+          <polygon points="-4,20 38,20 17,0" fill="#5474b5" />
         </g>
         <g transform="translate(660,250)">
-          <rect x="0" y="20" width="30" height="60" fill="#6d28d9" />
-          <polygon points="-4,20 34,20 15,0" fill="#a78bfa" />
+          <rect x="0" y="20" width="30" height="60" fill="#223b74" />
+          <polygon points="-4,20 34,20 15,0" fill="#5474b5" />
         </g>
 
       </svg>
@@ -271,22 +271,22 @@ function TomarEvaluacion({ evaluacion, estudianteId, onCerrar }) {
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4 overflow-y-auto" style={{ background: tema.fondo }}>
       <div className="w-full max-w-lg my-auto" style={{ fontFamily: "'Poppins', -apple-system, sans-serif" }}>
         {cargando ? (
-          <div className="rounded-3xl p-8 text-center text-white" style={{ background: "rgba(30,27,75,0.75)" }}>Cargando…</div>
+          <div className="rounded-3xl p-8 text-center text-white" style={{ background: "rgba(23,38,77,0.75)" }}>Cargando…</div>
         ) : errorInicio ? (
-          <div className="rounded-3xl p-6 text-center" style={{ background: "rgba(30,27,75,0.75)", border: "1px solid rgba(139,92,246,0.3)" }}>
+          <div className="rounded-3xl p-6 text-center" style={{ background: "rgba(23,38,77,0.75)", border: "1px solid rgba(47,85,164,0.3)" }}>
             <p className="text-sm text-rose-300 mb-4">{errorInicio}</p>
-            <button onClick={onCerrar} className="w-full py-3 rounded-xl font-bold text-white" style={{ background: "linear-gradient(to right, #7c3aed, #db2777)" }}>Cerrar</button>
+            <button onClick={onCerrar} className="w-full py-3 rounded-xl font-bold text-white" style={{ background: "linear-gradient(to right, #2F55A4, #17264D)" }}>Cerrar</button>
           </div>
         ) : enviado ? (
-          <div className="rounded-3xl p-8 text-center" style={{ background: "rgba(30,27,75,0.75)", border: "1px solid rgba(139,92,246,0.3)" }}>
+          <div className="rounded-3xl p-8 text-center" style={{ background: "rgba(23,38,77,0.75)", border: "1px solid rgba(47,85,164,0.3)" }}>
             <div className="text-5xl mb-3">✅</div>
             <div className="text-2xl font-extrabold text-white mb-2">¡Entregado!</div>
             <p className="text-sm text-slate-300 mb-6">Tu docente va a revisar y publicar tu nota pronto.</p>
-            <button onClick={onCerrar} className="w-full py-3 rounded-xl font-bold text-white" style={{ background: "linear-gradient(to right, #7c3aed, #db2777)" }}>Cerrar</button>
+            <button onClick={onCerrar} className="w-full py-3 rounded-xl font-bold text-white" style={{ background: "linear-gradient(to right, #2F55A4, #17264D)" }}>Cerrar</button>
           </div>
         ) : !empezado ? (
-          <div className="rounded-3xl p-7 text-center" style={{ background: "rgba(30,27,75,0.75)", border: "1px solid rgba(139,92,246,0.3)" }}>
-            <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-lg text-white mb-4" style={{ background: "#7c3aed" }}>Evaluación</span>
+          <div className="rounded-3xl p-7 text-center" style={{ background: "rgba(23,38,77,0.75)", border: "1px solid rgba(47,85,164,0.3)" }}>
+            <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-lg text-white mb-4" style={{ background: "#28478a" }}>Evaluación</span>
             <h1 className="text-2xl font-extrabold mb-3" style={{ background: "linear-gradient(to right, #c084fc, #f472b6, #fde047)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
               {evaluacion.titulo}
             </h1>
@@ -297,7 +297,7 @@ function TomarEvaluacion({ evaluacion, estudianteId, onCerrar }) {
               </div>
             )}
             {evaluacion.indicaciones && evaluacion.indicaciones.length > 0 && (
-              <div className="text-left mb-4 rounded-2xl p-4" style={{ background: "rgba(15,13,42,0.6)", border: "1px solid rgba(139,92,246,0.3)" }}>
+              <div className="text-left mb-4 rounded-2xl p-4" style={{ background: "rgba(15,25,50,0.6)", border: "1px solid rgba(47,85,164,0.3)" }}>
                 <div className="text-[11px] font-bold uppercase tracking-wide mb-2" style={{ color: "#d8b4fe" }}>Indicaciones</div>
                 <ul className="space-y-1.5">
                   {evaluacion.indicaciones.map((ind, i) => (
@@ -309,13 +309,13 @@ function TomarEvaluacion({ evaluacion, estudianteId, onCerrar }) {
             {evaluacion.tiempo_limite_minutos && (
               <p className="text-xs font-semibold mb-5" style={{ color: "#f472b6" }}>⏱ Tenés {evaluacion.tiempo_limite_minutos} minutos en total desde que empieces.</p>
             )}
-            <button onClick={empezar} className="w-full py-4 rounded-xl font-extrabold text-white text-lg" style={{ background: "linear-gradient(to right, #7c3aed, #db2777)" }}>¡Comenzar! 🚀</button>
+            <button onClick={empezar} className="w-full py-4 rounded-xl font-extrabold text-white text-lg" style={{ background: "linear-gradient(to right, #2F55A4, #17264D)" }}>¡Comenzar! 🚀</button>
             <button onClick={onCerrar} className="w-full text-xs text-slate-400 mt-3">Cancelar (no se guarda nada)</button>
           </div>
         ) : (
           <div>
-            <div className="flex justify-between items-center mb-4 rounded-2xl px-5 py-3" style={{ background: "rgba(30,27,75,0.6)", border: "1px solid rgba(139,92,246,0.3)" }}>
-              <span className="text-[11px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-lg text-white" style={{ background: "#7c3aed" }}>
+            <div className="flex justify-between items-center mb-4 rounded-2xl px-5 py-3" style={{ background: "rgba(23,38,77,0.6)", border: "1px solid rgba(47,85,164,0.3)" }}>
+              <span className="text-[11px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-lg text-white" style={{ background: "#28478a" }}>
                 Pregunta {indice + 1}/{preguntas.length}
               </span>
               {segundosRestantes !== null && (
@@ -323,15 +323,15 @@ function TomarEvaluacion({ evaluacion, estudianteId, onCerrar }) {
               )}
             </div>
 
-            <div className="rounded-3xl p-7 mb-5 text-center min-h-[110px] flex items-center justify-center" style={{ background: "rgba(30,27,75,0.85)", border: "1px solid rgba(139,92,246,0.4)" }}>
+            <div className="rounded-3xl p-7 mb-5 text-center min-h-[110px] flex items-center justify-center" style={{ background: "rgba(23,38,77,0.85)", border: "1px solid rgba(47,85,164,0.4)" }}>
               <span className="text-white text-base font-bold whitespace-pre-line">{preguntaActual.enunciado}</span>
             </div>
 
             {preguntaActual.tipo === "respuesta_corta" ? (
               <div>
                 <textarea value={respuestaCortaTemp} onChange={(e) => setRespuestaCortaTemp(e.target.value)} rows={4} placeholder="Escribí tu respuesta…"
-                  className="w-full text-sm rounded-2xl px-4 py-3 mb-3 outline-none text-white" style={{ background: "rgba(15,13,42,0.9)", border: "1px solid #7c3aed" }} />
-                <button onClick={siguiente} className="w-full py-3.5 rounded-xl font-bold text-white" style={{ background: "linear-gradient(to right, #7c3aed, #db2777)" }}>
+                  className="w-full text-sm rounded-2xl px-4 py-3 mb-3 outline-none text-white" style={{ background: "rgba(15,25,50,0.9)", border: "1px solid #28478a" }} />
+                <button onClick={siguiente} className="w-full py-3.5 rounded-xl font-bold text-white" style={{ background: "linear-gradient(to right, #2F55A4, #17264D)" }}>
                   {esUltima ? "Finalizar evaluación" : "Siguiente →"}
                 </button>
               </div>
@@ -373,7 +373,7 @@ function TarjetaEvaluacionEstudiante({ evaluacion, estudianteId }) {
   const publicado = intentos.filter((i) => i.visible_para_estudiante).sort((a, b) => b.numero_intento - a.numero_intento)[0];
   const hayPendiente = intentos.some((i) => i.estado !== "en_progreso" && !i.visible_para_estudiante);
 
-  const colorBorde = publicado ? "#22C55E" : hayPendiente ? "#F59E0B" : "#8B5CF6";
+  const colorBorde = publicado ? "#22C55E" : hayPendiente ? "#F59E0B" : "#2F55A4";
 
   return (
     <div className="bg-white rounded-xl p-3.5 shadow-sm" style={{ borderLeft: `4px solid ${colorBorde}` }}>
@@ -1171,8 +1171,8 @@ function MenuCodice({ activo, onCambiar, monedas, gradoId, onCerrarSesion }) {
   };
 
   return (
-    <div className="rounded-2xl mb-4" style={{ background: "linear-gradient(180deg, #1e1b30 0%, #14101f 100%)", border: "2px solid #8B5CF6" }}>
-      <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-t-2xl" style={{ background: "linear-gradient(180deg, #2d2450 0%, #1e1b30 100%)", borderBottom: "2px solid #7c3aed55" }}>
+    <div className="rounded-2xl mb-4" style={{ background: "linear-gradient(180deg, #0f1932 0%, #0a1226 100%)", border: "2px solid #2F55A4" }}>
+      <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-t-2xl" style={{ background: "linear-gradient(180deg, #1c2f5e 0%, #0f1932 100%)", borderBottom: "2px solid #28478a55" }}>
         <button onClick={() => elegir("inicio")} className="flex items-center gap-2">
           <span className="text-xl">🧭</span>
           <span className="text-violet-200 text-sm font-bold tracking-[0.2em]" style={{ fontFamily: "Georgia, serif" }}>CÓDICE</span>
@@ -1187,7 +1187,7 @@ function MenuCodice({ activo, onCambiar, monedas, gradoId, onCerrarSesion }) {
       </div>
 
       {ultimoAnuncio && (
-        <button onClick={() => elegir("mensajes")} className="w-full text-left px-3 py-2.5" style={{ background: "rgba(139,92,246,0.15)", borderBottom: "1px solid rgba(139,92,246,0.15)" }}>
+        <button onClick={() => elegir("mensajes")} className="w-full text-left px-3 py-2.5" style={{ background: "rgba(47,85,164,0.15)", borderBottom: "1px solid rgba(47,85,164,0.15)" }}>
           <div className="flex items-center gap-1.5 mb-0.5">
             <span className="text-xs">{ultimoAnuncio.fijado ? "📌" : "✉️"}</span>
             <span className="text-[10px] font-bold text-violet-200 uppercase tracking-wide">Último mensaje</span>
@@ -1199,7 +1199,7 @@ function MenuCodice({ activo, onCambiar, monedas, gradoId, onCerrarSesion }) {
 
       {activo !== "inicio" && (
         <div className="px-3 py-2">
-          <button onClick={() => elegir("inicio")} className="text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5 w-fit" style={{ background: "rgba(139,92,246,0.25)", color: "#EDE9FE" }}>
+          <button onClick={() => elegir("inicio")} className="text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5 w-fit" style={{ background: "rgba(47,85,164,0.25)", color: "#E8EEF8" }}>
             ← Volver a Inicio
           </button>
         </div>
@@ -1435,7 +1435,7 @@ function LogrosEstudiante({ estudianteId }) {
         {catalogo.map((l) => {
           const tiene = idsDesbloqueados.has(l.id);
           return (
-            <div key={l.id} className="rounded-xl p-2 text-center" style={{ background: tiene ? "#F5F3FF" : "#F1F5F9", border: `1.5px solid ${tiene ? "#8B5CF6" : "#E2E8F0"}` }}>
+            <div key={l.id} className="rounded-xl p-2 text-center" style={{ background: tiene ? "#E8EEF8" : "#F1F5F9", border: `1.5px solid ${tiene ? "#2F55A4" : "#E2E8F0"}` }}>
               <div className="text-2xl" style={{ filter: tiene ? "none" : "grayscale(1)", opacity: tiene ? 1 : 0.35 }}>{l.emoji}</div>
               <div className="text-[9px] font-semibold text-slate-700 truncate mt-0.5">{tiene ? l.nombre : "???"}</div>
             </div>
@@ -1560,7 +1560,7 @@ function CosmeticosEstudiante({ estudianteId, monedas, onMonedasActualizadas }) 
 }
 
 const CATEGORIAS_BIBLIOTECA = {
-  enlace: { label: "Enlace", emoji: "🔗", color: "#8B5CF6" },
+  enlace: { label: "Enlace", emoji: "🔗", color: "#2F55A4" },
   documento: { label: "Documento", emoji: "📄", color: "#3B82F6" },
   video: { label: "Video", emoji: "🎬", color: "#EF4444" },
   libro: { label: "Libro", emoji: "📖", color: "#F59E0B" },
@@ -1616,7 +1616,7 @@ function BibliotecaEstudiante({ gradoId }) {
 const CATEGORIA_INFO_ESTUDIANTE = {
   academico: { label: "Académico", color: "#3B82F6", emoji: "📘" },
   convivencial: { label: "Convivencial", color: "#F59E0B", emoji: "🤝" },
-  general: { label: "General", color: "#8B5CF6", emoji: "⚡" },
+  general: { label: "General", color: "#2F55A4", emoji: "⚡" },
   respeto: { label: "Respeto", color: "#22C55E", emoji: "🌱" },
   responsabilidad: { label: "Responsabilidad", color: "#22C55E", emoji: "✅" },
   confiabilidad: { label: "Confiabilidad", color: "#22C55E", emoji: "🤲" },
@@ -1739,7 +1739,7 @@ function PreguntadosEstudiante({ estudianteId }) {
       {/* La ruleta */}
       <div className="relative mx-auto mb-4" style={{ width: 220, height: 220 }}>
         <div className="absolute left-1/2 -translate-x-1/2 z-10" style={{ top: -6 }}>
-          <div style={{ width: 0, height: 0, borderLeft: "10px solid transparent", borderRight: "10px solid transparent", borderTop: "16px solid #1e1b30" }} />
+          <div style={{ width: 0, height: 0, borderLeft: "10px solid transparent", borderRight: "10px solid transparent", borderTop: "16px solid #0f1932" }} />
         </div>
         <svg viewBox="0 0 200 200" width={220} height={220} style={{ transition: girando ? "transform 3.1s cubic-bezier(0.17, 0.67, 0.12, 0.99)" : "none", transform: `rotate(${rotacion}deg)` }}>
           {categorias.map((c, i) => {
@@ -1752,12 +1752,12 @@ function PreguntadosEstudiante({ estudianteId }) {
             const tx = 100 + 62 * Math.cos(amitad), ty = 100 + 62 * Math.sin(amitad);
             return (
               <g key={c.id}>
-                <path d={`M100,100 L${x0},${y0} A95,95 0 ${grande} 1 ${x1},${y1} Z`} fill={c.color} stroke="#1e1b30" strokeWidth="1.5" />
+                <path d={`M100,100 L${x0},${y0} A95,95 0 ${grande} 1 ${x1},${y1} Z`} fill={c.color} stroke="#0f1932" strokeWidth="1.5" />
                 <text x={tx} y={ty} fontSize="16" textAnchor="middle" dominantBaseline="middle">{c.emoji}</text>
               </g>
             );
           })}
-          <circle cx="100" cy="100" r="16" fill="#1e1b30" />
+          <circle cx="100" cy="100" r="16" fill="#0f1932" />
         </svg>
       </div>
 
@@ -1945,7 +1945,7 @@ function PortalEstudiante() {
       <div>
         {nuevosLogros.length > 0 && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }} onClick={() => setNuevosLogros((prev) => prev.slice(1))}>
-            <div onClick={(e) => e.stopPropagation()} className="rounded-3xl p-6 text-center max-w-xs" style={{ background: "linear-gradient(160deg, #2d2450, #1e1b30)", border: "2px solid #F59E0B" }}>
+            <div onClick={(e) => e.stopPropagation()} className="rounded-3xl p-6 text-center max-w-xs" style={{ background: "linear-gradient(160deg, #1c2f5e, #0f1932)", border: "2px solid #F59E0B" }}>
               <div className="text-[11px] font-bold text-amber-300 uppercase tracking-widest mb-2">¡Nuevo logro desbloqueado!</div>
               <div className="text-6xl mb-2">{nuevosLogros[0].emoji}</div>
               <div className="text-lg font-bold text-white">{nuevosLogros[0].nombre}</div>
@@ -1972,7 +1972,7 @@ function PortalEstudiante() {
             <>
               <div className="flex items-center gap-3 mb-4 pb-4 border-b border-slate-100">
                 <div className="flex items-center gap-2 shrink-0">
-                  <div className="shrink-0 flex items-center justify-center rounded-full overflow-hidden" style={{ width: 56, height: 56, border: equipados.marco ? `4px solid ${equipados.marco.valor}` : "4px solid transparent", background: "#F5F3FF" }}>
+                  <div className="shrink-0 flex items-center justify-center rounded-full overflow-hidden" style={{ width: 56, height: 56, border: equipados.marco ? `4px solid ${equipados.marco.valor}` : "4px solid transparent", background: "#E8EEF8" }}>
                     {estudianteInfo?.foto_url ? (
                       <img src={estudianteInfo.foto_url} alt={datos.nombre} className="w-full h-full object-cover" />
                     ) : (
@@ -2328,7 +2328,7 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
   };
 
   return (
-    <div className="md:sticky md:top-0 md:z-20" style={{ background: "linear-gradient(180deg, #1e1b30 0%, #14101f 100%)", borderBottom: "2px solid #8B5CF6" }}>
+    <div className="md:sticky md:top-0 md:z-20" style={{ background: "linear-gradient(180deg, #0f1932 0%, #0a1226 100%)", borderBottom: "2px solid #2F55A4" }}>
       {/* Fila superior: logo, buscador, accesos rápidos */}
       <div className="flex items-center justify-between gap-3 px-4 py-3 flex-wrap">
         <button onClick={() => elegir("inicio")} className="flex items-center gap-2 shrink-0">
@@ -2337,7 +2337,7 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
           ) : (
             <span className="text-xl">🧭</span>
           )}
-          <span className="text-violet-200 text-base font-bold tracking-[0.15em]" style={{ fontFamily: "Georgia, serif", textShadow: "0 0 8px #a78bfa, 0 0 16px #7c3aed" }}>CÓDICE</span>
+          <span className="text-violet-200 text-base font-bold tracking-[0.15em]" style={{ fontFamily: "Georgia, serif", textShadow: "0 0 8px #5474b5, 0 0 16px #28478a" }}>CÓDICE</span>
         </button>
 
         <div className="flex-1 min-w-[160px] max-w-md order-3 md:order-none">
@@ -2363,7 +2363,7 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
           volver, visible en cualquier otra pantalla. */}
       {activo !== "inicio" && (
         <div className="px-3 pb-2">
-          <button onClick={() => elegir("inicio")} className="text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5 w-fit" style={{ background: "rgba(139,92,246,0.25)", color: "#EDE9FE" }}>
+          <button onClick={() => elegir("inicio")} className="text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5 w-fit" style={{ background: "rgba(47,85,164,0.25)", color: "#E8EEF8" }}>
             ← Volver a Inicio
           </button>
         </div>
@@ -2507,28 +2507,28 @@ function Panel({ session }) {
           <>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 mb-6">
               {[
-                { key: "ruleta", label: "Ruleta", Icono: Star, fondo: "#EDE9FE", color: "#6D28D9" },
+                { key: "ruleta", label: "Ruleta", Icono: Star, fondo: "#E8EEF8", color: "#223b74" },
                 { key: "ruletamonedas", label: "Ruleta de Monedas", Icono: Gift, fondo: "#FEF3C7", color: "#B45309" },
                 { key: "accionesmasivas", label: "Acciones Masivas", Icono: Settings, fondo: "#DBEAFE", color: "#1D4ED8" },
                 { key: "banco", label: "Banco", Icono: Package, fondo: "#DCFCE7", color: "#15803D" },
-                { key: "album", label: "Álbum", Icono: Image, fondo: "#FCE7F3", color: "#BE185D" },
+                { key: "album", label: "Álbum", Icono: Image, fondo: "#f1e7d5", color: "#BE185D" },
                 { key: "anuncios", label: "Anuncios", Icono: FileText, fondo: "#FFEDD5", color: "#C2410C" },
                 { key: "logros", label: "Logros", Icono: Award, fondo: "#E0E7FF", color: "#4338CA" },
                 { key: "salonhonor", label: "Salón de Honor", Icono: Trophy, fondo: "#CFFAFE", color: "#0E7490" },
-                { key: "diplomas", label: "Diplomas", Icono: Award, fondo: "#F3E8FF", color: "#7E22CE" },
+                { key: "diplomas", label: "Diplomas", Icono: Award, fondo: "#E8EEF8", color: "#7E22CE" },
                 { key: "gamext", label: "Desafíos / Misiones / Cosméticos", Icono: Puzzle, fondo: "#F1F5F9", color: "#475569" },
                 { key: "consignas", label: "Consignas del Códice", Icono: BookOpen, fondo: "#DCFCE7", color: "#15803D" },
                 { key: "trivia", label: "Preguntados", Icono: HelpCircle, fondo: "#DBEAFE", color: "#1D4ED8" },
-                { key: "bancopreguntas", label: "Banco de Preguntas", Icono: Archive, fondo: "#FCE7F3", color: "#BE185D" },
+                { key: "bancopreguntas", label: "Banco de Preguntas", Icono: Archive, fondo: "#f1e7d5", color: "#BE185D" },
                 { key: "temporizador", label: "Temporizador", Icono: Clock, fondo: "#FEF3C7", color: "#B45309" },
-                { key: "dado", label: "Dado", Icono: Package, fondo: "#EDE9FE", color: "#6D28D9" },
+                { key: "dado", label: "Dado", Icono: Package, fondo: "#E8EEF8", color: "#223b74" },
                 { key: "cronometro", label: "Cronómetro", Icono: Clock, fondo: "#DBEAFE", color: "#1D4ED8" },
                 { key: "semaforo", label: "Semáforo", Icono: Palette, fondo: "#DCFCE7", color: "#15803D" },
-                { key: "sorteoorden", label: "Sorteo de Orden / Parejas", Icono: Users, fondo: "#FCE7F3", color: "#BE185D" },
+                { key: "sorteoorden", label: "Sorteo de Orden / Parejas", Icono: Users, fondo: "#f1e7d5", color: "#BE185D" },
                 { key: "grupos", label: "Generador de Grupos", Icono: GraduationCap, fondo: "#FFEDD5", color: "#C2410C" },
                 { key: "marcador", label: "Marcador de Puntos", Icono: Award, fondo: "#E0E7FF", color: "#4338CA" },
                 { key: "selectorestudiante", label: "Selector de Estudiante", Icono: Star, fondo: "#CFFAFE", color: "#0E7490" },
-                { key: "bingo", label: "Bingo de Repaso", Icono: Puzzle, fondo: "#F3E8FF", color: "#7E22CE" },
+                { key: "bingo", label: "Bingo de Repaso", Icono: Puzzle, fondo: "#E8EEF8", color: "#7E22CE" },
                 { key: "formasexamen", label: "Formas de Examen (A/B/C/D)", Icono: FileText, fondo: "#FEE2E2", color: "#B91C1C" },
               ].map((op) => (
                 <button key={op.key} onClick={() => setSubTabHerramientas(op.key)}
