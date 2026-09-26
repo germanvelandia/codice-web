@@ -235,7 +235,7 @@ export function AsistenciaDireccionCurso({ gradoId, institucion }) {
               {estudiantes.map((e) => {
                 const reg = registrosDia[e.id];
                 return (
-                  <div key={e.id} className="flex items-center justify-between bg-white rounded-xl border border-slate-100 px-3 py-2">
+                  <div key={e.id} className="flex items-center justify-between bg-white rounded-xl border border-slate-200 px-3 py-2">
                     <span className="text-sm font-medium text-slate-700">{e.nombre}</span>
                     <div className="flex gap-1.5">
                       {CODIGOS.map((c) => (
@@ -263,7 +263,7 @@ export function AsistenciaDireccionCurso({ gradoId, institucion }) {
           {cargandoReporte ? (
             <div className="text-sm text-slate-400">Cargando…</div>
           ) : (
-            <div className="overflow-x-auto bg-white rounded-2xl shadow-sm border border-slate-100">
+            <div className="overflow-x-auto bg-white rounded-2xl shadow-sm border border-slate-200">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-slate-50">
@@ -279,7 +279,7 @@ export function AsistenciaDireccionCurso({ gradoId, institucion }) {
                   {totales.map((t) => {
                     const pct = t.total > 0 ? Math.round((t.P / t.total) * 100) : 0;
                     return (
-                      <tr key={t.estudianteId} className="border-t border-slate-100">
+                      <tr key={t.estudianteId} className="border-t border-slate-200">
                         <td className="px-3 py-2 font-medium text-slate-700">{t.nombre}</td>
                         <td className="text-center px-3 py-2">{t.P}</td>
                         <td className="text-center px-3 py-2">{t.R}</td>
@@ -297,7 +297,7 @@ export function AsistenciaDireccionCurso({ gradoId, institucion }) {
       )}
 
       {vista === "mover" && (
-        <div className="bg-white rounded-2xl border border-slate-100 p-4">
+        <div className="bg-white rounded-2xl border border-slate-200 p-4">
           <p className="text-xs text-slate-500 mb-3">
             Mueve la asistencia GENERAL (sin materia) de un rango de fechas hacia una materia puntual — por ejemplo, si marcaste asistencia
             general un día pero en realidad correspondía a una clase concreta. Los días que ya tengan un registro propio en esa materia se saltan solos, no se pisan.
@@ -348,7 +348,7 @@ export function AsistenciaDireccionCurso({ gradoId, institucion }) {
           ) : registrosDetalle.length === 0 ? (
             <p className="text-sm text-slate-400 text-center py-6">No hay registros de asistencia en ese rango.</p>
           ) : (
-            <div className="overflow-x-auto bg-white rounded-2xl shadow-sm border border-slate-100">
+            <div className="overflow-x-auto bg-white rounded-2xl shadow-sm border border-slate-200">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-slate-50">
@@ -361,7 +361,7 @@ export function AsistenciaDireccionCurso({ gradoId, institucion }) {
                 </thead>
                 <tbody>
                   {registrosDetalle.map((r) => (
-                    <tr key={r.id} className={`border-t border-slate-100 ${!r.materia_id ? "bg-amber-50" : ""}`}>
+                    <tr key={r.id} className={`border-t border-slate-200 ${!r.materia_id ? "bg-amber-50" : ""}`}>
                       <td className="px-3 py-2 font-medium text-slate-700">{r.estudianteNombre}</td>
                       <td className="text-center px-3 py-2">{r.fecha}</td>
                       <td className="text-center px-3 py-2 font-semibold">{r.codigo}</td>
