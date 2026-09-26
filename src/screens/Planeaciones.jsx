@@ -1114,7 +1114,7 @@ function tablaImpresion(titulo, columnas, filas, opts = {}) {
       <div style={{ fontWeight: 700, fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, color: opts.accent || "#1e293b", marginBottom: 3 }}>{titulo}</div>
       <table style={{ width: "100%", fontSize: 10.5, borderCollapse: "collapse" }}>
         <thead>
-          <tr style={{ background: opts.bg || "#F5F3FF" }}>
+          <tr style={{ background: opts.bg || "#E8EEF8" }}>
             {columnas.map((c) => <th key={c.clave} style={{ textAlign: "left", padding: "3px 6px", fontWeight: 700 }}>{c.titulo}</th>)}
           </tr>
         </thead>
@@ -1152,7 +1152,7 @@ function cuerpoUnidadImpresion({ unidad, materiaNombre, gradoId, clases, tareas,
 
       {bloqueImpresion("Finalidad, propósitos u objetivos", unidad.objetivo)}
       {bloqueImpresion("Contenidos", unidad.contenido)}
-      {bloqueImpresion("Problema, caso o proyecto", unidad.problema_proyecto, { bg: "#F5F3FF", accent: "#7C3AED" })}
+      {bloqueImpresion("Problema, caso o proyecto", unidad.problema_proyecto, { bg: "#E8EEF8", accent: "#28478a" })}
       {bloqueImpresion("Orientaciones generales para la evaluación", unidad.orientaciones_evaluacion, { bg: "#EFF6FF", accent: "#2563EB" })}
 
       {dba.length > 0 && bloqueImpresion("DBA vinculados", dba.map((d) => `${d.codigo ? d.codigo + " — " : ""}${d.descripcion}`).join("\n"), { bg: "#EFF6FF", accent: "#2563EB" })}
@@ -1160,13 +1160,13 @@ function cuerpoUnidadImpresion({ unidad, materiaNombre, gradoId, clases, tareas,
 
       {(unidad.caso_problema_integrador || unidad.dba || (unidad.competencias_ciudadanas || []).length > 0 || (unidad.contenidos_curriculares || []).length > 0) && (
         <div className="print-avoid-break" style={{ marginBottom: 12 }}>
-          <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5, borderBottom: "1px solid #8B5CF6", paddingBottom: 2 }}>
+          <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5, borderBottom: "1px solid #2F55A4", paddingBottom: 2 }}>
             Módulo I — Alineación curricular
           </div>
           {bloqueImpresion("Institución / Asignatura", unidad.institucion_asignatura)}
           {bloqueImpresion("Clase N°", unidad.clase_numero)}
           {bloqueImpresion("Duración", unidad.duracion_minutos ? `${unidad.duracion_minutos} minutos` : null)}
-          {bloqueImpresion("Caso / Problema integrador", unidad.caso_problema_integrador, { bg: "#F5F3FF", accent: "#7C3AED" })}
+          {bloqueImpresion("Caso / Problema integrador", unidad.caso_problema_integrador, { bg: "#E8EEF8", accent: "#28478a" })}
           {bloqueImpresion("Derecho Básico de Aprendizaje (DBA)", unidad.dba)}
           {(unidad.competencias_ciudadanas || []).length > 0 && bloqueImpresion("Competencias Ciudadanas", unidad.competencias_ciudadanas.join(" · "))}
           {bloqueImpresion("Desempeños / Indicadores", [
@@ -1180,13 +1180,13 @@ function cuerpoUnidadImpresion({ unidad, materiaNombre, gradoId, clases, tareas,
 
       {(unidad.nombre_proyecto || unidad.narrativa_sesion || (unidad.reglas_generales || []).length > 0 || (unidad.misiones_retos || []).length > 0) && (
         <div className="print-avoid-break" style={{ marginBottom: 12 }}>
-          <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5, borderBottom: "1px solid #8B5CF6", paddingBottom: 2 }}>
+          <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5, borderBottom: "1px solid #2F55A4", paddingBottom: 2 }}>
             Módulo II — Diseño gamificado y narrativa
           </div>
           {bloqueImpresion("Nombre del proyecto", unidad.nombre_proyecto)}
           {bloqueImpresion("Perfil de jugadores", unidad.perfil_jugadores)}
           {bloqueImpresion("Nivel de progresión", unidad.nivel_progresion ? `Nivel ${unidad.nivel_progresion} de 5` : null)}
-          {bloqueImpresion("Narrativa de la sesión", unidad.narrativa_sesion, { bg: "#F5F3FF", accent: "#7C3AED" })}
+          {bloqueImpresion("Narrativa de la sesión", unidad.narrativa_sesion, { bg: "#E8EEF8", accent: "#28478a" })}
           {bloqueImpresion("Tipo de escenario", unidad.tipo_escenario === "real" ? "Real" : unidad.tipo_escenario === "ficcion" ? "Ficción" : unidad.tipo_escenario ? "Real / Ficción" : null)}
           {(unidad.reglas_generales || []).length > 0 && bloqueImpresion("Reglas generales de juego", unidad.reglas_generales.map((r, i) => `${i + 1}. ${r}`).join("\n"))}
           {tablaImpresion("Misiones y retos", [{ clave: "nombre", titulo: "Misión" }, { clave: "descripcion", titulo: "Descripción" }], unidad.misiones_retos)}
@@ -1286,7 +1286,7 @@ function PlaneacionPrintView({ unidad, institucion, materiaNombre, gradoId, onCe
 
   const contenido = (
     <div className="print-only" style={{ maxWidth: "180mm", margin: "0 auto", padding: "0 0 14mm 0", fontFamily: "Georgia, 'Times New Roman', serif", color: "#1e293b" }}>
-      <div className="print-avoid-break" style={{ textAlign: "center", marginBottom: 14, borderBottom: "2px solid #8B5CF6", paddingBottom: 8 }}>
+      <div className="print-avoid-break" style={{ textAlign: "center", marginBottom: 14, borderBottom: "2px solid #2F55A4", paddingBottom: 8 }}>
         {institucion?.logo_url && <img src={institucion.logo_url} alt="Logo" style={{ maxHeight: 56, marginBottom: 6, display: "block", marginLeft: "auto", marginRight: "auto" }} />}
         <div style={{ fontSize: 17, fontWeight: 700 }}>{institucion?.nombre}</div>
         <div style={{ fontSize: 13, marginTop: 6, fontStyle: "italic" }}>Planeación de Clase</div>
@@ -1334,10 +1334,10 @@ function ImprimirTodasPlaneacionesModal({ unidades, institucion, materiaNombre, 
   const contenido = (
     <div className="print-only" style={{ maxWidth: "180mm", margin: "0 auto", fontFamily: "Georgia, 'Times New Roman', serif", color: "#1e293b" }}>
       {/* Portada institucional */}
-      <div className="print-avoid-break" style={{ minHeight: "220mm", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", pageBreakAfter: "always", border: "3px double #8B5CF6", padding: "30mm 15mm" }}>
+      <div className="print-avoid-break" style={{ minHeight: "220mm", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", pageBreakAfter: "always", border: "3px double #2F55A4", padding: "30mm 15mm" }}>
         {institucion?.logo_url && <img src={institucion.logo_url} alt="Logo" style={{ maxHeight: 90, marginBottom: 18 }} />}
-        <div style={{ fontSize: 13, letterSpacing: 2, textTransform: "uppercase", color: "#7C3AED", marginBottom: 6 }}>{institucion?.nombre || "Institución Educativa"}</div>
-        <div style={{ width: 60, height: 2, background: "#8B5CF6", margin: "10px 0 20px" }} />
+        <div style={{ fontSize: 13, letterSpacing: 2, textTransform: "uppercase", color: "#28478a", marginBottom: 6 }}>{institucion?.nombre || "Institución Educativa"}</div>
+        <div style={{ width: 60, height: 2, background: "#2F55A4", margin: "10px 0 20px" }} />
         <div style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>Documento Maestro de Planeación Didáctica</div>
         <div style={{ fontSize: 15, fontStyle: "italic", color: "#475569", marginBottom: 30 }}>Compendio de unidades — {materiaNombre}</div>
 
@@ -1356,7 +1356,7 @@ function ImprimirTodasPlaneacionesModal({ unidades, institucion, materiaNombre, 
 
       {/* Índice */}
       <div className="print-avoid-break" style={{ marginBottom: 16, pageBreakAfter: "always" }}>
-        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 10, borderBottom: "2px solid #8B5CF6", paddingBottom: 6 }}>Índice de unidades</div>
+        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 10, borderBottom: "2px solid #2F55A4", paddingBottom: 6 }}>Índice de unidades</div>
         <ol style={{ fontSize: 12.5, lineHeight: 1.9, paddingLeft: 20 }}>
           {unidades.map((u) => <li key={u.id}>{u.titulo}</li>)}
         </ol>
@@ -1365,7 +1365,7 @@ function ImprimirTodasPlaneacionesModal({ unidades, institucion, materiaNombre, 
       {/* Cada unidad */}
       {datosPorUnidad.map((d, i) => (
         <div key={d.unidad.id} className="print-avoid-break" style={{ pageBreakAfter: i === datosPorUnidad.length - 1 ? "auto" : "always" }}>
-          <div className="print-avoid-break" style={{ textAlign: "center", marginBottom: 14, borderBottom: "2px solid #8B5CF6", paddingBottom: 8 }}>
+          <div className="print-avoid-break" style={{ textAlign: "center", marginBottom: 14, borderBottom: "2px solid #2F55A4", paddingBottom: 8 }}>
             <div style={{ fontSize: 10, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1 }}>Unidad {i + 1} de {datosPorUnidad.length}</div>
             <div style={{ fontSize: 17, fontWeight: 700 }}>{d.unidad.titulo}</div>
           </div>
@@ -1485,7 +1485,7 @@ function UnidadCard({ unidad, institucion, materiaNombre, materias, gradoId, gra
             <div className="mt-1 mb-2">
               {unidad.area && (
                 <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full mb-2"
-                  style={{ background: unidad.area === "ET" ? "#EDE9FE" : unidad.area === "RE" ? "#FEF3C7" : "#DBEAFE", color: unidad.area === "ET" ? "#7C3AED" : unidad.area === "RE" ? "#B45309" : "#1D4ED8" }}>
+                  style={{ background: unidad.area === "ET" ? "#E8EEF8" : unidad.area === "RE" ? "#FEF3C7" : "#DBEAFE", color: unidad.area === "ET" ? "#28478a" : unidad.area === "RE" ? "#B45309" : "#1D4ED8" }}>
                   {unidad.area === "ET" ? "🏛️ Ética" : unidad.area === "RE" ? "✝️ Religión" : "⚜️ Integrada"}
                 </span>
               )}
@@ -1988,7 +1988,7 @@ function CalendarioClases({ materiaId, gradoId, periodo, onAbrirUnidad }) {
             return (
               <button key={i} onClick={() => { setDiaSeleccionado(fechaStr); setAgregando(false); }}
                 className="aspect-square rounded-lg p-1 flex flex-col items-center justify-start relative"
-                style={{ background: esSeleccionado ? "#EDE9FE" : esHoy ? "#F5F3FF" : "transparent", border: esHoy ? "1.5px solid #8B5CF6" : "1px solid transparent" }}>
+                style={{ background: esSeleccionado ? "#E8EEF8" : esHoy ? "#E8EEF8" : "transparent", border: esHoy ? "1.5px solid #2F55A4" : "1px solid transparent" }}>
                 <span className={`text-[11px] ${esSeleccionado ? "font-bold text-violet-700" : "text-slate-600"}`}>{d}</span>
                 {clasesDia.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-violet-500 mt-0.5" />}
               </button>
