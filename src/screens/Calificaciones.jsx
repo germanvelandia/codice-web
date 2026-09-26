@@ -69,30 +69,28 @@ function MiniAvatarCal({ estudiante, size = 22 }) {
   );
 }
 
-// Contenedor de cada paso del asistente (Materia → Grado y Curso →
-// Periodo). Cerrado, muestra un resumen tocable para volver a cambiar
-// esa elección; abierto, muestra el selector completo.
-function PasoMenu({ titulo, Icono, resumen, abierto, onAbrir, children }) {
-  if (!abierto) {
-    return (
-      <button onClick={onAbrir} className="w-full flex items-center justify-between bg-white rounded-2xl shadow-sm border border-slate-100 px-4 py-2.5 mb-2.5 hover:border-violet-200 text-left">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-[11px] font-bold shrink-0">✓</span>
-          <div className="min-w-0">
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">{titulo}</div>
-            <div className="text-sm font-bold text-slate-700 truncate">{resumen}</div>
-          </div>
-        </div>
-        <span className="text-xs font-semibold text-violet-500 shrink-0 ml-2">Cambiar ›</span>
-      </button>
-    );
-  }
+// Paso del asistente como "chip" compacto en una fila horizontal — al
+// tocarlo despliega su selector como un menú flotante debajo, sin
+// empujar el resto de la página hacia abajo.
+function PasoMenu({ titulo, Icono, resumen, abierto, onAbrir, onCerrar, ancho, children }) {
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-violet-200 p-3 mb-2.5">
-      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wide mb-2.5">
-        {Icono && <Icono size={13} />} {titulo}
-      </div>
-      {children}
+    <div className="relative shrink-0">
+      <button onClick={onAbrir} className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-left transition-all ${abierto ? "border-violet-400 bg-violet-50" : "border-slate-200 bg-white hover:border-slate-300"}`}>
+        {Icono && <Icono size={14} className="text-slate-400 shrink-0" />}
+        <div className="min-w-0">
+          <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide leading-none mb-0.5">{titulo}</div>
+          <div className="text-xs font-bold text-slate-700 truncate max-w-[170px]">{resumen}</div>
+        </div>
+        <span className="text-[9px] text-slate-400 shrink-0">{abierto ? "▲" : "▼"}</span>
+      </button>
+      {abierto && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={onCerrar} />
+          <div onClick={(e) => e.stopPropagation()} className={`absolute left-0 top-full mt-1.5 bg-white rounded-2xl shadow-lg border border-violet-200 p-3 z-30 ${ancho || "min-w-[280px]"}`}>
+            {children}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -1949,10 +1947,64 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
       <h2 className="text-xl font-bold text-white mb-1">Planilla de Notas</h2>
       <p className="text-xs text-violet-600 mb-3">Esta planilla es privada de tu cuenta — otros docentes que usen este enlace no ven ni afectan tus calificaciones.</p>
 
-      <PasoMenu titulo="Materia" Icono={BookOpen} abierto={pasoAbierto === "materia" || !materiaActualId}
-        resumen={materias.find((m) => m.id === materiaActualId)?.nombre || "—"} onAbrir={() => setPasoAbierto("materia")}>
-        <BarraMateria materias={materias} materiaActualId={materiaActualId} setMateriaActualId={setMateriaActualId} onCambio={cargarMaterias} onSeleccion={() => setPasoAbierto("grado")} sinTarjeta />
-      </PasoMenu>
+      <div className="flex flex-wrap items-start gap-2 mb-4">
+        <PasoMenu titulo="Materia" Icono={BookOpen} abierto={pasoAbierto === "materia" || !materiaActualId}
+          resumen={materias.find((m) => m.id === materiaActualId)?.nombre || "—"}
+          onAbrir={() => setPasoAbierto(pasoAbierto === "materia" ? null : "materia")} onCerrar={() => setPasoAbierto(null)} ancho="min-w-[320px]">
+          <BarraMateria materias={materias} materiaActualId={materiaActualId} setMateriaActualId={setMateriaActualId} onCambio={cargarMaterias} onSeleccion={() => setPasoAbierto("grado")} sinTarjeta />
+        </PasoMenu>
+
+        {materiaActualId && (
+          <>
+            <PasoMenu titulo="Grado y curso" Icono={GraduationCap} abierto={pasoAbierto === "grado"}
+              resumen={`Grado ${nivelYCurso(gradoId).nivel}° — Curso ${gradoId}`}
+              onAbrir={() => setPasoAbierto(pasoAbierto === "grado" ? null : "grado")} onCerrar={() => setPasoAbierto(null)}>
+              <div className="flex flex-wrap gap-1.5">
+                {(() => {
+                  const niveles = agruparPorNivel(grados);
+                  const { nivel: nivelActual } = nivelYCurso(gradoId);
+                  const cursosDelNivel = niveles.find((n) => n.nivel === nivelActual)?.cursos || [];
+                  return (
+                    <>
+                      {niveles.map((n) => (
+                        <ChipCal key={n.nivel} activo={nivelActual === n.nivel} onClick={() => { if (n.cursos[0]) setGradoId(n.cursos[0].id); }}>
+                          Grado {n.nivel}°
+                        </ChipCal>
+                      ))}
+                      <div className="w-px bg-slate-200 mx-1" />
+                      {cursosDelNivel.map((g) => (
+                        <ChipCal key={g.id} activo={gradoId === g.id} onClick={() => { setGradoId(g.id); setPasoAbierto("periodo"); }}>Curso {g.id}</ChipCal>
+                      ))}
+                    </>
+                  );
+                })()}
+              </div>
+            </PasoMenu>
+
+            <PasoMenu titulo="Periodo" Icono={Calendar} abierto={pasoAbierto === "periodo"}
+              resumen={`Periodo ${periodo}${periodo === config.periodo_actual ? " (vigente)" : ""}`}
+              onAbrir={() => setPasoAbierto(pasoAbierto === "periodo" ? null : "periodo")} onCerrar={() => setPasoAbierto(null)} ancho="min-w-[320px]">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {periodosDe(config)
+                  .filter((p) => !soloVigente || parseInt(p, 10) >= parseInt(config.periodo_actual || "1", 10))
+                  .map((p) => (
+                    <ChipCal key={p} activo={periodo === p} onClick={() => { setPeriodo(p); setPasoAbierto(null); }}>
+                      Periodo {p}{p === config.periodo_actual ? " (vigente)" : ""}
+                    </ChipCal>
+                  ))}
+                {periodo !== config.periodo_actual && (
+                  <ChipCal destacado onClick={marcarPeriodoVigente}>📌 Marcar como vigente</ChipCal>
+                )}
+                <label className="flex items-center gap-1.5 text-xs text-slate-500 shrink-0 ml-2">
+                  <input type="checkbox" checked={soloVigente} onChange={(e) => setSoloVigente(e.target.checked)} />
+                  Ocultar periodos anteriores
+                </label>
+                <ChipCal onClick={() => setComentariosAbiertos(true)}>💬 Comentarios por desempeño</ChipCal>
+              </div>
+            </PasoMenu>
+          </>
+        )}
+      </div>
 
       {!materiaActualId ? (
         <div className="text-sm text-slate-400 bg-white rounded-2xl p-6 text-center border border-dashed border-slate-200">
@@ -1968,51 +2020,6 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
           )}
 
           <PanelCategorias materiaId={materiaActualId} categorias={categorias} onCambio={cargarConfigYCategorias} />
-
-          <PasoMenu titulo="Grado y curso" Icono={GraduationCap} abierto={pasoAbierto === "grado"}
-            resumen={`Grado ${nivelYCurso(gradoId).nivel}° — Curso ${gradoId}`} onAbrir={() => setPasoAbierto("grado")}>
-            <div className="flex flex-wrap gap-1.5">
-              {(() => {
-                const niveles = agruparPorNivel(grados);
-                const { nivel: nivelActual } = nivelYCurso(gradoId);
-                const cursosDelNivel = niveles.find((n) => n.nivel === nivelActual)?.cursos || [];
-                return (
-                  <>
-                    {niveles.map((n) => (
-                      <ChipCal key={n.nivel} activo={nivelActual === n.nivel} onClick={() => { if (n.cursos[0]) setGradoId(n.cursos[0].id); }}>
-                        Grado {n.nivel}°
-                      </ChipCal>
-                    ))}
-                    <div className="w-px bg-slate-200 mx-1" />
-                    {cursosDelNivel.map((g) => (
-                      <ChipCal key={g.id} activo={gradoId === g.id} onClick={() => { setGradoId(g.id); setPasoAbierto("periodo"); }}>Curso {g.id}</ChipCal>
-                    ))}
-                  </>
-                );
-              })()}
-            </div>
-          </PasoMenu>
-
-          <PasoMenu titulo="Periodo" Icono={Calendar} abierto={pasoAbierto === "periodo"}
-            resumen={`Periodo ${periodo}${periodo === config.periodo_actual ? " (vigente)" : ""}`} onAbrir={() => setPasoAbierto("periodo")}>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {periodosDe(config)
-                .filter((p) => !soloVigente || parseInt(p, 10) >= parseInt(config.periodo_actual || "1", 10))
-                .map((p) => (
-                  <ChipCal key={p} activo={periodo === p} onClick={() => { setPeriodo(p); setPasoAbierto(null); }}>
-                    Periodo {p}{p === config.periodo_actual ? " (vigente)" : ""}
-                  </ChipCal>
-                ))}
-              {periodo !== config.periodo_actual && (
-                <ChipCal destacado onClick={marcarPeriodoVigente}>📌 Marcar como vigente</ChipCal>
-              )}
-              <label className="flex items-center gap-1.5 text-xs text-slate-500 shrink-0 ml-2">
-                <input type="checkbox" checked={soloVigente} onChange={(e) => setSoloVigente(e.target.checked)} />
-                Ocultar periodos anteriores
-              </label>
-              <ChipCal onClick={() => setComentariosAbiertos(true)}>💬 Comentarios por desempeño</ChipCal>
-            </div>
-          </PasoMenu>
 
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 mb-4">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
