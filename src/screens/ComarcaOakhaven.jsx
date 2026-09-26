@@ -283,7 +283,7 @@ function AjustarEconomiaModal({ sesion, reino, billetesDeSesion, onClose, onCamb
   );
 }
 
-const PALETA_REINOS = ["#8B5CF6", "#F59E0B", "#10B981", "#3B82F6", "#EF4444", "#EC4899", "#14B8A6", "#F97316"];
+const PALETA_REINOS = ["#2F55A4", "#F59E0B", "#10B981", "#3B82F6", "#EF4444", "#17264D", "#14B8A6", "#F97316"];
 
 const ICONOS_MATERIAL = {
   "Madera": "🪵", "Hierbas": "🌿", "Frutas": "🍎", "Animales": "🦌", "Piedra": "🪨", "Resina": "🟤", "Setas": "🍄", "Aguas": "💧",
@@ -378,7 +378,7 @@ function ReajustarProvinciasModal({ sesion, reinos, provincias, onClose, onCambi
           {reinos.map((r) => (
             <button key={r.id} onClick={() => setReinoActivoId(r.id)}
               className="text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap shrink-0"
-              style={{ background: reinoActivoId === r.id ? "#8B5CF6" : "#F1F5F9", color: reinoActivoId === r.id ? "#FFFFFF" : "#475569" }}>
+              style={{ background: reinoActivoId === r.id ? "#2F55A4" : "#F1F5F9", color: reinoActivoId === r.id ? "#FFFFFF" : "#475569" }}>
               {r.emoji} {r.nombre}
             </button>
           ))}
@@ -1301,7 +1301,7 @@ function RolesModal({ sesion, reinos, onClose }) {
           {reinos.map((reino) => (
             <button key={reino.id} onClick={() => setReinoActivoId(reino.id)}
               className="text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap shrink-0"
-              style={{ background: reinoActivoId === reino.id ? "#8B5CF6" : "#F1F5F9", color: reinoActivoId === reino.id ? "#FFFFFF" : "#475569" }}>
+              style={{ background: reinoActivoId === reino.id ? "#2F55A4" : "#F1F5F9", color: reinoActivoId === reino.id ? "#FFFFFF" : "#475569" }}>
               {reino.emoji} {reino.nombre} <span className="opacity-70">({estudiantesDe(reino).length})</span>
             </button>
           ))}
@@ -1999,7 +1999,7 @@ export function TarjetaComarcaPublica() {
   const { reino, provincias, inventario, recursos } = datos;
 
   return (
-    <div className="min-h-screen py-6 px-4" style={{ background: "linear-gradient(135deg, #2d2450 0%, #1e1b30 60%, #14101f 100%)" }}>
+    <div className="min-h-screen py-6 px-4" style={{ background: "linear-gradient(135deg, #1c2f5e 0%, #0f1932 60%, #0a1226 100%)" }}>
       <div className="max-w-sm mx-auto">
         <div className="text-center mb-4">
           <div className="text-4xl mb-1">🏰</div>
