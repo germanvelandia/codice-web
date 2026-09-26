@@ -42,7 +42,6 @@ import { VistaRubricas } from "./screens/Rubricas";
 import { VistaEntregasPorRevisar } from "./screens/EntregasPorRevisar";
 import { VistaTableroSemanal } from "./screens/TableroSemanal";
 import { VistaInicio, ContenidoLightbox } from "./screens/Inicio";
-import { NavegacionPorTarjetas, BotonVolverInicio, EnlaceTodasLasSecciones } from "./screens/InicioTarjetas";
 import { Star, Gift, Settings, Package, Image, FileText, Award, Trophy, Puzzle, BookOpen, HelpCircle, Archive, Clock, Palette, GraduationCap, Users } from "lucide-react";
 import { VistaComarcaOakhaven, TarjetaComarcaPublica, urlDeTarjeta, urlQR } from "./screens/ComarcaOakhaven";
 import { EditorTexto, TextoEnriquecido, textoPlano } from "./components/RichText";
@@ -1154,57 +1153,82 @@ const ICONO_MAPA = {
   proyectos: "🏹", ranking: "👑", recompensas: "💎", salonhonor: "🏆",
 };
 
-function MenuCodice({ activo, onCambiar, monedas, gradoId, onCerrarSesion }) {
+function SidebarTarjetasEstudiante({ activo, onCambiar, monedas, gradoId, onCerrarSesion, menuAbierto, onCerrarMenu }) {
   const [ultimoAnuncio, setUltimoAnuncio] = useState(null);
-  const [menuAbierto, setMenuAbierto] = useState(false);
-  const [submenuAbierto, setSubmenuAbierto] = useState(null);
 
   useEffect(() => {
     if (!gradoId) return;
     api.fetchAnunciosParaGrado(gradoId).then((lista) => setUltimoAnuncio(lista[0] || null));
   }, [gradoId]);
 
-  const elegir = (key) => {
-    onCambiar(key);
-    setMenuAbierto(false);
-    setSubmenuAbierto(null);
-  };
+  const elegir = (key) => { onCambiar(key); onCerrarMenu?.(); };
 
-  return (
-    <div className="rounded-2xl mb-4" style={{ background: "linear-gradient(180deg, #0f1932 0%, #0a1226 100%)", border: "2px solid #2F55A4" }}>
-      <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-t-2xl" style={{ background: "linear-gradient(180deg, #1c2f5e 0%, #0f1932 100%)", borderBottom: "2px solid #28478a55" }}>
-        <button onClick={() => elegir("inicio")} className="flex items-center gap-2">
-          <span className="text-xl">🧭</span>
-          <span className="text-violet-200 text-sm font-bold tracking-[0.2em]" style={{ fontFamily: "Georgia, serif" }}>CÓDICE</span>
-        </button>
-        {monedas !== undefined && (
-          <div className="flex items-center gap-1.5">
-            <span className="text-base">🪙</span>
-            <span className="text-sm font-bold text-amber-300">{monedas}</span>
-          </div>
+  const contenido = (
+    <div className="h-full flex flex-col" style={{ background: "linear-gradient(180deg, #17264D 0%, #0f1932 100%)" }}>
+      <div className="p-3 pb-2">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <button onClick={() => elegir("inicio")} className="flex items-center gap-2">
+            <span className="text-lg">🧭</span>
+            <span className="text-white text-sm font-bold tracking-[0.12em]" style={{ fontFamily: "Georgia, serif" }}>CÓDICE</span>
+          </button>
+          {monedas !== undefined && (
+            <div className="flex items-center gap-1">
+              <span className="text-sm">🪙</span>
+              <span className="text-xs font-bold text-amber-300">{monedas}</span>
+            </div>
+          )}
+        </div>
+        {ultimoAnuncio && (
+          <button onClick={() => elegir("mensajes")} className="w-full text-left rounded-xl px-2.5 py-2" style={{ background: "rgba(47,85,164,0.2)" }}>
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span className="text-xs">{ultimoAnuncio.fijado ? "📌" : "✉️"}</span>
+              <span className="text-[9px] font-bold text-violet-200 uppercase tracking-wide">Último mensaje</span>
+            </div>
+            <div className="text-[11px] font-semibold text-white truncate">{ultimoAnuncio.titulo}</div>
+          </button>
         )}
-        <button onClick={onCerrarSesion} className="text-violet-300 text-sm" title="Cerrar sesión">🚪</button>
       </div>
 
-      {ultimoAnuncio && (
-        <button onClick={() => elegir("mensajes")} className="w-full text-left px-3 py-2.5" style={{ background: "rgba(47,85,164,0.15)", borderBottom: "1px solid rgba(47,85,164,0.15)" }}>
-          <div className="flex items-center gap-1.5 mb-0.5">
-            <span className="text-xs">{ultimoAnuncio.fijado ? "📌" : "✉️"}</span>
-            <span className="text-[10px] font-bold text-violet-200 uppercase tracking-wide">Último mensaje</span>
-          </div>
-          <div className="text-xs font-semibold text-white truncate">{ultimoAnuncio.titulo}</div>
-          <div className="text-[11px] text-violet-300 truncate">{ultimoAnuncio.contenido}</div>
-        </button>
-      )}
+      <div className="flex-1 overflow-y-auto px-3 pb-3">
+        <TarjetaMenuLateral icono="🏠" label="Inicio" activo={activo === "inicio"} onClick={() => elegir("inicio")} fondo="#E8EEF8" />
 
-      {activo !== "inicio" && (
-        <div className="px-3 py-2">
-          <button onClick={() => elegir("inicio")} className="text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5 w-fit" style={{ background: "rgba(47,85,164,0.25)", color: "#E8EEF8" }}>
-            ← Volver a Inicio
-          </button>
-        </div>
-      )}
+        {MENU_CODICE_GRUPOS.map((grupo) => (
+          <div key={grupo.key} className="mt-3">
+            <div className="text-[9px] font-bold uppercase tracking-wide px-2.5 mb-1" style={{ color: "#829aca" }}>{grupo.icono} {grupo.label}</div>
+            {grupo.items.map((it) => (
+              <TarjetaMenuLateral key={it.key} icono={it.icono} label={it.label} activo={activo === it.key} onClick={() => elegir(it.key)} />
+            ))}
+          </div>
+        ))}
+      </div>
+
+      <div className="p-3 pt-2 border-t border-white/10">
+        <button onClick={onCerrarSesion} className="w-full text-center text-xs font-semibold text-violet-300 py-1.5" title="Cerrar sesión">🚪 Cerrar sesión</button>
+      </div>
     </div>
+  );
+
+  return (
+    <>
+      <div className="hidden md:block w-[240px] shrink-0 sticky top-0 h-screen">{contenido}</div>
+
+      <div className="md:hidden sticky top-0 z-30 flex items-center justify-between px-4 py-2.5" style={{ background: "#17264D" }}>
+        <button onClick={() => elegir("inicio")} className="flex items-center gap-2">
+          <span className="text-lg">🧭</span>
+          <span className="text-white text-sm font-bold tracking-[0.12em]">CÓDICE</span>
+        </button>
+        <div className="flex items-center gap-3">
+          {monedas !== undefined && <span className="text-xs font-bold text-amber-300">🪙 {monedas}</span>}
+          <button onClick={() => onCerrarMenu?.(true)} className="text-white text-xl">☰</button>
+        </div>
+      </div>
+      {menuAbierto && (
+        <>
+          <div className="md:hidden fixed inset-0 z-40 bg-black/40" onClick={() => onCerrarMenu?.()} />
+          <div className="md:hidden fixed left-0 top-0 bottom-0 z-50 w-[260px] shadow-xl">{contenido}</div>
+        </>
+      )}
+    </>
   );
 }
 
@@ -1885,7 +1909,7 @@ function PortalEstudiante() {
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState("");
   const [vista, setVista] = useState("inicio");
-  const [grupoAbierto, setGrupoAbierto] = useState(null);
+  const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
   const irAEstudiante = (key) => { setVista(key); };
   const [nuevosLogros, setNuevosLogros] = useState([]);
   const [equipados, setEquipados] = useState({ marco: null, titulo: null });
@@ -1942,7 +1966,7 @@ function PortalEstudiante() {
     const pctAsis = totalAsis > 0 ? Math.round((Number(datos.presentes) / totalAsis) * 100) : null;
 
     return (
-      <div>
+      <div className="min-h-screen flex" style={{ background: "#FBFBFD" }}>
         {nuevosLogros.length > 0 && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }} onClick={() => setNuevosLogros((prev) => prev.slice(1))}>
             <div onClick={(e) => e.stopPropagation()} className="rounded-3xl p-6 text-center max-w-xs" style={{ background: "linear-gradient(160deg, #1c2f5e, #0f1932)", border: "2px solid #F59E0B" }}>
@@ -1956,19 +1980,12 @@ function PortalEstudiante() {
             </div>
           </div>
         )}
-        <MenuCodice activo={vista} onCambiar={irAEstudiante} monedas={datos.monedas} gradoId={datos.grado_id} onCerrarSesion={cerrarSesion} />
+        <SidebarTarjetasEstudiante activo={vista} onCambiar={irAEstudiante} monedas={datos.monedas} gradoId={datos.grado_id} onCerrarSesion={cerrarSesion}
+          menuAbierto={menuMovilAbierto} onCerrarMenu={(abrir) => setMenuMovilAbierto(!!abrir)} />
 
+        <div className="flex-1 min-w-0 p-4 md:p-6">
         <div className="bg-white rounded-2xl shadow-lg p-6">
           {vista === "inicio" && (
-            grupoAbierto ? (
-              <>
-                <EnlaceTodasLasSecciones onCambiarGrupo={setGrupoAbierto} variante="clara" />
-                <ValorSemanaEstudiante />
-                <div className="mt-4">
-                  <NavegacionPorTarjetas grupos={MENU_CODICE_GRUPOS} onIr={irAEstudiante} grupoAbierto={grupoAbierto} onCambiarGrupo={setGrupoAbierto} />
-                </div>
-              </>
-            ) : (
             <>
               <div className="flex items-center gap-3 mb-4 pb-4 border-b border-slate-100">
                 <div className="flex items-center gap-2 shrink-0">
@@ -2036,13 +2053,7 @@ function PortalEstudiante() {
               <div className="text-xs text-slate-500 bg-slate-50 rounded-xl p-3">
                 Presentes: {datos.presentes} · Retardos: {datos.retardos} · Faltas injustificadas: {datos.faltas_injustificadas} · Faltas justificadas: {datos.faltas_justificadas}
               </div>
-
-              <div className="mt-6">
-                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">Todas las secciones</h3>
-                <NavegacionPorTarjetas grupos={MENU_CODICE_GRUPOS} onIr={irAEstudiante} grupoAbierto={null} onCambiarGrupo={setGrupoAbierto} />
-              </div>
             </>
-            )
           )}
 
           {vista === "misiones" && estudianteInfo && (
@@ -2133,6 +2144,7 @@ function PortalEstudiante() {
           )}
 
           <button onClick={() => { setDatos(null); setCodigo(""); setEstudianteInfo(null); setVista("inicio"); }} className="w-full text-xs text-violet-500 mt-4">← Consultar otro código</button>
+        </div>
         </div>
       </div>
     );
@@ -2301,9 +2313,22 @@ function FondoArcadeDocente() {
   return <div className="fixed inset-0 -z-10" style={{ background: "#1a1533" }} />;
 }
 
-function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstitucion, onSalir, onBuscarEstudiante, grados, gradoActivo, onCambiarGradoActivo, periodoActivo, onCambiarPeriodoActivo, materias, materiaActiva, onCambiarMateriaActiva, esAdmin, esAdminEfectivo, previsualizandoDocente, onCambiarPrevisualizacion }) {
-  const [menuAbierto, setMenuAbierto] = useState(false);
-  const [submenuAbierto, setSubmenuAbierto] = useState(null);
+// Tarjeta de un ítem del menú lateral — mismo lenguaje visual que las
+// tarjetas del resto de la app (círculo de color + texto), apiladas
+// verticalmente contra el fondo oscuro del menú.
+function TarjetaMenuLateral({ icono, label, activo, onClick, fondo, color }) {
+  return (
+    <button onClick={onClick}
+      className={`w-full flex items-center gap-2.5 rounded-xl px-2.5 py-2 mb-1.5 text-left transition-all ${activo ? "bg-white" : "hover:bg-white/10"}`}>
+      <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm" style={{ background: activo ? (fondo || "#E8EEF8") : "rgba(255,255,255,0.12)" }}>
+        {icono}
+      </div>
+      <span className={`text-xs font-bold leading-tight ${activo ? "text-[#17264D]" : "text-[#E8EEF8]"}`}>{label}</span>
+    </button>
+  );
+}
+
+function SidebarTarjetas({ activo, onCambiar, email, institucion, onAdmin, onInstitucion, onSalir, onBuscarEstudiante, esAdmin, esAdminEfectivo, previsualizandoDocente, onCambiarPrevisualizacion, grupos, menuAbierto, onCerrarMenu }) {
   const [nombreDocente, setNombreDocente] = useState("");
   const [editandoNombre, setEditandoNombre] = useState(false);
   const [nombreTemp, setNombreTemp] = useState("");
@@ -2322,75 +2347,95 @@ function SidebarPanel({ activo, onCambiar, email, institucion, onAdmin, onInstit
     }
   };
 
-  const elegir = (key) => {
-    onCambiar(key);
-    setMenuAbierto(false);
-  };
+  const elegir = (key) => { onCambiar(key); onCerrarMenu?.(); };
 
-  return (
-    <div className="md:sticky md:top-0 md:z-20" style={{ background: "linear-gradient(180deg, #0f1932 0%, #0a1226 100%)", borderBottom: "2px solid #2F55A4" }}>
-      {/* Fila superior: logo, buscador, accesos rápidos */}
-      <div className="flex items-center justify-between gap-3 px-4 py-3 flex-wrap">
-        <button onClick={() => elegir("inicio")} className="flex items-center gap-2 shrink-0">
+  const contenido = (
+    <div className="h-full flex flex-col" style={{ background: "linear-gradient(180deg, #17264D 0%, #0f1932 100%)" }}>
+      <div className="p-3 pb-2">
+        <button onClick={() => elegir("inicio")} className="flex items-center gap-2 mb-3 px-1">
           {institucion?.imagen_menu_url ? (
-            <img src={institucion.imagen_menu_url} alt="Logo" className="rounded-lg object-cover" style={{ width: 32, height: 32 }} />
+            <img src={institucion.imagen_menu_url} alt="Logo" className="rounded-lg object-cover" style={{ width: 28, height: 28 }} />
           ) : (
             <span className="text-xl">🧭</span>
           )}
-          <span className="text-violet-200 text-base font-bold tracking-[0.15em]" style={{ fontFamily: "Georgia, serif", textShadow: "0 0 8px #5474b5, 0 0 16px #28478a" }}>CÓDICE</span>
+          <span className="text-white text-sm font-bold tracking-[0.12em]" style={{ fontFamily: "Georgia, serif" }}>CÓDICE</span>
         </button>
 
-        <div className="flex-1 min-w-[160px] max-w-md order-3 md:order-none">
-          <BuscadorEstudiantesGlobal onSeleccionar={onBuscarEstudiante} />
-        </div>
+        <BuscadorEstudiantesGlobal onSeleccionar={(r) => { onBuscarEstudiante(r); onCerrarMenu?.(); }} />
+      </div>
 
-        <div className="flex items-center gap-3 shrink-0">
-          {esAdmin && (
-            <button onClick={() => onCambiarPrevisualizacion((v) => !v)}
-              className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${previsualizandoDocente ? "bg-amber-400 text-slate-900 border-amber-400" : "border-white/20 text-violet-200"}`}
-              title="Como administrador, podés previsualizar la app tal como la ve un docente regular, sin perder tu permiso real.">
-              {previsualizandoDocente ? "👤 Viendo como docente — Volver a admin" : "🔍 Ver como docente"}
+      <div className="flex-1 overflow-y-auto px-3 pb-3">
+        <TarjetaMenuLateral icono="🏠" label="Inicio" activo={activo === "inicio"} onClick={() => elegir("inicio")} fondo="#E8EEF8" />
+
+        {grupos.map((grupo) => (
+          <div key={grupo.key} className="mt-3">
+            <div className="text-[9px] font-bold uppercase tracking-wide px-2.5 mb-1" style={{ color: "#829aca" }}>{grupo.icono} {grupo.label}</div>
+            {grupo.items.map((it) => (
+              <TarjetaMenuLateral key={it.key} icono={it.icono} label={it.label} activo={activo === it.key} onClick={() => elegir(it.key)} />
+            ))}
+          </div>
+        ))}
+      </div>
+
+      <div className="p-3 pt-2 border-t border-white/10">
+        {esAdmin && (
+          <button onClick={() => onCambiarPrevisualizacion((v) => !v)}
+            className={`w-full text-center text-[10px] font-bold px-2.5 py-1.5 rounded-full border mb-2 ${previsualizandoDocente ? "bg-amber-400 text-slate-900 border-amber-400" : "border-white/20 text-violet-200"}`}
+            title="Como administrador, podés previsualizar la app tal como la ve un docente regular, sin perder tu permiso real.">
+            {previsualizandoDocente ? "👤 Viendo como docente" : "🔍 Ver como docente"}
+          </button>
+        )}
+        <div className="flex items-center gap-1 mb-2 px-1">
+          {editandoNombre ? (
+            <>
+              <input value={nombreTemp} onChange={(e) => setNombreTemp(e.target.value)} autoFocus
+                onKeyDown={(e) => { if (e.key === "Enter") guardarNombre(); if (e.key === "Escape") setEditandoNombre(false); }}
+                placeholder="Tu nombre" className="text-[11px] bg-transparent border-b border-violet-400 text-violet-100 outline-none px-1 flex-1 min-w-0" />
+              <button onClick={guardarNombre} className="text-[10px] text-emerald-400">✔</button>
+              <button onClick={() => setEditandoNombre(false)} className="text-[10px] text-violet-400/60">✕</button>
+            </>
+          ) : (
+            <button onClick={() => { setNombreTemp(nombreDocente); setEditandoNombre(true); }} className="text-[10px] text-violet-300/70 truncate hover:text-violet-200 flex-1 text-left" title="Tocá para editar tu nombre">
+              {nombreDocente || "+ Agregar tu nombre"} <span className="opacity-60">✏️</span>
             </button>
           )}
+        </div>
+        <div className="flex items-center justify-around">
           <button onClick={onAdmin} className="text-base" title={esAdminEfectivo ? "Docentes y mi cuenta" : "Mi cuenta"}>👤</button>
           {esAdminEfectivo && <button onClick={onInstitucion} className="text-base" title="Institución">⚙️</button>}
           <button onClick={onSalir} className="text-base" title="Cerrar sesión">🚪</button>
         </div>
       </div>
-
-      {/* La navegación ahora vive como cuadrícula de tarjetas en el
-          contenido de Inicio — acá solo queda un acceso rápido para
-          volver, visible en cualquier otra pantalla. */}
-      {activo !== "inicio" && (
-        <div className="px-3 pb-2">
-          <button onClick={() => elegir("inicio")} className="text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5 w-fit" style={{ background: "rgba(47,85,164,0.25)", color: "#E8EEF8" }}>
-            ← Volver a Inicio
-          </button>
-        </div>
-      )}
-
-      <div className="hidden md:flex items-center gap-1 px-4 pb-1.5">
-        {editandoNombre ? (
-          <>
-            <input value={nombreTemp} onChange={(e) => setNombreTemp(e.target.value)} autoFocus
-              onKeyDown={(e) => { if (e.key === "Enter") guardarNombre(); if (e.key === "Escape") setEditandoNombre(false); }}
-              placeholder="Tu nombre" className="text-[11px] bg-transparent border-b border-violet-400 text-violet-100 outline-none px-1 w-32" />
-            <button onClick={guardarNombre} className="text-[10px] text-emerald-400">✔</button>
-            <button onClick={() => setEditandoNombre(false)} className="text-[10px] text-violet-400/60">✕</button>
-          </>
-        ) : (
-          <button onClick={() => { setNombreTemp(nombreDocente); setEditandoNombre(true); }} className="text-[10px] text-violet-400/60 truncate hover:text-violet-300" title="Tocá para editar tu nombre">
-            {nombreDocente || "+ Agregar tu nombre"} <span className="opacity-60">✏️</span>
-          </button>
-        )}
-      </div>
     </div>
+  );
+
+  return (
+    <>
+      {/* Escritorio: fija, siempre visible */}
+      <div className="hidden md:block w-[240px] shrink-0 sticky top-0 h-screen">{contenido}</div>
+
+      {/* Móvil: barra angosta con hamburguesa + cajón deslizante */}
+      <div className="md:hidden sticky top-0 z-30 flex items-center justify-between px-4 py-2.5" style={{ background: "#17264D" }}>
+        <button onClick={() => elegir("inicio")} className="flex items-center gap-2">
+          <span className="text-lg">🧭</span>
+          <span className="text-white text-sm font-bold tracking-[0.12em]">CÓDICE</span>
+        </button>
+        <button onClick={() => onCerrarMenu?.(true)} className="text-white text-xl">☰</button>
+      </div>
+      {menuAbierto && (
+        <>
+          <div className="md:hidden fixed inset-0 z-40 bg-black/40" onClick={() => onCerrarMenu?.()} />
+          <div className="md:hidden fixed left-0 top-0 bottom-0 z-50 w-[260px] shadow-xl">{contenido}</div>
+        </>
+      )}
+    </>
   );
 }
 
+
 function Panel({ session }) {
   const [tab, setTab] = useState("inicio");
-  const [grupoAbierto, setGrupoAbierto] = useState(null);
+  const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
   const [esAdmin, setEsAdmin] = useState(null); // null = todavía no se sabe
   const [previsualizandoDocente, setPrevisualizandoDocente] = useState(false);
   const esAdminEfectivo = esAdmin && !previsualizandoDocente;
@@ -2437,7 +2482,7 @@ function Panel({ session }) {
   const menuPanelVisible = esAdminEfectivo ? MENU_PANEL_GRUPOS : MENU_PANEL_GRUPOS.filter((g) => g.key !== "administracion");
 
   useEffect(() => {
-    if (!esAdminEfectivo && CLAVES_SOLO_ADMIN.includes(tab)) { setTab("inicio"); setGrupoAbierto(null); }
+    if (!esAdminEfectivo && CLAVES_SOLO_ADMIN.includes(tab)) { setTab("inicio"); }
   }, [esAdminEfectivo]);
 
   // Desde "Entregas por revisar": salta directo a Misiones o Proyectos/Forja,
@@ -2450,35 +2495,18 @@ function Panel({ session }) {
   };
 
   return (
-    <div className="min-h-screen relative">
-      <FondoArcadeDocente />
-      <SidebarPanel activo={tab} onCambiar={irA} email={session.user.email} institucion={institucion}
+    <div className="min-h-screen flex" style={{ background: "#FBFBFD" }}>
+      <SidebarTarjetas activo={tab} onCambiar={irA} email={session.user.email} institucion={institucion}
         onAdmin={() => setAdministracionAbierta(true)} onInstitucion={() => setInstitucionAbierta(true)}
         onSalir={() => supabase.auth.signOut()} onBuscarEstudiante={irACalificacionesDesdeBusqueda}
-        grados={grados} gradoActivo={gradoActivo} onCambiarGradoActivo={setGradoActivo}
-        periodoActivo={periodoActivo} onCambiarPeriodoActivo={setPeriodoActivo}
-        materias={materias} materiaActiva={materiaActiva} onCambiarMateriaActiva={setMateriaActiva}
-        esAdmin={esAdmin} esAdminEfectivo={esAdminEfectivo} previsualizandoDocente={previsualizandoDocente} onCambiarPrevisualizacion={setPrevisualizandoDocente} />
+        esAdmin={esAdmin} esAdminEfectivo={esAdminEfectivo} previsualizandoDocente={previsualizandoDocente} onCambiarPrevisualizacion={setPrevisualizandoDocente}
+        grupos={menuPanelVisible} menuAbierto={menuMovilAbierto} onCerrarMenu={(abrir) => setMenuMovilAbierto(!!abrir)} />
 
       {institucionAbierta && <InstitucionModal onClose={() => { setInstitucionAbierta(false); cargarInstitucion(); }} />}
       {administracionAbierta && <AdministracionModal onClose={() => setAdministracionAbierta(false)} />}
 
-      <div className="p-6 max-w-6xl mx-auto">
-        {tab === "inicio" && (
-          grupoAbierto ? (
-            <VistaInicio onIrA={irA} soloEncabezado
-              accionSuperior={<EnlaceTodasLasSecciones onCambiarGrupo={setGrupoAbierto} />}
-              contenidoMedio={<NavegacionPorTarjetas grupos={menuPanelVisible} onIr={irA} grupoAbierto={grupoAbierto} onCambiarGrupo={setGrupoAbierto} />} />
-          ) : (
-            <VistaInicio onIrA={irA}
-              contenidoMedio={
-                <div className="mb-2">
-                  <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">Todas las secciones</h3>
-                  <NavegacionPorTarjetas grupos={menuPanelVisible} onIr={irA} grupoAbierto={null} onCambiarGrupo={setGrupoAbierto} />
-                </div>
-              } />
-          )
-        )}
+      <div className="flex-1 min-w-0 p-4 md:p-6">
+        {tab === "inicio" && <VistaInicio onIrA={irA} />}
         {tab === "entregasrevisar" && <VistaEntregasPorRevisar onIrAGrado={irAGradoDesdeRevisar} />}
         {tab === "estudiantes" && (
           <>
