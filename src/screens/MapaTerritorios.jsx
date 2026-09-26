@@ -42,7 +42,7 @@ function XPBar({ xp, xpToNextLevel, xpDesdeNivel }) {
 function TerritoryMap({ student, avatarConfig, territories, onSelectTerritory }) {
   const conqueredCount = territories.filter((t) => t.status === "conquered").length;
   return (
-    <section className="bg-white rounded-2xl border border-slate-100 p-5">
+    <section className="bg-white rounded-2xl border border-slate-200 p-5">
       <div className="flex items-center gap-3 mb-4">
         {avatarConfig ? (
           <div className="shrink-0"><PersonajePreview config={avatarConfig} size={48} /></div>
