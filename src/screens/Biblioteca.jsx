@@ -103,7 +103,7 @@ export function VistaBiblioteca({ grados, gradoActivo }) {
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div>
           <h2 className="text-xl font-bold text-white">📚 Biblioteca</h2>
-          <p className="text-sm text-slate-400">Enlaces informativos, organizados por grado completo — los ven todos los cursos de ese grado.</p>
+          <p className="text-sm text-white/80">Tus enlaces informativos para este grado — solo vos los ves y editás; a los estudiantes les llegan combinados con los de sus demás materias.</p>
         </div>
         <div className="flex gap-2">
           <select value={nivel} onChange={(e) => { setNivel(e.target.value); setFormAbierto(false); }} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
