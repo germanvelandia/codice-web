@@ -23,7 +23,7 @@ export function EmojiPicker({ value, onChange, size = "text-sm" }) {
       {abierto && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setAbierto(false)} />
-          <div className="absolute left-0 top-full mt-1 bg-white rounded-xl shadow-lg border border-slate-100 p-3 z-50" style={{ width: 280 }}>
+          <div className="absolute left-0 top-full mt-1 bg-white rounded-xl shadow-lg border border-slate-200 p-3 z-50" style={{ width: 280 }}>
             <input value={value} onChange={(e) => onChange(e.target.value)} placeholder="O escribí/pegá otro emoji acá"
               className="w-full text-sm rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none" />
             <div className="max-h-56 overflow-y-auto space-y-2">
