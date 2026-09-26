@@ -571,7 +571,7 @@ function JornadaDetalle({ jornada, gradoId, institucion }) {
               const cant = conteoDelHorario(h.id);
               const lleno = cant >= h.capacidad;
               return (
-                <div key={h.id} className={`rounded-xl p-2.5 border ${lleno ? "bg-amber-50 border-amber-200" : "bg-white border-slate-100"}`}>
+                <div key={h.id} className={`rounded-xl p-2.5 border ${lleno ? "bg-amber-50 border-amber-200" : "bg-white border-slate-200"}`}>
                   <div className="flex justify-between items-start">
                     <div>
                       <div className="text-sm font-semibold text-slate-700">{h.etiqueta}</div>
@@ -600,7 +600,7 @@ function JornadaDetalle({ jornada, gradoId, institucion }) {
           </button>
         </div>
         {matrizAbierta && (
-          <div className="overflow-x-auto bg-white rounded-2xl shadow-sm border border-slate-100 mb-2">
+          <div className="overflow-x-auto bg-white rounded-2xl shadow-sm border border-slate-200 mb-2">
             <table className="w-full text-[10px]">
               <thead>
                 <tr className="bg-slate-50">
@@ -610,7 +610,7 @@ function JornadaDetalle({ jornada, gradoId, institucion }) {
               </thead>
               <tbody>
                 {estudiantesOrdenados.map((e) => (
-                  <tr key={e.id} className="border-t border-slate-100">
+                  <tr key={e.id} className="border-t border-slate-200">
                     <td className="px-2 py-1 sticky left-0 bg-white font-medium text-slate-700 whitespace-nowrap">{e.nombre}</td>
                     {materiasChecklist.map((m) => (
                       <td key={m.id} className="text-center px-1 py-1">
@@ -631,7 +631,7 @@ function JornadaDetalle({ jornada, gradoId, institucion }) {
           🖨️ Imprimir todas las actas ({estudiantesOrdenados.filter((e) => e.asignacion?.tiene_reportes || e.asignacion?.materias_perdidas?.length > 0).length})
         </button>
       </div>
-      <div className="overflow-x-auto bg-white rounded-2xl shadow-sm border border-slate-100">
+      <div className="overflow-x-auto bg-white rounded-2xl shadow-sm border border-slate-200">
         <table className="w-full text-xs">
           <thead>
             <tr className="bg-slate-50">
@@ -659,7 +659,7 @@ function JornadaDetalle({ jornada, gradoId, institucion }) {
           </thead>
           <tbody>
             {estudiantesOrdenados.map((e) => (
-              <tr key={e.id} className="border-t border-slate-100">
+              <tr key={e.id} className="border-t border-slate-200">
                 <td className="px-3 py-2 font-medium text-slate-700">{e.nombre}</td>
                 <td className="px-3 py-2">
                   <select value={e.asignacion?.horario_id || ""} onChange={(ev) => asignar(e.id, ev.target.value ? parseInt(ev.target.value, 10) : null)}
@@ -787,7 +787,7 @@ function CitacionesDireccionCurso({ gradoId, institucion }) {
             const estudianteId = estudiante.id;
             const noAsistio = lista.filter((c) => c.estado === "no_asistio").length;
             return (
-              <div key={estudianteId} className="bg-white rounded-2xl border border-slate-100 p-3">
+              <div key={estudianteId} className="bg-white rounded-2xl border border-slate-200 p-3">
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-sm font-semibold text-slate-700">{lista[0].estudiante_nombre}</div>
                   <div className="flex gap-1.5">
