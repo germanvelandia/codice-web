@@ -72,19 +72,7 @@ export default function App() {
   }
 
   if (soloEstudiante) {
-    return (
-      <div className="min-h-screen flex items-center justify-center relative py-6">
-        <FondoCastillo />
-        <div className="w-full max-w-sm md:max-w-3xl px-4">
-          <div className="text-center mb-3">
-            <div className="text-4xl mb-1">🏰</div>
-            <h1 className="text-3xl font-bold text-white tracking-[0.15em]" style={{ fontFamily: "Georgia, serif", textShadow: "0 2px 8px rgba(76,29,149,0.6)" }}>CÓDICE</h1>
-            <p className="text-violet-100 text-xs mt-1" style={{ textShadow: "0 1px 4px rgba(76,29,149,0.6)" }}>Tu aventura de aprendizaje</p>
-          </div>
-          <PortalEstudiante />
-        </div>
-      </div>
-    );
+    return <PortalEstudiante />;
   }
 
   if (loading) return <Centered>Cargando…</Centered>;
@@ -2149,14 +2137,24 @@ function PortalEstudiante() {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg p-6">
-      <p className="text-sm text-slate-500 text-center mb-4">Ingresa el código de acceso que te dio tu docente para ver tu progreso.</p>
-      <input value={codigo} onChange={(e) => setCodigo(e.target.value.toUpperCase())} placeholder="Ej: AB3D9K" maxLength={6}
-        className="w-full text-center text-lg font-mono font-bold tracking-widest rounded-lg px-3 py-3 mb-3 border border-slate-200 outline-none" />
-      {error && <p className="text-xs text-rose-500 mb-2 text-center">{error}</p>}
-      <button disabled={cargando} onClick={consultar} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
-        {cargando ? "Consultando…" : "Ver mi progreso"}
-      </button>
+    <div className="min-h-screen flex items-center justify-center relative py-6">
+      <FondoCastillo />
+      <div className="w-full max-w-sm px-4">
+        <div className="text-center mb-3">
+          <div className="text-4xl mb-1">🏰</div>
+          <h1 className="text-3xl font-bold text-white tracking-[0.15em]" style={{ fontFamily: "Georgia, serif", textShadow: "0 2px 8px rgba(23,38,77,0.6)" }}>CÓDICE</h1>
+          <p className="text-violet-100 text-xs mt-1" style={{ textShadow: "0 1px 4px rgba(23,38,77,0.6)" }}>Tu aventura de aprendizaje</p>
+        </div>
+        <div className="bg-white rounded-2xl shadow-lg p-6">
+          <p className="text-sm text-slate-500 text-center mb-4">Ingresa el código de acceso que te dio tu docente para ver tu progreso.</p>
+          <input value={codigo} onChange={(e) => setCodigo(e.target.value.toUpperCase())} placeholder="Ej: AB3D9K" maxLength={6}
+            className="w-full text-center text-lg font-mono font-bold tracking-widest rounded-lg px-3 py-3 mb-3 border border-slate-200 outline-none" />
+          {error && <p className="text-xs text-rose-500 mb-2 text-center">{error}</p>}
+          <button disabled={cargando} onClick={consultar} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+            {cargando ? "Consultando…" : "Ver mi progreso"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
