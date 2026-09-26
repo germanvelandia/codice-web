@@ -49,7 +49,7 @@ function PasoPrevia({ mapa, onVolver, onConfirmado }) {
 
       <div className="space-y-3 mb-4">
         {previa.map((p) => (
-          <div key={p.origen} className="bg-white rounded-xl border border-slate-100 p-3">
+          <div key={p.origen} className="bg-white rounded-xl border border-slate-200 p-3">
             <div className="text-sm font-semibold text-slate-700 mb-1">
               {p.origen} → {p.graduacion ? <span className="text-emerald-600">🎓 Graduación (queda inactivo)</span> : <span className="text-violet-600">{p.destino}</span>}
               <span className="text-slate-400 font-normal"> · {p.estudiantes.length} estudiante(s)</span>
@@ -152,7 +152,7 @@ export function VistaPromocion() {
       ) : (
         <div className="space-y-2 mb-4">
           {gradosConEstudiantes.map((g) => (
-            <div key={g.id} className="flex items-center gap-2 bg-white rounded-xl border border-slate-100 p-3 flex-wrap">
+            <div key={g.id} className="flex items-center gap-2 bg-white rounded-xl border border-slate-200 p-3 flex-wrap">
               <div className="text-sm font-semibold text-slate-700 w-20">{g.id}</div>
               <div className="text-xs text-slate-400 w-32">{g.cantidadEstudiantes} estudiante(s)</div>
               <span className="text-slate-300">→</span>
@@ -175,7 +175,7 @@ export function VistaPromocion() {
         Ver vista previa →
       </button>
 
-      <div className="mt-6 border-t border-slate-100 pt-3">
+      <div className="mt-6 border-t border-slate-200 pt-3">
         <button onClick={() => setHistorialAbierto((v) => !v)} className="text-xs text-slate-400">
           {historialAbierto ? "Ocultar" : "Ver"} historial de promociones anteriores
         </button>
