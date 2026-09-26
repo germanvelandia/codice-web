@@ -576,7 +576,7 @@ export function VistaGuiasEstudio({ grados, gradoActivo, periodoActivo, materiaA
       ) : (
         <div className="space-y-2">
           {guias.map((g) => (
-            <div key={g.id} className="bg-white rounded-xl border border-slate-100 p-3">
+            <div key={g.id} className="bg-white rounded-xl border border-slate-200 p-3">
               <div className="flex justify-between items-start gap-2">
                 <div>
                   <div className="text-sm font-semibold text-slate-700">{g.titulo}</div>
@@ -724,7 +724,7 @@ export function GuiasEstudiante({ gradoId, estudianteId }) {
       ) : (
         <div className="space-y-2">
           {guias.map((g) => (
-            <button key={g.id} onClick={() => setAbierta(g)} className="w-full text-left bg-white rounded-xl border border-slate-100 p-3 hover:border-violet-200">
+            <button key={g.id} onClick={() => setAbierta(g)} className="w-full text-left bg-white rounded-xl border border-slate-200 p-3 hover:border-violet-200">
               <div className="text-sm font-semibold text-slate-700">{g.titulo}</div>
               <div className="text-[11px] text-slate-400 mt-0.5">{g.materias?.nombre}{g.tiempo_estimado ? ` · ⏱ ${g.tiempo_estimado}` : ""}{g.fecha_entrega ? ` · Entrega: ${g.fecha_entrega}` : ""}</div>
             </button>
