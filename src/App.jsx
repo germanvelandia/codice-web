@@ -1968,6 +1968,7 @@ function PortalAcudiente({ onElegirEstudiante }) {
   if (!hijos && !necesitaCambiarClave) {
     return (
       <div className="min-h-screen flex items-center justify-center relative py-6" style={{ background: "#FBFBFD" }}>
+        <FondoCastillo />
         <div className="w-full max-w-sm px-4">
           {onElegirEstudiante && (
             <div className="flex gap-1 rounded-full bg-slate-100 p-1 mb-5">
@@ -2004,6 +2005,7 @@ function PortalAcudiente({ onElegirEstudiante }) {
   if (necesitaCambiarClave) {
     return (
       <div className="min-h-screen flex items-center justify-center relative py-6" style={{ background: "#FBFBFD" }}>
+        <FondoCastillo />
         <div className="w-full max-w-sm px-4">
           <div className="text-center mb-5">
             <div className="text-4xl mb-1">🔐</div>
@@ -2402,6 +2404,7 @@ function PortalEstudiante() {
 
   return (
     <div className="min-h-screen flex items-center justify-center relative py-6" style={{ background: "#FBFBFD" }}>
+      <FondoCastillo />
       <div className="w-full max-w-sm px-4">
         <div className="flex gap-1 rounded-full bg-slate-100 p-1 mb-5">
           <button onClick={() => setTipoAcceso("estudiante")} className="flex-1 text-xs font-semibold py-2 rounded-full bg-white shadow-sm">🎓 Soy estudiante</button>
