@@ -1949,7 +1949,13 @@ function PortalAcudiente({ onElegirEstudiante }) {
         await api.iniciarSesionAcudiente(email, password);
       }
     } catch (e) {
-      setError(e.message);
+      if (/email not confirmed/i.test(e.message)) {
+        setError("Todavía no confirmaste tu correo — revisá tu bandeja de entrada (y spam) y tocá el enlace que te enviamos.");
+      } else if (/invalid login credentials/i.test(e.message)) {
+        setError("Correo o contraseña incorrectos.");
+      } else {
+        setError(e.message);
+      }
     }
     setCargando(false);
   };
@@ -1981,10 +1987,11 @@ function PortalAcudiente({ onElegirEstudiante }) {
 
             {mensajeCreado ? (
               <div className="text-center py-4">
-                <div className="text-3xl mb-2">✅</div>
-                <p className="text-sm text-slate-600 mb-1">¡Cuenta creada!</p>
-                <p className="text-xs text-slate-400">Si tu correo ya estaba cargado por el colegio, al iniciar sesión vas a ver a tu hijo/a automáticamente.</p>
-                <button onClick={() => { setModo("ingresar"); setMensajeCreado(false); }} className="mt-3 text-xs font-semibold text-violet-600 underline">Iniciar sesión ahora</button>
+                <div className="text-3xl mb-2">📩</div>
+                <p className="text-sm font-semibold text-slate-700 mb-1">¡Revisá tu correo!</p>
+                <p className="text-xs text-slate-400">Te enviamos un enlace de confirmación a <b>{email}</b>. Tenés que tocarlo antes de poder iniciar sesión — a veces cae en spam o "correo no deseado".</p>
+                <p className="text-xs text-slate-400 mt-2">Cuando ya lo hayas confirmado, si tu correo estaba cargado por el colegio, vas a ver a tu hijo/a automáticamente.</p>
+                <button onClick={() => { setModo("ingresar"); setMensajeCreado(false); }} className="mt-3 text-xs font-semibold text-violet-600 underline">Ya confirmé — iniciar sesión</button>
               </div>
             ) : (
               <>
