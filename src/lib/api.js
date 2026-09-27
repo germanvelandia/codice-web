@@ -5995,27 +5995,44 @@ export async function iniciarSesionAcudientePorDocumento(documento, clave) {
   if (error) throw error;
   if (!filas || filas.length === 0) return { ok: false, error: "No encontramos ese número de documento. Verificá con el colegio que esté cargado en el Directorio." };
 
-  const claveGuardada = filas.find((f) => f.clave_acudiente)?.clave_acudiente || null;
+  // Padre y madre tienen su propia clave — se determina cuál de los dos
+  // es, por fila, comparando contra qué columna coincidió el documento.
+  const filaConRol = filas.map((f) => ({ fila: f, rol: f.numero_documento_padre === doc ? "padre" : "madre" }));
+  const rol = filaConRol[0].rol;
+  const campoClave = rol === "padre" ? "clave_padre" : "clave_madre";
+  const claveGuardada = filaConRol.find((r) => r.fila[campoClave])?.fila[campoClave] || null;
   const estudiantes = filas.map((f) => f.estudiantes).filter(Boolean);
 
   if (!claveGuardada) {
     // Todavía no eligió clave propia — el documento hace de clave inicial.
     if (clave.trim() !== doc) return { ok: false, error: "Clave incorrecta. La primera vez, usá tu número de documento como clave." };
-    return { ok: true, necesitaCambiarClave: true, documento: doc, estudiantes };
+    return { ok: true, necesitaCambiarClave: true, documento: doc, rol, estudiantes };
   }
 
   const claveIngresadaHash = await hashClave(clave);
   if (claveIngresadaHash !== claveGuardada) return { ok: false, error: "Clave incorrecta." };
-  return { ok: true, necesitaCambiarClave: false, documento: doc, estudiantes };
+  return { ok: true, necesitaCambiarClave: false, documento: doc, rol, estudiantes };
 }
 
 // Guarda la clave nueva y personal — reemplaza al documento como clave
-// en TODAS las filas de ese acudiente (por si tiene más de un hijo).
-export async function cambiarClaveAcudiente(documento, nuevaClave) {
+// en TODAS las filas de ese acudiente (por si tiene más de un hijo),
+// pero solo en la columna del rol correspondiente (padre o madre), sin
+// tocar la clave del otro.
+export async function cambiarClaveAcudiente(documento, rol, nuevaClave) {
   if (nuevaClave.trim().length < 4) throw new Error("La clave nueva debe tener al menos 4 caracteres.");
   const hash = await hashClave(nuevaClave);
   const doc = documento.trim();
-  const { error } = await supabase.from("acudientes").update({ clave_acudiente: hash })
-    .or(`numero_documento_padre.eq.${doc},numero_documento_madre.eq.${doc}`);
+  const campo = rol === "padre" ? "numero_documento_padre" : "numero_documento_madre";
+  const campoClave = rol === "padre" ? "clave_padre" : "clave_madre";
+  const { error } = await supabase.from("acudientes").update({ [campoClave]: hash }).eq(campo, doc);
+  if (error) throw error;
+}
+
+// El docente restablece la clave de un acudiente puntual (padre o
+// madre) desde el Directorio — vuelve a NULL, así que la próxima vez
+// puede entrar de nuevo con el documento como clave inicial.
+export async function restablecerClaveAcudiente(estudianteId, rol) {
+  const campoClave = rol === "padre" ? "clave_padre" : "clave_madre";
+  const { error } = await supabase.from("acudientes").update({ [campoClave]: null }).eq("estudiante_id", estudianteId);
   if (error) throw error;
 }
