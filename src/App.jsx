@@ -1895,20 +1895,23 @@ function MiComarcaEstudiante({ estudianteInfo }) {
 }
 
 
-// Portal de Acudientes — cada acudiente se registra con su propio
-// correo, se vincula automáticamente a su(s) hijo(s) por coincidencia
-// de correo con el Directorio, y ve (solo lectura): notas, asistencia,
-// anuncios, y anotaciones de convivencia completas. NO ve el proceso
-// PIAR/DUA, ni nada de gestión de aula.
+// Portal de Acudientes — entra con número de documento de identidad
+// (que hace de clave la primera vez) y correo NO hace falta ni se usa
+// para el ingreso — evita el límite de envío de correos de Supabase.
+// Al entrar la primera vez, se exige elegir una clave propia, que
+// reemplaza al documento de ahí en adelante. Solo lectura: notas,
+// asistencia, anuncios, y anotaciones de convivencia completas. NO ve
+// el proceso PIAR/DUA, ni nada de gestión de aula.
 function PortalAcudiente({ onElegirEstudiante }) {
-  const [session, setSession] = useState(null);
-  const [cargandoSesion, setCargandoSesion] = useState(true);
-  const [modo, setModo] = useState("ingresar"); // "ingresar" | "crear"
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [documento, setDocumento] = useState("");
+  const [clave, setClave] = useState("");
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
-  const [mensajeCreado, setMensajeCreado] = useState(false);
+
+  const [necesitaCambiarClave, setNecesitaCambiarClave] = useState(false);
+  const [nuevaClave, setNuevaClave] = useState("");
+  const [nuevaClave2, setNuevaClave2] = useState("");
+  const [cambiandoClave, setCambiandoClave] = useState(false);
 
   const [hijos, setHijos] = useState(null);
   const [hijoElegidoId, setHijoElegidoId] = useState(null);
@@ -1916,19 +1919,41 @@ function PortalAcudiente({ onElegirEstudiante }) {
   const [resumen, setResumen] = useState(null);
   const [anuncios, setAnuncios] = useState([]);
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => { setSession(data.session); setCargandoSesion(false); });
-    const { data: listener } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
-    return () => listener.subscription.unsubscribe();
-  }, []);
+  const ingresar = async () => {
+    if (!documento.trim() || !clave.trim()) { setError("Completá documento y clave."); return; }
+    setCargando(true);
+    setError("");
+    try {
+      const r = await api.iniciarSesionAcudientePorDocumento(documento, clave);
+      if (!r.ok) { setError(r.error); setCargando(false); return; }
+      if (r.necesitaCambiarClave) {
+        setNecesitaCambiarClave(true);
+      } else {
+        setHijos(r.estudiantes);
+        if (r.estudiantes[0]) setHijoElegidoId(r.estudiantes[0].id);
+      }
+    } catch (e) {
+      setError(e.message);
+    }
+    setCargando(false);
+  };
 
-  useEffect(() => {
-    if (!session) { setHijos(null); return; }
-    api.sincronizarVinculosAcudiente().then(() => api.fetchMisHijos()).then((lista) => {
-      setHijos(lista);
-      if (lista[0]) setHijoElegidoId(lista[0].id);
-    });
-  }, [session]);
+  const guardarNuevaClave = async () => {
+    if (nuevaClave.trim().length < 4) { setError("La clave nueva debe tener al menos 4 caracteres."); return; }
+    if (nuevaClave !== nuevaClave2) { setError("Las dos claves no coinciden."); return; }
+    setCambiandoClave(true);
+    setError("");
+    try {
+      await api.cambiarClaveAcudiente(documento, nuevaClave);
+      const r = await api.iniciarSesionAcudientePorDocumento(documento, nuevaClave);
+      setHijos(r.estudiantes);
+      if (r.estudiantes[0]) setHijoElegidoId(r.estudiantes[0].id);
+      setNecesitaCambiarClave(false);
+    } catch (e) {
+      setError(e.message);
+    }
+    setCambiandoClave(false);
+  };
 
   useEffect(() => {
     if (!hijoElegidoId) return;
@@ -1937,34 +1962,10 @@ function PortalAcudiente({ onElegirEstudiante }) {
     api.fetchAnunciosParaAcudiente(hijos?.find((h) => h.id === hijoElegidoId)?.grado_id).then(setAnuncios);
   }, [hijoElegidoId]);
 
-  const enviar = async () => {
-    if (!email.trim() || !password.trim()) { setError("Completá correo y contraseña."); return; }
-    setCargando(true);
-    setError("");
-    try {
-      if (modo === "crear") {
-        await api.registrarAcudiente(email, password);
-        setMensajeCreado(true);
-      } else {
-        await api.iniciarSesionAcudiente(email, password);
-      }
-    } catch (e) {
-      if (/email not confirmed/i.test(e.message)) {
-        setError("Todavía no confirmaste tu correo — revisá tu bandeja de entrada (y spam) y tocá el enlace que te enviamos.");
-      } else if (/invalid login credentials/i.test(e.message)) {
-        setError("Correo o contraseña incorrectos.");
-      } else {
-        setError(e.message);
-      }
-    }
-    setCargando(false);
-  };
-
   const hijoElegido = hijos?.find((h) => h.id === hijoElegidoId);
 
-  if (cargandoSesion) return <Centered>Cargando…</Centered>;
-
-  if (!session) {
+  // Pantalla 1: pedir documento + clave (o el documento como clave inicial)
+  if (!hijos && !necesitaCambiarClave) {
     return (
       <div className="min-h-screen flex items-center justify-center relative py-6" style={{ background: "#FBFBFD" }}>
         <div className="w-full max-w-sm px-4">
@@ -1980,34 +1981,47 @@ function PortalAcudiente({ onElegirEstudiante }) {
             <p className="text-slate-400 text-xs mt-1">Seguimiento del progreso de tu hijo/a en CÓDICE</p>
           </div>
           <div className="bg-white rounded-2xl shadow-lg p-6">
-            <div className="flex gap-1 rounded-full bg-slate-100 p-1 mb-4">
-              <button onClick={() => { setModo("ingresar"); setError(""); setMensajeCreado(false); }} className={`flex-1 text-xs font-semibold py-2 rounded-full ${modo === "ingresar" ? "bg-white shadow-sm" : "text-slate-500"}`}>Ya tengo cuenta</button>
-              <button onClick={() => { setModo("crear"); setError(""); setMensajeCreado(false); }} className={`flex-1 text-xs font-semibold py-2 rounded-full ${modo === "crear" ? "bg-white shadow-sm" : "text-slate-500"}`}>Crear cuenta</button>
-            </div>
+            <label className="text-xs text-slate-500 block mb-1">Número de documento de identidad</label>
+            <input value={documento} onChange={(e) => setDocumento(e.target.value)} placeholder="Ej: 123456789"
+              className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
+            <label className="text-xs text-slate-500 block mb-1">Clave</label>
+            <input type="password" value={clave} onChange={(e) => setClave(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") ingresar(); }}
+              placeholder="La primera vez, usá tu documento"
+              className="w-full text-sm rounded-lg px-3 py-2 mb-1 border border-slate-200 outline-none" />
+            <p className="text-[11px] text-slate-400 mb-3">¿Primera vez? Escribí tu número de documento también en la clave — después vas a poder elegir una propia.</p>
+            {error && <p className="text-xs text-rose-500 mb-2">{error}</p>}
+            <button disabled={cargando} onClick={ingresar} className="w-full text-sm font-semibold py-2.5 rounded-lg text-white disabled:opacity-60" style={{ background: "#2F55A4" }}>
+              {cargando ? "…" : "Ingresar"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-            {mensajeCreado ? (
-              <div className="text-center py-4">
-                <div className="text-3xl mb-2">📩</div>
-                <p className="text-sm font-semibold text-slate-700 mb-1">¡Revisá tu correo!</p>
-                <p className="text-xs text-slate-400">Te enviamos un enlace de confirmación a <b>{email}</b>. Tenés que tocarlo antes de poder iniciar sesión — a veces cae en spam o "correo no deseado".</p>
-                <p className="text-xs text-slate-400 mt-2">Cuando ya lo hayas confirmado, si tu correo estaba cargado por el colegio, vas a ver a tu hijo/a automáticamente.</p>
-                <button onClick={() => { setModo("ingresar"); setMensajeCreado(false); }} className="mt-3 text-xs font-semibold text-violet-600 underline">Ya confirmé — iniciar sesión</button>
-              </div>
-            ) : (
-              <>
-                <label className="text-xs text-slate-500 block mb-1">Correo (el mismo que tiene el colegio)</label>
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tu@correo.com"
-                  className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
-                <label className="text-xs text-slate-500 block mb-1">Contraseña</label>
-                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") enviar(); }}
-                  className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
-                {error && <p className="text-xs text-rose-500 mb-2">{error}</p>}
-                <button disabled={cargando} onClick={enviar} className="w-full text-sm font-semibold py-2.5 rounded-lg text-white disabled:opacity-60" style={{ background: "#2F55A4" }}>
-                  {cargando ? "…" : modo === "crear" ? "Crear cuenta" : "Iniciar sesión"}
-                </button>
-              </>
-            )}
+  // Pantalla 2: primera vez — obligado a elegir una clave propia
+  if (necesitaCambiarClave) {
+    return (
+      <div className="min-h-screen flex items-center justify-center relative py-6" style={{ background: "#FBFBFD" }}>
+        <div className="w-full max-w-sm px-4">
+          <div className="text-center mb-5">
+            <div className="text-4xl mb-1">🔐</div>
+            <h1 className="text-xl font-bold" style={{ color: "#17264D", fontFamily: "Georgia, serif" }}>Elegí tu clave</h1>
+            <p className="text-slate-400 text-xs mt-1">Por seguridad, reemplazá el documento por una clave propia que solo vos conozcas.</p>
+          </div>
+          <div className="bg-white rounded-2xl shadow-lg p-6">
+            <label className="text-xs text-slate-500 block mb-1">Clave nueva</label>
+            <input type="password" value={nuevaClave} onChange={(e) => setNuevaClave(e.target.value)}
+              className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
+            <label className="text-xs text-slate-500 block mb-1">Repetí la clave nueva</label>
+            <input type="password" value={nuevaClave2} onChange={(e) => setNuevaClave2(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") guardarNuevaClave(); }}
+              className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
+            {error && <p className="text-xs text-rose-500 mb-2">{error}</p>}
+            <button disabled={cambiandoClave} onClick={guardarNuevaClave} className="w-full text-sm font-semibold py-2.5 rounded-lg text-white disabled:opacity-60" style={{ background: "#2F55A4" }}>
+              {cambiandoClave ? "…" : "Guardar y entrar"}
+            </button>
           </div>
         </div>
       </div>
@@ -2015,19 +2029,6 @@ function PortalAcudiente({ onElegirEstudiante }) {
   }
 
   if (hijos === null) return <Centered>Cargando…</Centered>;
-
-  if (hijos.length === 0) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4" style={{ background: "#FBFBFD" }}>
-        <div className="bg-white rounded-2xl shadow-lg p-6 max-w-sm text-center">
-          <div className="text-3xl mb-2">🤔</div>
-          <p className="text-sm text-slate-600 mb-2">No encontramos ningún estudiante vinculado a este correo.</p>
-          <p className="text-xs text-slate-400 mb-4">Verificá con el colegio que este correo esté cargado en el Directorio de acudientes de tu hijo/a.</p>
-          <button onClick={() => supabase.auth.signOut()} className="text-xs font-semibold text-violet-600 underline">Cerrar sesión</button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen" style={{ background: "#FBFBFD" }}>
@@ -2043,7 +2044,7 @@ function PortalAcudiente({ onElegirEstudiante }) {
                 {hijos.map((h) => <option key={h.id} value={h.id}>{h.nombre}</option>)}
               </select>
             )}
-            <button onClick={() => supabase.auth.signOut()} className="text-white text-xs underline">Cerrar sesión</button>
+            <button onClick={() => { setHijos(null); setDocumento(""); setClave(""); }} className="text-white text-xs underline">Cerrar sesión</button>
           </div>
         </div>
       </div>
@@ -2146,6 +2147,7 @@ function PortalAcudiente({ onElegirEstudiante }) {
     </div>
   );
 }
+
 
 function PortalEstudiante() {
   const [tipoAcceso, setTipoAcceso] = useState("estudiante"); // "estudiante" | "acudiente"
