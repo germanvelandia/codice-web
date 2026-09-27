@@ -5891,3 +5891,82 @@ export async function migrarFotoEstudianteAStorage(estudiante) {
   if (errorGuardar) throw errorGuardar;
   return urlData.publicUrl;
 }
+
+/* ==================== 👪 Portal de Acudientes ====================
+   Cada acudiente se registra con su propio correo y contraseña. Al
+   iniciar sesión, se busca automáticamente en la tabla "acudientes" (la
+   que ya carga el docente en el Directorio) cualquier estudiante cuyo
+   correo_padre o correo_madre coincida, y se vincula — sin necesitar
+   un código aparte. Si tiene más de un hijo, quedan todos vinculados. */
+
+export async function registrarAcudiente(email, password) {
+  const { data, error } = await supabase.auth.signUp({ email: email.trim(), password });
+  if (error) throw error;
+  return data;
+}
+
+export async function iniciarSesionAcudiente(email, password) {
+  const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+  if (error) throw error;
+  return data;
+}
+
+// Busca coincidencias por correo en "acudientes" y crea los vínculos que
+// falten. Se llama después de iniciar sesión — no rompe nada si ya
+// estaban vinculados (usa upsert con "ignoreDuplicates").
+export async function sincronizarVinculosAcudiente() {
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData?.user?.email) return 0;
+  const correo = userData.user.email;
+
+  const { data: coincidencias, error } = await supabase.from("acudientes").select("estudiante_id")
+    .or(`correo_padre.eq.${correo},correo_madre.eq.${correo}`);
+  if (error) throw error;
+  if (!coincidencias || coincidencias.length === 0) return 0;
+
+  const filas = coincidencias.map((c) => ({ auth_user_id: userData.user.id, estudiante_id: c.estudiante_id }));
+  const { error: errorVinculo } = await supabase.from("acudientes_cuentas").upsert(filas, { onConflict: "auth_user_id,estudiante_id", ignoreDuplicates: true });
+  if (errorVinculo) throw errorVinculo;
+  return filas.length;
+}
+
+// Los estudiantes vinculados a la cuenta del acudiente que inició sesión.
+export async function fetchMisHijos() {
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData?.user) return [];
+  const { data, error } = await supabase.from("acudientes_cuentas").select("estudiantes(id, nombre, grado_id, foto_url, foto_storage_url)").eq("auth_user_id", userData.user.id);
+  if (error) throw error;
+  return (data || []).map((r) => r.estudiantes).filter(Boolean);
+}
+
+// Resumen de solo lectura para el hijo elegido — notas finales por
+// materia/periodo, asistencia, y anotaciones de convivencia completas
+// (confirmado que el acudiente SÍ debe verlas tal cual las escribe el
+// docente, a diferencia del proceso PIAR que no se muestra).
+export async function fetchResumenParaAcudiente(estudianteId) {
+  const [estudianteRes, notasRes, asistencia, anotaciones] = await Promise.all([
+    supabase.from("estudiantes").select("*").eq("id", estudianteId).maybeSingle(),
+    supabase.from("notas_finales_periodo").select("*, materias(nombre)").eq("estudiante_id", estudianteId),
+    fetchEstadisticasAsistencia(estudianteId),
+    fetchAnotaciones(estudianteId),
+  ]);
+  if (estudianteRes.error) throw estudianteRes.error;
+
+  const materiasMap = {};
+  const notasPorMateriaPeriodo = {};
+  (notasRes.data || []).forEach((n) => {
+    if (!materiasMap[n.materia_id]) materiasMap[n.materia_id] = n.materias?.nombre || `Materia ${n.materia_id}`;
+    notasPorMateriaPeriodo[n.materia_id] = notasPorMateriaPeriodo[n.materia_id] || {};
+    notasPorMateriaPeriodo[n.materia_id][n.periodo] = n.nota;
+  });
+  const periodos = Array.from(new Set((notasRes.data || []).map((n) => n.periodo))).sort();
+  const materias = Object.entries(materiasMap).map(([id, nombre]) => ({ id, nombre })).sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+  return { estudiante: estudianteRes.data, materias, periodos, notasPorMateriaPeriodo, asistencia, anotaciones };
+}
+
+// Anuncios del curso del hijo — igual que ve el estudiante, combinados
+// de todos los docentes (ya existía fetchAnunciosParaGrado, se reusa).
+export async function fetchAnunciosParaAcudiente(gradoId) {
+  return fetchAnunciosParaGrado(gradoId);
+}
