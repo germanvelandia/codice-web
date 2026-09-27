@@ -1967,7 +1967,7 @@ function PortalAcudiente({ onElegirEstudiante }) {
   // Pantalla 1: pedir documento + clave (o el documento como clave inicial)
   if (!hijos && !necesitaCambiarClave) {
     return (
-      <div className="min-h-screen flex items-center justify-center relative py-6" style={{ background: "#FBFBFD" }}>
+      <div className="min-h-screen flex items-center justify-center relative py-6">
         <FondoCastillo />
         <div className="w-full max-w-sm px-4">
           {onElegirEstudiante && (
@@ -2004,7 +2004,7 @@ function PortalAcudiente({ onElegirEstudiante }) {
   // Pantalla 2: primera vez — obligado a elegir una clave propia
   if (necesitaCambiarClave) {
     return (
-      <div className="min-h-screen flex items-center justify-center relative py-6" style={{ background: "#FBFBFD" }}>
+      <div className="min-h-screen flex items-center justify-center relative py-6">
         <FondoCastillo />
         <div className="w-full max-w-sm px-4">
           <div className="text-center mb-5">
@@ -2403,7 +2403,7 @@ function PortalEstudiante() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative py-6" style={{ background: "#FBFBFD" }}>
+    <div className="min-h-screen flex items-center justify-center relative py-6">
       <FondoCastillo />
       <div className="w-full max-w-sm px-4">
         <div className="flex gap-1 rounded-full bg-slate-100 p-1 mb-5">
