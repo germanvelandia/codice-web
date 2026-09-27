@@ -17,6 +17,21 @@ function AcudienteEditModal({ estudiante, acudiente, onClose, onGuardado }) {
   const [emergRelacion, setEmergRelacion] = useState(acudiente?.contacto_emergencia_relacion || "");
   const [direccion, setDireccion] = useState(acudiente?.direccion || "");
   const [guardando, setGuardando] = useState(false);
+  const [restableciendo, setRestableciendo] = useState(null);
+
+  const restablecerClave = async (rol) => {
+    const doc = rol === "padre" ? documentoPadre : documentoMadre;
+    if (!doc.trim()) { alert(`Primero cargá el documento del/de la ${rol}.`); return; }
+    if (!confirm(`¿Restablecer la clave del/de la ${rol}? La próxima vez podrá entrar de nuevo usando su documento (${doc}) como clave, y se le va a pedir elegir una nueva.`)) return;
+    setRestableciendo(rol);
+    try {
+      await api.restablecerClaveAcudiente(estudiante.id, rol);
+      alert(`Listo — el/la ${rol} ya puede entrar de nuevo con su documento como clave.`);
+    } catch (e) {
+      alert("Error al restablecer: " + e.message);
+    }
+    setRestableciendo(null);
+  };
 
   const guardar = async () => {
     setGuardando(true);
@@ -66,7 +81,12 @@ function AcudienteEditModal({ estudiante, acudiente, onClose, onGuardado }) {
           </div>
           <div className="col-span-2">
             <label className="text-xs text-slate-500 block mb-1">Documento de identidad del padre (para entrar al Portal de Acudientes)</label>
-            <input value={documentoPadre} onChange={(e) => setDocumentoPadre(e.target.value)} placeholder="Ej: 123456789" className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" />
+            <div className="flex gap-2">
+              <input value={documentoPadre} onChange={(e) => setDocumentoPadre(e.target.value)} placeholder="Ej: 123456789" className="flex-1 text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" />
+              <button type="button" onClick={() => restablecerClave("padre")} disabled={restableciendo === "padre"} className="text-xs font-semibold px-3 rounded-lg bg-amber-50 text-amber-700 disabled:opacity-50 whitespace-nowrap">
+                {restableciendo === "padre" ? "…" : "🔄 Restablecer clave"}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -85,7 +105,12 @@ function AcudienteEditModal({ estudiante, acudiente, onClose, onGuardado }) {
           </div>
           <div className="col-span-2">
             <label className="text-xs text-slate-500 block mb-1">Documento de identidad de la madre (para entrar al Portal de Acudientes)</label>
-            <input value={documentoMadre} onChange={(e) => setDocumentoMadre(e.target.value)} placeholder="Ej: 123456789" className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" />
+            <div className="flex gap-2">
+              <input value={documentoMadre} onChange={(e) => setDocumentoMadre(e.target.value)} placeholder="Ej: 123456789" className="flex-1 text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" />
+              <button type="button" onClick={() => restablecerClave("madre")} disabled={restableciendo === "madre"} className="text-xs font-semibold px-3 rounded-lg bg-amber-50 text-amber-700 disabled:opacity-50 whitespace-nowrap">
+                {restableciendo === "madre" ? "…" : "🔄 Restablecer clave"}
+              </button>
+            </div>
           </div>
         </div>
 
