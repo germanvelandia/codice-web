@@ -5944,23 +5944,63 @@ export async function fetchMisHijos() {
 // (confirmado que el acudiente SÍ debe verlas tal cual las escribe el
 // docente, a diferencia del proceso PIAR que no se muestra).
 export async function fetchResumenParaAcudiente(estudianteId) {
-  const [estudianteRes, notasRes, asistencia, anotaciones] = await Promise.all([
+  const [estudianteRes, notasData, asistencia, anotaciones] = await Promise.all([
     supabase.from("estudiantes").select("*").eq("id", estudianteId).maybeSingle(),
-    supabase.from("notas_finales_periodo").select("*, materias(nombre)").eq("estudiante_id", estudianteId),
+    fetchNotasEstudiante(estudianteId),
     fetchEstadisticasAsistencia(estudianteId),
     fetchAnotaciones(estudianteId),
   ]);
   if (estudianteRes.error) throw estudianteRes.error;
 
-  const materiasMap = {};
-  const notasPorMateriaPeriodo = {};
-  (notasRes.data || []).forEach((n) => {
-    if (!materiasMap[n.materia_id]) materiasMap[n.materia_id] = n.materias?.nombre || `Materia ${n.materia_id}`;
-    notasPorMateriaPeriodo[n.materia_id] = notasPorMateriaPeriodo[n.materia_id] || {};
-    notasPorMateriaPeriodo[n.materia_id][n.periodo] = n.nota;
+  // Junta, por materia, los periodos con nota final ya guardada Y los
+  // periodos donde solo hay actividades cargadas todavía (en curso) —
+  // para estos últimos se calcula la nota en vivo con la misma fórmula
+  // ponderada del docente. Es la MISMA lógica que usa el estudiante en
+  // "Mis notas", para que padre e hijo vean siempre el mismo número.
+  const materiasMap = {}; // nombre -> { finales: {periodo: nota}, actividadesPorPeriodo: {periodo: [valores]} }
+  notasData.finales.forEach((f) => {
+    const nombre = f.materias?.nombre || `Materia ${f.materia_id}`;
+    materiasMap[nombre] = materiasMap[nombre] || { finales: {}, actividadesPorPeriodo: {} };
+    materiasMap[nombre].finales[f.periodo] = f.nota;
   });
-  const periodos = Array.from(new Set((notasRes.data || []).map((n) => n.periodo))).sort();
-  const materias = Object.entries(materiasMap).map(([id, nombre]) => ({ id, nombre })).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  notasData.valores.forEach((v) => {
+    const act = v.notas_actividades;
+    if (!act) return;
+    const nombre = act.materias?.nombre || `Materia ${act.materia_id}`;
+    materiasMap[nombre] = materiasMap[nombre] || { finales: {}, actividadesPorPeriodo: {} };
+    materiasMap[nombre].actividadesPorPeriodo[act.periodo] = materiasMap[nombre].actividadesPorPeriodo[act.periodo] || [];
+    materiasMap[nombre].actividadesPorPeriodo[act.periodo].push(v);
+  });
+
+  const notasPorMateriaPeriodo = {};
+  const periodosSet = new Set();
+  const materias = Object.entries(materiasMap).map(([nombre, m]) => {
+    const periodosDeEstaMateria = [...new Set([...Object.keys(m.finales), ...Object.keys(m.actividadesPorPeriodo)])];
+    notasPorMateriaPeriodo[nombre] = {};
+    periodosDeEstaMateria.forEach((periodo) => {
+      periodosSet.add(periodo);
+      if (Object.prototype.hasOwnProperty.call(m.finales, periodo)) {
+        notasPorMateriaPeriodo[nombre][periodo] = { nota: m.finales[periodo], enCurso: false };
+        return;
+      }
+      // Sin nota final guardada todavía: se calcula en vivo con lo que hay cargado.
+      const porCategoria = {};
+      const categoriasVistas = {};
+      (m.actividadesPorPeriodo[periodo] || []).forEach((a) => {
+        const cat = a.notas_actividades?.notas_categorias;
+        const catId = a.notas_actividades?.categoria_id;
+        if (!catId) return;
+        categoriasVistas[catId] = { id: catId, porcentaje: cat?.porcentaje || 0 };
+        porCategoria[catId] = porCategoria[catId] || [];
+        porCategoria[catId].push(a.valor);
+      });
+      const notaViva = notaFinalPonderada(porCategoria, Object.values(categoriasVistas));
+      notasPorMateriaPeriodo[nombre][periodo] = { nota: notaViva, enCurso: true };
+    });
+    return { id: nombre, nombre };
+  }).sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+  const periodos = Array.from(periodosSet).sort();
 
   return { estudiante: estudianteRes.data, materias, periodos, notasPorMateriaPeriodo, asistencia, anotaciones };
 }
