@@ -56,9 +56,10 @@ export default function App() {
   // No muestra ninguna opción de docente, ni espera sesión de Supabase.
   const soloEstudiante = typeof window !== "undefined" && window.location.hash === "#estudiante";
   const esTarjetaComarca = typeof window !== "undefined" && window.location.hash.startsWith("#comarca-tarjeta");
+  const soloAcudiente = typeof window !== "undefined" && window.location.hash === "#acudiente";
 
   useEffect(() => {
-    if (soloEstudiante || esTarjetaComarca) return;
+    if (soloEstudiante || esTarjetaComarca || soloAcudiente) return;
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setLoading(false);
@@ -69,6 +70,10 @@ export default function App() {
 
   if (esTarjetaComarca) {
     return <TarjetaComarcaPublica />;
+  }
+
+  if (soloAcudiente) {
+    return <PortalAcudiente />;
   }
 
   if (soloEstudiante) {
@@ -1889,6 +1894,245 @@ function MiComarcaEstudiante({ estudianteInfo }) {
   );
 }
 
+
+// Portal de Acudientes — cada acudiente se registra con su propio
+// correo, se vincula automáticamente a su(s) hijo(s) por coincidencia
+// de correo con el Directorio, y ve (solo lectura): notas, asistencia,
+// anuncios, y anotaciones de convivencia completas. NO ve el proceso
+// PIAR/DUA, ni nada de gestión de aula.
+function PortalAcudiente() {
+  const [session, setSession] = useState(null);
+  const [cargandoSesion, setCargandoSesion] = useState(true);
+  const [modo, setModo] = useState("ingresar"); // "ingresar" | "crear"
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [cargando, setCargando] = useState(false);
+  const [mensajeCreado, setMensajeCreado] = useState(false);
+
+  const [hijos, setHijos] = useState(null);
+  const [hijoElegidoId, setHijoElegidoId] = useState(null);
+  const [vista, setVista] = useState("notas");
+  const [resumen, setResumen] = useState(null);
+  const [anuncios, setAnuncios] = useState([]);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => { setSession(data.session); setCargandoSesion(false); });
+    const { data: listener } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!session) { setHijos(null); return; }
+    api.sincronizarVinculosAcudiente().then(() => api.fetchMisHijos()).then((lista) => {
+      setHijos(lista);
+      if (lista[0]) setHijoElegidoId(lista[0].id);
+    });
+  }, [session]);
+
+  useEffect(() => {
+    if (!hijoElegidoId) return;
+    setResumen(null);
+    api.fetchResumenParaAcudiente(hijoElegidoId).then(setResumen);
+    api.fetchAnunciosParaAcudiente(hijos?.find((h) => h.id === hijoElegidoId)?.grado_id).then(setAnuncios);
+  }, [hijoElegidoId]);
+
+  const enviar = async () => {
+    if (!email.trim() || !password.trim()) { setError("Completá correo y contraseña."); return; }
+    setCargando(true);
+    setError("");
+    try {
+      if (modo === "crear") {
+        await api.registrarAcudiente(email, password);
+        setMensajeCreado(true);
+      } else {
+        await api.iniciarSesionAcudiente(email, password);
+      }
+    } catch (e) {
+      setError(e.message);
+    }
+    setCargando(false);
+  };
+
+  const hijoElegido = hijos?.find((h) => h.id === hijoElegidoId);
+
+  if (cargandoSesion) return <Centered>Cargando…</Centered>;
+
+  if (!session) {
+    return (
+      <div className="min-h-screen flex items-center justify-center relative py-6" style={{ background: "#FBFBFD" }}>
+        <div className="w-full max-w-sm px-4">
+          <div className="text-center mb-5">
+            <div className="text-4xl mb-1">👪</div>
+            <h1 className="text-2xl font-bold" style={{ color: "#17264D", fontFamily: "Georgia, serif" }}>Portal de Acudientes</h1>
+            <p className="text-slate-400 text-xs mt-1">Seguimiento del progreso de tu hijo/a en CÓDICE</p>
+          </div>
+          <div className="bg-white rounded-2xl shadow-lg p-6">
+            <div className="flex gap-1 rounded-full bg-slate-100 p-1 mb-4">
+              <button onClick={() => { setModo("ingresar"); setError(""); setMensajeCreado(false); }} className={`flex-1 text-xs font-semibold py-2 rounded-full ${modo === "ingresar" ? "bg-white shadow-sm" : "text-slate-500"}`}>Ya tengo cuenta</button>
+              <button onClick={() => { setModo("crear"); setError(""); setMensajeCreado(false); }} className={`flex-1 text-xs font-semibold py-2 rounded-full ${modo === "crear" ? "bg-white shadow-sm" : "text-slate-500"}`}>Crear cuenta</button>
+            </div>
+
+            {mensajeCreado ? (
+              <div className="text-center py-4">
+                <div className="text-3xl mb-2">✅</div>
+                <p className="text-sm text-slate-600 mb-1">¡Cuenta creada!</p>
+                <p className="text-xs text-slate-400">Si tu correo ya estaba cargado por el colegio, al iniciar sesión vas a ver a tu hijo/a automáticamente.</p>
+                <button onClick={() => { setModo("ingresar"); setMensajeCreado(false); }} className="mt-3 text-xs font-semibold text-violet-600 underline">Iniciar sesión ahora</button>
+              </div>
+            ) : (
+              <>
+                <label className="text-xs text-slate-500 block mb-1">Correo (el mismo que tiene el colegio)</label>
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tu@correo.com"
+                  className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
+                <label className="text-xs text-slate-500 block mb-1">Contraseña</label>
+                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") enviar(); }}
+                  className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
+                {error && <p className="text-xs text-rose-500 mb-2">{error}</p>}
+                <button disabled={cargando} onClick={enviar} className="w-full text-sm font-semibold py-2.5 rounded-lg text-white disabled:opacity-60" style={{ background: "#2F55A4" }}>
+                  {cargando ? "…" : modo === "crear" ? "Crear cuenta" : "Iniciar sesión"}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (hijos === null) return <Centered>Cargando…</Centered>;
+
+  if (hijos.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4" style={{ background: "#FBFBFD" }}>
+        <div className="bg-white rounded-2xl shadow-lg p-6 max-w-sm text-center">
+          <div className="text-3xl mb-2">🤔</div>
+          <p className="text-sm text-slate-600 mb-2">No encontramos ningún estudiante vinculado a este correo.</p>
+          <p className="text-xs text-slate-400 mb-4">Verificá con el colegio que este correo esté cargado en el Directorio de acudientes de tu hijo/a.</p>
+          <button onClick={() => supabase.auth.signOut()} className="text-xs font-semibold text-violet-600 underline">Cerrar sesión</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen" style={{ background: "#FBFBFD" }}>
+      <div className="px-4 md:px-8 py-4" style={{ background: "#17264D" }}>
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">👪</span>
+            <span className="text-white font-bold text-sm tracking-wide">Portal de Acudientes</span>
+          </div>
+          <div className="flex items-center gap-3">
+            {hijos.length > 1 && (
+              <select value={hijoElegidoId} onChange={(e) => setHijoElegidoId(parseInt(e.target.value, 10))} className="text-xs rounded-full px-3 py-1.5 border-none outline-none">
+                {hijos.map((h) => <option key={h.id} value={h.id}>{h.nombre}</option>)}
+              </select>
+            )}
+            <button onClick={() => supabase.auth.signOut()} className="text-white text-xs underline">Cerrar sesión</button>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-3xl mx-auto p-4 md:p-6">
+        {hijoElegido && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 mb-4 flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full overflow-hidden shrink-0" style={{ background: "#E8EEF8" }}>
+              {api.urlFotoEstudiante(hijoElegido) ? <img src={api.urlFotoEstudiante(hijoElegido)} alt={hijoElegido.nombre} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xl">🎓</div>}
+            </div>
+            <div>
+              <div className="font-bold text-slate-800">{hijoElegido.nombre}</div>
+              <div className="text-xs text-slate-400">Grado {hijoElegido.grado_id}</div>
+            </div>
+          </div>
+        )}
+
+        <div className="flex gap-2 mb-4 flex-wrap">
+          {[
+            { key: "notas", label: "📖 Notas" },
+            { key: "asistencia", label: "📋 Asistencia" },
+            { key: "anuncios", label: "📣 Anuncios" },
+            { key: "convivencia", label: "🗒️ Convivencia" },
+          ].map((t) => (
+            <button key={t.key} onClick={() => setVista(t.key)}
+              className={`text-xs font-semibold px-3 py-2 rounded-full ${vista === t.key ? "text-white" : "bg-white text-slate-600 border border-slate-200"}`}
+              style={vista === t.key ? { background: "#2F55A4" } : undefined}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {!resumen ? (
+          <p className="text-sm text-slate-400">Cargando…</p>
+        ) : (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 md:p-5">
+            {vista === "notas" && (
+              resumen.materias.length === 0 ? (
+                <p className="text-sm text-slate-400">Todavía no hay notas registradas.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-slate-400 text-xs">
+                        <th className="pb-2">Materia</th>
+                        {resumen.periodos.map((p) => <th key={p} className="pb-2 text-center">P{p}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {resumen.materias.map((m) => (
+                        <tr key={m.id} className="border-t border-slate-100">
+                          <td className="py-2 font-medium text-slate-700">{m.nombre}</td>
+                          {resumen.periodos.map((p) => <td key={p} className="py-2 text-center">{resumen.notasPorMateriaPeriodo[m.id]?.[p] ?? "—"}</td>)}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            )}
+
+            {vista === "asistencia" && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-emerald-50 rounded-xl p-3 text-center"><div className="text-lg font-bold text-emerald-600">{resumen.asistencia.P}</div><div className="text-[10px] text-slate-500">Presentes</div></div>
+                <div className="bg-amber-50 rounded-xl p-3 text-center"><div className="text-lg font-bold text-amber-600">{resumen.asistencia.R}</div><div className="text-[10px] text-slate-500">Retardos</div></div>
+                <div className="bg-rose-50 rounded-xl p-3 text-center"><div className="text-lg font-bold text-rose-600">{resumen.asistencia.FI}</div><div className="text-[10px] text-slate-500">Faltas injustificadas</div></div>
+                <div className="bg-slate-50 rounded-xl p-3 text-center"><div className="text-lg font-bold text-slate-600">{resumen.asistencia.FJ}</div><div className="text-[10px] text-slate-500">Faltas justificadas</div></div>
+                {resumen.asistencia.pct !== null && <div className="col-span-2 sm:col-span-4 text-center text-sm text-slate-500 mt-1">% de asistencia: <b className="text-slate-800">{resumen.asistencia.pct}%</b></div>}
+              </div>
+            )}
+
+            {vista === "anuncios" && (
+              anuncios.length === 0 ? <p className="text-sm text-slate-400">No hay anuncios todavía.</p> : (
+                <div className="space-y-2">
+                  {anuncios.map((a) => (
+                    <div key={a.id} className="bg-slate-50 rounded-xl p-3">
+                      <div className="text-xs font-bold text-slate-700">{a.titulo}</div>
+                      <div className="text-xs text-slate-500 mt-1">{a.contenido}</div>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+
+            {vista === "convivencia" && (
+              resumen.anotaciones.length === 0 ? <p className="text-sm text-slate-400">No hay anotaciones registradas.</p> : (
+                <div className="space-y-2">
+                  {resumen.anotaciones.map((a) => (
+                    <div key={a.id} className="bg-slate-50 rounded-xl p-3">
+                      <div className="text-[10px] text-slate-400">{a.fecha} · {a.categoria === "academico" ? "📘 Académico" : "🤝 Convivencial"}</div>
+                      <div className="text-sm text-slate-700 mt-1 whitespace-pre-line">{a.contenido}</div>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function PortalEstudiante() {
   const [codigo, setCodigo] = useState(() => localStorage.getItem("codice_estudiante_codigo") || "");
