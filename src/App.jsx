@@ -1900,7 +1900,7 @@ function MiComarcaEstudiante({ estudianteInfo }) {
 // de correo con el Directorio, y ve (solo lectura): notas, asistencia,
 // anuncios, y anotaciones de convivencia completas. NO ve el proceso
 // PIAR/DUA, ni nada de gestión de aula.
-function PortalAcudiente() {
+function PortalAcudiente({ onElegirEstudiante }) {
   const [session, setSession] = useState(null);
   const [cargandoSesion, setCargandoSesion] = useState(true);
   const [modo, setModo] = useState("ingresar"); // "ingresar" | "crear"
@@ -1962,6 +1962,12 @@ function PortalAcudiente() {
     return (
       <div className="min-h-screen flex items-center justify-center relative py-6" style={{ background: "#FBFBFD" }}>
         <div className="w-full max-w-sm px-4">
+          {onElegirEstudiante && (
+            <div className="flex gap-1 rounded-full bg-slate-100 p-1 mb-5">
+              <button onClick={onElegirEstudiante} className="flex-1 text-xs font-semibold py-2 rounded-full text-slate-500">🎓 Soy estudiante</button>
+              <button className="flex-1 text-xs font-semibold py-2 rounded-full bg-white shadow-sm">👪 Soy acudiente</button>
+            </div>
+          )}
           <div className="text-center mb-5">
             <div className="text-4xl mb-1">👪</div>
             <h1 className="text-2xl font-bold" style={{ color: "#17264D", fontFamily: "Georgia, serif" }}>Portal de Acudientes</h1>
@@ -2135,6 +2141,7 @@ function PortalAcudiente() {
 }
 
 function PortalEstudiante() {
+  const [tipoAcceso, setTipoAcceso] = useState("estudiante"); // "estudiante" | "acudiente"
   const [codigo, setCodigo] = useState(() => localStorage.getItem("codice_estudiante_codigo") || "");
   const [datos, setDatos] = useState(null);
   const [estudianteInfo, setEstudianteInfo] = useState(null);
@@ -2380,9 +2387,17 @@ function PortalEstudiante() {
     );
   }
 
+  if (tipoAcceso === "acudiente") {
+    return <PortalAcudiente onElegirEstudiante={() => setTipoAcceso("estudiante")} />;
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center relative py-6" style={{ background: "#FBFBFD" }}>
       <div className="w-full max-w-sm px-4">
+        <div className="flex gap-1 rounded-full bg-slate-100 p-1 mb-5">
+          <button onClick={() => setTipoAcceso("estudiante")} className="flex-1 text-xs font-semibold py-2 rounded-full bg-white shadow-sm">🎓 Soy estudiante</button>
+          <button onClick={() => setTipoAcceso("acudiente")} className="flex-1 text-xs font-semibold py-2 rounded-full text-slate-500">👪 Soy acudiente</button>
+        </div>
         <div className="text-center mb-5">
           <div className="text-4xl mb-1">🎓</div>
           <h1 className="text-2xl font-bold" style={{ color: "#17264D", fontFamily: "Georgia, serif" }}>CÓDICE</h1>
