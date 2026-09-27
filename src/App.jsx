@@ -1904,6 +1904,7 @@ function MiComarcaEstudiante({ estudianteInfo }) {
 // el proceso PIAR/DUA, ni nada de gestión de aula.
 function PortalAcudiente({ onElegirEstudiante }) {
   const [documento, setDocumento] = useState("");
+  const [rol, setRol] = useState(null);
   const [clave, setClave] = useState("");
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
@@ -1926,6 +1927,7 @@ function PortalAcudiente({ onElegirEstudiante }) {
     try {
       const r = await api.iniciarSesionAcudientePorDocumento(documento, clave);
       if (!r.ok) { setError(r.error); setCargando(false); return; }
+      setRol(r.rol);
       if (r.necesitaCambiarClave) {
         setNecesitaCambiarClave(true);
       } else {
@@ -1944,7 +1946,7 @@ function PortalAcudiente({ onElegirEstudiante }) {
     setCambiandoClave(true);
     setError("");
     try {
-      await api.cambiarClaveAcudiente(documento, nuevaClave);
+      await api.cambiarClaveAcudiente(documento, rol, nuevaClave);
       const r = await api.iniciarSesionAcudientePorDocumento(documento, nuevaClave);
       setHijos(r.estudiantes);
       if (r.estudiantes[0]) setHijoElegidoId(r.estudiantes[0].id);
