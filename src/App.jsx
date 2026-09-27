@@ -1917,6 +1917,7 @@ function PortalAcudiente({ onElegirEstudiante }) {
   const [hijos, setHijos] = useState(null);
   const [hijoElegidoId, setHijoElegidoId] = useState(null);
   const [vista, setVista] = useState("notas");
+  const [materiaAbierta, setMateriaAbierta] = useState(null);
   const [resumen, setResumen] = useState(null);
   const [anuncios, setAnuncios] = useState([]);
 
@@ -2089,35 +2090,62 @@ function PortalAcudiente({ onElegirEstudiante }) {
               resumen.materias.length === 0 ? (
                 <p className="text-sm text-slate-400">Todavía no hay notas registradas.</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-slate-400 text-xs">
-                        <th className="pb-2">Materia</th>
-                        {resumen.periodos.map((p) => <th key={p} className="pb-2 text-center">P{p}</th>)}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {resumen.materias.map((m) => (
-                        <tr key={m.id} className="border-t border-slate-100">
-                          <td className="py-2 font-medium text-slate-700">{m.nombre}</td>
-                          {resumen.periodos.map((p) => {
-                            const celda = resumen.notasPorMateriaPeriodo[m.id]?.[p];
-                            return (
-                              <td key={p} className="py-2 text-center">
-                                {celda ? (
-                                  <span className={celda.enCurso ? "text-amber-600" : "text-slate-700"} title={celda.enCurso ? "En curso — se recalcula con cada actividad nueva" : "Nota final del periodo"}>
-                                    {celda.nota !== null && celda.nota !== undefined ? Number(celda.nota).toFixed(1) : "—"}{celda.enCurso && "*"}
-                                  </span>
-                                ) : "—"}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  <p className="text-[11px] text-amber-600 mt-2">* Nota en curso — el periodo todavía no cerró, se va actualizando con cada actividad nueva.</p>
+                <div className="space-y-2">
+                  {resumen.materias.map((m) => {
+                    const abierta = materiaAbierta === m.id;
+                    return (
+                      <div key={m.id} className="bg-slate-50 rounded-xl p-3">
+                        <button onClick={() => setMateriaAbierta(abierta ? null : m.id)} className="w-full text-left">
+                          <div className="text-sm font-semibold text-slate-800">{m.nombre}</div>
+                          <div className="flex flex-wrap gap-1.5 mt-1">
+                            {resumen.periodos.map((p) => {
+                              const celda = resumen.notasPorMateriaPeriodo[m.id]?.[p];
+                              return (
+                                <span key={p} className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${celda?.enCurso ? "bg-amber-100 text-amber-700" : "bg-violet-100 text-violet-700"}`}>
+                                  P{p}: {celda && celda.nota !== null && celda.nota !== undefined ? Number(celda.nota).toFixed(1) : "—"}{celda?.enCurso && "*"}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </button>
+
+                        {abierta && (
+                          <div className="mt-2 pt-2 border-t border-slate-200 space-y-2">
+                            {resumen.periodos.map((p) => {
+                              const celda = resumen.notasPorMateriaPeriodo[m.id]?.[p];
+                              if (!celda) return null;
+                              return (
+                                <div key={p}>
+                                  <div className="text-xs font-semibold text-slate-600">
+                                    Periodo {p} — <span>{celda.nota !== null && celda.nota !== undefined ? Number(celda.nota).toFixed(1) : "—"}</span>
+                                    {celda.enCurso && <span className="text-amber-600 font-normal"> · En curso (provisional)</span>}
+                                  </div>
+                                  {celda.actividades.length > 0 ? (
+                                    <div className="ml-2 mt-1 space-y-0.5">
+                                      {celda.actividades.map((a) => (
+                                        <div key={a.id}>
+                                          <div className="text-[11px] text-slate-500 flex justify-between gap-2">
+                                            <span>{a.notas_actividades?.nombre}{a.notas_actividades?.notas_categorias?.nombre ? ` (${a.notas_actividades.notas_categorias.nombre})` : ""}</span>
+                                            <span className="font-semibold shrink-0">{a.valor}</span>
+                                          </div>
+                                          {a.observacion && (
+                                            <div className="text-[10px] text-violet-600 italic bg-violet-50 rounded-lg px-2 py-1 mt-0.5">📝 {a.observacion}</div>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="text-[11px] text-slate-400 ml-2 mt-0.5">Sin actividades individuales cargadas para este periodo.</p>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <p className="text-[11px] text-amber-600 mt-1">* Nota en curso — el periodo todavía no cerró, se va actualizando con cada actividad nueva. Tocá una materia para ver el detalle.</p>
                 </div>
               )
             )}
