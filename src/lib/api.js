@@ -5980,7 +5980,7 @@ export async function fetchResumenParaAcudiente(estudianteId) {
     periodosDeEstaMateria.forEach((periodo) => {
       periodosSet.add(periodo);
       if (Object.prototype.hasOwnProperty.call(m.finales, periodo)) {
-        notasPorMateriaPeriodo[nombre][periodo] = { nota: m.finales[periodo], enCurso: false };
+        notasPorMateriaPeriodo[nombre][periodo] = { nota: m.finales[periodo], enCurso: false, actividades: m.actividadesPorPeriodo[periodo] || [] };
         return;
       }
       // Sin nota final guardada todavía: se calcula en vivo con lo que hay cargado.
@@ -5995,7 +5995,7 @@ export async function fetchResumenParaAcudiente(estudianteId) {
         porCategoria[catId].push(a.valor);
       });
       const notaViva = notaFinalPonderada(porCategoria, Object.values(categoriasVistas));
-      notasPorMateriaPeriodo[nombre][periodo] = { nota: notaViva, enCurso: true };
+      notasPorMateriaPeriodo[nombre][periodo] = { nota: notaViva, enCurso: true, actividades: m.actividadesPorPeriodo[periodo] || [] };
     });
     return { id: nombre, nombre };
   }).sort((a, b) => a.nombre.localeCompare(b.nombre));
