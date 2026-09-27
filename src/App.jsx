@@ -2101,11 +2101,23 @@ function PortalAcudiente({ onElegirEstudiante }) {
                       {resumen.materias.map((m) => (
                         <tr key={m.id} className="border-t border-slate-100">
                           <td className="py-2 font-medium text-slate-700">{m.nombre}</td>
-                          {resumen.periodos.map((p) => <td key={p} className="py-2 text-center">{resumen.notasPorMateriaPeriodo[m.id]?.[p] ?? "—"}</td>)}
+                          {resumen.periodos.map((p) => {
+                            const celda = resumen.notasPorMateriaPeriodo[m.id]?.[p];
+                            return (
+                              <td key={p} className="py-2 text-center">
+                                {celda ? (
+                                  <span className={celda.enCurso ? "text-amber-600" : "text-slate-700"} title={celda.enCurso ? "En curso — se recalcula con cada actividad nueva" : "Nota final del periodo"}>
+                                    {celda.nota !== null && celda.nota !== undefined ? Number(celda.nota).toFixed(1) : "—"}{celda.enCurso && "*"}
+                                  </span>
+                                ) : "—"}
+                              </td>
+                            );
+                          })}
                         </tr>
                       ))}
                     </tbody>
                   </table>
+                  <p className="text-[11px] text-amber-600 mt-2">* Nota en curso — el periodo todavía no cerró, se va actualizando con cada actividad nueva.</p>
                 </div>
               )
             )}
