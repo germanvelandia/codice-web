@@ -2381,13 +2381,12 @@ function PortalEstudiante() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative py-6">
-      <FondoCastillo />
+    <div className="min-h-screen flex items-center justify-center relative py-6" style={{ background: "#FBFBFD" }}>
       <div className="w-full max-w-sm px-4">
-        <div className="text-center mb-3">
-          <div className="text-4xl mb-1">🏰</div>
-          <h1 className="text-3xl font-bold text-white tracking-[0.15em]" style={{ fontFamily: "Georgia, serif", textShadow: "0 2px 8px rgba(23,38,77,0.6)" }}>CÓDICE</h1>
-          <p className="text-violet-100 text-xs mt-1" style={{ textShadow: "0 1px 4px rgba(23,38,77,0.6)" }}>Tu aventura de aprendizaje</p>
+        <div className="text-center mb-5">
+          <div className="text-4xl mb-1">🎓</div>
+          <h1 className="text-2xl font-bold" style={{ color: "#17264D", fontFamily: "Georgia, serif" }}>CÓDICE</h1>
+          <p className="text-slate-400 text-xs mt-1">Tu aventura de aprendizaje</p>
         </div>
         <div className="bg-white rounded-2xl shadow-lg p-6">
           <p className="text-sm text-slate-500 text-center mb-4">Ingresa el código de acceso que te dio tu docente para ver tu progreso.</p>
