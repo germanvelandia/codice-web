@@ -7,9 +7,11 @@ function AcudienteEditModal({ estudiante, acudiente, onClose, onGuardado }) {
   const [nombrePadre, setNombrePadre] = useState(acudiente?.nombre_padre || "");
   const [telefonoPadre, setTelefonoPadre] = useState(acudiente?.telefono_padre || "");
   const [correoPadre, setCorreoPadre] = useState(acudiente?.correo_padre || "");
+  const [documentoPadre, setDocumentoPadre] = useState(acudiente?.numero_documento_padre || "");
   const [nombreMadre, setNombreMadre] = useState(acudiente?.nombre_madre || "");
   const [telefonoMadre, setTelefonoMadre] = useState(acudiente?.telefono_madre || "");
   const [correoMadre, setCorreoMadre] = useState(acudiente?.correo_madre || "");
+  const [documentoMadre, setDocumentoMadre] = useState(acudiente?.numero_documento_madre || "");
   const [emergNombre, setEmergNombre] = useState(acudiente?.contacto_emergencia_nombre || "");
   const [emergTelefono, setEmergTelefono] = useState(acudiente?.contacto_emergencia_telefono || "");
   const [emergRelacion, setEmergRelacion] = useState(acudiente?.contacto_emergencia_relacion || "");
@@ -23,9 +25,11 @@ function AcudienteEditModal({ estudiante, acudiente, onClose, onGuardado }) {
         nombre_padre: nombrePadre.trim() || null,
         telefono_padre: telefonoPadre.trim() || null,
         correo_padre: correoPadre.trim() || null,
+        numero_documento_padre: documentoPadre.trim() || null,
         nombre_madre: nombreMadre.trim() || null,
         telefono_madre: telefonoMadre.trim() || null,
         correo_madre: correoMadre.trim() || null,
+        numero_documento_madre: documentoMadre.trim() || null,
         contacto_emergencia_nombre: emergNombre.trim() || null,
         contacto_emergencia_telefono: emergTelefono.trim() || null,
         contacto_emergencia_relacion: emergRelacion.trim() || null,
@@ -57,8 +61,12 @@ function AcudienteEditModal({ estudiante, acudiente, onClose, onGuardado }) {
             <input value={telefonoPadre} onChange={(e) => setTelefonoPadre(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" />
           </div>
           <div className="col-span-2">
-            <label className="text-xs text-slate-500 block mb-1">Correo del padre (para el Portal de Acudientes)</label>
+            <label className="text-xs text-slate-500 block mb-1">Correo del padre (opcional, solo contacto)</label>
             <input type="email" value={correoPadre} onChange={(e) => setCorreoPadre(e.target.value)} placeholder="ejemplo@correo.com" className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" />
+          </div>
+          <div className="col-span-2">
+            <label className="text-xs text-slate-500 block mb-1">Documento de identidad del padre (para entrar al Portal de Acudientes)</label>
+            <input value={documentoPadre} onChange={(e) => setDocumentoPadre(e.target.value)} placeholder="Ej: 123456789" className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" />
           </div>
         </div>
 
@@ -72,8 +80,12 @@ function AcudienteEditModal({ estudiante, acudiente, onClose, onGuardado }) {
             <input value={telefonoMadre} onChange={(e) => setTelefonoMadre(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" />
           </div>
           <div className="col-span-2">
-            <label className="text-xs text-slate-500 block mb-1">Correo de la madre (para el Portal de Acudientes)</label>
+            <label className="text-xs text-slate-500 block mb-1">Correo de la madre (opcional, solo contacto)</label>
             <input type="email" value={correoMadre} onChange={(e) => setCorreoMadre(e.target.value)} placeholder="ejemplo@correo.com" className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" />
+          </div>
+          <div className="col-span-2">
+            <label className="text-xs text-slate-500 block mb-1">Documento de identidad de la madre (para entrar al Portal de Acudientes)</label>
+            <input value={documentoMadre} onChange={(e) => setDocumentoMadre(e.target.value)} placeholder="Ej: 123456789" className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" />
           </div>
         </div>
 
