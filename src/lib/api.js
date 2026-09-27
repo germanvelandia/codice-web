@@ -5970,3 +5970,52 @@ export async function fetchResumenParaAcudiente(estudianteId) {
 export async function fetchAnunciosParaAcudiente(gradoId) {
   return fetchAnunciosParaGrado(gradoId);
 }
+
+/* ==================== 👪 Acceso de acudientes por documento ====================
+   Reemplaza el intento anterior con correo+contraseña (que topaba con el
+   límite de envío de correos de Supabase). Funciona parecido al código
+   del estudiante: sin registro por correo. La primera vez, el documento
+   de identidad ES la clave; al entrar así, se exige elegir una clave
+   nueva y personal, que reemplaza al documento de ahí en adelante. */
+
+async function hashClave(texto) {
+  const datos = new TextEncoder().encode(texto.trim());
+  const buffer = await crypto.subtle.digest("SHA-256", datos);
+  return Array.from(new Uint8Array(buffer)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Intenta entrar con documento + clave. Devuelve:
+// - { ok: false, error } si no coincide nada
+// - { ok: true, necesitaCambiarClave: true, documento, estudiantes } si entró con el documento (primera vez)
+// - { ok: true, necesitaCambiarClave: false, estudiantes } si ya tenía clave propia
+export async function iniciarSesionAcudientePorDocumento(documento, clave) {
+  const doc = documento.trim();
+  const { data: filas, error } = await supabase.from("acudientes").select("*, estudiantes(id, nombre, grado_id, foto_url, foto_storage_url)")
+    .or(`numero_documento_padre.eq.${doc},numero_documento_madre.eq.${doc}`);
+  if (error) throw error;
+  if (!filas || filas.length === 0) return { ok: false, error: "No encontramos ese número de documento. Verificá con el colegio que esté cargado en el Directorio." };
+
+  const claveGuardada = filas.find((f) => f.clave_acudiente)?.clave_acudiente || null;
+  const estudiantes = filas.map((f) => f.estudiantes).filter(Boolean);
+
+  if (!claveGuardada) {
+    // Todavía no eligió clave propia — el documento hace de clave inicial.
+    if (clave.trim() !== doc) return { ok: false, error: "Clave incorrecta. La primera vez, usá tu número de documento como clave." };
+    return { ok: true, necesitaCambiarClave: true, documento: doc, estudiantes };
+  }
+
+  const claveIngresadaHash = await hashClave(clave);
+  if (claveIngresadaHash !== claveGuardada) return { ok: false, error: "Clave incorrecta." };
+  return { ok: true, necesitaCambiarClave: false, documento: doc, estudiantes };
+}
+
+// Guarda la clave nueva y personal — reemplaza al documento como clave
+// en TODAS las filas de ese acudiente (por si tiene más de un hijo).
+export async function cambiarClaveAcudiente(documento, nuevaClave) {
+  if (nuevaClave.trim().length < 4) throw new Error("La clave nueva debe tener al menos 4 caracteres.");
+  const hash = await hashClave(nuevaClave);
+  const doc = documento.trim();
+  const { error } = await supabase.from("acudientes").update({ clave_acudiente: hash })
+    .or(`numero_documento_padre.eq.${doc},numero_documento_madre.eq.${doc}`);
+  if (error) throw error;
+}
