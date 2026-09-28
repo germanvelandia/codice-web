@@ -70,10 +70,9 @@ function TotalesPorGrado({ grados }) {
   const cargar = (materiaOverride) => {
     setCargando(true);
     const mId = (materiaOverride !== undefined ? materiaOverride : materiaFiltro) ? parseInt(materiaOverride !== undefined ? materiaOverride : materiaFiltro, 10) : null;
-    Promise.all([
-      api.fetchTotalesAsistenciaPorGrado(fechaDesde || null, fechaHasta || null, mId),
-      api.fetchTotalesAsistenciaPorEstudiante(fechaDesde || null, fechaHasta || null, mId),
-    ]).then(([g, e]) => { setTotales(g); setTotalesEstudiante(e); setCargando(false); });
+    api.fetchTotalesAsistenciaTodo(fechaDesde || null, fechaHasta || null, mId)
+      .then(({ porGrado, porEstudiante }) => { setTotales(porGrado); setTotalesEstudiante(porEstudiante); setCargando(false); })
+      .catch((e) => { setCargando(false); alert("No se pudieron cargar los totales de asistencia: " + e.message); });
   };
   useEffect(() => { cargar(); }, []);
 
