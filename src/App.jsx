@@ -1,1873 +1,785 @@
 import React, { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
-import * as XLSX from "xlsx";
-import * as api from "../lib/api";
-import { agruparPorNivel, nivelYCurso } from "../lib/gamification";
-import { periodosDe } from "../lib/calificaciones";
-import { EditorTexto, TextoEnriquecido } from "../components/RichText";
-import { BitacoraClaseModal } from "./Inicio";
-/* ==================== Helpers genéricos para el Formato Maestro ==================== */
+import { supabase } from "./lib/supabaseClient";
+import * as api from "./lib/api";
+import { nextLevel, nivelYCurso } from "./lib/gamification";
+import { bandaDesempeno, notaFinalPonderada } from "./lib/calificaciones";
+import { sonidoGirar, sonidoAcierto, sonidoError, sonidoLogro } from "./lib/sonidos";
+import { VistaGrados, VistaReinos, VistaEstudiantes, FotoLightbox } from "./screens/Estudiantes";
+import { VistaAsistencia } from "./screens/Asistencia";
+import { VistaRuleta, VistaRuletaMonedas, VistaTemporizador, DadoTool, CronometroTool, SemaforoTool, SorteoOrdenTool, GeneradorGruposTool, MarcadorPuntosTool, SelectorEstudianteTool, BingoTool, FormasExamenTool } from "./screens/Herramientas";
+import { VistaAccionesMasivas } from "./screens/AccionesMasivas";
+import { VistaBanco } from "./screens/Banco";
+import { VistaAlbum, CartaCriatura } from "./screens/Album";
+import { VistaAnuncios } from "./screens/Anuncios";
+import { VistaLogros } from "./screens/Logros";
+import { VistaSalonHonor } from "./screens/SalonHonor";
+import { VistaDiplomas } from "./screens/Diplomas";
+import { VistaPersonaje, PersonajePreview } from "./screens/Personaje";
+import { HistorialPuntosEstudiante } from "./screens/HistorialPuntos";
+import { MapaTerritoriosEstudiante } from "./screens/MapaTerritorios";
+import { VistaNiveles } from "./screens/Niveles";
+import { VistaObjetos, ObjetosEstudiante } from "./screens/Objetos";
+import { VistaActividadesProgramadas } from "./screens/ActividadesProgramadas";
+import { VistaGamificacionExtra } from "./screens/GamificacionExtra";
+import { VistaRoles } from "./screens/Roles";
+import { VistaCalificaciones } from "./screens/Calificaciones";
+import { VistaReportes } from "./screens/Reportes";
+import { VistaHorario } from "./screens/Horario";
+import { VistaPlaneaciones } from "./screens/Planeaciones";
+import { VistaBiblioteca } from "./screens/Biblioteca";
+import { VistaAnotaciones } from "./screens/Anotaciones";
+import { VistaInclusionGeneral } from "./screens/InclusionGeneral";
+import { VistaBajasVida } from "./screens/BajasVida";
+import { VistaCorregirNombres } from "./screens/CorregirNombres";
+import { VistaDireccionCurso } from "./screens/DireccionCurso";
+import { VistaGuiasEstudio, GuiasEstudiante } from "./screens/GuiasEstudio";
+import { VistaConsignasCodice } from "./screens/ConsignasCodice";
+import { VistaTriviaAdmin } from "./screens/TriviaAdmin";
+import { VistaBancoPreguntas } from "./screens/BancoPreguntas";
+import { VistaEvaluaciones } from "./screens/Evaluaciones";
+import { VistaProyectosForja } from "./screens/TareasCalificables";
+import { VistaRubricas } from "./screens/Rubricas";
+import { VistaEntregasPorRevisar } from "./screens/EntregasPorRevisar";
+import { VistaTableroSemanal } from "./screens/TableroSemanal";
+import { VistaInicio, ContenidoLightbox } from "./screens/Inicio";
+import { Star, Gift, Settings, Package, Image, FileText, Award, Trophy, Puzzle, BookOpen, HelpCircle, Archive, Clock, Palette, GraduationCap, Users } from "lucide-react";
+import { VistaComarcaOakhaven, TarjetaComarcaPublica, urlDeTarjeta, urlQR } from "./screens/ComarcaOakhaven";
+import { EditorTexto, TextoEnriquecido, textoPlano } from "./components/RichText";
+import { InstitucionModal } from "./screens/Institucion";
+import { AdministracionModal } from "./screens/Administracion";
 
-// Lista simple de textos (una fila = un ítem), con agregar/quitar.
-function ListaTextoEditable({ items, onCambio, placeholder }) {
-  const actualizar = (i, valor) => onCambio(items.map((it, idx) => (idx === i ? valor : it)));
-  const agregar = () => onCambio([...items, ""]);
-  const quitar = (i) => onCambio(items.filter((_, idx) => idx !== i));
-  return (
-    <div className="space-y-1.5">
-      {items.map((it, i) => (
-        <div key={i} className="flex items-center gap-1.5">
-          <input value={it} onChange={(e) => actualizar(i, e.target.value)} placeholder={placeholder}
-            className="flex-1 text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none" />
-          <button onClick={() => quitar(i)} className="text-slate-300 hover:text-rose-500 text-xs shrink-0">✕</button>
-        </div>
-      ))}
-      <button onClick={agregar} className="text-xs font-semibold text-violet-500">+ Agregar</button>
-    </div>
-  );
+export default function App() {
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Link dedicado para estudiantes: tu-sitio.vercel.app/#estudiante
+  // No muestra ninguna opción de docente, ni espera sesión de Supabase.
+  const soloEstudiante = typeof window !== "undefined" && window.location.hash === "#estudiante";
+  const esTarjetaComarca = typeof window !== "undefined" && window.location.hash.startsWith("#comarca-tarjeta");
+  const soloAcudiente = typeof window !== "undefined" && window.location.hash === "#acudiente";
+
+  useEffect(() => {
+    if (soloEstudiante || esTarjetaComarca || soloAcudiente) return;
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setLoading(false);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  if (esTarjetaComarca) {
+    return <TarjetaComarcaPublica />;
+  }
+
+  if (soloAcudiente) {
+    return <PortalAcudiente />;
+  }
+
+  if (soloEstudiante) {
+    return <PortalEstudiante />;
+  }
+
+  if (loading) return <Centered>Cargando…</Centered>;
+  return session ? <Panel session={session} /> : <AccessGate />;
 }
 
-// Tabla editable genérica — columnas definidas por el llamador, filas
-// libres (agregar/quitar). Cada fila es un objeto plano con esas claves.
-function TablaEditable({ columnas, filas, onCambio, filaVacia }) {
-  const actualizarCelda = (i, clave, valor) => onCambio(filas.map((f, idx) => (idx === i ? { ...f, [clave]: valor } : f)));
-  const agregarFila = () => onCambio([...filas, { ...filaVacia }]);
-  const quitarFila = (i) => onCambio(filas.filter((_, idx) => idx !== i));
+function Centered({ children }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-xs border-separate" style={{ borderSpacing: "0 6px" }}>
-        <thead>
-          <tr>
-            {columnas.map((c) => <th key={c.clave} className="text-left px-2 font-bold text-slate-400 uppercase tracking-wide" style={{ fontSize: 10 }}>{c.titulo}</th>)}
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {filas.map((fila, i) => (
-            <tr key={i} className="bg-white">
-              {columnas.map((c) => (
-                <td key={c.clave} className="px-1 py-1 align-top">
-                  {c.tipo === "textarea" ? (
-                    <textarea value={fila[c.clave] || ""} onChange={(e) => actualizarCelda(i, c.clave, e.target.value)} rows={2}
-                      className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none resize-none" style={{ minWidth: 140 }} />
-                  ) : c.tipo === "numero" ? (
-                    <input type="number" value={fila[c.clave] ?? ""} onChange={(e) => actualizarCelda(i, c.clave, e.target.value)}
-                      className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" style={{ minWidth: 70 }} />
-                  ) : (
-                    <input value={fila[c.clave] || ""} onChange={(e) => actualizarCelda(i, c.clave, e.target.value)}
-                      className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" style={{ minWidth: 140 }} />
-                  )}
-                </td>
-              ))}
-              <td className="align-top pt-2"><button onClick={() => quitarFila(i)} className="text-slate-300 hover:text-rose-500">✕</button></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <button onClick={agregarFila} className="text-xs font-semibold text-violet-500 mt-1">+ Agregar fila</button>
-    </div>
-  );
-}
-
-function SeccionModulo({ numero, titulo, subtitulo, children }) {
-  return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-3">
-      <div className="mb-3">
-        <div className="text-[10px] font-bold text-violet-500 uppercase tracking-wide">Módulo {numero}</div>
-        <h4 className="text-sm font-bold text-slate-800">{titulo}</h4>
-        {subtitulo && <p className="text-[11px] text-slate-400 mt-0.5">{subtitulo}</p>}
-      </div>
+    <div className="min-h-screen flex items-center justify-center bg-violet-50 text-slate-700">
       {children}
     </div>
   );
 }
 
-// Renglón de solo-lectura para el Formato Maestro completo (no imprime,
-// es para verlo en pantalla sin tener que entrar a editar).
-function FilaLectura({ etiqueta, children }) {
-  if (children === null || children === undefined || children === "" || (Array.isArray(children) && children.length === 0)) return null;
+// Fondo ambientado de castillo/aventura medieval — colinas, torres y
+// estandartes en SVG, puramente decorativo, detrás del formulario de acceso.
+// Silueta de castillo chico, reutilizable para armar un horizonte con
+// varios — recibe posición, escala y color para variar la profundidad.
+function Castillito({ x, y, escala = 1, color = "#223b74", opacity = 1 }) {
   return (
-    <div className="mb-2">
-      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">{etiqueta}</div>
-      <div className="text-sm text-slate-700 whitespace-pre-line">{Array.isArray(children) ? children.map((c, i) => <div key={i}>• {c}</div>) : children}</div>
-    </div>
+    <g transform={`translate(${x},${y}) scale(${escala})`} opacity={opacity}>
+      <rect x="0" y="35" width="70" height="45" fill={color} />
+      <rect x="-10" y="18" width="18" height="62" fill={color} />
+      <rect x="62" y="18" width="18" height="62" fill={color} />
+      <polygon points="-1,18 -1,4 8,12" fill={color} />
+      <polygon points="71,18 71,4 62,12" fill={color} />
+      {[0, 14, 28, 42, 56].map((dx) => (
+        <rect key={dx} x={dx} y="30" width="7" height="6" fill={color} />
+      ))}
+      <rect x="28" y="55" width="14" height="25" fill="#1e1b4b" />
+    </g>
   );
 }
 
-function TablaLectura({ columnas, filas }) {
-  if (!filas || filas.length === 0) return null;
+function FondoCastillo() {
   return (
-    <div className="overflow-x-auto mb-2">
-      <table className="w-full text-xs border-collapse">
-        <thead><tr>{columnas.map((c) => <th key={c.clave} className="text-left px-2 py-1 font-bold text-slate-400 uppercase" style={{ fontSize: 9 }}>{c.titulo}</th>)}</tr></thead>
-        <tbody>
-          {filas.map((f, i) => (
-            <tr key={i} className="border-t border-slate-200">
-              {columnas.map((c) => <td key={c.clave} className="px-2 py-1.5 align-top text-slate-600">{f[c.clave]}</td>)}
-            </tr>
+    <div className="fixed inset-0 -z-10 overflow-hidden" style={{ background: "linear-gradient(180deg, #28478a 0%, #5474b5 35%, #a7b8db 65%, #fef3c7 100%)" }}>
+      <svg viewBox="0 0 800 400" preserveAspectRatio="xMidYMax slice" className="absolute bottom-0 left-0 w-full h-full opacity-90">
+        {/* Sol/luna */}
+        <circle cx="670" cy="70" r="38" fill="#FDE68A" opacity="0.9" />
+        {/* Colinas traseras */}
+        <path d="M0,260 Q150,210 300,250 T600,240 T800,260 L800,400 L0,400 Z" fill="#5b21b6" opacity="0.55" />
+        {/* Horizonte de castillos chicos, a lo lejos */}
+        <Castillito x={30} y={195} escala={0.75} color="#223b74" opacity={0.5} />
+        <Castillito x={520} y={200} escala={0.6} color="#223b74" opacity={0.45} />
+        <Castillito x={640} y={190} escala={0.8} color="#223b74" opacity={0.5} />
+        {/* Colinas delanteras */}
+        <path d="M0,300 Q200,250 400,290 T800,290 L800,400 L0,400 Z" fill="#223b74" opacity="0.75" />
+        {/* Castillo central, principal */}
+        <g transform="translate(300,190)">
+          <rect x="0" y="60" width="200" height="110" fill="#3730a3" />
+          <rect x="-20" y="30" width="45" height="140" fill="#312e81" />
+          <rect x="175" y="30" width="45" height="140" fill="#312e81" />
+          <polygon points="2.5,30 2.5,0 25,15" fill="#28478a" />
+          <polygon points="197.5,30 197.5,0 175,15" fill="#28478a" />
+          <rect x="85" y="100" width="30" height="70" fill="#1e1b4b" rx="15" />
+          <rect x="20" y="80" width="20" height="25" fill="#5474b5" opacity="0.8" />
+          <rect x="160" y="80" width="20" height="25" fill="#5474b5" opacity="0.8" />
+          {[0, 40, 80, 120, 160, 200].map((x) => (
+            <rect key={x} x={x - 8} y="52" width="16" height="12" fill="#3730a3" />
           ))}
-        </tbody>
-      </table>
+        </g>
+        {/* Castillos laterales, más cerca */}
+        <Castillito x={70} y={230} escala={1.1} color="#5b21b6" />
+        <Castillito x={630} y={235} escala={1} color="#5b21b6" />
+        {/* Torres solitarias pequeñas */}
+        <g transform="translate(90,240)">
+          <rect x="0" y="20" width="34" height="70" fill="#223b74" />
+          <polygon points="-4,20 38,20 17,0" fill="#5474b5" />
+        </g>
+        <g transform="translate(660,250)">
+          <rect x="0" y="20" width="30" height="60" fill="#223b74" />
+          <polygon points="-4,20 34,20 15,0" fill="#5474b5" />
+        </g>
+
+      </svg>
     </div>
   );
 }
 
-// Muestra el Formato Maestro COMPLETO tal como quedó guardado, en
-// pantalla — sin necesidad de entrar a "editar" para verlo.
-function FormatoMaestroLectura({ unidad }) {
-  const tieneAlgo = unidad.caso_problema_integrador || unidad.dba || unidad.nombre_proyecto || unidad.narrativa_sesion ||
-    (unidad.competencias_ciudadanas || []).length > 0 || (unidad.contenidos_curriculares || []).length > 0 ||
-    (unidad.zonas_escenario || []).length > 0 || (unidad.roles_economia || []).length > 0 ||
-    (unidad.secuencia_didactica || []).length > 0 || (unidad.matriz_evaluacion || []).length > 0 ||
-    (unidad.misiones_retos || []).length > 0 || (unidad.reglas_generales || []).length > 0;
-
-  if (!tieneAlgo) return <p className="text-xs text-slate-400 py-2">Esta unidad todavía no tiene el Formato Maestro completado.</p>;
-
+function AccessGate() {
   return (
-    <div>
-      <SeccionModulo numero="I" titulo="Datos generales y alineación curricular">
-        <FilaLectura etiqueta="Institución / Asignatura">{unidad.institucion_asignatura}</FilaLectura>
-        <FilaLectura etiqueta="Clase N°">{unidad.clase_numero}</FilaLectura>
-        <FilaLectura etiqueta="Duración">{unidad.duracion_minutos ? `${unidad.duracion_minutos} minutos` : null}</FilaLectura>
-        <FilaLectura etiqueta="Caso / Problema integrador">{unidad.caso_problema_integrador}</FilaLectura>
-        <FilaLectura etiqueta="DBA">{unidad.dba}</FilaLectura>
-        <FilaLectura etiqueta="Competencias Ciudadanas">{unidad.competencias_ciudadanas}</FilaLectura>
-        <FilaLectura etiqueta="Desempeño Cognitivo">{unidad.desempeno_cognitivo}</FilaLectura>
-        <FilaLectura etiqueta="Desempeño Procedimental">{unidad.desempeno_procedimental}</FilaLectura>
-        <FilaLectura etiqueta="Desempeño Actitudinal">{unidad.desempeno_actitudinal}</FilaLectura>
-        <FilaLectura etiqueta="Contenidos Curriculares">{unidad.contenidos_curriculares}</FilaLectura>
-      </SeccionModulo>
-
-      <SeccionModulo numero="II" titulo="Diseño del proyecto gamificado y narrativa">
-        <FilaLectura etiqueta="Nombre del proyecto">{unidad.nombre_proyecto}</FilaLectura>
-        <FilaLectura etiqueta="Perfil de jugadores">{unidad.perfil_jugadores}</FilaLectura>
-        <FilaLectura etiqueta="Nivel de progresión">{unidad.nivel_progresion ? `Nivel ${unidad.nivel_progresion} de 5` : null}</FilaLectura>
-        <FilaLectura etiqueta="Narrativa de la sesión">{unidad.narrativa_sesion}</FilaLectura>
-        <FilaLectura etiqueta="Tipo de escenario">{unidad.tipo_escenario === "real" ? "Real" : unidad.tipo_escenario === "ficcion" ? "Ficción" : unidad.tipo_escenario ? "Real / Ficción" : null}</FilaLectura>
-        <FilaLectura etiqueta="Reglas generales">{unidad.reglas_generales}</FilaLectura>
-        {(unidad.misiones_retos || []).length > 0 && <>
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Misiones y retos</div>
-          <TablaLectura columnas={[{ clave: "nombre", titulo: "Misión" }, { clave: "descripcion", titulo: "Descripción" }]} filas={unidad.misiones_retos} />
-        </>}
-      </SeccionModulo>
-
-      {(unidad.zonas_escenario || []).length > 0 && (
-        <SeccionModulo numero="III" titulo="Escenario, paisaje y zonas">
-          <TablaLectura columnas={[
-            { clave: "zona", titulo: "Zona" }, { clave: "tipo_recorrido", titulo: "Recorrido" },
-            { clave: "reto_mision", titulo: "Reto/Misión" }, { clave: "contenido_vinculado", titulo: "Contenido" },
-          ]} filas={unidad.zonas_escenario} />
-        </SeccionModulo>
-      )}
-
-      {(unidad.roles_economia || []).length > 0 && (
-        <SeccionModulo numero="IV" titulo="Roles de equipo y economía">
-          <TablaLectura columnas={[
-            { clave: "avatar_rol", titulo: "Avatar/Rol" }, { clave: "funcion_operativa", titulo: "Función" }, { clave: "responsabilidad_academica", titulo: "Responsabilidad" },
-          ]} filas={unidad.roles_economia} />
-        </SeccionModulo>
-      )}
-
-      {(unidad.secuencia_didactica || []).length > 0 && (
-        <SeccionModulo numero="V" titulo="Secuencia didáctica integrada">
-          <TablaLectura columnas={[
-            { clave: "fase_minutos", titulo: "Fase/Min" }, { clave: "momento_codice", titulo: "Momento" },
-            { clave: "dinamica_operativa", titulo: "Dinámica" }, { clave: "rol_docente", titulo: "Rol docente" },
-          ]} filas={unidad.secuencia_didactica} />
-        </SeccionModulo>
-      )}
-
-      {(unidad.matriz_evaluacion || []).length > 0 && (
-        <SeccionModulo numero="VI" titulo="Entregable y matriz de evaluación">
-          <TablaLectura columnas={[
-            { clave: "componente", titulo: "Componente" }, { clave: "peso_pct", titulo: "% Peso" },
-            { clave: "evidencia", titulo: "Evidencia" }, { clave: "criterios", titulo: "Criterios" },
-          ]} filas={unidad.matriz_evaluacion} />
-        </SeccionModulo>
-      )}
-    </div>
-  );
-}
-
-const COMPETENCIAS_CIUDADANAS_OPCIONES = ["Pensamiento Social (COMP.07)", "Multiperspectivismo (COMP.08)", "Reflexión Ética (COMP.09)"];
-const MOMENTOS_CODICE_OPCIONES = ["VER / Apertura", "JUZGAR / Organización", "JUZGAR / Simulación", "ACTUAR / Evidencia", "EVALUAR / Juicio", "SÍNTESIS / Cierre"];
-
-function estadoInicialFormatoMaestro(base = {}) {
-  return {
-    institucion_asignatura: base.institucion_asignatura || "",
-    clase_numero: base.clase_numero || "",
-    duracion_minutos: base.duracion_minutos ?? 60,
-    caso_problema_integrador: base.caso_problema_integrador || "",
-    dba: base.dba || "",
-    competencias_ciudadanas: base.competencias_ciudadanas || [],
-    desempeno_cognitivo: base.desempeno_cognitivo || [],
-    desempeno_procedimental: base.desempeno_procedimental || [],
-    desempeno_actitudinal: base.desempeno_actitudinal || [],
-    contenidos_curriculares: base.contenidos_curriculares || [],
-    nombre_proyecto: base.nombre_proyecto || "",
-    perfil_jugadores: base.perfil_jugadores || "",
-    nivel_progresion: base.nivel_progresion ?? "",
-    narrativa_sesion: base.narrativa_sesion || "",
-    tipo_escenario: base.tipo_escenario || "real_ficcion",
-    reglas_generales: base.reglas_generales || [],
-    misiones_retos: base.misiones_retos || [],
-    zonas_escenario: base.zonas_escenario || [],
-    roles_economia: base.roles_economia || [],
-    secuencia_didactica: base.secuencia_didactica || [],
-    matriz_evaluacion: base.matriz_evaluacion || [],
-  };
-}
-
-// Formulario completo del Formato Maestro de Planeación Didáctica
-// Integrada (6 módulos) — se usa tanto para crear como para editar.
-// Genera y descarga una plantilla .xlsx con una hoja por módulo, lista
-// para llenar fuera de línea y volver a subir con "Importar desde Excel".
-function descargarPlantillaFormatoMaestro() {
-  const wb = XLSX.utils.book_new();
-
-  const datosGenerales = [
-    ["Campo", "Valor (completá esta columna)"],
-    ["Institución / Asignatura", "Ej: I.E. San José — Ciudadanía y Ética"],
-    ["Clase N°", "Ej: 2 - La Balanza Imparcial"],
-    ["Duración (minutos)", 60],
-    ["Caso / Problema integrador", "Descripción del caso dilemático de la sesión"],
-    ["DBA (código y enunciado)", ""],
-    ["Competencias Ciudadanas (separadas por coma)", "Pensamiento Social (COMP.07), Multiperspectivismo (COMP.08)"],
-    ["Desempeño Cognitivo (separados por coma si son varios)", ""],
-    ["Desempeño Procedimental (separados por coma si son varios)", ""],
-    ["Desempeño Actitudinal (separados por coma si son varios)", ""],
-    ["Contenidos Curriculares (separados por coma)", "Art. 13 Igualdad, Dharma / Ahimsa"],
-    ["Nombre del Proyecto", ""],
-    ["Perfil de Jugadores", ""],
-    ["Nivel de Progresión (1-5)", ""],
-    ["Narrativa de la Sesión", ""],
-    ["Tipo de Escenario (real / real_ficcion / ficcion)", "real_ficcion"],
-    ["Reglas Generales (separadas por coma)", "Uso obligatorio de GP, Fe Pública como salud ética"],
-  ];
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(datosGenerales), "Datos Generales");
-
-  const misiones = [["Misión", "Descripción"], ["Misión 1 (Tributaria)", "Pago de arancel inicial"], ["Misión 2 (Estratégica)", "Trueques y alianzas inter-reinos"]];
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(misiones), "Misiones y Retos");
-
-  const zonas = [["Zona / Provincia", "Tipo de Recorrido", "Reto / Misión Asociada", "Contenido Curricular Vinculado"],
-    ["Zona 1: Fronteras de Oakhaven", "Lineal / Tributario", "Pago de arancel y alquiler de materiales", "Responsabilidad fiscal y deber cívico"]];
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(zonas), "Zonas Escenario");
-
-  const roles = [["Avatar / Rol", "Función Operativa", "Responsabilidad Académica / Ética"],
-    ["Maestro del Gremio", "Líder estratega, administra GP/FP", "Coordinación general del equipo"]];
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(roles), "Roles Economia");
-
-  const secuencia = [["Fase / Minutos", "Momento CÓDICE", "Dinámica Operativa", "Rol Docente"],
-    ["00–08 min", "VER / Apertura", "Cobro de tributo inicial y presentación del dilema", "Proyectar pantalla de inicio y plantear pregunta"]];
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(secuencia), "Secuencia Didactica");
-
-  const evaluacion = [["Componente", "% Peso", "Evidencia Concreta", "Criterios de Evaluación"],
-    ["Cognitivo", 35, "Preguntas 1, 2 y 3 (Cara B)", "Rigor conceptual y calidad del Edicto de Concordia"],
-    ["Procedimental", 35, "Laberinto Vectorial (Cara A)", "Precisión sin tocar bordes negros"],
-    ["Actitudinal", 20, "Nivel de Fe Pública (FP)", "Juego limpio y diplomacia respetuosa"],
-    ["Coevaluación", 10, "Formulario de Valoración de Roles", "Calificación otorgada por el equipo"]];
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(evaluacion), "Matriz Evaluacion");
-
-  XLSX.writeFile(wb, "plantilla_formato_maestro_planeacion.xlsx");
-}
-
-// Lee un .xlsx con la misma estructura de la plantilla y arma el objeto
-// de estado del Formato Maestro, listo para revisar antes de guardar.
-function importarPlantillaFormatoMaestro(file, onListo) {
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    try {
-      const wb = XLSX.read(e.target.result, { type: "binary" });
-      const hoja = (nombre) => wb.Sheets[nombre] ? XLSX.utils.sheet_to_json(wb.Sheets[nombre], { header: 1 }) : [];
-      const filasATabla = (filas, claves) => filas.slice(1).filter((r) => r.length && r[0]).map((r) => Object.fromEntries(claves.map((k, i) => [k, r[i] !== undefined ? String(r[i]) : ""])));
-
-      const generales = hoja("Datos Generales");
-      const val = (etiqueta) => { const fila = generales.find((r) => String(r[0] || "").trim().toLowerCase().startsWith(etiqueta.toLowerCase())); return fila ? String(fila[1] ?? "").trim() : ""; };
-      const listaDe = (etiqueta) => val(etiqueta).split(",").map((s) => s.trim()).filter(Boolean);
-
-      const datos = estadoInicialFormatoMaestro({
-        institucion_asignatura: val("Institución"),
-        clase_numero: val("Clase N"),
-        duracion_minutos: parseInt(val("Duración"), 10) || 60,
-        caso_problema_integrador: val("Caso"),
-        dba: val("DBA"),
-        competencias_ciudadanas: listaDe("Competencias Ciudadanas"),
-        desempeno_cognitivo: listaDe("Desempeño Cognitivo"),
-        desempeno_procedimental: listaDe("Desempeño Procedimental"),
-        desempeno_actitudinal: listaDe("Desempeño Actitudinal"),
-        contenidos_curriculares: listaDe("Contenidos Curriculares"),
-        nombre_proyecto: val("Nombre del Proyecto"),
-        perfil_jugadores: val("Perfil de Jugadores"),
-        nivel_progresion: val("Nivel de Progresión"),
-        narrativa_sesion: val("Narrativa"),
-        tipo_escenario: val("Tipo de Escenario") || "real_ficcion",
-        reglas_generales: listaDe("Reglas Generales"),
-        misiones_retos: filasATabla(hoja("Misiones y Retos"), ["nombre", "descripcion"]),
-        zonas_escenario: filasATabla(hoja("Zonas Escenario"), ["zona", "tipo_recorrido", "reto_mision", "contenido_vinculado"]),
-        roles_economia: filasATabla(hoja("Roles Economia"), ["avatar_rol", "funcion_operativa", "responsabilidad_academica"]),
-        secuencia_didactica: filasATabla(hoja("Secuencia Didactica"), ["fase_minutos", "momento_codice", "dinamica_operativa", "rol_docente"]),
-        matriz_evaluacion: filasATabla(hoja("Matriz Evaluacion"), ["componente", "peso_pct", "evidencia", "criterios"]),
-      });
-      onListo(datos);
-    } catch (err) {
-      alert("No se pudo leer el archivo. Verificá que sea la plantilla descargada desde acá, sin cambiar los nombres de las hojas.");
-    }
-  };
-  reader.readAsBinaryString(file);
-}
-
-function FormatoMaestroCampos({ datos, setDatos }) {
-  const set = (clave, valor) => setDatos((prev) => ({ ...prev, [clave]: valor }));
-
-  return (
-    <div>
-      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 mb-3 flex items-center justify-between flex-wrap gap-2">
-        <div className="text-xs text-emerald-700">📊 ¿Preferís llenar esto en Excel? Descargá la plantilla, completala fuera de línea, y subila acá.</div>
-        <div className="flex gap-1.5 shrink-0">
-          <button onClick={descargarPlantillaFormatoMaestro} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-500 text-white">📥 Descargar plantilla</button>
-          <label className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-emerald-300 text-emerald-700 cursor-pointer">
-            📤 Importar
-            <input type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => {
-              if (e.target.files[0]) importarPlantillaFormatoMaestro(e.target.files[0], setDatos);
-              e.target.value = "";
-            }} />
-          </label>
+    <div className="min-h-screen flex items-center justify-center relative">
+      <FondoCastillo />
+      <div className="w-full max-w-sm px-4">
+        <div className="text-center mb-3">
+          <div className="text-4xl mb-1">🏰</div>
+          <h1 className="text-3xl font-bold text-white tracking-[0.15em]" style={{ fontFamily: "Georgia, serif", textShadow: "0 2px 8px rgba(76,29,149,0.6)" }}>CÓDICE</h1>
+          <p className="text-violet-100 text-xs mt-1" style={{ textShadow: "0 1px 4px rgba(76,29,149,0.6)" }}>El reino del aprendizaje te espera</p>
         </div>
+        <LoginScreen />
       </div>
-
-      <SeccionModulo numero="I" titulo="Datos generales y alineación curricular" subtitulo="Institución/asignatura, DBA, competencias y contenidos.">
-        <div className="grid sm:grid-cols-2 gap-2 mb-2">
-          <input value={datos.institucion_asignatura} onChange={(e) => set("institucion_asignatura", e.target.value)} placeholder="Institución / Asignatura"
-            className="text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none" />
-          <input value={datos.clase_numero} onChange={(e) => set("clase_numero", e.target.value)} placeholder="Clase N° (ej: 2 - La Balanza Imparcial)"
-            className="text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none" />
-        </div>
-        <div className="flex items-center gap-2 mb-2">
-          <label className="text-xs text-slate-500 shrink-0">Duración (min)</label>
-          <input type="number" value={datos.duracion_minutos} onChange={(e) => set("duracion_minutos", parseInt(e.target.value, 10) || 0)}
-            className="w-20 text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-        </div>
-        <textarea value={datos.caso_problema_integrador} onChange={(e) => set("caso_problema_integrador", e.target.value)} rows={2} placeholder="Caso / Problema integrador de la sesión"
-          className="w-full text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none mb-2 resize-none" />
-        <input value={datos.dba} onChange={(e) => set("dba", e.target.value)} placeholder="Derecho Básico de Aprendizaje (DBA) — código y enunciado"
-          className="w-full text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none mb-2" />
-        <label className="text-xs text-slate-500 block mb-1">Competencias Ciudadanas trabajadas</label>
-        <div className="flex flex-wrap gap-1.5 mb-1.5">
-          {COMPETENCIAS_CIUDADANAS_OPCIONES.filter((c) => !datos.competencias_ciudadanas.includes(c)).map((c) => (
-            <button key={c} onClick={() => set("competencias_ciudadanas", [...datos.competencias_ciudadanas, c])}
-              className="text-[11px] px-2.5 py-1 rounded-full border border-dashed border-violet-300 text-violet-500">+ {c}</button>
-          ))}
-        </div>
-        <div className="mb-3"><ListaTextoEditable items={datos.competencias_ciudadanas} onCambio={(v) => set("competencias_ciudadanas", v)} placeholder="Ej: Pensamiento Social (COMP.07)" /></div>
-
-        <label className="text-xs text-slate-500 block mb-1">Desempeños / Indicadores — Cognitivo</label>
-        <div className="mb-2"><ListaTextoEditable items={datos.desempeno_cognitivo} onCambio={(v) => set("desempeno_cognitivo", v)} placeholder="Indicador cognitivo específico" /></div>
-        <label className="text-xs text-slate-500 block mb-1">Desempeños / Indicadores — Procedimental</label>
-        <div className="mb-2"><ListaTextoEditable items={datos.desempeno_procedimental} onCambio={(v) => set("desempeno_procedimental", v)} placeholder="Indicador de ejecución en el juego" /></div>
-        <label className="text-xs text-slate-500 block mb-1">Desempeños / Indicadores — Actitudinal</label>
-        <div className="mb-3"><ListaTextoEditable items={datos.desempeno_actitudinal} onCambio={(v) => set("desempeno_actitudinal", v)} placeholder="Criterio de Fe Pública / Convivencia" /></div>
-
-        <label className="text-xs text-slate-500 block mb-1">Contenidos Curriculares</label>
-        <ListaTextoEditable items={datos.contenidos_curriculares} onCambio={(v) => set("contenidos_curriculares", v)} placeholder="Ej: Art. 13 Igualdad / Dharma - Ahimsa" />
-      </SeccionModulo>
-
-      <SeccionModulo numero="II" titulo="Diseño del proyecto gamificado y narrativa" subtitulo="Opcional si la clase no usa una narrativa/juego — dejalo en blanco si no aplica.">
-        <div className="grid sm:grid-cols-2 gap-2 mb-2">
-          <input value={datos.nombre_proyecto} onChange={(e) => set("nombre_proyecto", e.target.value)} placeholder="Nombre del proyecto/sesión"
-            className="text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none" />
-          <input value={datos.perfil_jugadores} onChange={(e) => set("perfil_jugadores", e.target.value)} placeholder="Perfil de jugadores/estudiantes"
-            className="text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none" />
-        </div>
-        <div className="flex items-center gap-2 mb-2">
-          <label className="text-xs text-slate-500 shrink-0">Nivel de progresión (1-5)</label>
-          <input type="number" min={1} max={5} value={datos.nivel_progresion} onChange={(e) => set("nivel_progresion", e.target.value)}
-            className="w-16 text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-        </div>
-        <textarea value={datos.narrativa_sesion} onChange={(e) => set("narrativa_sesion", e.target.value)} rows={2} placeholder="Narrativa de la sesión — 3-4 líneas ambientando el desafío"
-          className="w-full text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none mb-2 resize-none" />
-        <label className="text-xs text-slate-500 block mb-1">Tipo de escenario</label>
-        <div className="flex gap-1 rounded-full bg-slate-50 p-1 w-fit mb-3">
-          {[{ v: "real", l: "Real" }, { v: "real_ficcion", l: "Real/Ficción" }, { v: "ficcion", l: "Ficción" }].map((o) => (
-            <button key={o.v} onClick={() => set("tipo_escenario", o.v)} className={`text-xs px-3 py-1.5 rounded-full ${datos.tipo_escenario === o.v ? "bg-violet-500 text-white" : "text-slate-600"}`}>{o.l}</button>
-          ))}
-        </div>
-        <label className="text-xs text-slate-500 block mb-1">Reglas generales de juego</label>
-        <div className="mb-3"><ListaTextoEditable items={datos.reglas_generales} onCambio={(v) => set("reglas_generales", v)} placeholder="Ej: Uso obligatorio de GP para alquiler de herramientas" /></div>
-        <label className="text-xs text-slate-500 block mb-1">Misiones y retos</label>
-        <TablaEditable
-          columnas={[{ clave: "nombre", titulo: "Misión" }, { clave: "descripcion", titulo: "Descripción", tipo: "textarea" }]}
-          filas={datos.misiones_retos} onCambio={(v) => set("misiones_retos", v)} filaVacia={{ nombre: "", descripcion: "" }} />
-      </SeccionModulo>
-
-      <SeccionModulo numero="III" titulo="Escenario, paisaje y zonas" subtitulo="Deja la tabla vacía si la clase no tiene zonas/estaciones.">
-        <TablaEditable
-          columnas={[
-            { clave: "zona", titulo: "Zona / Provincia" },
-            { clave: "tipo_recorrido", titulo: "Tipo de recorrido" },
-            { clave: "reto_mision", titulo: "Reto / Misión asociada", tipo: "textarea" },
-            { clave: "contenido_vinculado", titulo: "Contenido curricular vinculado", tipo: "textarea" },
-          ]}
-          filas={datos.zonas_escenario} onCambio={(v) => set("zonas_escenario", v)}
-          filaVacia={{ zona: "", tipo_recorrido: "", reto_mision: "", contenido_vinculado: "" }} />
-      </SeccionModulo>
-
-      <SeccionModulo numero="IV" titulo="Roles de equipo, economía y soporte" subtitulo="Los 7 roles de la Comarca ya vienen precargados en las sesiones — usá esta tabla si querés documentarlos en la planeación.">
-        <TablaEditable
-          columnas={[
-            { clave: "avatar_rol", titulo: "Avatar / Rol" },
-            { clave: "funcion_operativa", titulo: "Función operativa", tipo: "textarea" },
-            { clave: "responsabilidad_academica", titulo: "Responsabilidad académica/ética", tipo: "textarea" },
-          ]}
-          filas={datos.roles_economia} onCambio={(v) => set("roles_economia", v)}
-          filaVacia={{ avatar_rol: "", funcion_operativa: "", responsabilidad_academica: "" }} />
-      </SeccionModulo>
-
-      <SeccionModulo numero="V" titulo="Secuencia didáctica integrada" subtitulo="El momento CÓDICE ayuda a alinear con Ver-Juzgar-Actuar-Evaluar-Síntesis.">
-        <TablaEditable
-          columnas={[
-            { clave: "fase_minutos", titulo: "Fase / Minutos" },
-            { clave: "momento_codice", titulo: "Momento CÓDICE" },
-            { clave: "dinamica_operativa", titulo: "Dinámica operativa", tipo: "textarea" },
-            { clave: "rol_docente", titulo: "Rol docente", tipo: "textarea" },
-          ]}
-          filas={datos.secuencia_didactica} onCambio={(v) => set("secuencia_didactica", v)}
-          filaVacia={{ fase_minutos: "", momento_codice: MOMENTOS_CODICE_OPCIONES[0], dinamica_operativa: "", rol_docente: "" }} />
-        <p className="text-[10px] text-slate-400 mt-1">Momentos sugeridos: {MOMENTOS_CODICE_OPCIONES.join(" · ")}</p>
-      </SeccionModulo>
-
-      <SeccionModulo numero="VI" titulo="Entregable académico y matriz de evaluación" subtitulo="El % de peso debería sumar 100 entre todos los componentes.">
-        <TablaEditable
-          columnas={[
-            { clave: "componente", titulo: "Componente" },
-            { clave: "peso_pct", titulo: "% Peso", tipo: "numero" },
-            { clave: "evidencia", titulo: "Evidencia concreta", tipo: "textarea" },
-            { clave: "criterios", titulo: "Criterios de evaluación", tipo: "textarea" },
-          ]}
-          filas={datos.matriz_evaluacion} onCambio={(v) => set("matriz_evaluacion", v)}
-          filaVacia={{ componente: "", peso_pct: "", evidencia: "", criterios: "" }} />
-        {datos.matriz_evaluacion.length > 0 && (() => {
-          const suma = datos.matriz_evaluacion.reduce((a, f) => a + (parseInt(f.peso_pct, 10) || 0), 0);
-          return <p className={`text-[11px] mt-2 ${suma === 100 ? "text-emerald-600" : "text-amber-600"}`}>Suma actual: {suma}% {suma !== 100 && "(debería sumar 100%)"}</p>;
-        })()}
-      </SeccionModulo>
     </div>
   );
 }
 
-
-const ICONO_RECURSO = { drive: "📁", docs: "📄", forms: "📝", otro: "🔗" };
-const LABEL_RECURSO = { drive: "Google Drive", docs: "Google Docs", forms: "Google Forms", otro: "Enlace" };
-const TIPOS_TAREA = [
-  { key: "tarea", label: "Tarea" },
-  { key: "lectura", label: "Lectura" },
-  { key: "proyecto", label: "Proyecto" },
-  { key: "evaluacion", label: "Evaluación" },
+const COLORES_OPCION = [
+  { bg: "#e11d48", borde: "#9f1239" }, { bg: "#2563eb", borde: "#1e40af" },
+  { bg: "#d97706", borde: "#b45309" }, { bg: "#059669", borde: "#065f46" },
 ];
 
-function SelectorEstandares({ planeacionId, tipo }) {
-  const [vinculados, setVinculados] = useState([]);
-  const [catalogo, setCatalogo] = useState([]);
-  const [agregando, setAgregando] = useState(false);
-  const [creandoNuevo, setCreandoNuevo] = useState(false);
-  const [nuevoCodigo, setNuevoCodigo] = useState("");
-  const [nuevaDescripcion, setNuevaDescripcion] = useState("");
-
-  const cargar = async () => {
-    const [v, c] = await Promise.all([api.fetchEstandaresDePlaneacion(planeacionId), api.fetchEstandares(tipo)]);
-    setVinculados(v.filter((e) => e && e.tipo === tipo));
-    setCatalogo(c);
-  };
-  useEffect(() => { cargar(); }, [planeacionId]);
-
-  const vincular = async (estandarId) => { await api.vincularEstandar(planeacionId, estandarId); cargar(); };
-  const desvincular = async (estandarId) => { await api.desvincularEstandar(planeacionId, estandarId); cargar(); };
-
-  const crearYVincular = async () => {
-    if (!nuevaDescripcion.trim()) return;
-    const nuevo = await api.crearEstandar({ tipo, codigo: nuevoCodigo.trim() || null, descripcion: nuevaDescripcion.trim() });
-    await api.vincularEstandar(planeacionId, nuevo.id);
-    setNuevoCodigo(""); setNuevaDescripcion(""); setCreandoNuevo(false); setAgregando(false);
-    cargar();
-  };
-
-  const disponibles = catalogo.filter((e) => !vinculados.some((v) => v.id === e.id));
-  const etiqueta = tipo === "dba" ? "DBA" : "Competencia";
-  const estilo = tipo === "dba" ? "bg-blue-50 text-blue-700" : "bg-teal-50 text-teal-700";
-
-  return (
-    <div className="mt-1">
-      {vinculados.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-1">
-          {vinculados.map((e) => (
-            <span key={e.id} className={`text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 ${estilo}`}>
-              {e.codigo ? `${e.codigo} — ` : ""}{e.descripcion}
-              <button onClick={() => desvincular(e.id)} className="opacity-60 hover:opacity-100">✕</button>
-            </span>
-          ))}
-        </div>
-      )}
-      {agregando ? (
-        <div className="flex flex-col gap-1 bg-slate-50 rounded-lg p-2 max-w-md">
-          {disponibles.length > 0 && (
-            <select onChange={(e) => { if (e.target.value) { vincular(parseInt(e.target.value, 10)); e.target.value = ""; } }}
-              className="text-[11px] rounded px-1.5 py-1 border border-slate-200 outline-none">
-              <option value="">Elegir del catálogo…</option>
-              {disponibles.map((e) => <option key={e.id} value={e.id}>{e.codigo ? `${e.codigo} — ` : ""}{e.descripcion}</option>)}
-            </select>
-          )}
-          {creandoNuevo ? (
-            <div className="flex gap-1">
-              <input value={nuevoCodigo} onChange={(e) => setNuevoCodigo(e.target.value)} placeholder="Código"
-                className="w-16 text-[11px] rounded px-1.5 py-1 border border-slate-200 outline-none" />
-              <input value={nuevaDescripcion} onChange={(e) => setNuevaDescripcion(e.target.value)} placeholder="Descripción"
-                className="flex-1 text-[11px] rounded px-1.5 py-1 border border-slate-200 outline-none" />
-              <button onClick={crearYVincular} className="text-[11px] px-2 rounded bg-violet-500 text-white">Añadir</button>
-            </div>
-          ) : (
-            <button onClick={() => setCreandoNuevo(true)} className="text-[10px] text-violet-500 text-left">+ Crear nuevo {etiqueta}</button>
-          )}
-          <button onClick={() => { setAgregando(false); setCreandoNuevo(false); }} className="text-[10px] text-slate-400 text-left">Cerrar</button>
-        </div>
-      ) : (
-        <button onClick={() => setAgregando(true)} className="text-[10px] text-violet-500">+ {etiqueta}</button>
-      )}
-    </div>
-  );
+function formatearTiempo(seg) {
+  const m = Math.floor(seg / 60), s = seg % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-function RecursosLista({ planeacionId }) {
-  const [recursos, setRecursos] = useState([]);
-  const [agregando, setAgregando] = useState(false);
-  const [url, setUrl] = useState("");
-  const [titulo, setTitulo] = useState("");
-
-  const cargar = () => api.fetchRecursos(planeacionId).then(setRecursos);
-  useEffect(() => { cargar(); }, [planeacionId]);
-
-  const agregar = async () => {
-    if (!url.trim()) return;
-    try {
-      await api.crearRecurso(planeacionId, url, titulo);
-      setUrl(""); setTitulo(""); setAgregando(false);
-      cargar();
-    } catch (e) {
-      alert("Error al agregar el recurso: " + e.message);
-    }
-  };
-
-  const quitar = async (id) => { await api.eliminarRecurso(id); cargar(); };
-
-  return (
-    <div className="mt-2">
-      {recursos.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-2">
-          {recursos.map((r) => (
-            <div key={r.id} className="flex items-center gap-1 text-xs bg-slate-50 rounded-full pl-2 pr-1 py-1">
-              <a href={r.url} target="_blank" rel="noreferrer" className="text-slate-600 hover:text-violet-600">
-                {ICONO_RECURSO[r.tipo]} {r.titulo || LABEL_RECURSO[r.tipo]}
-              </a>
-              <button onClick={() => quitar(r.id)} className="text-slate-300 hover:text-rose-500 ml-1">✕</button>
-            </div>
-          ))}
-        </div>
-      )}
-      {agregando ? (
-        <div className="flex gap-1.5 items-center">
-          <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Pega el link de Drive / Docs / Forms…"
-            className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none flex-1 min-w-0" />
-          <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Nombre (opcional)"
-            className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none w-32" />
-          <button onClick={agregar} className="text-xs px-2 py-1.5 rounded-lg bg-violet-500 text-white">Agregar</button>
-          <button onClick={() => setAgregando(false)} className="text-xs text-slate-400">✕</button>
-        </div>
-      ) : (
-        <button onClick={() => setAgregando(true)} className="text-[11px] text-violet-500">+ Agregar recurso (Drive/Docs/Forms)</button>
-      )}
-    </div>
-  );
-}
-
-function RubricaModal({ tarea, onClose }) {
-  const [criterios, setCriterios] = useState([]);
+function TomarEvaluacion({ evaluacion, estudianteId, onCerrar }) {
+  const [intentoId, setIntentoId] = useState(null);
+  const [preguntas, setPreguntas] = useState([]);
+  const [respuestas, setRespuestas] = useState({});
   const [cargando, setCargando] = useState(true);
-  const [guardando, setGuardando] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const [enviado, setEnviado] = useState(false);
+  const [errorInicio, setErrorInicio] = useState("");
+  const [empezado, setEmpezado] = useState(false);
+  const [indice, setIndice] = useState(0);
+  const [segundosRestantes, setSegundosRestantes] = useState(null);
+  const [respuestaCortaTemp, setRespuestaCortaTemp] = useState("");
 
   useEffect(() => {
-    api.fetchRubrica(tarea.id).then((r) => {
-      setCriterios(r?.criterios?.length ? r.criterios : [{ criterio: "", niveles: [{ nombre: "Alto", puntos: 5 }, { nombre: "Medio", puntos: 3 }, { nombre: "Bajo", puntos: 1 }] }]);
+    (async () => {
+      try {
+        const { intentoId: id, preguntas: p } = await api.iniciarIntentoConAleatorias(evaluacion, estudianteId);
+        setIntentoId(id);
+        setPreguntas(p);
+        if (evaluacion.tiempo_limite_minutos) setSegundosRestantes(evaluacion.tiempo_limite_minutos * 60);
+      } catch (e) {
+        setErrorInicio(e.message);
+      }
       setCargando(false);
-    });
-  }, [tarea.id]);
+    })();
+  }, []);
 
-  const actualizarCriterio = (i, texto) => setCriterios((prev) => prev.map((c, idx) => idx === i ? { ...c, criterio: texto } : c));
-  const actualizarNivel = (i, j, campo, valor) => setCriterios((prev) => prev.map((c, idx) => idx === i
-    ? { ...c, niveles: c.niveles.map((n, k) => k === j ? { ...n, [campo]: campo === "puntos" ? parseFloat(valor) || 0 : valor } : n) }
-    : c));
-  const agregarCriterio = () => setCriterios((prev) => [...prev, { criterio: "", niveles: [{ nombre: "Alto", puntos: 5 }, { nombre: "Medio", puntos: 3 }, { nombre: "Bajo", puntos: 1 }] }]);
-  const quitarCriterio = (i) => setCriterios((prev) => prev.filter((_, idx) => idx !== i));
+  const responder = (preguntaId, valor) => setRespuestas((prev) => ({ ...prev, [preguntaId]: valor }));
 
-  const guardar = async () => {
-    setGuardando(true);
+  const enviar = async () => {
+    setEnviando(true);
     try {
-      await api.guardarRubrica(tarea.id, criterios.filter((c) => c.criterio.trim()));
-      onClose();
+      const payload = preguntas.map((p) => ({ pregunta_id: p.id, respuesta: respuestas[p.id] || "" }));
+      await api.entregarIntento(intentoId, payload);
+      setEnviado(true);
     } catch (e) {
-      alert("Error al guardar: " + e.message);
+      alert("Error al entregar: " + e.message);
     }
-    setGuardando(false);
+    setEnviando(false);
   };
 
-  return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-xl">
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="font-bold text-slate-800">📊 Rúbrica — {tarea.titulo}</h3>
-          <button onClick={onClose} className="text-slate-400">✕</button>
-        </div>
+  // Cronómetro general de toda la prueba — al llegar a cero, entrega
+  // automáticamente lo que esté respondido hasta ese momento.
+  useEffect(() => {
+    if (!empezado || segundosRestantes === null || enviado || enviando) return;
+    if (segundosRestantes <= 0) { enviar(); return; }
+    const id = setTimeout(() => setSegundosRestantes((s) => s - 1), 1000);
+    return () => clearTimeout(id);
+  }, [empezado, segundosRestantes, enviado, enviando]);
 
+  const empezar = () => { setEmpezado(true); setIndice(0); };
+
+  const preguntaActual = preguntas[indice];
+  const esUltima = indice === preguntas.length - 1;
+
+  const siguiente = () => {
+    if (preguntaActual?.tipo === "respuesta_corta") { responder(preguntaActual.id, respuestaCortaTemp); }
+    setRespuestaCortaTemp("");
+    if (esUltima) {
+      if (!confirm("¿Entregar la evaluación? No vas a poder cambiar tus respuestas después.")) return;
+      enviar();
+    } else {
+      setIndice((i) => i + 1);
+    }
+  };
+
+  const elegirOpcion = (texto) => {
+    responder(preguntaActual.id, texto);
+    setTimeout(() => {
+      if (esUltima) { enviar(); } else { setIndice((i) => i + 1); }
+    }, 220); // breve pausa para que se vea el "clic", sin revelar si acertó
+  };
+
+  const tema = { fondo: "linear-gradient(135deg, #0f0c29, #302b63, #24243e)" };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4 overflow-y-auto" style={{ background: tema.fondo }}>
+      <div className="w-full max-w-lg my-auto" style={{ fontFamily: "'Poppins', -apple-system, sans-serif" }}>
         {cargando ? (
-          <div className="text-sm text-slate-400">Cargando…</div>
-        ) : (
-          <div className="space-y-3 mb-4">
-            {criterios.map((c, i) => (
-              <div key={i} className="border border-slate-200 rounded-xl p-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <input value={c.criterio} onChange={(e) => actualizarCriterio(i, e.target.value)} placeholder="Criterio a evaluar (ej: Ortografía)"
-                    className="flex-1 text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-                  <button onClick={() => quitarCriterio(i)} className="text-slate-300 hover:text-rose-500">🗑</button>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {c.niveles.map((n, j) => (
-                    <div key={j} className="bg-slate-50 rounded-lg p-2">
-                      <input value={n.nombre} onChange={(e) => actualizarNivel(i, j, "nombre", e.target.value)}
-                        className="w-full text-xs font-semibold rounded px-1 py-1 border border-slate-200 outline-none mb-1" />
-                      <input type="number" value={n.puntos} onChange={(e) => actualizarNivel(i, j, "puntos", e.target.value)}
-                        className="w-full text-xs rounded px-1 py-1 border border-slate-200 outline-none" placeholder="Puntos" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-            <button onClick={agregarCriterio} className="text-xs text-violet-500">+ Agregar criterio</button>
+          <div className="rounded-3xl p-8 text-center text-white" style={{ background: "rgba(23,38,77,0.75)" }}>Cargando…</div>
+        ) : errorInicio ? (
+          <div className="rounded-3xl p-6 text-center" style={{ background: "rgba(23,38,77,0.75)", border: "1px solid rgba(47,85,164,0.3)" }}>
+            <p className="text-sm text-rose-300 mb-4">{errorInicio}</p>
+            <button onClick={onCerrar} className="w-full py-3 rounded-xl font-bold text-white" style={{ background: "linear-gradient(to right, #2F55A4, #17264D)" }}>Cerrar</button>
           </div>
-        )}
+        ) : enviado ? (
+          <div className="rounded-3xl p-8 text-center" style={{ background: "rgba(23,38,77,0.75)", border: "1px solid rgba(47,85,164,0.3)" }}>
+            <div className="text-5xl mb-3">✅</div>
+            <div className="text-2xl font-extrabold text-white mb-2">¡Entregado!</div>
+            <p className="text-sm text-slate-300 mb-6">Tu docente va a revisar y publicar tu nota pronto.</p>
+            <button onClick={onCerrar} className="w-full py-3 rounded-xl font-bold text-white" style={{ background: "linear-gradient(to right, #2F55A4, #17264D)" }}>Cerrar</button>
+          </div>
+        ) : !empezado ? (
+          <div className="rounded-3xl p-7 text-center" style={{ background: "rgba(23,38,77,0.75)", border: "1px solid rgba(47,85,164,0.3)" }}>
+            <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-lg text-white mb-4" style={{ background: "#28478a" }}>Evaluación</span>
+            <h1 className="text-2xl font-extrabold mb-3" style={{ background: "linear-gradient(to right, #c084fc, #f472b6, #fde047)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+              {evaluacion.titulo}
+            </h1>
+            {evaluacion.descripcion && (
+              <div className="text-sm mb-4 text-left texto-oscuro-forzado">
+                <style>{`.texto-oscuro-forzado, .texto-oscuro-forzado * { color: #e2e8f0 !important; }`}</style>
+                <TextoEnriquecido html={evaluacion.descripcion} />
+              </div>
+            )}
+            {evaluacion.indicaciones && evaluacion.indicaciones.length > 0 && (
+              <div className="text-left mb-4 rounded-2xl p-4" style={{ background: "rgba(15,25,50,0.6)", border: "1px solid rgba(47,85,164,0.3)" }}>
+                <div className="text-[11px] font-bold uppercase tracking-wide mb-2" style={{ color: "#d8b4fe" }}>Indicaciones</div>
+                <ul className="space-y-1.5">
+                  {evaluacion.indicaciones.map((ind, i) => (
+                    <li key={i} className="flex items-start gap-2 text-xs text-slate-300"><span className="text-violet-400 shrink-0">✓</span><span>{ind}</span></li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {evaluacion.tiempo_limite_minutos && (
+              <p className="text-xs font-semibold mb-5" style={{ color: "#f472b6" }}>⏱ Tenés {evaluacion.tiempo_limite_minutos} minutos en total desde que empieces.</p>
+            )}
+            <button onClick={empezar} className="w-full py-4 rounded-xl font-extrabold text-white text-lg" style={{ background: "linear-gradient(to right, #2F55A4, #17264D)" }}>¡Comenzar! 🚀</button>
+            <button onClick={onCerrar} className="w-full text-xs text-slate-400 mt-3">Cancelar (no se guarda nada)</button>
+          </div>
+        ) : (
+          <div>
+            <div className="flex justify-between items-center mb-4 rounded-2xl px-5 py-3" style={{ background: "rgba(23,38,77,0.6)", border: "1px solid rgba(47,85,164,0.3)" }}>
+              <span className="text-[11px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-lg text-white" style={{ background: "#28478a" }}>
+                Pregunta {indice + 1}/{preguntas.length}
+              </span>
+              {segundosRestantes !== null && (
+                <span className="text-lg font-extrabold" style={{ color: segundosRestantes <= 30 ? "#fb7185" : "#f472b6" }}>{formatearTiempo(segundosRestantes)}</span>
+              )}
+            </div>
 
-        <button disabled={guardando} onClick={guardar} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
-          {guardando ? "Guardando…" : "Guardar rúbrica"}
-        </button>
-      </div>
-    </div>
-  );
-}
+            <div className="rounded-3xl p-7 mb-5 text-center min-h-[110px] flex items-center justify-center" style={{ background: "rgba(23,38,77,0.85)", border: "1px solid rgba(47,85,164,0.4)" }}>
+              <span className="text-white text-base font-bold whitespace-pre-line">{preguntaActual.enunciado}</span>
+            </div>
 
-function TareasLista({ planeacionId }) {
-  const [tareas, setTareas] = useState([]);
-  const [agregando, setAgregando] = useState(false);
-  const [titulo, setTitulo] = useState("");
-  const [tipo, setTipo] = useState("tarea");
-  const [fechaEntrega, setFechaEntrega] = useState("");
-  const [rubricaAbierta, setRubricaAbierta] = useState(null);
-  const [editandoId, setEditandoId] = useState(null);
-  const [tituloEdit, setTituloEdit] = useState("");
-  const [tipoEdit, setTipoEdit] = useState("tarea");
-  const [fechaEdit, setFechaEdit] = useState("");
-
-  const cargar = () => api.fetchTareas(planeacionId).then(setTareas);
-  useEffect(() => { cargar(); }, [planeacionId]);
-
-  const agregar = async () => {
-    if (!titulo.trim()) return;
-    try {
-      await api.crearTarea({ planeacion_id: planeacionId, titulo: titulo.trim(), tipo, fecha_entrega: fechaEntrega || null });
-      setTitulo(""); setFechaEntrega(""); setAgregando(false);
-      cargar();
-    } catch (e) {
-      alert("Error al agregar la tarea: " + e.message);
-    }
-  };
-
-  const empezarEdicion = (t) => {
-    setEditandoId(t.id); setTituloEdit(t.titulo); setTipoEdit(t.tipo); setFechaEdit(t.fecha_entrega || "");
-  };
-
-  const guardarEdicion = async () => {
-    if (!tituloEdit.trim()) return;
-    try {
-      await api.editarTarea(editandoId, { titulo: tituloEdit.trim(), tipo: tipoEdit, fecha_entrega: fechaEdit || null });
-      setEditandoId(null);
-      cargar();
-    } catch (e) {
-      alert("Error al guardar: " + e.message);
-    }
-  };
-
-  const quitar = async (id) => { if (!confirm("¿Eliminar esta tarea?")) return; await api.eliminarTarea(id); cargar(); };
-
-  return (
-    <div className="mt-3 border-t border-slate-200 pt-3">
-      <div className="text-xs font-semibold text-slate-500 mb-2">Tareas (evidencias de aprendizaje)</div>
-      {tareas.length > 0 && (
-        <div className="space-y-1.5 mb-2">
-          {tareas.map((t) => (
-            editandoId === t.id ? (
-              <div key={t.id} className="bg-violet-50 rounded-lg p-2 flex gap-1.5 items-center flex-wrap">
-                <input value={tituloEdit} onChange={(e) => setTituloEdit(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none flex-1 min-w-[120px]" />
-                <select value={tipoEdit} onChange={(e) => setTipoEdit(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none">
-                  {TIPOS_TAREA.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
-                </select>
-                <input type="date" value={fechaEdit} onChange={(e) => setFechaEdit(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-                <button onClick={guardarEdicion} className="text-xs px-2 py-1.5 rounded-lg bg-violet-500 text-white">Guardar</button>
-                <button onClick={() => setEditandoId(null)} className="text-xs text-slate-400">✕</button>
+            {preguntaActual.tipo === "respuesta_corta" ? (
+              <div>
+                <textarea value={respuestaCortaTemp} onChange={(e) => setRespuestaCortaTemp(e.target.value)} rows={4} placeholder="Escribí tu respuesta…"
+                  className="w-full text-sm rounded-2xl px-4 py-3 mb-3 outline-none text-white" style={{ background: "rgba(15,25,50,0.9)", border: "1px solid #28478a" }} />
+                <button onClick={siguiente} className="w-full py-3.5 rounded-xl font-bold text-white" style={{ background: "linear-gradient(to right, #2F55A4, #17264D)" }}>
+                  {esUltima ? "Finalizar evaluación" : "Siguiente →"}
+                </button>
               </div>
             ) : (
-              <div key={t.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-2.5 py-1.5">
-                <div className="text-xs text-slate-700">
-                  <span className="font-semibold">{t.titulo}</span>
-                  <span className="text-slate-400"> · {TIPOS_TAREA.find((x) => x.key === t.tipo)?.label}{t.fecha_entrega ? ` · Entrega: ${t.fecha_entrega}` : ""}</span>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button onClick={() => setRubricaAbierta(t)} className="text-[11px] text-violet-500">📊 Rúbrica</button>
-                  <button onClick={() => empezarEdicion(t)} className="text-slate-300 hover:text-violet-600 text-xs">✏️</button>
-                  <button onClick={() => quitar(t.id)} className="text-slate-300 hover:text-rose-500 text-xs">✕</button>
-                </div>
+              <div className="grid gap-3" style={{ gridTemplateColumns: (preguntaActual.opciones || []).length > 2 ? "1fr 1fr" : "1fr" }}>
+                {(preguntaActual.opciones || []).map((o, j) => {
+                  const color = COLORES_OPCION[j % COLORES_OPCION.length];
+                  const marcada = respuestas[preguntaActual.id] === o.texto;
+                  return (
+                    <button key={j} onClick={() => elegirOpcion(o.texto)}
+                      className="flex items-center gap-3 p-5 rounded-2xl font-bold text-white text-left"
+                      style={{ background: color.bg, borderBottom: `5px solid ${color.borde}`, outline: marcada ? "3px solid white" : "none" }}>
+                      <span className="w-8 h-8 rounded-lg flex items-center justify-center text-xs shrink-0" style={{ background: "rgba(0,0,0,0.2)" }}>{String.fromCharCode(65 + j)}</span>
+                      <span>{o.texto}</span>
+                    </button>
+                  );
+                })}
               </div>
-            )
-          ))}
-        </div>
-      )}
-      {agregando ? (
-        <div className="flex gap-1.5 items-center flex-wrap">
-          <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título de la tarea"
-            className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none flex-1 min-w-[120px]" />
-          <select value={tipo} onChange={(e) => setTipo(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none">
-            {TIPOS_TAREA.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
-          </select>
-          <input type="date" value={fechaEntrega} onChange={(e) => setFechaEntrega(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-          <button onClick={agregar} className="text-xs px-2 py-1.5 rounded-lg bg-violet-500 text-white">Agregar</button>
-          <button onClick={() => setAgregando(false)} className="text-xs text-slate-400">✕</button>
-        </div>
-      ) : (
-        <button onClick={() => setAgregando(true)} className="text-[11px] text-violet-500">+ Agregar tarea</button>
-      )}
-
-      {rubricaAbierta && <RubricaModal tarea={rubricaAbierta} onClose={() => setRubricaAbierta(null)} />}
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-const ESTADOS_DICTADO = [
-  { key: "pendiente", label: "Pendiente", color: "#F59E0B" },
-  { key: "dictada", label: "Dictada tal cual se planeó", color: "#22C55E" },
-  { key: "alterada", label: "Dictada, pero cambió sobre la marcha", color: "#F97316" },
-  { key: "aplazada", label: "Aplazada", color: "#EF4444" },
-];
-
-function DictadoControl({ claseId, grados, unidad }) {
-  const [dictados, setDictados] = useState([]);
-  const [agregando, setAgregando] = useState(false);
-  const [gradoId, setGradoId] = useState("");
-  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
-  const [estado, setEstado] = useState("dictada");
-  const [observacionAbiertaDe, setObservacionAbiertaDe] = useState(null);
-  const [observacionTemp, setObservacionTemp] = useState({});
-  const [comarcaAbiertaDe, setComarcaAbiertaDe] = useState(null);
-  const [reinosDelCurso, setReinosDelCurso] = useState([]);
-  const [seleccionados, setSeleccionados] = useState([]);
-  const [cargandoReinos, setCargandoReinos] = useState(false);
-  const [lanzando, setLanzando] = useState(false);
-
-  const abrirComarcaDe = (dictado) => {
-    setComarcaAbiertaDe(dictado.id);
-    setCargandoReinos(true);
-    api.fetchReinosDelCurso(dictado.grado_id).then((r) => { setReinosDelCurso(r); setSeleccionados(r); setCargandoReinos(false); });
-  };
-
-  const toggleReino = (nombre) => setSeleccionados((prev) => prev.includes(nombre) ? prev.filter((r) => r !== nombre) : [...prev, nombre]);
-
-  const lanzarComarca = async (dictado) => {
-    if (seleccionados.length < 2) { alert("Elegí al menos 2 Reinos."); return; }
-    setLanzando(true);
-    try {
-      await api.iniciarComarcaDesdePlaneacion(unidad, dictado, seleccionados);
-      alert("¡Listo! La sesión ya está creada — andá a la pestaña \"Comarca de Oakhaven\" para jugarla.");
-      setComarcaAbiertaDe(null);
-      cargar();
-    } catch (e) {
-      alert("Error: " + e.message);
-    }
-    setLanzando(false);
-  };
-
-  const cargar = () => api.fetchDictados(claseId).then(setDictados);
-  useEffect(() => { cargar(); }, [claseId]);
-  useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
-
-  const toggleAlerta = async (d) => { await api.editarDictado(d.id, { alerta: !d.alerta }); cargar(); };
-  const guardarObservacion = async (id) => {
-    await api.editarDictado(id, { observacion: (observacionTemp[id] ?? "").trim() || null });
-    setObservacionAbiertaDe(null);
-    cargar();
-  };
-
-  const agregar = async () => {
-    if (!gradoId) return;
-    try {
-      await api.crearDictado(claseId, gradoId, fecha, estado);
-      setAgregando(false);
-      cargar();
-    } catch (e) {
-      alert("Error al registrar: " + e.message);
-    }
-  };
-
-  const cambiarEstado = async (id, nuevoEstado) => { await api.editarDictado(id, { estado: nuevoEstado }); cargar(); };
-  const quitar = async (id) => { await api.eliminarDictado(id); cargar(); };
-
-  return (
-    <div className="mt-2 pt-2 border-t border-slate-200">
-      <div className="text-[10px] font-semibold text-slate-400 uppercase mb-1">Control por curso — lo que realmente pasó en el aula</div>
-      {dictados.length > 0 && (
-        <div className="space-y-1.5 mb-1.5">
-          {dictados.map((d) => {
-            const info = ESTADOS_DICTADO.find((e) => e.key === d.estado);
-            return (
-              <div key={d.id} className={`rounded-lg p-1.5 ${d.alerta ? "bg-rose-50" : ""}`}>
-                <div className="flex items-center gap-2 text-[11px]">
-                  <span className="font-semibold text-slate-600 w-16 shrink-0">Curso {d.grado_id}</span>
-                  <span className="text-slate-400 w-24 shrink-0">{d.fecha || "sin fecha"}</span>
-                  <select value={d.estado} onChange={(e) => cambiarEstado(d.id, e.target.value)}
-                    className="text-[10px] px-2 py-0.5 rounded-full border-0 outline-none" style={{ background: `${info.color}22`, color: info.color }}>
-                    {ESTADOS_DICTADO.map((e) => <option key={e.key} value={e.key}>{e.label}</option>)}
-                  </select>
-                  <button onClick={() => toggleAlerta(d)} title="Marcar para revisar más adelante" className={`text-xs shrink-0 ${d.alerta ? "" : "opacity-30"}`}>⚠️</button>
-                  <button onClick={() => setObservacionAbiertaDe(observacionAbiertaDe === d.id ? null : d.id)} className="text-[10px] text-violet-500 shrink-0">
-                    {d.observacion ? "📝 Ver nota" : "+ Nota"}
-                  </button>
-                  {unidad?.incluye_comarca && (
-                    d.comarca_sesion_id ? (
-                      <span className="text-[10px] text-emerald-600 font-semibold shrink-0">✓ 🏛️ Comarca vinculada</span>
-                    ) : (
-                      <button onClick={() => abrirComarcaDe(d)} className="text-[10px] text-violet-500 shrink-0">🏛️ Iniciar Comarca</button>
-                    )
-                  )}
-                  <button onClick={() => quitar(d.id)} className="text-slate-300 hover:text-rose-500 ml-auto shrink-0">✕</button>
-                </div>
-                {comarcaAbiertaDe === d.id && (
-                  <div className="mt-1.5 bg-violet-50 rounded-lg p-2">
-                    {cargandoReinos ? (
-                      <p className="text-[11px] text-slate-400">Buscando los Reinos de este curso…</p>
-                    ) : reinosDelCurso.length === 0 ? (
-                      <p className="text-[11px] text-rose-500">Este curso todavía no tiene Reinos asignados a sus estudiantes.</p>
-                    ) : (
-                      <>
-                        <div className="flex flex-wrap gap-1.5 mb-2">
-                          {reinosDelCurso.map((r) => (
-                            <button key={r} onClick={() => toggleReino(r)}
-                              className={`text-[10px] font-semibold px-2 py-1 rounded-full border ${seleccionados.includes(r) ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-500 border-slate-200"}`}>
-                              {seleccionados.includes(r) ? "✓ " : ""}{r}
-                            </button>
-                          ))}
-                        </div>
-                        <div className="flex gap-2">
-                          <button onClick={() => setComarcaAbiertaDe(null)} className="text-[11px] text-slate-500">Cancelar</button>
-                          <button disabled={lanzando} onClick={() => lanzarComarca(d)} className="text-[11px] font-semibold px-2 py-1 rounded-lg bg-violet-500 text-white disabled:opacity-60">
-                            {lanzando ? "Creando…" : "Fundar y vincular"}
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-                {observacionAbiertaDe === d.id && (
-                  <div className="mt-1 flex gap-1.5">
-                    <textarea value={observacionTemp[d.id] ?? d.observacion ?? ""} onChange={(e) => setObservacionTemp((prev) => ({ ...prev, [d.id]: e.target.value }))}
-                      rows={2} placeholder="¿Qué pasó realmente en esta clase? (ej: un imprevisto cambió la actividad planeada, no alcanzó el tiempo, etc.)"
-                      className="flex-1 text-[11px] rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-                    <button onClick={() => guardarObservacion(d.id)} className="text-[11px] px-2 py-1 rounded-lg bg-violet-500 text-white self-start">Guardar</button>
-                  </div>
-                )}
-                {d.observacion && observacionAbiertaDe !== d.id && (
-                  <p className="text-[10px] text-slate-500 mt-0.5 pl-[4.5rem]">📝 {d.observacion}</p>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-      {agregando ? (
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-[11px] rounded-lg px-2 py-1 border border-slate-200 outline-none">
-            {grados.map((g) => <option key={g.id} value={g.id}>Curso {g.id}</option>)}
-          </select>
-          <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="text-[11px] rounded-lg px-2 py-1 border border-slate-200 outline-none" />
-          <select value={estado} onChange={(e) => setEstado(e.target.value)} className="text-[11px] rounded-lg px-2 py-1 border border-slate-200 outline-none">
-            {ESTADOS_DICTADO.map((e) => <option key={e.key} value={e.key}>{e.label}</option>)}
-          </select>
-          <button onClick={agregar} className="text-[11px] px-2 py-1 rounded-lg bg-violet-500 text-white">Guardar</button>
-          <button onClick={() => setAgregando(false)} className="text-[11px] text-slate-400">✕</button>
-        </div>
-      ) : (
-        <button onClick={() => setAgregando(true)} className="text-[11px] text-violet-500">+ Registrar en un curso</button>
-      )}
-    </div>
-  );
-}
-
-function ClasesLista({ unidad, unidadId, grados, materiaNombre }) {
-  const [clases, setClases] = useState([]);
-  const [agregando, setAgregando] = useState(false);
-  const [editandoId, setEditandoId] = useState(null);
-  const [bitacoraAbierta, setBitacoraAbierta] = useState(null); // { fecha }
-  const [modo, setModo] = useState("agil"); // "agil" | "completo"
-  const [titulo, setTitulo] = useState("");
-  const [fecha, setFecha] = useState("");
-  const [duracion, setDuracion] = useState("");
-  const [descripcionAgil, setDescripcionAgil] = useState("");
-  const [inicio, setInicio] = useState("");
-  const [desarrollo, setDesarrollo] = useState("");
-  const [cierre, setCierre] = useState("");
-  const [indicador, setIndicador] = useState("");
-  const [objetivo, setObjetivo] = useState("");
-  const [ajustes, setAjustes] = useState("");
-
-  const cargar = () => api.fetchClases(unidadId).then(setClases);
-  useEffect(() => { cargar(); }, [unidadId]);
-
-  const limpiar = () => {
-    setTitulo(""); setFecha(""); setDuracion(""); setDescripcionAgil(""); setInicio(""); setDesarrollo(""); setCierre(""); setIndicador(""); setObjetivo(""); setAjustes("");
-    setAgregando(false); setEditandoId(null); setModo("agil");
-  };
-
-  const empezarEdicionClase = (c) => {
-    setEditandoId(c.id);
-    setTitulo(c.titulo || "");
-    setFecha(c.fecha || "");
-    setDuracion(c.duracion_minutos || "");
-    setObjetivo(c.objetivo_aprendizaje || "");
-    setAjustes(c.ajustes_curriculares || "");
-    if (c.momento_inicio || c.momento_cierre) {
-      setModo("completo");
-      setInicio(c.momento_inicio || "");
-      setDesarrollo(c.momento_desarrollo || "");
-      setCierre(c.momento_cierre || "");
-      setIndicador(c.indicador_desempeno || "");
-      setDescripcionAgil("");
-    } else {
-      setModo("agil");
-      setDescripcionAgil(c.momento_desarrollo || "");
-      setInicio(""); setDesarrollo(""); setCierre(""); setIndicador("");
-    }
-    setAgregando(true);
-  };
-
-  const guardar = async () => {
-    if (!titulo.trim()) return;
-    const campos = {
-      titulo: titulo.trim(), fecha: fecha || null,
-      duracion_minutos: duracion ? parseInt(duracion, 10) : null,
-      objetivo_aprendizaje: objetivo.trim() || null,
-      ajustes_curriculares: ajustes.trim() || null,
-      momento_inicio: modo === "agil" ? null : (inicio.trim() || null),
-      momento_desarrollo: modo === "agil" ? (descripcionAgil.trim() || null) : (desarrollo.trim() || null),
-      momento_cierre: modo === "agil" ? null : (cierre.trim() || null),
-      indicador_desempeno: modo === "agil" ? null : (indicador.trim() || null),
-    };
-    try {
-      if (editandoId) {
-        await api.editarPlaneacion(editandoId, campos);
-      } else {
-        await api.crearPlaneacion({ tipo: "clase", unidad_id: unidadId, orden: clases.length, ...campos });
-      }
-      limpiar();
-      cargar();
-    } catch (e) {
-      alert("Error al guardar la clase: " + e.message);
-    }
-  };
-
-  const quitar = async (id) => { if (!confirm("¿Eliminar esta clase?")) return; await api.eliminarPlaneacion(id); cargar(); };
-
-  return (
-    <div className="mt-3">
-      <div className="text-xs font-semibold text-slate-500 mb-2">Clases de esta unidad</div>
-      {clases.length > 0 && (
-        <div className="space-y-2 mb-2">
-          {clases.map((c, i) => (
-            <div key={c.id} className="bg-white border border-slate-200 rounded-lg p-2.5">
-              <div className="flex justify-between items-start">
-                <div className="text-xs">
-                  <span className="font-semibold text-slate-700">Clase {i + 1}: {c.titulo}</span>
-                  {c.fecha && <span className="text-slate-400"> · {c.fecha}</span>}
-                  {c.duracion_minutos && <span className="text-slate-400"> · {c.duracion_minutos} min</span>}
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {c.fecha && (
-                    <button onClick={() => setBitacoraAbierta({ fecha: c.fecha })} className="text-[10px] font-semibold text-violet-500">📔 Bitácora</button>
-                  )}
-                  <button onClick={() => empezarEdicionClase(c)} className="text-slate-300 hover:text-violet-600 text-xs">✏️</button>
-                  <button onClick={() => quitar(c.id)} className="text-slate-300 hover:text-rose-500 text-xs">✕</button>
-                </div>
-              </div>
-              {c.objetivo_aprendizaje && <p className="text-[11px] text-violet-600 mt-1"><b>🎯 Objetivo:</b> {c.objetivo_aprendizaje}</p>}
-              {(c.momento_inicio || c.momento_desarrollo || c.momento_cierre) && (
-                <div className="grid sm:grid-cols-3 gap-2 mt-2">
-                  {c.momento_inicio && (
-                    <div className="bg-amber-50 rounded-lg p-2">
-                      <div className="text-[9px] font-bold text-amber-600 uppercase mb-0.5">Actividades de apertura</div>
-                      <TextoEnriquecido html={c.momento_inicio} className="text-[11px] text-slate-600" />
-                    </div>
-                  )}
-                  {c.momento_desarrollo && (
-                    <div className="bg-violet-50 rounded-lg p-2">
-                      <div className="text-[9px] font-bold text-violet-600 uppercase mb-0.5">Actividades de desarrollo</div>
-                      <TextoEnriquecido html={c.momento_desarrollo} className="text-[11px] text-slate-600" />
-                    </div>
-                  )}
-                  {c.momento_cierre && (
-                    <div className="bg-emerald-50 rounded-lg p-2">
-                      <div className="text-[9px] font-bold text-emerald-600 uppercase mb-0.5">Actividades de cierre</div>
-                      <TextoEnriquecido html={c.momento_cierre} className="text-[11px] text-slate-600" />
-                    </div>
-                  )}
-                </div>
-              )}
-              {c.indicador_desempeno && <p className="text-[11px] text-slate-500 mt-1.5"><b>Indicador de desempeño:</b> {c.indicador_desempeno}</p>}
-              {c.ajustes_curriculares && (
-                <div className="bg-blue-50 rounded-lg p-2 mt-1.5">
-                  <div className="text-[9px] font-bold text-blue-600 uppercase mb-0.5">Ajustes razonables / adaptaciones</div>
-                  <TextoEnriquecido html={c.ajustes_curriculares} className="text-[11px] text-slate-600" />
-                </div>
-              )}
-              <div className="flex flex-wrap gap-3 mt-1.5">
-                <SelectorEstandares planeacionId={c.id} tipo="dba" />
-                <SelectorEstandares planeacionId={c.id} tipo="competencia" />
-              </div>
-              <RecursosLista planeacionId={c.id} />
-              <DictadoControl claseId={c.id} grados={grados} unidad={unidad} />
-            </div>
-          ))}
-        </div>
-      )}
-      {agregando ? (
-        <div className="bg-violet-50 rounded-lg p-3 space-y-2">
-          {editandoId && <div className="text-[11px] font-semibold text-violet-600">Editando "{titulo || "esta clase"}"</div>}
-          <div className="flex gap-1 rounded-full bg-white p-1 w-fit border border-slate-200">
-            <button onClick={() => setModo("agil")} className={`text-[11px] px-3 py-1 rounded-full ${modo === "agil" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🚀 Ágil</button>
-            <button onClick={() => setModo("completo")} className={`text-[11px] px-3 py-1 rounded-full ${modo === "completo" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📋 Completo (inicio/desarrollo/cierre)</button>
-          </div>
-          <div className="flex gap-1.5">
-            <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Tema central de la clase (sesión)"
-              className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-            <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-            <input type="number" value={duracion} onChange={(e) => setDuracion(e.target.value)} placeholder="Min." className="w-16 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-          </div>
-          <input value={objetivo} onChange={(e) => setObjetivo(e.target.value)} placeholder="Objetivo de aprendizaje — ¿qué sabrá o sabrá hacer el estudiante al terminar?"
-            className="w-full text-xs rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none" />
-          {modo === "agil" ? (
-            <EditorTexto value={descripcionAgil} onChange={setDescripcionAgil} minHeight={90} placeholder="¿Qué se va a hacer en esta clase?" />
-          ) : (
-            <>
-              <EditorTexto value={inicio} onChange={setInicio} minHeight={80}
-                placeholder="INICIO (10-15%): activación y motivación (dinámica corta, pregunta retadora) · recuperación de saberes previos · presentación del objetivo a los estudiantes…" />
-              <EditorTexto value={desarrollo} onChange={setDesarrollo} minHeight={80}
-                placeholder="DESARROLLO (65-70%): estructuración/modelado (explicación con ejemplos) · práctica guiada (ejercicios en conjunto) · práctica autónoma (trabajo individual o colaborativo)…" />
-              <EditorTexto value={cierre} onChange={setCierre} minHeight={80}
-                placeholder="CIERRE (15%): síntesis de los puntos clave · evaluación formativa o boleto de salida · metacognición (¿cómo aprendimos hoy?)…" />
-              <input value={indicador} onChange={(e) => setIndicador(e.target.value)} placeholder="Indicador de desempeño (opcional)"
-                className="w-full text-xs rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none" />
-              <label className="text-[10px] text-slate-500 block mb-1">Ajustes razonables / adaptaciones curriculares (opcional)</label>
-              <EditorTexto value={ajustes} onChange={setAjustes} minHeight={60} placeholder="Modificaciones planeadas para estudiantes con PIAR/DUA u otros ritmos de aprendizaje…" />
-            </>
-          )}
-          <div className="flex justify-end gap-2">
-            <button onClick={limpiar} className="text-xs text-slate-400">Cancelar</button>
-            <button onClick={guardar} className="text-xs px-3 py-1.5 rounded-lg bg-violet-500 text-white">{editandoId ? "Guardar cambios" : "Agregar clase"}</button>
-          </div>
-        </div>
-      ) : (
-        <button onClick={() => setAgregando(true)} className="text-[11px] text-violet-500">+ Agregar clase</button>
-      )}
-      {bitacoraAbierta && (
-        <BitacoraClaseModal gradoId={unidad.grado_id} materiaId={unidad.materia_id} materiaNombre={materiaNombre}
-          fechaInicial={bitacoraAbierta.fecha} onCerrar={() => setBitacoraAbierta(null)} />
-      )}
-    </div>
-  );
-}
-
-function bloqueImpresion(titulo, contenido, opts = {}) {
-  if (!contenido) return null;
-  return (
-    <div className="print-avoid-break" style={{ marginBottom: 10, background: opts.bg || "transparent", padding: opts.bg ? 8 : 0, borderRadius: opts.bg ? 6 : 0 }}>
-      <div style={{ fontWeight: 700, fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, color: opts.accent || "#1e293b", marginBottom: 3 }}>{titulo}</div>
-      <div style={{ fontSize: 12, lineHeight: 1.4, whiteSpace: "pre-line" }}>{contenido}</div>
-    </div>
-  );
-}
-
-// Igual que bloqueImpresion, pero para los módulos que son tablas
-// (Zonas, Roles, Secuencia, Matriz de Evaluación).
-function tablaImpresion(titulo, columnas, filas, opts = {}) {
-  if (!filas || filas.length === 0) return null;
-  return (
-    <div className="print-avoid-break" style={{ marginBottom: 10 }}>
-      <div style={{ fontWeight: 700, fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, color: opts.accent || "#1e293b", marginBottom: 3 }}>{titulo}</div>
-      <table style={{ width: "100%", fontSize: 10.5, borderCollapse: "collapse" }}>
-        <thead>
-          <tr style={{ background: opts.bg || "#E8EEF8" }}>
-            {columnas.map((c) => <th key={c.clave} style={{ textAlign: "left", padding: "3px 6px", fontWeight: 700 }}>{c.titulo}</th>)}
-          </tr>
-        </thead>
-        <tbody>
-          {filas.map((f, i) => (
-            <tr key={i} style={{ borderBottom: "1px solid #E2E8F0" }}>
-              {columnas.map((c) => <td key={c.clave} style={{ padding: "3px 6px", verticalAlign: "top" }}>{f[c.clave]}</td>)}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-// Cuerpo completo de una unidad para impresión — función pura (no hook),
-// para poder reutilizarla tanto en la impresión de una sola planeación
-// como en "Imprimir todas". No incluye el encabezado institucional ni el
-// pie de página, que dependen de si es una hoja individual o parte de un
-// documento con portada propia.
-function cuerpoUnidadImpresion({ unidad, materiaNombre, gradoId, clases, tareas, dba, competencias }) {
-  return (
-    <>
-      <table className="print-avoid-break" style={{ width: "100%", fontSize: 11.5, marginBottom: 12, borderCollapse: "collapse" }}>
-        <tbody>
-          <tr>
-            <td style={{ fontWeight: 700, padding: "2px 6px 2px 0", width: 90 }}>Materia:</td><td>{materiaNombre}</td>
-            <td style={{ fontWeight: 700, padding: "2px 6px 2px 20px", width: 60 }}>Grado:</td><td>{gradoId}</td>
-          </tr>
-          <tr>
-            <td style={{ fontWeight: 700, padding: "2px 6px 2px 0" }}>Unidad:</td><td colSpan={3}>{unidad.titulo}</td>
-          </tr>
-        </tbody>
-      </table>
-
-      {bloqueImpresion("Finalidad, propósitos u objetivos", unidad.objetivo)}
-      {bloqueImpresion("Contenidos", unidad.contenido)}
-      {bloqueImpresion("Problema, caso o proyecto", unidad.problema_proyecto, { bg: "#E8EEF8", accent: "#28478a" })}
-      {bloqueImpresion("Orientaciones generales para la evaluación", unidad.orientaciones_evaluacion, { bg: "#EFF6FF", accent: "#2563EB" })}
-
-      {dba.length > 0 && bloqueImpresion("DBA vinculados", dba.map((d) => `${d.codigo ? d.codigo + " — " : ""}${d.descripcion}`).join("\n"), { bg: "#EFF6FF", accent: "#2563EB" })}
-      {competencias.length > 0 && bloqueImpresion("Competencias vinculadas", competencias.map((c) => `${c.codigo ? c.codigo + " — " : ""}${c.descripcion}`).join("\n"), { bg: "#F0FDFA", accent: "#0D9488" })}
-
-      {(unidad.caso_problema_integrador || unidad.dba || (unidad.competencias_ciudadanas || []).length > 0 || (unidad.contenidos_curriculares || []).length > 0) && (
-        <div className="print-avoid-break" style={{ marginBottom: 12 }}>
-          <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5, borderBottom: "1px solid #2F55A4", paddingBottom: 2 }}>
-            Módulo I — Alineación curricular
-          </div>
-          {bloqueImpresion("Institución / Asignatura", unidad.institucion_asignatura)}
-          {bloqueImpresion("Clase N°", unidad.clase_numero)}
-          {bloqueImpresion("Duración", unidad.duracion_minutos ? `${unidad.duracion_minutos} minutos` : null)}
-          {bloqueImpresion("Caso / Problema integrador", unidad.caso_problema_integrador, { bg: "#E8EEF8", accent: "#28478a" })}
-          {bloqueImpresion("Derecho Básico de Aprendizaje (DBA)", unidad.dba)}
-          {(unidad.competencias_ciudadanas || []).length > 0 && bloqueImpresion("Competencias Ciudadanas", unidad.competencias_ciudadanas.join(" · "))}
-          {bloqueImpresion("Desempeños / Indicadores", [
-            ...(unidad.desempeno_cognitivo || []).map((d) => `Cognitivo: ${d}`),
-            ...(unidad.desempeno_procedimental || []).map((d) => `Procedimental: ${d}`),
-            ...(unidad.desempeno_actitudinal || []).map((d) => `Actitudinal: ${d}`),
-          ].join("\n") || null)}
-          {(unidad.contenidos_curriculares || []).length > 0 && bloqueImpresion("Contenidos Curriculares", unidad.contenidos_curriculares.map((c) => `• ${c}`).join("\n"))}
-        </div>
-      )}
-
-      {(unidad.nombre_proyecto || unidad.narrativa_sesion || (unidad.reglas_generales || []).length > 0 || (unidad.misiones_retos || []).length > 0) && (
-        <div className="print-avoid-break" style={{ marginBottom: 12 }}>
-          <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5, borderBottom: "1px solid #2F55A4", paddingBottom: 2 }}>
-            Módulo II — Diseño gamificado y narrativa
-          </div>
-          {bloqueImpresion("Nombre del proyecto", unidad.nombre_proyecto)}
-          {bloqueImpresion("Perfil de jugadores", unidad.perfil_jugadores)}
-          {bloqueImpresion("Nivel de progresión", unidad.nivel_progresion ? `Nivel ${unidad.nivel_progresion} de 5` : null)}
-          {bloqueImpresion("Narrativa de la sesión", unidad.narrativa_sesion, { bg: "#E8EEF8", accent: "#28478a" })}
-          {bloqueImpresion("Tipo de escenario", unidad.tipo_escenario === "real" ? "Real" : unidad.tipo_escenario === "ficcion" ? "Ficción" : unidad.tipo_escenario ? "Real / Ficción" : null)}
-          {(unidad.reglas_generales || []).length > 0 && bloqueImpresion("Reglas generales de juego", unidad.reglas_generales.map((r, i) => `${i + 1}. ${r}`).join("\n"))}
-          {tablaImpresion("Misiones y retos", [{ clave: "nombre", titulo: "Misión" }, { clave: "descripcion", titulo: "Descripción" }], unidad.misiones_retos)}
-        </div>
-      )}
-
-      {tablaImpresion("Módulo III — Escenario, paisaje y zonas", [
-        { clave: "zona", titulo: "Zona / Provincia" }, { clave: "tipo_recorrido", titulo: "Tipo de recorrido" },
-        { clave: "reto_mision", titulo: "Reto / Misión" }, { clave: "contenido_vinculado", titulo: "Contenido vinculado" },
-      ], unidad.zonas_escenario)}
-
-      {tablaImpresion("Módulo IV — Roles de equipo y economía", [
-        { clave: "avatar_rol", titulo: "Avatar / Rol" }, { clave: "funcion_operativa", titulo: "Función operativa" },
-        { clave: "responsabilidad_academica", titulo: "Responsabilidad académica" },
-      ], unidad.roles_economia)}
-
-      {tablaImpresion("Módulo V — Secuencia didáctica integrada", [
-        { clave: "fase_minutos", titulo: "Fase / Minutos" }, { clave: "momento_codice", titulo: "Momento CÓDICE" },
-        { clave: "dinamica_operativa", titulo: "Dinámica operativa" }, { clave: "rol_docente", titulo: "Rol docente" },
-      ], unidad.secuencia_didactica)}
-
-      {tablaImpresion("Módulo VI — Matriz de evaluación", [
-        { clave: "componente", titulo: "Componente" }, { clave: "peso_pct", titulo: "% Peso" },
-        { clave: "evidencia", titulo: "Evidencia" }, { clave: "criterios", titulo: "Criterios" },
-      ], unidad.matriz_evaluacion)}
-
-      {clases.length > 0 && (
-        <div className="print-avoid-break" style={{ marginBottom: 12 }}>
-          <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Desarrollo de clases</div>
-          {clases.map((c, i) => (
-            <div key={c.id} className="print-avoid-break" style={{ border: "1px solid #E2E8F0", borderRadius: 6, padding: 8, marginBottom: 8 }}>
-              <div style={{ fontWeight: 700, fontSize: 12 }}>
-                Clase {i + 1}: {c.titulo}
-                {c.fecha && <span style={{ fontWeight: 400, color: "#64748B" }}> · {c.fecha}</span>}
-                {c.duracion_minutos && <span style={{ fontWeight: 400, color: "#64748B" }}> · {c.duracion_minutos} min</span>}
-              </div>
-              {c.momento_inicio && <div style={{ fontSize: 11, marginTop: 4 }}><b>Actividades de apertura:</b> <span dangerouslySetInnerHTML={{ __html: c.momento_inicio }} /></div>}
-              {c.momento_desarrollo && <div style={{ fontSize: 11, marginTop: 2 }}><b>Actividades de desarrollo:</b> <span dangerouslySetInnerHTML={{ __html: c.momento_desarrollo }} /></div>}
-              {c.momento_cierre && <div style={{ fontSize: 11, marginTop: 2 }}><b>Actividades de cierre:</b> <span dangerouslySetInnerHTML={{ __html: c.momento_cierre }} /></div>}
-              {c.indicador_desempeno && <div style={{ fontSize: 11, marginTop: 2 }}><b>Indicador de desempeño:</b> {c.indicador_desempeno}</div>}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {tareas.length > 0 && (
-        <div className="print-avoid-break" style={{ marginBottom: 12 }}>
-          <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Tareas</div>
-          <table style={{ width: "100%", fontSize: 11, borderCollapse: "collapse" }}>
-            <tbody>
-              {tareas.map((t) => (
-                <tr key={t.id} style={{ borderTop: "1px solid #E2E8F0" }}>
-                  <td style={{ padding: "4px 6px 4px 0", fontWeight: 700 }}>{t.titulo}</td>
-                  <td style={{ padding: "4px 6px", color: "#64748B" }}>{t.tipo}</td>
-                  <td style={{ padding: "4px 0", color: "#64748B" }}>{t.fecha_entrega ? `Entrega: ${t.fecha_entrega}` : ""}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </>
-  );
-}
-
-function PlaneacionPrintView({ unidad, institucion, materiaNombre, gradoId, onCerrado }) {
-  const [clases, setClases] = useState([]);
-  const [tareas, setTareas] = useState([]);
-  const [estandaresUnidad, setEstandaresUnidad] = useState([]);
+function TarjetaEvaluacionEstudiante({ evaluacion, estudianteId }) {
+  const [intentos, setIntentos] = useState([]);
   const [cargando, setCargando] = useState(true);
+  const [tomando, setTomando] = useState(false);
 
-  useEffect(() => {
-    Promise.all([
-      api.fetchClases(unidad.id),
-      api.fetchTareas(unidad.id),
-      api.fetchEstandaresDePlaneacion(unidad.id),
-    ]).then(([cls, tsk, est]) => {
-      setClases(cls);
-      setTareas(tsk);
-      setEstandaresUnidad(est);
-      setCargando(false);
-    });
-  }, [unidad.id]);
-
-  useEffect(() => {
-    if (cargando) return;
-    const id = setTimeout(() => window.print(), 200);
-    const onAfter = () => onCerrado();
-    window.addEventListener("afterprint", onAfter);
-    return () => { clearTimeout(id); window.removeEventListener("afterprint", onAfter); };
-  }, [cargando]);
+  const cargar = () => api.fetchMisIntentos(evaluacion.id, estudianteId).then((d) => { setIntentos(d); setCargando(false); });
+  useEffect(() => { cargar(); }, [evaluacion.id]);
 
   if (cargando) return null;
+  const usados = intentos.length;
+  const maxIntentos = evaluacion.intentos_permitidos;
+  const puedeIntentar = maxIntentos === null || usados < maxIntentos;
+  const publicado = intentos.filter((i) => i.visible_para_estudiante).sort((a, b) => b.numero_intento - a.numero_intento)[0];
+  const hayPendiente = intentos.some((i) => i.estado !== "en_progreso" && !i.visible_para_estudiante);
 
-  const dba = estandaresUnidad.filter((e) => e?.tipo === "dba");
-  const competencias = estandaresUnidad.filter((e) => e?.tipo === "competencia");
+  const colorBorde = publicado ? "#22C55E" : hayPendiente ? "#F59E0B" : "#2F55A4";
 
-  const contenido = (
-    <div className="print-only" style={{ maxWidth: "180mm", margin: "0 auto", padding: "0 0 14mm 0", fontFamily: "Georgia, 'Times New Roman', serif", color: "#1e293b" }}>
-      <div className="print-avoid-break" style={{ textAlign: "center", marginBottom: 14, borderBottom: "2px solid #2F55A4", paddingBottom: 8 }}>
-        {institucion?.logo_url && <img src={institucion.logo_url} alt="Logo" style={{ maxHeight: 56, marginBottom: 6, display: "block", marginLeft: "auto", marginRight: "auto" }} />}
-        <div style={{ fontSize: 17, fontWeight: 700 }}>{institucion?.nombre}</div>
-        <div style={{ fontSize: 13, marginTop: 6, fontStyle: "italic" }}>Planeación de Clase</div>
-      </div>
-
-      {cuerpoUnidadImpresion({ unidad, materiaNombre, gradoId, clases, tareas, dba, competencias })}
-
-      <div className="print-footer">
-        {institucion?.nombre} · {materiaNombre} · Grado {gradoId} · {unidad.titulo} · Generado {new Date().toLocaleDateString("es-CO")}
-      </div>
-    </div>
-  );
-
-  return createPortal(contenido, document.body);
-}
-
-// Imprime TODAS las unidades del filtro actual (materia + curso + periodo)
-// en un solo documento, con una portada institucional al inicio.
-function ImprimirTodasPlaneacionesModal({ unidades, institucion, materiaNombre, gradoId, periodo, onCerrado }) {
-  const [datosPorUnidad, setDatosPorUnidad] = useState(null);
-
-  useEffect(() => {
-    Promise.all(unidades.map((u) =>
-      Promise.all([api.fetchClases(u.id), api.fetchTareas(u.id), api.fetchEstandaresDePlaneacion(u.id)])
-        .then(([clases, tareas, estandares]) => ({
-          unidad: u, clases, tareas,
-          dba: estandares.filter((e) => e?.tipo === "dba"),
-          competencias: estandares.filter((e) => e?.tipo === "competencia"),
-        }))
-    )).then(setDatosPorUnidad);
-  }, [unidades]);
-
-  useEffect(() => {
-    if (!datosPorUnidad) return;
-    const id = setTimeout(() => window.print(), 250);
-    const onAfter = () => onCerrado();
-    window.addEventListener("afterprint", onAfter);
-    return () => { clearTimeout(id); window.removeEventListener("afterprint", onAfter); };
-  }, [datosPorUnidad]);
-
-  if (!datosPorUnidad) return null;
-
-  const fechaHoy = new Date().toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" });
-
-  const contenido = (
-    <div className="print-only" style={{ maxWidth: "180mm", margin: "0 auto", fontFamily: "Georgia, 'Times New Roman', serif", color: "#1e293b" }}>
-      {/* Portada institucional */}
-      <div className="print-avoid-break" style={{ minHeight: "220mm", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", pageBreakAfter: "always", border: "3px double #2F55A4", padding: "30mm 15mm" }}>
-        {institucion?.logo_url && <img src={institucion.logo_url} alt="Logo" style={{ maxHeight: 90, marginBottom: 18 }} />}
-        <div style={{ fontSize: 13, letterSpacing: 2, textTransform: "uppercase", color: "#28478a", marginBottom: 6 }}>{institucion?.nombre || "Institución Educativa"}</div>
-        <div style={{ width: 60, height: 2, background: "#2F55A4", margin: "10px 0 20px" }} />
-        <div style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>Documento Maestro de Planeación Didáctica</div>
-        <div style={{ fontSize: 15, fontStyle: "italic", color: "#475569", marginBottom: 30 }}>Compendio de unidades — {materiaNombre}</div>
-
-        <table style={{ fontSize: 13, borderCollapse: "collapse", marginBottom: 24 }}>
-          <tbody>
-            <tr><td style={{ fontWeight: 700, padding: "4px 12px 4px 0", textAlign: "right" }}>Materia:</td><td style={{ padding: "4px 0", textAlign: "left" }}>{materiaNombre}</td></tr>
-            <tr><td style={{ fontWeight: 700, padding: "4px 12px 4px 0", textAlign: "right" }}>Grado / Curso:</td><td style={{ padding: "4px 0", textAlign: "left" }}>{gradoId}</td></tr>
-            <tr><td style={{ fontWeight: 700, padding: "4px 12px 4px 0", textAlign: "right" }}>Periodo:</td><td style={{ padding: "4px 0", textAlign: "left" }}>{periodo}</td></tr>
-            <tr><td style={{ fontWeight: 700, padding: "4px 12px 4px 0", textAlign: "right" }}>N° de unidades:</td><td style={{ padding: "4px 0", textAlign: "left" }}>{unidades.length}</td></tr>
-            <tr><td style={{ fontWeight: 700, padding: "4px 12px 4px 0", textAlign: "right" }}>Fecha de generación:</td><td style={{ padding: "4px 0", textAlign: "left" }}>{fechaHoy}</td></tr>
-          </tbody>
-        </table>
-
-        <div style={{ fontSize: 11, color: "#94A3B8", marginTop: "auto" }}>Documento generado automáticamente por CÓDICE — Sistema de Planeación Didáctica</div>
-      </div>
-
-      {/* Índice */}
-      <div className="print-avoid-break" style={{ marginBottom: 16, pageBreakAfter: "always" }}>
-        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 10, borderBottom: "2px solid #2F55A4", paddingBottom: 6 }}>Índice de unidades</div>
-        <ol style={{ fontSize: 12.5, lineHeight: 1.9, paddingLeft: 20 }}>
-          {unidades.map((u) => <li key={u.id}>{u.titulo}</li>)}
-        </ol>
-      </div>
-
-      {/* Cada unidad */}
-      {datosPorUnidad.map((d, i) => (
-        <div key={d.unidad.id} className="print-avoid-break" style={{ pageBreakAfter: i === datosPorUnidad.length - 1 ? "auto" : "always" }}>
-          <div className="print-avoid-break" style={{ textAlign: "center", marginBottom: 14, borderBottom: "2px solid #2F55A4", paddingBottom: 8 }}>
-            <div style={{ fontSize: 10, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1 }}>Unidad {i + 1} de {datosPorUnidad.length}</div>
-            <div style={{ fontSize: 17, fontWeight: 700 }}>{d.unidad.titulo}</div>
-          </div>
-          {cuerpoUnidadImpresion({ unidad: d.unidad, materiaNombre, gradoId, clases: d.clases, tareas: d.tareas, dba: d.dba, competencias: d.competencias })}
+  return (
+    <div className="bg-white rounded-xl p-3.5 shadow-sm" style={{ borderLeft: `4px solid ${colorBorde}` }}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-sm font-bold text-slate-800">⚔️ {evaluacion.titulo}</div>
+          {evaluacion.descripcion && <TextoEnriquecido html={evaluacion.descripcion} className="text-xs text-slate-500 mt-1" />}
         </div>
-      ))}
+        {publicado ? (
+          <span className="text-xs font-bold text-white bg-emerald-500 px-2.5 py-1 rounded-full shrink-0">{publicado.puntaje_obtenido}/{publicado.puntaje_maximo}</span>
+        ) : hayPendiente ? (
+          <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-2 py-1 rounded-full shrink-0 whitespace-nowrap">⏳ En revisión</span>
+        ) : null}
+      </div>
+      <div className="flex items-center gap-2 mt-2 text-[11px] text-slate-400">
+        <span>{maxIntentos ? `${usados}/${maxIntentos} intentos` : `${usados} intento(s)`}</span>
+        {evaluacion.tiempo_limite_minutos && <span>· ⏱ {evaluacion.tiempo_limite_minutos} min</span>}
+      </div>
+      {puedeIntentar && (
+        <button onClick={() => setTomando(true)} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white mt-2.5">
+          {usados > 0 ? "Presentar de nuevo" : "Presentar"}
+        </button>
+      )}
+      {tomando && <TomarEvaluacion evaluacion={evaluacion} estudianteId={estudianteId} onCerrar={() => { setTomando(false); cargar(); }} />}
+    </div>
+  );
+}
 
-      <div className="print-footer">
-        {institucion?.nombre} · {materiaNombre} · Grado {gradoId} · Periodo {periodo} · Generado {fechaHoy}
+// Resume, por materia, los periodos con nota (final o en curso calculada en vivo) —
+// misma lógica que usa "Mis notas", reutilizada acá para el aviso general.
+function resumenPorMateria(datos) {
+  const materias = {};
+  datos.finales.forEach((f) => {
+    const nombre = f.materias?.nombre || `Materia ${f.materia_id}`;
+    materias[nombre] = materias[nombre] || { finales: {}, actividadesPorPeriodo: {} };
+    materias[nombre].finales[f.periodo] = f.nota;
+  });
+  datos.valores.forEach((v) => {
+    const act = v.notas_actividades;
+    if (!act) return;
+    const nombre = act.materias?.nombre || `Materia ${act.materia_id}`;
+    materias[nombre] = materias[nombre] || { finales: {}, actividadesPorPeriodo: {} };
+    materias[nombre].actividadesPorPeriodo[act.periodo] = materias[nombre].actividadesPorPeriodo[act.periodo] || [];
+    materias[nombre].actividadesPorPeriodo[act.periodo].push(v);
+  });
+
+  const resultado = {};
+  Object.entries(materias).forEach(([nombre, m]) => {
+    const periodos = [...new Set([...Object.keys(m.finales), ...Object.keys(m.actividadesPorPeriodo)])].sort();
+    resultado[nombre] = periodos.map((periodo) => {
+      const actividadesPeriodo = m.actividadesPorPeriodo[periodo] || [];
+      if (Object.prototype.hasOwnProperty.call(m.finales, periodo)) {
+        return { periodo, nota: m.finales[periodo], enCurso: false };
+      }
+      const porCategoria = {};
+      const categoriasVistas = {};
+      actividadesPeriodo.forEach((a) => {
+        const cat = a.notas_actividades?.notas_categorias;
+        const catId = a.notas_actividades?.categoria_id;
+        if (!catId) return;
+        categoriasVistas[catId] = { id: catId, porcentaje: cat?.porcentaje || 0 };
+        porCategoria[catId] = porCategoria[catId] || [];
+        porCategoria[catId].push(a.valor);
+      });
+      return { periodo, nota: notaFinalPonderada(porCategoria, Object.values(categoriasVistas)), enCurso: true };
+    });
+  });
+  return resultado;
+}
+
+function AvisoRendimiento({ estudianteId }) {
+  const [resumen, setResumen] = useState(null);
+
+  useEffect(() => {
+    api.fetchNotasEstudiante(estudianteId).then((d) => setResumen(resumenPorMateria(d))).catch(() => setResumen({}));
+  }, [estudianteId]);
+
+  if (!resumen) return null;
+  const config = { escala_min: 1, nota_minima: 3.5, nota_maxima: 5 };
+
+  const estados = Object.entries(resumen)
+    .map(([nombre, filas]) => {
+      const ultima = filas[filas.length - 1];
+      return { nombre, nota: ultima?.nota ?? null };
+    })
+    .filter((e) => e.nota !== null);
+
+  if (estados.length === 0) return null;
+
+  const enRiesgo = estados.filter((e) => bandaDesempeno(e.nota, config).key === "bajo");
+
+  if (enRiesgo.length > 0) {
+    return (
+      <div className="rounded-xl p-3 mb-4 bg-rose-50 border border-rose-200">
+        <div className="text-sm font-bold text-rose-700">⚠️ Rendimiento académico en riesgo</div>
+        <div className="text-xs text-rose-600 mt-1">Estás perdiendo: {enRiesgo.map((e) => e.nombre).join(", ")}. Hablá con tu docente para ponerte al día.</div>
+      </div>
+    );
+  }
+
+  const promedio = estados.reduce((a, e) => a + e.nota, 0) / estados.length;
+  const bandaGeneral = bandaDesempeno(promedio, config);
+  const mensajes = {
+    basico: "Vas cumpliendo lo mínimo. ¡Con un poco más de esfuerzo podés subir de nivel!",
+    alto: "Buen desempeño general. ¡Seguí así!",
+    superior: "¡Excelente desempeño! Tu esfuerzo se nota.",
+  };
+  return (
+    <div className="rounded-xl p-3 mb-4" style={{ background: `${bandaGeneral.color}15`, border: `1px solid ${bandaGeneral.color}55` }}>
+      <div className="text-sm font-bold" style={{ color: bandaGeneral.color }}>
+        {bandaGeneral.key === "superior" ? "🌟" : bandaGeneral.key === "alto" ? "👍" : "💪"} {bandaGeneral.label} desempeño académico
+      </div>
+      <div className="text-xs mt-1" style={{ color: bandaGeneral.color }}>{mensajes[bandaGeneral.key]}</div>
+    </div>
+  );
+}
+
+function MisNotas({ estudianteId }) {
+  const [datos, setDatos] = useState(null);
+  const [comentarios, setComentarios] = useState({});
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState(null);
+  const [materiaAbierta, setMateriaAbierta] = useState(null);
+
+  useEffect(() => {
+    Promise.all([api.fetchNotasEstudiante(estudianteId), api.fetchComentariosDesempeno()])
+      .then(([d, c]) => { setDatos(d); setComentarios(c); setCargando(false); })
+      .catch((e) => { setError(e.message); setCargando(false); });
+  }, [estudianteId]);
+
+  if (cargando) return <div className="text-xs text-slate-400 mt-4">Cargando notas…</div>;
+  if (error) return <div className="text-xs text-rose-500 bg-rose-50 rounded-lg p-2 mt-4">Error al cargar notas: {error}</div>;
+  if (!datos) return null;
+
+  // Junta, por materia, los periodos con nota final guardada (definitiva) y los
+  // periodos donde solo hay actividades cargadas todavía (en curso) — para estos
+  // últimos se calcula la nota en vivo con la misma fórmula ponderada del docente.
+  const materias = {};
+  datos.finales.forEach((f) => {
+    const nombre = f.materias?.nombre || `Materia ${f.materia_id}`;
+    materias[nombre] = materias[nombre] || { finales: {}, actividadesPorPeriodo: {} };
+    materias[nombre].finales[f.periodo] = f.nota;
+  });
+  datos.valores.forEach((v) => {
+    const act = v.notas_actividades;
+    if (!act) return;
+    const nombre = act.materias?.nombre || `Materia ${act.materia_id}`;
+    materias[nombre] = materias[nombre] || { finales: {}, actividadesPorPeriodo: {} };
+    materias[nombre].actividadesPorPeriodo[act.periodo] = materias[nombre].actividadesPorPeriodo[act.periodo] || [];
+    materias[nombre].actividadesPorPeriodo[act.periodo].push(v);
+  });
+
+  if (Object.keys(materias).length === 0) {
+    return <div className="text-xs text-slate-400 mt-4 pt-4 border-t border-slate-100">Todavía no tenés notas ni actividades cargadas.</div>;
+  }
+  const config = { escala_min: 1, nota_minima: 3.5, nota_maxima: 5 };
+
+  return (
+    <div className="mt-4 pt-4 border-t border-slate-100">
+      <div className="text-xs font-semibold text-slate-600 mb-2">📚 Mis notas</div>
+      <div className="space-y-2">
+        {Object.entries(materias).map(([nombreMateria, m]) => {
+          const abierta = materiaAbierta === nombreMateria;
+          const periodos = [...new Set([...Object.keys(m.finales), ...Object.keys(m.actividadesPorPeriodo)])].sort();
+
+          const filas = periodos.map((periodo) => {
+            const actividadesPeriodo = m.actividadesPorPeriodo[periodo] || [];
+            if (Object.prototype.hasOwnProperty.call(m.finales, periodo)) {
+              return { periodo, nota: m.finales[periodo], enCurso: false, actividadesPeriodo };
+            }
+            // Sin nota final guardada todavía: se calcula en vivo con lo que hay cargado
+            const porCategoria = {};
+            const categoriasVistas = {};
+            actividadesPeriodo.forEach((a) => {
+              const cat = a.notas_actividades?.notas_categorias;
+              const catId = a.notas_actividades?.categoria_id;
+              if (!catId) return;
+              categoriasVistas[catId] = { id: catId, porcentaje: cat?.porcentaje || 0 };
+              porCategoria[catId] = porCategoria[catId] || [];
+              porCategoria[catId].push(a.valor);
+            });
+            const notaViva = notaFinalPonderada(porCategoria, Object.values(categoriasVistas));
+            return { periodo, nota: notaViva, enCurso: true, actividadesPeriodo };
+          });
+
+          return (
+            <div key={nombreMateria} className="bg-slate-50 rounded-xl p-3">
+              <button onClick={() => setMateriaAbierta(abierta ? null : nombreMateria)} className="w-full text-left">
+                <div className="text-sm font-semibold text-slate-800">{nombreMateria}</div>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {filas.map((f) => {
+                    const b = bandaDesempeno(f.nota, config);
+                    return (
+                      <span key={f.periodo} className="text-[10px] px-2 py-0.5 rounded-full font-semibold flex items-center gap-1" style={{ background: `${b.color}22`, color: b.color }}>
+                        P{f.periodo}: {f.nota ?? "—"}{f.enCurso && " 🕓"}
+                      </span>
+                    );
+                  })}
+                </div>
+              </button>
+
+              {abierta && (
+                <div className="mt-2 pt-2 border-t border-slate-200 space-y-2">
+                  {filas.map((f) => {
+                    const b = bandaDesempeno(f.nota, config);
+                    return (
+                      <div key={f.periodo}>
+                        <div className="text-xs font-semibold text-slate-600">
+                          Periodo {f.periodo} — <span style={{ color: b.color }}>{f.nota ?? "—"} ({b.label})</span>
+                          {f.enCurso && <span className="text-amber-600 font-normal"> · En curso (provisional, puede cambiar)</span>}
+                        </div>
+                        {f.enCurso && f.actividadesPeriodo.length > 0 && (
+                          <div className="ml-2 mt-1 space-y-0.5">
+                            {f.actividadesPeriodo.map((a) => (
+                              <div key={a.id}>
+                                <div className="text-[11px] text-slate-500 flex justify-between">
+                                  <span>{a.notas_actividades?.nombre}{a.notas_actividades?.notas_categorias?.nombre ? ` (${a.notas_actividades.notas_categorias.nombre})` : ""}</span>
+                                  <span className="font-semibold">{a.valor}</span>
+                                </div>
+                                {a.observacion && (
+                                  <div className="text-[10px] text-violet-600 italic bg-violet-50 rounded-lg px-2 py-1 mt-0.5">📝 {a.observacion}</div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {!f.enCurso && f.actividadesPeriodo.some((a) => a.observacion) && (
+                          <div className="ml-2 mt-1 space-y-0.5">
+                            {f.actividadesPeriodo.filter((a) => a.observacion).map((a) => (
+                              <div key={a.id} className="text-[10px] text-violet-600 italic bg-violet-50 rounded-lg px-2 py-1">
+                                📝 <b>{a.notas_actividades?.nombre}:</b> {a.observacion}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {!f.enCurso && f.nota !== null && comentarios[b.key] && (
+                          <div className="text-[11px] text-slate-500 italic mt-1 bg-white rounded-lg p-2">{comentarios[b.key]}</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
-
-  return createPortal(contenido, document.body);
 }
 
-function UnidadCard({ unidad, institucion, materiaNombre, materias, gradoId, grados, onCambio }) {
-  const [expandida, setExpandida] = useState(false);
-  const [editando, setEditando] = useState(false);
-  const [titulo, setTitulo] = useState(unidad.titulo);
-  const [ficha, setFicha] = useState(() => estadoInicialFicha(unidad));
-  const [estado, setEstado] = useState(unidad.estado);
-  const [imprimiendo, setImprimiendo] = useState(false);
-  const [formatoMaestroAbierto, setFormatoMaestroAbierto] = useState(false);
-  const [formatoLecturaAbierto, setFormatoLecturaAbierto] = useState(false);
-  const [formatoMaestro, setFormatoMaestro] = useState(() => estadoInicialFormatoMaestro(unidad));
-  const guardar = async () => {
-    await api.editarPlaneacion(unidad.id, {
-      titulo: titulo.trim(), estado,
-      ...camposDesdeFicha(ficha, { areaAuto: unidad.area || areaSugerida(materiaNombre, (unidad.materias_extra || []).length), previo: unidad }),
-      ...formatoMaestro,
-    });
-    setEditando(false);
-    onCambio();
-  };
+function AlbumEstudiante({ estudianteId, monedas, onMonedasActualizadas }) {
+  const [config, setConfig] = useState(null);
+  const [catalogo, setCatalogo] = useState([]);
+  const [coleccion, setColeccion] = useState([]);
+  const [abriendo, setAbriendo] = useState(false);
+  const [resultado, setResultado] = useState(null);
+  const [cargando, setCargando] = useState(true);
 
-  const eliminar = async () => {
-    if (!confirm(`¿Eliminar la unidad "${unidad.titulo}" y todo su contenido (clases, tareas, recursos)? No se puede deshacer.`)) return;
-    await api.eliminarPlaneacion(unidad.id);
-    onCambio();
+  const cargar = () => {
+    Promise.all([api.fetchAlbumConfig(), api.fetchCriaturasActivas(), api.fetchColeccion(estudianteId)]).then(([cfg, cat, col]) => {
+      setConfig(cfg); setCatalogo(cat); setColeccion(col); setCargando(false);
+    });
+  };
+  useEffect(() => { cargar(); }, [estudianteId]);
+
+  if (cargando || !config) return <div className="text-sm text-slate-400">Cargando…</div>;
+  if (catalogo.length === 0) return <p className="text-sm text-slate-400">Todavía no hay criaturas disponibles para coleccionar.</p>;
+
+  const poseidas = new Map(coleccion.map((c) => [c.criatura_id, c]));
+  const puedeAbrir = monedas >= config.costo_sobre;
+
+  const abrirSobre = async () => {
+    setAbriendo(true);
+    setResultado(null);
+    try {
+      const r = await api.abrirSobre(estudianteId);
+      setTimeout(() => {
+        setAbriendo(false);
+        setResultado(r);
+        onMonedasActualizadas();
+        cargar();
+      }, 1400);
+    } catch (e) {
+      setAbriendo(false);
+      alert("Error al abrir el sobre: " + e.message);
+    }
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-3">
-      <div className="flex justify-between items-start gap-2">
-        <div className="min-w-0 flex-1">
-          {editando ? (
-            <input value={titulo} onChange={(e) => setTitulo(e.target.value)} className="w-full text-sm font-bold rounded-lg px-2 py-1 border border-violet-300 outline-none mb-1" />
-          ) : (
-            <div className="flex items-center gap-2 flex-wrap">
-              <h4 className="font-bold text-slate-800">{unidad.titulo}</h4>
-              <span className={`text-[10px] px-2 py-0.5 rounded-full ${unidad.estado === "publicado" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
-                {unidad.estado === "publicado" ? "Publicado" : "Borrador"}
-              </span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-50 text-violet-600">
-                {grados.some((g) => String(g.id) === String(unidad.grado_id)) ? `📍 Curso ${unidad.grado_id}` : `🏫 Todo el grado ${unidad.grado_id}°`}
-              </span>
-              {unidad.materias_extra && unidad.materias_extra.length > 0 && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">
-                  🔗 + {unidad.materias_extra.map((id) => materias.find((m) => m.id === id)?.nombre || id).join(", ")}
-                </span>
-              )}
+    <div>
+      <h3 className="font-bold text-slate-800 mb-1">🎴 {config.nombre_album}</h3>
+      <p className="text-xs text-slate-400 mb-3">Comprá sobres con tus monedas y coleccioná criaturas al azar. Vas a tener {config.cartas_por_sobre} por sobre.</p>
+
+      {abriendo ? (
+        <div className="text-center py-6 text-violet-500 animate-pulse text-sm">🎴 Abriendo sobre…</div>
+      ) : resultado ? (
+        resultado.ok ? (
+          <div className="bg-violet-50 rounded-2xl p-4 mb-3 text-center">
+            <div className="text-xs font-semibold text-violet-700 mb-2">¡Te tocaron estas criaturas!</div>
+            <div className="flex justify-center gap-2 flex-wrap">
+              {resultado.cartas.map((c, i) => <CartaCriatura key={i} criatura={c} tamano="chico" />)}
             </div>
-          )}
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <button onClick={() => setImprimiendo(true)} className="text-xs text-slate-400 hover:text-violet-600" title="Exportar / Imprimir PDF">🖨️</button>
-          <button onClick={() => setEditando((v) => !v)} className="text-xs text-slate-400 hover:text-violet-600">{editando ? "✕" : "✏️"}</button>
-          <button onClick={eliminar} className="text-xs text-slate-400 hover:text-rose-500">🗑</button>
-          <button onClick={() => setExpandida((v) => !v)} className="text-xs text-violet-500">{expandida ? "Cerrar ▲" : "Abrir ▼"}</button>
-        </div>
+          </div>
+        ) : (
+          <div className="text-center bg-amber-50 rounded-xl p-3 mb-3 text-xs text-amber-700">Te faltan monedas para abrir un sobre (necesitás {resultado.costo}).</div>
+        )
+      ) : null}
+
+      <button disabled={!puedeAbrir} onClick={abrirSobre} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-50 mb-4">
+        {puedeAbrir ? `🎴 Abrir sobre (🪙 ${config.costo_sobre})` : `Necesitás ${config.costo_sobre} monedas`}
+      </button>
+
+      <div className="text-xs font-semibold text-slate-600 mb-2">Tu colección ({coleccion.length}/{catalogo.length})</div>
+      <div className="flex flex-wrap gap-2 justify-center">
+        {catalogo.map((c) => {
+          const tenida = poseidas.get(c.id);
+          return <CartaCriatura key={c.id} criatura={tenida ? { ...c, cantidad: tenida.cantidad } : c} tamano="chico" revelada={!!tenida} />;
+        })}
+      </div>
+    </div>
+  );
+}
+
+function BancoEstudiante({ estudianteId, monedas, onMonedasActualizadas }) {
+  const [premiosActivos, setPremiosActivos] = useState([]);
+  const [girando, setGirando] = useState(false);
+  const [resultado, setResultado] = useState(null);
+  const [historial, setHistorial] = useState([]);
+  const [mostrarHistorial, setMostrarHistorial] = useState(false);
+
+  const cargarPremios = () => api.fetchPremiosActivos().then(setPremiosActivos);
+  useEffect(() => { cargarPremios(); }, []);
+
+  const costoMinimo = premiosActivos.length > 0 ? Math.min(...premiosActivos.map((p) => p.costo_monedas)) : null;
+  const puedeCanjear = costoMinimo !== null && monedas >= costoMinimo;
+
+  const canjear = async () => {
+    setGirando(true);
+    setResultado(null);
+    try {
+      const r = await api.canjearAleatorio(estudianteId);
+      setTimeout(() => {
+        setGirando(false);
+        setResultado(r);
+        onMonedasActualizadas();
+        cargarPremios();
+      }, 1500);
+    } catch (e) {
+      setGirando(false);
+      alert("Error al canjear: " + e.message);
+    }
+  };
+
+  const verHistorial = async () => {
+    const c = await api.fetchCanjes();
+    setHistorial(c.filter((x) => x.estudiante_id === estudianteId));
+    setMostrarHistorial(true);
+  };
+
+  if (premiosActivos.length === 0) return null;
+
+  return (
+    <div className="mt-4 pt-4 border-t border-slate-100">
+      <div className="text-xs font-semibold text-slate-600 mb-2">🏦 Banco de premios</div>
+      <p className="text-[11px] text-slate-400 mb-2">Cangeá tus monedas por un premio sorpresa. Cuantas más monedas tengas, a más premios podés aspirar.</p>
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {premiosActivos.map((p) => (
+          <span key={p.id} className={`text-[10px] px-2 py-1 rounded-full ${monedas >= p.costo_monedas ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-400"}`}>
+            {p.emoji} {p.nombre} · 🪙{p.costo_monedas}
+          </span>
+        ))}
       </div>
 
-      {editando ? (
-        <div className="mt-2 space-y-3">
-          <FichaClaseCampos ficha={ficha} setFicha={setFicha} materiaId={unidad.materia_id} materias={materias}
-            fmAbierto={formatoMaestroAbierto} setFmAbierto={setFormatoMaestroAbierto} formatoMaestro={formatoMaestro} setFormatoMaestro={setFormatoMaestro} />
-          <div className="flex items-center gap-2">
-            <select value={estado} onChange={(e) => setEstado(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none">
-              <option value="borrador">Borrador</option>
-              <option value="publicado">Publicado</option>
-            </select>
-            <button onClick={guardar} className="text-xs px-3 py-1.5 rounded-lg bg-violet-500 text-white">Guardar cambios</button>
+      {girando ? (
+        <div className="text-center py-3 text-sm text-violet-500 animate-pulse">🎰 Sorteando tu premio…</div>
+      ) : resultado ? (
+        resultado.ok ? (
+          <div className="text-center bg-emerald-50 rounded-xl p-3 mb-2">
+            <div className="text-2xl">{resultado.premio.emoji}</div>
+            <div className="text-sm font-bold text-emerald-700">¡Ganaste "{resultado.premio.nombre}"!</div>
+            <div className="text-[11px] text-emerald-600">Pedíselo a tu docente. Te quedan {resultado.monedasRestantes} monedas.</div>
           </div>
-        </div>
-      ) : (
-        <>
-          {(unidad.incluye_momentos || unidad.formato === "mision") && (
-            <div className="mt-1 mb-2">
-              {unidad.area && (
-                <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full mb-2"
-                  style={{ background: unidad.area === "ET" ? "#E8EEF8" : unidad.area === "RE" ? "#FEF3C7" : "#DBEAFE", color: unidad.area === "ET" ? "#28478a" : unidad.area === "RE" ? "#B45309" : "#1D4ED8" }}>
-                  {unidad.area === "ET" ? "🏛️ Ética" : unidad.area === "RE" ? "✝️ Religión" : "⚜️ Integrada"}
-                </span>
-              )}
-              <div className="space-y-1">
-                {[
-                  { icono: "👁️", label: "VER", texto: unidad.momento_ver, xp: unidad.xp_ver },
-                  { icono: "⚖️", label: "JUZGAR", texto: unidad.momento_juzgar, xp: unidad.xp_juzgar },
-                  { icono: "🖐️", label: "ACTUAR", texto: unidad.momento_actuar, xp: unidad.xp_actuar },
-                  { icono: "🔨", label: "FORJA", texto: unidad.momento_forja, xp: unidad.xp_forja },
-                  { icono: "📢", label: "TESTIMONIAR", texto: unidad.momento_testimoniar, xp: unidad.xp_testimoniar },
-                  { icono: "📖", label: "MI CÓDICE", texto: unidad.momento_codice, xp: unidad.xp_codice },
-                ].filter((m) => m.texto).map((m) => (
-                  <div key={m.label} className="text-xs text-slate-600 bg-slate-50 rounded-lg px-2.5 py-1.5">
-                    <span className="font-bold">{m.icono} {m.label}</span> — {m.texto} <span className="text-violet-500 font-semibold">(+{m.xp} XP)</span>
+        ) : (
+          <div className="text-center bg-amber-50 rounded-xl p-3 mb-2 text-xs text-amber-700">Todavía no te alcanzan las monedas para ningún premio disponible.</div>
+        )
+      ) : null}
+
+      <div className="flex gap-2">
+        <button disabled={!puedeCanjear || girando} onClick={canjear} className="flex-1 text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-50">
+          {puedeCanjear ? "🎰 Canjear por un premio sorpresa" : `Necesitás al menos ${costoMinimo} monedas`}
+        </button>
+        <button onClick={verHistorial} className="text-xs text-slate-400 px-2">Historial</button>
+      </div>
+
+      {mostrarHistorial && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.5)" }} onClick={() => setMostrarHistorial(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-4 w-full max-w-sm max-h-[70vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-2">
+              <h4 className="font-bold text-sm text-slate-800">Tus premios ganados</h4>
+              <button onClick={() => setMostrarHistorial(false)} className="text-slate-400">✕</button>
+            </div>
+            {historial.length === 0 ? (
+              <p className="text-xs text-slate-400">Todavía no ganaste ningún premio.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {historial.map((c) => (
+                  <div key={c.id} className="flex justify-between text-xs bg-slate-50 rounded-lg px-2 py-1.5">
+                    <span>{c.premio?.emoji} {c.premio?.nombre || "Premio"}</span>
+                    <span className={c.estado === "entregado" ? "text-emerald-600" : "text-amber-600"}>{c.estado === "entregado" ? "✔ Entregado" : "Pendiente"}</span>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-          {unidad.incluye_comarca && <ComarcaEnPlaneacion unidad={unidad} />}
-          {(unidad.caso_problema_integrador || unidad.narrativa_sesion || (unidad.zonas_escenario || []).length > 0 || (unidad.secuencia_didactica || []).length > 0 || (unidad.nombre_proyecto)) && (
-            <div className="mt-2 mb-2">
-              <button onClick={() => setFormatoLecturaAbierto((v) => !v)} className="text-xs font-bold text-violet-600 flex items-center gap-1">
-                {formatoLecturaAbierto ? "▾" : "▸"} 📋 Formato Maestro de Planeación Didáctica (6 módulos)
-              </button>
-              {formatoLecturaAbierto && <div className="mt-2"><FormatoMaestroLectura unidad={unidad} /></div>}
-            </div>
-          )}
-          {unidad.objetivo && <p className="text-xs text-slate-500 mt-1"><b>Finalidad/objetivo:</b> {unidad.objetivo}</p>}
-          {unidad.contenido && <p className="text-xs text-slate-500 mt-1 whitespace-pre-line"><b>Contenidos:</b> {unidad.contenido}</p>}
-          {unidad.problema_proyecto && (
-            <p className="text-xs text-slate-500 mt-1 whitespace-pre-line bg-violet-50 rounded-lg p-2"><b>Problema/proyecto:</b> {unidad.problema_proyecto}</p>
-          )}
-          {unidad.orientaciones_evaluacion && (
-            <p className="text-xs text-slate-500 mt-1 whitespace-pre-line bg-blue-50 rounded-lg p-2"><b>Evaluación:</b> {unidad.orientaciones_evaluacion}</p>
-          )}
-        </>
-      )}
-
-      {expandida && (
-        <div className="mt-3 pt-3 border-t border-slate-200">
-          <div className="flex flex-wrap gap-3 mb-2">
-            <SelectorEstandares planeacionId={unidad.id} tipo="dba" />
-            <SelectorEstandares planeacionId={unidad.id} tipo="competencia" />
-          </div>
-          <RecursosLista planeacionId={unidad.id} />
-          <ClasesLista unidad={unidad} unidadId={unidad.id} grados={grados} materiaNombre={materiaNombre} />
-          <TareasLista planeacionId={unidad.id} />
-        </div>
-      )}
-
-      {imprimiendo && (
-        <PlaneacionPrintView unidad={unidad} institucion={institucion} materiaNombre={materiaNombre} gradoId={gradoId} onCerrado={() => setImprimiendo(false)} />
-      )}
-    </div>
-  );
-}
-
-const PROMPT_PLANTILLA = `Actúa como un experto en diseño curricular colombiano, siguiendo el modelo de secuencias didácticas de Ángel Díaz-Barriga (apertura, desarrollo, cierre).
-
-Necesito un plan de clases para:
-- Materia: [COMPLETAR]
-- Grado: [COMPLETAR]
-- Tema/Unidad: [COMPLETAR]
-- Número de clases: [COMPLETAR, ej: 4]
-- Objetivo general: [COMPLETAR, opcional]
-
-Devolveme ÚNICAMENTE un JSON válido (sin texto antes ni después, sin bloques de código \`\`\`), con esta estructura exacta:
-
-{
-  "titulo": "Título de la unidad",
-  "objetivo": "Objetivo de aprendizaje general de la unidad",
-  "clases": [
-    {
-      "titulo": "Título de la clase 1",
-      "duracion_minutos": 60,
-      "momento_inicio": "Actividad de apertura, recuperación de saberes previos o pregunta detonadora...",
-      "momento_desarrollo": "Actividades de desarrollo, aplicación de la información en un caso o problema...",
-      "momento_cierre": "Actividad de cierre, síntesis o reconstrucción de lo aprendido...",
-      "indicador_desempeno": "Indicador de desempeño observable de esta clase"
-    }
-  ]
-}`;
-
-function ImportarPlanIAModal({ materiaId, materias, gradoId, periodo, onCerrar, onImportado }) {
-  const gradoIdAGuardar = nivelYCurso(gradoId).nivel;
-  const [materiasExtra, setMateriasExtra] = useState([]);
-  const [texto, setTexto] = useState("");
-  const [copiado, setCopiado] = useState(false);
-  const [previa, setPrevia] = useState(null);
-  const [errorParseo, setErrorParseo] = useState("");
-  const [importando, setImportando] = useState(false);
-
-  const { nivel } = nivelYCurso(gradoId);
-  const otrasMaterias = materias.filter((m) => m.id !== materiaId);
-  const toggleMateriaExtra = (id) => setMateriasExtra((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
-
-  const copiarPrompt = async () => {
-    try {
-      await navigator.clipboard.writeText(PROMPT_PLANTILLA);
-      setCopiado(true);
-      setTimeout(() => setCopiado(false), 2000);
-    } catch (e) {
-      alert("No se pudo copiar automáticamente — seleccioná el texto y copialo manualmente.");
-    }
-  };
-
-  const analizar = () => {
-    setErrorParseo("");
-    setPrevia(null);
-    let limpio = texto.trim();
-    // por si la IA igual lo mandó envuelto en ```json ... ```
-    limpio = limpio.replace(/^```json/i, "").replace(/^```/, "").replace(/```$/, "").trim();
-    try {
-      const json = JSON.parse(limpio);
-      if (!json.titulo || !Array.isArray(json.clases)) {
-        setErrorParseo("El JSON no tiene el formato esperado (falta 'titulo' o 'clases').");
-        return;
-      }
-      setPrevia(json);
-    } catch (e) {
-      setErrorParseo("No pude leer eso como JSON válido. Revisá que hayas pegado la respuesta completa, sin texto extra antes o después.");
-    }
-  };
-
-  const importar = async () => {
-    setImportando(true);
-    try {
-      await api.crearUnidadConClases(
-        { materia_id: materiaId, materias_extra: materiasExtra, grado_id: gradoIdAGuardar, periodo, titulo: previa.titulo, objetivo: previa.objetivo || null, orden: 999 },
-        previa.clases
-      );
-      onImportado();
-    } catch (e) {
-      alert("Error al importar: " + e.message);
-    }
-    setImportando(false);
-  };
-
-  return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onCerrar}>
-      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-xl">
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="font-bold text-slate-800">✨ Importar plan generado por IA</h3>
-          <button onClick={onCerrar} className="text-slate-400">✕</button>
-        </div>
-
-        <div className="bg-violet-50 rounded-xl p-3 mb-4">
-          <div className="text-xs font-semibold text-slate-600 mb-1">Paso 1 — Copiá este mensaje y pegalo en tu IA de confianza (Claude, ChatGPT, etc.)</div>
-          <p className="text-[11px] text-slate-500 mb-2">Completá los corchetes [COMPLETAR] con tu materia, grado y tema antes de mandarlo.</p>
-          <pre className="text-[10px] bg-white rounded-lg p-2 whitespace-pre-wrap max-h-32 overflow-y-auto border border-slate-200">{PROMPT_PLANTILLA}</pre>
-          <button onClick={copiarPrompt} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white mt-2">
-            {copiado ? "✔ Copiado" : "📋 Copiar mensaje"}
-          </button>
-        </div>
-
-        <div className="mb-4">
-          <div className="text-xs font-semibold text-slate-600 mb-1">Paso 2 — Pegá acá la respuesta (el JSON) que te dio la IA</div>
-          <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={6} placeholder='{ "titulo": "...", "clases": [...] }'
-            className="w-full text-xs font-mono rounded-lg px-3 py-2 border border-slate-200 outline-none" />
-          <button onClick={analizar} disabled={!texto.trim()} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white mt-2 disabled:opacity-50">
-            Analizar
-          </button>
-          {errorParseo && <p className="text-xs text-rose-500 mt-2">{errorParseo}</p>}
-        </div>
-
-        {previa && (
-          <div className="border border-emerald-200 bg-emerald-50 rounded-xl p-3 mb-4">
-            <div className="text-xs font-semibold text-emerald-700 mb-1">Vista previa — se va a crear:</div>
-            <div className="text-sm font-bold text-slate-800">{previa.titulo}</div>
-            {previa.objetivo && <div className="text-xs text-slate-500 mt-0.5">{previa.objetivo}</div>}
-            <div className="text-xs text-slate-600 mt-2">{previa.clases.length} clase(s):</div>
-            <ul className="text-xs text-slate-500 list-disc list-inside">
-              {previa.clases.map((c, i) => <li key={i}>{c.titulo || `Clase ${i + 1}`}</li>)}
-            </ul>
-
-            {otrasMaterias.length > 0 && (
-              <div className="mt-3">
-                <label className="text-[11px] text-slate-500 block mb-1">Combinar con otra(s) materia(s) (opcional)</label>
-                <div className="flex flex-wrap gap-1.5">
-                  {otrasMaterias.map((m) => (
-                    <button key={m.id} onClick={() => toggleMateriaExtra(m.id)}
-                      className={`text-xs px-3 py-1 rounded-full border ${materiasExtra.includes(m.id) ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>
-                      {m.nombre}
-                    </button>
-                  ))}
-                </div>
-              </div>
             )}
-
-            <button disabled={importando} onClick={importar} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-emerald-500 text-white mt-3 disabled:opacity-60">
-              {importando ? "Importando…" : "✔ Crear esta unidad con sus clases"}
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ComarcaEnPlaneacion({ unidad }) {
-  return (
-    <div className="mt-2 mb-2 bg-gradient-to-r from-violet-50 to-fuchsia-50 border border-violet-200 rounded-xl p-3">
-      <div className="text-xs font-bold text-violet-700 mb-1.5">🏛️ Comarca de Oakhaven</div>
-      {unidad.comarca_dilema && <p className="text-xs text-slate-600 mb-1"><b>Dilema:</b> {unidad.comarca_dilema}</p>}
-      {unidad.comarca_pregunta_dilema && <p className="text-[11px] text-slate-500">1. {unidad.comarca_pregunta_dilema}</p>}
-      {unidad.comarca_pregunta_fundamentacion && <p className="text-[11px] text-slate-500">2. {unidad.comarca_pregunta_fundamentacion}</p>}
-      {unidad.comarca_pregunta_edicto && <p className="text-[11px] text-slate-500">3. {unidad.comarca_pregunta_edicto}</p>}
-      <p className="text-[11px] text-violet-500 mt-1.5">Para iniciar la sesión real, usá el botón "🏛️" junto al curso, en el Control por curso de abajo.</p>
-    </div>
-  );
-}
-
-// ==================== 📝 Ficha de clase ====================
-// Una sola forma, simple, para crear y para editar una clase. Reúne lo
-// esencial en pocas líneas y guarda en las mismas columnas de siempre
-// (objetivo, problema_proyecto, momentos, Comarca), así que las
-// planeaciones anteriores se siguen viendo e imprimiendo igual. Lo
-// avanzado (dilema propio, XP, Formato Maestro de 6 módulos) queda en
-// "Más opciones", sin estorbar.
-
-const XP_POR_DEFECTO = { ver: 10, juzgar: 20, actuar: 20, forja: 50, testimoniar: 30, codice: 20 };
-
-// El área (Ética / Religión / Integrada) se deduce sola de la materia,
-// para no tener que preguntarla en cada clase.
-function areaSugerida(nombreMateria, cantidadExtra) {
-  if (cantidadExtra > 0) return "IN";
-  const n = (nombreMateria || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  if (n.includes("relig")) return "RE";
-  return "ET";
-}
-
-function estadoInicialFicha(u = null) {
-  const xp = (valor, porDefecto) => (valor === null || valor === undefined ? porDefecto : valor);
-  return {
-    objetivo: u?.objetivo || "",
-    problema: u?.problema_proyecto || "",
-    ver: u?.momento_ver || "", juzgar: u?.momento_juzgar || "", actuar: u?.momento_actuar || "",
-    evidencia: u?.momento_forja || "",
-    testimoniar: u?.momento_testimoniar || "", codice: u?.momento_codice || "",
-    xp: {
-      ver: xp(u?.xp_ver, XP_POR_DEFECTO.ver), juzgar: xp(u?.xp_juzgar, XP_POR_DEFECTO.juzgar), actuar: xp(u?.xp_actuar, XP_POR_DEFECTO.actuar),
-      forja: xp(u?.xp_forja, XP_POR_DEFECTO.forja), testimoniar: xp(u?.xp_testimoniar, XP_POR_DEFECTO.testimoniar), codice: xp(u?.xp_codice, XP_POR_DEFECTO.codice),
-    },
-    eventoId: u?.comarca_evento_id ? String(u.comarca_evento_id) : "",
-    dilema: u?.comarca_dilema || "",
-    preguntaDilema: u?.comarca_pregunta_dilema || "",
-    preguntaFundamentacion: u?.comarca_pregunta_fundamentacion || "",
-    preguntaEdicto: u?.comarca_pregunta_edicto || "",
-    area: u?.area || null, // null = automática, según la materia
-    contenido: u?.contenido || "",
-    orientaciones: u?.orientaciones_evaluacion || "",
-  };
-}
-
-// Convierte la ficha en las columnas de la base de datos. "previo" es la
-// planeación tal como estaba (al editar), para no apagar por accidente
-// algo que ya tenía activado.
-function camposDesdeFicha(f, { areaAuto, previo = null }) {
-  const t = (s) => (s || "").trim() || null;
-  const num = (v) => parseInt(v, 10) || 0;
-  const tieneMomentos = [f.ver, f.juzgar, f.actuar, f.evidencia, f.testimoniar, f.codice].some((s) => (s || "").trim());
-  const tieneComarca = !!(f.eventoId || (f.dilema || "").trim() || (f.preguntaDilema || "").trim() || (f.preguntaFundamentacion || "").trim() || (f.preguntaEdicto || "").trim());
-  return {
-    objetivo: t(f.objetivo), problema_proyecto: t(f.problema), contenido: t(f.contenido), orientaciones_evaluacion: t(f.orientaciones),
-    formato: (tieneMomentos || previo?.formato === "mision") ? "mision" : (previo?.formato || "generico"), // se mantiene por compatibilidad con planeaciones viejas
-    incluye_momentos: tieneMomentos || !!previo?.incluye_momentos,
-    incluye_comarca: tieneComarca || !!previo?.incluye_comarca,
-    area: f.area || areaAuto,
-    momento_ver: t(f.ver), xp_ver: num(f.xp.ver),
-    momento_juzgar: t(f.juzgar), xp_juzgar: num(f.xp.juzgar),
-    momento_actuar: t(f.actuar), xp_actuar: num(f.xp.actuar),
-    momento_forja: t(f.evidencia), xp_forja: num(f.xp.forja),
-    momento_testimoniar: t(f.testimoniar), xp_testimoniar: num(f.xp.testimoniar),
-    momento_codice: t(f.codice), xp_codice: num(f.xp.codice),
-    comarca_dilema: t(f.dilema),
-    comarca_pregunta_dilema: t(f.preguntaDilema),
-    comarca_pregunta_fundamentacion: t(f.preguntaFundamentacion),
-    comarca_pregunta_edicto: t(f.preguntaEdicto),
-    comarca_evento_id: f.eventoId ? parseInt(f.eventoId, 10) : null,
-  };
-}
-
-function CampoFicha({ etiqueta, ayuda, children }) {
-  return (
-    <div>
-      <div className="text-xs font-bold text-slate-600 mb-1">{etiqueta}{ayuda && <span className="font-normal text-slate-400"> — {ayuda}</span>}</div>
-      {children}
-    </div>
-  );
-}
-
-function FichaClaseCampos({ ficha, setFicha, materiaId, materias, mostrarMaterias, materiasExtra, setMateriasExtra, fmAbierto, setFmAbierto, formatoMaestro, setFormatoMaestro }) {
-  const [masAbierto, setMasAbierto] = useState(false);
-  const [eventos, setEventos] = useState([]);
-  useEffect(() => { api.fetchComarcaEventos().then(setEventos).catch(() => {}); }, []);
-
-  const set = (clave, valor) => setFicha((prev) => ({ ...prev, [clave]: valor }));
-  const setXp = (clave, valor) => setFicha((prev) => ({ ...prev, xp: { ...prev.xp, [clave]: valor } }));
-  const otrasMaterias = (materias || []).filter((m) => m.id !== materiaId);
-  const toggleMateriaExtra = (id) => setMateriasExtra((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
-  const inputCls = "w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white";
-  const chip = (activo) => `text-xs px-3 py-1.5 rounded-full border ${activo ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`;
-
-  const SECUENCIA = [
-    { k: "ver", icono: "👁️", label: "VER", ph: "Con qué abrís: caso, dilema o texto (unos 10 min)…" },
-    { k: "juzgar", icono: "⚖️", label: "JUZGAR", ph: "Qué analizan o deliberan (unos 25 min)…" },
-    { k: "actuar", icono: "🖐️", label: "ACTUAR", ph: "Qué deciden, proponen o hacen (unos 20 min)…" },
-  ];
-
-  return (
-    <div className="space-y-3">
-      <CampoFicha etiqueta="🎯 Propósito" ayuda="una frase: qué van a saber, hacer y ser">
-        <input value={ficha.objetivo} onChange={(e) => set("objetivo", e.target.value)} placeholder="Al final, mis estudiantes podrán…" className={inputCls} />
-      </CampoFicha>
-
-      <CampoFicha etiqueta="❓ Pregunta o problema que mueve la clase">
-        <textarea value={ficha.problema} onChange={(e) => set("problema", e.target.value)} rows={2}
-          placeholder="Ej: ¿Qué debe hacer el Consejo ante el fraude en el Banco Central?" className={inputCls} />
-      </CampoFicha>
-
-      <div>
-        <div className="text-xs font-bold text-slate-600 mb-1">🧭 Secuencia de la clase</div>
-        <div className="space-y-1.5">
-          {SECUENCIA.map((m) => (
-            <div key={m.k} className="flex items-center gap-2">
-              <span className="text-[11px] font-bold text-slate-500 w-20 shrink-0">{m.icono} {m.label}</span>
-              <input value={ficha[m.k]} onChange={(e) => set(m.k, e.target.value)} placeholder={m.ph} className="flex-1 text-xs rounded-lg px-2.5 py-2 border border-slate-200 outline-none bg-white" />
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <CampoFicha etiqueta="📝 Evidencia que se califica" ayuda="qué entregan">
-        <input value={ficha.evidencia} onChange={(e) => set("evidencia", e.target.value)}
-          placeholder="Ej: reflexión personal de 5 a 8 líneas (la calificás con una rúbrica)" className={inputCls} />
-      </CampoFicha>
-
-      <CampoFicha etiqueta="🏛️ Carta de la Comarca" ayuda="opcional">
-        <select value={ficha.eventoId} onChange={(e) => set("eventoId", e.target.value)} className={inputCls}>
-          <option value="">Sin carta puntual</option>
-          {eventos.map((ev) => <option key={ev.id} value={ev.id}>{ev.titulo}</option>)}
-        </select>
-      </CampoFicha>
-
-      {mostrarMaterias && otrasMaterias.length > 0 && (
-        <CampoFicha etiqueta="🔗 ¿La misma clase sirve para otra materia?" ayuda="ej: Ética + Religión">
-          <div className="flex flex-wrap gap-1.5">
-            {otrasMaterias.map((m) => (
-              <button key={m.id} type="button" onClick={() => toggleMateriaExtra(m.id)} className={chip(materiasExtra.includes(m.id))}>{m.nombre}</button>
-            ))}
-          </div>
-        </CampoFicha>
-      )}
-
-      <button type="button" onClick={() => setMasAbierto((v) => !v)} className="text-xs font-semibold text-violet-600">
-        {masAbierto ? "▾" : "▸"} Más opciones (dilema propio, XP, contenidos, Formato Maestro…)
-      </button>
-
-      {masAbierto && (
-        <div className="space-y-3 bg-white rounded-xl border border-slate-200 p-3">
-          <CampoFicha etiqueta="Área" ayuda="por defecto se deduce de la materia">
-            <div className="flex flex-wrap gap-1.5">
-              <button type="button" onClick={() => set("area", null)} className={chip(!ficha.area)}>Automática</button>
-              <button type="button" onClick={() => set("area", "ET")} className={chip(ficha.area === "ET")}>🏛️ Ética</button>
-              <button type="button" onClick={() => set("area", "RE")} className={chip(ficha.area === "RE")}>✝️ Religión</button>
-              <button type="button" onClick={() => set("area", "IN")} className={chip(ficha.area === "IN")}>⚜️ Integrada</button>
-            </div>
-          </CampoFicha>
-
-          <CampoFicha etiqueta="Dilema propio para la Comarca" ayuda="si no elegís una carta del catálogo">
-            <textarea value={ficha.dilema} onChange={(e) => set("dilema", e.target.value)} rows={2}
-              placeholder="Ej: El Acueducto Común se está secando — solo hay agua para 4 de los 6 Reinos este mes." className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-          </CampoFicha>
-
-          <CampoFicha etiqueta="Preguntas de la Cara B" ayuda="el entregable de La Forja">
-            <input value={ficha.preguntaDilema} onChange={(e) => set("preguntaDilema", e.target.value)} placeholder="Pregunta 1 — El Dilema" className="w-full text-xs rounded-lg px-2 py-1.5 mb-1.5 border border-slate-200 outline-none" />
-            <input value={ficha.preguntaFundamentacion} onChange={(e) => set("preguntaFundamentacion", e.target.value)} placeholder="Pregunta 2 — Fundamentación" className="w-full text-xs rounded-lg px-2 py-1.5 mb-1.5 border border-slate-200 outline-none" />
-            <input value={ficha.preguntaEdicto} onChange={(e) => set("preguntaEdicto", e.target.value)} placeholder="Pregunta 3 — Edicto de Concordia" className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-          </CampoFicha>
-
-          <CampoFicha etiqueta="Otros momentos">
-            <input value={ficha.testimoniar} onChange={(e) => set("testimoniar", e.target.value)} placeholder="📢 TESTIMONIAR — cómo presentan y defienden lo aprendido" className="w-full text-xs rounded-lg px-2 py-1.5 mb-1.5 border border-slate-200 outline-none" />
-            <input value={ficha.codice} onChange={(e) => set("codice", e.target.value)} placeholder="📖 MI CÓDICE — pregunta de reflexión para el diario personal" className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-          </CampoFicha>
-
-          <CampoFicha etiqueta="XP que gana el estudiante en cada momento">
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-              {[["ver", "Ver"], ["juzgar", "Juzgar"], ["actuar", "Actuar"], ["forja", "Evidencia"], ["testimoniar", "Testimoniar"], ["codice", "Mi Códice"]].map(([k, etiqueta]) => (
-                <label key={k} className="text-[10px] text-slate-500 text-center">
-                  {etiqueta}
-                  <input type="number" value={ficha.xp[k]} onChange={(e) => setXp(k, e.target.value)} className="w-full text-xs text-center rounded px-1 py-1 border border-slate-200 outline-none mt-0.5" />
-                </label>
-              ))}
-            </div>
-          </CampoFicha>
-
-          <CampoFicha etiqueta="Contenidos">
-            <textarea value={ficha.contenido} onChange={(e) => set("contenido", e.target.value)} rows={2} placeholder="Contenido / temas a desarrollar" className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-          </CampoFicha>
-
-          <CampoFicha etiqueta="Orientaciones para la evaluación">
-            <textarea value={ficha.orientaciones} onChange={(e) => set("orientaciones", e.target.value)} rows={2} placeholder="Criterios de valoración; lineamientos para exámenes, etc." className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-          </CampoFicha>
-
-          <div>
-            <button type="button" onClick={() => setFmAbierto((v) => !v)} className="text-xs font-semibold text-violet-600">
-              {fmAbierto ? "▾" : "▸"} 📋 Formato Maestro de Planeación Didáctica (6 módulos, para el formato institucional)
-            </button>
-            {fmAbierto && <div className="mt-2"><FormatoMaestroCampos datos={formatoMaestro} setDatos={setFormatoMaestro} /></div>}
           </div>
         </div>
       )}
@@ -1875,353 +787,1685 @@ function FichaClaseCampos({ ficha, setFicha, materiaId, materias, mostrarMateria
   );
 }
 
-function NuevaUnidadForm({ materiaId, materias, gradoId, periodo, orden, onCancelar, onCreada }) {
-  const [titulo, setTitulo] = useState("");
-  const [ficha, setFicha] = useState(() => estadoInicialFicha());
-  const [materiasExtra, setMateriasExtra] = useState([]);
-  const [fmAbierto, setFmAbierto] = useState(false);
-  const [formatoMaestro, setFormatoMaestro] = useState(() => estadoInicialFormatoMaestro());
-  const [guardando, setGuardando] = useState(false);
-
-  const { nivel } = nivelYCurso(gradoId);
-  const materiaNombre = materias.find((m) => m.id === materiaId)?.nombre;
-
-  const guardar = async () => {
-    if (!titulo.trim()) { alert("Escribe un título para la clase."); return; }
-    setGuardando(true);
-    try {
-      const campos = {
-        tipo: "unidad", materia_id: materiaId, materias_extra: materiasExtra, grado_id: nivel, periodo,
-        titulo: titulo.trim(), orden,
-        ...camposDesdeFicha(ficha, { areaAuto: areaSugerida(materiaNombre, materiasExtra.length) }),
-      };
-      if (fmAbierto) Object.assign(campos, formatoMaestro);
-      await api.crearPlaneacion(campos);
-      onCreada();
-    } catch (e) {
-      alert("Error al guardar: " + e.message);
-    }
-    setGuardando(false);
-  };
-
-  return (
-    <div className="bg-violet-50 rounded-2xl p-4 mb-3">
-      <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título de la clase (ej: M01 · El Gobernante Ético)"
-        className="w-full text-sm font-semibold rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none bg-white" />
-
-      <FichaClaseCampos ficha={ficha} setFicha={setFicha} materiaId={materiaId} materias={materias} mostrarMaterias
-        materiasExtra={materiasExtra} setMateriasExtra={setMateriasExtra}
-        fmAbierto={fmAbierto} setFmAbierto={setFmAbierto} formatoMaestro={formatoMaestro} setFormatoMaestro={setFormatoMaestro} />
-
-      <div className="my-3">
-        <p className="text-[11px] text-slate-400 bg-white rounded-lg px-3 py-2">
-          🏫 Esta planeación es para todo el grado {nivel}° (todos sus cursos) — usá el "Control por curso" dentro de cada clase para registrar en qué curso y fecha se dictó cada una.
-        </p>
-      </div>
-      <div className="flex justify-end gap-2">
-        <button onClick={onCancelar} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
-        <button disabled={guardando} onClick={guardar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
-          {guardando ? "Guardando…" : "Crear planeación"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-const MESES_NOMBRE_PLAN = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-const DIAS_SEMANA_CORTOS_PLAN = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
-
-function aFechaStrPlan(date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
-function AgregarClaseCalendarioForm({ unidades, fecha, onCancelar, onCreada }) {
-  const [unidadId, setUnidadId] = useState(unidades[0]?.id || "");
-  const [titulo, setTitulo] = useState("");
-  const [descripcion, setDescripcion] = useState("");
-  const [duracion, setDuracion] = useState("");
-  const [guardando, setGuardando] = useState(false);
-
-  const guardar = async () => {
-    if (!unidadId) { alert("Elegí a qué unidad pertenece esta clase."); return; }
-    if (!titulo.trim()) { alert("Escribe un título."); return; }
-    setGuardando(true);
-    try {
-      await api.crearPlaneacion({
-        tipo: "clase", unidad_id: unidadId, titulo: titulo.trim(), fecha, orden: 999,
-        duracion_minutos: duracion ? parseInt(duracion, 10) : null,
-        momento_desarrollo: descripcion.trim() || null,
-      });
-      onCreada();
-    } catch (e) {
-      alert("Error al guardar: " + e.message);
-    }
-    setGuardando(false);
-  };
-
-  return (
-    <div className="bg-violet-50 rounded-lg p-3 mt-2">
-      <label className="text-[11px] text-slate-500 block mb-1">Unidad a la que pertenece</label>
-      <select value={unidadId} onChange={(e) => setUnidadId(parseInt(e.target.value, 10))} className="w-full text-xs rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none bg-white">
-        {unidades.map((u) => <option key={u.id} value={u.id}>{u.titulo}</option>)}
-      </select>
-      <div className="flex gap-1.5 mb-2">
-        <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título de la clase"
-          className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-        <input type="number" value={duracion} onChange={(e) => setDuracion(e.target.value)} placeholder="Min." className="w-16 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
-      </div>
-      <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2} placeholder="¿Qué se va a hacer? (opcional)"
-        className="w-full text-xs rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none" />
-      <div className="flex justify-end gap-2">
-        <button onClick={onCancelar} className="text-xs text-slate-400">Cancelar</button>
-        <button disabled={guardando} onClick={guardar} className="text-xs px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
-          {guardando ? "Guardando…" : "Agregar clase"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function CalendarioClases({ materiaId, gradoId, periodo, onAbrirUnidad }) {
-  const [clases, setClases] = useState([]);
-  const [unidades, setUnidades] = useState([]);
+function MicroMisionesEstudiante({ estudianteId, onCambio }) {
+  const [misiones, setMisiones] = useState([]);
   const [cargando, setCargando] = useState(true);
-  const [mesActual, setMesActual] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
-  const [diaSeleccionado, setDiaSeleccionado] = useState(aFechaStrPlan(new Date()));
-  const [agregando, setAgregando] = useState(false);
+  const [completando, setCompletando] = useState(null);
 
-  const cargar = () => {
-    setCargando(true);
-    api.fetchTodasLasClases(materiaId, gradoId, periodo).then(({ clases, unidades }) => { setClases(clases); setUnidades(unidades); setCargando(false); });
+  const cargar = () => api.fetchMicroMisionesEstudiante(estudianteId).then((d) => { setMisiones(d); setCargando(false); });
+  useEffect(() => { cargar(); }, [estudianteId]);
+
+  const completar = async (mision) => {
+    setCompletando(mision.id);
+    try {
+      await api.completarMicroMision(mision, estudianteId);
+      cargar();
+      onCambio && onCambio();
+    } catch (e) {
+      alert(e.message);
+    }
+    setCompletando(null);
   };
-  useEffect(() => { cargar(); }, [materiaId, gradoId, periodo]);
 
-  const primerDiaMes = new Date(mesActual.getFullYear(), mesActual.getMonth(), 1);
-  const diasEnMes = new Date(mesActual.getFullYear(), mesActual.getMonth() + 1, 0).getDate();
-  const offset = (primerDiaMes.getDay() + 6) % 7;
-  const celdas = [];
-  for (let i = 0; i < offset; i++) celdas.push(null);
-  for (let d = 1; d <= diasEnMes; d++) celdas.push(d);
-  while (celdas.length % 7 !== 0) celdas.push(null);
+  if (cargando || misiones.length === 0) return null;
 
-  const clasesDelDia = (fechaStr) => clases.filter((c) => c.fecha === fechaStr);
-  const clasesSeleccionado = clasesDelDia(diaSeleccionado);
-  const hoyStr = aFechaStrPlan(new Date());
+  return (
+    <div className="mb-4 pb-4 border-b border-slate-100">
+      <div className="text-xs font-semibold text-slate-600 mb-2">🎯 Misiones diarias/semanales</div>
+      <div className="space-y-1.5">
+        {misiones.map((m) => (
+          <div key={m.id} className={`flex items-center justify-between rounded-lg px-3 py-2 ${m.completada ? "bg-emerald-50" : "bg-slate-50"}`}>
+            <div className="min-w-0">
+              <div className="text-xs font-semibold text-slate-700">{m.tipo === "diaria" ? "☀️" : "📅"} {m.titulo}</div>
+              {m.descripcion && <TextoEnriquecido html={m.descripcion} className="text-[11px] text-slate-500" />}
+              <div className="text-[10px] text-slate-400">🪙{m.recompensa_monedas} · ⭐{m.recompensa_xp}</div>
+            </div>
+            {m.completada ? (
+              <span className="text-[11px] text-emerald-600 font-semibold shrink-0">✔ Cumplida</span>
+            ) : (
+              <button disabled={completando === m.id} onClick={() => completar(m)} className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-violet-500 text-white shrink-0">
+                {completando === m.id ? "…" : "Marcar cumplida"}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function EvaluacionesEstudiante({ estudianteId, gradoId }) {
+  const [evaluaciones, setEvaluaciones] = useState([]);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    api.fetchEvaluacionesDisponibles(gradoId).then((data) => {
+      const ahora = new Date();
+      const hoy = ahora.toISOString().slice(0, 10);
+      const vigentes = data.filter((e) => {
+        if (e.fecha_apertura && e.fecha_apertura > hoy) return false;
+        if (!e.fecha_cierre) return true;
+        if (e.fecha_cierre > hoy) return true;
+        if (e.fecha_cierre < hoy) return false;
+        // Es justo el día de cierre: si además tiene hora_cierre, hay que
+        // respetarla exacta; sin hora, sigue abierta hasta las 23:59.
+        if (!e.hora_cierre) return true;
+        const limite = new Date(`${e.fecha_cierre}T${e.hora_cierre}`);
+        return ahora <= limite;
+      });
+      setEvaluaciones(vigentes);
+      setCargando(false);
+    });
+  }, [gradoId]);
+
+  if (cargando || evaluaciones.length === 0) return null;
+
+  return (
+    <div className="mt-4 pt-4 border-t border-slate-100">
+      <div className="text-xs font-semibold text-slate-600 mb-2">📝 Evaluaciones disponibles</div>
+      <div className="space-y-2">
+        {evaluaciones.map((e) => <TarjetaEvaluacionEstudiante key={e.id} evaluacion={e} estudianteId={estudianteId} />)}
+      </div>
+    </div>
+  );
+}
+
+function SalonHonorEstudiante({ estudianteId }) {
+  const [datos, setDatos] = useState(null);
+  const [avatares, setAvatares] = useState({});
+  const [cargando, setCargando] = useState(true);
+  useEffect(() => {
+    api.fetchSalonDeHonor().then((d) => {
+      setDatos(d);
+      setCargando(false);
+      const ids = [...new Set([...d.topXp.map((e) => e.id), ...d.topInsignias.map((e) => e.id)])];
+      api.fetchAvatarConfigsMultiples(ids).then(setAvatares);
+    });
+  }, []);
 
   if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
-  if (unidades.length === 0) {
-    return <div className="text-sm text-slate-400 bg-white rounded-2xl p-6 text-center border border-dashed border-slate-200">Creá primero una unidad/tema para poder agendar clases en el calendario.</div>;
-  }
+
+  const medalla = (i) => i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`;
 
   return (
-    <div className="grid md:grid-cols-2 gap-4">
-      <div className="bg-white rounded-2xl border border-slate-200 p-3">
-        <div className="flex items-center justify-between mb-3">
-          <button onClick={() => setMesActual((p) => new Date(p.getFullYear(), p.getMonth() - 1, 1))} className="text-slate-400 hover:text-violet-600 px-2 text-lg">‹</button>
-          <div className="font-bold text-slate-800 capitalize">{MESES_NOMBRE_PLAN[mesActual.getMonth()]} {mesActual.getFullYear()}</div>
-          <button onClick={() => setMesActual((p) => new Date(p.getFullYear(), p.getMonth() + 1, 1))} className="text-slate-400 hover:text-violet-600 px-2 text-lg">›</button>
-        </div>
-        <div className="grid grid-cols-7 gap-1 mb-1">
-          {DIAS_SEMANA_CORTOS_PLAN.map((d) => <div key={d} className="text-center text-[10px] font-bold text-slate-400 py-1">{d}</div>)}
-        </div>
-        <div className="grid grid-cols-7 gap-1">
-          {celdas.map((d, i) => {
-            if (d === null) return <div key={i} />;
-            const fechaStr = aFechaStrPlan(new Date(mesActual.getFullYear(), mesActual.getMonth(), d));
-            const clasesDia = clasesDelDia(fechaStr);
-            const esHoy = fechaStr === hoyStr;
-            const esSeleccionado = fechaStr === diaSeleccionado;
-            return (
-              <button key={i} onClick={() => { setDiaSeleccionado(fechaStr); setAgregando(false); }}
-                className="aspect-square rounded-lg p-1 flex flex-col items-center justify-start relative"
-                style={{ background: esSeleccionado ? "#E8EEF8" : esHoy ? "#E8EEF8" : "transparent", border: esHoy ? "1.5px solid #2F55A4" : "1px solid transparent" }}>
-                <span className={`text-[11px] ${esSeleccionado ? "font-bold text-violet-700" : "text-slate-600"}`}>{d}</span>
-                {clasesDia.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-violet-500 mt-0.5" />}
-              </button>
-            );
-          })}
-        </div>
+    <div>
+      <h3 className="font-bold text-slate-800 mb-1">🏆 Salón de Honor</h3>
+      <p className="text-xs text-slate-400 mb-3">Los mejores de toda la institución, cruzando todos los grados.</p>
+
+      <div className="text-xs font-semibold text-slate-600 mb-1.5">⭐ Más XP</div>
+      <div className="space-y-1.5 mb-4">
+        {datos.topXp.map((e) => (
+          <div key={e.id} className={`flex items-center justify-between px-3 py-2 rounded-xl ${e.id === estudianteId ? "bg-violet-100 border border-violet-300" : "bg-slate-50"}`}>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-sm w-6 text-center shrink-0">{medalla(datos.topXp.indexOf(e))}</span>
+              {avatares[e.id] && <PersonajePreview config={avatares[e.id]} size={26} />}
+              <span className={`text-xs truncate ${e.id === estudianteId ? "font-bold text-violet-700" : "text-slate-700"}`}>{e.nombre}{e.id === estudianteId ? " (vos)" : ""}</span>
+              <span className="text-[10px] text-slate-400 shrink-0">G{e.grado_id}</span>
+            </div>
+            <span className="text-xs font-semibold text-slate-500 shrink-0">{e.xp} XP</span>
+          </div>
+        ))}
+        {datos.topXp.length === 0 && <p className="text-xs text-slate-400">Todavía no hay datos.</p>}
       </div>
 
-      <div>
-        <div className="text-xs font-semibold text-slate-500 mb-2">
-          {fechaALocalPlan(diaSeleccionado).toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" })}
-        </div>
-        {clasesSeleccionado.length === 0 ? (
-          <div className="text-sm text-slate-400 bg-white rounded-2xl p-4 text-center border border-dashed border-slate-200 mb-2">Sin clases agendadas este día.</div>
-        ) : (
-          <div className="space-y-2 mb-2">
-            {clasesSeleccionado.map((c) => (
-              <button key={c.id} onClick={() => onAbrirUnidad(c.unidad_id)} className="w-full text-left bg-white rounded-xl border border-slate-200 p-3 hover:border-violet-200">
-                <div className="text-sm font-semibold text-slate-800">{c.titulo}</div>
-                <div className="text-[11px] text-violet-500">{c.unidad_titulo}</div>
-                {c.momento_desarrollo && <TextoEnriquecido html={c.momento_desarrollo} className="text-[11px] text-slate-500 mt-1 line-clamp-2" />}
-              </button>
-            ))}
+      <div className="text-xs font-semibold text-slate-600 mb-1.5">🏅 Más insignias</div>
+      <div className="space-y-1.5 mb-4">
+        {datos.topInsignias.map((e) => (
+          <div key={e.id} className={`flex items-center justify-between px-3 py-2 rounded-xl ${e.id === estudianteId ? "bg-violet-100 border border-violet-300" : "bg-slate-50"}`}>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-sm w-6 text-center shrink-0">{medalla(datos.topInsignias.indexOf(e))}</span>
+              {avatares[e.id] && <PersonajePreview config={avatares[e.id]} size={26} />}
+              <span className={`text-xs truncate ${e.id === estudianteId ? "font-bold text-violet-700" : "text-slate-700"}`}>{e.nombre}{e.id === estudianteId ? " (vos)" : ""}</span>
+              <span className="text-[10px] text-slate-400 shrink-0">G{e.grado_id}</span>
+            </div>
+            <span className="text-xs font-semibold text-amber-600 shrink-0">{e.cantidad} 🏅</span>
           </div>
-        )}
-        {agregando ? (
-          <AgregarClaseCalendarioForm unidades={unidades} fecha={diaSeleccionado} onCancelar={() => setAgregando(false)} onCreada={() => { setAgregando(false); cargar(); }} />
-        ) : (
-          <button onClick={() => setAgregando(true)} className="text-xs text-violet-500">+ Agregar clase este día</button>
-        )}
+        ))}
+        {datos.topInsignias.length === 0 && <p className="text-xs text-slate-400">Todavía nadie desbloqueó insignias.</p>}
+      </div>
+
+      <div className="text-xs font-semibold text-slate-600 mb-1.5">📜 Logros recientes</div>
+      <div className="space-y-1.5">
+        {datos.muroReciente.slice(0, 8).map((l) => (
+          <div key={l.id} className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2">
+            <span className="text-base shrink-0">{l.logro_emoji}</span>
+            <div className="text-[11px] min-w-0">
+              <span className="font-semibold text-slate-700">{l.estudiante_nombre}</span>
+              <span className="text-slate-400"> desbloqueó </span>
+              <span className="font-semibold text-violet-600">{l.logro_nombre}</span>
+            </div>
+          </div>
+        ))}
+        {datos.muroReciente.length === 0 && <p className="text-xs text-slate-400">Todavía no hay logros desbloqueados.</p>}
       </div>
     </div>
   );
 }
 
-function fechaALocalPlan(fechaStr) {
-  const [a, m, d] = fechaStr.split("-").map(Number);
-  return new Date(a, m - 1, d);
-}
-
-function PendientesModal({ materiaId, materiaNombre, onClose }) {
-  const [pendientes, setPendientes] = useState([]);
+function RankingEstudiante({ estudianteId, gradoId }) {
+  const [ranking, setRanking] = useState([]);
+  const [avatares, setAvatares] = useState({});
   const [cargando, setCargando] = useState(true);
 
-  const cargar = () => {
-    setCargando(true);
-    api.fetchDictadosPendientes(materiaId).then((d) => { setPendientes(d); setCargando(false); });
-  };
-  useEffect(() => { cargar(); }, [materiaId]);
+  useEffect(() => {
+    api.fetchRankingGrado(gradoId).then((r) => {
+      setRanking(r);
+      setCargando(false);
+      api.fetchAvatarConfigsMultiples(r.map((x) => x.id)).then(setAvatares);
+    });
+  }, [gradoId]);
 
-  const marcarDictada = async (id) => { await api.editarDictado(id, { estado: "dictada" }); cargar(); };
+  if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
+
+  const medalla = (i) => i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`;
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="font-bold text-slate-800">📋 Clases pendientes — {materiaNombre}</h3>
-          <button onClick={onClose} className="text-slate-400">✕</button>
-        </div>
-        {cargando ? (
-          <div className="text-sm text-slate-400">Cargando…</div>
-        ) : pendientes.length === 0 ? (
-          <div className="text-sm text-slate-400">No hay clases pendientes ni aplazadas en esta materia. 🎉</div>
-        ) : (
-          <div className="space-y-1.5">
-            {pendientes.map((d) => {
-              const info = ESTADOS_DICTADO.find((e) => e.key === d.estado);
-              return (
-                <div key={d.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
-                  <div className="text-xs">
-                    <span className="font-semibold text-slate-700">{d.clase_titulo}</span>
-                    <span className="text-slate-400"> · Curso {d.grado_id}{d.fecha ? ` · ${d.fecha}` : ""}</span>
-                    <span className="ml-1 text-[10px] px-2 py-0.5 rounded-full" style={{ background: `${info.color}22`, color: info.color }}>{info.label}</span>
-                  </div>
-                  <button onClick={() => marcarDictada(d.id)} className="text-[11px] text-violet-500 shrink-0">Marcar dictada</button>
-                </div>
-              );
-            })}
+    <div>
+      <h3 className="font-bold text-slate-800 mb-1">🏆 Ranking de tu grado</h3>
+      <p className="text-xs text-slate-400 mb-3">Ordenado por experiencia (XP) acumulada.</p>
+      <div className="space-y-1.5">
+        {ranking.map((r, i) => (
+          <div key={r.id} className={`flex items-center justify-between px-3 py-2 rounded-xl ${r.id === estudianteId ? "bg-violet-100 border border-violet-300" : "bg-slate-50"}`}>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-sm w-6 text-center shrink-0">{medalla(i)}</span>
+              {avatares[r.id] && <PersonajePreview config={avatares[r.id]} size={26} />}
+              <span className={`text-xs truncate ${r.id === estudianteId ? "font-bold text-violet-700" : "text-slate-700"}`}>{r.nombre}{r.id === estudianteId ? " (vos)" : ""}</span>
+            </div>
+            <span className="text-xs font-semibold text-slate-500 shrink-0">{r.xp} XP</span>
           </div>
-        )}
+        ))}
+        {ranking.length === 0 && <p className="text-xs text-slate-400">Todavía no hay datos de XP en tu grado.</p>}
       </div>
     </div>
   );
 }
 
-function FilaEstandar({ e, onCambio }) {
-  const [editando, setEditando] = useState(false);
-  const [codigo, setCodigo] = useState(e.codigo || "");
-  const [descripcion, setDescripcion] = useState(e.descripcion || "");
+function TareaCalificableEstudiante({ tarea, estudianteId, icono = "📄" }) {
+  const [entrega, setEntrega] = useState(null);
+  useEffect(() => { api.fetchMiEntrega(tarea.id, estudianteId).then(setEntrega); }, [tarea.id]);
 
-  const guardar = async () => {
-    if (!descripcion.trim()) { alert("La descripción no puede quedar vacía."); return; }
-    try {
-      await api.editarEstandar(e.id, { codigo: codigo.trim() || null, descripcion: descripcion.trim() });
-      setEditando(false);
-      onCambio();
-    } catch (err) {
-      alert("Error al guardar: " + err.message);
-    }
-  };
+  const calificado = entrega?.nota !== null && entrega?.nota !== undefined;
+  const colorBorde = calificado ? "#22C55E" : "#F59E0B";
 
-  const eliminar = async () => {
-    if (!confirm(`¿Eliminar "${e.descripcion}" del catálogo? Se quita de todas las clases/unidades donde estuviera vinculado. No se puede deshacer.`)) return;
-    try {
-      await api.eliminarEstandar(e.id);
-      onCambio();
-    } catch (err) {
-      alert("Error al eliminar: " + err.message);
-    }
-  };
+  return (
+    <div className="bg-white rounded-xl p-3.5 shadow-sm" style={{ borderLeft: `4px solid ${colorBorde}` }}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-sm font-bold text-slate-800">{icono} {tarea.titulo}</div>
+          {tarea.materias?.nombre && <div className="text-[11px] text-violet-500 font-semibold mt-0.5">{tarea.materias.nombre}</div>}
+          {tarea.descripcion && <TextoEnriquecido html={tarea.descripcion} className="text-xs text-slate-500 mt-1" />}
+        </div>
+        {calificado ? (
+          <span className="text-xs font-bold text-white bg-emerald-500 px-2.5 py-1 rounded-full shrink-0">{entrega.nota}</span>
+        ) : (
+          <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-2 py-1 rounded-full shrink-0 whitespace-nowrap">⏳ Pendiente</span>
+        )}
+      </div>
+      {tarea.fecha_entrega && <div className="text-[11px] text-slate-400 mt-2">📅 Entrega: {tarea.fecha_entrega}</div>}
+      {tarea.url && (
+        <a href={tarea.url} target="_blank" rel="noreferrer" className="inline-block text-xs font-semibold text-white bg-violet-500 px-3 py-1.5 rounded-lg mt-2">
+          🔗 Abrir enlace
+        </a>
+      )}
+      {calificado && entrega.comentario && (
+        <div className="text-xs text-slate-600 italic bg-slate-50 rounded-lg p-2 mt-2">"{entrega.comentario}"</div>
+      )}
+    </div>
+  );
+}
 
-  if (editando) {
+function ProyectosEstudiante({ estudianteId, gradoId }) {
+  const [proyectos, setProyectos] = useState([]);
+  const [tareasPlan, setTareasPlan] = useState([]);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    Promise.all([api.fetchTareasCalificablesEstudiante(gradoId, "proyecto"), api.fetchTareasPlaneacionParaGrado(gradoId)])
+      .then(([p, t]) => { setProyectos(p); setTareasPlan(t); setCargando(false); });
+  }, [gradoId]);
+
+  if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
+  if (proyectos.length === 0 && tareasPlan.length === 0) {
     return (
-      <div className="flex items-center gap-2 bg-violet-50 rounded-lg p-2">
-        <input value={codigo} onChange={(ev) => setCodigo(ev.target.value)} placeholder="Código" className="w-20 text-xs rounded px-2 py-1 border border-slate-200 outline-none" />
-        <input value={descripcion} onChange={(ev) => setDescripcion(ev.target.value)} placeholder="Descripción" className="flex-1 text-xs rounded px-2 py-1 border border-slate-200 outline-none" />
-        <button onClick={guardar} className="text-xs px-2 py-1 rounded-lg bg-violet-500 text-white shrink-0">Guardar</button>
-        <button onClick={() => setEditando(false)} className="text-xs text-slate-400 shrink-0">✕</button>
+      <div className="text-center py-8">
+        <div className="text-3xl mb-2">📜</div>
+        <p className="text-sm text-slate-400">Todavía no tenés proyectos asignados.</p>
       </div>
     );
   }
 
   return (
-    <div className="flex items-center justify-between gap-2 bg-slate-50 rounded-lg px-2 py-1.5">
-      <div className="text-xs text-slate-700 min-w-0">{e.codigo ? <span className="font-semibold">{e.codigo} — </span> : ""}{e.descripcion}</div>
-      <div className="flex items-center gap-2 shrink-0">
-        <button onClick={() => setEditando(true)} className="text-xs text-slate-400 hover:text-violet-600">✏️</button>
-        <button onClick={eliminar} className="text-xs text-slate-400 hover:text-rose-500">🗑</button>
+    <div>
+      <h3 className="font-bold text-slate-800 mb-3">📜 Proyectos</h3>
+      {proyectos.length > 0 && (
+        <div className="space-y-2 mb-5">
+          {proyectos.map((p) => <TareaCalificableEstudiante key={p.id} tarea={p} estudianteId={estudianteId} icono="📜" />)}
+        </div>
+      )}
+      {tareasPlan.length > 0 && (
+        <>
+          <div className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wide">Otras tareas de clase</div>
+          <div className="space-y-2">
+            {tareasPlan.map((t) => (
+              <div key={t.id} className="bg-white rounded-xl p-3.5 shadow-sm border-l-4 border-slate-300">
+                <div className="text-sm font-bold text-slate-800">📝 {t.titulo}</div>
+                <div className="text-[11px] text-violet-500 font-semibold mt-0.5">{t.materia_nombre}{t.unidad_titulo ? ` · ${t.unidad_titulo}` : ""}</div>
+                {t.fecha_entrega && <div className="text-[11px] text-slate-400 mt-1.5">📅 Entrega: {t.fecha_entrega}</div>}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ForjaEstudiante({ estudianteId, gradoId }) {
+  const [talleres, setTalleres] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  useEffect(() => { api.fetchTareasCalificablesEstudiante(gradoId, "forja").then((d) => { setTalleres(d); setCargando(false); }); }, [gradoId]);
+
+  if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
+  if (talleres.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-3xl mb-2">🔨</div>
+        <p className="text-sm text-slate-400">Todavía no tenés talleres o entregables asignados.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h3 className="font-bold text-slate-800 mb-3">🔨 Forja</h3>
+      <div className="space-y-2">
+        {talleres.map((t) => <TareaCalificableEstudiante key={t.id} tarea={t} estudianteId={estudianteId} icono="🔨" />)}
       </div>
     </div>
   );
 }
 
-function CargaMasivaEstandares({ tipo, onCargado }) {
-  const [texto, setTexto] = useState("");
-  const [cargando, setCargando] = useState(false);
-  const [abierto, setAbierto] = useState(false);
+function ProximamentePanel({ nombre }) {
+  return (
+    <div className="text-center py-8">
+      <div className="text-4xl mb-2">🔒</div>
+      <p className="text-sm font-semibold text-slate-600">{nombre}</p>
+      <p className="text-xs text-slate-400 mt-1">Todavía no está disponible — próximamente.</p>
+    </div>
+  );
+}
 
-  const lineas = texto.split("\n").map((l) => l.trim()).filter(Boolean);
+const MENU_CODICE_GRUPOS = [
+  {
+    key: "inicio_grupo", label: "Inicio", icono: "🏠", items: [
+      { key: "inicio", label: "Inicio", icono: "🏠" },
+    ],
+  },
+  {
+    key: "estudio", label: "Estudio", icono: "🎓", items: [
+      { key: "codice", label: "Códice", icono: "📖" },
+      { key: "notas", label: "Notas", icono: "📝" },
+      { key: "misiones", label: "Misiones", icono: "⚔️" },
+      { key: "forja", label: "Forja", icono: "🔨" },
+      { key: "guias", label: "Guías", icono: "📘" },
+      { key: "biblioteca", label: "Biblioteca", icono: "📚" },
+      { key: "proyectos", label: "Proyectos", icono: "📜" },
+      { key: "historial", label: "Historial", icono: "🗂️" },
+    ],
+  },
+  {
+    key: "comunidad", label: "Comunidad", icono: "🏆", items: [
+      { key: "ranking", label: "Ranking", icono: "📊" },
+      { key: "salonhonor", label: "Salón de Honor", icono: "🏆" },
+      { key: "recompensas", label: "Recompensas", icono: "🎁" },
+      { key: "album", label: "Álbum", icono: "🎴" },
+      { key: "comarca", label: "Mi Comarca", icono: "🏛️" },
+    ],
+  },
+  {
+    key: "diversion", label: "Diversión", icono: "🎡", items: [
+      { key: "preguntados", label: "Preguntados", icono: "🎡" },
+      { key: "personaje", label: "Personaje", icono: "🎨" },
+    ],
+  },
+  {
+    key: "cuenta", label: "Mi cuenta", icono: "👤", items: [
+      { key: "perfil", label: "Perfil", icono: "👤" },
+    ],
+  },
+];
+// Lista plana — se sigue usando donde hace falta el conjunto completo sin agrupar.
+const MENU_CODICE = MENU_CODICE_GRUPOS.flatMap((g) => g.items);
 
-  const parsearLinea = (linea) => {
-    // Acepta "CÓDIGO: descripción", "CÓDIGO - descripción", o solo descripción sin código
-    const match = linea.match(/^([A-Za-zÁÉÍÓÚñÑ0-9.]+)\s*[:\-–]\s*(.+)$/);
-    if (match) return { codigo: match[1].trim(), descripcion: match[2].trim() };
-    return { codigo: null, descripcion: linea };
+// Íconos temáticos de castillo/aventura para cada destino del menú, en vez
+// del emoji genérico — puramente decorativo, la navegación real sigue
+// siendo la misma (la key de MENU_CODICE).
+const ICONO_MAPA = {
+  album: "🏯", biblioteca: "📚", codice: "📖", forja: "⚒️", guias: "🗺️",
+  inicio: "🏰", misiones: "⚔️", notas: "📜", personaje: "🧙", historial: "📖", perfil: "🛡️", preguntados: "🎡",
+  proyectos: "🏹", ranking: "👑", recompensas: "💎", salonhonor: "🏆",
+};
+
+function SidebarTarjetasEstudiante({ activo, onCambiar, monedas, gradoId, onCerrarSesion, menuAbierto, onCerrarMenu }) {
+  const [ultimoAnuncio, setUltimoAnuncio] = useState(null);
+
+  useEffect(() => {
+    if (!gradoId) return;
+    api.fetchAnunciosParaGrado(gradoId).then((lista) => setUltimoAnuncio(lista[0] || null));
+  }, [gradoId]);
+
+  const elegir = (key) => { onCambiar(key); onCerrarMenu?.(); };
+
+  const contenido = (
+    <div className="h-full flex flex-col" style={{ background: "linear-gradient(180deg, #17264D 0%, #0f1932 100%)" }}>
+      <div className="p-3 pb-2">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <button onClick={() => elegir("inicio")} className="flex items-center gap-2">
+            <span className="text-lg">🧭</span>
+            <span className="text-white text-sm font-bold tracking-[0.12em]" style={{ fontFamily: "Georgia, serif" }}>CÓDICE</span>
+          </button>
+          {monedas !== undefined && (
+            <div className="flex items-center gap-1">
+              <span className="text-sm">🪙</span>
+              <span className="text-xs font-bold text-amber-300">{monedas}</span>
+            </div>
+          )}
+        </div>
+        {ultimoAnuncio && (
+          <button onClick={() => elegir("mensajes")} className="w-full text-left rounded-xl px-2.5 py-2" style={{ background: "rgba(47,85,164,0.2)" }}>
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span className="text-xs">{ultimoAnuncio.fijado ? "📌" : "✉️"}</span>
+              <span className="text-[9px] font-bold text-violet-200 uppercase tracking-wide">Último mensaje</span>
+            </div>
+            <div className="text-[11px] font-semibold text-white truncate">{ultimoAnuncio.titulo}</div>
+          </button>
+        )}
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-3 pb-3">
+        <TarjetaMenuLateral icono="🏠" label="Inicio" activo={activo === "inicio"} onClick={() => elegir("inicio")} fondo="#E8EEF8" />
+
+        {MENU_CODICE_GRUPOS.filter((g) => g.key !== "inicio_grupo").map((grupo) => (
+          <div key={grupo.key} className="mt-3">
+            <div className="text-[9px] font-bold uppercase tracking-wide px-2.5 mb-1" style={{ color: "#829aca" }}>{grupo.icono} {grupo.label}</div>
+            {grupo.items.map((it) => (
+              <TarjetaMenuLateral key={it.key} icono={it.icono} label={it.label} activo={activo === it.key} onClick={() => elegir(it.key)} />
+            ))}
+          </div>
+        ))}
+      </div>
+
+      <div className="p-3 pt-2 border-t border-white/10">
+        <button onClick={onCerrarSesion} className="w-full text-center text-xs font-semibold text-violet-300 py-1.5" title="Cerrar sesión">🚪 Cerrar sesión</button>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      <div className="hidden md:block w-[210px] shrink-0 sticky top-0 h-screen">{contenido}</div>
+
+      <div className="md:hidden sticky top-0 z-30 flex items-center justify-between px-4 py-2.5" style={{ background: "#17264D" }}>
+        <button onClick={() => elegir("inicio")} className="flex items-center gap-2">
+          <span className="text-lg">🧭</span>
+          <span className="text-white text-sm font-bold tracking-[0.12em]">CÓDICE</span>
+        </button>
+        <div className="flex items-center gap-3">
+          {monedas !== undefined && <span className="text-xs font-bold text-amber-300">🪙 {monedas}</span>}
+          <button onClick={() => onCerrarMenu?.(true)} className="text-white text-xl">☰</button>
+        </div>
+      </div>
+      {menuAbierto && (
+        <>
+          <div className="md:hidden fixed inset-0 z-40 bg-black/40" onClick={() => onCerrarMenu?.()} />
+          <div className="md:hidden fixed left-0 top-0 bottom-0 z-50 w-[260px] shadow-xl">{contenido}</div>
+        </>
+      )}
+    </>
+  );
+}
+
+function EntradaCodiceCard({ entrada }) {
+  const [comentarios, setComentarios] = useState([]);
+  const [expandido, setExpandido] = useState(false);
+
+  const verComentarios = () => {
+    if (!expandido) api.fetchComentariosCodice(entrada.id).then(setComentarios);
+    setExpandido((v) => !v);
   };
 
-  const cargarTodos = async () => {
-    if (lineas.length === 0) return;
-    setCargando(true);
-    let hechos = 0;
-    for (const linea of lineas) {
-      const { codigo, descripcion } = parsearLinea(linea);
-      if (!descripcion) continue;
-      try {
-        await api.crearEstandar({ tipo, codigo, descripcion });
-        hechos++;
-      } catch (e) {
-        // sigue con las demás aunque una falle
-      }
+  return (
+    <div className={`rounded-xl p-3 ${entrada.autor_docente_id ? "bg-violet-50 border border-violet-100" : "bg-slate-50"}`}>
+      <div className="flex items-center justify-between mb-1">
+        <div className="text-[11px] text-slate-400">
+          {entrada.fecha}{entrada.materia_nombre ? ` · ${entrada.materia_nombre}` : ""}
+          {entrada.autor_docente_id && <span className="ml-1.5 text-violet-600 font-semibold">· ✍️ De tu docente</span>}
+        </div>
+        {entrada.nota !== null && entrada.nota !== undefined && (
+          <span className="text-[10px] font-bold text-white bg-emerald-500 px-2 py-0.5 rounded-full">Nota: {entrada.nota}</span>
+        )}
+      </div>
+      {entrada.titulo && <div className="text-sm font-bold text-slate-800 mb-1">{entrada.titulo}</div>}
+      {entrada.tarea_titulo && <div className="text-[11px] text-violet-500 mb-1">🔗 Vinculada a: {entrada.tarea_titulo}</div>}
+      <TextoEnriquecido html={entrada.contenido} className="text-xs text-slate-600" />
+      <button onClick={verComentarios} className="text-[11px] text-violet-500 mt-2">
+        {expandido ? "Ocultar comentarios" : "💬 Ver comentarios del docente"}
+      </button>
+      {expandido && (
+        <div className="mt-2 space-y-1.5">
+          {comentarios.length === 0 ? (
+            <p className="text-[11px] text-slate-400">Todavía no tiene comentarios.</p>
+          ) : (
+            comentarios.map((c) => (
+              <div key={c.id} className="bg-white rounded-lg p-2 text-[11px]">
+                <span className="font-semibold text-violet-600">{c.autor_nombre}: </span>
+                <span className="text-slate-600">{c.comentario}</span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CodiceEstudiante({ estudianteId, gradoId }) {
+  const [entradas, setEntradas] = useState([]);
+  const [materias, setMaterias] = useState([]);
+  const [consignas, setConsignas] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [escribiendo, setEscribiendo] = useState(false);
+  const [titulo, setTitulo] = useState("");
+  const [contenido, setContenido] = useState("");
+  const [materiaId, setMateriaId] = useState("");
+  const [consignaIdActual, setConsignaIdActual] = useState(null);
+  const [guardando, setGuardando] = useState(false);
+
+  const cargar = () => api.fetchEntradasCodice(estudianteId).then((d) => { setEntradas(d); setCargando(false); });
+  useEffect(() => {
+    cargar();
+    api.fetchMaterias().then(setMaterias);
+    if (gradoId) api.fetchConsignasActivasParaGrado(gradoId).then(setConsignas);
+  }, [estudianteId, gradoId]);
+
+  const idsRespondidas = new Set(entradas.filter((e) => e.consigna_id).map((e) => e.consigna_id));
+
+  const responderConsigna = (consigna) => {
+    setConsignaIdActual(consigna.id);
+    setTitulo(consigna.titulo);
+    setMateriaId(consigna.materia_id || "");
+    setContenido("");
+    setEscribiendo(true);
+  };
+
+  const guardar = async () => {
+    if (!contenido.trim()) return;
+    setGuardando(true);
+    try {
+      await api.crearEntradaCodice(estudianteId, { titulo: titulo.trim() || null, contenido: contenido.trim(), materia_id: materiaId ? parseInt(materiaId, 10) : null, consigna_id: consignaIdActual });
+      setTitulo(""); setContenido(""); setMateriaId(""); setConsignaIdActual(null); setEscribiendo(false);
+      cargar();
+    } catch (e) {
+      alert("Error al guardar: " + e.message);
     }
-    setCargando(false);
-    setTexto("");
-    setAbierto(false);
-    alert(`Se cargaron ${hechos} de ${lineas.length} líneas.`);
-    onCargado();
+    setGuardando(false);
   };
 
-  if (!abierto) {
-    return <button onClick={() => setAbierto(true)} className="text-xs font-semibold text-violet-500 mb-3">+ Cargar varios de una vez</button>;
+  return (
+    <div>
+      <h3 className="font-bold text-slate-800 mb-1">📖 Mi Códice</h3>
+      <p className="text-xs text-slate-400 mb-3">Tu diario personal de aprendizajes — anotá qué entendiste, qué te costó, o cualquier reflexión sobre tus clases.</p>
+
+      {consignas.filter((c) => !idsRespondidas.has(c.id)).length > 0 && (
+        <div className="space-y-2 mb-4">
+          {consignas.filter((c) => !idsRespondidas.has(c.id)).map((c) => (
+            <div key={c.id} className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+              <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wide">📢 Consigna de tu docente</div>
+              <div className="text-sm font-bold text-slate-800 mt-0.5">{c.titulo}</div>
+              <TextoEnriquecido html={c.pregunta} className="text-xs text-slate-600 italic mt-1" />
+              <button onClick={() => responderConsigna(c)} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-500 text-white mt-2">Responder</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {escribiendo ? (
+        <div className="bg-violet-50 rounded-xl p-3 mb-3">
+          {consignaIdActual && <p className="text-[11px] text-violet-600 font-semibold mb-2">Respondiendo la consigna: "{textoPlano(consignas.find((c) => c.id === consignaIdActual)?.pregunta)}"</p>}
+          <select value={materiaId} onChange={(e) => setMateriaId(e.target.value)} className="w-full text-xs rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none">
+            <option value="">Sin materia específica</option>
+            {materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+          </select>
+          <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título (opcional)"
+            className="w-full text-sm rounded-lg px-2 py-1.5 mb-2 border border-slate-200 outline-none" />
+          <div className="mb-2"><EditorTexto value={contenido} onChange={setContenido} minHeight={110} placeholder="¿Qué aprendiste hoy? ¿Qué te costó entender? ¿Qué reflexión te queda?" /></div>
+          <div className="flex justify-end gap-2">
+            <button onClick={() => { setEscribiendo(false); setConsignaIdActual(null); }} className="text-xs text-slate-400 px-2 py-1">Cancelar</button>
+            <button disabled={guardando} onClick={guardar} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+              {guardando ? "Guardando…" : "Guardar entrada"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => { setConsignaIdActual(null); setTitulo(""); setMateriaId(""); setEscribiendo(true); }} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white mb-3">
+          ✎ Nueva entrada
+        </button>
+      )}
+
+      {cargando ? (
+        <div className="text-sm text-slate-400">Cargando…</div>
+      ) : entradas.length === 0 ? (
+        <p className="text-sm text-slate-400 text-center py-4">Todavía no escribiste ninguna entrada en tu Códice.</p>
+      ) : (
+        <div className="space-y-2">
+          {entradas.map((e) => <EntradaCodiceCard key={e.id} entrada={e} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ValorSemanaEstudiante() {
+  const [valor, setValor] = useState(null);
+  const [ampliado, setAmpliado] = useState(false);
+  useEffect(() => { api.fetchValorSemanal().then(setValor); }, []);
+  if (!valor || (!valor.nombre && !valor.imagen_url && !valor.html_contenido)) return null;
+
+  return (
+    <div className="bg-violet-50 rounded-2xl p-3 mb-4 flex items-center gap-3">
+      {valor.html_contenido ? (
+        <div className="shrink-0 rounded-xl overflow-hidden cursor-pointer" style={{ maxWidth: 110 }} onClick={() => setAmpliado(true)} dangerouslySetInnerHTML={{ __html: valor.html_contenido }} />
+      ) : (
+        <div className="rounded-xl overflow-hidden shrink-0" style={{ width: 56, height: 56, background: "white" }}>
+          {valor.imagen_url ? (
+            <img src={valor.imagen_url} alt={valor.nombre || "Valor de la semana"} onClick={() => setAmpliado(true)} className="w-full h-full object-contain cursor-pointer" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-2xl">🌟</div>
+          )}
+        </div>
+      )}
+      <div className="min-w-0">
+        <div className="text-[9px] font-bold text-violet-500 uppercase tracking-wide">Valor de la semana</div>
+        <div className="text-sm font-bold text-slate-800 truncate">{valor.nombre}</div>
+        {valor.descripcion && <div className="text-[11px] text-slate-500 mt-0.5">{valor.descripcion}</div>}
+      </div>
+      {ampliado && valor.html_contenido && <ContenidoLightbox html={valor.html_contenido} onClose={() => setAmpliado(false)} />}
+      {ampliado && !valor.html_contenido && valor.imagen_url && <FotoLightbox url={valor.imagen_url} nombre={valor.nombre || "Valor de la semana"} onClose={() => setAmpliado(false)} />}
+    </div>
+  );
+}
+
+function AnunciosEstudiante({ gradoId }) {
+  const [anuncios, setAnuncios] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  useEffect(() => { api.fetchAnunciosParaGrado(gradoId).then((d) => { setAnuncios(d); setCargando(false); }); }, [gradoId]);
+
+  if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
+  if (anuncios.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-3xl mb-2">✉️</div>
+        <p className="text-sm text-slate-400">No hay anuncios por ahora.</p>
+      </div>
+    );
   }
 
   return (
-    <div className="bg-violet-50 rounded-xl p-3 mb-3">
-      <p className="text-[11px] text-slate-500 mb-2">
-        Pegá uno por línea. Podés poner el código y la descripción separados por "<b>:</b>" o "<b>-</b>" (ej: <i>DBA1: Reconoce estructuras narrativas</i>),
-        o solo la descripción si no tiene código.
-      </p>
-      <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={6}
-        placeholder={"DBA1: Reconoce estructuras narrativas...\nDBA2: Comprende textos argumentativos...\nSolo una descripción sin código también sirve"}
-        className="w-full text-xs font-mono rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
-      <div className="flex justify-between items-center">
-        <span className="text-[11px] text-slate-400">{lineas.length} línea(s) detectada(s)</span>
-        <div className="flex gap-2">
-          <button onClick={() => setAbierto(false)} className="text-xs text-slate-500 px-2 py-1.5">Cancelar</button>
-          <button disabled={cargando || lineas.length === 0} onClick={cargarTodos} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-50">
-            {cargando ? "Cargando…" : `Cargar ${lineas.length} línea(s)`}
+    <div>
+      <h3 className="font-bold text-slate-800 mb-3">✉️ Mensajes</h3>
+      <div className="space-y-2">
+        {anuncios.map((a) => (
+          <div key={a.id} className={`bg-white rounded-xl p-3.5 shadow-sm ${a.fijado ? "border-l-4 border-amber-400" : "border-l-4 border-violet-300"}`}>
+            <div className="flex items-center gap-1.5">
+              {a.fijado && <span className="text-xs">📌</span>}
+              <div className="text-sm font-bold text-slate-800">{a.titulo}</div>
+            </div>
+            <TextoEnriquecido html={a.contenido} className="text-xs text-slate-600 mt-1" />
+            <p className="text-[10px] text-slate-400 mt-2">{new Date(a.creado_en).toLocaleDateString("es-CO", { day: "numeric", month: "long" })}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LogrosEstudiante({ estudianteId }) {
+  const [catalogo, setCatalogo] = useState([]);
+  const [desbloqueados, setDesbloqueados] = useState([]);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    Promise.all([api.fetchLogrosCatalogo(), api.fetchLogrosEstudiante(estudianteId)]).then(([c, d]) => {
+      setCatalogo(c.filter((l) => l.activo)); setDesbloqueados(d); setCargando(false);
+    });
+  }, [estudianteId]);
+
+  if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
+  if (catalogo.length === 0) return null;
+
+  const idsDesbloqueados = new Set(desbloqueados.map((d) => d.logro_id));
+
+  return (
+    <div>
+      <div className="text-xs font-semibold text-slate-600 mb-2">🏅 Insignias ({desbloqueados.length}/{catalogo.length})</div>
+      <div className="grid grid-cols-3 gap-2">
+        {catalogo.map((l) => {
+          const tiene = idsDesbloqueados.has(l.id);
+          return (
+            <div key={l.id} className="rounded-xl p-2 text-center" style={{ background: tiene ? "#E8EEF8" : "#F1F5F9", border: `1.5px solid ${tiene ? "#2F55A4" : "#E2E8F0"}` }}>
+              <div className="text-2xl" style={{ filter: tiene ? "none" : "grayscale(1)", opacity: tiene ? 1 : 0.35 }}>{l.emoji}</div>
+              <div className="text-[9px] font-semibold text-slate-700 truncate mt-0.5">{tiene ? l.nombre : "???"}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function DesafioReinoEstudiante({ gradoId, miReino }) {
+  const [desafios, setDesafios] = useState([]);
+  const [progresoPorDesafio, setProgresoPorDesafio] = useState({});
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    api.fetchDesafiosReino(gradoId).then(async (lista) => {
+      const activos = lista.filter((d) => d.activo);
+      setDesafios(activos);
+      const progresos = {};
+      for (const d of activos) { progresos[d.id] = await api.fetchProgresoDesafio(d); }
+      setProgresoPorDesafio(progresos);
+      setCargando(false);
+    });
+  }, [gradoId]);
+
+  if (cargando || desafios.length === 0) return null;
+
+  return (
+    <div className="mb-4">
+      <div className="text-xs font-semibold text-slate-600 mb-2">⚔️ Desafío de tu Reino</div>
+      {desafios.map((d) => {
+        const filas = progresoPorDesafio[d.id] || [];
+        const miFila = filas.find((f) => f.reino === miReino);
+        return (
+          <div key={d.id} className="bg-violet-50 rounded-xl p-3 mb-2">
+            <div className="text-sm font-bold text-slate-800">{d.titulo}</div>
+            {d.descripcion && <TextoEnriquecido html={d.descripcion} className="text-[11px] text-slate-500 mt-0.5" />}
+            <div className="space-y-1.5 mt-2">
+              {filas.slice(0, 4).map((f) => (
+                <div key={f.reino}>
+                  <div className="flex justify-between text-[11px] mb-0.5">
+                    <span className={`font-semibold ${f.reino === miReino ? "text-violet-700" : "text-slate-500"}`}>{f.reino}{f.reino === miReino ? " (vos)" : ""}</span>
+                    <span className="text-slate-400">{f.total}/{d.meta}</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-white overflow-hidden">
+                    <div className="h-full rounded-full bg-gradient-to-r from-violet-400 to-violet-600" style={{ width: `${f.pct}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function CosmeticosEstudiante({ estudianteId, monedas, onMonedasActualizadas }) {
+  const [catalogo, setCatalogo] = useState([]);
+  const [poseidos, setPoseidos] = useState([]);
+  const [equipados, setEquipados] = useState({ marco: null, titulo: null });
+  const [cargando, setCargando] = useState(true);
+
+  const cargar = () => {
+    Promise.all([api.fetchCosmeticosCatalogo(), api.fetchCosmeticosEstudiante(estudianteId), api.fetchEquipadosEstudiante(estudianteId)]).then(([cat, pos, eq]) => {
+      setCatalogo(cat.filter((c) => c.activo)); setPoseidos(pos); setEquipados(eq); setCargando(false);
+    });
+  };
+  useEffect(() => { cargar(); }, [estudianteId]);
+
+  if (cargando) return null;
+
+  const idsPoseidos = new Set(poseidos.map((p) => p.cosmetico_id));
+
+  const comprar = async (c) => {
+    try {
+      await api.comprarCosmetico(estudianteId, c);
+      cargar();
+      onMonedasActualizadas();
+    } catch (e) {
+      alert(e.message);
+    }
+  };
+
+  const equipar = async (c) => {
+    await api.equiparCosmetico(estudianteId, c.tipo, equipados[c.tipo]?.id === c.id ? null : c.id);
+    cargar();
+  };
+
+  return (
+    <div>
+      <div className="text-xs font-semibold text-slate-600 mb-2">🎨 Personalización</div>
+      <div className="grid grid-cols-2 gap-2">
+        {catalogo.map((c) => {
+          const tengo = idsPoseidos.has(c.id);
+          const equipado = equipados[c.tipo]?.id === c.id;
+          return (
+            <div key={c.id} className="bg-slate-50 rounded-xl p-2.5 text-center">
+              {c.tipo === "marco" ? (
+                <div className="w-8 h-8 rounded-full border-4 mx-auto" style={{ borderColor: c.valor }} />
+              ) : (
+                <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-violet-100 text-violet-700 inline-block">{c.valor}</span>
+              )}
+              <div className="text-[11px] font-semibold text-slate-700 mt-1">{c.nombre}</div>
+              {tengo ? (
+                <button onClick={() => equipar(c)} className={`text-[10px] mt-1 px-2 py-1 rounded-full ${equipado ? "bg-violet-500 text-white" : "bg-white border border-slate-200 text-slate-500"}`}>
+                  {equipado ? "✔ Equipado" : "Equipar"}
+                </button>
+              ) : (
+                <button onClick={() => comprar(c)} disabled={monedas < c.costo_monedas} className="text-[10px] mt-1 px-2 py-1 rounded-full bg-amber-100 text-amber-700 disabled:opacity-40">
+                  🪙 {c.costo_monedas}
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {catalogo.length === 0 && <p className="text-xs text-slate-400">Todavía no hay cosméticos disponibles.</p>}
+    </div>
+  );
+}
+
+const CATEGORIAS_BIBLIOTECA = {
+  enlace: { label: "Enlace", emoji: "🔗", color: "#2F55A4" },
+  documento: { label: "Documento", emoji: "📄", color: "#3B82F6" },
+  video: { label: "Video", emoji: "🎬", color: "#EF4444" },
+  libro: { label: "Libro", emoji: "📖", color: "#F59E0B" },
+  audio: { label: "Audio", emoji: "🎧", color: "#22C55E" },
+};
+
+function BibliotecaEstudiante({ gradoId }) {
+  const [recursos, setRecursos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const { nivel } = nivelYCurso(gradoId);
+
+  useEffect(() => { api.fetchBibliotecaPorNivel(nivel).then((d) => { setRecursos(d); setCargando(false); }); }, [nivel]);
+
+  if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
+  if (recursos.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-3xl mb-2">📚</div>
+        <p className="text-sm text-slate-400">Todavía no hay nada en la biblioteca.</p>
+      </div>
+    );
+  }
+
+  const porCategoria = Object.entries(CATEGORIAS_BIBLIOTECA)
+    .map(([key, info]) => ({ key, ...info, items: recursos.filter((r) => r.categoria === key) }))
+    .filter((c) => c.items.length > 0);
+
+  return (
+    <div>
+      <h3 className="font-bold text-slate-800 mb-1">📚 Biblioteca</h3>
+      <p className="text-xs text-slate-400 mb-4">Recursos y enlaces para tu grado.</p>
+      <div className="space-y-5">
+        {porCategoria.map((cat) => (
+          <div key={cat.key}>
+            <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2">{cat.emoji} {cat.label}s</div>
+            <div className="rounded-xl p-3 flex gap-2 flex-wrap items-end" style={{ background: "linear-gradient(180deg, transparent 85%, #D6B98C 85%, #D6B98C 100%)" }}>
+              {cat.items.map((r) => (
+                <a key={r.id} href={r.url} target="_blank" rel="noreferrer"
+                  className="rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow px-2 pt-3 pb-2 block"
+                  style={{ width: 84, minHeight: 110, background: cat.color }} title={textoPlano(r.descripcion) || r.titulo}>
+                  <div className="text-lg mb-1">{cat.emoji}</div>
+                  <div className="text-[9px] font-bold text-white leading-tight break-words">{r.titulo}</div>
+                </a>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const CATEGORIA_INFO_ESTUDIANTE = {
+  academico: { label: "Académico", color: "#3B82F6", emoji: "📘" },
+  convivencial: { label: "Convivencial", color: "#F59E0B", emoji: "🤝" },
+  general: { label: "General", color: "#2F55A4", emoji: "⚡" },
+  respeto: { label: "Respeto", color: "#22C55E", emoji: "🌱" },
+  responsabilidad: { label: "Responsabilidad", color: "#22C55E", emoji: "✅" },
+  confiabilidad: { label: "Confiabilidad", color: "#22C55E", emoji: "🤲" },
+  justicia: { label: "Justicia", color: "#22C55E", emoji: "⚖️" },
+  solidaridad: { label: "Solidaridad", color: "#22C55E", emoji: "💛" },
+  ciudadania: { label: "Ciudadanía", color: "#22C55E", emoji: "🏛️" },
+};
+
+function HistorialEstudiante({ estudianteId }) {
+  const [historial, setHistorial] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [verTodo, setVerTodo] = useState(false);
+
+  useEffect(() => { api.fetchHistorialGamificacion(estudianteId).then((d) => { setHistorial(d); setCargando(false); }); }, [estudianteId]);
+
+  if (cargando) return null;
+  if (historial.length === 0) return null;
+
+  const visibles = verTodo ? historial : historial.slice(0, 6);
+
+  return (
+    <div className="mt-5 pt-4 border-t border-slate-100">
+      <div className="text-xs font-semibold text-slate-600 mb-2">📜 Historial reciente</div>
+      <div className="space-y-1.5">
+        {visibles.map((h) => {
+          const info = CATEGORIA_INFO_ESTUDIANTE[h.categoria] || { label: h.categoria, color: "#94A3B8", emoji: "•" };
+          return (
+            <div key={h.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
+              <div className="min-w-0">
+                <div className="text-xs font-semibold text-slate-700">{h.etiqueta}</div>
+                <div className="text-[10px] text-slate-400">
+                  {new Date(h.ts).toLocaleDateString("es-CO", { day: "numeric", month: "short" })}
+                  <span style={{ color: info.color }}> · {info.emoji} {info.label}</span>
+                </div>
+              </div>
+              <div className={`text-xs font-semibold shrink-0 ${h.xp >= 0 ? "text-emerald-600" : "text-rose-500"}`}>{h.xp > 0 ? "+" : ""}{h.xp} XP</div>
+            </div>
+          );
+        })}
+      </div>
+      {historial.length > 6 && (
+        <button onClick={() => setVerTodo((v) => !v)} className="text-[11px] text-violet-500 mt-2">
+          {verTodo ? "Ver menos" : `Ver todo (${historial.length})`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function PreguntadosEstudiante({ estudianteId }) {
+  const [categorias, setCategorias] = useState([]);
+  const [coronas, setCoronas] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [girando, setGirando] = useState(false);
+  const [rotacion, setRotacion] = useState(0);
+  const [categoriaElegida, setCategoriaElegida] = useState(null);
+  const [pregunta, setPregunta] = useState(null);
+  const [respondida, setRespondida] = useState(null); // { opcion, acierto, corona }
+  const [cargandoPregunta, setCargandoPregunta] = useState(false);
+
+  const cargar = () => {
+    Promise.all([api.fetchTriviaCategorias(), api.fetchCoronasEstudiante(estudianteId)]).then(([cats, cor]) => {
+      setCategorias(cats); setCoronas(cor); setCargando(false);
+    });
+  };
+  useEffect(() => { cargar(); }, [estudianteId]);
+
+  const girar = () => {
+    if (categorias.length === 0) return;
+    sonidoGirar();
+    setGirando(true);
+    setCategoriaElegida(null);
+    setPregunta(null);
+    setRespondida(null);
+    const elegidaIdx = Math.floor(Math.random() * categorias.length);
+    const vueltasExtra = 4 * 360;
+    const anguloPorSector = 360 / categorias.length;
+    // Apunta al centro del sector elegido, en la parte de arriba de la ruleta
+    const anguloFinal = 360 - (elegidaIdx * anguloPorSector + anguloPorSector / 2);
+    setRotacion((prev) => prev + vueltasExtra + anguloFinal - (prev % 360));
+
+    setTimeout(async () => {
+      setGirando(false);
+      const cat = categorias[elegidaIdx];
+      setCategoriaElegida(cat);
+      setCargandoPregunta(true);
+      const p = await api.fetchPreguntaTriviaAleatoria(cat.id, estudianteId);
+      setPregunta(p);
+      setCargandoPregunta(false);
+    }, 3200);
+  };
+
+  const responder = async (opcionIdx) => {
+    if (respondida) return;
+    const r = await api.responderTrivia(estudianteId, pregunta, opcionIdx);
+    setRespondida({ opcion: opcionIdx, ...r });
+    if (r.corona) { sonidoLogro(); setCoronas((prev) => [...prev, pregunta.categoria_id]); }
+    else if (r.acierto) sonidoAcierto();
+    else sonidoError();
+  };
+
+  if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
+
+  if (categorias.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-3xl mb-2">🎡</div>
+        <p className="text-sm text-slate-400">Tu docente todavía no armó las categorías de Preguntados.</p>
+      </div>
+    );
+  }
+
+  const anguloPorSector = 360 / categorias.length;
+
+  return (
+    <div>
+      <h3 className="font-bold text-slate-800 mb-1 text-center">🎡 Preguntados</h3>
+      <p className="text-xs text-slate-400 mb-4 text-center">Girá la ruleta, respondé, y ganá la corona de cada categoría acertando 3 seguidas.</p>
+
+      {/* La ruleta */}
+      <div className="relative mx-auto mb-4" style={{ width: 220, height: 220 }}>
+        <div className="absolute left-1/2 -translate-x-1/2 z-10" style={{ top: -6 }}>
+          <div style={{ width: 0, height: 0, borderLeft: "10px solid transparent", borderRight: "10px solid transparent", borderTop: "16px solid #0f1932" }} />
+        </div>
+        <svg viewBox="0 0 200 200" width={220} height={220} style={{ transition: girando ? "transform 3.1s cubic-bezier(0.17, 0.67, 0.12, 0.99)" : "none", transform: `rotate(${rotacion}deg)` }}>
+          {categorias.map((c, i) => {
+            const a0 = (i * anguloPorSector - 90) * (Math.PI / 180);
+            const a1 = ((i + 1) * anguloPorSector - 90) * (Math.PI / 180);
+            const x0 = 100 + 95 * Math.cos(a0), y0 = 100 + 95 * Math.sin(a0);
+            const x1 = 100 + 95 * Math.cos(a1), y1 = 100 + 95 * Math.sin(a1);
+            const grande = anguloPorSector > 180 ? 1 : 0;
+            const amitad = (i * anguloPorSector + anguloPorSector / 2 - 90) * (Math.PI / 180);
+            const tx = 100 + 62 * Math.cos(amitad), ty = 100 + 62 * Math.sin(amitad);
+            return (
+              <g key={c.id}>
+                <path d={`M100,100 L${x0},${y0} A95,95 0 ${grande} 1 ${x1},${y1} Z`} fill={c.color} stroke="#0f1932" strokeWidth="1.5" />
+                <text x={tx} y={ty} fontSize="16" textAnchor="middle" dominantBaseline="middle">{c.emoji}</text>
+              </g>
+            );
+          })}
+          <circle cx="100" cy="100" r="16" fill="#0f1932" />
+        </svg>
+      </div>
+
+      {!categoriaElegida && (
+        <button disabled={girando} onClick={girar} className="block mx-auto text-sm font-semibold px-6 py-2.5 rounded-full bg-violet-500 text-white disabled:opacity-60">
+          {girando ? "Girando…" : "🎡 Girar la ruleta"}
+        </button>
+      )}
+
+      {categoriaElegida && (
+        <div className="max-w-sm mx-auto">
+          <div className="text-center mb-3">
+            <span className="text-xs font-bold px-3 py-1 rounded-full text-white" style={{ background: categoriaElegida.color }}>{categoriaElegida.emoji} {categoriaElegida.nombre}</span>
+          </div>
+
+          {cargandoPregunta ? (
+            <div className="text-sm text-slate-400 text-center">Cargando pregunta…</div>
+          ) : !pregunta ? (
+            <div className="text-center">
+              <p className="text-sm text-slate-400 mb-3">Todavía no hay preguntas cargadas en esta categoría.</p>
+              <button onClick={() => setCategoriaElegida(null)} className="text-xs font-semibold text-violet-500">← Girar de nuevo</button>
+            </div>
+          ) : (
+            <div className="bg-slate-50 rounded-2xl p-4">
+              <p className="text-sm font-semibold text-slate-800 mb-3">{pregunta.pregunta}</p>
+              <div className="space-y-1.5">
+                {pregunta.opciones.map((o, i) => {
+                  let estilo = "bg-white text-slate-600 border border-slate-200";
+                  if (respondida) {
+                    if (i === pregunta.correcta) estilo = "bg-emerald-500 text-white";
+                    else if (i === respondida.opcion) estilo = "bg-rose-500 text-white";
+                  }
+                  return (
+                    <button key={i} disabled={!!respondida} onClick={() => responder(i)} className={`w-full text-left text-sm px-3 py-2 rounded-lg ${estilo}`}>
+                      {o}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {respondida && (
+                <div className="mt-3 text-center">
+                  {respondida.corona ? (
+                    <p className="text-sm font-bold text-amber-500">👑 ¡Corona de {categoriaElegida.nombre}! +15 monedas extra</p>
+                  ) : respondida.acierto ? (
+                    <p className="text-sm font-semibold text-emerald-600">¡Correcto! +5 XP, +2 monedas</p>
+                  ) : (
+                    <p className="text-sm font-semibold text-rose-500">Fallaste — se corta la racha en esta categoría</p>
+                  )}
+                  <button onClick={() => { setCategoriaElegida(null); setPregunta(null); setRespondida(null); }} className="mt-2 text-xs font-semibold text-violet-500">Girar de nuevo →</button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Vitrina de coronas */}
+      <div className="mt-6 pt-4 border-t border-slate-100">
+        <div className="text-xs font-semibold text-slate-600 mb-2">Tus coronas ({coronas.length}/{categorias.length})</div>
+        <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+          {categorias.map((c) => {
+            const tiene = coronas.includes(c.id);
+            return (
+              <div key={c.id} className="rounded-xl p-2 text-center" style={{ background: tiene ? c.color : "#F1F5F9", opacity: tiene ? 1 : 0.5 }}>
+                <div className="text-lg">{tiene ? "👑" : c.emoji}</div>
+                <div className={`text-[9px] font-semibold truncate ${tiene ? "text-white" : "text-slate-400"}`}>{c.nombre}</div>
+              </div>
+            );
+          })}
+        </div>
+        {coronas.length === categorias.length && categorias.length > 0 && (
+          <p className="text-center text-xs font-bold text-amber-500 mt-3">🏆 ¡Completaste todas las coronas!</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// El estudiante ve su propio código QR para abrir su tarjeta de la
+// Comarca de Oakhaven en cualquier dispositivo, sin tener que iniciar
+// sesión ahí — solo necesita la sesión activa de su grado.
+function MiComarcaEstudiante({ estudianteInfo }) {
+  const [sesion, setSesion] = useState(null);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    if (!estudianteInfo?.grado_id) return;
+    api.fetchSesionActivaDelGrado(estudianteInfo.grado_id).then((s) => { setSesion(s); setCargando(false); });
+  }, [estudianteInfo?.grado_id]);
+
+  const reinoId = estudianteInfo?.reino_actual || estudianteInfo?.reino_original;
+
+  if (cargando) return <p className="text-sm text-slate-400">Cargando…</p>;
+
+  if (!sesion || !reinoId) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-4xl mb-2">🏛️</div>
+        <p className="text-sm text-slate-400">Tu docente todavía no abrió una sesión de la Comarca de Oakhaven para tu curso.</p>
+      </div>
+    );
+  }
+
+  const link = urlDeTarjeta(sesion.id, reinoId, estudianteInfo.id);
+
+  return (
+    <div className="text-center py-4">
+      <div className="text-4xl mb-2">🏛️</div>
+      <h3 className="font-bold text-slate-800 mb-1">Mi Comarca de Oakhaven</h3>
+      <p className="text-xs text-slate-400 mb-4">Escaneá este código (o tocá el botón) para ver tu tarjeta con tus GP, FP y objetos.</p>
+      <img src={urlQR(link)} alt="Código QR de tu tarjeta" className="mx-auto rounded-xl border border-slate-200 mb-4" />
+      <a href={link} target="_blank" rel="noreferrer" className="inline-block text-sm font-semibold px-5 py-2.5 rounded-lg bg-violet-500 text-white">
+        Ver mi tarjeta ahora
+      </a>
+    </div>
+  );
+}
+
+
+// Portal de Acudientes — entra con número de documento de identidad
+// (que hace de clave la primera vez) y correo NO hace falta ni se usa
+// para el ingreso — evita el límite de envío de correos de Supabase.
+// Al entrar la primera vez, se exige elegir una clave propia, que
+// reemplaza al documento de ahí en adelante. Solo lectura: notas,
+// asistencia, anuncios, y anotaciones de convivencia completas. NO ve
+// el proceso PIAR/DUA, ni nada de gestión de aula.
+function PortalAcudiente({ onElegirEstudiante }) {
+  const [documento, setDocumento] = useState("");
+  const [rol, setRol] = useState(null);
+  const [clave, setClave] = useState("");
+  const [error, setError] = useState("");
+  const [cargando, setCargando] = useState(false);
+
+  const [necesitaCambiarClave, setNecesitaCambiarClave] = useState(false);
+  const [nuevaClave, setNuevaClave] = useState("");
+  const [nuevaClave2, setNuevaClave2] = useState("");
+  const [cambiandoClave, setCambiandoClave] = useState(false);
+
+  const [hijos, setHijos] = useState(null);
+  const [hijoElegidoId, setHijoElegidoId] = useState(null);
+  const [vista, setVista] = useState("notas");
+  const [materiaAbierta, setMateriaAbierta] = useState(null);
+  const [resumen, setResumen] = useState(null);
+  const [anuncios, setAnuncios] = useState([]);
+
+  const ingresar = async () => {
+    if (!documento.trim() || !clave.trim()) { setError("Completá documento y clave."); return; }
+    setCargando(true);
+    setError("");
+    try {
+      const r = await api.iniciarSesionAcudientePorDocumento(documento, clave);
+      if (!r.ok) { setError(r.error); setCargando(false); return; }
+      setRol(r.rol);
+      if (r.necesitaCambiarClave) {
+        setNecesitaCambiarClave(true);
+      } else {
+        setHijos(r.estudiantes);
+        if (r.estudiantes[0]) setHijoElegidoId(r.estudiantes[0].id);
+      }
+    } catch (e) {
+      setError(e.message);
+    }
+    setCargando(false);
+  };
+
+  const guardarNuevaClave = async () => {
+    if (nuevaClave.trim().length < 4) { setError("La clave nueva debe tener al menos 4 caracteres."); return; }
+    if (nuevaClave !== nuevaClave2) { setError("Las dos claves no coinciden."); return; }
+    setCambiandoClave(true);
+    setError("");
+    try {
+      await api.cambiarClaveAcudiente(documento, rol, nuevaClave);
+      const r = await api.iniciarSesionAcudientePorDocumento(documento, nuevaClave);
+      setHijos(r.estudiantes);
+      if (r.estudiantes[0]) setHijoElegidoId(r.estudiantes[0].id);
+      setNecesitaCambiarClave(false);
+    } catch (e) {
+      setError(e.message);
+    }
+    setCambiandoClave(false);
+  };
+
+  useEffect(() => {
+    if (!hijoElegidoId) return;
+    setResumen(null);
+    api.fetchResumenParaAcudiente(hijoElegidoId).then(setResumen);
+    api.fetchAnunciosParaAcudiente(hijos?.find((h) => h.id === hijoElegidoId)?.grado_id).then(setAnuncios);
+  }, [hijoElegidoId]);
+
+  const hijoElegido = hijos?.find((h) => h.id === hijoElegidoId);
+
+  // Pantalla 1: pedir documento + clave (o el documento como clave inicial)
+  if (!hijos && !necesitaCambiarClave) {
+    return (
+      <div className="min-h-screen flex items-center justify-center relative py-6">
+        <FondoCastillo />
+        <div className="w-full max-w-sm px-4">
+          {onElegirEstudiante && (
+            <div className="flex gap-1 rounded-full bg-slate-100 p-1 mb-5">
+              <button onClick={onElegirEstudiante} className="flex-1 text-xs font-semibold py-2 rounded-full text-slate-500">🎓 Soy estudiante</button>
+              <button className="flex-1 text-xs font-semibold py-2 rounded-full bg-white shadow-sm">👪 Soy acudiente</button>
+            </div>
+          )}
+          <div className="text-center mb-5">
+            <div className="text-4xl mb-1">👪</div>
+            <h1 className="text-2xl font-bold" style={{ color: "#17264D", fontFamily: "Georgia, serif" }}>Portal de Acudientes</h1>
+            <p className="text-slate-400 text-xs mt-1">Seguimiento del progreso de tu hijo/a en CÓDICE</p>
+          </div>
+          <div className="bg-white rounded-2xl shadow-lg p-6">
+            <label className="text-xs text-slate-500 block mb-1">Número de documento de identidad</label>
+            <input value={documento} onChange={(e) => setDocumento(e.target.value)} placeholder="Ej: 123456789"
+              className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
+            <label className="text-xs text-slate-500 block mb-1">Clave</label>
+            <input type="password" value={clave} onChange={(e) => setClave(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") ingresar(); }}
+              placeholder="La primera vez, usá tu documento"
+              className="w-full text-sm rounded-lg px-3 py-2 mb-1 border border-slate-200 outline-none" />
+            <p className="text-[11px] text-slate-400 mb-3">¿Primera vez? Escribí tu número de documento también en la clave — después vas a poder elegir una propia.</p>
+            {error && <p className="text-xs text-rose-500 mb-2">{error}</p>}
+            <button disabled={cargando} onClick={ingresar} className="w-full text-sm font-semibold py-2.5 rounded-lg text-white disabled:opacity-60" style={{ background: "#2F55A4" }}>
+              {cargando ? "…" : "Ingresar"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Pantalla 2: primera vez — obligado a elegir una clave propia
+  if (necesitaCambiarClave) {
+    return (
+      <div className="min-h-screen flex items-center justify-center relative py-6">
+        <FondoCastillo />
+        <div className="w-full max-w-sm px-4">
+          <div className="text-center mb-5">
+            <div className="text-4xl mb-1">🔐</div>
+            <h1 className="text-xl font-bold" style={{ color: "#17264D", fontFamily: "Georgia, serif" }}>Elegí tu clave</h1>
+            <p className="text-slate-400 text-xs mt-1">Por seguridad, reemplazá el documento por una clave propia que solo vos conozcas.</p>
+          </div>
+          <div className="bg-white rounded-2xl shadow-lg p-6">
+            <label className="text-xs text-slate-500 block mb-1">Clave nueva</label>
+            <input type="password" value={nuevaClave} onChange={(e) => setNuevaClave(e.target.value)}
+              className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
+            <label className="text-xs text-slate-500 block mb-1">Repetí la clave nueva</label>
+            <input type="password" value={nuevaClave2} onChange={(e) => setNuevaClave2(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") guardarNuevaClave(); }}
+              className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
+            {error && <p className="text-xs text-rose-500 mb-2">{error}</p>}
+            <button disabled={cambiandoClave} onClick={guardarNuevaClave} className="w-full text-sm font-semibold py-2.5 rounded-lg text-white disabled:opacity-60" style={{ background: "#2F55A4" }}>
+              {cambiandoClave ? "…" : "Guardar y entrar"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (hijos === null) return <Centered>Cargando…</Centered>;
+
+  return (
+    <div className="min-h-screen" style={{ background: "#FBFBFD" }}>
+      <div className="px-4 md:px-8 py-4" style={{ background: "#17264D" }}>
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">👪</span>
+            <span className="text-white font-bold text-sm tracking-wide">Portal de Acudientes</span>
+          </div>
+          <div className="flex items-center gap-3">
+            {hijos.length > 1 && (
+              <select value={hijoElegidoId} onChange={(e) => setHijoElegidoId(parseInt(e.target.value, 10))} className="text-xs rounded-full px-3 py-1.5 border-none outline-none">
+                {hijos.map((h) => <option key={h.id} value={h.id}>{h.nombre}</option>)}
+              </select>
+            )}
+            <button onClick={() => { setHijos(null); setDocumento(""); setClave(""); }} className="text-white text-xs underline">Cerrar sesión</button>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-3xl mx-auto p-4 md:p-6">
+        {hijoElegido && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 mb-4 flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full overflow-hidden shrink-0" style={{ background: "#E8EEF8" }}>
+              {api.urlFotoEstudiante(hijoElegido) ? <img src={api.urlFotoEstudiante(hijoElegido)} alt={hijoElegido.nombre} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xl">🎓</div>}
+            </div>
+            <div>
+              <div className="font-bold text-slate-800">{hijoElegido.nombre}</div>
+              <div className="text-xs text-slate-400">Grado {hijoElegido.grado_id}</div>
+            </div>
+          </div>
+        )}
+
+        <div className="flex gap-2 mb-4 flex-wrap">
+          {[
+            { key: "notas", label: "📖 Notas" },
+            { key: "asistencia", label: "📋 Asistencia" },
+            { key: "anuncios", label: "📣 Anuncios" },
+            { key: "convivencia", label: "🗒️ Convivencia" },
+          ].map((t) => (
+            <button key={t.key} onClick={() => setVista(t.key)}
+              className={`text-xs font-semibold px-3 py-2 rounded-full ${vista === t.key ? "text-white" : "bg-white text-slate-600 border border-slate-200"}`}
+              style={vista === t.key ? { background: "#2F55A4" } : undefined}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {!resumen ? (
+          <p className="text-sm text-slate-400">Cargando…</p>
+        ) : (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 md:p-5">
+            {vista === "notas" && (
+              resumen.materias.length === 0 ? (
+                <p className="text-sm text-slate-400">Todavía no hay notas registradas.</p>
+              ) : (
+                <div className="space-y-2">
+                  {resumen.materias.map((m) => {
+                    const abierta = materiaAbierta === m.id;
+                    return (
+                      <div key={m.id} className="bg-slate-50 rounded-xl p-3">
+                        <button onClick={() => setMateriaAbierta(abierta ? null : m.id)} className="w-full text-left">
+                          <div className="text-sm font-semibold text-slate-800">{m.nombre}</div>
+                          <div className="flex flex-wrap gap-1.5 mt-1">
+                            {resumen.periodos.map((p) => {
+                              const celda = resumen.notasPorMateriaPeriodo[m.id]?.[p];
+                              return (
+                                <span key={p} className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${celda?.enCurso ? "bg-amber-100 text-amber-700" : "bg-violet-100 text-violet-700"}`}>
+                                  P{p}: {celda && celda.nota !== null && celda.nota !== undefined ? Number(celda.nota).toFixed(1) : "—"}{celda?.enCurso && "*"}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </button>
+
+                        {abierta && (
+                          <div className="mt-2 pt-2 border-t border-slate-200 space-y-2">
+                            {resumen.periodos.map((p) => {
+                              const celda = resumen.notasPorMateriaPeriodo[m.id]?.[p];
+                              if (!celda) return null;
+                              return (
+                                <div key={p}>
+                                  <div className="text-xs font-semibold text-slate-600">
+                                    Periodo {p} — <span>{celda.nota !== null && celda.nota !== undefined ? Number(celda.nota).toFixed(1) : "—"}</span>
+                                    {celda.enCurso && <span className="text-amber-600 font-normal"> · En curso (provisional)</span>}
+                                  </div>
+                                  {celda.enCurso && (
+                                    celda.actividades.length > 0 ? (
+                                      <div className="ml-2 mt-1 space-y-0.5">
+                                        {celda.actividades.map((a) => (
+                                          <div key={a.id}>
+                                            <div className="text-[11px] text-slate-500 flex justify-between gap-2">
+                                              <span>{a.notas_actividades?.nombre}{a.notas_actividades?.notas_categorias?.nombre ? ` (${a.notas_actividades.notas_categorias.nombre})` : ""}</span>
+                                              <span className="font-semibold shrink-0">{a.valor}</span>
+                                            </div>
+                                            {a.observacion && (
+                                              <div className="text-[10px] text-violet-600 italic bg-violet-50 rounded-lg px-2 py-1 mt-0.5">📝 {a.observacion}</div>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <p className="text-[11px] text-slate-400 ml-2 mt-0.5">Sin actividades individuales cargadas para este periodo.</p>
+                                    )
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <p className="text-[11px] text-amber-600 mt-1">* Nota en curso — el periodo todavía no cerró, se va actualizando con cada actividad nueva. Tocá una materia para ver el detalle.</p>
+                </div>
+              )
+            )}
+
+            {vista === "asistencia" && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-emerald-50 rounded-xl p-3 text-center"><div className="text-lg font-bold text-emerald-600">{resumen.asistencia.P}</div><div className="text-[10px] text-slate-500">Presentes</div></div>
+                <div className="bg-amber-50 rounded-xl p-3 text-center"><div className="text-lg font-bold text-amber-600">{resumen.asistencia.R}</div><div className="text-[10px] text-slate-500">Retardos</div></div>
+                <div className="bg-rose-50 rounded-xl p-3 text-center"><div className="text-lg font-bold text-rose-600">{resumen.asistencia.FI}</div><div className="text-[10px] text-slate-500">Faltas injustificadas</div></div>
+                <div className="bg-slate-50 rounded-xl p-3 text-center"><div className="text-lg font-bold text-slate-600">{resumen.asistencia.FJ}</div><div className="text-[10px] text-slate-500">Faltas justificadas</div></div>
+                {resumen.asistencia.pct !== null && <div className="col-span-2 sm:col-span-4 text-center text-sm text-slate-500 mt-1">% de asistencia: <b className="text-slate-800">{resumen.asistencia.pct}%</b></div>}
+              </div>
+            )}
+
+            {vista === "anuncios" && (
+              anuncios.length === 0 ? <p className="text-sm text-slate-400">No hay anuncios todavía.</p> : (
+                <div className="space-y-2">
+                  {anuncios.map((a) => (
+                    <div key={a.id} className="bg-slate-50 rounded-xl p-3">
+                      <div className="text-xs font-bold text-slate-700">{a.titulo}</div>
+                      <div className="text-xs text-slate-500 mt-1">{a.contenido}</div>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+
+            {vista === "convivencia" && (
+              resumen.anotaciones.length === 0 ? <p className="text-sm text-slate-400">No hay anotaciones registradas.</p> : (
+                <div className="space-y-2">
+                  {resumen.anotaciones.map((a) => (
+                    <div key={a.id} className="bg-slate-50 rounded-xl p-3">
+                      <div className="text-[10px] text-slate-400">{a.fecha} · {a.categoria === "academico" ? "📘 Académico" : "🤝 Convivencial"}</div>
+                      <div className="text-sm text-slate-700 mt-1 whitespace-pre-line">{a.contenido}</div>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+function PortalEstudiante() {
+  const [tipoAcceso, setTipoAcceso] = useState("estudiante"); // "estudiante" | "acudiente"
+  const [codigo, setCodigo] = useState(() => localStorage.getItem("codice_estudiante_codigo") || "");
+  const [datos, setDatos] = useState(null);
+  const [estudianteInfo, setEstudianteInfo] = useState(null);
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState("");
+  const [vista, setVista] = useState("inicio");
+  const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
+  const irAEstudiante = (key) => { setVista(key); };
+  const [nuevosLogros, setNuevosLogros] = useState([]);
+  const [equipados, setEquipados] = useState({ marco: null, titulo: null });
+  const [avatarConfig, setAvatarConfig] = useState(null);
+  const [miRol, setMiRol] = useState(null);
+  const [nivelesConfig, setNivelesConfig] = useState(null);
+
+  useEffect(() => { api.fetchNivelesParaJuego().then(setNivelesConfig); }, []);
+
+  const consultar = async () => {
+    if (!codigo.trim()) return;
+    setCargando(true);
+    setError("");
+    try {
+      const res = await api.consultarPortalEstudiante(codigo);
+      if (!res) { setError("Código no encontrado. Verifica con tu docente."); setDatos(null); }
+      else {
+        setDatos(res);
+        localStorage.setItem("codice_estudiante_codigo", codigo.trim());
+        const info = await api.fetchEstudiantePorCodigo(codigo);
+        setEstudianteInfo(info);
+        if (info) {
+          api.registrarAcceso(info.id);
+          api.verificarYOtorgarLogros(info.id).then((nuevos) => { if (nuevos.length > 0) { sonidoLogro(); setNuevosLogros(nuevos); } });
+          api.fetchEquipadosEstudiante(info.id).then(setEquipados);
+          api.fetchAvatarConfigsMultiples([info.id]).then((mapa) => setAvatarConfig(mapa[info.id] || null));
+          api.fetchMiRol(info.id).then(setMiRol);
+        }
+      }
+    } catch (e) {
+      setError("Ocurrió un error: " + e.message);
+    }
+    setCargando(false);
+  };
+
+  // Si ya había una sesión guardada (mismo navegador), la restaura sola
+  // al cargar la página — así un refresco no saca al estudiante afuera.
+  useEffect(() => {
+    if (codigo && !datos) consultar();
+  }, []);
+
+  const cerrarSesion = () => {
+    if (!confirm("¿Cerrar sesión? Vas a tener que ingresar tu código de nuevo la próxima vez.")) return;
+    localStorage.removeItem("codice_estudiante_codigo");
+    setCodigo("");
+    setDatos(null);
+    setEstudianteInfo(null);
+    setVista("inicio");
+  };
+
+  if (datos) {
+    const { level, next, pct } = nextLevel(datos.xp || 0, nivelesConfig);
+    const totalAsis = Number(datos.total_asistencia) || 0;
+    const pctAsis = totalAsis > 0 ? Math.round((Number(datos.presentes) / totalAsis) * 100) : null;
+
+    return (
+      <div className="min-h-screen flex" style={{ background: "#FBFBFD" }}>
+        {nuevosLogros.length > 0 && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }} onClick={() => setNuevosLogros((prev) => prev.slice(1))}>
+            <div onClick={(e) => e.stopPropagation()} className="rounded-3xl p-6 text-center max-w-xs" style={{ background: "linear-gradient(160deg, #1c2f5e, #0f1932)", border: "2px solid #F59E0B" }}>
+              <div className="text-[11px] font-bold text-amber-300 uppercase tracking-widest mb-2">¡Nuevo logro desbloqueado!</div>
+              <div className="text-6xl mb-2">{nuevosLogros[0].emoji}</div>
+              <div className="text-lg font-bold text-white">{nuevosLogros[0].nombre}</div>
+              {nuevosLogros[0].descripcion && <div className="text-xs text-violet-200 mt-1">{nuevosLogros[0].descripcion}</div>}
+              <button onClick={() => setNuevosLogros((prev) => prev.slice(1))} className="mt-4 text-sm font-semibold px-5 py-2 rounded-full bg-amber-400 text-slate-900">
+                {nuevosLogros.length > 1 ? `Genial (${nuevosLogros.length - 1} más)` : "¡Genial!"}
+              </button>
+            </div>
+          </div>
+        )}
+        <SidebarTarjetasEstudiante activo={vista} onCambiar={irAEstudiante} monedas={datos.monedas} gradoId={datos.grado_id} onCerrarSesion={cerrarSesion}
+          menuAbierto={menuMovilAbierto} onCerrarMenu={(abrir) => setMenuMovilAbierto(!!abrir)} />
+
+        <div className="flex-1 min-w-0 p-5 md:p-10">
+          {vista === "inicio" && (
+            <>
+              <div className="flex items-center gap-3 mb-4 pb-4 border-b border-slate-100">
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="shrink-0 flex items-center justify-center rounded-full overflow-hidden" style={{ width: 56, height: 56, border: equipados.marco ? `4px solid ${equipados.marco.valor}` : "4px solid transparent", background: "#E8EEF8" }}>
+                    {estudianteInfo?.foto_url ? (
+                      <img src={estudianteInfo.foto_url} alt={datos.nombre} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-2xl">🎓</span>
+                    )}
+                  </div>
+                  {avatarConfig && (
+                    <div className="shrink-0 bg-gradient-to-b from-violet-100 to-violet-50 rounded-2xl p-1 border border-violet-200">
+                      <PersonajePreview config={avatarConfig} size={56} />
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-base font-bold text-slate-800 truncate">{datos.nombre}</div>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]">
+                    {equipados.titulo && <span className="font-semibold text-violet-500">✨ {equipados.titulo.valor}</span>}
+                    {miRol && <span className="font-semibold text-amber-600" title={miRol.descripcion || undefined}>👑 {miRol.nombre}</span>}
+                    <span className="text-slate-400">Grado {datos.grado_id} · {datos.grupo}</span>
+                  </div>
+                </div>
+                <div className="flex-1 max-w-xs shrink-0 hidden sm:block">
+                  <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+                    <span className="font-semibold text-violet-600">{level.name}</span>
+                    <span>{next ? `${datos.xp}/${next.min}` : "máx"}</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-violet-100 overflow-hidden">
+                    <div className="h-full rounded-full bg-gradient-to-r from-violet-400 to-violet-600" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              </div>
+
+              {/* En pantallas chicas, la barra de nivel/XP se muestra completa acá abajo */}
+              <div className="mb-4 sm:hidden">
+                <div className="flex justify-between text-xs text-slate-500 mb-1">
+                  <span className="font-semibold text-violet-600">{level.name}</span>
+                  <span>{datos.xp}{next ? ` / ${next.min} XP` : " XP · nivel máximo"}</span>
+                </div>
+                <div className="h-2.5 rounded-full bg-violet-100 overflow-hidden">
+                  <div className="h-full rounded-full bg-gradient-to-r from-violet-400 to-violet-600" style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+
+              <ValorSemanaEstudiante />
+              {estudianteInfo && <DesafioReinoEstudiante gradoId={estudianteInfo.grado_id} miReino={estudianteInfo.reino_actual || estudianteInfo.reino_original || "Sin grupo"} />}
+              {estudianteInfo && <AvisoRendimiento estudianteId={estudianteInfo.id} />}
+
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                <div className="bg-emerald-50 rounded-xl p-3 text-center">
+                  <div className="text-lg font-bold text-emerald-600">{datos.vida}</div>
+                  <div className="text-[10px] text-slate-500">Vida</div>
+                </div>
+                <div className="bg-amber-50 rounded-xl p-3 text-center">
+                  <div className="text-lg font-bold text-amber-600">{datos.monedas}</div>
+                  <div className="text-[10px] text-slate-500">Monedas</div>
+                </div>
+                <div className="bg-blue-50 rounded-xl p-3 text-center">
+                  <div className="text-lg font-bold text-blue-600">{pctAsis ?? "—"}{pctAsis !== null && "%"}</div>
+                  <div className="text-[10px] text-slate-500">Asistencia</div>
+                </div>
+              </div>
+              <div className="text-xs text-slate-500 bg-slate-50 rounded-xl p-3">
+                Presentes: {datos.presentes} · Retardos: {datos.retardos} · Faltas injustificadas: {datos.faltas_injustificadas} · Faltas justificadas: {datos.faltas_justificadas}
+              </div>
+            </>
+          )}
+
+          {vista === "misiones" && estudianteInfo && (
+            <MarcoSeccion zonaLabel="Estudio — Misiones" icono="🎓">
+              <div className="mb-4"><MapaTerritoriosEstudiante estudianteId={estudianteInfo.id} nombre={datos.nombre} xp={datos.xp} /></div>
+              <MicroMisionesEstudiante estudianteId={estudianteInfo.id} onCambio={() => consultar()} />
+              <EvaluacionesEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />
+            </MarcoSeccion>
+          )}
+
+          {vista === "proyectos" && estudianteInfo && (
+            <MarcoSeccion zonaLabel="Estudio — Proyectos" icono="🎓"><ProyectosEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} /></MarcoSeccion>
+          )}
+
+          {vista === "forja" && estudianteInfo && (
+            <MarcoSeccion zonaLabel="Estudio — Forja" icono="🎓"><ForjaEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} /></MarcoSeccion>
+          )}
+
+          {vista === "guias" && estudianteInfo && (
+            <MarcoSeccion zonaLabel="Estudio — Guías" icono="🎓"><GuiasEstudiante gradoId={estudianteInfo.grado_id} estudianteId={estudianteInfo.id} /></MarcoSeccion>
+          )}
+
+          {vista === "codice" && estudianteInfo && (
+            <MarcoSeccion zonaLabel="Estudio — Códice" icono="🎓"><CodiceEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} /></MarcoSeccion>
+          )}
+
+          {vista === "biblioteca" && estudianteInfo && (
+            <MarcoSeccion zonaLabel="Estudio — Biblioteca" icono="🎓"><BibliotecaEstudiante gradoId={estudianteInfo.grado_id} /></MarcoSeccion>
+          )}
+
+          {vista === "notas" && estudianteInfo && (
+            <MarcoSeccion zonaLabel="Estudio — Notas" icono="🎓"><MisNotas estudianteId={estudianteInfo.id} /></MarcoSeccion>
+          )}
+
+          {vista === "personaje" && estudianteInfo && (
+            <MarcoSeccion zonaLabel="Diversión — Personaje" icono="🎡"><VistaPersonaje estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} /></MarcoSeccion>
+          )}
+
+          {vista === "historial" && estudianteInfo && (
+            <MarcoSeccion zonaLabel="Estudio — Historial" icono="🎓"><HistorialPuntosEstudiante estudianteId={estudianteInfo.id} /></MarcoSeccion>
+          )}
+
+          {vista === "recompensas" && estudianteInfo && (
+            <MarcoSeccion zonaLabel="Comunidad — Recompensas" icono="🏆">
+              <BancoEstudiante estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} />
+              <ObjetosEstudiante estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} />
+            </MarcoSeccion>
+          )}
+
+          {vista === "preguntados" && estudianteInfo && (
+            <MarcoSeccion zonaLabel="Diversión — Preguntados" icono="🎡"><PreguntadosEstudiante estudianteId={estudianteInfo.id} /></MarcoSeccion>
+          )}
+
+          {vista === "album" && estudianteInfo && (
+            <MarcoSeccion zonaLabel="Comunidad — Álbum" icono="🏆"><AlbumEstudiante estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} /></MarcoSeccion>
+          )}
+
+          {vista === "comarca" && estudianteInfo && <MarcoSeccion zonaLabel="Comunidad — Mi Comarca" icono="🏆"><MiComarcaEstudiante estudianteInfo={estudianteInfo} /></MarcoSeccion>}
+
+          {vista === "ranking" && estudianteInfo && (
+            <MarcoSeccion zonaLabel="Comunidad — Ranking" icono="🏆"><RankingEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} /></MarcoSeccion>
+          )}
+
+          {vista === "salonhonor" && estudianteInfo && (
+            <MarcoSeccion zonaLabel="Comunidad — Salón de Honor" icono="🏆"><SalonHonorEstudiante estudianteId={estudianteInfo.id} /></MarcoSeccion>
+          )}
+
+          {vista === "perfil" && estudianteInfo && (
+            <MarcoSeccion zonaLabel="Mi cuenta — Perfil" icono="👤">
+              <h3 className="font-bold text-slate-800 mb-3">👤 Mi perfil</h3>
+              <div className="space-y-2 text-sm mb-5">
+                <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-400">Nombre</span><span className="font-semibold text-slate-700">{datos.nombre}</span></div>
+                <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-400">Grado</span><span className="font-semibold text-slate-700">{datos.grado_id}</span></div>
+                <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-400">Grupo</span><span className="font-semibold text-slate-700">{datos.grupo}</span></div>
+                <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-400">Nivel</span><span className="font-semibold text-violet-600">{level.name}</span></div>
+                <div className="flex justify-between"><span className="text-slate-400">XP total</span><span className="font-semibold text-slate-700">{datos.xp}</span></div>
+              </div>
+              <LogrosEstudiante estudianteId={estudianteInfo.id} />
+              <div className="mt-5 pt-4 border-t border-slate-100">
+                <CosmeticosEstudiante estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} />
+              </div>
+              <HistorialEstudiante estudianteId={estudianteInfo.id} />
+            </MarcoSeccion>
+          )}
+
+          {vista === "mensajes" && estudianteInfo && (
+            <MarcoSeccion zonaLabel="Mensajes" icono="✉️"><AnunciosEstudiante gradoId={estudianteInfo.grado_id} /></MarcoSeccion>
+          )}
+
+          <button onClick={() => { setDatos(null); setCodigo(""); setEstudianteInfo(null); setVista("inicio"); }} className="w-full text-xs text-violet-500 mt-4">← Consultar otro código</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (tipoAcceso === "acudiente") {
+    return <PortalAcudiente onElegirEstudiante={() => setTipoAcceso("estudiante")} />;
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center relative py-6">
+      <FondoCastillo />
+      <div className="w-full max-w-sm px-4">
+        <div className="flex gap-1 rounded-full bg-slate-100 p-1 mb-5">
+          <button onClick={() => setTipoAcceso("estudiante")} className="flex-1 text-xs font-semibold py-2 rounded-full bg-white shadow-sm">🎓 Soy estudiante</button>
+          <button onClick={() => setTipoAcceso("acudiente")} className="flex-1 text-xs font-semibold py-2 rounded-full text-slate-500">👪 Soy acudiente</button>
+        </div>
+        <div className="text-center mb-5">
+          <div className="text-4xl mb-1">🎓</div>
+          <h1 className="text-2xl font-bold" style={{ color: "#17264D", fontFamily: "Georgia, serif" }}>CÓDICE</h1>
+          <p className="text-slate-400 text-xs mt-1">Tu aventura de aprendizaje</p>
+        </div>
+        <div className="bg-white rounded-2xl shadow-lg p-6">
+          <p className="text-sm text-slate-500 text-center mb-4">Ingresa el código de acceso que te dio tu docente para ver tu progreso.</p>
+          <input value={codigo} onChange={(e) => setCodigo(e.target.value.toUpperCase())} placeholder="Ej: AB3D9K" maxLength={6}
+            className="w-full text-center text-lg font-mono font-bold tracking-widest rounded-lg px-3 py-3 mb-3 border border-slate-200 outline-none" />
+          {error && <p className="text-xs text-rose-500 mb-2 text-center">{error}</p>}
+          <button disabled={cargando} onClick={consultar} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+            {cargando ? "Consultando…" : "Ver mi progreso"}
           </button>
         </div>
       </div>
@@ -2229,274 +2473,530 @@ function CargaMasivaEstandares({ tipo, onCargado }) {
   );
 }
 
-function GestionarEstandaresModal({ onClose }) {
-  const [dba, setDba] = useState([]);
-  const [competencias, setCompetencias] = useState([]);
-  const [cargando, setCargando] = useState(true);
-  const [tab, setTab] = useState("dba");
+function LoginScreen() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [mensaje, setMensaje] = useState("");
+  const [cargando, setCargando] = useState(false);
 
-  const cargar = () => {
+  const entrar = async () => {
     setCargando(true);
-    Promise.all([api.fetchEstandares("dba"), api.fetchEstandares("competencia")]).then(([d, c]) => {
-      setDba(d); setCompetencias(c); setCargando(false);
-    });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setCargando(false);
+    if (error) setMensaje(error.message);
   };
-  useEffect(() => { cargar(); }, []);
 
-  const lista = tab === "dba" ? dba : competencias;
+  const recuperar = async () => {
+    if (!email) { setMensaje("Escribe tu correo arriba primero."); return; }
+    setCargando(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    setCargando(false);
+    setMensaje(error ? error.message : "Te enviamos un correo para restablecer tu contraseña.");
+  };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="font-bold text-slate-800">🗂️ Catálogo de DBA y Competencias</h3>
-          <button onClick={onClose} className="text-slate-400">✕</button>
-        </div>
-        <p className="text-xs text-slate-500 mb-3">
-          Corregí o eliminá los que hayan quedado mal escritos. Es un catálogo compartido: los cambios se reflejan en todas las clases/unidades donde estén vinculados.
-        </p>
-        <div className="flex gap-1 mb-3 rounded-full bg-slate-100 p-1 w-fit">
-          <button onClick={() => setTab("dba")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "dba" ? "bg-blue-500 text-white" : "text-slate-600"}`}>DBA ({dba.length})</button>
-          <button onClick={() => setTab("competencia")} className={`text-xs px-3 py-1.5 rounded-full ${tab === "competencia" ? "bg-teal-500 text-white" : "text-slate-600"}`}>Competencias ({competencias.length})</button>
-        </div>
+    <div className="bg-white rounded-2xl shadow-lg p-6">
+      <p className="text-sm text-slate-500 text-center mb-5">Acceso de docentes</p>
 
-        <CargaMasivaEstandares tipo={tab} onCargado={cargar} />
+      <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Correo" type="email"
+        className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none" />
+      <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Contraseña" type="password"
+        className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none" />
 
-        {cargando ? (
-          <div className="text-sm text-slate-400">Cargando…</div>
-        ) : lista.length === 0 ? (
-          <div className="text-sm text-slate-400">Todavía no hay ninguno creado en esta categoría.</div>
-        ) : (
-          <div className="space-y-1.5">
-            {lista.map((e) => <FilaEstandar key={e.id} e={e} onCambio={cargar} />)}
-          </div>
-        )}
+      {mensaje && <p className="text-xs text-rose-500 mb-2">{mensaje}</p>}
+
+      <button disabled={cargando} onClick={entrar}
+        className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+        {cargando ? "Un momento…" : "Entrar"}
+      </button>
+
+      <button onClick={recuperar} className="w-full text-xs text-violet-500 mt-3">¿Olvidaste tu contraseña?</button>
+      <p className="text-[11px] text-slate-400 text-center mt-4">
+        ¿Sos docente nuevo y no tenés cuenta? Pedile a un administrador de la plataforma que te invite.
+      </p>
+    </div>
+  );
+}
+
+const MENU_PANEL_GRUPOS = [
+  {
+    key: "inicio_grupo", label: "Inicio", icono: "🏠", items: [
+      { key: "inicio", label: "Inicio", icono: "🏠" },
+    ],
+  },
+  {
+    key: "academico", label: "Académico", icono: "🎓", items: [
+      { key: "entregasrevisar", label: "Entregas por revisar", icono: "📝" },
+      { key: "estudiantes", label: "Estudiantes", icono: "🏰" },
+      { key: "asistencia", label: "Asistencia", icono: "📋" },
+      { key: "calificaciones", label: "Planillas", icono: "📖" },
+      { key: "evaluaciones", label: "Misiones", icono: "⚔️" },
+      { key: "proyectosforja", label: "La Forja", icono: "🔨" },
+    ],
+  },
+  {
+    key: "convivencial", label: "Convivencial", icono: "🤝", items: [
+      { key: "anotaciones", label: "Anotaciones", icono: "🗒️" },
+      { key: "inclusion", label: "Inclusión", icono: "🧩" },
+      { key: "bajasvida", label: "Bajas de Vida", icono: "📉" },
+      { key: "direccioncurso", label: "Dirección de Curso", icono: "🎓" },
+    ],
+  },
+  {
+    key: "planeacion", label: "Planeación", icono: "🗺️", items: [
+      { key: "planeaciones", label: "Planeaciones", icono: "📝" },
+      { key: "tablerosemanal", label: "Tablero Semanal", icono: "🗓️" },
+      { key: "rubricas", label: "Rúbricas", icono: "🎯" },
+      { key: "guiasestudio", label: "Guías de Estudio", icono: "📘" },
+      { key: "biblioteca", label: "Biblioteca", icono: "📚" },
+      { key: "actividadesprogramadas", label: "Actividades Programadas", icono: "🎮" },
+      { key: "herr_bancopreguntas", label: "Banco de Preguntas", icono: "🗂️" },
+      { key: "herr_consignas", label: "Consignas del Códice", icono: "📜" },
+      { key: "herr_formasexamen", label: "Formas de Examen (A/B/C/D)", icono: "📝" },
+    ],
+  },
+  {
+    key: "gamificacion", label: "Gamificación", icono: "🎮", items: [
+      { key: "comarca", label: "Comarca de Oakhaven", icono: "🏛️" },
+      { key: "herr_ruleta", label: "Ruleta", icono: "🎡" },
+      { key: "herr_ruletamonedas", label: "Ruleta de Monedas", icono: "🪙" },
+      { key: "herr_banco", label: "Banco", icono: "🏦" },
+      { key: "herr_album", label: "Álbum", icono: "🖼️" },
+      { key: "herr_logros", label: "Logros", icono: "🏆" },
+      { key: "herr_salonhonor", label: "Salón de Honor", icono: "🥇" },
+      { key: "herr_diplomas", label: "Diplomas", icono: "🏅" },
+      { key: "herr_gamext", label: "Desafíos/Misiones/Cosméticos", icono: "🕹️" },
+      { key: "herr_bingo", label: "Bingo de Repaso", icono: "🎯" },
+    ],
+  },
+  {
+    key: "administracion", label: "Administración", icono: "⚙️", items: [
+      { key: "corregirnombres", label: "Corregir Nombres", icono: "🪪" },
+      { key: "niveles", label: "Niveles", icono: "🏅" },
+      { key: "objetos", label: "Objetos", icono: "🎒" },
+      { key: "horario", label: "Agenda", icono: "🗓️" },
+      { key: "roles", label: "Roles", icono: "🎭" },
+      { key: "reportes", label: "Reportes", icono: "📊" },
+    ],
+  },
+  {
+    key: "herramientas_grupo", label: "Herramientas", icono: "🛠️", items: [
+      { key: "herr_accionesmasivas", label: "Acciones Masivas", icono: "🎯" },
+      { key: "herr_anuncios", label: "Anuncios", icono: "📣" },
+      { key: "herr_trivia", label: "Preguntados", icono: "🎡" },
+      { key: "herr_temporizador", label: "Temporizador", icono: "⏱️" },
+      { key: "herr_dado", label: "Dado", icono: "🎲" },
+      { key: "herr_cronometro", label: "Cronómetro", icono: "⏲️" },
+      { key: "herr_semaforo", label: "Semáforo", icono: "🚦" },
+      { key: "herr_sorteoorden", label: "Sorteo de Orden/Parejas", icono: "🔀" },
+      { key: "herr_grupos", label: "Generador de Grupos", icono: "👥" },
+      { key: "herr_marcador", label: "Marcador de Puntos", icono: "🔢" },
+      { key: "herr_selectorestudiante", label: "Selector de Estudiante", icono: "🎯" },
+    ],
+  },
+];
+// Lista plana — se sigue usando donde hace falta el conjunto completo sin agrupar.
+const MENU_PANEL = MENU_PANEL_GRUPOS.flatMap((g) => g.items);
+const CLAVES_SOLO_ADMIN = ["corregirnombres", "niveles", "objetos", "horario", "roles", "reportes"];
+// Marco decorativo reutilizable — mismo lenguaje visual del "Zona de
+// Herramientas" (degradado azul/dorado, encabezado oscuro, contenido en
+// tarjeta blanca adentro), para las demás zonas de la app.
+function MarcoSeccion({ zonaLabel, icono, children }) {
+  return (
+    <div className="rounded-[28px] p-1" style={{ background: "linear-gradient(135deg, #2F55A4, #B8892B)" }}>
+      <div className="rounded-[24px] p-4 md:p-6" style={{ background: "linear-gradient(160deg, #17264D 0%, #223b74 100%)" }}>
+        <div className="flex items-center gap-2.5 mb-4 px-1">
+          <span className="text-2xl">{icono}</span>
+          <div className="text-base font-extrabold text-white">{zonaLabel}</div>
+        </div>
+        <div className="rounded-2xl bg-white p-4 md:p-5">
+          {children}
+        </div>
       </div>
     </div>
   );
 }
 
-export function VistaPlaneaciones({ grados, gradoActivo, periodoActivo, materiaActiva }) {
-  const [materias, setMaterias] = useState([]);
-  const [materiaId, setMateriaId] = useState(materiaActiva || "");
-  const [gradoId, setGradoId] = useState(gradoActivo || "");
-  const [periodo, setPeriodo] = useState("1");
-  const [unidades, setUnidades] = useState([]);
-  const [config, setConfig] = useState({ cantidad_periodos: 4, sistema_periodos: "bimestre" });
-  const [cargando, setCargando] = useState(true);
-  const [error, setError] = useState(null);
+const NOMBRES_HERRAMIENTAS = {
+  ruleta: "Ruleta", ruletamonedas: "Ruleta de Monedas", accionesmasivas: "Acciones Masivas", banco: "Banco",
+  album: "Álbum", anuncios: "Anuncios", logros: "Logros", salonhonor: "Salón de Honor", diplomas: "Diplomas",
+  gamext: "Desafíos / Misiones / Cosméticos", consignas: "Consignas del Códice", trivia: "Preguntados",
+  bancopreguntas: "Banco de Preguntas", temporizador: "Temporizador", dado: "Dado", cronometro: "Cronómetro",
+  semaforo: "Semáforo", sorteoorden: "Sorteo de Orden / Parejas", grupos: "Generador de Grupos",
+  marcador: "Marcador de Puntos", selectorestudiante: "Selector de Estudiante", bingo: "Bingo de Repaso",
+  formasexamen: "Formas de Examen (A/B/C/D)",
+};
 
-  useEffect(() => { if (gradoActivo) setGradoId(gradoActivo); }, [gradoActivo]);
-  useEffect(() => { if (materiaActiva) setMateriaId(materiaActiva); }, [materiaActiva]);
-  useEffect(() => { if (periodoActivo) setPeriodo(periodoActivo); }, [periodoActivo]);
-  const [formAbierto, setFormAbierto] = useState(false);
-  const [institucion, setInstitucion] = useState(null);
-  const [pendientesAbierto, setPendientesAbierto] = useState(false);
-  const [estandaresAbierto, setEstandaresAbierto] = useState(false);
-  const [vista, setVista] = useState("unidades"); // "unidades" | "calendario"
-  const [importarIAAbierto, setImportarIAAbierto] = useState(false);
-  const [imprimiendoTodas, setImprimiendoTodas] = useState(false);
-  const [soloVigente, setSoloVigente] = useState(true);
+function BuscadorEstudiantesGlobal({ onSeleccionar }) {
+  const [query, setQuery] = useState("");
+  const [resultados, setResultados] = useState([]);
+  const [buscando, setBuscando] = useState(false);
+  const [abierto, setAbierto] = useState(false);
 
   useEffect(() => {
-    api.fetchMisMaterias().then((data) => { setMaterias(data); if (data[0]) setMateriaId(data[0].id); });
-    api.fetchInstitucion().then(setInstitucion);
-  }, []);
-  useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
+    if (query.trim().length < 2) { setResultados([]); return; }
+    setBuscando(true);
+    const id = setTimeout(() => {
+      api.buscarEstudiantesGlobal(query).then((r) => { setResultados(r); setBuscando(false); setAbierto(true); });
+    }, 300);
+    return () => clearTimeout(id);
+  }, [query]);
 
-  // Respeta la configuración real de periodos de cada materia (bimestre/trimestre/semestre),
-  // la misma que se define en Calificaciones → Escala y periodos.
-  useEffect(() => {
-    if (!materiaId) return;
-    api.fetchNotasConfig(materiaId).then((cfg) => {
-      setConfig(cfg);
-      if (cfg?.periodo_actual) setPeriodo(cfg.periodo_actual);
-    });
-  }, [materiaId]);
-
-  const marcarPeriodoVigente = async () => {
-    await api.guardarNotasConfig(materiaId, { ...config, periodo_actual: periodo });
-    setConfig((prev) => ({ ...prev, periodo_actual: periodo }));
+  const elegir = (est) => {
+    onSeleccionar(est);
+    setQuery("");
+    setResultados([]);
+    setAbierto(false);
   };
-
-  useEffect(() => {
-    if (soloVigente && config.periodo_actual && parseInt(periodo, 10) < parseInt(config.periodo_actual, 10)) {
-      setPeriodo(config.periodo_actual);
-    }
-  }, [soloVigente]);
-
-  const listaPeriodos = periodosDe(config);
-  useEffect(() => {
-    if (!listaPeriodos.includes(periodo)) setPeriodo(listaPeriodos[0] || "1");
-  }, [materiaId, config]);
-
-  const cargar = () => {
-    if (!materiaId || !gradoId) return;
-    setCargando(true);
-    setError(null);
-    api.fetchUnidades(materiaId, gradoId, periodo)
-      .then((data) => { setUnidades(data); setCargando(false); })
-      .catch((e) => { setError(e.message); setCargando(false); });
-  };
-  useEffect(() => { cargar(); }, [materiaId, gradoId, periodo]);
-
-  const niveles = agruparPorNivel(grados);
-  const { nivel: nivelActual } = nivelYCurso(gradoId || (grados[0]?.id || ""));
-  const cursosDelNivel = niveles.find((n) => n.nivel === nivelActual)?.cursos || [];
 
   return (
-    <div>
-      <div className="flex flex-wrap gap-2 mb-4 items-center">
-        <select value={materiaId} onChange={(e) => setMateriaId(parseInt(e.target.value, 10))} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
-          {materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
-        </select>
-        <select value={nivelActual} onChange={(e) => {
-          const n = niveles.find((x) => x.nivel === e.target.value);
-          if (n?.cursos[0]) setGradoId(n.cursos[0].id);
-        }} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
-          {niveles.map((n) => <option key={n.nivel} value={n.nivel}>Grado {n.nivel}°</option>)}
-        </select>
-        <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
-          {cursosDelNivel.map((g) => <option key={g.id} value={g.id}>Curso {g.id}</option>)}
-        </select>
-        <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
-          {listaPeriodos
-            .filter((p) => !soloVigente || parseInt(p, 10) >= parseInt(config.periodo_actual || "1", 10))
-            .map((p) => <option key={p} value={p}>Periodo {p}{p === config.periodo_actual ? " (vigente)" : ""}</option>)}
-        </select>
-        {periodo !== config.periodo_actual && (
-          <button onClick={marcarPeriodoVigente} title="Marcar este periodo como el vigente para esta materia" className="text-xs px-2.5 py-1.5 rounded-full bg-violet-100 text-violet-700 shrink-0">📌 Marcar como vigente</button>
-        )}
-        <label className="flex items-center gap-1.5 text-xs text-slate-500 shrink-0">
-          <input type="checkbox" checked={soloVigente} onChange={(e) => setSoloVigente(e.target.checked)} />
-          Ocultar periodos anteriores
-        </label>
-        <button onClick={() => setPendientesAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-amber-200 text-amber-600">📋 Pendientes</button>
-        <button onClick={() => setEstandaresAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🗂️ Gestionar DBA/Competencias</button>
-        <div className="flex gap-1 rounded-full bg-white p-1 border border-slate-200">
-          <button onClick={() => setVista("unidades")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "unidades" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📋 Por unidad</button>
-          <button onClick={() => setVista("calendario")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "calendario" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📅 Calendario</button>
+    <div className="relative">
+      <input value={query} onChange={(e) => setQuery(e.target.value)} onFocus={() => resultados.length && setAbierto(true)}
+        placeholder="🔍 Buscar estudiante…"
+        className="w-full text-xs rounded-full px-3 py-2 border border-slate-200 outline-none bg-slate-50 focus:bg-white" />
+      {abierto && (query.trim().length >= 2) && (
+        <div className="absolute z-30 top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-lg border border-slate-100 max-h-64 overflow-y-auto" onMouseLeave={() => setAbierto(false)}>
+          {buscando ? (
+            <div className="text-xs text-slate-400 p-3">Buscando…</div>
+          ) : resultados.length === 0 ? (
+            <div className="text-xs text-slate-400 p-3">Sin resultados.</div>
+          ) : (
+            resultados.map((r) => (
+              <button key={r.id} onClick={() => elegir(r)} className="w-full text-left px-3 py-2 text-xs hover:bg-violet-50 flex justify-between items-center">
+                <span className="text-slate-700">{r.nombre}</span>
+                <span className="text-slate-400">Grado {r.grado_id}</span>
+              </button>
+            ))
+          )}
         </div>
-        <button onClick={() => setImportarIAAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-violet-300 text-violet-600">✨ Importar plan (IA)</button>
-        <button onClick={() => setFormAbierto((v) => !v)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white ml-auto">
-          {formAbierto ? "Cerrar" : "+ Nueva clase"}
+      )}
+    </div>
+  );
+}
+
+// Fondo "retro arcade" para el lado del docente — cuadrícula en píxeles,
+// franjas de scanline, y un horizonte bajo de castillos en 8-bit, sin
+// interferir con la lectura de las tarjetas blancas de contenido.
+function FondoArcadeDocente() {
+  return <div className="fixed inset-0 -z-10" style={{ background: "#1a1533" }} />;
+}
+
+// Tarjeta de un ítem del menú lateral — mismo lenguaje visual que las
+// tarjetas del resto de la app (círculo de color + texto), apiladas
+// verticalmente contra el fondo oscuro del menú.
+function TarjetaMenuLateral({ icono, label, activo, onClick, fondo, color }) {
+  return (
+    <button onClick={onClick}
+      className={`w-full flex items-center gap-2.5 rounded-xl px-2.5 py-2 mb-1.5 text-left transition-all ${activo ? "bg-white" : "hover:bg-white/10"}`}>
+      <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm" style={{ background: activo ? (fondo || "#E8EEF8") : "rgba(255,255,255,0.12)" }}>
+        {icono}
+      </div>
+      <span className={`text-sm font-bold leading-tight ${activo ? "text-[#17264D]" : "text-[#E8EEF8]"}`}>{label}</span>
+    </button>
+  );
+}
+
+function SidebarTarjetas({ activo, onCambiar, email, institucion, onAdmin, onInstitucion, onSalir, onBuscarEstudiante, esAdmin, esAdminEfectivo, previsualizandoDocente, onCambiarPrevisualizacion, grupos, menuAbierto, onCerrarMenu }) {
+  const [nombreDocente, setNombreDocente] = useState("");
+  const [editandoNombre, setEditandoNombre] = useState(false);
+  const [nombreTemp, setNombreTemp] = useState("");
+  // Grupos desplegados — por defecto, solo el que contiene la sección
+  // activa; los demás quedan colapsados hasta que se les haga clic.
+  const [gruposAbiertos, setGruposAbiertos] = useState(() => {
+    const inicial = grupos.find((g) => g.items.some((it) => it.key === activo));
+    return new Set(inicial ? [inicial.key] : []);
+  });
+  const toggleGrupo = (key) => setGruposAbiertos((prev) => {
+    const nuevo = new Set(prev);
+    if (nuevo.has(key)) nuevo.delete(key); else nuevo.add(key);
+    return nuevo;
+  });
+  // Si la sección activa cambia a una de un grupo todavía cerrado, ese
+  // grupo se abre solo (por ejemplo, al entrar por un atajo o al volver).
+  useEffect(() => {
+    const contenedor = grupos.find((g) => g.items.some((it) => it.key === activo));
+    if (contenedor && !gruposAbiertos.has(contenedor.key)) {
+      setGruposAbiertos((prev) => new Set(prev).add(contenedor.key));
+    }
+  }, [activo]);
+
+  useEffect(() => { api.fetchMiPerfil().then((p) => setNombreDocente(p?.nombre || "")); }, []);
+
+  const guardarNombre = async () => {
+    const valor = nombreTemp.trim();
+    if (!valor) { setEditandoNombre(false); return; }
+    try {
+      await api.guardarMiNombre(valor);
+      setNombreDocente(valor);
+      setEditandoNombre(false);
+    } catch (e) {
+      alert("Error al guardar: " + e.message);
+    }
+  };
+
+  const elegir = (key) => { onCambiar(key); onCerrarMenu?.(); };
+
+  const contenido = (
+    <div className="h-full flex flex-col" style={{ background: "linear-gradient(180deg, #17264D 0%, #0f1932 100%)" }}>
+      <div className="p-3 pb-2">
+        <button onClick={() => elegir("inicio")} className="flex items-center gap-2 mb-3 px-1">
+          {institucion?.imagen_menu_url ? (
+            <img src={institucion.imagen_menu_url} alt="Logo" className="rounded-lg object-cover" style={{ width: 28, height: 28 }} />
+          ) : (
+            <span className="text-xl">🧭</span>
+          )}
+          <span className="text-white text-sm font-bold tracking-[0.12em]" style={{ fontFamily: "Georgia, serif" }}>CÓDICE</span>
         </button>
+
+        <BuscadorEstudiantesGlobal onSeleccionar={(r) => { onBuscarEstudiante(r); onCerrarMenu?.(); }} />
       </div>
 
-      <p className="text-[11px] text-slate-400 mb-3">
-        Plan de estudios de la materia, organizado por unidades/temas dentro de cada periodo. Cada unidad puede tener varias clases, tareas con rúbrica, y recursos de Google Drive/Docs/Forms.
-        Los periodos ({config.sistema_periodos === "trimestre" ? "trimestre" : config.sistema_periodos === "semestre" ? "semestre" : "bimestre"}, {listaPeriodos.length} en total) se toman de la configuración de esta materia en Calificaciones → Escala y periodos.
-      </p>
+      <div className="flex-1 overflow-y-auto px-3 pb-3">
+        <TarjetaMenuLateral icono="🏠" label="Inicio" activo={activo === "inicio"} onClick={() => elegir("inicio")} fondo="#E8EEF8" />
 
-      {formAbierto && (
-        <NuevaUnidadForm materiaId={materiaId} materias={materias} gradoId={gradoId} periodo={periodo} orden={unidades.length}
-          onCancelar={() => setFormAbierto(false)} onCreada={() => { setFormAbierto(false); cargar(); }} />
-      )}
+        {grupos.filter((g) => g.key !== "inicio_grupo").map((grupo) => {
+          const abierto = gruposAbiertos.has(grupo.key);
+          return (
+            <div key={grupo.key} className="mt-2">
+              <button onClick={() => toggleGrupo(grupo.key)} className="w-full flex items-center justify-between px-2.5 py-1 mb-1 rounded-lg hover:bg-white/5">
+                <span className="text-[9px] font-bold uppercase tracking-wide" style={{ color: "#829aca" }}>{grupo.icono} {grupo.label}</span>
+                <span className="text-[8px]" style={{ color: "#829aca" }}>{abierto ? "▾" : "▸"}</span>
+              </button>
+              {abierto && grupo.items.map((it) => (
+                <TarjetaMenuLateral key={it.key} icono={it.icono} label={it.label} activo={activo === it.key} onClick={() => elegir(it.key)} />
+              ))}
+            </div>
+          );
+        })}
+      </div>
 
-      {vista === "calendario" ? (
-        <CalendarioClases materiaId={materiaId} gradoId={gradoId} periodo={periodo} onAbrirUnidad={() => setVista("unidades")} />
-      ) : cargando ? (
-        <div className="text-sm text-slate-400">Cargando…</div>
-      ) : error ? (
-        <div className="text-sm text-rose-500 bg-rose-50 rounded-xl p-3">Error al cargar: {error}</div>
-      ) : unidades.length === 0 ? (
-        <div className="text-sm text-slate-400 bg-white rounded-2xl p-6 text-center border border-dashed border-slate-200">
-          Todavía no hay clases planeadas para este periodo. Creá la primera con "+ Nueva clase".
-        </div>
-      ) : (
-        <>
-          <div className="flex justify-end mb-2">
-            <button onClick={() => setImprimiendoTodas(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700">
-              🖨️ Imprimir todas ({unidades.length})
+      <div className="p-3 pt-2 border-t border-white/10">
+        {esAdmin && (
+          <button onClick={() => onCambiarPrevisualizacion((v) => !v)}
+            className={`w-full text-center text-[10px] font-bold px-2.5 py-1.5 rounded-full border mb-2 ${previsualizandoDocente ? "bg-amber-400 text-slate-900 border-amber-400" : "border-white/20 text-violet-200"}`}
+            title="Como administrador, podés previsualizar la app tal como la ve un docente regular, sin perder tu permiso real.">
+            {previsualizandoDocente ? "👤 Viendo como docente" : "🔍 Ver como docente"}
+          </button>
+        )}
+        <div className="flex items-center gap-1 mb-2 px-1">
+          {editandoNombre ? (
+            <>
+              <input value={nombreTemp} onChange={(e) => setNombreTemp(e.target.value)} autoFocus
+                onKeyDown={(e) => { if (e.key === "Enter") guardarNombre(); if (e.key === "Escape") setEditandoNombre(false); }}
+                placeholder="Tu nombre" className="text-[11px] bg-transparent border-b border-violet-400 text-violet-100 outline-none px-1 flex-1 min-w-0" />
+              <button onClick={guardarNombre} className="text-[10px] text-emerald-400">✔</button>
+              <button onClick={() => setEditandoNombre(false)} className="text-[10px] text-violet-400/60">✕</button>
+            </>
+          ) : (
+            <button onClick={() => { setNombreTemp(nombreDocente); setEditandoNombre(true); }} className="text-[10px] text-violet-300/70 truncate hover:text-violet-200 flex-1 text-left" title="Tocá para editar tu nombre">
+              {nombreDocente || "+ Agregar tu nombre"} <span className="opacity-60">✏️</span>
             </button>
-          </div>
-          {unidades.map((u) => <UnidadCard key={u.id} unidad={u} institucion={institucion} materiaNombre={materias.find((m) => m.id === materiaId)?.nombre || ""} materias={materias} gradoId={gradoId} grados={grados} onCambio={cargar} />)}
+          )}
+        </div>
+        <div className="flex items-center justify-around">
+          <button onClick={onAdmin} className="text-base" title={esAdminEfectivo ? "Docentes y mi cuenta" : "Mi cuenta"}>👤</button>
+          {esAdminEfectivo && <button onClick={onInstitucion} className="text-base" title="Institución">⚙️</button>}
+          <button onClick={onSalir} className="text-base" title="Cerrar sesión">🚪</button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Escritorio: fija, siempre visible */}
+      <div className="hidden md:block w-[210px] shrink-0 sticky top-0 h-screen">{contenido}</div>
+
+      {/* Móvil: barra angosta con hamburguesa + cajón deslizante */}
+      <div className="md:hidden sticky top-0 z-30 flex items-center justify-between px-4 py-2.5" style={{ background: "#17264D" }}>
+        <button onClick={() => elegir("inicio")} className="flex items-center gap-2">
+          <span className="text-lg">🧭</span>
+          <span className="text-white text-sm font-bold tracking-[0.12em]">CÓDICE</span>
+        </button>
+        <button onClick={() => onCerrarMenu?.(true)} className="text-white text-xl">☰</button>
+      </div>
+      {menuAbierto && (
+        <>
+          <div className="md:hidden fixed inset-0 z-40 bg-black/40" onClick={() => onCerrarMenu?.()} />
+          <div className="md:hidden fixed left-0 top-0 bottom-0 z-50 w-[260px] shadow-xl">{contenido}</div>
         </>
       )}
-      {imprimiendoTodas && (
-        <ImprimirTodasPlaneacionesModal unidades={unidades} institucion={institucion}
-          materiaNombre={materias.find((m) => m.id === materiaId)?.nombre || ""} gradoId={gradoId} periodo={periodo}
-          onCerrado={() => setImprimiendoTodas(false)} />
-      )}
-      {pendientesAbierto && (
-        <PendientesModal materiaId={materiaId} materiaNombre={materias.find((m) => m.id === materiaId)?.nombre || ""} onClose={() => setPendientesAbierto(false)} />
-      )}
-      {estandaresAbierto && <GestionarEstandaresModal onClose={() => setEstandaresAbierto(false)} />}
-      {importarIAAbierto && (
-        <ImportarPlanIAModal materiaId={materiaId} materias={materias} gradoId={gradoId} periodo={periodo}
-          onCerrar={() => setImportarIAAbierto(false)} onImportado={() => { setImportarIAAbierto(false); cargar(); }} />
-      )}
-    </div>
+    </>
   );
 }
 
-// Vista del estudiante — solo muestra las unidades marcadas como
-// "Publicado" por el docente; los borradores quedan ocultos.
-export function MiPlanDeEstudio({ estudianteInfo }) {
+
+function Panel({ session }) {
+  const [tab, setTab] = useState("inicio");
+  const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
+  const [esAdmin, setEsAdmin] = useState(null); // null = todavía no se sabe
+  const [previsualizandoDocente, setPrevisualizandoDocente] = useState(false);
+  const esAdminEfectivo = esAdmin && !previsualizandoDocente;
+  useEffect(() => { api.fetchMiPerfil().then((p) => setEsAdmin(!!p?.es_admin)); }, []);
+  const [subTabHerramientas, setSubTabHerramientas] = useState("ruleta");
+  const [grado, setGrado] = useState(null);
+  const [gradoActivo, setGradoActivo] = useState(null);
+  const [periodoActivo, setPeriodoActivo] = useState("1");
   const [materias, setMaterias] = useState([]);
-  const [materiaId, setMateriaId] = useState("");
-  const [config, setConfig] = useState({ cantidad_periodos: 4, sistema_periodos: "bimestre" });
-  const [periodo, setPeriodo] = useState("1");
-  const [unidades, setUnidades] = useState(null);
-  const [abiertaId, setAbiertaId] = useState(null);
+  const [materiaActiva, setMateriaActiva] = useState(null);
+  const [reino, setReino] = useState(null);
+  const [modoLista, setModoLista] = useState(false);
+  const [grados, setGrados] = useState([]);
+  const [institucionAbierta, setInstitucionAbierta] = useState(false);
+  const [administracionAbierta, setAdministracionAbierta] = useState(false);
+  const [institucion, setInstitucion] = useState(null);
+  const [destinoBusqueda, setDestinoBusqueda] = useState(null);
 
-  useEffect(() => { api.fetchMaterias().then((data) => { setMaterias(data); if (data[0]) setMateriaId(data[0].id); }); }, []);
+  const irACalificacionesDesdeBusqueda = (estudiante) => {
+    setTab("calificaciones");
+    setDestinoBusqueda({ estudianteId: estudiante.id, gradoId: estudiante.grado_id, ts: Date.now() });
+  };
+
+  const cargarInstitucion = () => api.fetchInstitucion().then(setInstitucion);
 
   useEffect(() => {
-    if (!materiaId) return;
-    api.fetchNotasConfig(materiaId).then((cfg) => { setConfig(cfg); if (cfg?.periodo_actual) setPeriodo(cfg.periodo_actual); });
-  }, [materiaId]);
-
-  useEffect(() => {
-    if (!materiaId || !estudianteInfo?.grado_id) return;
-    setUnidades(null);
-    api.fetchUnidades(materiaId, estudianteInfo.grado_id, periodo).then((data) => {
-      setUnidades(data.filter((u) => u.estado === "publicado"));
+    api.asegurarProfesor().then(() => api.asegurarGradosBase()).then(() => api.fetchGrados()).then((data) => {
+      setGrados(data);
+      setGradoActivo((prev) => prev || data[0]?.id || null);
     });
-  }, [materiaId, periodo, estudianteInfo?.grado_id]);
+    api.fetchMaterias().then((data) => {
+      setMaterias(data);
+      setMateriaActiva((prev) => prev || data[0]?.id || null);
+    });
+    cargarInstitucion();
+  }, []);
 
-  const listaPeriodos = periodosDe(config);
+  const irA = (key) => {
+    if (CLAVES_SOLO_ADMIN.includes(key) && !esAdminEfectivo) return;
+    if (key.startsWith("herr_")) {
+      setTab("herramientas");
+      setSubTabHerramientas(key.slice(5));
+      return;
+    }
+    setTab(key);
+    if (key === "estudiantes") { setGrado(null); setReino(null); setModoLista(false); }
+  };
+
+  // Para que el menú resalte bien el ítem activo cuando estás en una
+  // herramienta específica (en vez de mostrar "Herramientas" resaltado
+  // en general sin distinguir cuál).
+  const claveActivaMenu = tab === "herramientas" ? `herr_${subTabHerramientas}` : tab;
+
+  const menuPanelVisible = esAdminEfectivo ? MENU_PANEL_GRUPOS : MENU_PANEL_GRUPOS.filter((g) => g.key !== "administracion");
+
+  useEffect(() => {
+    if (!esAdminEfectivo && CLAVES_SOLO_ADMIN.includes(tab)) { setTab("inicio"); }
+  }, [esAdminEfectivo]);
+
+  // Desde "Entregas por revisar": salta directo a Misiones o Proyectos/Forja,
+  // ya con el curso, la materia y el periodo correctos seleccionados arriba.
+  const irAGradoDesdeRevisar = (gradoId, materiaId, periodo, destino) => {
+    setGradoActivo(gradoId);
+    if (materiaId) setMateriaActiva(materiaId);
+    if (periodo) setPeriodoActivo(String(periodo));
+    setTab(destino);
+  };
 
   return (
-    <div>
-      <h3 className="font-bold text-slate-800 mb-1">📘 Mi Plan de Estudio</h3>
-      <p className="text-xs text-slate-400 mb-4">Las unidades que tu docente ya publicó para esta materia y periodo.</p>
+    <div className="min-h-screen flex" style={{ background: "#FBFBFD" }}>
+      <SidebarTarjetas activo={claveActivaMenu} onCambiar={irA} email={session.user.email} institucion={institucion}
+        onAdmin={() => setAdministracionAbierta(true)} onInstitucion={() => setInstitucionAbierta(true)}
+        onSalir={() => supabase.auth.signOut()} onBuscarEstudiante={irACalificacionesDesdeBusqueda}
+        esAdmin={esAdmin} esAdminEfectivo={esAdminEfectivo} previsualizandoDocente={previsualizandoDocente} onCambiarPrevisualizacion={setPrevisualizandoDocente}
+        grupos={menuPanelVisible} menuAbierto={menuMovilAbierto} onCerrarMenu={(abrir) => setMenuMovilAbierto(!!abrir)} />
 
-      <div className="flex flex-wrap gap-2 mb-4">
-        <select value={materiaId} onChange={(e) => setMateriaId(parseInt(e.target.value, 10))} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
-          {materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
-        </select>
-        <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
-          {listaPeriodos.map((p) => <option key={p} value={p}>Periodo {p}{p === config.periodo_actual ? " (vigente)" : ""}</option>)}
-        </select>
-      </div>
+      {institucionAbierta && <InstitucionModal onClose={() => { setInstitucionAbierta(false); cargarInstitucion(); }} />}
+      {administracionAbierta && <AdministracionModal onClose={() => setAdministracionAbierta(false)} />}
 
-      {unidades === null ? (
-        <p className="text-sm text-slate-400">Cargando…</p>
-      ) : unidades.length === 0 ? (
-        <div className="text-sm text-slate-400 bg-white rounded-2xl p-6 text-center border border-dashed border-slate-200">
-          Tu docente todavía no publicó unidades para esta materia y periodo.
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {unidades.map((u) => (
-            <div key={u.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3">
-              <button onClick={() => setAbiertaId(abiertaId === u.id ? null : u.id)} className="w-full flex items-center justify-between text-left">
-                <span className="font-bold text-slate-800 text-sm">{u.titulo}</span>
-                <span className="text-xs text-violet-500">{abiertaId === u.id ? "Cerrar ▲" : "Ver ▼"}</span>
-              </button>
-              {u.objetivo && <p className="text-xs text-slate-500 mt-1">{u.objetivo}</p>}
-              {abiertaId === u.id && (
-                <div className="mt-3 pt-3 border-t border-slate-200">
-                  {u.contenido && <FilaLectura etiqueta="Contenidos">{u.contenido}</FilaLectura>}
-                  {u.problema_proyecto && <FilaLectura etiqueta="Problema / Proyecto">{u.problema_proyecto}</FilaLectura>}
-                  <FormatoMaestroLectura unidad={u} />
+      <div className="flex-1 min-w-0 p-5 md:p-10">
+        {tab === "inicio" && <VistaInicio onIrA={irA} />}
+        {tab === "entregasrevisar" && <MarcoSeccion zonaLabel="Académico — Entregas por revisar" icono="🎓"><VistaEntregasPorRevisar onIrAGrado={irAGradoDesdeRevisar} /></MarcoSeccion>}
+        {tab === "estudiantes" && (
+          <MarcoSeccion zonaLabel="Académico — Estudiantes" icono="🎓">
+            {!grado && <VistaGrados onElegirGrado={(g) => { setGrado(g); setReino(null); setModoLista(true); }} />}
+            {grado && !modoLista && !reino && (
+              <VistaReinos
+                gradoId={grado}
+                onElegirReino={(r) => setReino(r)}
+                onVerTodos={() => setModoLista(true)}
+                onVolver={() => setGrado(null)}
+              />
+            )}
+            {grado && (modoLista || reino) && (
+              <VistaEstudiantes
+                gradoId={grado}
+                grados={grados}
+                reinoFiltro={modoLista ? null : reino}
+                onVolver={() => setGrado(null)}
+                onVerGrupos={() => { setReino(null); setModoLista(false); }}
+              />
+            )}
+          </MarcoSeccion>
+        )}
+        {tab === "asistencia" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Asistencia" icono="🎓"><VistaAsistencia grados={grados} gradoActivo={gradoActivo} /></MarcoSeccion>}
+        {tab === "herramientas" && grados.length > 0 && (
+          <div className="rounded-[28px] p-1" style={{ background: "linear-gradient(135deg, #2F55A4, #B8892B)" }}>
+            <div className="rounded-[24px] p-4 md:p-6" style={{ background: "linear-gradient(160deg, #17264D 0%, #223b74 100%)" }}>
+              <div className="flex items-center gap-2.5 mb-4 px-1">
+                <span className="text-2xl">🎮</span>
+                <div>
+                  <div className="text-[10px] font-extrabold tracking-wide uppercase" style={{ color: "#f1e7d5" }}>Zona de Herramientas</div>
+                  <div className="text-lg font-extrabold text-white">{NOMBRES_HERRAMIENTAS[subTabHerramientas] || "Herramienta"}</div>
                 </div>
-              )}
+              </div>
+              <div className="rounded-2xl bg-white p-4 md:p-5">
+                {subTabHerramientas === "ruleta" && <VistaRuleta grados={grados} gradoActivo={gradoActivo} />}
+                {subTabHerramientas === "ruletamonedas" && <VistaRuletaMonedas grados={grados} gradoActivo={gradoActivo} />}
+                {subTabHerramientas === "accionesmasivas" && <VistaAccionesMasivas grados={grados} gradoActivo={gradoActivo} />}
+            {subTabHerramientas === "banco" && <VistaBanco />}
+            {subTabHerramientas === "album" && <VistaAlbum />}
+            {subTabHerramientas === "anuncios" && <VistaAnuncios grados={grados} />}
+            {subTabHerramientas === "logros" && <VistaLogros />}
+            {subTabHerramientas === "salonhonor" && <VistaSalonHonor />}
+            {subTabHerramientas === "diplomas" && <VistaDiplomas grados={grados} gradoActivo={gradoActivo} />}
+            {subTabHerramientas === "gamext" && <VistaGamificacionExtra grados={grados} />}
+            {subTabHerramientas === "consignas" && <VistaConsignasCodice grados={grados} />}
+            {subTabHerramientas === "trivia" && <VistaTriviaAdmin grados={grados} />}
+            {subTabHerramientas === "bancopreguntas" && <VistaBancoPreguntas grados={grados} />}
+            {subTabHerramientas === "temporizador" && <VistaTemporizador />}
+            {subTabHerramientas === "dado" && <DadoTool />}
+            {subTabHerramientas === "cronometro" && <CronometroTool />}
+            {subTabHerramientas === "semaforo" && <SemaforoTool />}
+            {subTabHerramientas === "sorteoorden" && <SorteoOrdenTool grados={grados} />}
+            {subTabHerramientas === "grupos" && <GeneradorGruposTool grados={grados} />}
+            {subTabHerramientas === "marcador" && <MarcadorPuntosTool />}
+            {subTabHerramientas === "selectorestudiante" && <SelectorEstudianteTool grados={grados} />}
+                {subTabHerramientas === "bingo" && <BingoTool />}
+                {subTabHerramientas === "formasexamen" && <FormasExamenTool />}
+              </div>
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        )}
+        {tab === "roles" && <VistaRoles />}
+        {tab === "calificaciones" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Planillas" icono="🎓"><VistaCalificaciones grados={grados} destinoBusqueda={destinoBusqueda} gradoActivo={gradoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
+        {tab === "reportes" && grados.length > 0 && <VistaReportes grados={grados} gradoActivo={gradoActivo} />}
+        {tab === "horario" && grados.length > 0 && <VistaHorario grados={grados} />}
+        {tab === "planeaciones" && grados.length > 0 && <MarcoSeccion zonaLabel="Planeación — Planeaciones" icono="🗺️"><VistaPlaneaciones grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
+        {tab === "tablerosemanal" && grados.length > 0 && <MarcoSeccion zonaLabel="Planeación — Tablero Semanal" icono="🗺️"><VistaTableroSemanal grados={grados} /></MarcoSeccion>}
+        {tab === "rubricas" && <MarcoSeccion zonaLabel="Planeación — Rúbricas" icono="🗺️"><VistaRubricas /></MarcoSeccion>}
+        {tab === "biblioteca" && grados.length > 0 && <MarcoSeccion zonaLabel="Planeación — Biblioteca" icono="🗺️"><VistaBiblioteca grados={grados} gradoActivo={gradoActivo} /></MarcoSeccion>}
+        {tab === "comarca" && grados.length > 0 && (
+          <MarcoSeccion zonaLabel="Comarca de Oakhaven" icono="🏛️">
+            <VistaComarcaOakhaven grados={grados} gradoActivo={gradoActivo} />
+          </MarcoSeccion>
+        )}
+        {tab === "anotaciones" && <MarcoSeccion zonaLabel="Convivencial — Anotaciones" icono="🤝"><VistaAnotaciones /></MarcoSeccion>}
+        {tab === "inclusion" && <MarcoSeccion zonaLabel="Convivencial — Inclusión" icono="🤝"><VistaInclusionGeneral /></MarcoSeccion>}
+        {tab === "bajasvida" && <MarcoSeccion zonaLabel="Convivencial — Bajas de Vida" icono="🤝"><VistaBajasVida /></MarcoSeccion>}
+        {tab === "corregirnombres" && <VistaCorregirNombres />}
+        {tab === "niveles" && <VistaNiveles />}
+        {tab === "objetos" && <VistaObjetos grados={grados} gradoActivo={gradoActivo} />}
+        {tab === "direccioncurso" && <MarcoSeccion zonaLabel="Convivencial — Dirección de Curso" icono="🤝"><VistaDireccionCurso grados={grados} gradoActivo={gradoActivo} /></MarcoSeccion>}
+        {tab === "guiasestudio" && <MarcoSeccion zonaLabel="Planeación — Guías de Estudio" icono="🗺️"><VistaGuiasEstudio grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
+        {tab === "actividadesprogramadas" && <MarcoSeccion zonaLabel="Planeación — Actividades Programadas" icono="🗺️"><VistaActividadesProgramadas grados={grados} /></MarcoSeccion>}
+        {tab === "evaluaciones" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Misiones" icono="🎓"><VistaEvaluaciones grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
+        {tab === "proyectosforja" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — La Forja" icono="🎓"><VistaProyectosForja grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
+      </div>
     </div>
   );
 }
