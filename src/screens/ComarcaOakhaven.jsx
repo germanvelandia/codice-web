@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import * as api from "../lib/api";
+import { leerPersistido, guardarPersistido } from "../lib/api";
 import { agruparPorNivel } from "../lib/gamification";
 
 function CambiarEmojiReino({ reino, onGuardado }) {
@@ -2156,7 +2157,26 @@ export function VistaComarcaOakhaven({ grados, gradoActivo }) {
   const [cargandoReinos, setCargandoReinos] = useState(false);
   const [creando, setCreando] = useState(false);
 
-  const cargar = () => { setCargando(true); api.fetchSesionesComarca().then((d) => { setSesiones(d); setCargando(false); }); };
+  // Si actualizás la página con una sesión abierta, vuelve a abrirse esa misma
+  // sesión (en vez de mandarte a la lista).
+  const sesionARestaurar = useRef(leerPersistido("comarca_sesion") ?? null);
+  useEffect(() => {
+    if (sesionARestaurar.current && !sesionAbierta) return; // todavía restaurando
+    guardarPersistido("comarca_sesion", sesionAbierta ? sesionAbierta.id : null);
+  }, [sesionAbierta]);
+
+  const cargar = () => {
+    setCargando(true);
+    api.fetchSesionesComarca().then((d) => {
+      setSesiones(d);
+      if (sesionARestaurar.current) {
+        const guardada = d.find((s) => s.id === sesionARestaurar.current);
+        sesionARestaurar.current = null;
+        if (guardada) setSesionAbierta(guardada); else guardarPersistido("comarca_sesion", null); // esa sesión ya no existe
+      }
+      setCargando(false);
+    });
+  };
   useEffect(() => { cargar(); }, []);
 
   useEffect(() => {
