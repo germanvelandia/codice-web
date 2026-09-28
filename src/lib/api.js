@@ -3741,6 +3741,188 @@ export async function eliminarCitacion(id) {
   if (error) throw error;
 }
 
+// ==== INICIO CITACIONES ====
+/* ---------------- 📄 Formato oficial de citación a acudientes ----------------
+   Reproduce el formato del colegio: a la izquierda el FORMATO DE CITACIÓN que
+   recibe el acudiente, a la derecha el SOPORTE que queda en la institución,
+   dos citaciones por hoja carta horizontal. Todo lo que cambia entre
+   instituciones vive en "formato_citacion" (tabla institucion), editable desde
+   Citaciones, así que cambiar de colegio no exige tocar el código. */
+export const FORMATO_CITACION_DEFAULT = {
+  encabezado: [
+    "COLEGIO ALFONSO LOPEZ MICHELSEN IED",
+    "Licencia de Funcionamiento Resolución No. 4601 de noviembre 16 de 2007",
+    "Carrera 98 B No. 74 – 68 Sur. 3564974",
+  ],
+  encabezadoSoporte: [
+    "COLEGIO “ALFONSO LOPEZ MICHELSEN” IED",
+    "Resolución No. 4601 de noviembre 16 de 2007",
+    "Carrera 98 B N° 74-68 Sur Tel: 3564974-5-6-7 y 8",
+  ],
+  logoDerecho: null,
+  jornada: "J.T.",
+  lugares: ["SALA DE PROFESORES", "COORDINACIÓN", "SALÓN"],
+  firmaIzquierda: "COORDINACIÓN",
+  firmaDerecha: "NOMBRE DEL DOCENTE",
+  textoLegal: "Esta citación se realiza en el marco de **la Ley 1098 Artículo 23** que cita la custodia y cuidado personal de los niños, las niñas y los adolescentes quienes tienen derecho a que sus padres en forma permanente y solidaria asuman directa y oportunamente su custodia para su desarrollo integral; al igual que el **Art. 38** en el que se establecen las obligaciones de la familia, el **Art. 67** que habla de las responsabilidades en la educación y el decreto **1286/05** en el que se establecen los deberes de los padres de familia con el fin de asegurar el cumplimiento de los compromisos asumidos con la educación de los hijos, so pena de incurrir en negligencia que debe ser reportada al ICBF. Es obligación del empleador, otorgar los permisos a los que haya lugar, con relación al cuidado de los menores de edad.",
+  cierre: "Agradecemos su puntual asistencia.",
+};
+
+// Lo guardado por la institución pisa al formato original, campo por campo.
+export function formatoCitacionCompleto(institucion) {
+  const guardado = institucion?.formato_citacion || {};
+  const resultado = { ...FORMATO_CITACION_DEFAULT };
+  Object.keys(FORMATO_CITACION_DEFAULT).forEach((k) => {
+    const v = guardado[k];
+    if (v === undefined || v === null) return;
+    if (Array.isArray(FORMATO_CITACION_DEFAULT[k])) { if (Array.isArray(v) && v.length > 0) resultado[k] = v; return; }
+    resultado[k] = v;
+  });
+  return resultado;
+}
+
+export async function guardarFormatoCitacion(formato) {
+  const { data, error } = await supabase.from("institucion").update({ formato_citacion: formato }).eq("id", 1).select();
+  if (error) throw error;
+  if (!data || data.length === 0) {
+    // La fila de la institución todavía no existía: se crea.
+    const { error: e2 } = await supabase.from("institucion").upsert({ id: 1, nombre: "Institución Educativa", formato_citacion: formato }, { onConflict: "id" });
+    if (e2) throw e2;
+  }
+}
+
+const escHtml = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+// **texto** => negrita (así se marcan los artículos en el texto legal)
+const conNegritas = (s) => escHtml(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+const fmtFechaCitacion = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ""); return m ? `${m[3]}/${m[2]}/${m[1]}` : (iso || ""); };
+const fmtHoraCitacion = (h) => {
+  const m = /^(\d{1,2}):(\d{2})/.exec(h || "");
+  if (!m) return h || "";
+  const hh = parseInt(m[1], 10);
+  return `${String(hh % 12 === 0 ? 12 : hh % 12).padStart(2, "0")}:${m[2]} ${hh >= 12 ? "pm" : "am"}`;
+};
+
+// items: [{ fechaElaboracion, numero, acudiente, fechaCita, hora, estudiante, curso, lugar, docente, recibe }]
+// Un objeto vacío {} da un formato en blanco para llenar a mano.
+export function htmlCitaciones(items, formato, institucion, opciones = {}) {
+  const f = formato;
+  const escudo = institucion?.logo_url ? `<img class="logo" src="${escHtml(institucion.logo_url)}" />` : `<div class="logo"></div>`;
+  const logoDer = f.logoDerecho ? `<img class="logo" src="${escHtml(f.logoDerecho)}" />` : `<div class="logo"></div>`;
+  const norm = (s) => String(s || "").trim().toLowerCase();
+
+  const tira = (it) => {
+    const coincide = (f.lugares || []).some((l) => norm(l) === norm(it.lugar));
+    const opcionesLugar = [...(f.lugares || []), ...(it.lugar && !coincide ? [it.lugar] : [])];
+    const lugares = opcionesLugar.map((l) => `<span class="lugar">${escHtml(l)} <span class="marca">${norm(l) === norm(it.lugar) ? "X" : "&nbsp;"}</span></span>`).join("");
+    return `
+    <div class="tira">
+      <div class="formato">
+        <div class="enc">
+          ${escudo}
+          <div class="enc-txt">
+            <div class="b">${escHtml(f.encabezado[0] || "")}</div>
+            ${f.encabezado.slice(1).map((l) => `<div>${escHtml(l)}</div>`).join("")}
+            <div class="b titulo">FORMATO DE CITACIÓN</div>
+          </div>
+          ${logoDer}
+        </div>
+        <div class="cabecera-datos">
+          <div class="caja fecha">${escHtml(fmtFechaCitacion(it.fechaElaboracion))}</div>
+          <div class="cit">Citación <span class="caja num">${escHtml(it.numero ?? "")}</span></div>
+        </div>
+        <div class="fila">Señor padre de familia y/o acudiente: <span class="caja grow">${escHtml(it.acudiente)}</span></div>
+        <div class="fila corta">Cordial saludo.</div>
+        <div class="fila">Solicitamos su presencia la fecha <span class="caja w30">${escHtml(fmtFechaCitacion(it.fechaCita))}</span> En horario de <span class="caja w22">${escHtml(fmtHoraCitacion(it.hora))}</span></div>
+        <div class="fila corta">A fin de tratar asuntos relacionados con la formación <b>académica</b> y/o de <b>convivencia</b></div>
+        <div class="fila">de su hijo(a) <span class="caja grow">${escHtml(it.estudiante)}</span> del curso <span class="caja w20">${escHtml(it.curso)}</span> ${escHtml(f.jornada)}</div>
+        <div class="fila lugares"><span class="et">Será atendido en:</span> ${lugares}</div>
+        <div class="firmas">
+          <div class="firma"><div class="linea"></div><div>${escHtml(f.firmaIzquierda)}</div></div>
+          <div class="firma"><div class="linea">${escHtml(it.docente)}</div><div>${escHtml(f.firmaDerecha)}</div></div>
+        </div>
+        <div class="legal">${conNegritas(f.textoLegal)}</div>
+        <div class="cierre">${escHtml(f.cierre)}</div>
+      </div>
+      <div class="soporte">
+        <div class="enc-sop">
+          ${escudo}
+          <div class="enc-txt">
+            <div class="b">${escHtml(f.encabezadoSoporte[0] || "")}</div>
+            ${f.encabezadoSoporte.slice(1).map((l) => `<div>${escHtml(l)}</div>`).join("")}
+          </div>
+          ${logoDer}
+        </div>
+        <div class="cabecera-datos sop">
+          <div class="b">SOPORTE DE CITACION</div>
+          <div class="caja fecha">${escHtml(fmtFechaCitacion(it.fechaElaboracion)) || "FECHA"}</div>
+        </div>
+        <div class="campo">Nombre del Estudiante</div><div class="caja ancha">${escHtml(it.estudiante)}</div>
+        <div class="fila">Curso. <span class="caja w18">${escHtml(it.curso)}</span> Citación <span class="caja w14">${escHtml(it.numero ?? "")}</span></div>
+        <div class="fila">Docente <span class="caja grow">${escHtml(it.docente)}</span></div>
+        <div class="campo">Se cita a su acudiente</div><div class="caja ancha">${escHtml(it.acudiente)}</div>
+        <div class="fila">para el día <span class="caja w40">${escHtml(fmtFechaCitacion(it.fechaCita))}</span> Hora <span class="caja grow">${escHtml(fmtHoraCitacion(it.hora))}</span></div>
+        <div class="fila">Será atendido en <span class="caja grow">${escHtml(it.lugar)}</span></div>
+        <div class="campo">Recibe la citación:</div><div class="caja ancha alta">${escHtml(it.recibe)}</div>
+      </div>
+    </div>`;
+  };
+
+  // Dos citaciones por hoja carta horizontal.
+  const hojas = [];
+  for (let i = 0; i < items.length; i += 2) hojas.push(`<div class="hoja">${tira(items[i])}${items[i + 1] ? tira(items[i + 1]) : ""}</div>`);
+
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Citaciones</title><style>
+@page { size: letter landscape; margin: 8mm; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: Arial, Helvetica, sans-serif; color: #000; font-size: 8.4pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.hoja { height: 198mm; display: flex; flex-direction: column; page-break-after: always; }
+.hoja:last-child { page-break-after: auto; }
+.tira { height: 98mm; display: flex; gap: 4mm; padding: 1.5mm 0; border-bottom: 1px dashed #666; }
+.hoja .tira:last-child { border-bottom: none; }
+.formato { flex: 0 0 62%; display: flex; flex-direction: column; gap: 1.1mm; min-width: 0; }
+.soporte { flex: 1; border-left: 1px dashed #666; padding-left: 4mm; display: flex; flex-direction: column; gap: 1mm; min-width: 0; }
+.enc, .enc-sop { display: flex; align-items: center; gap: 2mm; }
+.enc-sop { border: 1px solid #000; padding: 1mm; }
+.enc-txt { flex: 1; text-align: center; font-size: 7.2pt; line-height: 1.25; }
+.enc-sop .enc-txt { font-size: 6.6pt; }
+.b { font-weight: 700; }
+.titulo { font-size: 8.4pt; }
+.logo { width: 14mm; height: 14mm; object-fit: contain; flex: none; }
+.cabecera-datos { display: flex; justify-content: flex-end; align-items: center; gap: 3mm; margin-top: -1mm; }
+.cabecera-datos.sop { justify-content: space-between; margin-top: 0; }
+.cit { display: flex; align-items: center; gap: 1.5mm; font-size: 7.6pt; }
+.caja { display: inline-block; border: 1px solid #000; border-radius: 1.6mm; padding: 0.6mm 2mm; min-height: 5.6mm; line-height: 1.3; vertical-align: middle; }
+.caja.fecha { min-width: 30mm; text-align: center; }
+.caja.num { min-width: 8mm; text-align: center; }
+.caja.ancha { display: block; min-height: 6mm; }
+.caja.alta { min-height: 8mm; }
+.fila { display: flex; align-items: center; gap: 1.6mm; flex-wrap: nowrap; }
+.fila.corta { min-height: 3.4mm; }
+.grow { flex: 1; min-width: 0; }
+.w14 { width: 12mm; } .w18 { width: 16mm; } .w20 { width: 18mm; } .w22 { width: 22mm; } .w30 { width: 27mm; } .w40 { width: 34mm; }
+.fila.lugares { flex-wrap: wrap; row-gap: 0.8mm; }
+.et { white-space: nowrap; }
+.lugar { display: inline-flex; align-items: flex-end; gap: 1mm; margin-right: 3mm; white-space: nowrap; }
+.marca { display: inline-block; min-width: 9mm; border-bottom: 1px solid #000; text-align: center; font-weight: 700; }
+.firmas { display: flex; gap: 6mm; margin-top: 3.5mm; text-align: center; font-size: 7.4pt; font-weight: 700; }
+.firma { flex: 1; }
+.linea { border-bottom: 1px solid #000; min-height: 5mm; font-weight: 400; font-size: 8pt; padding-bottom: 0.4mm; }
+.legal { border: 1px solid #000; padding: 1.2mm 1.6mm; font-size: 5.7pt; line-height: 1.25; text-align: justify; }
+.cierre { font-size: 8.4pt; }
+.campo { font-size: 7.6pt; margin-top: 0.4mm; }
+</style></head><body>${hojas.join("")}${opciones.autoImprimir === false ? "" : "<script>window.onload = function () { window.print(); };</script>"}</body></html>`;
+}
+
+// Abre el documento en una ventana aparte para imprimirlo (así el formato no
+// depende del resto de la app).
+export function abrirDocumentoParaImprimir(html) {
+  const ventana = window.open("", "_blank");
+  if (!ventana) { alert("El navegador bloqueó la ventana de impresión. Permití las ventanas emergentes para este sitio y volvé a intentar."); return; }
+  ventana.document.write(html);
+  ventana.document.close();
+}
+// ==== FIN CITACIONES ====
+
 /* ---------------- 🗓️ Jornada de Entrega de Informes ---------------- */
 export async function fetchJornadasPorCurso(gradoId) {
   const { data, error } = await supabase.from("jornadas_entrega_informes").select("*").eq("grado_id", gradoId).order("fecha", { ascending: false });
