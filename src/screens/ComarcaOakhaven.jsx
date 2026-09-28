@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import * as api from "../lib/api";
 import { agruparPorNivel } from "../lib/gamification";
 
@@ -831,6 +832,17 @@ function TruequesModal({ sesion, reinos, inventario, recursos, onClose, onCambio
   );
 }
 
+// La hoja de estilos global (index.css) oculta al imprimir TODO lo que no
+// sea ".print-only" y cuelgue directo de <body>. Un modal dentro de la app
+// queda oculto y sale la hoja en blanco, así que lo que se imprime va en
+// un portal aparte, igual que las planeaciones y las actas.
+function ImpresionEnBody({ children }) {
+  return createPortal(<div className="print-only">{children}</div>, document.body);
+}
+// Sin esto el navegador no imprime los fondos de color por defecto, y el
+// texto blanco de las tarjetas oscuras saldría invisible sobre papel blanco.
+const COLOR_EXACTO = { WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" };
+
 function MisionesSecretasModal({ sesion, reinos, onClose }) {
   const [catalogo, setCatalogo] = useState([]);
   const [misiones, setMisiones] = useState([]);
@@ -839,6 +851,7 @@ function MisionesSecretasModal({ sesion, reinos, onClose }) {
   const [textoNuevo, setTextoNuevo] = useState("");
   const [repartiendo, setRepartiendo] = useState(false);
   const [modoImprimir, setModoImprimir] = useState(false);
+  const [cantidad, setCantidad] = useState(10);
 
   const cargar = () => {
     setCargando(true);
@@ -847,6 +860,9 @@ function MisionesSecretasModal({ sesion, reinos, onClose }) {
     });
   };
   useEffect(() => { cargar(); }, []);
+
+  // Cuántas misiones recibe cada Reino: entre 1 y las que haya en el catálogo.
+  const cantidadValida = Math.max(1, Math.min(parseInt(cantidad, 10) || 10, catalogo.length || 1));
 
   const agregarAlCatalogo = async () => {
     if (!textoNuevo.trim()) return;
@@ -858,10 +874,10 @@ function MisionesSecretasModal({ sesion, reinos, onClose }) {
   const eliminarDelCatalogo = async (id) => { await api.eliminarMisionCatalogo(id); cargar(); };
 
   const repartir = async () => {
-    if (misiones.length > 0 && !confirm("Ya hay misiones repartidas en esta sesión — ¿volver a sortear? Se van a reemplazar las actuales.")) return;
+    if (misiones.length > 0 && !confirm(`Ya hay misiones repartidas en esta sesión — ¿volver a sortear con ${cantidadValida} por Reino? Se van a reemplazar las actuales.`)) return;
     setRepartiendo(true);
     try {
-      await api.repartirMisionesSecretas(sesion.id, reinos);
+      await api.repartirMisionesSecretas(sesion.id, reinos, cantidadValida);
       cargar();
     } catch (e) {
       alert("Error: " + e.message);
@@ -876,31 +892,50 @@ function MisionesSecretasModal({ sesion, reinos, onClose }) {
 
   const misionesDe = (reinoId) => misiones.filter((m) => m.reino_id === reinoId);
 
+  // Ajuste fino por Reino, sin volver a sortear a los demás.
+  const agregarUna = async (reino) => {
+    try {
+      await api.agregarMisionAReino(sesion.id, reino.id, misionesDe(reino.id).map((m) => m.texto));
+      cargar();
+    } catch (e) {
+      alert(e.message);
+    }
+  };
+  const quitar = async (mision) => {
+    if (!confirm("¿Quitar esta misión del Reino?")) return;
+    await api.quitarMisionAsignada(mision.id);
+    cargar();
+  };
+
   if (modoImprimir) {
-    return (
-      <div className="fixed inset-0 z-40 bg-white overflow-y-auto p-6">
-        <div className="flex justify-between items-center mb-4 print:hidden">
-          <h3 className="font-bold text-slate-800">📜 Misiones Secretas — para imprimir</h3>
-          <div className="flex gap-2">
-            <button onClick={() => window.print()} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">🖨️ Imprimir</button>
-            <button onClick={() => setModoImprimir(false)} className="text-slate-400">✕</button>
-          </div>
+    const tarjetas = reinos.map((reino) => (
+      <div key={reino.id} style={{ border: "2px dashed #94a3b8", borderRadius: 16, padding: 14, breakInside: "avoid", pageBreakInside: "avoid", background: "#fff" }}>
+        <div style={{ textAlign: "center", marginBottom: 8 }}>
+          <div style={{ fontSize: 24 }}>{reino.emoji}</div>
+          <div style={{ fontWeight: 700, color: "#1e293b" }}>{reino.nombre}</div>
+          <div style={{ fontSize: 10, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>Misiones Secretas — Confidencial</div>
         </div>
-        <div className="grid sm:grid-cols-2 gap-4">
-          {reinos.map((reino) => (
-            <div key={reino.id} className="border-2 border-dashed border-slate-300 rounded-2xl p-4 break-inside-avoid">
-              <div className="text-center mb-2">
-                <div className="text-2xl">{reino.emoji}</div>
-                <div className="font-bold text-slate-800">{reino.nombre}</div>
-                <div className="text-[10px] text-slate-400 uppercase tracking-wide">Misiones Secretas — Confidencial</div>
-              </div>
-              <ol className="text-xs text-slate-700 list-decimal list-inside space-y-1">
-                {misionesDe(reino.id).map((m) => <li key={m.id}>{m.texto}</li>)}
-              </ol>
-            </div>
-          ))}
-        </div>
+        <ol style={{ fontSize: 12, color: "#334155", listStyleType: "decimal", paddingLeft: 20, margin: 0 }}>
+          {misionesDe(reino.id).map((m) => <li key={m.id} style={{ marginBottom: 4 }}>{m.texto}</li>)}
+        </ol>
       </div>
+    ));
+    return (
+      <>
+        <div className="fixed inset-0 z-40 bg-white overflow-y-auto p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-bold text-slate-800">📜 Misiones Secretas — para imprimir</h3>
+            <div className="flex gap-2">
+              <button onClick={() => window.print()} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">🖨️ Imprimir</button>
+              <button onClick={() => setModoImprimir(false)} className="text-slate-400">✕</button>
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4">{tarjetas}</div>
+        </div>
+        <ImpresionEnBody>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12 }}>{tarjetas}</div>
+        </ImpresionEnBody>
+      </>
     );
   }
 
@@ -913,11 +948,23 @@ function MisionesSecretasModal({ sesion, reinos, onClose }) {
           <h3 className="font-bold text-slate-800">📜 Misiones Secretas</h3>
           <button onClick={onClose} className="text-slate-400">✕</button>
         </div>
-        <p className="text-xs text-slate-400 mb-3">Cada Reino recibe 10 misiones al azar del catálogo — se revelan al final de la sesión.</p>
+        <p className="text-xs text-slate-400 mb-3">Cada Reino recibe misiones al azar del catálogo — se revelan al final de la sesión.</p>
 
-        <div className="flex gap-2 mb-3">
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <label className="text-xs text-slate-500 flex items-center gap-1.5">
+            Misiones por Reino
+            <input type="number" min={1} max={Math.max(1, catalogo.length)} value={cantidad} onChange={(e) => setCantidad(e.target.value)}
+              className="w-16 text-sm text-center rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+          </label>
+          <span className="text-[11px] text-slate-400">El catálogo tiene {catalogo.length}</span>
+        </div>
+        {catalogo.length > 0 && (parseInt(cantidad, 10) || 10) > catalogo.length && (
+          <p className="text-[11px] text-amber-600 mb-2">El catálogo solo tiene {catalogo.length} misiones, así que cada Reino va a recibir {catalogo.length}. Agregá más al catálogo si querés más.</p>
+        )}
+
+        <div className="flex gap-2 mb-3 flex-wrap">
           <button disabled={repartiendo} onClick={repartir} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
-            {repartiendo ? "Repartiendo…" : "🎲 Repartir 10 misiones a cada Reino"}
+            {repartiendo ? "Repartiendo…" : `🎲 Repartir ${cantidadValida} misiones a cada Reino`}
           </button>
           {misiones.length > 0 && (
             <button onClick={() => setModoImprimir(true)} className="text-sm font-semibold px-4 py-2 rounded-lg border border-violet-200 text-violet-600">🖨️ Ver para imprimir</button>
@@ -947,13 +994,19 @@ function MisionesSecretasModal({ sesion, reinos, onClose }) {
           <div className="space-y-3">
             {reinos.map((reino) => (
               <div key={reino.id} className="border border-slate-200 rounded-xl p-3">
-                <div className="font-bold text-slate-800 text-sm mb-2">{reino.emoji} {reino.nombre}</div>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="font-bold text-slate-800 text-sm">{reino.emoji} {reino.nombre} <span className="text-[10px] font-normal text-slate-400">· {misionesDe(reino.id).length} misiones</span></div>
+                  <button onClick={() => agregarUna(reino)} className="text-[11px] font-semibold text-violet-600 shrink-0">＋ Agregar una</button>
+                </div>
                 <div className="space-y-1">
                   {misionesDe(reino.id).map((m) => (
-                    <label key={m.id} className={`flex items-center gap-2 text-xs px-2 py-1 rounded-lg ${m.cumplida ? "bg-emerald-50 text-emerald-700 line-through" : "bg-slate-50 text-slate-600"}`}>
-                      <input type="checkbox" checked={m.cumplida} onChange={() => toggleCumplida(m)} />
-                      {m.texto}
-                    </label>
+                    <div key={m.id} className={`flex items-center gap-2 text-xs px-2 py-1 rounded-lg ${m.cumplida ? "bg-emerald-50 text-emerald-700 line-through" : "bg-slate-50 text-slate-600"}`}>
+                      <label className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer">
+                        <input type="checkbox" checked={m.cumplida} onChange={() => toggleCumplida(m)} />
+                        <span>{m.texto}</span>
+                      </label>
+                      <button onClick={() => quitar(m)} className="text-slate-300 hover:text-rose-500 shrink-0" title="Quitar esta misión">🗑</button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -990,72 +1043,91 @@ function TarjetasRolImprimibleModal({ sesion, reinos, onClose }) {
 
   const tarjetas = estudiantes.map((est) => ({ est, reino: reinoDe(est), rol: rolDe(est) })).filter((t) => t.reino && t.rol);
 
-  return (
-    <div className="fixed inset-0 z-40 bg-white overflow-y-auto p-6">
-      <div className="flex justify-between items-center mb-4 print:hidden">
-        <h3 className="font-bold text-slate-800">🎭 Tarjetas de Rol — para imprimir</h3>
-        <div className="flex gap-2">
-          <button onClick={() => window.print()} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">🖨️ Imprimir</button>
-          <button onClick={onClose} className="text-slate-400">✕</button>
-        </div>
-      </div>
-      {tarjetas.length === 0 ? (
-        <p className="text-sm text-slate-400 print:hidden">Todavía nadie tiene un Reino y un rol asignados a la vez — hacelo primero en "🎭 Roles".</p>
-      ) : (
-        <div className="grid sm:grid-cols-3 gap-3">
-          {tarjetas.map(({ est, reino, rol }) => (
-            <div key={est.id} className="rounded-2xl p-4 text-white shadow-sm break-inside-avoid" style={{ background: "linear-gradient(160deg, #451a80 0%, #2d1155 100%)", border: "2px solid #C084FC" }}>
-              <div className="text-[9px] uppercase tracking-widest text-violet-200 mb-1">{reino.emoji} {reino.nombre}</div>
-              <div className="text-3xl mb-1">{rol.info?.emoji || "🎭"}</div>
-              <div className="text-sm font-bold mb-0.5">{rol.nombre}</div>
-              <div className="text-xs text-violet-200 mb-2">{nombreMostrado(est)}</div>
-              {rol.info?.descripcion && <p className="text-[10px] text-violet-100 leading-snug">{rol.info.descripcion}</p>}
-            </div>
-          ))}
-        </div>
-      )}
+  // Mismo diseño en pantalla y en papel. Los colores van con estilo en línea
+  // (y "color exacto") para que el fondo oscuro también se imprima.
+  const cartas = tarjetas.map(({ est, reino, rol }) => (
+    <div key={est.id} style={{ ...COLOR_EXACTO, borderRadius: 16, padding: 14, color: "#fff", background: "linear-gradient(160deg, #223b74 0%, #0f1932 100%)", border: "2px solid #829aca", breakInside: "avoid", pageBreakInside: "avoid" }}>
+      <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.1em", color: "#ccd7eb", marginBottom: 4 }}>{reino.emoji} {reino.nombre}</div>
+      <div style={{ fontSize: 30, marginBottom: 4 }}>{rol.info?.emoji || "🎭"}</div>
+      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 2 }}>{rol.nombre}</div>
+      <div style={{ fontSize: 12, color: "#ccd7eb", marginBottom: 8 }}>{nombreMostrado(est)}</div>
+      {rol.info?.descripcion && <p style={{ fontSize: 10, color: "#E8EEF8", lineHeight: 1.35, margin: 0 }}>{rol.info.descripcion}</p>}
     </div>
-  );
-}
+  ));
 
-function InventarioImprimibleModal({ reinos, inventario, onClose }) {
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl print:shadow-none print:max-h-none">
-        <div className="flex justify-between items-center mb-4 print:hidden">
-          <h3 className="font-bold text-slate-800">📋 Inventario por Reino</h3>
+    <>
+      <div className="fixed inset-0 z-40 bg-white overflow-y-auto p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-bold text-slate-800">🎭 Tarjetas de Rol — para imprimir</h3>
           <div className="flex gap-2">
             <button onClick={() => window.print()} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">🖨️ Imprimir</button>
             <button onClick={onClose} className="text-slate-400">✕</button>
           </div>
         </div>
-        <div className="space-y-4">
-          {reinos.map((r) => {
-            const items = inventario.filter((i) => i.reino_id === r.id && i.cantidad > 0);
-            return (
-              <div key={r.id} className="border border-slate-200 rounded-xl p-3">
-                <div className="font-bold text-slate-800 text-sm mb-2">{r.emoji} {r.nombre} — 🪙 {r.gp} GP · 🕊️ {r.fp} FP</div>
-                {items.length === 0 ? (
-                  <p className="text-xs text-slate-400">Sin productos todavía.</p>
-                ) : (
-                  <table className="w-full text-xs">
-                    <thead><tr className="text-left text-slate-400"><th className="pb-1">Producto</th><th className="pb-1 text-right">Cantidad</th></tr></thead>
-                    <tbody>
-                      {items.map((i) => (
-                        <tr key={i.id} className="border-t border-slate-200">
-                          <td className="py-1">{i.comarca_productos?.emoji} {i.comarca_productos?.nombre}</td>
-                          <td className="py-1 text-right font-semibold">{i.cantidad}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            );
-          })}
+        {tarjetas.length === 0 ? (
+          <p className="text-sm text-slate-400">Todavía nadie tiene un Reino y un rol asignados a la vez — hacelo primero en "🎭 Roles".</p>
+        ) : (
+          <div className="grid sm:grid-cols-3 gap-3">{cartas}</div>
+        )}
+      </div>
+      {tarjetas.length > 0 && (
+        <ImpresionEnBody>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>{cartas}</div>
+        </ImpresionEnBody>
+      )}
+    </>
+  );
+}
+
+function InventarioImprimibleModal({ reinos, inventario, onClose }) {
+  const cuerpo = (
+    <div className="space-y-4">
+      {reinos.map((r) => {
+        const items = inventario.filter((i) => i.reino_id === r.id && i.cantidad > 0);
+        return (
+          <div key={r.id} className="border border-slate-200 rounded-xl p-3" style={{ breakInside: "avoid", pageBreakInside: "avoid" }}>
+            <div className="font-bold text-slate-800 text-sm mb-2">{r.emoji} {r.nombre} — 🪙 {r.gp} GP · 🕊️ {r.fp} FP</div>
+            {items.length === 0 ? (
+              <p className="text-xs text-slate-400">Sin productos todavía.</p>
+            ) : (
+              <table className="w-full text-xs">
+                <thead><tr className="text-left text-slate-400"><th className="pb-1">Producto</th><th className="pb-1 text-right">Cantidad</th></tr></thead>
+                <tbody>
+                  {items.map((i) => (
+                    <tr key={i.id} className="border-t border-slate-200">
+                      <td className="py-1">{i.comarca_productos?.emoji} {i.comarca_productos?.nombre}</td>
+                      <td className="py-1 text-right font-semibold">{i.cantidad}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+        <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-bold text-slate-800">📋 Inventario por Reino</h3>
+            <div className="flex gap-2">
+              <button onClick={() => window.print()} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">🖨️ Imprimir</button>
+              <button onClick={onClose} className="text-slate-400">✕</button>
+            </div>
+          </div>
+          {cuerpo}
         </div>
       </div>
-    </div>
+      <ImpresionEnBody>
+        <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 10, color: "#1e293b" }}>📋 Inventario por Reino</div>
+        {cuerpo}
+      </ImpresionEnBody>
+    </>
   );
 }
 
