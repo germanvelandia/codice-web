@@ -2120,22 +2120,24 @@ function PortalAcudiente({ onElegirEstudiante }) {
                                     Periodo {p} — <span>{celda.nota !== null && celda.nota !== undefined ? Number(celda.nota).toFixed(1) : "—"}</span>
                                     {celda.enCurso && <span className="text-amber-600 font-normal"> · En curso (provisional)</span>}
                                   </div>
-                                  {celda.actividades.length > 0 ? (
-                                    <div className="ml-2 mt-1 space-y-0.5">
-                                      {celda.actividades.map((a) => (
-                                        <div key={a.id}>
-                                          <div className="text-[11px] text-slate-500 flex justify-between gap-2">
-                                            <span>{a.notas_actividades?.nombre}{a.notas_actividades?.notas_categorias?.nombre ? ` (${a.notas_actividades.notas_categorias.nombre})` : ""}</span>
-                                            <span className="font-semibold shrink-0">{a.valor}</span>
+                                  {celda.enCurso && (
+                                    celda.actividades.length > 0 ? (
+                                      <div className="ml-2 mt-1 space-y-0.5">
+                                        {celda.actividades.map((a) => (
+                                          <div key={a.id}>
+                                            <div className="text-[11px] text-slate-500 flex justify-between gap-2">
+                                              <span>{a.notas_actividades?.nombre}{a.notas_actividades?.notas_categorias?.nombre ? ` (${a.notas_actividades.notas_categorias.nombre})` : ""}</span>
+                                              <span className="font-semibold shrink-0">{a.valor}</span>
+                                            </div>
+                                            {a.observacion && (
+                                              <div className="text-[10px] text-violet-600 italic bg-violet-50 rounded-lg px-2 py-1 mt-0.5">📝 {a.observacion}</div>
+                                            )}
                                           </div>
-                                          {a.observacion && (
-                                            <div className="text-[10px] text-violet-600 italic bg-violet-50 rounded-lg px-2 py-1 mt-0.5">📝 {a.observacion}</div>
-                                          )}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <p className="text-[11px] text-slate-400 ml-2 mt-0.5">Sin actividades individuales cargadas para este periodo.</p>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <p className="text-[11px] text-slate-400 ml-2 mt-0.5">Sin actividades individuales cargadas para este periodo.</p>
+                                    )
                                   )}
                                 </div>
                               );
