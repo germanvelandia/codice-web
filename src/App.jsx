@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "./lib/supabaseClient";
 import * as api from "./lib/api";
+import { useEstadoPersistente, fijarUsuarioPersistencia } from "./lib/api";
 import { nextLevel, nivelYCurso } from "./lib/gamification";
 import { bandaDesempeno, notaFinalPonderada } from "./lib/calificaciones";
 import { sonidoGirar, sonidoAcierto, sonidoError, sonidoLogro } from "./lib/sonidos";
@@ -2718,7 +2719,7 @@ function SidebarTarjetas({ activo, onCambiar, email, institucion, onAdmin, onIns
     if (contenedor && !gruposAbiertos.has(contenedor.key)) {
       setGruposAbiertos((prev) => new Set(prev).add(contenedor.key));
     }
-  }, [activo]);
+  }, [activo, grupos.length]); // grupos.length: el grupo "Administración" aparece recién cuando se sabe que sos admin
 
   useEffect(() => { api.fetchMiPerfil().then((p) => setNombreDocente(p?.nombre || "")); }, []);
 
@@ -2827,20 +2828,22 @@ function SidebarTarjetas({ activo, onCambiar, email, institucion, onAdmin, onIns
 
 
 function Panel({ session }) {
-  const [tab, setTab] = useState("inicio");
+  // Lo que se recuerda al "Actualizar" es propio de cada docente.
+  fijarUsuarioPersistencia(session.user.id);
+  const [tab, setTab] = useEstadoPersistente("panel_seccion", "inicio");
   const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
   const [esAdmin, setEsAdmin] = useState(null); // null = todavía no se sabe
   const [previsualizandoDocente, setPrevisualizandoDocente] = useState(false);
   const esAdminEfectivo = esAdmin && !previsualizandoDocente;
   useEffect(() => { api.fetchMiPerfil().then((p) => setEsAdmin(!!p?.es_admin)); }, []);
-  const [subTabHerramientas, setSubTabHerramientas] = useState("ruleta");
-  const [grado, setGrado] = useState(null);
-  const [gradoActivo, setGradoActivo] = useState(null);
-  const [periodoActivo, setPeriodoActivo] = useState("1");
+  const [subTabHerramientas, setSubTabHerramientas] = useEstadoPersistente("panel_herramienta", "ruleta");
+  const [grado, setGrado] = useEstadoPersistente("panel_estudiantes_curso", null);
+  const [gradoActivo, setGradoActivo] = useEstadoPersistente("panel_curso_activo", null);
+  const [periodoActivo, setPeriodoActivo] = useEstadoPersistente("panel_periodo_activo", "1");
   const [materias, setMaterias] = useState([]);
-  const [materiaActiva, setMateriaActiva] = useState(null);
-  const [reino, setReino] = useState(null);
-  const [modoLista, setModoLista] = useState(false);
+  const [materiaActiva, setMateriaActiva] = useEstadoPersistente("panel_materia_activa", null);
+  const [reino, setReino] = useEstadoPersistente("panel_estudiantes_reino", null);
+  const [modoLista, setModoLista] = useEstadoPersistente("panel_estudiantes_lista", false);
   const [grados, setGrados] = useState([]);
   const [institucionAbierta, setInstitucionAbierta] = useState(false);
   const [administracionAbierta, setAdministracionAbierta] = useState(false);
@@ -2857,11 +2860,11 @@ function Panel({ session }) {
   useEffect(() => {
     api.asegurarProfesor().then(() => api.asegurarGradosBase()).then(() => api.fetchGrados()).then((data) => {
       setGrados(data);
-      setGradoActivo((prev) => prev || data[0]?.id || null);
+      setGradoActivo((prev) => (prev && data.some((g) => g.id === prev) ? prev : data[0]?.id || null));
     });
     api.fetchMaterias().then((data) => {
       setMaterias(data);
-      setMateriaActiva((prev) => prev || data[0]?.id || null);
+      setMateriaActiva((prev) => (prev && data.some((m) => m.id === prev) ? prev : data[0]?.id || null));
     });
     cargarInstitucion();
   }, []);
@@ -2884,9 +2887,18 @@ function Panel({ session }) {
 
   const menuPanelVisible = esAdminEfectivo ? MENU_PANEL_GRUPOS : MENU_PANEL_GRUPOS.filter((g) => g.key !== "administracion");
 
+  // Si la sección recordada ya no existe (o cambiaste de rol), se vuelve a Inicio.
+  // El chequeo de administrador espera a saber quién sos: antes de eso "esAdmin"
+  // es null y una pantalla de administración recordada se perdería en cada F5.
+  const seccionesValidas = ["inicio", "herramientas", ...MENU_PANEL.map((i) => i.key).filter((k) => !k.startsWith("herr_"))];
   useEffect(() => {
+    if (!seccionesValidas.includes(tab)) { setTab("inicio"); return; }
+    if (esAdmin === null) return;
     if (!esAdminEfectivo && CLAVES_SOLO_ADMIN.includes(tab)) { setTab("inicio"); }
-  }, [esAdminEfectivo]);
+  }, [tab, esAdmin, esAdminEfectivo]);
+  useEffect(() => {
+    if (!NOMBRES_HERRAMIENTAS[subTabHerramientas]) setSubTabHerramientas("ruleta");
+  }, [subTabHerramientas]);
 
   // Desde "Entregas por revisar": salta directo a Misiones o Proyectos/Forja,
   // ya con el curso, la materia y el periodo correctos seleccionados arriba.
