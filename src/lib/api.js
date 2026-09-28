@@ -4643,6 +4643,42 @@ export async function fetchNivelacion(materiaId) {
   return data || [];
 }
 
+/* ==================== 🖨️ Incumplimientos de nivelación ====================
+   Estudiantes de uno o varios cursos que, en alguna de TUS materias,
+   perdieron un periodo ya cerrado (nota final guardada por debajo de la
+   nota mínima) y cuya nivelación sigue en "Sin marcar": ni la presentaron
+   ni la superaron. Alimenta el documento firmado por grado.
+   Solo cuenta periodos con nota final guardada — el periodo en curso, que
+   todavía se calcula en vivo, no entra. */
+export async function fetchIncumplimientosNivelacion(cursoIds) {
+  const materias = await fetchMisMaterias();
+  const listas = await Promise.all(cursoIds.map((id) => fetchEstudiantesPorGrado(id)));
+  const estudiantes = listas.flat(); // ya vienen por curso y, dentro de cada curso, por apellido
+  const posicion = new Map(estudiantes.map((e, i) => [e.id, i]));
+  const porId = new Map(estudiantes.map((e) => [e.id, e]));
+  const acumulado = new Map();
+
+  for (const materia of materias) {
+    const [config, finales, nivelacion] = await Promise.all([
+      fetchNotasConfig(materia.id), fetchNotasFinales(materia.id), fetchNivelacion(materia.id),
+    ]);
+    const minima = config?.nota_minima;
+    if (minima === null || minima === undefined) continue;
+    finales.forEach((f) => {
+      const est = porId.get(f.estudiante_id);
+      if (!est || f.nota === null || f.nota === undefined || Number(f.nota) >= Number(minima)) return;
+      const registro = nivelacion.find((n) => n.estudiante_id === f.estudiante_id && String(n.periodo) === String(f.periodo));
+      if (registro && registro.estado) return; // pendiente, en proceso o superado: ya tiene seguimiento
+      if (!acumulado.has(est.id)) acumulado.set(est.id, { estudiante: est, items: [] });
+      acumulado.get(est.id).items.push({ materia: materia.nombre, periodo: f.periodo, nota: f.nota });
+    });
+  }
+
+  return Array.from(acumulado.values())
+    .map((d) => ({ ...d, items: d.items.sort((a, b) => a.materia.localeCompare(b.materia) || Number(a.periodo) - Number(b.periodo)) }))
+    .sort((a, b) => posicion.get(a.estudiante.id) - posicion.get(b.estudiante.id));
+}
+
 export async function setNivelacion(materiaId, estudianteId, periodo, estado, notaOriginal) {
   if (!estado) {
     const { error } = await supabase.from("nivelacion").delete().eq("materia_id", materiaId).eq("estudiante_id", estudianteId).eq("periodo", periodo);
