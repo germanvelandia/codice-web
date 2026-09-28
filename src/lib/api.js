@@ -3657,7 +3657,9 @@ export async function fetchPanelDireccionCurso(gradoId) {
   const estudiantes = await fetchEstudiantesPorGrado(gradoId);
   const idsEstudiantes = estudiantes.map((e) => e.id);
   const [asistenciaRes, notas, actasRes, citacionesRes] = await Promise.all([
-    idsEstudiantes.length ? supabase.from("asistencia").select("estudiante_id, codigo").in("estudiante_id", idsEstudiantes) : { data: [] },
+    idsEstudiantes.length
+      ? traerTodo(() => ordenAsistencia(supabase.from("asistencia").select("estudiante_id, codigo", { count: "exact" }).in("estudiante_id", idsEstudiantes))).then((data) => ({ data }))
+      : { data: [] },
     fetchNotasDireccionCurso(gradoId),
     supabase.from("actas").select("id, estudiante_id, fecha, tipo, tipo_evento, evaluacion_compromiso"),
     supabase.from("citaciones_padres").select("id, estudiante_id, estado, fecha_citacion"),
@@ -3739,6 +3741,46 @@ export async function editarCitacion(id, campos) {
 export async function eliminarCitacion(id) {
   const { error } = await supabase.from("citaciones_padres").delete().eq("id", id);
   if (error) throw error;
+}
+
+/* ---------------- ⚡ Carga liviana de Citaciones ----------------
+   Citaciones solo necesita el id y el nombre de cada estudiante, no su progreso
+   ni sus roles. Antes se pedían los estudiantes completos TRES veces al abrir. */
+
+// El id del usuario sin ir a la red: getUser() le pregunta al servidor de
+// Supabase en cada llamada; getSession() lee la sesión guardada en el navegador.
+async function idUsuarioRapido() {
+  const { data } = await supabase.auth.getSession();
+  if (data?.session?.user?.id) return data.session.user.id;
+  const { data: u } = await supabase.auth.getUser();
+  return u?.user?.id || null;
+}
+
+export async function fetchEstudiantesLivianosPorGrado(gradoId) {
+  const { data, error } = await supabase.from("estudiantes").select("id, nombre, grado_id").eq("grado_id", gradoId).eq("activo", true);
+  if (error) throw error;
+  return ordenarPorApellido(data || []);
+}
+
+// Tus citaciones de una lista de estudiantes que ya tenés cargada.
+export async function fetchCitacionesDeEstudiantes(estudiantes) {
+  const ids = estudiantes.map((e) => e.id);
+  if (ids.length === 0) return [];
+  const docenteId = await idUsuarioRapido();
+  const { data, error } = await supabase.from("citaciones_padres").select("*").in("estudiante_id", ids).eq("docente_id", docenteId).order("fecha_citacion", { ascending: false });
+  if (error) throw error;
+  const nombrePorId = {}; estudiantes.forEach((e) => { nombrePorId[e.id] = e.nombre; });
+  return (data || []).map((c) => ({ ...c, estudiante_nombre: nombrePorId[c.estudiante_id] }));
+}
+
+// Nombres de padre y madre del Directorio — solo para sugerir a quién citar.
+export async function fetchNombresAcudientes(estudianteIds) {
+  if (estudianteIds.length === 0) return {};
+  const { data, error } = await supabase.from("acudientes").select("estudiante_id, nombre_padre, nombre_madre").in("estudiante_id", estudianteIds);
+  if (error) throw error;
+  const mapa = {};
+  (data || []).forEach((a) => { mapa[a.estudiante_id] = a; });
+  return mapa;
 }
 
 // ==== INICIO CITACIONES ====
@@ -4911,17 +4953,52 @@ export async function calcularNotasFinalesPeriodo(materiaId, gradoId, periodo, e
 // Listado detallado (fila por fila, con materia) de la asistencia de un
 // curso en un rango de fechas — para poder ver y borrar registros puntuales
 // que hayan quedado mal cargados (mezclados entre materias, duplicados, etc.).
+// ==== INICIO LECTURA COMPLETA ====
+/* Supabase corta CUALQUIER lectura en 1000 filas por pedido (sin avisar). En
+   asistencia se llega rápido: un curso de 34 estudiantes pasa de 1000 registros
+   en ~30 clases, y en los reportes por institución mucho antes. Los totales
+   contaban solo un pedazo. Esta función trae TODAS las filas: pide la primera
+   página junto con el total y el resto de las páginas en paralelo.
+   "armar" tiene que devolver una consulta NUEVA cada vez, con
+   select(..., { count: "exact" }) y un orden completo (así las páginas no se
+   pisan ni se repiten). */
+async function traerTodo(armar, tamano = 1000) {
+  const primera = await armar().range(0, tamano - 1);
+  if (primera.error) throw primera.error;
+  const filas = [...(primera.data || [])];
+  if (filas.length < tamano) return filas;
+
+  if (typeof primera.count === "number") {
+    const paginas = Math.ceil(primera.count / tamano);
+    const resto = await Promise.all(Array.from({ length: Math.max(0, paginas - 1) }, (_, i) => armar().range((i + 1) * tamano, (i + 2) * tamano - 1)));
+    for (const r of resto) { if (r.error) throw r.error; filas.push(...(r.data || [])); }
+    return filas;
+  }
+  // Si el servidor no informó el total: página por página hasta que venga incompleta.
+  for (let desde = tamano; ; desde += tamano) {
+    const r = await armar().range(desde, desde + tamano - 1);
+    if (r.error) { if (r.error.code === "PGRST103") break; throw r.error; } // "rango fuera de límite" = ya no hay más
+    filas.push(...(r.data || []));
+    if ((r.data || []).length < tamano) break;
+  }
+  return filas;
+}
+// Orden completo de la tabla asistencia (no tiene columna id).
+const ordenAsistencia = (q) => q.order("estudiante_id").order("fecha").order("materia_id").order("codigo");
+// ==== FIN LECTURA COMPLETA ====
+
 export async function fetchAsistenciaDetalladaCurso(gradoId, fechaDesde, fechaHasta) {
   const estudiantes = await fetchEstudiantesPorGrado(gradoId);
   const ids = estudiantes.map((e) => e.id);
   if (ids.length === 0) return [];
   const nombrePorId = {}; estudiantes.forEach((e) => { nombrePorId[e.id] = e.nombre; });
 
-  let query = supabase.from("asistencia").select("estudiante_id, fecha, codigo, materia_id").in("estudiante_id", ids);
-  if (fechaDesde) query = query.gte("fecha", fechaDesde);
-  if (fechaHasta) query = query.lte("fecha", fechaHasta);
-  const { data, error } = await query.order("fecha", { ascending: false });
-  if (error) throw error;
+  const data = await traerTodo(() => {
+    let q = supabase.from("asistencia").select("estudiante_id, fecha, codigo, materia_id", { count: "exact" }).in("estudiante_id", ids);
+    if (fechaDesde) q = q.gte("fecha", fechaDesde);
+    if (fechaHasta) q = q.lte("fecha", fechaHasta);
+    return q.order("fecha", { ascending: false }).order("estudiante_id").order("materia_id").order("codigo");
+  });
 
   const materias = await fetchMaterias();
   const nombreMateriaPorId = {}; materias.forEach((m) => { nombreMateriaPorId[m.id] = m.nombre; });
@@ -4942,12 +5019,13 @@ export async function fetchTotalesAsistenciaInstitucionalCurso(gradoId, fechaDes
   const ids = estudiantes.map((e) => e.id);
   if (ids.length === 0) return [];
 
-  let query = supabase.from("asistencia").select("estudiante_id, codigo, fecha").in("estudiante_id", ids);
-  query = materiaId ? query.eq("materia_id", materiaId) : query.is("materia_id", null);
-  if (fechaDesde) query = query.gte("fecha", fechaDesde);
-  if (fechaHasta) query = query.lte("fecha", fechaHasta);
-  const { data: registros, error } = await query;
-  if (error) throw error;
+  const registros = await traerTodo(() => {
+    let q = supabase.from("asistencia").select("estudiante_id, codigo, fecha", { count: "exact" }).in("estudiante_id", ids);
+    q = materiaId ? q.eq("materia_id", materiaId) : q.is("materia_id", null);
+    if (fechaDesde) q = q.gte("fecha", fechaDesde);
+    if (fechaHasta) q = q.lte("fecha", fechaHasta);
+    return ordenAsistencia(q);
+  });
 
   const totales = {};
   estudiantes.forEach((e) => { totales[e.id] = { estudianteId: e.id, nombre: e.nombre, P: 0, R: 0, FI: 0, FJ: 0, total: 0 }; });
@@ -5073,54 +5151,58 @@ export async function quitarAsistencia(estudianteId, fecha, materiaId = null) {
 
 // Totales de asistencia agrupados por grado (para comparar entre cursos de
 // un vistazo), opcionalmente acotado a un rango de fechas.
-export async function fetchTotalesAsistenciaPorGrado(fechaDesde, fechaHasta, materiaId = null) {
-  let query = supabase.from("asistencia").select("estudiante_id, codigo");
-  if (fechaDesde) query = query.gte("fecha", fechaDesde);
-  if (fechaHasta) query = query.lte("fecha", fechaHasta);
-  if (materiaId) query = query.eq("materia_id", materiaId);
-  const { data: registros, error } = await query;
-  if (error) throw error;
+// Totales de asistencia por grado y por estudiante, calculados con UNA sola
+// descarga de la tabla (antes cada uno la descargaba entera por separado, y
+// además ninguno pasaba de las primeras 1000 filas). Opcionalmente acotado a un
+// rango de fechas y a una materia.
+async function calcularTotalesAsistencia(fechaDesde, fechaHasta, materiaId = null) {
+  const [registros, estudiantes] = await Promise.all([
+    traerTodo(() => {
+      let q = supabase.from("asistencia").select("estudiante_id, codigo", { count: "exact" });
+      if (fechaDesde) q = q.gte("fecha", fechaDesde);
+      if (fechaHasta) q = q.lte("fecha", fechaHasta);
+      if (materiaId) q = q.eq("materia_id", materiaId);
+      return ordenAsistencia(q);
+    }),
+    traerTodo(() => supabase.from("estudiantes").select("id, nombre, grado_id, activo", { count: "exact" }).order("id")),
+  ]);
 
-  const { data: estudiantes, error: e2 } = await supabase.from("estudiantes").select("id, grado_id");
-  if (e2) throw e2;
-  const gradoPorEstudiante = {}; (estudiantes || []).forEach((e) => { gradoPorEstudiante[e.id] = e.grado_id; });
-
-  const totales = {};
-  (registros || []).forEach((r) => {
+  // Por grado: cuenta todo registro cuyo estudiante tenga curso (activo o no, como antes).
+  const gradoPorEstudiante = {}; estudiantes.forEach((e) => { gradoPorEstudiante[e.id] = e.grado_id; });
+  const porGradoMapa = {};
+  registros.forEach((r) => {
     const grado = gradoPorEstudiante[r.estudiante_id];
     if (!grado) return;
-    totales[grado] = totales[grado] || { grado, P: 0, R: 0, FI: 0, FJ: 0, total: 0 };
-    totales[grado][r.codigo] = (totales[grado][r.codigo] || 0) + 1;
-    totales[grado].total += 1;
+    porGradoMapa[grado] = porGradoMapa[grado] || { grado, P: 0, R: 0, FI: 0, FJ: 0, total: 0 };
+    porGradoMapa[grado][r.codigo] = (porGradoMapa[grado][r.codigo] || 0) + 1;
+    porGradoMapa[grado].total += 1;
   });
 
-  return Object.values(totales).sort((a, b) => a.grado.localeCompare(b.grado, undefined, { numeric: true }));
+  // Por estudiante: solo los activos.
+  const porEstudianteMapa = {};
+  estudiantes.filter((e) => e.activo === true).forEach((e) => {
+    porEstudianteMapa[e.id] = { estudianteId: e.id, nombre: e.nombre, grado: e.grado_id, P: 0, R: 0, FI: 0, FJ: 0, total: 0 };
+  });
+  registros.forEach((r) => {
+    if (!porEstudianteMapa[r.estudiante_id]) return;
+    porEstudianteMapa[r.estudiante_id][r.codigo] = (porEstudianteMapa[r.estudiante_id][r.codigo] || 0) + 1;
+    porEstudianteMapa[r.estudiante_id].total += 1;
+  });
+
+  return {
+    porGrado: Object.values(porGradoMapa).sort((a, b) => a.grado.localeCompare(b.grado, undefined, { numeric: true })),
+    porEstudiante: Object.values(porEstudianteMapa).sort((a, b) => a.grado.localeCompare(b.grado, undefined, { numeric: true }) || a.nombre.localeCompare(b.nombre)),
+  };
 }
 
-// Igual que fetchTotalesAsistenciaPorGrado, pero desglosado por estudiante
-// (agrupado/ordenado por grado) en vez de solo el total agregado del grado.
+export async function fetchTotalesAsistenciaTodo(fechaDesde, fechaHasta, materiaId = null) {
+  return calcularTotalesAsistencia(fechaDesde, fechaHasta, materiaId);
+}
+export async function fetchTotalesAsistenciaPorGrado(fechaDesde, fechaHasta, materiaId = null) {
+  return (await calcularTotalesAsistencia(fechaDesde, fechaHasta, materiaId)).porGrado;
+}
 export async function fetchTotalesAsistenciaPorEstudiante(fechaDesde, fechaHasta, materiaId = null) {
-  let query = supabase.from("asistencia").select("estudiante_id, codigo");
-  if (fechaDesde) query = query.gte("fecha", fechaDesde);
-  if (fechaHasta) query = query.lte("fecha", fechaHasta);
-  if (materiaId) query = query.eq("materia_id", materiaId);
-  const { data: registros, error } = await query;
-  if (error) throw error;
-
-  const { data: estudiantes, error: e2 } = await supabase.from("estudiantes").select("id, nombre, grado_id").eq("activo", true);
-  if (e2) throw e2;
-
-  const totales = {};
-  (estudiantes || []).forEach((e) => {
-    totales[e.id] = { estudianteId: e.id, nombre: e.nombre, grado: e.grado_id, P: 0, R: 0, FI: 0, FJ: 0, total: 0 };
-  });
-  (registros || []).forEach((r) => {
-    if (!totales[r.estudiante_id]) return;
-    totales[r.estudiante_id][r.codigo] = (totales[r.estudiante_id][r.codigo] || 0) + 1;
-    totales[r.estudiante_id].total += 1;
-  });
-
-  return Object.values(totales).sort((a, b) => a.grado.localeCompare(b.grado, undefined, { numeric: true }) || a.nombre.localeCompare(b.nombre));
+  return (await calcularTotalesAsistencia(fechaDesde, fechaHasta, materiaId)).porEstudiante;
 }
 
 // Mueve registros de asistencia GENERAL (sin materia) hacia una materia
