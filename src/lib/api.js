@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
 import { GRADOS_BASE, ordenarPorApellido, buscarEstudiantePorNombre } from "./gamification";
 import { notaAutomatica, notaFinalPonderada } from "./calificaciones";
@@ -6128,3 +6129,37 @@ export async function restablecerClaveAcudiente(estudianteId, rol) {
   const { error } = await supabase.from("acudientes").update({ [campoClave]: null }).eq("estudiante_id", estudianteId);
   if (error) throw error;
 }
+
+// ==== INICIO PERSISTENCIA ====
+/* ==================== 💾 Recordar dónde estabas al actualizar ====================
+   Guarda en sessionStorage: sobrevive a "Actualizar" (F5) en la misma pestaña,
+   pero no se mezcla entre pestañas ni entre docentes distintos, porque cada
+   clave lleva el id del usuario. */
+let usuarioPersistencia = "";
+export function fijarUsuarioPersistencia(uid) { usuarioPersistencia = uid || ""; }
+const clavePersistida = (clave) => `codice:${usuarioPersistencia}:${clave}`;
+
+// Devuelve lo guardado, o undefined si no hay nada (o no se puede leer).
+export function leerPersistido(clave) {
+  try {
+    const v = sessionStorage.getItem(clavePersistida(clave));
+    return v === null ? undefined : JSON.parse(v);
+  } catch {
+    return undefined;
+  }
+}
+
+export function guardarPersistido(clave, valor) {
+  try { sessionStorage.setItem(clavePersistida(clave), JSON.stringify(valor)); } catch { /* modo privado o sin espacio: no pasa nada */ }
+}
+
+// Igual que useState, pero recuerda el valor al actualizar la página.
+export function useEstadoPersistente(clave, valorInicial) {
+  const [valor, setValor] = useState(() => {
+    const guardado = leerPersistido(clave);
+    return guardado === undefined ? valorInicial : guardado;
+  });
+  useEffect(() => { guardarPersistido(clave, valor); }, [clave, valor]);
+  return [valor, setValor];
+}
+// ==== FIN PERSISTENCIA ====
