@@ -5190,6 +5190,22 @@ export async function repartirMisionesSecretas(sesionId, reinos, cantidadPorRein
   if (error) throw error;
 }
 
+// Suma una misión al azar (que ese Reino todavía no tenga) — para ajustar
+// el número de misiones de un Reino puntual sin volver a sortear todo.
+export async function agregarMisionAReino(sesionId, reinoId, textosYaAsignados = []) {
+  const catalogo = await fetchMisionesCatalogo();
+  const disponibles = catalogo.filter((m) => !textosYaAsignados.includes(m.texto));
+  if (disponibles.length === 0) throw new Error("Este Reino ya tiene todas las misiones del catálogo. Agregá más al catálogo primero.");
+  const elegida = disponibles[Math.floor(Math.random() * disponibles.length)];
+  const { error } = await supabase.from("comarca_misiones_asignadas").insert({ sesion_id: sesionId, reino_id: reinoId, texto: elegida.texto });
+  if (error) throw error;
+}
+
+export async function quitarMisionAsignada(misionId) {
+  const { error } = await supabase.from("comarca_misiones_asignadas").delete().eq("id", misionId);
+  if (error) throw error;
+}
+
 export async function marcarMisionCumplida(misionId, cumplida) {
   const { error } = await supabase.from("comarca_misiones_asignadas").update({ cumplida }).eq("id", misionId);
   if (error) throw error;
