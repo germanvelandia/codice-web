@@ -23,7 +23,7 @@ function htmlEncabezadoColegio(institucion, subtitulo) {
   `;
 }
 
-function CitacionForm({ estudiantes, citaciones, acudientes, formato, citacion, onCancelar, onGuardada }) {
+function CitacionForm({ estudiantes, citaciones, acudientes, formato, citacion, docente, onCancelar, onGuardada }) {
   const sugeridoAcudiente = (id) => acudientes[id]?.nombre_padre || acudientes[id]?.nombre_madre || "";
   // Es la 1ª, 2ª, 3ª… citación de ese estudiante (se puede corregir a mano).
   const siguienteNumero = (id) => citaciones.filter((c) => c.estudiante_id === id).length + 1;
@@ -53,6 +53,8 @@ function CitacionForm({ estudiantes, citaciones, acudientes, formato, citacion, 
 
   const guardar = async () => {
     if (!estudianteId || !motivo.trim()) { alert("Elegí el estudiante y escribí el motivo."); return; }
+    if (!acudiente.trim()) { alert("Escribí el nombre del acudiente al que se cita — es lo que va impreso en el formato."); return; }
+    if (!(lugarSel === "__otro__" ? lugarOtro.trim() : lugarSel)) { alert("Elegí dónde va a ser atendido el acudiente."); return; }
     setGuardando(true);
     try {
       const campos = {
@@ -71,15 +73,21 @@ function CitacionForm({ estudiantes, citaciones, acudientes, formato, citacion, 
   };
 
   const inputCls = "w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white";
+  const docenteEsCorreo = /\S+@\S+\.\S+/.test(docente || "");
   return (
     <div className="bg-violet-50 rounded-xl p-3 mb-3">
+      {docenteEsCorreo && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-lg px-3 py-2 mb-3">
+          ⚠️ Todavía no pusiste tu nombre — el formato va a salir sin nombre de docente (nunca con tu correo). Podés ponerlo tocando tu correo abajo del todo, en el menú de la izquierda.
+        </div>
+      )}
       <label className="text-xs text-slate-500 block mb-1">Estudiante</label>
       <select value={estudianteId} onChange={(e) => elegirEstudiante(parseInt(e.target.value, 10))} disabled={!!citacion}
         className={`${inputCls} mb-2 disabled:opacity-60`}>
         {estudiantes.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
       </select>
 
-      <label className="text-xs text-slate-500 block mb-1">Acudiente a citar</label>
+      <label className="text-xs text-slate-500 block mb-1">Acudiente a citar (nombre que va impreso) *</label>
       <input value={acudiente} onChange={(e) => { setAcudienteEditado(true); setAcudiente(e.target.value); }} placeholder="Nombre de quien se cita" className={`${inputCls} mb-1`} />
       {(ac?.nombre_padre || ac?.nombre_madre) && (
         <div className="flex flex-wrap gap-1.5 mb-2">
@@ -104,7 +112,7 @@ function CitacionForm({ estudiantes, citaciones, acudientes, formato, citacion, 
 
       <div className="grid grid-cols-3 gap-2 mb-2">
         <div className="col-span-2">
-          <label className="text-xs text-slate-500 block mb-1">Será atendido en</label>
+          <label className="text-xs text-slate-500 block mb-1">Será atendido en *</label>
           <select value={lugarSel} onChange={(e) => setLugarSel(e.target.value)} className={inputCls}>
             <option value="">Sin definir</option>
             {(formato.lugares || []).map((l) => <option key={l} value={l}>{l}</option>)}
@@ -1009,7 +1017,7 @@ function CitacionesDireccionCurso({ gradoId, institucion: institucionInicial, es
       </div>
 
       {formAbierto && (
-        <CitacionForm estudiantes={estudiantesOrdenados} citaciones={citaciones} acudientes={acudientes} formato={formato}
+        <CitacionForm estudiantes={estudiantesOrdenados} citaciones={citaciones} acudientes={acudientes} formato={formato} docente={docente}
           onCancelar={() => setFormAbierto(false)} onGuardada={() => { setFormAbierto(false); recargarCitaciones(); }} />
       )}
 
