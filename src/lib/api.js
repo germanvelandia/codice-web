@@ -3846,12 +3846,15 @@ const fmtHoraCitacion = (h) => {
 
 // items: [{ fechaElaboracion, numero, acudiente, fechaCita, hora, estudiante, curso, lugar, docente, recibe }]
 // Un objeto vacío {} da un formato en blanco para llenar a mano.
+const pareceCorreo = (s) => /\S+@\S+\.\S+/.test(String(s || ""));
+
 export function htmlCitaciones(items, formato, institucion, opciones = {}) {
   const f = formato;
   const escudo = institucion?.logo_url ? `<img class="logo" src="${escHtml(institucion.logo_url)}" />` : `<div class="logo"></div>`;
   const logoDer = f.logoDerecho ? `<img class="logo" src="${escHtml(f.logoDerecho)}" />` : `<div class="logo"></div>`;
   const norm = (s) => String(s || "").trim().toLowerCase();
 
+  const hoyISO = new Date().toISOString().slice(0, 10);
   const tira = (it) => {
     const coincide = (f.lugares || []).some((l) => norm(l) === norm(it.lugar));
     const opcionesLugar = [...(f.lugares || []), ...(it.lugar && !coincide ? [it.lugar] : [])];
@@ -3869,8 +3872,8 @@ export function htmlCitaciones(items, formato, institucion, opciones = {}) {
           ${logoDer}
         </div>
         <div class="cabecera-datos">
-          <div class="caja fecha">${escHtml(fmtFechaCitacion(it.fechaElaboracion))}</div>
-          <div class="cit">Citación <span class="caja num">${escHtml(it.numero ?? "")}</span></div>
+          <div class="caja fecha">${escHtml(fmtFechaCitacion(it.fechaElaboracion || hoyISO))}</div>
+          <div class="cit"><span style="font-size:6.6pt;">Elaborado</span> · Citación <span class="caja num">${escHtml(it.numero ?? "")}</span></div>
         </div>
         <div class="fila">Señor padre de familia y/o acudiente: <span class="caja grow">${escHtml(it.acudiente)}</span></div>
         <div class="fila corta">Cordial saludo.</div>
@@ -3880,7 +3883,7 @@ export function htmlCitaciones(items, formato, institucion, opciones = {}) {
         <div class="fila lugares"><span class="et">Será atendido en:</span> ${lugares}</div>
         <div class="firmas">
           <div class="firma"><div class="linea"></div><div>${escHtml(f.firmaIzquierda)}</div></div>
-          <div class="firma"><div class="linea">${escHtml(it.docente)}</div><div>${escHtml(f.firmaDerecha)}</div></div>
+          <div class="firma"><div class="linea">${pareceCorreo(it.docente) ? "" : escHtml(it.docente)}</div><div>${escHtml(f.firmaDerecha)}</div></div>
         </div>
         <div class="legal">${conNegritas(f.textoLegal)}</div>
         <div class="cierre">${escHtml(f.cierre)}</div>
@@ -3896,11 +3899,11 @@ export function htmlCitaciones(items, formato, institucion, opciones = {}) {
         </div>
         <div class="cabecera-datos sop">
           <div class="b">SOPORTE DE CITACION</div>
-          <div class="caja fecha">${escHtml(fmtFechaCitacion(it.fechaElaboracion)) || "FECHA"}</div>
+          <div class="caja fecha">${escHtml(fmtFechaCitacion(it.fechaElaboracion || hoyISO)) || "FECHA"}</div>
         </div>
         <div class="campo">Nombre del Estudiante</div><div class="caja ancha">${escHtml(it.estudiante)}</div>
         <div class="fila">Curso. <span class="caja w18">${escHtml(it.curso)}</span> Citación <span class="caja w14">${escHtml(it.numero ?? "")}</span></div>
-        <div class="fila">Docente <span class="caja grow">${escHtml(it.docente)}</span></div>
+        <div class="fila">Docente <span class="caja grow">${pareceCorreo(it.docente) ? "" : escHtml(it.docente)}</span></div>
         <div class="campo">Se cita a su acudiente</div><div class="caja ancha">${escHtml(it.acudiente)}</div>
         <div class="fila">para el día <span class="caja w40">${escHtml(fmtFechaCitacion(it.fechaCita))}</span> Hora <span class="caja grow">${escHtml(fmtHoraCitacion(it.hora))}</span></div>
         <div class="fila">Será atendido en <span class="caja grow">${escHtml(it.lugar)}</span></div>
