@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import * as XLSX from "xlsx";
 import * as api from "../lib/api";
+import { useEstadoPersistente, leerPersistido } from "../lib/api";
 import {
   CONFIG_DEFAULT, periodosDe, bandaDesempeno, notaAutomatica, notaFinalPonderada,
   calcularEstadisticas, GAM_CATEGORIAS_OPCIONES,
@@ -2003,13 +2004,18 @@ function ComentariosDesempenoModal({ onClose }) {
 
 export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, materiaActiva }) {
   const [materias, setMaterias] = useState([]);
-  const [materiaActualId, setMateriaActualId] = useState(null);
+  // Materia, curso, periodo y vista se recuerdan al "Actualizar" la página.
+  const [materiaActualId, setMateriaActualId] = useEstadoPersistente("planillas_materia", null);
   const [config, setConfig] = useState(CONFIG_DEFAULT);
   const [categorias, setCategorias] = useState([]);
-  const [gradoId, setGradoId] = useState(gradoActivo || grados[0]?.id || "");
-  const [periodo, setPeriodo] = useState("1");
+  const [gradoId, setGradoId] = useEstadoPersistente("planillas_curso", gradoActivo || grados[0]?.id || "");
+  const [periodo, setPeriodo] = useEstadoPersistente("planillas_periodo", "1");
   const [soloVigente, setSoloVigente] = useState(true);
-  const [subVista, setSubVista] = useState("planilla");
+  const [subVista, setSubVista] = useEstadoPersistente("planillas_vista", "planilla");
+  // Si ya había un periodo recordado, la primera carga de la materia no lo pisa
+  // con el "vigente" (solo lo hace al cambiar de materia a mano).
+  const periodoRecordado = useRef(leerPersistido("planillas_periodo") !== undefined);
+  const montado = useRef(false);
   const [comentariosAbiertos, setComentariosAbiertos] = useState(false);
   const [estudiantes, setEstudiantes] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -2019,10 +2025,12 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
 
   // Curso activo elegido en la barra superior — no pisa el salto puntual
   // que hace el buscador global de estudiantes (ver el efecto de abajo).
-  useEffect(() => { if (gradoActivo) setGradoId(gradoActivo); }, [gradoActivo]);
+  // (No se aplica al montar: si no, cada vez que entrabas volvía al primer curso.)
+  useEffect(() => { if (montado.current && gradoActivo) setGradoId(gradoActivo); }, [gradoActivo]);
   // Materia activa de la barra superior (el periodo sigue su propia lógica
   // de "vigente" por materia, no se pisa con un periodo global).
-  useEffect(() => { if (materiaActiva) setMateriaActualId(materiaActiva); }, [materiaActiva]);
+  useEffect(() => { if (montado.current && materiaActiva) setMateriaActualId(materiaActiva); }, [materiaActiva]);
+  useEffect(() => { montado.current = true; }, []);
 
   // Cuando llega desde el buscador global de estudiantes: saltar directo a su
   // curso, en la Planilla, con su fila resaltada.
@@ -2036,12 +2044,13 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
   const cargarMaterias = async () => {
     const m = await api.fetchMaterias();
     setMaterias(m);
-    if (!materiaActualId && m.length > 0) setMateriaActualId(m[0].id);
+    // Si la materia recordada ya no existe (la borraron), se cae a la primera.
+    if (m.length > 0 && !m.some((x) => x.id === materiaActualId)) setMateriaActualId(m[0].id);
     return m;
   };
 
   useEffect(() => { cargarMaterias().then(() => setCargando(false)); }, []);
-  useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
+  useEffect(() => { if (grados.length && (!gradoId || !grados.some((g) => g.id === gradoId))) setGradoId(grados[0].id); }, [grados]);
 
   const cargarConfigYCategorias = async () => {
     if (!materiaActualId) return;
@@ -2052,7 +2061,12 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
   };
   // Al cambiar de materia, el periodo arranca en el "vigente" que hayas marcado
   // para esa materia (no siempre en el Periodo 1).
-  useEffect(() => { cargarConfigYCategorias().then((cfg) => { if (cfg?.periodo_actual) setPeriodo(cfg.periodo_actual); }); }, [materiaActualId]);
+  useEffect(() => {
+    cargarConfigYCategorias().then((cfg) => {
+      if (cfg && periodoRecordado.current) { periodoRecordado.current = false; return; }
+      if (cfg?.periodo_actual) setPeriodo(cfg.periodo_actual);
+    });
+  }, [materiaActualId]);
 
   const marcarPeriodoVigente = async () => {
     await api.guardarNotasConfig(materiaActualId, { ...config, periodo_actual: periodo });
