@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import * as api from "../lib/api";
-import { htmlCitaciones, formatoCitacionCompleto, abrirDocumentoParaImprimir, FORMATO_CITACION_DEFAULT } from "../lib/api";
+import { htmlCitaciones, formatoCitacionCompleto, abrirDocumentoParaImprimir, FORMATO_CITACION_DEFAULT, useEstadoPersistente } from "../lib/api";
 import { ordenarPorApellido, ordenarPorNombre } from "../lib/gamification";
 import { NotasDireccionCurso } from "./NotasDireccionCurso";
 
@@ -40,8 +40,15 @@ function CitacionForm({ estudiantes, citaciones, acudientes, formato, citacion, 
   const [lugarOtro, setLugarOtro] = useState(lugarInicial && !lugarConocido ? lugarInicial : "");
   const [numero, setNumero] = useState(citacion?.numero ?? (primero ? siguienteNumero(primero) : 1));
   const [guardando, setGuardando] = useState(false);
+  const [acudienteEditado, setAcudienteEditado] = useState(false);
 
-  const elegirEstudiante = (id) => { setEstudianteId(id); setAcudiente(sugeridoAcudiente(id)); setNumero(siguienteNumero(id)); };
+  // Los nombres del Directorio se traen en segundo plano: si llegan cuando el
+  // formulario ya está abierto, se completa la sugerencia (salvo que ya hayas escrito algo).
+  useEffect(() => {
+    if (!citacion && !acudienteEditado) setAcudiente(sugeridoAcudiente(estudianteId));
+  }, [acudientes]);
+
+  const elegirEstudiante = (id) => { setEstudianteId(id); setAcudienteEditado(false); setAcudiente(sugeridoAcudiente(id)); setNumero(siguienteNumero(id)); };
   const ac = acudientes[estudianteId];
 
   const guardar = async () => {
@@ -73,11 +80,11 @@ function CitacionForm({ estudiantes, citaciones, acudientes, formato, citacion, 
       </select>
 
       <label className="text-xs text-slate-500 block mb-1">Acudiente a citar</label>
-      <input value={acudiente} onChange={(e) => setAcudiente(e.target.value)} placeholder="Nombre de quien se cita" className={`${inputCls} mb-1`} />
+      <input value={acudiente} onChange={(e) => { setAcudienteEditado(true); setAcudiente(e.target.value); }} placeholder="Nombre de quien se cita" className={`${inputCls} mb-1`} />
       {(ac?.nombre_padre || ac?.nombre_madre) && (
         <div className="flex flex-wrap gap-1.5 mb-2">
-          {ac.nombre_padre && <button type="button" onClick={() => setAcudiente(ac.nombre_padre)} className="text-[11px] px-2 py-0.5 rounded-full bg-white border border-slate-200 text-slate-600">Padre: {ac.nombre_padre}</button>}
-          {ac.nombre_madre && <button type="button" onClick={() => setAcudiente(ac.nombre_madre)} className="text-[11px] px-2 py-0.5 rounded-full bg-white border border-slate-200 text-slate-600">Madre: {ac.nombre_madre}</button>}
+          {ac.nombre_padre && <button type="button" onClick={() => { setAcudienteEditado(true); setAcudiente(ac.nombre_padre); }} className="text-[11px] px-2 py-0.5 rounded-full bg-white border border-slate-200 text-slate-600">Padre: {ac.nombre_padre}</button>}
+          {ac.nombre_madre && <button type="button" onClick={() => { setAcudienteEditado(true); setAcudiente(ac.nombre_madre); }} className="text-[11px] px-2 py-0.5 rounded-full bg-white border border-slate-200 text-slate-600">Madre: {ac.nombre_madre}</button>}
         </div>
       )}
 
@@ -893,12 +900,11 @@ function FormatoCitacionModal({ institucion, onClose, onGuardado }) {
   );
 }
 
-function CitacionesDireccionCurso({ gradoId, institucion: institucionInicial }) {
+function CitacionesDireccionCurso({ gradoId, institucion: institucionInicial, esAdmin }) {
   const [estudiantes, setEstudiantes] = useState([]);
   const [citaciones, setCitaciones] = useState([]);
   const [acudientes, setAcudientes] = useState({});
   const [docente, setDocente] = useState("");
-  const [esAdmin, setEsAdmin] = useState(false);
   const [institucion, setInstitucion] = useState(institucionInicial);
   const [cargando, setCargando] = useState(true);
   const [formAbierto, setFormAbierto] = useState(false);
@@ -909,25 +915,40 @@ function CitacionesDireccionCurso({ gradoId, institucion: institucionInicial }) 
   const [cantidadBlanco, setCantidadBlanco] = useState(4);
 
   useEffect(() => { setInstitucion(institucionInicial); }, [institucionInicial]);
-  useEffect(() => { api.fetchMiPerfil().then((p) => { setDocente(p?.nombre || ""); setEsAdmin(!!p?.es_admin); }).catch(() => {}); }, []);
+  useEffect(() => { api.fetchMiPerfil().then((p) => setDocente(p?.nombre || "")).catch(() => {}); }, []);
 
+  const [errorCarga, setErrorCarga] = useState("");
+
+  // Al abrir: estudiantes (solo id y nombre) -> citaciones. Son 2 consultas en
+  // fila y ninguna pesada. Los acudientes se traen DESPUÉS, en segundo plano,
+  // porque solo se usan para sugerir a quién citar cuando se abre el formulario.
   const cargar = () => {
     if (!gradoId) return;
-    setCargando(true);
-    Promise.all([api.fetchEstudiantesPorGrado(gradoId), api.fetchCitacionesPorCurso(gradoId), api.fetchAcudientesPorGrado(gradoId)]).then(([est, cit, acu]) => {
-      setEstudiantes(ordenarPorApellido(est));
-      setCitaciones(cit);
-      const mapa = {};
-      acu.forEach((x) => { if (x.acudiente) mapa[x.estudiante.id] = x.acudiente; });
-      setAcudientes(mapa);
-      setSeleccion(new Set());
-      setCargando(false);
-    });
+    setCargando(true); setErrorCarga("");
+    api.fetchEstudiantesLivianosPorGrado(gradoId)
+      .then(async (est) => {
+        const cit = await api.fetchCitacionesDeEstudiantes(est);
+        setEstudiantes(est); setCitaciones(cit); setSeleccion(new Set()); setCargando(false);
+        api.fetchNombresAcudientes(est.map((e) => e.id)).then(setAcudientes).catch(() => {});
+      })
+      .catch((e) => { setErrorCarga(e.message); setCargando(false); });
   };
   useEffect(() => { cargar(); }, [gradoId]);
 
-  const eliminar = async (id) => { if (!confirm("¿Eliminar esta citación?")) return; await api.eliminarCitacion(id); cargar(); };
-  const verificar = async (id, estado) => { await api.editarCitacion(id, { estado }); cargar(); };
+  // Después de crear o gestionar una citación solo se vuelven a pedir las citaciones
+  // (una consulta), sin la pantalla de "Cargando…" ni volver a traer a los estudiantes.
+  const recargarCitaciones = () => api.fetchCitacionesDeEstudiantes(estudiantes).then(setCitaciones).catch(() => {});
+
+  const eliminar = async (id) => {
+    if (!confirm("¿Eliminar esta citación?")) return;
+    setCitaciones((prev) => prev.filter((c) => c.id !== id));
+    setSeleccion((prev) => { const s = new Set(prev); s.delete(id); return s; });
+    try { await api.eliminarCitacion(id); } catch (e) { alert("No se pudo eliminar: " + e.message); recargarCitaciones(); }
+  };
+  const verificar = async (id, estado) => {
+    setCitaciones((prev) => prev.map((c) => (c.id === id ? { ...c, estado } : c)));
+    try { await api.editarCitacion(id, { estado }); } catch (e) { alert("No se pudo guardar: " + e.message); recargarCitaciones(); }
+  };
 
   const ESTADO_LABEL = { pendiente: "🟡 Pendiente", atendida: "🟢 Atendida", no_asistio: "🔴 No asistió" };
   const ESTADO_TXT = { pendiente: "Pendiente", atendida: "Atendida", no_asistio: "No asistió" };
@@ -989,7 +1010,7 @@ function CitacionesDireccionCurso({ gradoId, institucion: institucionInicial }) 
 
       {formAbierto && (
         <CitacionForm estudiantes={estudiantesOrdenados} citaciones={citaciones} acudientes={acudientes} formato={formato}
-          onCancelar={() => setFormAbierto(false)} onGuardada={() => { setFormAbierto(false); cargar(); }} />
+          onCancelar={() => setFormAbierto(false)} onGuardada={() => { setFormAbierto(false); recargarCitaciones(); }} />
       )}
 
       <div className="bg-white rounded-2xl border border-slate-200 p-3 mb-3">
@@ -1016,6 +1037,11 @@ function CitacionesDireccionCurso({ gradoId, institucion: institucionInicial }) 
 
       {cargando ? (
         <div className="text-sm text-slate-400">Cargando…</div>
+      ) : errorCarga ? (
+        <div className="text-sm text-rose-600 bg-rose-50 rounded-2xl p-4 border border-rose-100">
+          No se pudieron cargar las citaciones: {errorCarga}
+          <button onClick={cargar} className="ml-2 underline font-semibold">Reintentar</button>
+        </div>
       ) : citaciones.length === 0 ? (
         <div className="text-sm text-slate-400 bg-white rounded-2xl p-6 text-center border border-dashed border-slate-200">Todavía no hay citaciones registradas para este curso.</div>
       ) : (
@@ -1070,7 +1096,7 @@ function CitacionesDireccionCurso({ gradoId, institucion: institucionInicial }) 
         </div>
       )}
 
-      {atendiendo && <AtenderCitacionModal citacion={atendiendo} institucion={institucion} onClose={() => setAtendiendo(null)} onGuardada={() => { setAtendiendo(null); cargar(); }} />}
+      {atendiendo && <AtenderCitacionModal citacion={atendiendo} institucion={institucion} onClose={() => setAtendiendo(null)} onGuardada={() => { setAtendiendo(null); recargarCitaciones(); }} />}
       {formatoAbierto && (
         <FormatoCitacionModal institucion={institucion}
           onClose={() => setFormatoAbierto(false)}
@@ -1079,13 +1105,19 @@ function CitacionesDireccionCurso({ gradoId, institucion: institucionInicial }) 
     </div>
   );
 }
-export function VistaDireccionCurso({ grados, gradoActivo }) {
-  const [gradoId, setGradoId] = useState(gradoActivo || grados[0]?.id || "");
-  const [vista, setVista] = useState("notas"); // "notas" | "citaciones" | "jornada"
+export function VistaDireccionCurso({ grados, gradoActivo, esAdmin }) {
+  // Curso y pestaña se recuerdan: así, si trabajás en Citaciones, no se dispara
+  // cada vez la carga de "Notas" (la vista más pesada) antes de poder pasar.
+  const [gradoId, setGradoId] = useEstadoPersistente("direccion_curso", gradoActivo || grados[0]?.id || "");
+  const [vista, setVista] = useEstadoPersistente("direccion_vista", "notas"); // "notas" | "citaciones" | "jornada"
   const [institucion, setInstitucion] = useState(null);
+  const montado = useRef(false);
 
-  useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
-  useEffect(() => { if (gradoActivo) setGradoId(gradoActivo); }, [gradoActivo]);
+  useEffect(() => { if (!["notas", "citaciones", "jornada"].includes(vista)) setVista("notas"); }, [vista]);
+  useEffect(() => { if (grados.length && (!gradoId || !grados.some((g) => g.id === gradoId))) setGradoId(grados[0].id); }, [grados]);
+  // (No se aplica al montar: si no, pisaría el curso recordado.)
+  useEffect(() => { if (montado.current && gradoActivo) setGradoId(gradoActivo); }, [gradoActivo]);
+  useEffect(() => { montado.current = true; }, []);
   useEffect(() => { api.fetchInstitucion().then(setInstitucion); }, []);
 
   return (
@@ -1107,7 +1139,7 @@ export function VistaDireccionCurso({ grados, gradoActivo }) {
       </div>
 
       {vista === "notas" && <NotasDireccionCurso gradoId={gradoId} />}
-      {vista === "citaciones" && <CitacionesDireccionCurso gradoId={gradoId} institucion={institucion} />}
+      {vista === "citaciones" && <CitacionesDireccionCurso gradoId={gradoId} institucion={institucion} esAdmin={esAdmin} />}
       {vista === "jornada" && <JornadasDireccionCurso gradoId={gradoId} institucion={institucion} />}
     </div>
   );
