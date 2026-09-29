@@ -3003,7 +3003,7 @@ function Panel({ session }) {
         {tab === "corregirnombres" && <VistaCorregirNombres />}
         {tab === "niveles" && <VistaNiveles />}
         {tab === "objetos" && <VistaObjetos grados={grados} gradoActivo={gradoActivo} />}
-        {tab === "direccioncurso" && <MarcoSeccion zonaLabel="Convivencial — Dirección de Curso" icono="🤝"><VistaDireccionCurso grados={grados} gradoActivo={gradoActivo} /></MarcoSeccion>}
+        {tab === "direccioncurso" && <MarcoSeccion zonaLabel="Convivencial — Dirección de Curso" icono="🤝"><VistaDireccionCurso grados={grados} gradoActivo={gradoActivo} esAdmin={esAdminEfectivo} /></MarcoSeccion>}
         {tab === "guiasestudio" && <MarcoSeccion zonaLabel="Planeación — Guías de Estudio" icono="🗺️"><VistaGuiasEstudio grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
         {tab === "actividadesprogramadas" && <MarcoSeccion zonaLabel="Planeación — Actividades Programadas" icono="🗺️"><VistaActividadesProgramadas grados={grados} /></MarcoSeccion>}
         {tab === "evaluaciones" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Misiones" icono="🎓"><VistaEvaluaciones grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
