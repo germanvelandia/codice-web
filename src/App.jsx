@@ -2964,7 +2964,7 @@ function Panel({ session }) {
             {subTabHerramientas === "album" && <VistaAlbum />}
             {subTabHerramientas === "anuncios" && <VistaAnuncios grados={grados} />}
             {subTabHerramientas === "logros" && <VistaLogros />}
-            {subTabHerramientas === "salonhonor" && <VistaSalonHonor />}
+            {subTabHerramientas === "salonhonor" && <VistaSalonHonor grados={grados} />}
             {subTabHerramientas === "diplomas" && <VistaDiplomas grados={grados} gradoActivo={gradoActivo} />}
             {subTabHerramientas === "gamext" && <VistaGamificacionExtra grados={grados} />}
             {subTabHerramientas === "consignas" && <VistaConsignasCodice grados={grados} />}
