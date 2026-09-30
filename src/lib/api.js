@@ -5198,6 +5198,80 @@ async function calcularTotalesAsistencia(fechaDesde, fechaHasta, materiaId = nul
   };
 }
 
+/* ==================== 🏆 Ranking de Reinos (compañerismo + asistencia) ====================
+   Combina dos cosas que hoy viven separadas:
+   - Puntos de compañerismo/trabajo en equipo: permanentes por Reino, los
+     otorga el docente a mano (como "El Banco" de la Comarca, pero sin
+     reiniciarse en cada sesión de juego).
+   - % de asistencia promedio de los estudiantes de ese Reino en el curso.
+   El peso de cada uno lo define el docente al momento de verlo — no se
+   guarda una fórmula fija, así que puede probar combinaciones distintas. */
+
+export async function ajustarPuntosCompania(reinoId, delta, motivo) {
+  const { data: reino, error: e1 } = await supabase.from("reinos").select("puntos_compania").eq("id", reinoId).single();
+  if (e1) throw e1;
+  const nuevoValor = (reino.puntos_compania || 0) + delta;
+  const { error } = await supabase.from("reinos").update({ puntos_compania: nuevoValor }).eq("id", reinoId);
+  if (error) throw error;
+  return nuevoValor;
+}
+
+// Trae, para un curso, cada Reino presente con: su % de asistencia
+// promedio (de sus estudiantes activos en ESE curso) y sus puntos de
+// compañerismo. La normalización y el peso se aplican después, en
+// pantalla, para que el docente pueda mover los porcentajes sin volver
+// a pedir los datos cada vez.
+export async function fetchDatosRankingReinos(gradoId) {
+  const estudiantes = await traerTodo(() => supabase.from("estudiantes").select("id, nombre, reino_actual, reino_original", { count: "exact" }).eq("grado_id", gradoId).eq("activo", true).order("id"));
+  const idsEstudiantes = estudiantes.map((e) => e.id);
+  const asistencia = idsEstudiantes.length
+    ? await traerTodo(() => ordenAsistencia(supabase.from("asistencia").select("estudiante_id, codigo", { count: "exact" }).in("estudiante_id", idsEstudiantes)))
+    : [];
+  const reinosCatalogo = await fetchReinos();
+
+  const reinoDe = (e) => (e.reino_actual && e.reino_actual !== "Sin grupo" ? e.reino_actual : e.reino_original) || "Sin grupo";
+  const estudiantesPorReino = {};
+  estudiantes.forEach((e) => {
+    const r = reinoDe(e);
+    estudiantesPorReino[r] = estudiantesPorReino[r] || [];
+    estudiantesPorReino[r].push(e);
+  });
+
+  const conteoPorEstudiante = {};
+  asistencia.forEach((a) => {
+    conteoPorEstudiante[a.estudiante_id] = conteoPorEstudiante[a.estudiante_id] || { P: 0, total: 0 };
+    conteoPorEstudiante[a.estudiante_id].total += 1;
+    if (a.codigo === "P") conteoPorEstudiante[a.estudiante_id].P += 1;
+  });
+
+  return Object.entries(estudiantesPorReino)
+    .filter(([nombre]) => nombre !== "Sin grupo")
+    .map(([nombre, ests]) => {
+      const catalogado = reinosCatalogo.find((r) => r.nombre === nombre);
+      let sumaPct = 0, conDatos = 0;
+      ests.forEach((e) => {
+        const c = conteoPorEstudiante[e.id];
+        if (c && c.total > 0) { sumaPct += (c.P / c.total) * 100; conDatos += 1; }
+      });
+      return {
+        reinoId: catalogado?.id ?? null, nombre, color: catalogado?.color || null,
+        puntosCompania: catalogado?.puntos_compania || 0,
+        asistenciaPct: conDatos > 0 ? Math.round((sumaPct / conDatos) * 10) / 10 : null,
+        estudiantes: ests,
+      };
+    })
+    .sort((a, b) => a.nombre.localeCompare(b.nombre));
+}
+
+// Crea UNA actividad en la categoría elegida y le pone esa nota a los
+// estudiantes marcados — mismo mecanismo que ya usa "Nota masiva" en la
+// Planilla, así el resultado se ve y se edita igual que cualquier otra nota.
+export async function aplicarRankingReinosAPlanilla(materiaId, categoriaId, periodo, nombreActividad, notasPorEstudiante) {
+  const actividad = await crearActividad({ materia_id: materiaId, categoria_id: categoriaId, periodo, nombre: nombreActividad });
+  await Promise.all(Object.entries(notasPorEstudiante).map(([estudianteId, valor]) => setValor(actividad.id, parseInt(estudianteId, 10), valor)));
+  return actividad;
+}
+
 export async function fetchTotalesAsistenciaTodo(fechaDesde, fechaHasta, materiaId = null) {
   return calcularTotalesAsistencia(fechaDesde, fechaHasta, materiaId);
 }
