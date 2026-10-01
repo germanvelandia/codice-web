@@ -2025,6 +2025,7 @@ export function TarjetaComarcaPublica() {
 
   const [datos, setDatos] = useState(null);
   const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState("");
   const [formTruequeAbierto, setFormTruequeAbierto] = useState(false);
   const [reinoDestino, setReinoDestino] = useState("");
   const [otrosReinos, setOtrosReinos] = useState([]);
@@ -2033,9 +2034,19 @@ export function TarjetaComarcaPublica() {
   const [gpOfrecido, setGpOfrecido] = useState(0);
   const [enviando, setEnviando] = useState(false);
 
+  // Antes, si esta consulta fallaba por cualquier motivo, la pantalla se
+  // quedaba esperando para siempre (el .then nunca corría, así que nunca
+  // se apagaba "cargando") — ahora, si algo sale mal, se avisa en vez de
+  // quedar en blanco sin explicación.
   const cargar = () => {
-    setCargando(true);
-    Promise.all([api.fetchTarjetaReino(sesionId, reinoId), api.fetchNombresFantasiaDeSesion(sesionId)]).then(([d, fantasia]) => { setDatos(d); setNombresFantasia(fantasia); setCargando(false); });
+    if (!sesionId || !reinoId) { setErrorCarga("Este enlace parece incompleto — volvé a escanear el código QR."); setCargando(false); return; }
+    setCargando(true); setErrorCarga("");
+    Promise.all([api.fetchTarjetaReino(sesionId, reinoId), api.fetchNombresFantasiaDeSesion(sesionId)])
+      .then(([d, fantasia]) => {
+        if (!d?.reino) { setErrorCarga("No encontramos este Reino — puede que la sesión ya haya terminado."); setCargando(false); return; }
+        setDatos(d); setNombresFantasia(fantasia); setCargando(false);
+      })
+      .catch((e) => { setErrorCarga(e.message || "No se pudo cargar tu tarjeta."); setCargando(false); });
   };
   useEffect(() => {
     cargar();
@@ -2067,7 +2078,21 @@ export function TarjetaComarcaPublica() {
   };
 
   if (!sesionId || !reinoId) return <div className="min-h-screen flex items-center justify-center text-white">Tarjeta inválida.</div>;
-  if (cargando || !datos?.reino) return <div className="min-h-screen flex items-center justify-center text-white">Cargando tu Reino…</div>;
+  const FONDO_TARJETA = "linear-gradient(135deg, #1c2f5e 0%, #0f1932 60%, #0a1226 100%)";
+  if (cargando) {
+    return <div className="min-h-screen flex items-center justify-center text-white" style={{ background: FONDO_TARJETA }}>Cargando tu Reino…</div>;
+  }
+  if (errorCarga || !datos?.reino) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-center p-6" style={{ background: FONDO_TARJETA }}>
+        <div className="bg-white rounded-2xl p-6 max-w-sm shadow-xl">
+          <div className="text-3xl mb-2">🤔</div>
+          <p className="text-sm text-slate-600">{errorCarga || "No pudimos cargar la información de tu Reino."}</p>
+          <button onClick={cargar} className="mt-3 text-xs font-semibold text-violet-600 underline">Reintentar</button>
+        </div>
+      </div>
+    );
+  }
 
   const { reino, provincias, inventario, recursos } = datos;
 
