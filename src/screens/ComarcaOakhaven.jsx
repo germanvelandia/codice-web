@@ -3,40 +3,29 @@ import { createPortal } from "react-dom";
 import * as api from "../lib/api";
 import { leerPersistido, guardarPersistido } from "../lib/api";
 import { agruparPorNivel } from "../lib/gamification";
+import { EmojiPicker } from "../components/EmojiPicker";
 
+// Antes esto era una cajita de texto en blanco, sin mostrar ninguna
+// opción — había que SABER escribir un emoji a mano. Ahora usa el mismo
+// selector visual (con categorías) que ya existe en el resto de la app.
 function CambiarEmojiReino({ reino, onGuardado }) {
-  const [editando, setEditando] = useState(false);
-  const [valor, setValor] = useState(reino.emoji);
   const [guardando, setGuardando] = useState(false);
 
-  const guardar = async () => {
-    if (!valor.trim()) { setEditando(false); return; }
+  const guardar = async (nuevoEmoji) => {
+    if (!nuevoEmoji || nuevoEmoji === reino.emoji) return;
     setGuardando(true);
     try {
-      await api.guardarEmojiReino(reino.id, valor.trim());
+      await api.guardarEmojiReino(reino.id, nuevoEmoji);
       onGuardado();
-      setEditando(false);
     } catch (e) {
       alert("Error al guardar el emoji: " + e.message);
     }
     setGuardando(false);
   };
 
-  if (!editando) {
-    return (
-      <button onClick={() => { setValor(reino.emoji); setEditando(true); }} className="text-[10px] font-semibold px-2 py-1 rounded-full bg-white/80 text-slate-600">
-        {reino.emoji} Cambiar ícono
-      </button>
-    );
-  }
-
   return (
-    <div className="flex items-center gap-1 bg-white/90 rounded-full px-1.5 py-1">
-      <input value={valor} onChange={(e) => setValor(e.target.value)} autoFocus
-        onKeyDown={(e) => { if (e.key === "Enter") guardar(); if (e.key === "Escape") setEditando(false); }}
-        className="w-9 text-center text-sm outline-none bg-transparent" placeholder="🏰" />
-      <button disabled={guardando} onClick={guardar} className="text-[10px] font-semibold text-violet-600">{guardando ? "…" : "✓"}</button>
-      <button onClick={() => setEditando(false)} className="text-[10px] text-slate-400">✕</button>
+    <div className="bg-white/90 rounded-full px-1 py-0.5" title={guardando ? "Guardando…" : "Cambiar ícono"} style={{ opacity: guardando ? 0.6 : 1 }}>
+      <EmojiPicker value={reino.emoji} onChange={guardar} size="text-base" />
     </div>
   );
 }
@@ -570,6 +559,23 @@ function TransferirProvinciaModal({ provincia, reinos, onClose, onCambio }) {
   );
 }
 
+const PRODUCTOS_PRESTABLECIDOS = [
+  { nombre: "Cambiar de puesto por un día", emoji: "🪑", costo_gp: 10 },
+  { nombre: "Tarea libre (no presentar una)", emoji: "📝", costo_gp: 20 },
+  { nombre: "Salir 5 minutos antes", emoji: "⏰", costo_gp: 15 },
+  { nombre: "Escuchar música mientras trabajás", emoji: "🎧", costo_gp: 10 },
+  { nombre: "Trabajar en pareja (actividad individual)", emoji: "🤝", costo_gp: 15 },
+  { nombre: "Dulce o snack", emoji: "🍬", costo_gp: 8 },
+  { nombre: "5 minutos de celular permitido", emoji: "📱", costo_gp: 12 },
+  { nombre: "Material especial (colores, stickers)", emoji: "🎨", costo_gp: 10 },
+  { nombre: "Ser el ayudante del docente por un día", emoji: "👑", costo_gp: 15 },
+  { nombre: "Repetir una evaluación", emoji: "🔄", costo_gp: 30 },
+  { nombre: "Punto extra en una actividad", emoji: "⭐", costo_gp: 20 },
+  { nombre: "Elegir la dinámica de la próxima clase", emoji: "🎮", costo_gp: 25 },
+  { nombre: "Pase para llegar tarde sin anotación", emoji: "🎫", costo_gp: 18 },
+  { nombre: "Comodín para una pregunta del examen", emoji: "🃏", costo_gp: 25 },
+];
+
 function BancoModal({ sesion, reinos, onClose, onCambio }) {
   const [productos, setProductos] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -581,6 +587,8 @@ function BancoModal({ sesion, reinos, onClose, onCambio }) {
   const [emoji, setEmoji] = useState("📦");
   const [costoGp, setCostoGp] = useState(5);
   const [reinoDueno, setReinoDueno] = useState("");
+  const [prestablecidosAbierto, setPrestablecidosAbierto] = useState(false);
+  const [agregandoPrestablecido, setAgregandoPrestablecido] = useState(null);
 
   const cargar = () => { setCargando(true); api.fetchComarcaProductos().then((d) => { setProductos(d); setCargando(false); }); };
   useEffect(() => { cargar(); }, []);
@@ -604,6 +612,18 @@ function BancoModal({ sesion, reinos, onClose, onCambio }) {
     }
     cancelarForm();
     cargar();
+  };
+
+  const nombresYaEnCatalogo = new Set(productos.map((p) => p.nombre));
+  const agregarPrestablecido = async (item) => {
+    setAgregandoPrestablecido(item.nombre);
+    try {
+      await api.crearComarcaProducto({ ...item, reino_dueno_nombre: null });
+      cargar();
+    } catch (e) {
+      alert("Error al agregar: " + e.message);
+    }
+    setAgregandoPrestablecido(null);
   };
 
   const eliminarProducto = async (p) => {
@@ -637,11 +657,40 @@ function BancoModal({ sesion, reinos, onClose, onCambio }) {
           {reinos.map((r) => <option key={r.id} value={r.id}>{r.emoji} {r.nombre} (🪙 {r.gp})</option>)}
         </select>
 
-        <button onClick={() => (formAbierto ? cancelarForm() : setFormAbierto(true))} className="text-xs font-semibold text-violet-500 mb-2">{formAbierto ? "Cerrar" : "+ Agregar producto al catálogo del Banco"}</button>
+        <div className="flex flex-wrap gap-3 mb-2">
+          <button onClick={() => (formAbierto ? cancelarForm() : setFormAbierto(true))} className="text-xs font-semibold text-violet-500">{formAbierto ? "Cerrar" : "+ Agregar producto propio"}</button>
+          <button onClick={() => setPrestablecidosAbierto((v) => !v)} className="text-xs font-semibold text-amber-600">{prestablecidosAbierto ? "Cerrar" : "📋 Usar una lista preestablecida"}</button>
+        </div>
+        {prestablecidosAbierto && (
+          <div className="bg-amber-50 rounded-xl p-3 mb-3">
+            <p className="text-[11px] text-amber-700 mb-2">Ideas listas para usar en clase — tocá "+" para agregarlas a tu catálogo (después podés editar el nombre o el costo si querés).</p>
+            <div className="space-y-1 max-h-48 overflow-y-auto">
+              {PRODUCTOS_PRESTABLECIDOS.map((item) => {
+                const yaExiste = nombresYaEnCatalogo.has(item.nombre);
+                return (
+                  <div key={item.nombre} className="flex items-center justify-between gap-2 bg-white rounded-lg px-2.5 py-1.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-base shrink-0">{item.emoji}</span>
+                      <span className="text-xs text-slate-700 truncate">{item.nombre}</span>
+                      <span className="text-[10px] text-amber-600 font-semibold shrink-0">🪙 {item.costo_gp}</span>
+                    </div>
+                    {yaExiste ? (
+                      <span className="text-[10px] text-emerald-600 font-semibold shrink-0">✓ En el catálogo</span>
+                    ) : (
+                      <button disabled={agregandoPrestablecido === item.nombre} onClick={() => agregarPrestablecido(item)} className="text-xs font-bold text-white bg-amber-500 rounded-full w-6 h-6 shrink-0 disabled:opacity-50">
+                        {agregandoPrestablecido === item.nombre ? "…" : "+"}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
         {formAbierto && (
           <div className="bg-violet-50 rounded-xl p-3 mb-3 space-y-1.5">
             <div className="flex gap-1.5 flex-wrap items-end">
-              <input value={emoji} onChange={(e) => setEmoji(e.target.value)} className="w-12 text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none text-center" />
+              <EmojiPicker value={emoji} onChange={setEmoji} />
               <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre (ej: Tijeras)" className="flex-1 min-w-[100px] text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
               <input type="number" value={costoGp} onChange={(e) => setCostoGp(e.target.value)} placeholder="GP" className="w-16 text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none text-center" />
             </div>
