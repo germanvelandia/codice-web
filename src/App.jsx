@@ -1860,22 +1860,43 @@ function PreguntadosEstudiante({ estudianteId }) {
 // sesión ahí — solo necesita la sesión activa de su grado.
 function MiComarcaEstudiante({ estudianteInfo }) {
   const [sesion, setSesion] = useState(null);
+  const [reinoId, setReinoId] = useState(null);
   const [cargando, setCargando] = useState(true);
 
+  // El Reino del estudiante (reino_actual/reino_original) es un NOMBRE
+  // ("Los Ilusionistas"), no el id numérico que usa comarca_reinos en
+  // esta sesión puntual — hay que buscar cuál fila de esta sesión
+  // corresponde a ese nombre antes de poder armar el QR.
   useEffect(() => {
     if (!estudianteInfo?.grado_id) return;
-    api.fetchSesionActivaDelGrado(estudianteInfo.grado_id).then((s) => { setSesion(s); setCargando(false); });
+    api.fetchSesionActivaDelGrado(estudianteInfo.grado_id).then(async (s) => {
+      setSesion(s);
+      if (s) {
+        const nombreReino = estudianteInfo?.reino_actual || estudianteInfo?.reino_original;
+        const reinosDeSesion = await api.fetchReinosDeSesion(s.id);
+        const match = reinosDeSesion.find((r) => r.nombre === nombreReino);
+        setReinoId(match?.id || null);
+      }
+      setCargando(false);
+    });
   }, [estudianteInfo?.grado_id]);
-
-  const reinoId = estudianteInfo?.reino_actual || estudianteInfo?.reino_original;
 
   if (cargando) return <p className="text-sm text-slate-400">Cargando…</p>;
 
-  if (!sesion || !reinoId) {
+  if (!sesion) {
     return (
       <div className="text-center py-8">
         <div className="text-4xl mb-2">🏛️</div>
         <p className="text-sm text-slate-400">Tu docente todavía no abrió una sesión de la Comarca de Oakhaven para tu curso.</p>
+      </div>
+    );
+  }
+
+  if (!reinoId) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-4xl mb-2">🤔</div>
+        <p className="text-sm text-slate-400">Hay una sesión activa, pero tu Reino no quedó armado en ella todavía — avisale a tu docente.</p>
       </div>
     );
   }
