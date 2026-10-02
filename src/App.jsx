@@ -2217,6 +2217,85 @@ function PortalAcudiente({ onElegirEstudiante }) {
 }
 
 
+// ==================== 🎴 Tarjeta de personaje (estilo "tarjeta de juego") ====================
+// Banner con el personaje del estudiante en grande, y las 3 estadísticas
+// clave (Vida, Experiencia, Oro) como barras de colores — inspirado en el
+// modelo que mandó el docente. VIDA_MAX=100 porque así arranca cada
+// estudiante y así se otorgan las pociones; si en algún momento la vida
+// pudiera superar 100, solo hay que subir este número.
+const VIDA_MAX = 100;
+
+function TarjetaPersonajeEstudiante({ datos, estudianteInfo, avatarConfig, equipados, miRol, level, next, pct }) {
+  const vidaPct = Math.max(0, Math.min(100, Math.round(((datos.vida ?? 0) / VIDA_MAX) * 100)));
+  const colorVida = vidaPct > 50 ? "#22C55E" : vidaPct > 20 ? "#F59E0B" : "#EF4444";
+
+  return (
+    <div className="rounded-3xl overflow-hidden border border-slate-200 shadow-sm mb-4 bg-white">
+      {/* Banner con el personaje */}
+      <div className="relative h-32 sm:h-36 flex items-center justify-center" style={{ background: "linear-gradient(160deg, #223b74 0%, #17264D 55%, #0f1932 100%)" }}>
+        <div aria-hidden className="absolute inset-0 opacity-20" style={{ backgroundImage: "radial-gradient(circle, #B8892B 1.5px, transparent 1.5px)", backgroundSize: "18px 18px" }} />
+        {avatarConfig ? (
+          <div className="relative" style={{ filter: "drop-shadow(0 6px 10px rgba(0,0,0,0.35))" }}>
+            <PersonajePreview config={avatarConfig} size={120} />
+          </div>
+        ) : (
+          <span className="text-6xl relative">🎓</span>
+        )}
+        {equipados.marco && (
+          <div className="absolute top-2 right-2 text-[10px] font-bold px-2 py-1 rounded-full text-white" style={{ background: "rgba(0,0,0,0.35)" }}>🖼️ {equipados.marco.valor}</div>
+        )}
+      </div>
+
+      <div className="p-4">
+        {/* Foto de perfil pequeña (si tiene) + nombre + rol/título */}
+        <div className="flex items-center gap-2.5 -mt-9 mb-3">
+          <div className="shrink-0 flex items-center justify-center rounded-full overflow-hidden bg-white" style={{ width: 52, height: 52, border: "3px solid white", boxShadow: "0 2px 6px rgba(0,0,0,0.15)" }}>
+            {estudianteInfo?.foto_url ? (
+              <img src={estudianteInfo.foto_url} alt={datos.nombre} className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-xl">🙂</span>
+            )}
+          </div>
+          <div className="flex-1 min-w-0 pt-7">
+            <div className="text-base font-bold text-slate-800 truncate">{datos.nombre}</div>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]">
+              {equipados.titulo && <span className="font-semibold text-violet-500">✨ {equipados.titulo.valor}</span>}
+              {miRol && <span className="font-semibold text-amber-600" title={miRol.descripcion || undefined}>👑 {miRol.nombre}</span>}
+              <span className="text-slate-400">Grado {datos.grado_id} · {datos.grupo}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Barra de Vida */}
+        <div className="rounded-full overflow-hidden relative mb-3" style={{ height: 28, background: "#F1F5F9" }}>
+          <div className="h-full rounded-full transition-all" style={{ width: `${vidaPct}%`, background: colorVida }} />
+          <div className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white" style={{ textShadow: "0 1px 2px rgba(0,0,0,0.35)" }}>
+            ❤️ {datos.vida ?? 0} VIDA
+          </div>
+        </div>
+
+        {/* Experiencia y Oro */}
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-2xl p-2.5" style={{ background: "#F3E8FF" }}>
+            <div className="text-[9px] font-bold text-violet-500 uppercase tracking-wide mb-1">🧬 Experiencia</div>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-sm font-bold text-violet-700 truncate">{level.name}</span>
+              <span className="text-[10px] text-violet-500 shrink-0">{next ? `${datos.xp}/${next.min}` : "máx"}</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-white overflow-hidden">
+              <div className="h-full rounded-full bg-violet-500" style={{ width: `${pct}%` }} />
+            </div>
+          </div>
+          <div className="rounded-2xl p-2.5 flex flex-col justify-center" style={{ background: "#FEF3C7" }}>
+            <div className="text-[9px] font-bold text-amber-600 uppercase tracking-wide mb-1">🪙 Oro</div>
+            <div className="text-xl font-bold text-amber-700">{datos.monedas}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PortalEstudiante() {
   const [tipoAcceso, setTipoAcceso] = useState("estudiante"); // "estudiante" | "acudiente"
   const [codigo, setCodigo] = useState(() => localStorage.getItem("codice_estudiante_codigo") || "");
@@ -2302,68 +2381,18 @@ function PortalEstudiante() {
         <div className="flex-1 min-w-0 p-5 md:p-10">
           {vista === "inicio" && (
             <>
-              <div className="flex items-center gap-3 mb-4 pb-4 border-b border-slate-100">
-                <div className="flex items-center gap-2 shrink-0">
-                  <div className="shrink-0 flex items-center justify-center rounded-full overflow-hidden" style={{ width: 56, height: 56, border: equipados.marco ? `4px solid ${equipados.marco.valor}` : "4px solid transparent", background: "#E8EEF8" }}>
-                    {estudianteInfo?.foto_url ? (
-                      <img src={estudianteInfo.foto_url} alt={datos.nombre} className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-2xl">🎓</span>
-                    )}
-                  </div>
-                  {avatarConfig && (
-                    <div className="shrink-0 bg-gradient-to-b from-violet-100 to-violet-50 rounded-2xl p-1 border border-violet-200">
-                      <PersonajePreview config={avatarConfig} size={56} />
-                    </div>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-base font-bold text-slate-800 truncate">{datos.nombre}</div>
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]">
-                    {equipados.titulo && <span className="font-semibold text-violet-500">✨ {equipados.titulo.valor}</span>}
-                    {miRol && <span className="font-semibold text-amber-600" title={miRol.descripcion || undefined}>👑 {miRol.nombre}</span>}
-                    <span className="text-slate-400">Grado {datos.grado_id} · {datos.grupo}</span>
-                  </div>
-                </div>
-                <div className="flex-1 max-w-xs shrink-0 hidden sm:block">
-                  <div className="flex justify-between text-[10px] text-slate-500 mb-1">
-                    <span className="font-semibold text-violet-600">{level.name}</span>
-                    <span>{next ? `${datos.xp}/${next.min}` : "máx"}</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-violet-100 overflow-hidden">
-                    <div className="h-full rounded-full bg-gradient-to-r from-violet-400 to-violet-600" style={{ width: `${pct}%` }} />
-                  </div>
-                </div>
-              </div>
-
-              {/* En pantallas chicas, la barra de nivel/XP se muestra completa acá abajo */}
-              <div className="mb-4 sm:hidden">
-                <div className="flex justify-between text-xs text-slate-500 mb-1">
-                  <span className="font-semibold text-violet-600">{level.name}</span>
-                  <span>{datos.xp}{next ? ` / ${next.min} XP` : " XP · nivel máximo"}</span>
-                </div>
-                <div className="h-2.5 rounded-full bg-violet-100 overflow-hidden">
-                  <div className="h-full rounded-full bg-gradient-to-r from-violet-400 to-violet-600" style={{ width: `${pct}%` }} />
-                </div>
-              </div>
+              <TarjetaPersonajeEstudiante
+                datos={datos} estudianteInfo={estudianteInfo} avatarConfig={avatarConfig}
+                equipados={equipados} miRol={miRol} level={level} next={next} pct={pct}
+              />
 
               <ValorSemanaEstudiante />
               {estudianteInfo && <DesafioReinoEstudiante gradoId={estudianteInfo.grado_id} miReino={estudianteInfo.reino_actual || estudianteInfo.reino_original || "Sin grupo"} />}
               {estudianteInfo && <AvisoRendimiento estudianteId={estudianteInfo.id} />}
 
-              <div className="grid grid-cols-3 gap-2 mb-4">
-                <div className="bg-emerald-50 rounded-xl p-3 text-center">
-                  <div className="text-lg font-bold text-emerald-600">{datos.vida}</div>
-                  <div className="text-[10px] text-slate-500">Vida</div>
-                </div>
-                <div className="bg-amber-50 rounded-xl p-3 text-center">
-                  <div className="text-lg font-bold text-amber-600">{datos.monedas}</div>
-                  <div className="text-[10px] text-slate-500">Monedas</div>
-                </div>
-                <div className="bg-blue-50 rounded-xl p-3 text-center">
-                  <div className="text-lg font-bold text-blue-600">{pctAsis ?? "—"}{pctAsis !== null && "%"}</div>
-                  <div className="text-[10px] text-slate-500">Asistencia</div>
-                </div>
+              <div className="bg-blue-50 rounded-xl p-3 mb-2 flex items-center justify-between">
+                <span className="text-xs font-semibold text-blue-700">📋 Asistencia</span>
+                <span className="text-sm font-bold text-blue-600">{pctAsis ?? "—"}{pctAsis !== null && "%"}</span>
               </div>
               <div className="text-xs text-slate-500 bg-slate-50 rounded-xl p-3">
                 Presentes: {datos.presentes} · Retardos: {datos.retardos} · Faltas injustificadas: {datos.faltas_injustificadas} · Faltas justificadas: {datos.faltas_justificadas}
