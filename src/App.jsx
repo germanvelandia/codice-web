@@ -2248,7 +2248,7 @@ function TarjetaPersonajeEstudiante({ datos, estudianteInfo, avatarConfig, equip
 
       <div className="p-4">
         {/* Foto de perfil pequeña (si tiene) + nombre + rol/título */}
-        <div className="flex items-center gap-2.5 -mt-9 mb-3">
+        <div className="flex items-center gap-2.5 -mt-5 mb-3">
           <div className="shrink-0 flex items-center justify-center rounded-full overflow-hidden bg-white" style={{ width: 52, height: 52, border: "3px solid white", boxShadow: "0 2px 6px rgba(0,0,0,0.15)" }}>
             {estudianteInfo?.foto_url ? (
               <img src={estudianteInfo.foto_url} alt={datos.nombre} className="w-full h-full object-cover" />
