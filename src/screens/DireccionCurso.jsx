@@ -1121,7 +1121,7 @@ export function VistaDireccionCurso({ grados, gradoActivo, esAdmin }) {
   const [institucion, setInstitucion] = useState(null);
   const montado = useRef(false);
 
-  useEffect(() => { if (!["notas", "citaciones", "jornada"].includes(vista)) setVista("notas"); }, [vista]);
+  useEffect(() => { if (!["notas", "citaciones", "jornada", "controles"].includes(vista)) setVista("notas"); }, [vista]);
   useEffect(() => { if (grados.length && (!gradoId || !grados.some((g) => g.id === gradoId))) setGradoId(grados[0].id); }, [grados]);
   // (No se aplica al montar: si no, pisaría el curso recordado.)
   useEffect(() => { if (montado.current && gradoActivo) setGradoId(gradoActivo); }, [gradoActivo]);
@@ -1143,12 +1143,234 @@ export function VistaDireccionCurso({ grados, gradoActivo, esAdmin }) {
           <button onClick={() => setVista("notas")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "notas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📝 Notas</button>
           <button onClick={() => setVista("citaciones")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "citaciones" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📞 Citaciones</button>
           <button onClick={() => setVista("jornada")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "jornada" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🗓️ Jornada de Entrega</button>
+          <button onClick={() => setVista("controles")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "controles" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📋 Controles</button>
         </div>
       </div>
 
       {vista === "notas" && <NotasDireccionCurso gradoId={gradoId} />}
       {vista === "citaciones" && <CitacionesDireccionCurso gradoId={gradoId} institucion={institucion} esAdmin={esAdmin} />}
       {vista === "jornada" && <JornadasDireccionCurso gradoId={gradoId} institucion={institucion} />}
+      {vista === "controles" && <ControlesDireccionCurso gradoId={gradoId} />}
+    </div>
+  );
+}
+
+// ==================== 📋 Controles de curso ====================
+// Lista de "controles" (pagos, permisos, lo que haga falta) y, dentro de
+// cada uno, el estado por estudiante — completado o no, monto pagado si
+// corresponde, y una observación libre.
+function ControlesDireccionCurso({ gradoId }) {
+  const [controles, setControles] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [formAbierto, setFormAbierto] = useState(false);
+  const [controlAbierto, setControlAbierto] = useState(null);
+
+  const cargar = () => {
+    if (!gradoId) return;
+    setCargando(true);
+    api.fetchControlesCurso(gradoId).then((d) => { setControles(d); setCargando(false); });
+  };
+  useEffect(() => { cargar(); }, [gradoId]);
+
+  const eliminar = async (c) => {
+    if (!confirm(`¿Eliminar "${c.nombre}"? Se borra el estado de todos los estudiantes en este control.`)) return;
+    await api.eliminarControlCurso(c.id);
+    cargar();
+  };
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
+        <p className="text-sm text-slate-500">Seguimiento de pagos, permisos, útiles o cualquier otra cosa que necesites controlar por estudiante.</p>
+        <button onClick={() => setFormAbierto((v) => !v)} className="text-xs font-semibold px-3 py-2 rounded-full bg-violet-500 text-white">
+          {formAbierto ? "Cerrar" : "+ Nuevo control"}
+        </button>
+      </div>
+
+      {formAbierto && <NuevoControlForm gradoId={gradoId} onCancelar={() => setFormAbierto(false)} onCreado={() => { setFormAbierto(false); cargar(); }} />}
+
+      {cargando ? (
+        <p className="text-sm text-slate-400">Cargando…</p>
+      ) : controles.length === 0 ? (
+        <div className="text-sm text-slate-400 bg-white rounded-2xl p-6 text-center border border-dashed border-slate-200">Todavía no creaste ningún control para este curso.</div>
+      ) : (
+        <div className="grid sm:grid-cols-2 gap-3">
+          {controles.map((c) => (
+            <div key={c.id} className="bg-white rounded-2xl border border-slate-200 p-4">
+              <div className="flex justify-between items-start gap-2 mb-1">
+                <div className="font-bold text-slate-800">{c.nombre}</div>
+                <button onClick={() => eliminar(c)} className="text-slate-300 hover:text-rose-500 text-sm shrink-0">🗑</button>
+              </div>
+              {c.descripcion && <p className="text-xs text-slate-500 mb-2">{c.descripcion}</p>}
+              <div className="flex flex-wrap gap-2 mb-3 text-[11px] text-slate-400">
+                {c.monto_esperado != null && <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-semibold">💰 ${Number(c.monto_esperado).toLocaleString()}</span>}
+                {c.fecha_limite && <span className="bg-slate-50 px-2 py-0.5 rounded-full">📅 {c.fecha_limite}</span>}
+              </div>
+              <button onClick={() => setControlAbierto(c)} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-violet-200 text-violet-700">Ver estudiantes →</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {controlAbierto && <ControlEstudiantesModal control={controlAbierto} gradoId={gradoId} onClose={() => setControlAbierto(null)} />}
+    </div>
+  );
+}
+
+function NuevoControlForm({ gradoId, onCancelar, onCreado }) {
+  const [nombre, setNombre] = useState("");
+  const [descripcion, setDescripcion] = useState("");
+  const [esPago, setEsPago] = useState(false);
+  const [monto, setMonto] = useState("");
+  const [fechaLimite, setFechaLimite] = useState("");
+  const [guardando, setGuardando] = useState(false);
+
+  const guardar = async () => {
+    if (!nombre.trim()) { alert("Escribí un nombre para el control."); return; }
+    setGuardando(true);
+    try {
+      await api.crearControlCurso(gradoId, {
+        nombre: nombre.trim(), descripcion: descripcion.trim() || null,
+        monto_esperado: esPago && monto ? parseFloat(monto) : null,
+        fecha_limite: fechaLimite || null,
+      });
+      onCreado();
+    } catch (e) {
+      alert("Error al crear: " + e.message);
+    }
+    setGuardando(false);
+  };
+
+  const inputCls = "w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white";
+  return (
+    <div className="bg-violet-50 rounded-2xl p-4 mb-4">
+      <label className="text-xs text-slate-500 block mb-1">Nombre del control</label>
+      <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej: Salida pedagógica al Parque Explora" className={`${inputCls} mb-2`} />
+
+      <label className="text-xs text-slate-500 block mb-1">Descripción (opcional)</label>
+      <input value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Ej: incluye transporte y entrada" className={`${inputCls} mb-3`} />
+
+      <label className="flex items-center gap-2 text-sm text-slate-600 mb-2">
+        <input type="checkbox" checked={esPago} onChange={(e) => setEsPago(e.target.checked)} />
+        Es un control de pago (lleva un monto esperado)
+      </label>
+
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        {esPago && (
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">Monto esperado por estudiante</label>
+            <input type="number" min="0" value={monto} onChange={(e) => setMonto(e.target.value)} placeholder="Ej: 25000" className={inputCls} />
+          </div>
+        )}
+        <div>
+          <label className="text-xs text-slate-500 block mb-1">Fecha límite (opcional)</label>
+          <input type="date" value={fechaLimite} onChange={(e) => setFechaLimite(e.target.value)} className={inputCls} />
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2">
+        <button onClick={onCancelar} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
+        <button disabled={guardando} onClick={guardar} className="text-xs font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
+          {guardando ? "Creando…" : "Crear control"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ControlEstudiantesModal({ control, gradoId, onClose }) {
+  const [estudiantes, setEstudiantes] = useState([]);
+  const [estados, setEstados] = useState({});
+  const [cargando, setCargando] = useState(true);
+  const esPago = control.monto_esperado != null;
+
+  const cargar = () => {
+    setCargando(true);
+    api.fetchEstudiantesPorGrado(gradoId).then((est) => {
+      const ordenados = ordenarPorApellido(est);
+      setEstudiantes(ordenados);
+      api.fetchEstadoControl(control.id, ordenados).then((filas) => {
+        const mapa = {}; filas.forEach((f) => { mapa[f.estudiante_id] = f; });
+        setEstados(mapa);
+        setCargando(false);
+      });
+    });
+  };
+  useEffect(() => { cargar(); }, [control.id]);
+
+  const actualizar = (estudianteId, cambios) => {
+    const actual = estados[estudianteId];
+    const nuevo = { ...actual, ...cambios };
+    setEstados((prev) => ({ ...prev, [estudianteId]: nuevo }));
+    api.actualizarEstadoControl(control.id, estudianteId, {
+      completado: nuevo.completado, monto_pagado: nuevo.monto_pagado || null, fecha_pago: nuevo.fecha_pago || null, observacion: nuevo.observacion || null,
+    }).catch((e) => alert("No se pudo guardar: " + e.message));
+  };
+
+  const completados = Object.values(estados).filter((e) => e.completado).length;
+  const totalRecaudado = Object.values(estados).reduce((a, e) => a + (Number(e.monto_pagado) || 0), 0);
+
+  const exportar = () => {
+    const filas = estudiantes.map((e) => {
+      const est = estados[e.id] || {};
+      const fila = { Estudiante: e.nombre, Completado: est.completado ? "Sí" : "No" };
+      if (esPago) { fila["Monto pagado"] = est.monto_pagado || 0; fila["Fecha de pago"] = est.fecha_pago || ""; }
+      fila["Observación"] = est.observacion || "";
+      return fila;
+    });
+    const hoja = XLSX.utils.json_to_sheet(filas);
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, "Control");
+    XLSX.writeFile(libro, `${control.nombre.replace(/[^a-z0-9]+/gi, "_")}.xlsx`);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-2xl max-h-[88vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-start mb-1">
+          <div>
+            <h3 className="font-bold text-slate-800">📋 {control.nombre}</h3>
+            {control.descripcion && <p className="text-xs text-slate-400 mt-0.5">{control.descripcion}</p>}
+          </div>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+
+        {!cargando && (
+          <div className="flex flex-wrap items-center gap-2 my-3">
+            <span className="text-xs bg-emerald-50 text-emerald-700 font-semibold px-2.5 py-1 rounded-full">{completados} / {estudiantes.length} completados</span>
+            {esPago && <span className="text-xs bg-amber-50 text-amber-700 font-semibold px-2.5 py-1 rounded-full">💰 ${totalRecaudado.toLocaleString()} recaudados {control.monto_esperado ? `de $${(control.monto_esperado * estudiantes.length).toLocaleString()} esperados` : ""}</span>}
+            <button onClick={exportar} className="text-xs font-semibold px-2.5 py-1 rounded-full border border-slate-200 text-slate-600 ml-auto">📥 Exportar (Excel)</button>
+          </div>
+        )}
+
+        {cargando ? (
+          <p className="text-sm text-slate-400">Cargando…</p>
+        ) : (
+          <div className="space-y-1.5">
+            {estudiantes.map((est) => {
+              const e = estados[est.id] || {};
+              return (
+                <div key={est.id} className={`rounded-xl p-2.5 ${e.completado ? "bg-emerald-50" : "bg-slate-50"}`}>
+                  <div className="flex items-center gap-2.5">
+                    <input type="checkbox" checked={!!e.completado} onChange={(ev) => actualizar(est.id, { completado: ev.target.checked })} className="shrink-0 w-4 h-4" />
+                    <span className="text-sm text-slate-700 flex-1 min-w-0 truncate">{est.nombre}</span>
+                    {esPago && (
+                      <>
+                        <input type="number" min="0" placeholder="Monto" value={e.monto_pagado || ""} onChange={(ev) => actualizar(est.id, { monto_pagado: ev.target.value })}
+                          className="w-20 text-xs text-right rounded-lg px-2 py-1 border border-slate-200 outline-none shrink-0" />
+                        <input type="date" value={e.fecha_pago || ""} onChange={(ev) => actualizar(est.id, { fecha_pago: ev.target.value })}
+                          className="text-xs rounded-lg px-1.5 py-1 border border-slate-200 outline-none shrink-0" />
+                      </>
+                    )}
+                  </div>
+                  <input value={e.observacion || ""} onChange={(ev) => actualizar(est.id, { observacion: ev.target.value })} placeholder="Observación (opcional)"
+                    className="w-full text-xs rounded-lg px-2 py-1 mt-1.5 border border-slate-200 outline-none bg-white/70" />
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
