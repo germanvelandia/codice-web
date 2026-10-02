@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
 import { GRADOS_BASE, ordenarPorApellido, buscarEstudiantePorNombre } from "./gamification";
-import { notaAutomatica, notaFinalPonderada } from "./calificaciones";
+import { notaAutomatica, notaFinalPonderada, CONFIG_DEFAULT } from "./calificaciones";
 import { NIVELACION_COMPROMISOS_DEFAULT, FALTAS_MANUAL } from "./actasTemplates";
 import { CATALOGO_BASE } from "./avatarPartes";
 
@@ -4956,6 +4956,55 @@ export async function calcularNotasFinalesPeriodo(materiaId, gradoId, periodo, e
 // Listado detallado (fila por fila, con materia) de la asistencia de un
 // curso en un rango de fechas — para poder ver y borrar registros puntuales
 // que hayan quedado mal cargados (mezclados entre materias, duplicados, etc.).
+// ==================== 📋 Controles de curso ====================
+// Sistema genérico para seguir cualquier cosa por estudiante: pagos de
+// salidas pedagógicas, permisos firmados, útiles pendientes, aspectos
+// convivenciales — lo que haga falta. Un control con "monto_esperado"
+// se trata como un pago (muestra monto pagado + fecha); sin eso, es un
+// simple sí/no. La observación en texto libre está siempre disponible.
+
+export async function fetchControlesCurso(gradoId) {
+  const { data, error } = await supabase.from("controles_curso").select("*").eq("grado_id", gradoId).order("creado_en", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearControlCurso(gradoId, campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("controles_curso")
+    .insert({ grado_id: gradoId, docente_id: userData?.user?.id || null, ...campos }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function editarControlCurso(id, campos) {
+  const { error } = await supabase.from("controles_curso").update(campos).eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarControlCurso(id) {
+  const { error } = await supabase.from("controles_curso").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// Trae el estado de un control para una lista de estudiantes — a quien no
+// tenga fila todavía se le completa un estado "pendiente" por defecto, sin
+// necesidad de crearla en la base hasta que el docente marque algo.
+export async function fetchEstadoControl(controlId, estudiantes) {
+  const { data, error } = await supabase.from("controles_curso_estudiantes").select("*").eq("control_id", controlId);
+  if (error) throw error;
+  const porId = {}; (data || []).forEach((f) => { porId[f.estudiante_id] = f; });
+  return estudiantes.map((e) => porId[e.id] || {
+    control_id: controlId, estudiante_id: e.id, completado: false, monto_pagado: null, fecha_pago: null, observacion: null,
+  });
+}
+
+export async function actualizarEstadoControl(controlId, estudianteId, campos) {
+  const { error } = await supabase.from("controles_curso_estudiantes")
+    .upsert({ control_id: controlId, estudiante_id: estudianteId, ...campos, actualizado_en: new Date().toISOString() }, { onConflict: "control_id,estudiante_id" });
+  if (error) throw error;
+}
+
 // ==== INICIO LECTURA COMPLETA ====
 /* Supabase corta CUALQUIER lectura en 1000 filas por pedido (sin avisar). En
    asistencia se llega rápido: un curso de 34 estudiantes pasa de 1000 registros
@@ -5221,13 +5270,24 @@ export async function ajustarPuntosCompania(reinoId, delta, motivo) {
 // compañerismo. La normalización y el peso se aplican después, en
 // pantalla, para que el docente pueda mover los porcentajes sin volver
 // a pedir los datos cada vez.
-export async function fetchDatosRankingReinos(gradoId) {
+// El desempeño académico sale de las notas FINALES ya guardadas de una
+// materia y periodo puntuales (las mismas que alimentan el Boletín) — el
+// docente elige cuál, ya que solo ve sus propias materias.
+export async function fetchDatosRankingReinos(gradoId, materiaDesempenoId = null, periodoDesempeno = null) {
   const estudiantes = await traerTodo(() => supabase.from("estudiantes").select("id, nombre, reino_actual, reino_original", { count: "exact" }).eq("grado_id", gradoId).eq("activo", true).order("id"));
   const idsEstudiantes = estudiantes.map((e) => e.id);
   const asistencia = idsEstudiantes.length
     ? await traerTodo(() => ordenAsistencia(supabase.from("asistencia").select("estudiante_id, codigo", { count: "exact" }).in("estudiante_id", idsEstudiantes)))
     : [];
   const reinosCatalogo = await fetchReinos();
+
+  let notasFinales = [], escalaDesempeno = CONFIG_DEFAULT;
+  if (materiaDesempenoId && periodoDesempeno) {
+    const [todas, cfg] = await Promise.all([fetchNotasFinales(materiaDesempenoId), fetchNotasConfig(materiaDesempenoId)]);
+    notasFinales = todas.filter((n) => String(n.periodo) === String(periodoDesempeno) && idsEstudiantes.includes(n.estudiante_id) && n.nota !== null && n.nota !== undefined);
+    if (cfg) escalaDesempeno = cfg;
+  }
+  const notaPorEstudiante = {}; notasFinales.forEach((n) => { notaPorEstudiante[n.estudiante_id] = Number(n.nota); });
 
   const reinoDe = (e) => (e.reino_actual && e.reino_actual !== "Sin grupo" ? e.reino_actual : e.reino_original) || "Sin grupo";
   const estudiantesPorReino = {};
@@ -5253,10 +5313,16 @@ export async function fetchDatosRankingReinos(gradoId) {
         const c = conteoPorEstudiante[e.id];
         if (c && c.total > 0) { sumaPct += (c.P / c.total) * 100; conDatos += 1; }
       });
+      let sumaNota = 0, conNota = 0;
+      ests.forEach((e) => { if (notaPorEstudiante[e.id] !== undefined) { sumaNota += notaPorEstudiante[e.id]; conNota += 1; } });
+      const promedioNota = conNota > 0 ? Math.round((sumaNota / conNota) * 10) / 10 : null;
+      const rangoEscala = (escalaDesempeno.nota_maxima ?? 5) - (escalaDesempeno.escala_min ?? 1);
+      const desempenoPct = promedioNota !== null && rangoEscala > 0 ? ((promedioNota - (escalaDesempeno.escala_min ?? 1)) / rangoEscala) * 100 : null;
       return {
         reinoId: catalogado?.id ?? null, nombre, color: catalogado?.color || null,
         puntosCompania: catalogado?.puntos_compania || 0,
         asistenciaPct: conDatos > 0 ? Math.round((sumaPct / conDatos) * 10) / 10 : null,
+        desempenoPromedio: promedioNota, desempenoPct,
         estudiantes: ests,
       };
     })
