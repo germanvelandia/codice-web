@@ -8,6 +8,7 @@ import { EditorTexto, TextoEnriquecido } from "../components/RichText";
 
 // (REINO_COLORS ahora se importa directo desde gamification.js, ver arriba)
 import * as api from "../lib/api";
+import { PersonajePreview } from "./Personaje";
 import { ActasModal } from "./Actas";
 import { RemisionModal } from "./Remision";
 import { ResumenEstudianteModal } from "./Resumen";
@@ -1074,7 +1075,7 @@ function AreaEstudiante({ estudiante, progreso, grados, onClose, onAbrir }) {
   );
 }
 
-function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFotoActualizada, reinos, catalogoReinos, onCambiarReino, roles, onCambiarRol, onCodigoGenerado, grados, gradoActual, onTrasladado }) {
+function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFotoActualizada, reinos, catalogoReinos, onCambiarReino, roles, onCambiarRol, onCodigoGenerado, grados, gradoActual, onTrasladado, avatar }) {
   const [actasAbiertas, setActasAbiertas] = useState(false);
   const [inclusionAbierta, setInclusionAbierta] = useState(false);
   const [codiceAbierto, setCodiceAbierto] = useState(false);
@@ -1153,6 +1154,10 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
         {api.urlFotoEstudiante(estudiante) ? (
           <img src={api.urlFotoEstudiante(estudiante)} alt={estudiante.nombre} onClick={() => setFotoAmpliada(true)}
             className="w-14 h-14 object-cover rounded-full border border-slate-200 cursor-pointer" />
+        ) : avatar ? (
+          <div className="w-14 h-14 rounded-full flex items-center justify-center border border-slate-200 overflow-hidden bg-gradient-to-b from-violet-50 to-white" title="Personaje del estudiante">
+            <PersonajePreview config={avatar} size={50} />
+          </div>
         ) : infoReino.logo_url ? (
           <img src={infoReino.logo_url} alt="" className="w-14 h-14 object-contain rounded-full border border-slate-200" />
         ) : (
@@ -2008,6 +2013,8 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
   const [eliminandoVarios, setEliminandoVarios] = useState(false);
   const [confirmacionTexto, setConfirmacionTexto] = useState("");
 
+  const [avatares, setAvatares] = useState({});
+
   const cargar = async () => {
     setCargando(true);
     const [data, rolesData, reinosData] = await Promise.all([api.fetchEstudiantesPorGrado(gradoId), api.fetchRoles(), api.fetchReinos()]);
@@ -2015,6 +2022,9 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
     setRoles(rolesData);
     setCatalogoReinos(reinosData);
     setCargando(false);
+    // Los avatares se piden aparte, sin bloquear el resto de la lista —
+    // no son datos críticos, solo decorativos.
+    api.fetchAvatarConfigsMultiples(data.map((e) => e.id)).then(setAvatares).catch(() => {});
   };
   useEffect(() => { cargar(); }, [gradoId]);
 
@@ -2196,7 +2206,7 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
           {visibles.map((s) => (
-            <TarjetaEstudiante key={s.id} estudiante={s} reinos={reinos} catalogoReinos={catalogoReinos} onQuitar={quitar} onRenombrar={renombrar} onCambiarReino={cambiarReino} onAplicado={actualizarProgresoLocal} onFotoActualizada={actualizarFotoLocal} roles={roles} onCambiarRol={cambiarRol} onCodigoGenerado={actualizarCodigoLocal} grados={grados} gradoActual={gradoId} onTrasladado={cargar} />
+            <TarjetaEstudiante key={s.id} estudiante={s} reinos={reinos} catalogoReinos={catalogoReinos} onQuitar={quitar} onRenombrar={renombrar} onCambiarReino={cambiarReino} onAplicado={actualizarProgresoLocal} onFotoActualizada={actualizarFotoLocal} roles={roles} onCambiarRol={cambiarRol} onCodigoGenerado={actualizarCodigoLocal} grados={grados} gradoActual={gradoId} onTrasladado={cargar} avatar={avatares[s.id]} />
           ))}
         </div>
       )}
