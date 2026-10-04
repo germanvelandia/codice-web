@@ -5005,17 +5005,20 @@ export async function actualizarEstadoControl(controlId, estudianteId, campos) {
   if (error) throw error;
 }
 
-// Preferencia de estilo del personaje de rol (versión femenina o masculina
-// del dibujo) — la elige el propio estudiante en "Mi Personaje", es solo
-// cosmético, no un dato sobre su identidad.
-export async function fetchGeneroPersonaje(estudianteId) {
-  const { data, error } = await supabase.from("estudiantes").select("genero_personaje").eq("id", estudianteId).maybeSingle();
+// El estudiante elige LIBREMENTE cuál de los 14 personajes quiere (sin
+// importar el rol que le toque jugar en la Comarca) — rol + género
+// identifican exactamente cuál de los 14 dibujos es. Si todavía no eligió
+// ninguno, se devuelve null y la pantalla cae a lo que ya mostraba antes
+// (el avatar armado por partes).
+export async function fetchPersonajeElegido(estudianteId) {
+  const { data, error } = await supabase.from("estudiantes").select("personaje_elegido_rol, genero_personaje").eq("id", estudianteId).maybeSingle();
   if (error) throw error;
-  return data?.genero_personaje || "masculino";
+  if (!data?.personaje_elegido_rol) return null;
+  return { rolKey: data.personaje_elegido_rol, genero: data.genero_personaje || "masculino" };
 }
 
-export async function guardarGeneroPersonaje(estudianteId, genero) {
-  const { error } = await supabase.from("estudiantes").update({ genero_personaje: genero }).eq("id", estudianteId);
+export async function guardarPersonajeElegido(estudianteId, rolKey, genero) {
+  const { error } = await supabase.from("estudiantes").update({ personaje_elegido_rol: rolKey, genero_personaje: genero }).eq("id", estudianteId);
   if (error) throw error;
 }
 
