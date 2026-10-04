@@ -31,18 +31,34 @@ export function VistaPersonaje({ estudianteId, monedas, onMonedasActualizadas })
   const [cargando, setCargando] = useState(true);
   const [tab, setTab] = useState("cuerpo");
   const [comprando, setComprando] = useState(null);
+  const [generoPersonaje, setGeneroPersonaje] = useState("masculino");
+  const [guardandoGenero, setGuardandoGenero] = useState(false);
 
   const cargar = async () => {
     setCargando(true);
-    const [cat, cfg, desb] = await Promise.all([
+    const [cat, cfg, desb, genero] = await Promise.all([
       api.fetchAvatarCatalogo(), api.fetchAvatarConfig(estudianteId), api.fetchAvatarDesbloqueados(estudianteId),
+      api.fetchGeneroPersonaje(estudianteId).catch(() => "masculino"),
     ]);
     setCatalogo(cat);
     setConfig(cfg);
     setDesbloqueados(desb);
+    setGeneroPersonaje(genero);
     setCargando(false);
   };
   useEffect(() => { cargar(); }, [estudianteId]);
+
+  const elegirGenero = async (genero) => {
+    if (genero === generoPersonaje) return;
+    setGuardandoGenero(true);
+    setGeneroPersonaje(genero); // se ve el cambio al toque; si falla el guardado, se avisa abajo
+    try {
+      await api.guardarGeneroPersonaje(estudianteId, genero);
+    } catch (e) {
+      alert("No se pudo guardar: " + e.message);
+    }
+    setGuardandoGenero(false);
+  };
 
   if (cargando || !config) return <div className="text-sm text-slate-400">Cargando…</div>;
 
@@ -113,6 +129,24 @@ export function VistaPersonaje({ estudianteId, monedas, onMonedasActualizadas })
 
       <div className="flex justify-center gap-1.5 mb-2 text-sm">
         <span className="font-bold text-amber-600">🪙 {monedas}</span>
+      </div>
+
+      {/* Si en algún momento te asignan un rol de la Comarca (Maestro del
+          Gremio, Defensor del Pacto, etc.), se muestra un dibujo de
+          personaje para ese rol — acá elegís qué versión preferís. No
+          cambia nada de lo de arriba, es solo para ese dibujo puntual. */}
+      <div className="bg-slate-50 rounded-2xl p-3 mb-4 text-center">
+        <p className="text-[11px] text-slate-500 mb-2">Si te toca un rol de la Comarca, ¿qué versión de personaje preferís?</p>
+        <div className="flex justify-center gap-2">
+          <button onClick={() => elegirGenero("femenino")} disabled={guardandoGenero}
+            className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${generoPersonaje === "femenino" ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>
+            🙋‍♀️ Femenino
+          </button>
+          <button onClick={() => elegirGenero("masculino")} disabled={guardandoGenero}
+            className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${generoPersonaje === "masculino" ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>
+            🙋‍♂️ Masculino
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-1 rounded-full bg-slate-100 p-1 mb-3 flex-wrap justify-center">
