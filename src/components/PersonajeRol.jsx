@@ -12,3 +12,8 @@ export function PersonajeRol({ rolKey, genero = "masculino", size = 48, classNam
       className={className} />
   );
 }
+
+// React.lazy() exige que el componente venga como export "default" — se
+// mantiene también el export con nombre de arriba, por si algo más lo
+// importa de la forma de siempre (sin carga diferida).
+export default PersonajeRol;
