@@ -39,3 +39,24 @@ export function imagenPersonajeRol(rolKey, genero = "masculino") {
   if (!par) return null;
   return par[genero] || par.masculino || par.femenino || null;
 }
+
+// Nombre corto para mostrar en la galería (no hace falta que coincida
+// textualmente con COMARCA_ROLES — es solo una etiqueta).
+const NOMBRES_ROL = {
+  maestro_gremio: "Maestro del Gremio",
+  heraldo: "Heraldo de la Alianza",
+  peregrino: "Peregrino del Sentido",
+  cronista: "Cronista del Reino",
+  defensor: "Defensor del Pacto",
+  consejero: "Consejero Real",
+  guardian: "Guardián del Símbolo",
+};
+
+// Los 14 personajes en una lista plana, para recorrer en la galería de
+// selección — cada uno con su rol+género (lo que hay que guardar) y un
+// nombre para mostrar.
+export const LISTA_PERSONAJES = Object.entries(PERSONAJES_ROL).flatMap(([rolKey, generos]) =>
+  Object.entries(generos).map(([genero, src]) => ({
+    rolKey, genero, src, nombre: NOMBRES_ROL[rolKey] || rolKey,
+  }))
+);
