@@ -49,7 +49,6 @@ import { VistaComarcaOakhaven, TarjetaComarcaPublica, urlDeTarjeta, urlQR } from
 // cuando un estudiante con un rol de la Comarca realmente los necesita —
 // no forman parte del paquete principal que carga la pantalla de inicio.
 const PersonajeRol = lazy(() => import("./components/PersonajeRol"));
-import { COMARCA_ROLES } from "./lib/api";
 import { EditorTexto, TextoEnriquecido, textoPlano } from "./components/RichText";
 import { InstitucionModal } from "./screens/Institucion";
 import { AdministracionModal } from "./screens/Administracion";
@@ -2230,7 +2229,7 @@ function PortalAcudiente({ onElegirEstudiante }) {
 // pudiera superar 100, solo hay que subir este número.
 const VIDA_MAX = 100;
 
-function TarjetaPersonajeEstudiante({ datos, estudianteInfo, avatarConfig, equipados, miRol, level, next, pct, generoPersonaje }) {
+function TarjetaPersonajeEstudiante({ datos, estudianteInfo, avatarConfig, equipados, miRol, level, next, pct, personajeElegido }) {
   const vidaPct = Math.max(0, Math.min(100, Math.round(((datos.vida ?? 0) / VIDA_MAX) * 100)));
   const colorVida = vidaPct > 50 ? "#22C55E" : vidaPct > 20 ? "#F59E0B" : "#EF4444";
 
@@ -2240,15 +2239,14 @@ function TarjetaPersonajeEstudiante({ datos, estudianteInfo, avatarConfig, equip
       <div className="relative h-32 sm:h-36 flex items-center justify-center" style={{ background: "linear-gradient(160deg, #223b74 0%, #17264D 55%, #0f1932 100%)" }}>
         <div aria-hidden className="absolute inset-0 opacity-20" style={{ backgroundImage: "radial-gradient(circle, #B8892B 1.5px, transparent 1.5px)", backgroundSize: "18px 18px" }} />
         {(() => {
-          // Si el rol asignado coincide con uno de los 7 de la Comarca, se
-          // muestra ese dibujo de personaje en vez del avatar genérico —
-          // es más específico y queda mejor con el tema del rol.
-          const rolComarca = miRol && COMARCA_ROLES.find((r) => r.nombre === miRol.nombre);
-          if (rolComarca) {
+          // El estudiante elige libremente cuál de los 14 personajes
+          // quiere (sin importar el rol que le toque jugar) — si ya
+          // eligió uno, se muestra ese dibujo en vez del avatar genérico.
+          if (personajeElegido) {
             return (
               <div className="relative" style={{ filter: "drop-shadow(0 6px 10px rgba(0,0,0,0.35))" }}>
                 <Suspense fallback={<span className="text-6xl relative">🎓</span>}>
-                  <PersonajeRol rolKey={rolComarca.key} genero={generoPersonaje} size={120} />
+                  <PersonajeRol rolKey={personajeElegido.rolKey} genero={personajeElegido.genero} size={120} />
                 </Suspense>
               </div>
             );
@@ -2331,7 +2329,7 @@ function PortalEstudiante() {
   const [equipados, setEquipados] = useState({ marco: null, titulo: null });
   const [avatarConfig, setAvatarConfig] = useState(null);
   const [miRol, setMiRol] = useState(null);
-  const [generoPersonaje, setGeneroPersonaje] = useState("masculino");
+  const [personajeElegido, setPersonajeElegido] = useState(null);
   const [nivelesConfig, setNivelesConfig] = useState(null);
 
   useEffect(() => { api.fetchNivelesParaJuego().then(setNivelesConfig); }, []);
@@ -2354,7 +2352,7 @@ function PortalEstudiante() {
           api.fetchEquipadosEstudiante(info.id).then(setEquipados);
           api.fetchAvatarConfigsMultiples([info.id]).then((mapa) => setAvatarConfig(mapa[info.id] || null));
           api.fetchMiRol(info.id).then(setMiRol);
-          api.fetchGeneroPersonaje(info.id).then(setGeneroPersonaje).catch(() => {});
+          api.fetchPersonajeElegido(info.id).then(setPersonajeElegido).catch(() => {});
         }
       }
     } catch (e) {
@@ -2406,7 +2404,7 @@ function PortalEstudiante() {
             <>
               <TarjetaPersonajeEstudiante
                 datos={datos} estudianteInfo={estudianteInfo} avatarConfig={avatarConfig}
-                equipados={equipados} miRol={miRol} level={level} next={next} pct={pct} generoPersonaje={generoPersonaje}
+                equipados={equipados} miRol={miRol} level={level} next={next} pct={pct} personajeElegido={personajeElegido}
               />
 
               <ValorSemanaEstudiante />
