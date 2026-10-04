@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, Suspense, lazy } from "react";
 import { supabase } from "./lib/supabaseClient";
 import * as api from "./lib/api";
 import { useEstadoPersistente, fijarUsuarioPersistencia } from "./lib/api";
@@ -45,7 +45,10 @@ import { VistaTableroSemanal } from "./screens/TableroSemanal";
 import { VistaInicio, ContenidoLightbox } from "./screens/Inicio";
 import { Star, Gift, Settings, Package, Image, FileText, Award, Trophy, Puzzle, BookOpen, HelpCircle, Archive, Clock, Palette, GraduationCap, Users } from "lucide-react";
 import { VistaComarcaOakhaven, TarjetaComarcaPublica, urlDeTarjeta, urlQR } from "./screens/ComarcaOakhaven";
-import { PersonajeRol } from "./components/PersonajeRol";
+// Carga diferida: este componente (y sus 14 imágenes) solo se descargan
+// cuando un estudiante con un rol de la Comarca realmente los necesita —
+// no forman parte del paquete principal que carga la pantalla de inicio.
+const PersonajeRol = lazy(() => import("./components/PersonajeRol"));
 import { COMARCA_ROLES } from "./lib/api";
 import { EditorTexto, TextoEnriquecido, textoPlano } from "./components/RichText";
 import { InstitucionModal } from "./screens/Institucion";
@@ -2244,7 +2247,9 @@ function TarjetaPersonajeEstudiante({ datos, estudianteInfo, avatarConfig, equip
           if (rolComarca) {
             return (
               <div className="relative" style={{ filter: "drop-shadow(0 6px 10px rgba(0,0,0,0.35))" }}>
-                <PersonajeRol rolKey={rolComarca.key} size={120} />
+                <Suspense fallback={<span className="text-6xl relative">🎓</span>}>
+                  <PersonajeRol rolKey={rolComarca.key} size={120} />
+                </Suspense>
               </div>
             );
           }
