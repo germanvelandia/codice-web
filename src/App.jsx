@@ -2230,7 +2230,7 @@ function PortalAcudiente({ onElegirEstudiante }) {
 // pudiera superar 100, solo hay que subir este número.
 const VIDA_MAX = 100;
 
-function TarjetaPersonajeEstudiante({ datos, estudianteInfo, avatarConfig, equipados, miRol, level, next, pct }) {
+function TarjetaPersonajeEstudiante({ datos, estudianteInfo, avatarConfig, equipados, miRol, level, next, pct, generoPersonaje }) {
   const vidaPct = Math.max(0, Math.min(100, Math.round(((datos.vida ?? 0) / VIDA_MAX) * 100)));
   const colorVida = vidaPct > 50 ? "#22C55E" : vidaPct > 20 ? "#F59E0B" : "#EF4444";
 
@@ -2248,7 +2248,7 @@ function TarjetaPersonajeEstudiante({ datos, estudianteInfo, avatarConfig, equip
             return (
               <div className="relative" style={{ filter: "drop-shadow(0 6px 10px rgba(0,0,0,0.35))" }}>
                 <Suspense fallback={<span className="text-6xl relative">🎓</span>}>
-                  <PersonajeRol rolKey={rolComarca.key} size={120} />
+                  <PersonajeRol rolKey={rolComarca.key} genero={generoPersonaje} size={120} />
                 </Suspense>
               </div>
             );
@@ -2331,6 +2331,7 @@ function PortalEstudiante() {
   const [equipados, setEquipados] = useState({ marco: null, titulo: null });
   const [avatarConfig, setAvatarConfig] = useState(null);
   const [miRol, setMiRol] = useState(null);
+  const [generoPersonaje, setGeneroPersonaje] = useState("masculino");
   const [nivelesConfig, setNivelesConfig] = useState(null);
 
   useEffect(() => { api.fetchNivelesParaJuego().then(setNivelesConfig); }, []);
@@ -2353,6 +2354,7 @@ function PortalEstudiante() {
           api.fetchEquipadosEstudiante(info.id).then(setEquipados);
           api.fetchAvatarConfigsMultiples([info.id]).then((mapa) => setAvatarConfig(mapa[info.id] || null));
           api.fetchMiRol(info.id).then(setMiRol);
+          api.fetchGeneroPersonaje(info.id).then(setGeneroPersonaje).catch(() => {});
         }
       }
     } catch (e) {
@@ -2404,7 +2406,7 @@ function PortalEstudiante() {
             <>
               <TarjetaPersonajeEstudiante
                 datos={datos} estudianteInfo={estudianteInfo} avatarConfig={avatarConfig}
-                equipados={equipados} miRol={miRol} level={level} next={next} pct={pct}
+                equipados={equipados} miRol={miRol} level={level} next={next} pct={pct} generoPersonaje={generoPersonaje}
               />
 
               <ValorSemanaEstudiante />
