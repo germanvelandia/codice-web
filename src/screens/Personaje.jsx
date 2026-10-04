@@ -1,6 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, Suspense, lazy } from "react";
 import * as api from "../lib/api";
 import { personajeSvg } from "../lib/avatarPartes";
+
+// Carga diferida: la galería (con sus 14 imágenes) solo se descarga
+// cuando el estudiante abre esta sección — no forma parte del paquete
+// principal de la app.
+const GaleriaPersonajesRol = lazy(() => import("../components/GaleriaPersonajesRol"));
+const PersonajeRol = lazy(() => import("../components/PersonajeRol"));
 
 const LABELS_CATEGORIA = { cuerpo: "🧍 Cuerpo", pelo: "💇 Pelo", atuendo: "👕 Atuendo", accesorio: "🎩 Accesorio" };
 
@@ -31,33 +37,34 @@ export function VistaPersonaje({ estudianteId, monedas, onMonedasActualizadas })
   const [cargando, setCargando] = useState(true);
   const [tab, setTab] = useState("cuerpo");
   const [comprando, setComprando] = useState(null);
-  const [generoPersonaje, setGeneroPersonaje] = useState("masculino");
-  const [guardandoGenero, setGuardandoGenero] = useState(false);
+  const [personajeElegido, setPersonajeElegido] = useState(null);
+  const [guardandoPersonaje, setGuardandoPersonaje] = useState(false);
+  const [galeriaAbierta, setGaleriaAbierta] = useState(false);
 
   const cargar = async () => {
     setCargando(true);
-    const [cat, cfg, desb, genero] = await Promise.all([
+    const [cat, cfg, desb, elegido] = await Promise.all([
       api.fetchAvatarCatalogo(), api.fetchAvatarConfig(estudianteId), api.fetchAvatarDesbloqueados(estudianteId),
-      api.fetchGeneroPersonaje(estudianteId).catch(() => "masculino"),
+      api.fetchPersonajeElegido(estudianteId).catch(() => null),
     ]);
     setCatalogo(cat);
     setConfig(cfg);
     setDesbloqueados(desb);
-    setGeneroPersonaje(genero);
+    setPersonajeElegido(elegido);
     setCargando(false);
   };
   useEffect(() => { cargar(); }, [estudianteId]);
 
-  const elegirGenero = async (genero) => {
-    if (genero === generoPersonaje) return;
-    setGuardandoGenero(true);
-    setGeneroPersonaje(genero); // se ve el cambio al toque; si falla el guardado, se avisa abajo
+  const elegirPersonaje = async (rolKey, genero) => {
+    setGuardandoPersonaje(true);
+    setPersonajeElegido({ rolKey, genero }); // se ve el cambio al toque; si falla el guardado, se avisa abajo
     try {
-      await api.guardarGeneroPersonaje(estudianteId, genero);
+      await api.guardarPersonajeElegido(estudianteId, rolKey, genero);
+      setGaleriaAbierta(false);
     } catch (e) {
       alert("No se pudo guardar: " + e.message);
     }
-    setGuardandoGenero(false);
+    setGuardandoPersonaje(false);
   };
 
   if (cargando || !config) return <div className="text-sm text-slate-400">Cargando…</div>;
@@ -131,22 +138,30 @@ export function VistaPersonaje({ estudianteId, monedas, onMonedasActualizadas })
         <span className="font-bold text-amber-600">🪙 {monedas}</span>
       </div>
 
-      {/* Si en algún momento te asignan un rol de la Comarca (Maestro del
-          Gremio, Defensor del Pacto, etc.), se muestra un dibujo de
-          personaje para ese rol — acá elegís qué versión preferís. No
-          cambia nada de lo de arriba, es solo para ese dibujo puntual. */}
-      <div className="bg-slate-50 rounded-2xl p-3 mb-4 text-center">
-        <p className="text-[11px] text-slate-500 mb-2">Si te toca un rol de la Comarca, ¿qué versión de personaje preferís?</p>
-        <div className="flex justify-center gap-2">
-          <button onClick={() => elegirGenero("femenino")} disabled={guardandoGenero}
-            className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${generoPersonaje === "femenino" ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>
-            🙋‍♀️ Femenino
-          </button>
-          <button onClick={() => elegirGenero("masculino")} disabled={guardandoGenero}
-            className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${generoPersonaje === "masculino" ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>
-            🙋‍♂️ Masculino
+      {/* El personaje que se ve en Inicio cuando te toca un rol en la
+          Comarca — elegís libremente cuál de los 14 te gusta, sin importar
+          qué rol te toque jugar. No tiene nada que ver con las piezas de
+          arriba (cuerpo/pelo/atuendo/accesorio), es un dibujo aparte. */}
+      <div className="bg-slate-50 rounded-2xl p-3 mb-4">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <p className="text-[11px] text-slate-500">🎭 Tu personaje para cuando te toque un rol en la Comarca</p>
+          <button onClick={() => setGaleriaAbierta((v) => !v)} className="text-xs font-semibold text-violet-600 shrink-0">
+            {galeriaAbierta ? "Cerrar" : personajeElegido ? "Cambiar" : "Elegir"}
           </button>
         </div>
+        {personajeElegido && !galeriaAbierta && (
+          <div className="flex justify-center">
+            <Suspense fallback={<div style={{ width: 48, height: 48 }} />}>
+              <PersonajeRol rolKey={personajeElegido.rolKey} genero={personajeElegido.genero} size={48} />
+            </Suspense>
+          </div>
+        )}
+        {galeriaAbierta && (
+          <Suspense fallback={<p className="text-xs text-slate-400 text-center py-4">Cargando personajes…</p>}>
+            <GaleriaPersonajesRol elegido={personajeElegido} onElegir={elegirPersonaje} />
+          </Suspense>
+        )}
+        {guardandoPersonaje && <p className="text-[10px] text-slate-400 text-center mt-1">Guardando…</p>}
       </div>
 
       <div className="flex gap-1 rounded-full bg-slate-100 p-1 mb-3 flex-wrap justify-center">
