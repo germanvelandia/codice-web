@@ -45,6 +45,8 @@ import { VistaTableroSemanal } from "./screens/TableroSemanal";
 import { VistaInicio, ContenidoLightbox } from "./screens/Inicio";
 import { Star, Gift, Settings, Package, Image, FileText, Award, Trophy, Puzzle, BookOpen, HelpCircle, Archive, Clock, Palette, GraduationCap, Users } from "lucide-react";
 import { VistaComarcaOakhaven, TarjetaComarcaPublica, urlDeTarjeta, urlQR } from "./screens/ComarcaOakhaven";
+import { PersonajeRol } from "./components/PersonajeRol";
+import { COMARCA_ROLES } from "./lib/api";
 import { EditorTexto, TextoEnriquecido, textoPlano } from "./components/RichText";
 import { InstitucionModal } from "./screens/Institucion";
 import { AdministracionModal } from "./screens/Administracion";
@@ -2234,13 +2236,27 @@ function TarjetaPersonajeEstudiante({ datos, estudianteInfo, avatarConfig, equip
       {/* Banner con el personaje */}
       <div className="relative h-32 sm:h-36 flex items-center justify-center" style={{ background: "linear-gradient(160deg, #223b74 0%, #17264D 55%, #0f1932 100%)" }}>
         <div aria-hidden className="absolute inset-0 opacity-20" style={{ backgroundImage: "radial-gradient(circle, #B8892B 1.5px, transparent 1.5px)", backgroundSize: "18px 18px" }} />
-        {avatarConfig ? (
-          <div className="relative" style={{ filter: "drop-shadow(0 6px 10px rgba(0,0,0,0.35))" }}>
-            <PersonajePreview config={avatarConfig} size={120} />
-          </div>
-        ) : (
-          <span className="text-6xl relative">🎓</span>
-        )}
+        {(() => {
+          // Si el rol asignado coincide con uno de los 7 de la Comarca, se
+          // muestra ese dibujo de personaje en vez del avatar genérico —
+          // es más específico y queda mejor con el tema del rol.
+          const rolComarca = miRol && COMARCA_ROLES.find((r) => r.nombre === miRol.nombre);
+          if (rolComarca) {
+            return (
+              <div className="relative" style={{ filter: "drop-shadow(0 6px 10px rgba(0,0,0,0.35))" }}>
+                <PersonajeRol rolKey={rolComarca.key} size={120} />
+              </div>
+            );
+          }
+          if (avatarConfig) {
+            return (
+              <div className="relative" style={{ filter: "drop-shadow(0 6px 10px rgba(0,0,0,0.35))" }}>
+                <PersonajePreview config={avatarConfig} size={120} />
+              </div>
+            );
+          }
+          return <span className="text-6xl relative">🎓</span>;
+        })()}
         {equipados.marco && (
           <div className="absolute top-2 right-2 text-[10px] font-bold px-2 py-1 rounded-full text-white" style={{ background: "rgba(0,0,0,0.35)" }}>🖼️ {equipados.marco.valor}</div>
         )}
