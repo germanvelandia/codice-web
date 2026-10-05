@@ -17,6 +17,7 @@ import { DirectorioModal } from "./Directorio";
 import { InsigniaNivel, CapaEstrellasBanner } from "../components/NivelPersonaje";
 import { EmojiPicker } from "../components/EmojiPicker";
 import { nivelPersonaje, textoBeneficio, TIPOS_BENEFICIO } from "../lib/mejorasPersonaje";
+import { useNivelesPersonaje } from "../lib/configNiveles";
 
 // Carga diferida: el dibujo de cada personaje (con sus imágenes) solo se descarga
 // cuando se abre esta pantalla — no forma parte del paquete principal de la app.
@@ -24,6 +25,8 @@ const PersonajeConMejoras = lazy(() => import("../components/PersonajeConMejoras
 const GaleriaPersonajesRol = lazy(() => import("../components/GaleriaPersonajesRol"));
 // La vista previa de niveles trae las imágenes de todos los niveles: se carga aparte, solo al abrir esa pestaña.
 const VistaNivelesPersonaje = lazy(() => import("../components/VistaNivelesPersonaje"));
+// El editor de niveles también se carga aparte, solo al abrir su pestaña.
+const EditorNivelesPersonaje = lazy(() => import("../components/EditorNivelesPersonaje"));
 
 // Privilegios de clase que un estudiante compró (corona, estandarte…): acá el docente
 // los marca como usados cuando los concede, o los vuelve a habilitar.
@@ -142,7 +145,7 @@ function PiezasPersonajeModal({ onClose }) {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
   const [editando, setEditando] = useState(null); // null | "nueva" | pieza
-  const [vista, setVista] = useState("piezas"); // "piezas" | "niveles"
+  const [vista, setVista] = useState("piezas"); // "piezas" | "niveles" | "editar"
   const cargar = () => {
     setCargando(true);
     api.fetchMejorasCatalogo({ soloActivas: false })
@@ -158,7 +161,7 @@ function PiezasPersonajeModal({ onClose }) {
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className={`bg-white rounded-2xl p-5 w-full ${vista === "niveles" ? "max-w-3xl" : "max-w-lg"} max-h-[88vh] overflow-y-auto shadow-xl`}>
+      <div onClick={(e) => e.stopPropagation()} className={`bg-white rounded-2xl p-5 w-full ${vista === "niveles" ? "max-w-3xl" : vista === "editar" ? "max-w-xl" : "max-w-lg"} max-h-[88vh] overflow-y-auto shadow-xl`}>
         <div className="flex justify-between items-center mb-1">
           <h3 className="font-bold text-slate-800">🎒 Piezas del personaje</h3>
           <button onClick={onClose} className="text-slate-400">✕</button>
@@ -166,6 +169,7 @@ function PiezasPersonajeModal({ onClose }) {
         <div className="inline-flex gap-1 rounded-full bg-slate-100 p-1 mb-3">
           <button type="button" onClick={() => setVista("piezas")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "piezas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🎒 Piezas</button>
           <button type="button" onClick={() => setVista("niveles")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "niveles" ? "bg-violet-500 text-white" : "text-slate-600"}`}>⭐ Vista de niveles</button>
+          <button type="button" onClick={() => setVista("editar")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "editar" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🏅 Editar niveles</button>
         </div>
         {vista === "piezas" && (
           <p className="text-xs text-slate-400 mb-3">Los estudiantes las compran con Oro en "Mi Personaje". Cada una trae un beneficio, y cuantas más tengan, más sube el nivel de su personaje (el brillo y el fondo cambian).</p>
@@ -174,6 +178,10 @@ function PiezasPersonajeModal({ onClose }) {
         {vista === "niveles" ? (
           <Suspense fallback={<p className="text-sm text-slate-400">Cargando personajes…</p>}>
             <VistaNivelesPersonaje piezas={piezas.filter((p) => p.activo)} />
+          </Suspense>
+        ) : vista === "editar" ? (
+          <Suspense fallback={<p className="text-sm text-slate-400">Cargando…</p>}>
+            <EditorNivelesPersonaje cantidadPiezas={piezas.filter((p) => p.activo).length} />
           </Suspense>
         ) : error ? (
           <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">
@@ -1494,6 +1502,7 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
 
   // Lo que compró el estudiante: define el nivel de su personaje, el equipo que se ve
   // junto a él y los privilegios que todavía están sin usar.
+  useNivelesPersonaje(); // para que la tarjeta se actualice si cambian los niveles en "Editar niveles"
   const piezasConPieza = mejoras.filter((f) => f.mejora);
   const nv = nivelPersonaje(piezasConPieza.length);
   const equipoPuesto = piezasConPieza.filter((f) => f.mejora.slot !== "companero").map((f) => ({ emoji: f.mejora.emoji, nombre: f.mejora.nombre }));
