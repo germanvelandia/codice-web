@@ -57,7 +57,7 @@ export function VistaPersonaje({ estudianteId, monedas, onMonedasActualizadas })
 
   const elegirPersonaje = async (rolKey, genero) => {
     setGuardandoPersonaje(true);
-    setPersonajeElegido({ rolKey, genero }); // se ve el cambio al toque; si falla el guardado, se avisa abajo
+    setPersonajeElegido({ rolKey, genero, asignadoPorDocente: false }); // se ve el cambio al toque; si falla el guardado, se avisa abajo
     try {
       await api.guardarPersonajeElegido(estudianteId, rolKey, genero);
       setGaleriaAbierta(false);
@@ -144,10 +144,14 @@ export function VistaPersonaje({ estudianteId, monedas, onMonedasActualizadas })
           arriba (cuerpo/pelo/atuendo/accesorio), es un dibujo aparte. */}
       <div className="bg-slate-50 rounded-2xl p-3 mb-4">
         <div className="flex items-center justify-between gap-2 mb-2">
-          <p className="text-[11px] text-slate-500">🎭 Tu personaje para cuando te toque un rol en la Comarca</p>
-          <button onClick={() => setGaleriaAbierta((v) => !v)} className="text-xs font-semibold text-violet-600 shrink-0">
-            {galeriaAbierta ? "Cerrar" : personajeElegido ? "Cambiar" : "Elegir"}
-          </button>
+          <p className="text-[11px] text-slate-500">
+            {personajeElegido?.asignadoPorDocente ? "🎭 Tu personaje — lo asignó tu docente" : "🎭 Tu personaje para cuando te toque un rol en la Comarca"}
+          </p>
+          {!personajeElegido?.asignadoPorDocente && (
+            <button onClick={() => setGaleriaAbierta((v) => !v)} className="text-xs font-semibold text-violet-600 shrink-0">
+              {galeriaAbierta ? "Cerrar" : personajeElegido ? "Cambiar" : "Elegir"}
+            </button>
+          )}
         </div>
         {personajeElegido && !galeriaAbierta && (
           <div className="flex justify-center">
@@ -156,7 +160,7 @@ export function VistaPersonaje({ estudianteId, monedas, onMonedasActualizadas })
             </Suspense>
           </div>
         )}
-        {galeriaAbierta && (
+        {galeriaAbierta && !personajeElegido?.asignadoPorDocente && (
           <Suspense fallback={<p className="text-xs text-slate-400 text-center py-4">Cargando personajes…</p>}>
             <GaleriaPersonajesRol elegido={personajeElegido} onElegir={elegirPersonaje} />
           </Suspense>
