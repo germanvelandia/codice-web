@@ -16,6 +16,8 @@ import { VistaLogros } from "./screens/Logros";
 import { VistaSalonHonor } from "./screens/SalonHonor";
 import { VistaDiplomas } from "./screens/Diplomas";
 import { VistaPersonaje, PersonajePreview } from "./screens/Personaje";
+import { InsigniaNivel, CapaEstrellasBanner } from "./components/NivelPersonaje";
+import { nivelPersonaje } from "./lib/mejorasPersonaje";
 import { HistorialPuntosEstudiante } from "./screens/HistorialPuntos";
 import { MapaTerritoriosEstudiante } from "./screens/MapaTerritorios";
 import { VistaNiveles } from "./screens/Niveles";
@@ -49,6 +51,7 @@ import { VistaComarcaOakhaven, TarjetaComarcaPublica, urlDeTarjeta, urlQR } from
 // cuando un estudiante con un rol de la Comarca realmente los necesita —
 // no forman parte del paquete principal que carga la pantalla de inicio.
 const PersonajeRol = lazy(() => import("./components/PersonajeRol"));
+const PersonajeConMejoras = lazy(() => import("./components/PersonajeConMejoras"));
 import { EditorTexto, TextoEnriquecido, textoPlano } from "./components/RichText";
 import { InstitucionModal } from "./screens/Institucion";
 import { AdministracionModal } from "./screens/Administracion";
@@ -875,9 +878,23 @@ function EvaluacionesEstudiante({ estudianteId, gradoId }) {
   );
 }
 
+// Personaje chico para los rankings: el pixel art (el que asignó el docente o eligió el
+// estudiante) y, si no tiene ninguno, el avatar que armó antes por partes.
+function MiniPersonaje({ personaje, avatar }) {
+  if (personaje) {
+    return (
+      <Suspense fallback={<span style={{ display: "inline-block", width: 28, height: 28 }} />}>
+        <PersonajeRol rolKey={personaje.rolKey} genero={personaje.genero} size={28} />
+      </Suspense>
+    );
+  }
+  return avatar ? <PersonajePreview config={avatar} size={26} /> : null;
+}
+
 function SalonHonorEstudiante({ estudianteId }) {
   const [datos, setDatos] = useState(null);
   const [avatares, setAvatares] = useState({});
+  const [personajes, setPersonajes] = useState({});
   const [cargando, setCargando] = useState(true);
   useEffect(() => {
     api.fetchSalonDeHonor().then((d) => {
@@ -885,6 +902,7 @@ function SalonHonorEstudiante({ estudianteId }) {
       setCargando(false);
       const ids = [...new Set([...d.topXp.map((e) => e.id), ...d.topInsignias.map((e) => e.id)])];
       api.fetchAvatarConfigsMultiples(ids).then(setAvatares);
+      api.fetchPersonajesMostrarMultiples(ids).then(setPersonajes).catch(() => {});
     });
   }, []);
 
@@ -903,7 +921,7 @@ function SalonHonorEstudiante({ estudianteId }) {
           <div key={e.id} className={`flex items-center justify-between px-3 py-2 rounded-xl ${e.id === estudianteId ? "bg-violet-100 border border-violet-300" : "bg-slate-50"}`}>
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-sm w-6 text-center shrink-0">{medalla(datos.topXp.indexOf(e))}</span>
-              {avatares[e.id] && <PersonajePreview config={avatares[e.id]} size={26} />}
+              <MiniPersonaje personaje={personajes[e.id]} avatar={avatares[e.id]} />
               <span className={`text-xs truncate ${e.id === estudianteId ? "font-bold text-violet-700" : "text-slate-700"}`}>{e.nombre}{e.id === estudianteId ? " (vos)" : ""}</span>
               <span className="text-[10px] text-slate-400 shrink-0">G{e.grado_id}</span>
             </div>
@@ -919,7 +937,7 @@ function SalonHonorEstudiante({ estudianteId }) {
           <div key={e.id} className={`flex items-center justify-between px-3 py-2 rounded-xl ${e.id === estudianteId ? "bg-violet-100 border border-violet-300" : "bg-slate-50"}`}>
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-sm w-6 text-center shrink-0">{medalla(datos.topInsignias.indexOf(e))}</span>
-              {avatares[e.id] && <PersonajePreview config={avatares[e.id]} size={26} />}
+              <MiniPersonaje personaje={personajes[e.id]} avatar={avatares[e.id]} />
               <span className={`text-xs truncate ${e.id === estudianteId ? "font-bold text-violet-700" : "text-slate-700"}`}>{e.nombre}{e.id === estudianteId ? " (vos)" : ""}</span>
               <span className="text-[10px] text-slate-400 shrink-0">G{e.grado_id}</span>
             </div>
@@ -950,6 +968,7 @@ function SalonHonorEstudiante({ estudianteId }) {
 function RankingEstudiante({ estudianteId, gradoId }) {
   const [ranking, setRanking] = useState([]);
   const [avatares, setAvatares] = useState({});
+  const [personajes, setPersonajes] = useState({});
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
@@ -957,6 +976,7 @@ function RankingEstudiante({ estudianteId, gradoId }) {
       setRanking(r);
       setCargando(false);
       api.fetchAvatarConfigsMultiples(r.map((x) => x.id)).then(setAvatares);
+      api.fetchPersonajesMostrarMultiples(r.map((x) => x.id)).then(setPersonajes).catch(() => {});
     });
   }, [gradoId]);
 
@@ -973,7 +993,7 @@ function RankingEstudiante({ estudianteId, gradoId }) {
           <div key={r.id} className={`flex items-center justify-between px-3 py-2 rounded-xl ${r.id === estudianteId ? "bg-violet-100 border border-violet-300" : "bg-slate-50"}`}>
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-sm w-6 text-center shrink-0">{medalla(i)}</span>
-              {avatares[r.id] && <PersonajePreview config={avatares[r.id]} size={26} />}
+              <MiniPersonaje personaje={personajes[r.id]} avatar={avatares[r.id]} />
               <span className={`text-xs truncate ${r.id === estudianteId ? "font-bold text-violet-700" : "text-slate-700"}`}>{r.nombre}{r.id === estudianteId ? " (vos)" : ""}</span>
             </div>
             <span className="text-xs font-semibold text-slate-500 shrink-0">{r.xp} XP</span>
@@ -2229,15 +2249,22 @@ function PortalAcudiente({ onElegirEstudiante }) {
 // pudiera superar 100, solo hay que subir este número.
 const VIDA_MAX = 100;
 
-function TarjetaPersonajeEstudiante({ datos, estudianteInfo, avatarConfig, equipados, miRol, level, next, pct, personajeElegido }) {
+function TarjetaPersonajeEstudiante({ datos, estudianteInfo, avatarConfig, equipados, miRol, level, next, pct, personajeElegido, mejoras = [] }) {
   const vidaPct = Math.max(0, Math.min(100, Math.round(((datos.vida ?? 0) / VIDA_MAX) * 100)));
   const colorVida = vidaPct > 50 ? "#22C55E" : vidaPct > 20 ? "#F59E0B" : "#EF4444";
+  // Lo que compró en "Mi Personaje": define su nivel, el equipo que se ve junto a él y su compañero.
+  const conPieza = mejoras.filter((f) => f.mejora);
+  const nv = nivelPersonaje(conPieza.length);
+  const equipoPuesto = conPieza.filter((f) => f.mejora.slot !== "companero").map((f) => ({ emoji: f.mejora.emoji, nombre: f.mejora.nombre }));
+  const companero = conPieza.find((f) => f.mejora.slot === "companero")?.mejora.emoji || null;
 
   return (
     <div className="rounded-3xl overflow-hidden border border-slate-200 shadow-sm mb-4 bg-white">
       {/* Banner con el personaje */}
       <div className="relative h-32 sm:h-36 flex items-center justify-center" style={{ background: "linear-gradient(160deg, #223b74 0%, #17264D 55%, #0f1932 100%)" }}>
         <div aria-hidden className="absolute inset-0 opacity-20" style={{ backgroundImage: "radial-gradient(circle, #B8892B 1.5px, transparent 1.5px)", backgroundSize: "18px 18px" }} />
+        <CapaEstrellasBanner nivel={nv.nivel} />
+        {conPieza.length > 0 && <div className="absolute top-2 left-2 z-10"><InsigniaNivel nivel={nv.nivel} nombre={nv.nombre} color={nv.color} /></div>}
         {(() => {
           // El estudiante elige libremente cuál de los 14 personajes
           // quiere (sin importar el rol que le toque jugar) — si ya
@@ -2246,7 +2273,8 @@ function TarjetaPersonajeEstudiante({ datos, estudianteInfo, avatarConfig, equip
             return (
               <div className="relative" style={{ filter: "drop-shadow(0 6px 10px rgba(0,0,0,0.35))" }}>
                 <Suspense fallback={<span className="text-6xl relative">🎓</span>}>
-                  <PersonajeRol rolKey={personajeElegido.rolKey} genero={personajeElegido.genero} size={120} />
+                  <PersonajeConMejoras rolKey={personajeElegido.rolKey} genero={personajeElegido.genero} size={120}
+                    nivel={nv.nivel} equipo={equipoPuesto} companero={companero} />
                 </Suspense>
               </div>
             );
@@ -2255,6 +2283,16 @@ function TarjetaPersonajeEstudiante({ datos, estudianteInfo, avatarConfig, equip
             return (
               <div className="relative" style={{ filter: "drop-shadow(0 6px 10px rgba(0,0,0,0.35))" }}>
                 <PersonajePreview config={avatarConfig} size={120} />
+              </div>
+            );
+          }
+          // Sin personaje todavía: si ya compró piezas, igual se ven (brillo y equipo) con el 🎓.
+          if (conPieza.length > 0) {
+            return (
+              <div className="relative">
+                <Suspense fallback={<span className="text-6xl relative">🎓</span>}>
+                  <PersonajeConMejoras rolKey={null} size={120} nivel={nv.nivel} equipo={equipoPuesto} companero={companero} />
+                </Suspense>
               </div>
             );
           }
@@ -2330,6 +2368,7 @@ function PortalEstudiante() {
   const [avatarConfig, setAvatarConfig] = useState(null);
   const [miRol, setMiRol] = useState(null);
   const [personajeElegido, setPersonajeElegido] = useState(null);
+  const [mejoras, setMejoras] = useState([]);
   const [nivelesConfig, setNivelesConfig] = useState(null);
 
   useEffect(() => { api.fetchNivelesParaJuego().then(setNivelesConfig); }, []);
@@ -2353,6 +2392,7 @@ function PortalEstudiante() {
           api.fetchAvatarConfigsMultiples([info.id]).then((mapa) => setAvatarConfig(mapa[info.id] || null));
           api.fetchMiRol(info.id).then(setMiRol);
           api.fetchPersonajeElegido(info.id).then(setPersonajeElegido).catch(() => {});
+          api.fetchMejorasDeEstudiante(info.id).then(setMejoras).catch(() => {});
         }
       }
     } catch (e) {
@@ -2404,7 +2444,7 @@ function PortalEstudiante() {
             <>
               <TarjetaPersonajeEstudiante
                 datos={datos} estudianteInfo={estudianteInfo} avatarConfig={avatarConfig}
-                equipados={equipados} miRol={miRol} level={level} next={next} pct={pct} personajeElegido={personajeElegido}
+                equipados={equipados} miRol={miRol} level={level} next={next} pct={pct} personajeElegido={personajeElegido} mejoras={mejoras}
               />
 
               <ValorSemanaEstudiante />
