@@ -1,7 +1,7 @@
 import React from "react";
 import { imagenPersonajeRol } from "../lib/personajesRol";
 import { imagenConNivel } from "../lib/personajesNivel";
-import { NIVELES_PERSONAJE } from "../lib/mejorasPersonaje";
+import { nivelesActuales } from "../lib/configNiveles";
 import { asegurarEstilosNivel } from "./NivelPersonaje";
 
 // El personaje (uno de los 14) con todo lo que lo hace crecer a medida que compra
@@ -12,7 +12,7 @@ import { asegurarEstilosNivel } from "./NivelPersonaje";
 // Si no hay personaje (rolKey vacío) se muestra un 🎓, pero igual con el brillo y el equipo.
 export default function PersonajeConMejoras({ rolKey, genero = "masculino", size = 92, nivel = 1, equipo = [], companero = null }) {
   asegurarEstilosNivel();
-  const colorAura = NIVELES_PERSONAJE.find((n) => n.nivel === nivel)?.color || null;
+  const colorAura = nivelesActuales().find((n) => n.nivel === nivel)?.color || null;
   // Si hay una variante dibujada para este nivel se usa; si no, el dibujo base.
   const src = rolKey ? (imagenConNivel(rolKey, genero, nivel) || imagenPersonajeRol(rolKey, genero)) : null;
   const icono = Math.max(12, Math.round(size * 0.16));
