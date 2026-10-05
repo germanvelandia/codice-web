@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import PersonajeConMejoras from "./PersonajeConMejoras";
 import { InsigniaNivel, CapaEstrellasBanner } from "./NivelPersonaje";
-import { NIVELES_PERSONAJE } from "../lib/mejorasPersonaje";
+import { useNivelesPersonaje } from "../lib/configNiveles";
 import { PERSONAJES_NIVEL } from "../lib/personajesNivel";
 
 // Vista previa de los 14 personajes en cada uno de los 4 niveles, sin tener que comprar
@@ -56,9 +56,10 @@ function Celda({ rolKey, genero, nivelInfo, piezas }) {
 export default function VistaNivelesPersonaje({ piezas = [] }) {
   const [rolKey, setRolKey] = useState(ROLES[0].key);
   const rol = ROLES.find((r) => r.key === rolKey);
+  const niveles = useNivelesPersonaje(); // los configurados en Editar niveles (pueden ser más o menos de 4)
 
   // Cuántos de los 14 personajes ya tienen dibujo propio en cada nivel de mejora.
-  const avance = NIVELES_PERSONAJE.slice(1).map((n) => ({
+  const avance = niveles.slice(1).map((n) => ({
     nivel: n.nivel,
     cargados: ROLES.reduce((a, r) => a + GENEROS.filter((g) => PERSONAJES_NIVEL[r.key]?.[g.key]?.[n.nivel]).length, 0),
   }));
@@ -66,7 +67,7 @@ export default function VistaNivelesPersonaje({ piezas = [] }) {
   return (
     <div>
       <p className="text-xs text-slate-400 mb-2">
-        Así se ve cada personaje en cada nivel. {piezas.length > 0
+        Así se ve cada personaje en cada nivel (los que tengas configurados en "Editar niveles"). {piezas.length > 0
           ? "Como ejemplo, se le ponen las primeras piezas de tu catálogo."
           : "Todavía no hay piezas en el catálogo, así que solo se ven el brillo y los dibujos."}
       </p>
@@ -92,8 +93,8 @@ export default function VistaNivelesPersonaje({ piezas = [] }) {
       {GENEROS.map((g) => (
         <div key={g.key} className="mb-4">
           <div className="text-[11px] font-semibold text-slate-500 mb-1">{g.etiqueta}</div>
-          <div className="grid grid-cols-4 gap-2">
-            {NIVELES_PERSONAJE.map((n) => (
+          <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))" }}>
+            {niveles.map((n) => (
               <Celda key={n.nivel} rolKey={rol.key} genero={g.key} nivelInfo={n} piezas={piezas} />
             ))}
           </div>
