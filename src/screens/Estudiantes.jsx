@@ -22,6 +22,8 @@ import { nivelPersonaje, textoBeneficio, TIPOS_BENEFICIO } from "../lib/mejorasP
 // cuando se abre esta pantalla — no forma parte del paquete principal de la app.
 const PersonajeConMejoras = lazy(() => import("../components/PersonajeConMejoras"));
 const GaleriaPersonajesRol = lazy(() => import("../components/GaleriaPersonajesRol"));
+// La vista previa de niveles trae las imágenes de todos los niveles: se carga aparte, solo al abrir esa pestaña.
+const VistaNivelesPersonaje = lazy(() => import("../components/VistaNivelesPersonaje"));
 
 // Privilegios de clase que un estudiante compró (corona, estandarte…): acá el docente
 // los marca como usados cuando los concede, o los vuelve a habilitar.
@@ -140,6 +142,7 @@ function PiezasPersonajeModal({ onClose }) {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
   const [editando, setEditando] = useState(null); // null | "nueva" | pieza
+  const [vista, setVista] = useState("piezas"); // "piezas" | "niveles"
   const cargar = () => {
     setCargando(true);
     api.fetchMejorasCatalogo({ soloActivas: false })
@@ -155,14 +158,24 @@ function PiezasPersonajeModal({ onClose }) {
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[88vh] overflow-y-auto shadow-xl">
+      <div onClick={(e) => e.stopPropagation()} className={`bg-white rounded-2xl p-5 w-full ${vista === "niveles" ? "max-w-3xl" : "max-w-lg"} max-h-[88vh] overflow-y-auto shadow-xl`}>
         <div className="flex justify-between items-center mb-1">
           <h3 className="font-bold text-slate-800">🎒 Piezas del personaje</h3>
           <button onClick={onClose} className="text-slate-400">✕</button>
         </div>
-        <p className="text-xs text-slate-400 mb-3">Los estudiantes las compran con Oro en "Mi Personaje". Cada una trae un beneficio, y cuantas más tengan, más sube el nivel de su personaje (el brillo y el fondo cambian).</p>
+        <div className="inline-flex gap-1 rounded-full bg-slate-100 p-1 mb-3">
+          <button type="button" onClick={() => setVista("piezas")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "piezas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🎒 Piezas</button>
+          <button type="button" onClick={() => setVista("niveles")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "niveles" ? "bg-violet-500 text-white" : "text-slate-600"}`}>⭐ Vista de niveles</button>
+        </div>
+        {vista === "piezas" && (
+          <p className="text-xs text-slate-400 mb-3">Los estudiantes las compran con Oro en "Mi Personaje". Cada una trae un beneficio, y cuantas más tengan, más sube el nivel de su personaje (el brillo y el fondo cambian).</p>
+        )}
 
-        {error ? (
+        {vista === "niveles" ? (
+          <Suspense fallback={<p className="text-sm text-slate-400">Cargando personajes…</p>}>
+            <VistaNivelesPersonaje piezas={piezas.filter((p) => p.activo)} />
+          </Suspense>
+        ) : error ? (
           <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">
             No se pudo leer el catálogo. ¿Ya corriste el SQL <b>60_mejoras_personaje.sql</b> en Supabase?<br /><span className="text-amber-600">{error}</span>
           </div>
