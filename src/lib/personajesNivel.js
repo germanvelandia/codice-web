@@ -1,16 +1,27 @@
-// Variantes DIBUJADAS de cada personaje según su nivel (opcional).
+// Variantes DIBUJADAS de cada personaje según su nivel.
 //
-// Mientras este objeto esté vacío, todos los niveles usan el dibujo base y la mejora
-// se nota con el brillo, el fondo, los íconos de equipo y el compañero. Si más
-// adelante se generan imágenes mejoradas (por ejemplo en PixelLab), se agregan acá:
+// Cada nivel vive en su propio archivo (variantesNivel2.js, variantesNivel3.js, …) con
+// los 14 personajes. Para sumar un nivel nuevo: se crea su archivo, se importa acá
+// y se agrega una línea en "agregarNivel". El número es el nivel de CÓDICE (Nv 2, 3 o 4),
+// y el nivel 1 (sin piezas) siempre usa el dibujo base.
 //
-//   PERSONAJES_NIVEL = {
-//     defensor: { femenino: { 3: "data:image/png;base64,...", 4: "data:image/png;base64,..." } },
-//   }
-//
-// y se usan solas: para el nivel N se toma la variante del nivel más alto
-// disponible que no lo supere; si no hay ninguna, se usa el dibujo base.
+// Para un personaje en el nivel N se usa la variante del nivel más alto disponible que
+// no lo supere; si no hay ninguna, se usa el dibujo base.
+import { VARIANTES as NIVEL_2 } from "./variantesNivel2";
+
 export const PERSONAJES_NIVEL = {};
+
+function agregarNivel(nivel, datos) {
+  Object.keys(datos).forEach((rolKey) => {
+    Object.keys(datos[rolKey]).forEach((genero) => {
+      if (!PERSONAJES_NIVEL[rolKey]) PERSONAJES_NIVEL[rolKey] = {};
+      if (!PERSONAJES_NIVEL[rolKey][genero]) PERSONAJES_NIVEL[rolKey][genero] = {};
+      PERSONAJES_NIVEL[rolKey][genero][nivel] = datos[rolKey][genero];
+    });
+  });
+}
+
+agregarNivel(2, NIVEL_2);
 
 export function imagenConNivel(rolKey, genero, nivel) {
   const porNivel = PERSONAJES_NIVEL[rolKey]?.[genero];
