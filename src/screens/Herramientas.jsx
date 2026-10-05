@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import * as XLSX from "xlsx";
 import * as api from "../lib/api";
+import { useAvataresEstudiantes } from "../lib/useAvatares";
+import { AvatarMini } from "../components/AvatarMini";
 
 let audioCtx = null;
 function getCtx() {
@@ -165,6 +167,7 @@ export function VistaRuleta({ grados, gradoActivo }) {
 
   useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
   useEffect(() => { if (gradoId) api.fetchEstudiantesPorGrado(gradoId).then(setEstudiantes); }, [gradoId]);
+  const avatarDe = useAvataresEstudiantes(estudiantes.map((s) => s.id));
 
   const reinos = useMemo(() => {
     const set = new Set(estudiantes.map((s) => s.reino_actual || s.reino_original || "Sin grupo"));
@@ -251,7 +254,10 @@ export function VistaRuleta({ grados, gradoActivo }) {
             transition: "box-shadow 0.2s",
           }}>
           {mostrado ? (
-            <span className="text-2xl font-bold text-violet-700 break-words" style={{ opacity: spinning ? 0.85 : 1 }}>{mostrado.label}</span>
+            <div className="flex flex-col items-center gap-2 py-3">
+              {mostrado.estudianteId && <AvatarMini src={avatarDe(mostrado.estudianteId)} nombre={mostrado.label} size={72} />}
+              <span className="text-2xl font-bold text-violet-700 break-words" style={{ opacity: spinning ? 0.85 : 1 }}>{mostrado.label}</span>
+            </div>
           ) : (
             <span className="text-sm text-slate-400">Tocá "Girar" para sortear</span>
           )}
@@ -261,7 +267,10 @@ export function VistaRuleta({ grados, gradoActivo }) {
         </button>
         {winner && !spinning && (
           <div className="text-center">
-            <div className="text-lg font-bold px-6 py-3 rounded-2xl bg-violet-100 text-violet-700 mb-3">🎉 {winner.label}</div>
+            <div className="text-lg font-bold px-6 py-3 rounded-2xl bg-violet-100 text-violet-700 mb-3 flex items-center justify-center gap-3">
+              {winner.estudianteId && <AvatarMini src={avatarDe(winner.estudianteId)} nombre={winner.label} size={48} />}
+              <span>🎉 {winner.label}</span>
+            </div>
             {winner.estudianteId && (
               <div className="bg-white rounded-2xl border border-slate-200 p-3 max-w-sm">
                 <div className="text-xs font-semibold text-slate-500 mb-2">Registrar participación</div>
@@ -691,22 +700,25 @@ export function SorteoOrdenTool({ grados }) {
   const [gradoId, setGradoId] = useState(grados[0]?.id || "");
   const [estudiantes, setEstudiantes] = useState([]);
   const [modo, setModo] = useState("orden");
-  const [resultado, setResultado] = useState([]);
+  // Cada fila guarda a los estudiantes (no solo el nombre) para poder mostrar su avatar; "modo" se
+  // guarda junto al resultado para que, si se cambia el botón después, la lista no cambie de sentido.
+  const [resultado, setResultado] = useState({ modo: "orden", filas: [] });
 
   useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
   useEffect(() => { if (gradoId) api.fetchEstudiantesPorGrado(gradoId).then(setEstudiantes); }, [gradoId]);
+  const avatarDe = useAvataresEstudiantes(estudiantes.map((s) => s.id));
 
   const sortear = () => {
     const mezclados = [...estudiantes].sort(() => Math.random() - 0.5);
     beep(500, 0.08);
     if (modo === "orden") {
-      setResultado(mezclados.map((s) => s.nombre));
+      setResultado({ modo, filas: mezclados.map((s) => [s]) });
     } else {
       const parejas = [];
       for (let i = 0; i < mezclados.length; i += 2) {
-        parejas.push(mezclados[i + 1] ? `${mezclados[i].nombre} + ${mezclados[i + 1].nombre}` : `${mezclados[i].nombre} (sin pareja)`);
+        parejas.push(mezclados[i + 1] ? [mezclados[i], mezclados[i + 1]] : [mezclados[i]]);
       }
-      setResultado(parejas);
+      setResultado({ modo, filas: parejas });
     }
   };
 
@@ -723,9 +735,23 @@ export function SorteoOrdenTool({ grados }) {
         </div>
         <button onClick={sortear} disabled={estudiantes.length === 0} className="text-sm font-semibold px-4 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-50">Sortear</button>
       </div>
-      {resultado.length > 0 && (
-        <ol className="text-sm text-slate-700 list-decimal list-inside space-y-1 max-h-64 overflow-y-auto">
-          {resultado.map((r, i) => <li key={i}>{r}</li>)}
+      {resultado.filas.length > 0 && (
+        <ol className="text-sm text-slate-700 space-y-1.5 max-h-72 overflow-y-auto">
+          {resultado.filas.map((miembros, i) => (
+            <li key={i} className="flex items-center gap-2 flex-wrap">
+              <span className="w-6 text-right text-xs text-slate-400 shrink-0">{i + 1}.</span>
+              {miembros.map((s, k) => (
+                <React.Fragment key={s.id}>
+                  {k > 0 && <span className="text-slate-400">+</span>}
+                  <span className="inline-flex items-center gap-1.5">
+                    <AvatarMini src={avatarDe(s.id)} nombre={s.nombre} size={28} />
+                    <span>{s.nombre}</span>
+                  </span>
+                </React.Fragment>
+              ))}
+              {resultado.modo === "parejas" && miembros.length === 1 && <span className="text-xs text-slate-400">(sin pareja)</span>}
+            </li>
+          ))}
         </ol>
       )}
     </div>
@@ -740,12 +766,13 @@ export function GeneradorGruposTool({ grados }) {
 
   useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
   useEffect(() => { if (gradoId) api.fetchEstudiantesPorGrado(gradoId).then(setEstudiantes); }, [gradoId]);
+  const avatarDe = useAvataresEstudiantes(estudiantes.map((s) => s.id));
 
   const generar = () => {
     const mezclados = [...estudiantes].sort(() => Math.random() - 0.5);
     const n = Math.max(2, Math.min(numGrupos, mezclados.length || 2));
     const resultado = Array.from({ length: n }, () => []);
-    mezclados.forEach((s, i) => resultado[i % n].push(s.nombre));
+    mezclados.forEach((s, i) => resultado[i % n].push(s));
     beep(500, 0.08);
     setGrupos(resultado);
   };
@@ -767,8 +794,14 @@ export function GeneradorGruposTool({ grados }) {
           {grupos.map((g, i) => (
             <div key={i} className="bg-violet-50 rounded-xl p-2.5">
               <div className="text-xs font-bold text-violet-600 mb-1">Grupo {i + 1}</div>
-              <ol className="text-xs text-slate-600 list-decimal list-inside space-y-0.5">
-                {g.map((nombre, j) => <li key={j}>{nombre}</li>)}
+              <ol className="text-xs text-slate-600 space-y-1">
+                {g.map((s, j) => (
+                  <li key={s.id} className="flex items-center gap-1.5 min-w-0">
+                    <span className="w-4 text-right text-slate-400 shrink-0">{j + 1}.</span>
+                    <AvatarMini src={avatarDe(s.id)} nombre={s.nombre} size={22} />
+                    <span className="truncate">{s.nombre}</span>
+                  </li>
+                ))}
               </ol>
             </div>
           ))}
@@ -825,6 +858,7 @@ export function SelectorEstudianteTool({ grados }) {
 
   useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
   useEffect(() => { if (gradoId) api.fetchEstudiantesPorGrado(gradoId).then((est) => { setEstudiantes(est); setSalidos([]); setElegido(null); }); }, [gradoId]);
+  const avatarDe = useAvataresEstudiantes(estudiantes.map((s) => s.id));
 
   const disponibles = noRepetir ? estudiantes.filter((s) => !salidos.includes(s.id)) : estudiantes;
 
@@ -859,7 +893,8 @@ export function SelectorEstudianteTool({ grados }) {
           No repetir hasta que salgan todos
         </label>
       </div>
-      <div className="bg-violet-50 rounded-xl p-6 text-center mb-3 min-h-[70px] flex items-center justify-center">
+      <div className="bg-violet-50 rounded-xl p-6 text-center mb-3 min-h-[70px] flex flex-col items-center justify-center gap-2">
+        {elegido && <AvatarMini src={avatarDe(elegido.id)} nombre={elegido.nombre} size={72} />}
         <span className={`text-xl font-bold text-violet-700 ${girando ? "opacity-60" : ""}`}>{elegido ? elegido.nombre : "¿Quién sigue?"}</span>
       </div>
       <div className="flex items-center justify-between">
