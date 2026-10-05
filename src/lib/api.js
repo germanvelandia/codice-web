@@ -5457,6 +5457,32 @@ export async function registrarAccion(estudianteId, accion) {
   return { xp: fila?.xp ?? 0, vida: fila?.vida ?? 0, monedas: fila?.monedas ?? 0 };
 }
 
+// Suma (o resta, con un número negativo) experiencia u oro DIRECTO, sin pasar
+// por una acción del catálogo — para los botones rápidos de la tarjeta del
+// estudiante. A diferencia de registrarAccion, no regala una moneda de yapa:
+// lo que se suma es exactamente lo que se pidió. Deja su renglón en el historial.
+export async function ajustarPuntosRapido(estudianteId, { xp = 0, monedas = 0 }) {
+  const etiqueta = xp ? "Experiencia directa" : "Oro directo";
+  const [, rpcRes] = await Promise.all([
+    supabase.from("historial_gamificacion").insert({
+      estudiante_id: estudianteId, etiqueta, xp, vida: 0, monedas, categoria: "general",
+    }),
+    supabase.rpc("ajustar_progreso", { p_estudiante_id: estudianteId, p_delta_xp: xp, p_delta_vida: 0, p_delta_monedas: monedas }),
+  ]);
+  if (rpcRes.error) throw rpcRes.error;
+  const fila = rpcRes.data?.[0];
+  return { xp: fila?.xp ?? 0, vida: fila?.vida ?? 0, monedas: fila?.monedas ?? 0 };
+}
+
+// Personaje (uno de los 14) que el docente le asigna a un estudiante para su
+// tarjeta. Pasar rolKey = null lo quita.
+export async function guardarPersonajeDocente(estudianteId, rolKey, genero) {
+  const { error } = await supabase.from("estudiantes")
+    .update({ personaje_docente_rol: rolKey || null, personaje_docente_genero: rolKey ? (genero || "masculino") : null })
+    .eq("id", estudianteId);
+  if (error) throw error;
+}
+
 /* ---------------- Rúbricas (catálogo reutilizable) ---------------- */
 // Solo tus propias rúbricas — no las de otros docentes.
 export async function fetchRubricasCatalogo() {
