@@ -8,7 +8,6 @@ import { EditorTexto, TextoEnriquecido } from "../components/RichText";
 
 // (REINO_COLORS ahora se importa directo desde gamification.js, ver arriba)
 import * as api from "../lib/api";
-import { PersonajePreview } from "./Personaje";
 import { ActasModal } from "./Actas";
 import { RemisionModal } from "./Remision";
 import { ResumenEstudianteModal } from "./Resumen";
@@ -19,6 +18,32 @@ import { DirectorioModal } from "./Directorio";
 // Carga diferida: el dibujo de cada personaje (con sus imágenes) solo se descarga
 // cuando se abre esta pantalla — no forma parte del paquete principal de la app.
 const PersonajeRol = lazy(() => import("../components/PersonajeRol"));
+const GaleriaPersonajesRol = lazy(() => import("../components/GaleriaPersonajesRol"));
+
+// El docente le asigna a cada estudiante uno de los 14 personajes. Es solo
+// para la tarjeta de ESTA vista — no depende de lo que el estudiante arme o
+// elija en su portal.
+function SelectorPersonajeDocenteModal({ estudiante, onClose, onElegir, onQuitar, guardando }) {
+  const elegido = estudiante.personaje_docente_rol
+    ? { rolKey: estudiante.personaje_docente_rol, genero: estudiante.personaje_docente_genero || "masculino" }
+    : null;
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-md max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-1">
+          <h3 className="font-bold text-slate-800">🎭 Personaje de {estudiante.nombre}</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-400 mb-3">Elegí el que va a aparecer arriba en su tarjeta. Es solo para tu vista de docente — no depende de lo que el estudiante arme en "Mi Personaje".</p>
+        <Suspense fallback={<p className="text-xs text-slate-400 text-center py-6">Cargando personajes…</p>}>
+          <GaleriaPersonajesRol elegido={elegido} onElegir={onElegir} />
+        </Suspense>
+        {guardando && <p className="text-[11px] text-slate-400 text-center mt-2">Guardando…</p>}
+        {elegido && <button type="button" onClick={onQuitar} className="mt-3 text-xs text-rose-600 underline">Quitar personaje</button>}
+      </div>
+    </div>
+  );
+}
 
 function IconoCorazon({ size = 16 }) {
   return (
@@ -1101,7 +1126,7 @@ function AreaEstudiante({ estudiante, progreso, grados, onClose, onAbrir }) {
   );
 }
 
-function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFotoActualizada, reinos, catalogoReinos, onCambiarReino, roles, onCambiarRol, onCodigoGenerado, grados, gradoActual, onTrasladado, avatar }) {
+function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFotoActualizada, reinos, catalogoReinos, onCambiarReino, roles, onCambiarRol, onCodigoGenerado, grados, gradoActual, onTrasladado, onPersonajeCambiado }) {
   const [actasAbiertas, setActasAbiertas] = useState(false);
   const [inclusionAbierta, setInclusionAbierta] = useState(false);
   const [codiceAbierto, setCodiceAbierto] = useState(false);
@@ -1115,6 +1140,14 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
   const [areaAbierta, setAreaAbierta] = useState(false);
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [puntosAbierto, setPuntosAbierto] = useState(false);
+  const [selectorAbierto, setSelectorAbierto] = useState(false);
+  const [guardandoPersonaje, setGuardandoPersonaje] = useState(false);
+  const [aplicandoRapido, setAplicandoRapido] = useState(false);
+  const [libre, setLibre] = useState(null); // "xp" | "monedas" | null — cuál campo de cantidad libre está abierto
+  const [valorLibre, setValorLibre] = useState("");
+  const [destello, setDestello] = useState(null); // { tipo, texto } — el "+10" que aparece un instante
+  const temporizadorDestello = useRef(null);
+  useEffect(() => () => clearTimeout(temporizadorDestello.current), []);
   const [generando, setGenerando] = useState(false);
   const [editandoNombre, setEditandoNombre] = useState(false);
   const [nombreTemp, setNombreTemp] = useState(estudiante.nombre);
@@ -1173,6 +1206,71 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
     }
   };
 
+  const guardarPersonaje = async (rolKey, genero) => {
+    setGuardandoPersonaje(true);
+    try {
+      await api.guardarPersonajeDocente(estudiante.id, rolKey, genero);
+      onPersonajeCambiado(estudiante.id, rolKey, genero);
+      setSelectorAbierto(false);
+    } catch (e) {
+      alert("No se pudo guardar el personaje: " + e.message);
+    }
+    setGuardandoPersonaje(false);
+  };
+
+  // Suma (o resta) experiencia u oro al instante, sin abrir ningún panel.
+  const sumarRapido = async (tipo, cantidad) => {
+    const n = parseInt(cantidad, 10);
+    if (!n) return;
+    if (Math.abs(n) > 1000 && !confirm(`¿Seguro que querés ${n > 0 ? "sumar" : "restar"} ${Math.abs(n)} de ${tipo === "xp" ? "experiencia" : "oro"}?`)) return;
+    setAplicandoRapido(true);
+    try {
+      const nuevo = await api.ajustarPuntosRapido(estudiante.id, tipo === "xp" ? { xp: n } : { monedas: n });
+      onAplicado(estudiante.id, nuevo);
+      setDestello({ tipo, texto: `${n > 0 ? "+" : ""}${n}` });
+      clearTimeout(temporizadorDestello.current);
+      temporizadorDestello.current = setTimeout(() => setDestello(null), 1400);
+    } catch (e) {
+      alert("No se pudo registrar: " + e.message);
+    }
+    setAplicandoRapido(false);
+  };
+  const aplicarLibre = async () => {
+    const tipo = libre;
+    const valor = valorLibre;
+    setLibre(null); setValorLibre("");
+    if (tipo) await sumarRapido(tipo, valor);
+  };
+
+  // Fila de botones +10 / +30 / +50 / # (cantidad libre, también para restar con un negativo).
+  const filaRapida = (tipo) => {
+    const estilo = tipo === "xp"
+      ? { background: "#F5F3FF", color: "#6D28D9", borderColor: "#DDD6FE" }
+      : { background: "#FFFBEB", color: "#B45309", borderColor: "#FDE68A" };
+    return (
+      <div className="mt-1.5">
+        <div className="flex items-center gap-1">
+          {[10, 30, 50].map((n) => (
+            <button key={n} type="button" disabled={aplicandoRapido} onClick={() => sumarRapido(tipo, n)}
+              className="flex-1 text-[10px] font-bold rounded-full py-1 border disabled:opacity-50" style={estilo}>+{n}</button>
+          ))}
+          <button type="button" onClick={() => { setLibre(libre === tipo ? null : tipo); setValorLibre(""); }}
+            title="Otra cantidad (con un número negativo se resta)"
+            className="w-7 text-[10px] font-bold rounded-full py-1 border" style={estilo}>#</button>
+        </div>
+        {libre === tipo && (
+          <div className="flex items-center gap-1 mt-1">
+            <input type="number" autoFocus value={valorLibre} onChange={(e) => setValorLibre(e.target.value)} placeholder="Ej: 25 o -5"
+              onKeyDown={(e) => { if (e.key === "Enter") aplicarLibre(); if (e.key === "Escape") { setLibre(null); setValorLibre(""); } }}
+              className="w-full min-w-0 text-[11px] rounded-lg px-2 py-1 border border-slate-200 outline-none" />
+            <button type="button" disabled={aplicandoRapido} onClick={aplicarLibre}
+              className="text-[11px] font-bold px-2 py-1 rounded-lg bg-violet-500 text-white disabled:opacity-50">✓</button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const colorReino = infoReino.color;
   const vida = progreso.vida ?? 100;
   const vidaPct = Math.max(0, Math.min(100, vida));
@@ -1188,16 +1286,18 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
     </button>
   );
 
-  // Arriba va el personaje: el que eligió el estudiante entre los 14, o si no
-  // eligió ninguno el que armó por partes, o un ícono si no tiene nada.
-  const personajeBanner = estudiante.personaje_elegido_rol ? (
-    <Suspense fallback={<span className="text-4xl">🎓</span>}>
-      <PersonajeRol rolKey={estudiante.personaje_elegido_rol} genero={estudiante.genero_personaje || "masculino"} size={92} />
+  // Arriba va el personaje que le asignaste vos (uno de los 14). Si todavía no
+  // le asignaste ninguno, se invita a elegirlo — el que arme o elija el
+  // estudiante en su portal no se usa acá.
+  const personajeBanner = estudiante.personaje_docente_rol ? (
+    <Suspense fallback={<span className="text-4xl">🎭</span>}>
+      <PersonajeRol rolKey={estudiante.personaje_docente_rol} genero={estudiante.personaje_docente_genero || "masculino"} size={92} />
     </Suspense>
-  ) : avatar ? (
-    <PersonajePreview config={avatar} size={88} />
   ) : (
-    <span className="text-5xl opacity-90">🎓</span>
+    <div className="flex flex-col items-center" style={{ color: "rgba(255,255,255,0.92)" }}>
+      <span className="text-4xl">🎭</span>
+      <span className="text-[10px] font-semibold mt-0.5">Elegir personaje</span>
+    </div>
   );
 
   return (
@@ -1207,7 +1307,8 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
         style={{ background: `linear-gradient(160deg, ${colorReino} 0%, ${colorReino}99 55%, #17264D 140%)` }}>
         <div aria-hidden className="absolute inset-0 opacity-20" style={{ backgroundImage: "radial-gradient(circle, #ffffff 1.2px, transparent 1.2px)", backgroundSize: "16px 16px" }} />
         <div className="absolute top-2 left-2 z-10"><InclusionBadge estudiante={estudiante} /></div>
-        <div className="relative" style={{ filter: "drop-shadow(0 5px 8px rgba(0,0,0,0.35))" }}>{personajeBanner}</div>
+        <button type="button" onClick={() => setSelectorAbierto(true)} title="Elegir el personaje de este estudiante"
+          className="relative" style={{ filter: "drop-shadow(0 5px 8px rgba(0,0,0,0.35))" }}>{personajeBanner}</button>
       </div>
 
       <div className="px-3 pb-3 flex flex-col">
@@ -1223,6 +1324,8 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
               <>
                 <div className="fixed inset-0 z-20" onClick={() => setMenuAbierto(false)} />
                 <div className="absolute right-0 top-9 z-30 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1 text-left">
+                  <button type="button" onClick={() => { setSelectorAbierto(true); setMenuAbierto(false); }}
+                    className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50 text-slate-700">🎭 Cambiar personaje</button>
                   <button type="button" onClick={() => { setNombreTemp(estudiante.nombre); setEditandoNombre(true); setMenuAbierto(false); }}
                     className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50 text-slate-700">✏️ Editar nombre</button>
                   <label className="block w-full text-left text-xs px-3 py-2 hover:bg-slate-50 text-slate-700 cursor-pointer">
@@ -1298,29 +1401,43 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
 
         <div className="grid grid-cols-2 gap-3 mt-3">
           <div className="min-w-0">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1 pl-1">Experiencia</div>
+            <div className="flex items-center justify-between mb-1 pl-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Experiencia</span>
+              {destello && destello.tipo === "xp" && <span className="text-[11px] font-bold text-emerald-600">{destello.texto}</span>}
+            </div>
             <div className="flex items-center h-10 rounded-full pl-3 pr-1" style={{ background: "linear-gradient(90deg, #8B5CF6, #A78BFA)" }}>
               <span className="text-white text-sm">✨</span>
               <span className="flex-1 text-center text-white font-bold text-sm">{progreso.xp || 0}</span>
-              {botonFlecha("Dar o quitar puntos")}
+              {botonFlecha("Más opciones de puntos")}
             </div>
+            {filaRapida("xp")}
             <div className="h-1 rounded-full bg-violet-100 overflow-hidden mt-1.5">
               <div className="h-full rounded-full bg-violet-500" style={{ width: `${pct}%` }} />
             </div>
             <div className="text-[9px] text-slate-400 mt-0.5 truncate pl-1">{level.name}{next ? ` · ${progreso.xp || 0}/${next.min}` : " · máx"}</div>
           </div>
           <div className="min-w-0">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1 pl-1">Oro</div>
+            <div className="flex items-center justify-between mb-1 pl-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Oro</span>
+              {destello && destello.tipo === "monedas" && <span className="text-[11px] font-bold text-emerald-600">{destello.texto}</span>}
+            </div>
             <div className="flex items-center h-10 rounded-full pl-3 pr-1" style={{ background: "linear-gradient(90deg, #F59E0B, #FBBF24)" }}>
               <span className="text-sm">🪙</span>
               <span className="flex-1 text-center text-white font-bold text-sm">{progreso.monedas || 0}</span>
-              {botonFlecha("Dar o quitar puntos")}
+              {botonFlecha("Más opciones de puntos")}
             </div>
+            {filaRapida("monedas")}
           </div>
         </div>
       </div>
 
       <QuickGamify estudiante={estudiante} onAplicado={onAplicado} ocultarBoton abiertoExterno={puntosAbierto} onCambioAbierto={setPuntosAbierto} />
+      {selectorAbierto && (
+        <SelectorPersonajeDocenteModal estudiante={estudiante} guardando={guardandoPersonaje}
+          onClose={() => setSelectorAbierto(false)}
+          onElegir={guardarPersonaje}
+          onQuitar={() => guardarPersonaje(null, null)} />
+      )}
       {actasAbiertas && <ActasModal estudiante={estudiante} onClose={() => setActasAbiertas(false)} />}
       {inclusionAbierta && <InclusionModal estudiante={estudiante} onClose={() => setInclusionAbierta(false)} onGuardado={() => setInclusionAbierta(false)} />}
       {codiceAbierto && <CodiceDocenteModal estudiante={estudiante} onClose={() => setCodiceAbierto(false)} />}
@@ -2111,8 +2228,6 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
   const [eliminandoVarios, setEliminandoVarios] = useState(false);
   const [confirmacionTexto, setConfirmacionTexto] = useState("");
 
-  const [avatares, setAvatares] = useState({});
-
   const cargar = async () => {
     setCargando(true);
     const [data, rolesData, reinosData] = await Promise.all([api.fetchEstudiantesPorGrado(gradoId), api.fetchRoles(), api.fetchReinos()]);
@@ -2120,9 +2235,6 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
     setRoles(rolesData);
     setCatalogoReinos(reinosData);
     setCargando(false);
-    // Los avatares se piden aparte, sin bloquear el resto de la lista —
-    // no son datos críticos, solo decorativos.
-    api.fetchAvatarConfigsMultiples(data.map((e) => e.id)).then(setAvatares).catch(() => {});
   };
   useEffect(() => { cargar(); }, [gradoId]);
 
@@ -2138,6 +2250,10 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
 
   const actualizarProgresoLocal = (id, nuevo) => {
     setEstudiantes((prev) => prev.map((s) => (s.id === id ? { ...s, progreso: [nuevo] } : s)));
+  };
+
+  const actualizarPersonajeLocal = (id, rolKey, genero) => {
+    setEstudiantes((prev) => prev.map((s) => (s.id === id ? { ...s, personaje_docente_rol: rolKey, personaje_docente_genero: genero } : s)));
   };
 
   const actualizarFotoLocal = (id, fotoUrl) => {
@@ -2304,7 +2420,7 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {visibles.map((s) => (
-            <TarjetaEstudiante key={s.id} estudiante={s} reinos={reinos} catalogoReinos={catalogoReinos} onQuitar={quitar} onRenombrar={renombrar} onCambiarReino={cambiarReino} onAplicado={actualizarProgresoLocal} onFotoActualizada={actualizarFotoLocal} roles={roles} onCambiarRol={cambiarRol} onCodigoGenerado={actualizarCodigoLocal} grados={grados} gradoActual={gradoId} onTrasladado={cargar} avatar={avatares[s.id]} />
+            <TarjetaEstudiante key={s.id} estudiante={s} reinos={reinos} catalogoReinos={catalogoReinos} onQuitar={quitar} onRenombrar={renombrar} onCambiarReino={cambiarReino} onAplicado={actualizarProgresoLocal} onFotoActualizada={actualizarFotoLocal} roles={roles} onCambiarRol={cambiarRol} onCodigoGenerado={actualizarCodigoLocal} grados={grados} gradoActual={gradoId} onTrasladado={cargar} onPersonajeCambiado={actualizarPersonajeLocal} />
           ))}
         </div>
       )}
