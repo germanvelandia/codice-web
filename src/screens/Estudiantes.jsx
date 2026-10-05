@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, Suspense, lazy } from "react";
 import { createPortal } from "react-dom";
 import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabaseClient";
@@ -15,6 +15,25 @@ import { ResumenEstudianteModal } from "./Resumen";
 import { ObservadorModal, ObservadorPorGradoModal } from "./Observador";
 import { TutoriasModal } from "./Tutorias";
 import { DirectorioModal } from "./Directorio";
+
+// Carga diferida: el dibujo de cada personaje (con sus imágenes) solo se descarga
+// cuando se abre esta pantalla — no forma parte del paquete principal de la app.
+const PersonajeRol = lazy(() => import("../components/PersonajeRol"));
+
+function IconoCorazon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+    </svg>
+  );
+}
+function IconoFlecha({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
 
 function LevelBar({ xp }) {
   const { level, next, pct } = nextLevel(xp);
@@ -88,8 +107,13 @@ function AccionGamificacionForm({ tab, accion, onCancelar, onGuardado }) {
   );
 }
 
-function QuickGamify({ estudiante, onAplicado }) {
-  const [abierto, setAbierto] = useState(false);
+function QuickGamify({ estudiante, onAplicado, abiertoExterno, onCambioAbierto, ocultarBoton }) {
+  // Puede funcionar solo (con su propio botón "⚡ Puntos") o ser abierto desde
+  // afuera — así las flechitas de la tarjeta abren este mismo panel.
+  const [abiertoInterno, setAbiertoInterno] = useState(false);
+  const controlado = abiertoExterno !== undefined;
+  const abierto = controlado ? abiertoExterno : abiertoInterno;
+  const setAbierto = (v) => { if (controlado) { if (onCambioAbierto) onCambioAbierto(v); } else setAbiertoInterno(v); };
   const [tab, setTab] = useState("rapido");
   const [cargando, setCargando] = useState(false);
   const [catalogo, setCatalogo] = useState([]);
@@ -128,9 +152,11 @@ function QuickGamify({ estudiante, onAplicado }) {
 
   return (
     <>
-      <button onClick={() => setAbierto(true)} className="text-xs px-3 py-1.5 rounded-full bg-violet-500 text-white font-semibold">
-        ⚡ Puntos
-      </button>
+      {!ocultarBoton && (
+        <button onClick={() => setAbierto(true)} className="text-xs px-3 py-1.5 rounded-full bg-violet-500 text-white font-semibold">
+          ⚡ Puntos
+        </button>
+      )}
       {abierto && (
         <div className="fixed inset-0 z-30 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.4)" }} onClick={() => setAbierto(false)}>
           <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl shadow-xl p-4 w-full max-w-lg max-h-[80vh] overflow-y-auto">
@@ -1087,6 +1113,8 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
   const [trasladoAbierto, setTrasladoAbierto] = useState(false);
   const [documentoAbierto, setDocumentoAbierto] = useState(false);
   const [areaAbierta, setAreaAbierta] = useState(false);
+  const [menuAbierto, setMenuAbierto] = useState(false);
+  const [puntosAbierto, setPuntosAbierto] = useState(false);
   const [generando, setGenerando] = useState(false);
   const [editandoNombre, setEditandoNombre] = useState(false);
   const [nombreTemp, setNombreTemp] = useState(estudiante.nombre);
@@ -1145,84 +1173,154 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
     }
   };
 
+  const colorReino = infoReino.color;
+  const vida = progreso.vida ?? 100;
+  const vidaPct = Math.max(0, Math.min(100, vida));
+  const colorVida = vida > 50 ? "#22C55E" : vida > 20 ? "#F59E0B" : "#EF4444";
+  const { level, next, pct } = nextLevel(progreso.xp || 0);
+  const fotoUrl = api.urlFotoEstudiante(estudiante);
+
+  // Las flechitas de Vida / Experiencia / Oro abren el mismo panel de puntos de siempre.
+  const botonFlecha = (titulo) => (
+    <button type="button" onClick={() => setPuntosAbierto(true)} title={titulo}
+      className="w-8 h-8 rounded-full bg-white shadow flex items-center justify-center shrink-0 text-slate-500">
+      <IconoFlecha />
+    </button>
+  );
+
+  // Arriba va el personaje: el que eligió el estudiante entre los 14, o si no
+  // eligió ninguno el que armó por partes, o un ícono si no tiene nada.
+  const personajeBanner = estudiante.personaje_elegido_rol ? (
+    <Suspense fallback={<span className="text-4xl">🎓</span>}>
+      <PersonajeRol rolKey={estudiante.personaje_elegido_rol} genero={estudiante.genero_personaje || "masculino"} size={92} />
+    </Suspense>
+  ) : avatar ? (
+    <PersonajePreview config={avatar} size={88} />
+  ) : (
+    <span className="text-5xl opacity-90">🎓</span>
+  );
+
   return (
-    <div className="relative rounded-2xl p-3 shadow-sm border-2 min-w-0 flex flex-col items-center text-center"
-      style={{ background: `${infoReino.color}0D`, borderColor: `${infoReino.color}66` }}>
-      <div className="absolute top-2 left-2"><InclusionBadge estudiante={estudiante} /></div>
+    <div className="relative rounded-2xl bg-white shadow-sm border-2 min-w-0 flex flex-col"
+      style={{ borderColor: `${colorReino}66` }}>
+      <div className="relative h-28 flex items-center justify-center overflow-hidden rounded-t-xl"
+        style={{ background: `linear-gradient(160deg, ${colorReino} 0%, ${colorReino}99 55%, #17264D 140%)` }}>
+        <div aria-hidden className="absolute inset-0 opacity-20" style={{ backgroundImage: "radial-gradient(circle, #ffffff 1.2px, transparent 1.2px)", backgroundSize: "16px 16px" }} />
+        <div className="absolute top-2 left-2 z-10"><InclusionBadge estudiante={estudiante} /></div>
+        <div className="relative" style={{ filter: "drop-shadow(0 5px 8px rgba(0,0,0,0.35))" }}>{personajeBanner}</div>
+      </div>
 
-      <div className="relative shrink-0 mb-2">
-        {api.urlFotoEstudiante(estudiante) ? (
-          <img src={api.urlFotoEstudiante(estudiante)} alt={estudiante.nombre} onClick={() => setFotoAmpliada(true)}
-            className="w-14 h-14 object-cover rounded-full border border-slate-200 cursor-pointer" />
-        ) : avatar ? (
-          <div className="w-14 h-14 rounded-full flex items-center justify-center border border-slate-200 overflow-hidden bg-gradient-to-b from-violet-50 to-white" title="Personaje del estudiante">
-            <PersonajePreview config={avatar} size={50} />
-          </div>
-        ) : infoReino.logo_url ? (
-          <img src={infoReino.logo_url} alt="" className="w-14 h-14 object-contain rounded-full border border-slate-200" />
-        ) : (
-          <div className="w-14 h-14 rounded-full flex items-center justify-center text-sm font-bold"
-            style={{ background: `${infoReino.color}22`, color: infoReino.color }}>
-            {initials(estudiante.nombre)}
-          </div>
-        )}
-        <label className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-violet-500 flex items-center justify-center cursor-pointer" title="Subir foto">
-          <span className="text-white text-[9px]">{subiendoFoto ? "…" : "📷"}</span>
-          <input type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files[0]) subirFoto(e.target.files[0]); }} />
-        </label>
-        {api.urlFotoEstudiante(estudiante) && (
-          <button onClick={quitarFoto} className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-500 flex items-center justify-center" title="Quitar foto">
-            <span className="text-white text-[9px]">✕</span>
+      <div className="px-3 pb-3 flex flex-col">
+        <div className="relative z-10 flex justify-end gap-1.5 -mt-4 mb-1">
+          <button type="button" onClick={() => setAreaAbierta(true)} title="Ver toda la información de este estudiante"
+            className="w-8 h-8 rounded-full bg-blue-600 text-white shadow flex items-center justify-center">
+            <GraduationCap size={16} />
           </button>
-        )}
+          <div className="relative">
+            <button type="button" onClick={() => setMenuAbierto((v) => !v)} title="Más opciones"
+              className="w-8 h-8 rounded-full bg-slate-700 text-white shadow flex items-center justify-center text-base leading-none">⋮</button>
+            {menuAbierto && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setMenuAbierto(false)} />
+                <div className="absolute right-0 top-9 z-30 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1 text-left">
+                  <button type="button" onClick={() => { setNombreTemp(estudiante.nombre); setEditandoNombre(true); setMenuAbierto(false); }}
+                    className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50 text-slate-700">✏️ Editar nombre</button>
+                  <label className="block w-full text-left text-xs px-3 py-2 hover:bg-slate-50 text-slate-700 cursor-pointer">
+                    📷 {subiendoFoto ? "Subiendo…" : "Subir foto"}
+                    <input type="file" accept="image/*" className="hidden"
+                      onChange={(e) => { if (e.target.files[0]) subirFoto(e.target.files[0]); setMenuAbierto(false); }} />
+                  </label>
+                  {fotoUrl && (
+                    <button type="button" onClick={() => { setMenuAbierto(false); quitarFoto(); }}
+                      className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50 text-rose-600">🗑 Quitar foto</button>
+                  )}
+                  {!codigo && (
+                    <button type="button" disabled={generando} onClick={() => { setMenuAbierto(false); generarCodigo(); }}
+                      className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50 text-violet-600">🔑 {generando ? "Generando…" : "Generar código"}</button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-start gap-2.5">
+          <div className="relative shrink-0">
+            {fotoUrl ? (
+              <img src={fotoUrl} alt={estudiante.nombre} onClick={() => setFotoAmpliada(true)}
+                className="w-12 h-12 object-cover rounded-full border border-slate-200 cursor-pointer" />
+            ) : infoReino.logo_url ? (
+              <img src={infoReino.logo_url} alt="" className="w-12 h-12 object-contain rounded-full border border-slate-200" />
+            ) : (
+              <div className="w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold"
+                style={{ background: `${colorReino}22`, color: colorReino }}>
+                {initials(estudiante.nombre)}
+              </div>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            {editandoNombre ? (
+              <input autoFocus value={nombreTemp} onChange={(e) => setNombreTemp(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") guardarNombre(); if (e.key === "Escape") { setNombreTemp(estudiante.nombre); setEditandoNombre(false); } }}
+                onBlur={guardarNombre}
+                className="w-full text-[13px] font-bold uppercase text-slate-800 border-b border-violet-300 outline-none bg-transparent" />
+            ) : (
+              <button type="button" onClick={() => setAreaAbierta(true)} title="Ver toda la información de este estudiante"
+                className="text-left text-[13px] font-extrabold uppercase leading-tight text-slate-800 hover:text-violet-600 break-words">
+                {estudiante.nombre}
+              </button>
+            )}
+            <div className="flex flex-wrap items-center gap-1 mt-1">
+              <select value={reino} onChange={(e) => onCambiarReino(estudiante.id, e.target.value)}
+                className="text-[10px] font-semibold rounded-full px-2 py-0.5 outline-none max-w-full"
+                style={{ background: `${colorReino}18`, color: colorReino, border: `1px solid ${colorReino}55` }}>
+                {reinos.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+              {roles && roles.length > 0 && (
+                <select value={rolActualId} onChange={(e) => onCambiarRol(estudiante.id, e.target.value ? parseInt(e.target.value, 10) : null)}
+                  className="text-[10px] font-semibold bg-violet-50 text-violet-600 rounded-full px-2 py-0.5 outline-none max-w-full">
+                  <option value="">Sin rol</option>
+                  {roles.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
+                </select>
+              )}
+              {codigo && <span className="text-[10px] text-slate-400">🔑 <span className="font-mono font-bold text-violet-600">{codigo}</span></span>}
+            </div>
+          </div>
+        </div>
+
+        <div className="relative mt-3 h-10 rounded-full overflow-hidden" style={{ background: "#E2E8F0" }}>
+          <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${vidaPct}%`, background: colorVida }} />
+          <div className="absolute inset-0 flex items-center justify-center gap-1.5 text-white font-bold text-sm" style={{ textShadow: "0 1px 2px rgba(0,0,0,0.4)" }}>
+            <IconoCorazon /> <span>{vida} VIDA</span>
+          </div>
+          <div className="absolute right-1 top-1">{botonFlecha("Dar o quitar puntos")}</div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 mt-3">
+          <div className="min-w-0">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1 pl-1">Experiencia</div>
+            <div className="flex items-center h-10 rounded-full pl-3 pr-1" style={{ background: "linear-gradient(90deg, #8B5CF6, #A78BFA)" }}>
+              <span className="text-white text-sm">✨</span>
+              <span className="flex-1 text-center text-white font-bold text-sm">{progreso.xp || 0}</span>
+              {botonFlecha("Dar o quitar puntos")}
+            </div>
+            <div className="h-1 rounded-full bg-violet-100 overflow-hidden mt-1.5">
+              <div className="h-full rounded-full bg-violet-500" style={{ width: `${pct}%` }} />
+            </div>
+            <div className="text-[9px] text-slate-400 mt-0.5 truncate pl-1">{level.name}{next ? ` · ${progreso.xp || 0}/${next.min}` : " · máx"}</div>
+          </div>
+          <div className="min-w-0">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1 pl-1">Oro</div>
+            <div className="flex items-center h-10 rounded-full pl-3 pr-1" style={{ background: "linear-gradient(90deg, #F59E0B, #FBBF24)" }}>
+              <span className="text-sm">🪙</span>
+              <span className="flex-1 text-center text-white font-bold text-sm">{progreso.monedas || 0}</span>
+              {botonFlecha("Dar o quitar puntos")}
+            </div>
+          </div>
+        </div>
       </div>
 
-      {editandoNombre ? (
-        <input autoFocus value={nombreTemp} onChange={(e) => setNombreTemp(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") guardarNombre(); if (e.key === "Escape") { setNombreTemp(estudiante.nombre); setEditandoNombre(false); } }}
-          onBlur={guardarNombre}
-          className="text-xs font-medium text-slate-900 text-center border-b border-violet-300 outline-none w-full mb-1" />
-      ) : (
-        <button onClick={() => setAreaAbierta(true)} className="text-xs font-medium text-slate-900 leading-tight mb-1 hover:text-violet-600" title="Ver toda la información de este estudiante">
-          {estudiante.nombre}
-        </button>
-      )}
-      <button onClick={() => { setNombreTemp(estudiante.nombre); setEditandoNombre(true); }} title="Editar nombre" className="text-[10px] text-slate-400 hover:text-violet-500 mb-1.5">
-        ✏️ Editar
-      </button>
-
-      <select value={reino} onChange={(e) => onCambiarReino(estudiante.id, e.target.value)}
-        className="text-[11px] text-slate-400 bg-transparent outline-none mb-1 max-w-full"
-        style={{ textAlign: "center", textAlignLast: "center" }}>
-        {reinos.map((r) => <option key={r} value={r}>{r}</option>)}
-      </select>
-      {roles && roles.length > 0 && (
-        <select value={rolActualId} onChange={(e) => onCambiarRol(estudiante.id, e.target.value ? parseInt(e.target.value, 10) : null)}
-          className="text-[11px] bg-violet-50 text-violet-600 rounded-full px-2 py-0.5 mb-1.5 outline-none max-w-full"
-          style={{ textAlign: "center", textAlignLast: "center" }}>
-          <option value="">Sin rol</option>
-          {roles.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
-        </select>
-      )}
-
-      <div className="flex items-center gap-1 text-xs text-amber-600 mb-1.5">
-        <span>🪙</span><span>{progreso.monedas || 0}</span>
-      </div>
-
-      <div className="w-full mb-1.5">
-        <LevelBar xp={progreso.xp || 0} />
-        <VidaBar vida={progreso.vida ?? 100} />
-      </div>
-
-      {codigo ? (
-        <p className="text-[10px] text-slate-400 mb-2">🔑 <span className="font-mono font-bold text-violet-600">{codigo}</span></p>
-      ) : (
-        <button disabled={generando} onClick={generarCodigo} className="text-[10px] text-violet-500 underline mb-2">
-          {generando ? "Generando…" : "🔑 Generar código"}
-        </button>
-      )}
-
-      <QuickGamify estudiante={estudiante} onAplicado={onAplicado} />
+      <QuickGamify estudiante={estudiante} onAplicado={onAplicado} ocultarBoton abiertoExterno={puntosAbierto} onCambioAbierto={setPuntosAbierto} />
       {actasAbiertas && <ActasModal estudiante={estudiante} onClose={() => setActasAbiertas(false)} />}
       {inclusionAbierta && <InclusionModal estudiante={estudiante} onClose={() => setInclusionAbierta(false)} onGuardado={() => setInclusionAbierta(false)} />}
       {codiceAbierto && <CodiceDocenteModal estudiante={estudiante} onClose={() => setCodiceAbierto(false)} />}
@@ -2204,7 +2302,7 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {visibles.map((s) => (
             <TarjetaEstudiante key={s.id} estudiante={s} reinos={reinos} catalogoReinos={catalogoReinos} onQuitar={quitar} onRenombrar={renombrar} onCambiarReino={cambiarReino} onAplicado={actualizarProgresoLocal} onFotoActualizada={actualizarFotoLocal} roles={roles} onCambiarRol={cambiarRol} onCodigoGenerado={actualizarCodigoLocal} grados={grados} gradoActual={gradoId} onTrasladado={cargar} avatar={avatares[s.id]} />
           ))}
