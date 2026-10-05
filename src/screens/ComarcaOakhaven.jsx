@@ -4,6 +4,8 @@ import * as api from "../lib/api";
 import { leerPersistido, guardarPersistido } from "../lib/api";
 import { agruparPorNivel } from "../lib/gamification";
 import { EmojiPicker } from "../components/EmojiPicker";
+import { useAvataresEstudiantes } from "../lib/useAvatares";
+import { AvatarMini } from "../components/AvatarMini";
 
 // Antes esto era una cajita de texto en blanco, sin mostrar ninguna
 // opción — había que SABER escribir un emoji a mano. Ahora usa el mismo
@@ -1079,6 +1081,7 @@ function TarjetasRolImprimibleModal({ sesion, reinos, onClose }) {
       setEstudiantes(est); setCatalogoRoles(roles); setNombresFantasia(fantasia); setCargando(false);
     });
   }, []);
+  const avatarDe = useAvataresEstudiantes(estudiantes.map((e) => e.id));
 
   if (cargando) return null;
 
@@ -1100,7 +1103,10 @@ function TarjetasRolImprimibleModal({ sesion, reinos, onClose }) {
       <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.1em", color: "#ccd7eb", marginBottom: 4 }}>{reino.emoji} {reino.nombre}</div>
       <div style={{ fontSize: 30, marginBottom: 4 }}>{rol.info?.emoji || "🎭"}</div>
       <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 2 }}>{rol.nombre}</div>
-      <div style={{ fontSize: 12, color: "#ccd7eb", marginBottom: 8 }}>{nombreMostrado(est)}</div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", gap: 8, marginBottom: 8 }}>
+        <AvatarMini src={avatarDe(est.id)} nombre={nombreMostrado(est)} size={40} />
+        <span style={{ fontSize: 12, color: "#ccd7eb" }}>{nombreMostrado(est)}</span>
+      </div>
       {rol.info?.descripcion && <p style={{ fontSize: 10, color: "#E8EEF8", lineHeight: 1.35, margin: 0 }}>{rol.info.descripcion}</p>}
     </div>
   ));
@@ -1331,6 +1337,7 @@ function RolesModal({ sesion, reinos, onClose }) {
   const [recienGuardadoNombreId, setRecienGuardadoNombreId] = useState(null);
   const [editandoRolDe, setEditandoRolDe] = useState(null);
   const [reinoActivoId, setReinoActivoId] = useState(reinos[0]?.id || null);
+  const avatarDe = useAvataresEstudiantes(estudiantes.map((e) => e.id));
 
   const cargar = () => {
     return Promise.all([api.fetchEstudiantesPorGrado(sesion.grado_id), api.fetchRoles(), api.fetchNombresFantasiaDeSesion(sesion.id)]).then(([est, roles, fantasia]) => {
@@ -1447,7 +1454,10 @@ function RolesModal({ sesion, reinos, onClose }) {
                     return (
                       <div key={est.id} className="bg-white border border-slate-200 rounded-xl p-3">
                         <div className="flex items-center justify-between gap-2 mb-2">
-                          <span className="text-sm font-semibold text-slate-800 flex-1 min-w-0 truncate">{est.nombre}</span>
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <AvatarMini src={avatarDe(est.id)} nombre={est.nombre} size={32} />
+                            <span className="text-sm font-semibold text-slate-800 truncate">{est.nombre}</span>
+                          </div>
                           {recienGuardadoId === est.id && <span className="text-[10px] text-emerald-600 font-semibold shrink-0">✓ Guardado</span>}
                         </div>
 
@@ -1598,6 +1608,7 @@ function QRModal({ sesion, reinos, onClose }) {
       setEstudiantes(est); setCatalogoRoles(roles); setNombresFantasia(fantasia);
     });
   }, []);
+  const avatarDe = useAvataresEstudiantes(estudiantes.map((e) => e.id));
 
   const reinoDe = (est) => reinos.find((r) => r.nombre === (est.reino_actual || est.reino_original));
   const rolDe = (est) => {
@@ -1643,7 +1654,10 @@ function QRModal({ sesion, reinos, onClose }) {
               return (
                 <div key={est.id} className="border border-slate-200 rounded-xl p-3 text-center">
                   <img src={urlQR(urlDeTarjeta(sesion.id, reino.id, est.id))} alt={`QR ${est.nombre}`} className="mx-auto mb-2 rounded-lg" />
-                  <div className="text-xs font-semibold text-slate-700">{nombreMostrado(est)}</div>
+                  <div className="flex items-center justify-center gap-1.5">
+                    <AvatarMini src={avatarDe(est.id)} nombre={nombreMostrado(est)} size={30} />
+                    <div className="text-xs font-semibold text-slate-700">{nombreMostrado(est)}</div>
+                  </div>
                   <div className="text-[10px] text-slate-400">{rol.info?.emoji || "🎭"} {rol.nombre} · {reino?.nombre}</div>
                 </div>
               );
@@ -2082,6 +2096,8 @@ export function TarjetaComarcaPublica() {
   const [gpPedido, setGpPedido] = useState(0);
   const [gpOfrecido, setGpOfrecido] = useState(0);
   const [enviando, setEnviando] = useState(false);
+  // Si el QR es de un estudiante, se pide su avatar para mostrarlo junto a su nombre.
+  const avatarDe = useAvataresEstudiantes(estudianteId ? [estudianteId] : []);
 
   // Antes, si esta consulta fallaba por cualquier motivo, la pantalla se
   // quedaba esperando para siempre (el .then nunca corría, así que nunca
@@ -2158,8 +2174,13 @@ export function TarjetaComarcaPublica() {
             {reino.imagen_url ? <img src={reino.imagen_url} alt={reino.nombre} className="w-full h-full object-cover" /> : <span className="text-5xl">{reino.emoji}</span>}
           </div>
           <div className="p-4">
-            <div className="text-lg font-bold text-slate-800">{reino.emoji} {reino.nombre}</div>
-            {miNombre && <div className="text-xs text-violet-600 font-semibold">{miNombre}{miRolNombre ? ` · ${miRolInfo?.emoji || "🎭"} ${miRolNombre}` : ""}</div>}
+            <div className="flex items-center gap-3">
+              {estudianteId && miNombre && <AvatarMini src={avatarDe(estudianteId)} nombre={miNombre} size={56} />}
+              <div className="min-w-0">
+                <div className="text-lg font-bold text-slate-800">{reino.emoji} {reino.nombre}</div>
+                {miNombre && <div className="text-xs text-violet-600 font-semibold">{miNombre}{miRolNombre ? ` · ${miRolInfo?.emoji || "🎭"} ${miRolNombre}` : ""}</div>}
+              </div>
+            </div>
             <div className="flex gap-2 mt-3">
               <div className="flex-1 bg-amber-50 rounded-xl p-2 text-center"><div className="text-xl font-bold text-amber-700">{reino.gp}</div><div className="text-[10px] text-amber-600">🪙 GP</div></div>
               <div className="flex-1 bg-violet-50 rounded-xl p-2 text-center"><div className="text-xl font-bold text-violet-700">{reino.fp}</div><div className="text-[10px] text-violet-600">🕊️ FP</div></div>
