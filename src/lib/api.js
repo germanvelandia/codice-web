@@ -5010,11 +5010,24 @@ export async function actualizarEstadoControl(controlId, estudianteId, campos) {
 // identifican exactamente cuál de los 14 dibujos es. Si todavía no eligió
 // ninguno, se devuelve null y la pantalla cae a lo que ya mostraba antes
 // (el avatar armado por partes).
+// El personaje que se ve en el portal del estudiante. Manda el que le asignó el
+// DOCENTE (así es el mismo que ve el docente en su tarjeta); si el docente no le
+// asignó ninguno, vale el que el propio estudiante eligió. "asignadoPorDocente"
+// avisa a la pantalla "Mi Personaje" para no dejarle cambiar uno que ya vino fijado.
 export async function fetchPersonajeElegido(estudianteId) {
-  const { data, error } = await supabase.from("estudiantes").select("personaje_elegido_rol, genero_personaje").eq("id", estudianteId).maybeSingle();
+  let { data, error } = await supabase.from("estudiantes")
+    .select("personaje_elegido_rol, genero_personaje, personaje_docente_rol, personaje_docente_genero").eq("id", estudianteId).maybeSingle();
+  if (error) {
+    // Si todavía no existen las columnas del docente (falta correr el SQL 59), se sigue
+    // usando solo la elección del estudiante, como antes.
+    ({ data, error } = await supabase.from("estudiantes").select("personaje_elegido_rol, genero_personaje").eq("id", estudianteId).maybeSingle());
+  }
   if (error) throw error;
+  if (data?.personaje_docente_rol) {
+    return { rolKey: data.personaje_docente_rol, genero: data.personaje_docente_genero || "masculino", asignadoPorDocente: true };
+  }
   if (!data?.personaje_elegido_rol) return null;
-  return { rolKey: data.personaje_elegido_rol, genero: data.genero_personaje || "masculino" };
+  return { rolKey: data.personaje_elegido_rol, genero: data.genero_personaje || "masculino", asignadoPorDocente: false };
 }
 
 export async function guardarPersonajeElegido(estudianteId, rolKey, genero) {
