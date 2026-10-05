@@ -4,6 +4,7 @@ import { GRADOS_BASE, ordenarPorApellido, buscarEstudiantePorNombre } from "./ga
 import { notaAutomatica, notaFinalPonderada, CONFIG_DEFAULT } from "./calificaciones";
 import { NIVELACION_COMPROMISOS_DEFAULT, FALTAS_MANUAL } from "./actasTemplates";
 import { CATALOGO_BASE } from "./avatarPartes";
+import { calcularBonos, aplicarBonosAccion } from "./mejorasPersonaje";
 
 export async function asegurarGradosBase() {
   const filas = GRADOS_BASE.map((id) => ({ id }));
@@ -5458,14 +5459,23 @@ export async function fetchAsistenciaConsolidadaEstudiante(estudianteId) {
 }
 
 export async function registrarAccion(estudianteId, accion) {
-  const deltaMonedas = accion.xp > 0 ? 1 : 0;
+  // Beneficios de las piezas del personaje (capa, espada, escudo…). Si no hay piezas,
+  // o todavía no se corrió el SQL de las piezas, se da la acción EXACTA como siempre.
+  let bonos = null;
+  try { bonos = await fetchBonosEstudiante(estudianteId); } catch (e) { bonos = null; }
+  const ajuste = aplicarBonosAccion(accion, bonos);
+  const deltaMonedas = (accion.xp > 0 ? 1 : 0) + ajuste.monedasExtra;
   const [, rpcRes] = await Promise.all([
     supabase.from("historial_gamificacion").insert({
-      estudiante_id: estudianteId, etiqueta: accion.label, xp: accion.xp, vida: accion.vida, monedas: deltaMonedas, categoria: accion.categoria,
+      estudiante_id: estudianteId, etiqueta: accion.label + ajuste.sufijo, xp: ajuste.xp, vida: ajuste.vida, monedas: deltaMonedas, categoria: accion.categoria,
     }),
-    supabase.rpc("ajustar_progreso", { p_estudiante_id: estudianteId, p_delta_xp: accion.xp, p_delta_vida: accion.vida, p_delta_monedas: deltaMonedas }),
+    supabase.rpc("ajustar_progreso", { p_estudiante_id: estudianteId, p_delta_xp: ajuste.xp, p_delta_vida: ajuste.vida, p_delta_monedas: deltaMonedas }),
   ]);
   if (rpcRes.error) throw rpcRes.error;
+  // El escudo que absorbió una resta de vida queda "usado" (se recarga a los 7 días).
+  if (ajuste.escudoUsado) {
+    await supabase.from("estudiante_mejoras").update({ ultimo_uso: new Date().toISOString() }).eq("id", ajuste.escudoUsado.id);
+  }
   const fila = rpcRes.data?.[0];
   return { xp: fila?.xp ?? 0, vida: fila?.vida ?? 0, monedas: fila?.monedas ?? 0 };
 }
@@ -5494,6 +5504,86 @@ export async function guardarPersonajeDocente(estudianteId, rolKey, genero) {
     .update({ personaje_docente_rol: rolKey || null, personaje_docente_genero: rolKey ? (genero || "masculino") : null })
     .eq("id", estudianteId);
   if (error) throw error;
+}
+
+// ==================== 🎒 Piezas que mejoran al personaje ====================
+export async function fetchMejorasCatalogo({ soloActivas = true } = {}) {
+  let q = supabase.from("avatar_mejoras").select("*").order("orden").order("costo");
+  if (soloActivas) q = q.eq("activo", true);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function crearMejora(campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("avatar_mejoras").insert({ ...campos, docente_id: userData?.user?.id || null }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function editarMejora(id, campos) {
+  const { error } = await supabase.from("avatar_mejoras").update(campos).eq("id", id);
+  if (error) throw error;
+}
+
+// Lo que compró un estudiante, cada fila con su pieza adentro (fila.mejora).
+export async function fetchMejorasDeEstudiante(estudianteId) {
+  const { data, error } = await supabase.from("estudiante_mejoras").select("*, mejora:avatar_mejoras(*)").eq("estudiante_id", estudianteId).order("comprado_en");
+  if (error) throw error;
+  return data || [];
+}
+
+// Lo mismo para un curso entero, de un solo pedido: { [estudianteId]: [filas] }.
+export async function fetchMejorasDeEstudiantes(estudianteIds) {
+  if (!estudianteIds.length) return {};
+  const { data, error } = await supabase.from("estudiante_mejoras").select("*, mejora:avatar_mejoras(*)").in("estudiante_id", estudianteIds).order("comprado_en");
+  if (error) throw error;
+  const mapa = {};
+  (data || []).forEach((f) => { (mapa[f.estudiante_id] = mapa[f.estudiante_id] || []).push(f); });
+  return mapa;
+}
+
+export async function fetchBonosEstudiante(estudianteId) {
+  return calcularBonos(await fetchMejorasDeEstudiante(estudianteId));
+}
+
+// Compra una pieza con monedas. Se descuentan PRIMERO las monedas y después se
+// registra la pieza: si dos toques seguidos intentan comprarla dos veces, la
+// segunda choca con la regla de "una sola vez" y se devuelven las monedas.
+export async function comprarMejoraPersonaje(estudianteId, mejora, monedasActuales) {
+  if (monedasActuales < mejora.costo) throw new Error("No tenés suficientes monedas para esto.");
+  if (mejora.costo > 0) await ajustarMonedas(estudianteId, -mejora.costo);
+  const { data: fila, error } = await supabase.from("estudiante_mejoras").insert({ estudiante_id: estudianteId, mejora_id: mejora.id }).select().single();
+  if (error) {
+    if (mejora.costo > 0) { try { await ajustarMonedas(estudianteId, mejora.costo); } catch (e) { /* si falla la devolución, el docente la ve en el historial */ } }
+    throw new Error(error.code === "23505" ? "Ya tenés esta pieza." : error.message);
+  }
+  // Renglón en el historial, para que se vea en qué se gastaron las monedas.
+  await supabase.from("historial_gamificacion").insert({ estudiante_id: estudianteId, etiqueta: "Compró: " + mejora.nombre, xp: 0, vida: 0, monedas: -mejora.costo, categoria: "general" });
+  return fila;
+}
+
+// El docente marca un privilegio como usado (o lo vuelve a habilitar).
+export async function canjearPrivilegio(filaId, canjeado = true) {
+  const { error } = await supabase.from("estudiante_mejoras").update({ canjeado, canjeado_en: canjeado ? new Date().toISOString() : null }).eq("id", filaId);
+  if (error) throw error;
+}
+
+// Qué personaje mostrar al lado de cada nombre en los rankings: el que asignó el
+// docente; si no, el que eligió el propio estudiante.
+export async function fetchPersonajesMostrarMultiples(estudianteIds) {
+  if (!estudianteIds.length) return {};
+  let { data, error } = await supabase.from("estudiantes")
+    .select("id, personaje_elegido_rol, genero_personaje, personaje_docente_rol, personaje_docente_genero").in("id", estudianteIds);
+  if (error) ({ data, error } = await supabase.from("estudiantes").select("id, personaje_elegido_rol, genero_personaje").in("id", estudianteIds));
+  if (error) throw error;
+  const mapa = {};
+  (data || []).forEach((e) => {
+    if (e.personaje_docente_rol) mapa[e.id] = { rolKey: e.personaje_docente_rol, genero: e.personaje_docente_genero || "masculino" };
+    else if (e.personaje_elegido_rol) mapa[e.id] = { rolKey: e.personaje_elegido_rol, genero: e.genero_personaje || "masculino" };
+  });
+  return mapa;
 }
 
 /* ---------------- Rúbricas (catálogo reutilizable) ---------------- */
