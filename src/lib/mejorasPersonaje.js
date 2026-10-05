@@ -1,19 +1,17 @@
 // Lógica de las piezas que mejoran al personaje (sin imágenes ni base de datos,
 // para que se pueda cargar en cualquier pantalla sin pesar nada).
 
-// El nivel del personaje sube con la CANTIDAD de piezas que el estudiante compró.
-// Con cada nivel cambia el brillo detrás del personaje y el fondo del banner.
-export const NIVELES_PERSONAJE = [
-  { nivel: 1, nombre: "Novato", desde: 0, color: null },
-  { nivel: 2, nombre: "Aventurero", desde: 1, color: "#CD7F32" }, // bronce
-  { nivel: 3, nombre: "Veterano", desde: 3, color: "#C0C8D0" },   // plata
-  { nivel: 4, nombre: "Leyenda", desde: 5, color: "#FFC93C" },    // oro
-];
+import { NIVELES_POR_DEFECTO, nivelesActuales } from "./configNiveles";
 
-export function nivelPersonaje(cantidad) {
-  let actual = NIVELES_PERSONAJE[0];
-  NIVELES_PERSONAJE.forEach((n) => { if (cantidad >= n.desde) actual = n; });
-  const siguiente = NIVELES_PERSONAJE.find((n) => n.nivel === actual.nivel + 1) || null;
+// El nivel del personaje sube con la CANTIDAD de piezas que el estudiante compró. Cuántas
+// piezas pide cada nivel, cómo se llama y cómo se ve se configura en Editar niveles
+// (configNiveles.js); estos son los 4 de fábrica.
+export const NIVELES_PERSONAJE = NIVELES_POR_DEFECTO;
+
+export function nivelPersonaje(cantidad, niveles = nivelesActuales()) {
+  let actual = niveles[0];
+  niveles.forEach((n) => { if (cantidad >= n.desde) actual = n; });
+  const siguiente = niveles.find((n) => n.nivel === actual.nivel + 1) || null;
   return { ...actual, siguiente, faltan: siguiente ? siguiente.desde - cantidad : 0 };
 }
 
