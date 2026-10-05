@@ -20,9 +20,9 @@ import { DirectorioModal } from "./Directorio";
 const PersonajeRol = lazy(() => import("../components/PersonajeRol"));
 const GaleriaPersonajesRol = lazy(() => import("../components/GaleriaPersonajesRol"));
 
-// El docente le asigna a cada estudiante uno de los 14 personajes. Es solo
-// para la tarjeta de ESTA vista — no depende de lo que el estudiante arme o
-// elija en su portal.
+// El docente le asigna a cada estudiante uno de los 14 personajes. Ese es el
+// que se ve tanto en esta tarjeta como en el portal del estudiante (donde, si
+// ya viene asignado, el estudiante no lo puede cambiar).
 function SelectorPersonajeDocenteModal({ estudiante, onClose, onElegir, onQuitar, guardando }) {
   const elegido = estudiante.personaje_docente_rol
     ? { rolKey: estudiante.personaje_docente_rol, genero: estudiante.personaje_docente_genero || "masculino" }
@@ -34,7 +34,7 @@ function SelectorPersonajeDocenteModal({ estudiante, onClose, onElegir, onQuitar
           <h3 className="font-bold text-slate-800">🎭 Personaje de {estudiante.nombre}</h3>
           <button onClick={onClose} className="text-slate-400">✕</button>
         </div>
-        <p className="text-xs text-slate-400 mb-3">Elegí el que va a aparecer arriba en su tarjeta. Es solo para tu vista de docente — no depende de lo que el estudiante arme en "Mi Personaje".</p>
+        <p className="text-xs text-slate-400 mb-3">Elegí el personaje de este estudiante. Es el que vas a ver arriba en tu tarjeta y también el que él va a ver en su portal. Una vez asignado, el estudiante no puede cambiarlo (vos sí, cuando quieras).</p>
         <Suspense fallback={<p className="text-xs text-slate-400 text-center py-6">Cargando personajes…</p>}>
           <GaleriaPersonajesRol elegido={elegido} onElegir={onElegir} />
         </Suspense>
