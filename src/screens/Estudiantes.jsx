@@ -14,11 +14,197 @@ import { ResumenEstudianteModal } from "./Resumen";
 import { ObservadorModal, ObservadorPorGradoModal } from "./Observador";
 import { TutoriasModal } from "./Tutorias";
 import { DirectorioModal } from "./Directorio";
+import { InsigniaNivel, CapaEstrellasBanner } from "../components/NivelPersonaje";
+import { EmojiPicker } from "../components/EmojiPicker";
+import { nivelPersonaje, textoBeneficio, TIPOS_BENEFICIO } from "../lib/mejorasPersonaje";
 
 // Carga diferida: el dibujo de cada personaje (con sus imágenes) solo se descarga
 // cuando se abre esta pantalla — no forma parte del paquete principal de la app.
-const PersonajeRol = lazy(() => import("../components/PersonajeRol"));
+const PersonajeConMejoras = lazy(() => import("../components/PersonajeConMejoras"));
 const GaleriaPersonajesRol = lazy(() => import("../components/GaleriaPersonajesRol"));
+
+// Privilegios de clase que un estudiante compró (corona, estandarte…): acá el docente
+// los marca como usados cuando los concede, o los vuelve a habilitar.
+function PrivilegiosEstudianteModal({ estudiante, privilegios, onClose, onCambio }) {
+  const [guardando, setGuardando] = useState(null);
+  const alternar = async (f) => {
+    setGuardando(f.id);
+    try { await api.canjearPrivilegio(f.id, !f.canjeado); await onCambio(); }
+    catch (e) { alert("No se pudo guardar: " + e.message); }
+    setGuardando(null);
+  };
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-md max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-1">
+          <h3 className="font-bold text-slate-800">🎟️ Privilegios de {estudiante.nombre}</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-400 mb-3">Los compró con sus monedas. Cuando se lo concedas en clase, marcalo como usado.</p>
+        <div className="space-y-2">
+          {privilegios.map((f) => (
+            <div key={f.id} className={`rounded-xl p-3 flex items-center gap-3 ${f.canjeado ? "bg-slate-50" : "bg-amber-50"}`}>
+              <span className="text-2xl shrink-0">{f.mejora.emoji}</span>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-bold text-slate-800 leading-tight">{f.mejora.nombre}</div>
+                <div className="text-[11px] text-slate-500">{textoBeneficio(f.mejora)}</div>
+                {f.canjeado && f.canjeado_en && <div className="text-[10px] text-slate-400 mt-0.5">Usado el {new Date(f.canjeado_en).toLocaleDateString("es-CO")}</div>}
+              </div>
+              <button type="button" disabled={guardando === f.id} onClick={() => alternar(f)}
+                className={`text-[11px] font-semibold px-2.5 py-1.5 rounded-full shrink-0 disabled:opacity-50 ${f.canjeado ? "border border-slate-300 text-slate-600" : "bg-amber-500 text-white"}`}>
+                {f.canjeado ? "Volver a habilitar" : "Marcar como usado"}
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Formulario de una pieza del catálogo (nueva o para editar).
+function PiezaForm({ pieza, siguienteOrden, onCancelar, onGuardado }) {
+  const [nombre, setNombre] = useState(pieza?.nombre || "");
+  const [emoji, setEmoji] = useState(pieza?.emoji || "🎖️");
+  const [costo, setCosto] = useState(pieza?.costo ?? 50);
+  const [tipo, setTipo] = useState(pieza?.beneficio_tipo || "ninguno");
+  const [valor, setValor] = useState(pieza?.beneficio_valor ?? 10);
+  const [texto, setTexto] = useState(pieza?.beneficio_texto || "");
+  const [slot, setSlot] = useState(pieza?.slot || "equipo");
+  const [guardando, setGuardando] = useState(false);
+  const def = TIPOS_BENEFICIO.find((t) => t.key === tipo);
+
+  const guardar = async () => {
+    if (!nombre.trim()) { alert("Escribí un nombre para la pieza."); return; }
+    const c = parseInt(costo, 10);
+    if (isNaN(c) || c < 0) { alert("El costo tiene que ser un número (0 o más)."); return; }
+    if (tipo === "privilegio" && !texto.trim()) { alert("Escribí cuál es el privilegio (por ejemplo: elegir su puesto por una semana)."); return; }
+    const v = def?.usaValor ? parseFloat(valor) : 0;
+    if (def?.usaValor && (isNaN(v) || v <= 0)) { alert("El valor del beneficio tiene que ser mayor que 0."); return; }
+    setGuardando(true);
+    try {
+      const campos = {
+        nombre: nombre.trim(), emoji: emoji || "🎖️", costo: c, slot, beneficio_tipo: tipo, beneficio_valor: v,
+        // Los beneficios automáticos se explican solos con su valor; solo el privilegio y lo decorativo llevan texto propio.
+        beneficio_texto: tipo === "privilegio" || tipo === "ninguno" ? (texto.trim() || null) : null,
+      };
+      if (pieza?.id) await api.editarMejora(pieza.id, campos);
+      else await api.crearMejora({ ...campos, orden: siguienteOrden });
+      onGuardado();
+    } catch (e) { alert("No se pudo guardar: " + e.message); }
+    setGuardando(false);
+  };
+
+  const inputCls = "w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white";
+  return (
+    <div className="bg-violet-50 rounded-2xl p-3 mb-3">
+      <div className="flex items-end gap-2 mb-2">
+        <div><label className="text-[11px] text-slate-500 block mb-1">Ícono</label><EmojiPicker value={emoji} onChange={setEmoji} /></div>
+        <div className="flex-1 min-w-0"><label className="text-[11px] text-slate-500 block mb-1">Nombre</label>
+          <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej: Capa de aprendiz" className={inputCls} /></div>
+        <div className="w-24"><label className="text-[11px] text-slate-500 block mb-1">Costo 🪙</label>
+          <input type="number" min="0" value={costo} onChange={(e) => setCosto(e.target.value)} className={inputCls} /></div>
+      </div>
+      <label className="text-[11px] text-slate-500 block mb-1">Beneficio</label>
+      <select value={tipo} onChange={(e) => setTipo(e.target.value)} className={`${inputCls} mb-2`}>
+        {TIPOS_BENEFICIO.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+      </select>
+      {def?.usaValor && (
+        <div className="mb-2">
+          <label className="text-[11px] text-slate-500 block mb-1">{tipo === "xp_pct" ? "Porcentaje extra de experiencia" : "Monedas extra por acción positiva"}</label>
+          <input type="number" min="1" value={valor} onChange={(e) => setValor(e.target.value)} className={inputCls} />
+        </div>
+      )}
+      {(tipo === "privilegio" || tipo === "ninguno") && (
+        <div className="mb-2">
+          <label className="text-[11px] text-slate-500 block mb-1">{tipo === "privilegio" ? "¿Qué privilegio es? (se lo ve el estudiante)" : "Descripción (opcional)"}</label>
+          <input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder={tipo === "privilegio" ? "Ej: Elegir su puesto por una semana" : "Ej: Un compañero que lo acompaña"} className={inputCls} />
+        </div>
+      )}
+      <label className="text-[11px] text-slate-500 block mb-1">Cómo se ve en el personaje</label>
+      <select value={slot} onChange={(e) => setSlot(e.target.value)} className={`${inputCls} mb-3`}>
+        <option value="equipo">Equipo (ícono junto al personaje)</option>
+        <option value="companero">Compañero (aparece a su lado)</option>
+      </select>
+      <div className="flex justify-end gap-2">
+        <button onClick={onCancelar} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
+        <button disabled={guardando} onClick={guardar} className="text-xs font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">{guardando ? "Guardando…" : "Guardar pieza"}</button>
+      </div>
+    </div>
+  );
+}
+
+// El catálogo de piezas que los estudiantes pueden comprar para mejorar su personaje.
+function PiezasPersonajeModal({ onClose }) {
+  const [piezas, setPiezas] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState("");
+  const [editando, setEditando] = useState(null); // null | "nueva" | pieza
+  const cargar = () => {
+    setCargando(true);
+    api.fetchMejorasCatalogo({ soloActivas: false })
+      .then((d) => { setPiezas(d); setError(""); })
+      .catch((e) => setError(e.message))
+      .finally(() => setCargando(false));
+  };
+  useEffect(() => { cargar(); }, []);
+  const alternarActiva = async (p) => {
+    try { await api.editarMejora(p.id, { activo: !p.activo }); cargar(); } catch (e) { alert("No se pudo cambiar: " + e.message); }
+  };
+  const siguienteOrden = piezas.reduce((m, p) => Math.max(m, p.orden || 0), 0) + 1;
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[88vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-1">
+          <h3 className="font-bold text-slate-800">🎒 Piezas del personaje</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <p className="text-xs text-slate-400 mb-3">Los estudiantes las compran con Oro en "Mi Personaje". Cada una trae un beneficio, y cuantas más tengan, más sube el nivel de su personaje (el brillo y el fondo cambian).</p>
+
+        {error ? (
+          <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">
+            No se pudo leer el catálogo. ¿Ya corriste el SQL <b>60_mejoras_personaje.sql</b> en Supabase?<br /><span className="text-amber-600">{error}</span>
+          </div>
+        ) : cargando ? (
+          <p className="text-sm text-slate-400">Cargando…</p>
+        ) : (
+          <>
+            {editando && (
+              <PiezaForm pieza={editando === "nueva" ? null : editando} siguienteOrden={siguienteOrden}
+                onCancelar={() => setEditando(null)} onGuardado={() => { setEditando(null); cargar(); }} />
+            )}
+            <div className="space-y-1.5 mb-3">
+              {piezas.map((p) => (
+                <div key={p.id} className={`rounded-xl border p-2.5 flex items-center gap-2.5 ${p.activo ? "border-slate-200 bg-white" : "border-slate-100 bg-slate-50 opacity-60"}`}>
+                  <span className="text-2xl shrink-0">{p.emoji}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-bold text-slate-800 leading-tight">{p.nombre} <span className="text-[11px] font-semibold text-amber-600">🪙 {p.costo}</span>{p.slot === "companero" && <span className="text-[10px] text-slate-400"> · compañero</span>}</div>
+                    <div className="text-[11px] text-slate-500 truncate">{textoBeneficio(p)}</div>
+                  </div>
+                  <button type="button" onClick={() => setEditando(p)} className="text-[11px] font-semibold text-violet-600 shrink-0">Editar</button>
+                  <button type="button" onClick={() => alternarActiva(p)} className="text-[11px] text-slate-400 shrink-0">{p.activo ? "Ocultar" : "Mostrar"}</button>
+                </div>
+              ))}
+              {piezas.length === 0 && <p className="text-xs text-slate-400">Todavía no hay piezas. Agregá la primera.</p>}
+            </div>
+            {!editando && <button type="button" onClick={() => setEditando("nueva")} className="text-xs font-semibold text-violet-600">+ Nueva pieza</button>}
+            <p className="text-[11px] text-slate-400 mt-3">Si ocultás una pieza, deja de venderse pero quienes ya la compraron la conservan con su beneficio.</p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Ícono de estrella para el botón de la barra de acciones.
+function IconoEstrella({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1L12 2Z" />
+    </svg>
+  );
+}
 
 // El docente le asigna a cada estudiante uno de los 14 personajes. Ese es el
 // que se ve tanto en esta tarjeta como en el portal del estudiante (donde, si
@@ -1126,7 +1312,7 @@ function AreaEstudiante({ estudiante, progreso, grados, onClose, onAbrir }) {
   );
 }
 
-function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFotoActualizada, reinos, catalogoReinos, onCambiarReino, roles, onCambiarRol, onCodigoGenerado, grados, gradoActual, onTrasladado, onPersonajeCambiado }) {
+function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFotoActualizada, reinos, catalogoReinos, onCambiarReino, roles, onCambiarRol, onCodigoGenerado, grados, gradoActual, onTrasladado, onPersonajeCambiado, mejoras = [], onMejorasCambiaron }) {
   const [actasAbiertas, setActasAbiertas] = useState(false);
   const [inclusionAbierta, setInclusionAbierta] = useState(false);
   const [codiceAbierto, setCodiceAbierto] = useState(false);
@@ -1141,6 +1327,7 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [puntosAbierto, setPuntosAbierto] = useState(false);
   const [selectorAbierto, setSelectorAbierto] = useState(false);
+  const [privilegiosAbierto, setPrivilegiosAbierto] = useState(false);
   const [guardandoPersonaje, setGuardandoPersonaje] = useState(false);
   const [aplicandoRapido, setAplicandoRapido] = useState(false);
   const [menuPuntos, setMenuPuntos] = useState(null); // "xp" | "monedas" | null — cuál desplegable de suma rápida está abierto
@@ -1292,12 +1479,22 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
     </button>
   );
 
-  // Arriba va el personaje que le asignaste vos (uno de los 14). Si todavía no
-  // le asignaste ninguno, se invita a elegirlo — el que arme o elija el
-  // estudiante en su portal no se usa acá.
+  // Lo que compró el estudiante: define el nivel de su personaje, el equipo que se ve
+  // junto a él y los privilegios que todavía están sin usar.
+  const piezasConPieza = mejoras.filter((f) => f.mejora);
+  const nv = nivelPersonaje(piezasConPieza.length);
+  const equipoPuesto = piezasConPieza.filter((f) => f.mejora.slot !== "companero").map((f) => ({ emoji: f.mejora.emoji, nombre: f.mejora.nombre }));
+  const companero = piezasConPieza.find((f) => f.mejora.slot === "companero")?.mejora.emoji || null;
+  const privilegios = piezasConPieza.filter((f) => f.mejora.beneficio_tipo === "privilegio");
+  const privilegiosSinUsar = privilegios.filter((f) => !f.canjeado).length;
+
+  // Arriba va el personaje que le asignaste vos (uno de los 14), con el brillo, el
+  // equipo y el compañero que le dan sus piezas. Si todavía no le asignaste ninguno,
+  // se invita a elegirlo — el que arme o elija el estudiante en su portal no se usa acá.
   const personajeBanner = estudiante.personaje_docente_rol ? (
     <Suspense fallback={<span className="text-4xl">🎭</span>}>
-      <PersonajeRol rolKey={estudiante.personaje_docente_rol} genero={estudiante.personaje_docente_genero || "masculino"} size={92} />
+      <PersonajeConMejoras rolKey={estudiante.personaje_docente_rol} genero={estudiante.personaje_docente_genero || "masculino"} size={92}
+        nivel={nv.nivel} equipo={equipoPuesto} companero={companero} />
     </Suspense>
   ) : (
     <div className="flex flex-col items-center" style={{ color: "rgba(255,255,255,0.92)" }}>
@@ -1312,7 +1509,15 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
       <div className="relative h-28 flex items-center justify-center overflow-hidden rounded-t-xl"
         style={{ background: `linear-gradient(160deg, ${colorReino} 0%, ${colorReino}99 55%, #17264D 140%)` }}>
         <div aria-hidden className="absolute inset-0 opacity-20" style={{ backgroundImage: "radial-gradient(circle, #ffffff 1.2px, transparent 1.2px)", backgroundSize: "16px 16px" }} />
+        <CapaEstrellasBanner nivel={nv.nivel} />
         <div className="absolute top-2 left-2 z-10"><InclusionBadge estudiante={estudiante} /></div>
+        <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
+          {privilegiosSinUsar > 0 && (
+            <button type="button" onClick={() => setPrivilegiosAbierto(true)} title="Tiene privilegios para canjear"
+              className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: "#FBBF24", color: "#451A03", boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }}>🎟️ {privilegiosSinUsar}</button>
+          )}
+          {piezasConPieza.length > 0 && <InsigniaNivel nivel={nv.nivel} nombre={nv.nombre} color={nv.color} />}
+        </div>
         <button type="button" onClick={() => setSelectorAbierto(true)} title="Elegir el personaje de este estudiante"
           className="relative" style={{ filter: "drop-shadow(0 5px 8px rgba(0,0,0,0.35))" }}>{personajeBanner}</button>
       </div>
@@ -1332,6 +1537,10 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
                 <div className="absolute right-0 top-9 z-30 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1 text-left">
                   <button type="button" onClick={() => { setSelectorAbierto(true); setMenuAbierto(false); }}
                     className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50 text-slate-700">🎭 Cambiar personaje</button>
+                  {privilegios.length > 0 && (
+                    <button type="button" onClick={() => { setPrivilegiosAbierto(true); setMenuAbierto(false); }}
+                      className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50 text-slate-700">🎟️ Privilegios ({privilegios.length})</button>
+                  )}
                   <button type="button" onClick={() => { setNombreTemp(estudiante.nombre); setEditandoNombre(true); setMenuAbierto(false); }}
                     className="w-full text-left text-xs px-3 py-2 hover:bg-slate-50 text-slate-700">✏️ Editar nombre</button>
                   <label className="block w-full text-left text-xs px-3 py-2 hover:bg-slate-50 text-slate-700 cursor-pointer">
@@ -1447,6 +1656,10 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
           onClose={() => setSelectorAbierto(false)}
           onElegir={guardarPersonaje}
           onQuitar={() => guardarPersonaje(null, null)} />
+      )}
+      {privilegiosAbierto && (
+        <PrivilegiosEstudianteModal estudiante={estudiante} privilegios={privilegios} onClose={() => setPrivilegiosAbierto(false)}
+          onCambio={async () => { if (onMejorasCambiaron) await onMejorasCambiaron(); }} />
       )}
       {actasAbiertas && <ActasModal estudiante={estudiante} onClose={() => setActasAbiertas(false)} />}
       {inclusionAbierta && <InclusionModal estudiante={estudiante} onClose={() => setInclusionAbierta(false)} onGuardado={() => setInclusionAbierta(false)} />}
@@ -2233,6 +2446,8 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
   const [fotosMasivoAbierto, setFotosMasivoAbierto] = useState(false);
   const [importarDatosAbierto, setImportarDatosAbierto] = useState(false);
   const [observadoresGradoAbierto, setObservadoresGradoAbierto] = useState(false);
+  const [piezasAbierto, setPiezasAbierto] = useState(false);
+  const [mejorasPorEst, setMejorasPorEst] = useState({});
   const [modoSeleccion, setModoSeleccion] = useState(false);
   const [seleccionados, setSeleccionados] = useState([]);
   const [eliminandoVarios, setEliminandoVarios] = useState(false);
@@ -2245,8 +2460,14 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
     setRoles(rolesData);
     setCatalogoReinos(reinosData);
     setCargando(false);
+    // Las piezas de cada estudiante se piden aparte, sin frenar la lista — si todavía no
+    // se corrió el SQL de las piezas, simplemente no se muestra nada de eso.
+    api.fetchMejorasDeEstudiantes(data.map((e) => e.id)).then(setMejorasPorEst).catch(() => {});
   };
   useEffect(() => { cargar(); }, [gradoId]);
+  const recargarMejoras = async () => {
+    try { setMejorasPorEst(await api.fetchMejorasDeEstudiantes(estudiantes.map((e) => e.id))); } catch (e) { /* se reintenta en la próxima carga */ }
+  };
 
   const reinos = useMemo(() => {
     const set = new Set(estudiantes.map((s) => s.reino_actual || s.reino_original || "Sin grupo"));
@@ -2341,6 +2562,7 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
           <TarjetaAccion Icono={FileText} color={PALETA_ACCIONES[6]} label="Observadores del curso" onClick={() => setObservadoresGradoAbierto(true)} />
           <TarjetaAccion Icono={BookOpen} color={PALETA_ACCIONES[7]} label="Planilla en blanco" onClick={() => setPlanillaBlancoAbierta(true)} />
           <TarjetaAccion Icono={Package} color={PALETA_ACCIONES[8]} label="Importar varios" onClick={() => setImportarAbierto(true)} />
+          <TarjetaAccion Icono={IconoEstrella} color={{ fondo: "#FEF9C3", icono: "#A16207" }} label="Piezas del personaje" onClick={() => setPiezasAbierto(true)} />
           <TarjetaAccion Icono={Archive} color={{ fondo: "#FEE2E2", icono: "#B91C1C" }} label={modoSeleccion ? "Cancelar selección" : "Quitar varios"} destacada={modoSeleccion}
             onClick={() => { setModoSeleccion((v) => !v); setSeleccionados([]); setConfirmacionTexto(""); }} />
         </div>
@@ -2386,6 +2608,7 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
       {importarDatosAbierto && (
         <ImportarDatosPersonalesModal estudiantes={estudiantes} onClose={() => setImportarDatosAbierto(false)} onGuardado={cargar} />
       )}
+      {piezasAbierto && <PiezasPersonajeModal onClose={() => setPiezasAbierto(false)} />}
       {observadoresGradoAbierto && (
         <ObservadorPorGradoModal gradoId={gradoId} onClose={() => setObservadoresGradoAbierto(false)} />
       )}
@@ -2430,7 +2653,7 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {visibles.map((s) => (
-            <TarjetaEstudiante key={s.id} estudiante={s} reinos={reinos} catalogoReinos={catalogoReinos} onQuitar={quitar} onRenombrar={renombrar} onCambiarReino={cambiarReino} onAplicado={actualizarProgresoLocal} onFotoActualizada={actualizarFotoLocal} roles={roles} onCambiarRol={cambiarRol} onCodigoGenerado={actualizarCodigoLocal} grados={grados} gradoActual={gradoId} onTrasladado={cargar} onPersonajeCambiado={actualizarPersonajeLocal} />
+            <TarjetaEstudiante key={s.id} estudiante={s} reinos={reinos} catalogoReinos={catalogoReinos} onQuitar={quitar} onRenombrar={renombrar} onCambiarReino={cambiarReino} onAplicado={actualizarProgresoLocal} onFotoActualizada={actualizarFotoLocal} roles={roles} onCambiarRol={cambiarRol} onCodigoGenerado={actualizarCodigoLocal} grados={grados} gradoActual={gradoId} onTrasladado={cargar} onPersonajeCambiado={actualizarPersonajeLocal} mejoras={mejorasPorEst[s.id] || []} onMejorasCambiaron={recargarMejoras} />
           ))}
         </div>
       )}
