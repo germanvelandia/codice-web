@@ -1143,7 +1143,7 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
   const [selectorAbierto, setSelectorAbierto] = useState(false);
   const [guardandoPersonaje, setGuardandoPersonaje] = useState(false);
   const [aplicandoRapido, setAplicandoRapido] = useState(false);
-  const [libre, setLibre] = useState(null); // "xp" | "monedas" | null — cuál campo de cantidad libre está abierto
+  const [menuPuntos, setMenuPuntos] = useState(null); // "xp" | "monedas" | null — cuál desplegable de suma rápida está abierto
   const [valorLibre, setValorLibre] = useState("");
   const [destello, setDestello] = useState(null); // { tipo, texto } — el "+10" que aparece un instante
   const temporizadorDestello = useRef(null);
@@ -1223,6 +1223,8 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
     const n = parseInt(cantidad, 10);
     if (!n) return;
     if (Math.abs(n) > 1000 && !confirm(`¿Seguro que querés ${n > 0 ? "sumar" : "restar"} ${Math.abs(n)} de ${tipo === "xp" ? "experiencia" : "oro"}?`)) return;
+    setMenuPuntos(null);
+    setValorLibre("");
     setAplicandoRapido(true);
     try {
       const nuevo = await api.ajustarPuntosRapido(estudiante.id, tipo === "xp" ? { xp: n } : { monedas: n });
@@ -1236,38 +1238,42 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
     setAplicandoRapido(false);
   };
   const aplicarLibre = async () => {
-    const tipo = libre;
-    const valor = valorLibre;
-    setLibre(null); setValorLibre("");
-    if (tipo) await sumarRapido(tipo, valor);
+    if (menuPuntos) await sumarRapido(menuPuntos, valorLibre);
   };
+  const abrirMenuPuntos = (tipo) => { setValorLibre(""); setMenuPuntos((v) => (v === tipo ? null : tipo)); };
 
-  // Fila de botones +10 / +30 / +50 / # (cantidad libre, también para restar con un negativo).
-  const filaRapida = (tipo) => {
-    const estilo = tipo === "xp"
+  // Desplegable de la flechita de Experiencia u Oro: +10 / +30 / +50 y una cantidad
+  // libre (con un número negativo se resta). Solo se ve mientras está abierto, así
+  // la tarjeta no se llena de botones.
+  const menuRapido = (tipo) => {
+    if (menuPuntos !== tipo) return null;
+    const esXp = tipo === "xp";
+    const estilo = esXp
       ? { background: "#F5F3FF", color: "#6D28D9", borderColor: "#DDD6FE" }
       : { background: "#FFFBEB", color: "#B45309", borderColor: "#FDE68A" };
     return (
-      <div className="mt-1.5">
-        <div className="flex items-center gap-1">
-          {[10, 30, 50].map((n) => (
-            <button key={n} type="button" disabled={aplicandoRapido} onClick={() => sumarRapido(tipo, n)}
-              className="flex-1 text-[10px] font-bold rounded-full py-1 border disabled:opacity-50" style={estilo}>+{n}</button>
-          ))}
-          <button type="button" onClick={() => { setLibre(libre === tipo ? null : tipo); setValorLibre(""); }}
-            title="Otra cantidad (con un número negativo se resta)"
-            className="w-7 text-[10px] font-bold rounded-full py-1 border" style={estilo}>#</button>
-        </div>
-        {libre === tipo && (
-          <div className="flex items-center gap-1 mt-1">
-            <input type="number" autoFocus value={valorLibre} onChange={(e) => setValorLibre(e.target.value)} placeholder="Ej: 25 o -5"
-              onKeyDown={(e) => { if (e.key === "Enter") aplicarLibre(); if (e.key === "Escape") { setLibre(null); setValorLibre(""); } }}
+      <>
+        <div className="fixed inset-0 z-20" onClick={() => { setMenuPuntos(null); setValorLibre(""); }} />
+        <div className={`absolute ${esXp ? "left-0" : "right-0"} top-full mt-1 z-30 w-44 bg-white rounded-xl shadow-lg border border-slate-200 p-2`}>
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1.5 px-0.5">Sumar {esXp ? "experiencia" : "oro"}</div>
+          <div className="flex items-center gap-1">
+            {[10, 30, 50].map((n) => (
+              <button key={n} type="button" disabled={aplicandoRapido} onClick={() => sumarRapido(tipo, n)}
+                className="flex-1 text-xs font-bold rounded-full py-1.5 border disabled:opacity-50" style={estilo}>+{n}</button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1 mt-1.5">
+            <span className="text-xs font-bold text-slate-400 w-4 text-center">#</span>
+            <input type="number" value={valorLibre} onChange={(e) => setValorLibre(e.target.value)} placeholder="Otra (ej: 25 o -5)"
+              onKeyDown={(e) => { if (e.key === "Enter") aplicarLibre(); if (e.key === "Escape") { setMenuPuntos(null); setValorLibre(""); } }}
               className="w-full min-w-0 text-[11px] rounded-lg px-2 py-1 border border-slate-200 outline-none" />
             <button type="button" disabled={aplicandoRapido} onClick={aplicarLibre}
               className="text-[11px] font-bold px-2 py-1 rounded-lg bg-violet-500 text-white disabled:opacity-50">✓</button>
           </div>
-        )}
-      </div>
+          <button type="button" onClick={() => { setMenuPuntos(null); setValorLibre(""); setPuntosAbierto(true); }}
+            className="mt-1.5 w-full text-left text-[11px] text-slate-500 hover:text-violet-600 px-0.5">⚡ Más acciones…</button>
+        </div>
+      </>
     );
   };
 
@@ -1278,9 +1284,9 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
   const { level, next, pct } = nextLevel(progreso.xp || 0);
   const fotoUrl = api.urlFotoEstudiante(estudiante);
 
-  // Las flechitas de Vida / Experiencia / Oro abren el mismo panel de puntos de siempre.
-  const botonFlecha = (titulo) => (
-    <button type="button" onClick={() => setPuntosAbierto(true)} title={titulo}
+  // La flechita de Vida abre el panel completo de acciones; las de Experiencia y Oro abren su desplegable de suma rápida.
+  const botonFlecha = (titulo, alTocar = () => setPuntosAbierto(true)) => (
+    <button type="button" onClick={alTocar} title={titulo}
       className="w-8 h-8 rounded-full bg-white shadow flex items-center justify-center shrink-0 text-slate-500">
       <IconoFlecha />
     </button>
@@ -1405,12 +1411,14 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
               <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Experiencia</span>
               {destello && destello.tipo === "xp" && <span className="text-[11px] font-bold text-emerald-600">{destello.texto}</span>}
             </div>
-            <div className="flex items-center h-10 rounded-full pl-3 pr-1" style={{ background: "linear-gradient(90deg, #8B5CF6, #A78BFA)" }}>
-              <span className="text-white text-sm">✨</span>
-              <span className="flex-1 text-center text-white font-bold text-sm">{progreso.xp || 0}</span>
-              {botonFlecha("Más opciones de puntos")}
+            <div className="relative">
+              <div className="flex items-center h-10 rounded-full pl-3 pr-1" style={{ background: "linear-gradient(90deg, #8B5CF6, #A78BFA)" }}>
+                <span className="text-white text-sm">✨</span>
+                <span className="flex-1 text-center text-white font-bold text-sm">{progreso.xp || 0}</span>
+                {botonFlecha("Sumar experiencia", () => abrirMenuPuntos("xp"))}
+              </div>
+              {menuRapido("xp")}
             </div>
-            {filaRapida("xp")}
             <div className="h-1 rounded-full bg-violet-100 overflow-hidden mt-1.5">
               <div className="h-full rounded-full bg-violet-500" style={{ width: `${pct}%` }} />
             </div>
@@ -1421,12 +1429,14 @@ function TarjetaEstudiante({ estudiante, onQuitar, onRenombrar, onAplicado, onFo
               <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Oro</span>
               {destello && destello.tipo === "monedas" && <span className="text-[11px] font-bold text-emerald-600">{destello.texto}</span>}
             </div>
-            <div className="flex items-center h-10 rounded-full pl-3 pr-1" style={{ background: "linear-gradient(90deg, #F59E0B, #FBBF24)" }}>
-              <span className="text-sm">🪙</span>
-              <span className="flex-1 text-center text-white font-bold text-sm">{progreso.monedas || 0}</span>
-              {botonFlecha("Más opciones de puntos")}
+            <div className="relative">
+              <div className="flex items-center h-10 rounded-full pl-3 pr-1" style={{ background: "linear-gradient(90deg, #F59E0B, #FBBF24)" }}>
+                <span className="text-sm">🪙</span>
+                <span className="flex-1 text-center text-white font-bold text-sm">{progreso.monedas || 0}</span>
+                {botonFlecha("Sumar oro", () => abrirMenuPuntos("monedas"))}
+              </div>
+              {menuRapido("monedas")}
             </div>
-            {filaRapida("monedas")}
           </div>
         </div>
       </div>
