@@ -1230,7 +1230,7 @@ function SidebarTarjetasEstudiante({ activo, onCambiar, monedas, gradoId, onCerr
     <>
       <div className="hidden md:block w-[210px] shrink-0 sticky top-0 h-screen">{contenido}</div>
 
-      <div className="md:hidden sticky top-0 z-30 flex items-center justify-between px-4 py-2.5" style={{ background: "#17264D" }}>
+      <div className="md:hidden w-full sticky top-0 z-30 flex items-center justify-between px-4 py-2.5" style={{ background: "#17264D" }}>
         <button onClick={() => elegir("inicio")} className="flex items-center gap-2">
           <span className="text-lg">🧭</span>
           <span className="text-white text-sm font-bold tracking-[0.12em]">CÓDICE</span>
@@ -2422,7 +2422,7 @@ function PortalEstudiante() {
     const pctAsis = totalAsis > 0 ? Math.round((Number(datos.presentes) / totalAsis) * 100) : null;
 
     return (
-      <div className="min-h-screen flex" style={{ background: "#FBFBFD" }}>
+      <div className="min-h-screen flex flex-col md:flex-row" style={{ background: "#FBFBFD" }}>
         {nuevosLogros.length > 0 && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }} onClick={() => setNuevosLogros((prev) => prev.slice(1))}>
             <div onClick={(e) => e.stopPropagation()} className="rounded-3xl p-6 text-center max-w-xs" style={{ background: "linear-gradient(160deg, #1c2f5e, #0f1932)", border: "2px solid #F59E0B" }}>
@@ -2920,7 +2920,7 @@ function SidebarTarjetas({ activo, onCambiar, email, institucion, onAdmin, onIns
       <div className="hidden md:block w-[210px] shrink-0 sticky top-0 h-screen">{contenido}</div>
 
       {/* Móvil: barra angosta con hamburguesa + cajón deslizante */}
-      <div className="md:hidden sticky top-0 z-30 flex items-center justify-between px-4 py-2.5" style={{ background: "#17264D" }}>
+      <div className="md:hidden w-full sticky top-0 z-30 flex items-center justify-between px-4 py-2.5" style={{ background: "#17264D" }}>
         <button onClick={() => elegir("inicio")} className="flex items-center gap-2">
           <span className="text-lg">🧭</span>
           <span className="text-white text-sm font-bold tracking-[0.12em]">CÓDICE</span>
@@ -3021,7 +3021,7 @@ function Panel({ session }) {
   };
 
   return (
-    <div className="min-h-screen flex" style={{ background: "#FBFBFD" }}>
+    <div className="min-h-screen flex flex-col md:flex-row" style={{ background: "#FBFBFD" }}>
       <SidebarTarjetas activo={claveActivaMenu} onCambiar={irA} email={session.user.email} institucion={institucion}
         onAdmin={() => setAdministracionAbierta(true)} onInstitucion={() => setInstitucionAbierta(true)}
         onSalir={() => supabase.auth.signOut()} onBuscarEstudiante={irACalificacionesDesdeBusqueda}
