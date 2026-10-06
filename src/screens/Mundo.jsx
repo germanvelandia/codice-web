@@ -24,7 +24,7 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
   useNivelesPersonaje(); // para que el nivel se actualice si cambian en "Editar niveles"
 
   const cargar = async () => {
-    const [pers, mej, mis, hec, zon] = await Promise.allSettled([api.fetchPersonajeElegido(idEst), api.fetchMejorasDeEstudiante(idEst), mundoApi.fetchMisionesMundo(estudianteInfo.grado_id), mundoApi.fetchHechasMundo(idEst), mundoApi.fetchZonasMundo(estudianteInfo.grado_id)]);
+    const [pers, mej, mis, hec, zon, pos] = await Promise.allSettled([api.fetchPersonajeElegido(idEst), api.fetchMejorasDeEstudiante(idEst), mundoApi.fetchMisionesMundo(estudianteInfo.grado_id), mundoApi.fetchHechasMundo(idEst), mundoApi.fetchZonasMundo(estudianteInfo.grado_id), mundoApi.fetchPosadaMundo()]);
     // El "modo prueba" es SOLO para cuando todavía no se corrió el SQL 62 (no existen las tablas).
     // Si las tablas existen pero el curso no tiene misiones, el mundo funciona normal, sin misiones.
     const hayTablas = mis.status === "fulfilled" && hec.status === "fulfilled";
@@ -37,6 +37,7 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
       // Si todavía no se corrió el SQL 64, solo existe la Aldea (ninguna zona nueva está abierta).
       zonasAbiertas: zon.status === "fulfilled" ? zon.value.abiertas : [],
       zonasRequisitos: zon.status === "fulfilled" ? zon.value.requisitos : {},
+      posada: pos.status === "fulfilled" ? pos.value : { activa: false, costo: 15, vida: 25 },
     });
     setCargando(false);
   };
@@ -58,10 +59,11 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
         mundo = await iniciarMundo(raizRef.current, {
           sprites: SPRITES_MUNDO, modoPrueba: info.modoPrueba, misiones: info.misiones, hechas: info.hechas,
           jugador: {
-            id: idEst, nombre: primerNombre(estudianteInfo.nombre), clave: `${info.personaje.rolKey}_${info.personaje.genero}`, xp: datos?.xp ?? 0, oro: datos?.monedas ?? 0,
+            id: idEst, nombre: primerNombre(estudianteInfo.nombre), clave: `${info.personaje.rolKey}_${info.personaje.genero}`, xp: datos?.xp ?? 0, oro: datos?.monedas ?? 0, vida: typeof datos?.vida === "number" ? datos.vida : null,
             nivel: nv && nv.nivel > 1 ? { nivel: nv.nivel, nombre: nv.nombre, color: nv.color } : null, companero,
           },
-          zonasAbiertas: info.zonasAbiertas, zonasRequisitos: info.zonasRequisitos,
+          zonasAbiertas: info.zonasAbiertas, zonasRequisitos: info.zonasRequisitos, posada: info.posada,
+          alDescansar: () => mundoApi.descansarEnPosada(idEst),
           alCompletar: async (m) => (info.modoPrueba ? { ok: true } : mundoApi.completarMisionMundo(idEst, m)),
           alSalir: () => { setJugando(false); },
         });
