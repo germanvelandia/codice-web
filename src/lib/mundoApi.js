@@ -58,3 +58,40 @@ export async function completarMisionMundo(estudianteId, mision) {
     return { ok: false, mensaje: (e && e.message) || "no se pudo entregar el premio" };
   }
 }
+
+// =====================================================================================
+//  PARA EL DOCENTE: editar las misiones del mundo (se usa desde Estudiantes → Misiones del Mundo)
+// =====================================================================================
+
+// Todas las misiones, también las ocultas, con los campos que se editan.
+export async function fetchMisionesMundoAdmin() {
+  const { data, error } = await supabase.from("mundo_misiones").select("*").order("orden").order("id");
+  if (error) throw error;
+  return (data || []).map((m) => ({ ...normalizarMision(m), activo: m.activo !== false, orden: Number(m.orden) || 0 }));
+}
+
+export async function crearMisionMundo(campos) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("mundo_misiones").insert({ ...campos, docente_id: userData?.user?.id || null }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function editarMisionMundo(id, campos) {
+  const { error } = await supabase.from("mundo_misiones").update(campos).eq("id", id);
+  if (error) throw error;
+}
+
+// Borrar una misión también borra el registro de quiénes la completaron (los premios ya entregados no se tocan).
+export async function eliminarMisionMundo(id) {
+  const { error } = await supabase.from("mundo_misiones").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// Cuántos estudiantes completaron cada misión: { [misionId]: cantidad }
+export async function fetchConteoHechasMundo() {
+  const { data, error } = await supabase.from("mundo_misiones_hechas").select("mision_id");
+  if (error) throw error;
+  const conteo = {}; (data || []).forEach((f) => { conteo[f.mision_id] = (conteo[f.mision_id] || 0) + 1; });
+  return conteo;
+}
