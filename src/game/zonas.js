@@ -26,16 +26,30 @@ export const ZONAS = [
     key: "bosque", nombre: "Bosque de la Curiosidad", emoji: "🌲", corto: "el Bosque", de: "del Bosque", a: "al Bosque", guardia: "Guardia del Bosque", previa: "aldea", requisitoPorDefecto: 3,
     insignia: { nombre: "Insignia de la Curiosidad", emoji: "🌿", color: "#22c55e" },
     guardian: { nombre: "Silvano", titulo: "Guardián del Bosque", sprite: "cronista_masculino", reto: "El bosque premia a quien pregunta. ¿Tienes la curiosidad y el saber para vencerme?" },
+    retadores: [
+      { id: "bosque-1", nombre: "Garra Negra", sprite: "defensor_masculino", frase: "¡Alto ahí, viajero! Este sendero es mío. Respóndeme bien o pagarás el peaje con tu salud." },
+      { id: "bosque-2", nombre: "La Sombra Hueca", sprite: "peregrino_femenino", frase: "Entre los árboles, quien no sabe se pierde… ¿Sabes tú lo suficiente?" },
+      { id: "bosque-3", nombre: "El Acechador", sprite: "heraldo_masculino", frase: "Te seguía desde el claro. Veamos si tu cabeza vale tanto como tu mochila." },
+      { id: "bosque-4", nombre: "Dama de las Espinas", sprite: "consejero_femenino", frase: "Las espinas hieren a quien se equivoca. ¡Responde con cuidado!" },
+    ],
     lugares: [
       { key: "claro", emoji: "🌼", nombre: "Claro del Bosque" },
       { key: "arroyo", emoji: "💧", nombre: "Arroyo Cantarino" },
       { key: "mirador", emoji: "⛰️", nombre: "Mirador" },
+      { key: "campamento", emoji: "🏕️", nombre: "Campamento del Ermitaño" },
+      { key: "cascada", emoji: "💦", nombre: "Cascada Escondida" },
+      { key: "roble", emoji: "🌳", nombre: "Gran Roble" },
+      { key: "ruinas", emoji: "🏛️", nombre: "Ruinas Antiguas" },
     ],
   },
   {
     key: "montana", nombre: "Montaña del Esfuerzo", emoji: "🏔️", corto: "la Montaña", de: "de la Montaña", a: "a la Montaña", guardia: "Guardia de la Montaña", previa: "bosque", requisitoPorDefecto: 3,
     insignia: { nombre: "Insignia del Esfuerzo", emoji: "⛰️", color: "#64748b" },
     guardian: { nombre: "Roca", titulo: "Guardián de la Montaña", sprite: "guardian_masculino", reto: "Nadie llega a mi cumbre sin esfuerzo. ¡Veamos de qué estás hecho!" },
+    retadores: [
+      { id: "montana-1", nombre: "Gólem de Piedra", sprite: "guardian_femenino", frase: "La montaña no perdona a los que dudan. ¡Responde o siente su peso!" },
+      { id: "montana-2", nombre: "Ladrón de Cumbres", sprite: "cronista_masculino", frase: "Aquí arriba solo sobrevive el que sabe. ¡Demuéstralo!" },
+    ],
     lugares: [
       { key: "sendero", emoji: "🥾", nombre: "Sendero de Piedra" },
       { key: "cueva", emoji: "🕳️", nombre: "Cueva del Eco" },
@@ -46,6 +60,10 @@ export const ZONAS = [
     key: "lago", nombre: "Lago de la Reflexión", emoji: "🏞️", corto: "el Lago", de: "del Lago", a: "al Lago", guardia: "Guardia del Lago", previa: "montana", requisitoPorDefecto: 3,
     insignia: { nombre: "Insignia de la Reflexión", emoji: "💧", color: "#0ea5e9" },
     guardian: { nombre: "Marisol", titulo: "Guardiana del Lago", sprite: "consejero_femenino", reto: "Aquí se piensa antes de responder. ¿Estás listo para el último reto?" },
+    retadores: [
+      { id: "lago-1", nombre: "Espectro del Lago", sprite: "heraldo_femenino", frase: "Las aguas guardan a quienes no supieron responder… ¿serás el próximo?" },
+      { id: "lago-2", nombre: "Corsario Mudo", sprite: "maestro_gremio_masculino", frase: "No hablo, pero mis preguntas hieren. ¡Contesta rápido!" },
+    ],
     lugares: [
       { key: "orilla", emoji: "🏖️", nombre: "Orilla" },
       { key: "muelle", emoji: "🛶", nombre: "Muelle" },
@@ -91,3 +109,6 @@ export function estadoZonas({ misiones = [], hechas = [], abiertas = [], requisi
 export function misionesDisponibles(misiones, estado) {
   return misiones.filter((m) => (estado[zonaDeMision(m)] || {}).desbloqueada);
 }
+
+// Todos los retadores del mundo, con la zona a la que pertenecen.
+export const RETADORES = ZONAS.flatMap((z) => (z.retadores || []).map((r) => ({ ...r, zona: z.key })));
