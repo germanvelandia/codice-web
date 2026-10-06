@@ -9,6 +9,7 @@
 
 import { ZONAS, RETADORES, estadoZonas, misionesDisponibles, zonaDeMision } from "./zonas";
 import { armarPool, crearDuelo, esperaRestanteMin } from "./duelo";
+import { ITEMS, RECETAS, RECURSOS_POR_ZONA, MAX_POR_ITEM, puedeFabricar, faltantes, cantidadPorRecoleccion, esHerramienta } from "./items";
 
 const TILE = 32;
 const DIRS8 = ["east", "south-east", "south", "south-west", "west", "north-west", "north", "north-east"];
@@ -100,6 +101,19 @@ const CSS = `
 .mundo .m-viaje { margin-top: 8px; border: 0; border-radius: 99px; padding: 7px 14px; font-weight: 800; font-size: 12px; background: var(--acento); color: #fff; cursor: pointer; font-family: inherit; }
 .mundo .m-barra { height: 9px; border-radius: 99px; background: var(--borde); overflow: hidden; margin: 6px 0 2px; }
 .mundo .m-barra > i { display: block; height: 100%; background: var(--acento); }
+.mundo .m-mochila { position: absolute; inset: 0; z-index: 25; background: rgba(8,14,32,.8); display: flex; align-items: center; justify-content: center; padding: 14px; overflow-y: auto; }
+.mundo .m-tabs { display: flex; gap: 6px; margin: 4px 0 10px; }
+.mundo .m-tab { flex: 1; padding: 8px; border-radius: 10px; border: 2px solid var(--borde); background: var(--fondo); color: var(--texto); font-weight: 700; font-size: 13px; }
+.mundo .m-tab.act { border-color: var(--acento); color: var(--acento); }
+.mundo .m-inv { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
+.mundo .m-slot { border: 2px solid var(--borde); border-radius: 12px; background: var(--fondo); padding: 8px 6px; text-align: center; font-size: 12px; display: flex; flex-direction: column; gap: 2px; align-items: center; }
+.mundo .m-slot .e { font-size: 26px; line-height: 1.1; } .mundo .m-slot b { font-size: 13px; } .mundo .m-slot small { color: var(--suave); font-size: 11px; line-height: 1.25; }
+.mundo .m-chico { margin-top: 4px; border: 0; border-radius: 99px; padding: 5px 10px; font-weight: 800; font-size: 11px; background: var(--acento); color: #fff; }
+.mundo .m-chico:disabled { opacity: .4; cursor: default; }
+.mundo .m-receta { border: 2px solid var(--borde); border-radius: 12px; background: var(--fondo); padding: 8px 10px; margin-bottom: 7px; display: flex; align-items: center; gap: 10px; }
+.mundo .m-receta .e { font-size: 28px; } .mundo .m-receta .t { flex: 1; min-width: 0; font-size: 12px; line-height: 1.4; } .mundo .m-receta .t b { font-size: 14px; }
+.mundo .m-ing { display: inline-block; margin-right: 8px; white-space: nowrap; } .mundo .m-ing.falta { color: var(--mal); font-weight: 700; }
+.mundo .m-msg { font-size: 13px; padding: 8px 11px; border-radius: 10px; margin-bottom: 8px; background: var(--ok-s); color: var(--ok); font-weight: 700; } .mundo .m-msg.mal { background: var(--mal-s); color: var(--mal); }
 .mundo .m-fundido { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity .18s; }
 .mundo .m-fundido.ver { opacity: 1; pointer-events: auto; }
 .mundo .m-fin { position: absolute; inset: 0; background: rgba(8,14,32,.78); display: flex; align-items: center; justify-content: center; padding: 20px; }
@@ -131,6 +145,7 @@ const PLANTILLA = `
       <span class="m-chip m-vida oculto">❤️ <span class="h-vida">100</span></span>
       <span class="m-chip">🎯 <span class="h-mis">0/0</span></span>
       <span class="m-chip">⭐ <span class="h-est">0/6</span></span>
+      <button class="m-boton b-mochila oculto" aria-label="Mochila">🎒 Mochila</button>
       <button class="m-boton b-mapa" aria-label="Mapa del mundo">🗺️ Mapa</button>
       <button class="m-boton b-sonido" aria-label="Sonido">🔊</button>
       <button class="m-boton b-salir">↩ Salir</button>
@@ -144,6 +159,7 @@ const PLANTILLA = `
   <button class="m-accion oculto" aria-label="Interactuar">💬</button>
   <div class="m-dialogo oculto"></div>
   <div class="m-mapa oculto"></div>
+  <div class="m-mochila oculto"></div>
   <div class="m-duelo oculto"></div>
   <div class="m-fundido"></div>
   <div class="m-fin oculto"><div class="m-tarjeta"><div class="m-grande">🏆</div><h2>¡Completaste todas las misiones!</h2><p class="m-fin-texto"></p><button class="b-seguir">Seguir explorando</button></div></div>
@@ -591,6 +607,8 @@ function crearZonaNatural(def) {
     cols: COLS, filas: FILAS, vecinos: def.vecinos, retadores: (meta.retadores || []).map((r) => ({ x: r.cx * TILE + 16, y: r.cy * TILE + 24 })),
     npcs: [], puertas: [], salidas: [{ x: 0, y: ey * TILE, w: 40, h: 4 * TILE, volver: true }], slotsPorLugar,
     bloqueado,
+    tipoEn: (x, y) => { const tx = Math.floor(x / TILE), ty = Math.floor(y / TILE); return dentro(tx, ty) ? tipo[ty][tx] : -1; },
+    aguaCerca: (x, y, r) => { const cx = Math.floor(x / TILE), cy = Math.floor(y / TILE); for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if (dentro(cx + dx, cy + dy) && tipo[cy + dy][cx + dx] === K.AGUA) return true; return false; },
     piso: (x, y) => { const tx = Math.floor(x / TILE), ty = Math.floor(y / TILE); return dentro(tx, ty) ? pisoDe[tipo[ty][tx]] || "pasto" : "pasto"; },
     puntoLibre(r, chocaFn) { for (let i = 0; i < 600; i++) { const x = (5 + r() * (COLS - 12)) * TILE, y = (5 + r() * (FILAS - 10)) * TILE; if (K_CAMINABLES.has(tipo[Math.floor(y / TILE)][Math.floor(x / TILE)]) && !chocaFn(x, y) && Math.hypot(x - spawn.x, y - spawn.y) > 80) return { x, y }; } return { x: spawn.x + 100, y: spawn.y }; },
     objetos(lista, ctx, camX, camY, visible) {
@@ -1059,6 +1077,30 @@ export async function iniciarMundo(raiz, op) {
     });
   });
 
+  // ---- recursos: puntos para recoger madera, piedra, peces y hierba (cada uno pide acertar una pregunta) ----
+  const RC = op.recolecta && op.recolecta.activo ? op.recolecta : null;
+  const inv = { ...((RC && RC.inventario) || {}) };
+  let recogidoHoy = (RC && RC.hoy) || 0;
+  if (RC) naturales.forEach((esc, zi) => {
+    const lista = RECURSOS_POR_ZONA[esc.zona] || [], r = rng(9100 + zi * 17), puestos = [];
+    const fijos = esc.npcs.filter((n) => n.tipo !== "aldeano");
+    for (const [item, cuantos] of lista) {
+      let hechos = 0, intentos = 0;
+      while (hechos < cuantos && intentos++ < 4000) {
+        const x = (4 + r() * (esc.cols - 8)) * TILE, y = (4 + r() * (esc.filas - 8)) * TILE, t = esc.tipoEn(x, y);
+        if (!K_CAMINABLES.has(t) || t === K.CAMINO || t === K.PUENTE || t === K.PIEDRA) continue;           // fuera de los senderos y de los lugares de misión
+        const agua = esc.aguaCerca(x, y, 2);
+        if (item === "pez" ? !agua : agua) continue;                                                       // los peces, junto al agua; lo demás, lejos de ella
+        if (chocaEn(esc, x, y)) continue;
+        if (Math.hypot(x - esc.spawn.x, y - esc.spawn.y) < 170) continue;
+        if (esc.guardian && Math.hypot(x - esc.guardian.x, y - esc.guardian.y) < 150) continue;
+        if (fijos.some((n) => Math.hypot(n.x - x, n.y - y) < 80) || puestos.some((p) => Math.hypot(p.x - x, p.y - y) < 90)) continue;
+        const nodo = { tipo: "recurso", item, zona: esc.zona, nombre: ITEMS[item].nombre, x, y, dir: "south", radio: 38, solido: true, hastaMs: 0 };
+        puestos.push(nodo); esc.npcs.push(nodo); hechos++;
+      }
+    }
+  });
+
   // ---- aldeanos: muchos personajes caminando por ahí ----
   let contadorAldeanos = 0;
   function poblar(esc, cantidad) {
@@ -1076,7 +1118,7 @@ export async function iniciarMundo(raiz, op) {
   const estado = {
     activo: true, escena: exterior, clave: claveJugador, nombre: J.nombre || "Estudiante", x: exterior.spawn.x, y: exterior.spawn.y, dir: "south", caminando: false,
     xp: J.xp || 0, oro: J.oro || 0, vida: typeof J.vida === "number" ? J.vida : null, descansando: false, ganado: { xp: 0, oro: 0 }, est: 0, cercano: null, dialogo: null, avisos: [], fase: 0, terminado: false, cambiando: false, pasoT: 0.3,
-    comp: { x: exterior.spawn.x, y: exterior.spawn.y }, hechas, fasePaso: 0, movio: false, mapaAbierto: false, duelo: null,
+    comp: { x: exterior.spawn.x, y: exterior.spawn.y }, hechas, fasePaso: 0, movio: false, mapaAbierto: false, duelo: null, mochilaAbierta: false,
   };
   const teclas = new Set(), joy = { x: 0, y: 0 };
 
@@ -1401,7 +1443,7 @@ export async function iniciarMundo(raiz, op) {
   }
   // ---- el mapa del mundo: las zonas, cuáles están abiertas y qué falta para entrar ----
   function abrirMapa() {
-    if (estado.dialogo || estado.cambiando || estado.duelo) return;
+    if (estado.dialogo || estado.cambiando || estado.duelo || estado.mochilaAbierta) return;
     estado.mapaAbierto = true; teclas.clear(); joy.x = joy.y = 0;
     const aqui = estado.escena.zona || "aldea", mapa = q(".m-mapa");
     const tarjetas = ZONAS.map((z) => {
@@ -1430,9 +1472,116 @@ export async function iniciarMundo(raiz, op) {
   }
   function cerrarMapa() { estado.mapaAbierto = false; q(".m-mapa").classList.add("oculto"); cv.focus(); }
   function interactuar() {
-    if (estado.dialogo || estado.mapaAbierto || estado.duelo || estado.cambiando || !estado.activo || !estado.cercano) return;
+    if (estado.dialogo || estado.mapaAbierto || estado.mochilaAbierta || estado.duelo || estado.cambiando || !estado.activo || !estado.cercano) return;
     const n = estado.cercano;
-    if (n.tipo === "puerta") entrarEdificio(n.edificio); else if (n.tipo === "guardia") abrirGuardia(n); else if (n.tipo === "posadero") abrirPosada(n); else if (n.tipo === "guardian") abrirGuardian(n); else if (n.tipo === "retador") abrirRetador(n, false); else if (n.tipo === "mision") abrirMision(n); else if (n.tipo === "aldeano") abrirCharla(n);
+    if (n.tipo === "puerta") entrarEdificio(n.edificio); else if (n.tipo === "guardia") abrirGuardia(n); else if (n.tipo === "posadero") abrirPosada(n); else if (n.tipo === "guardian") abrirGuardian(n); else if (n.tipo === "retador") abrirRetador(n, false); else if (n.tipo === "mision") abrirMision(n); else if (n.tipo === "aldeano") abrirCharla(n); else if (n.tipo === "recurso") abrirRecurso(n);
+  }
+
+  // ---- recoger recursos: cada punto hace una pregunta; si se acierta, se recoge (hay un límite por día) ----
+  const poolRecurso = (zona) => { const p = poolDeZona(zona); return p.length ? p : armarPool(misiones, []); };
+  function tarjetaRecurso(n, cuerpo, botones) {
+    const d = abrirTarjeta(`<div class="m-cab"><span class="m-emo">${ITEMS[n.item].emoji}</span><div><div class="m-quien">${html(n.nombre)}</div><div class="m-titulo">Recurso · hoy ${recogidoHoy}${RC.limite > 0 ? "/" + RC.limite : ""}</div></div><button class="m-cerrar" data-a="cerrar" aria-label="Cerrar">✕</button></div>${cuerpo}${botones || ""}`);
+    d.querySelectorAll('[data-a="cerrar"]').forEach((b) => (b.onclick = cerrarDialogo)); return d;
+  }
+  function abrirRecurso(n) {
+    if (!RC) return;
+    estado.dialogo = n; n.hablando = true; snd.hablar();
+    const cerrar = '<button class="m-ok" data-a="cerrar">Entendido</button>';
+    if (RC.limite > 0 && recogidoHoy >= RC.limite) { tarjetaRecurso(n, `<p class="m-texto">Hoy ya recogiste todo lo que podías (<b>${RC.limite}</b>). ¡Vuelve mañana! 🌙</p>`, cerrar); return; }
+    if ((inv[n.item] || 0) >= MAX_POR_ITEM) { tarjetaRecurso(n, `<p class="m-texto">Tu mochila ya tiene el máximo de ${ITEMS[n.item].nombre.toLowerCase()} (${MAX_POR_ITEM}). Fabrica algo para hacer espacio.</p>`, cerrar); return; }
+    const pool = poolRecurso(n.zona);
+    if (!pool.length) { tarjetaRecurso(n, '<p class="m-texto">Todavía no hay preguntas preparadas para recoger aquí.</p>', cerrar); return; }
+    const rand = op.rngDuelo || Math.random, p = pool[Math.floor(rand() * pool.length)];
+    const dd = crearDuelo({ pool: [p], aciertos: 1, vidas: 1, rand }), q1 = dd.actual();
+    const ops = q1.opciones.map((o, i) => `<button class="m-opcion" data-i="${i}">${i + 1}. ${html(o)}</button>`).join("");
+    const d = tarjetaRecurso(n, `<p class="m-texto">Para recoger ${ITEMS[n.item].emoji} responde bien esta pregunta:<br><b>${html(q1.texto)}</b></p><div class="m-caja">${ops}</div>`);
+    let listo = false;
+    d.querySelectorAll(".m-opcion").forEach((b) => (b.onclick = () => { if (listo) return; listo = true; responderRecurso(n, dd, Number(b.dataset.i), d); }));
+  }
+  async function responderRecurso(n, dd, i, d) {
+    const r = dd.responder(i), caja = d.querySelector(".m-caja");
+    d.querySelectorAll(".m-opcion").forEach((b, k) => { b.disabled = true; if (k === r.correcta) b.classList.add("bien"); else if (k === i) b.classList.add("mal"); });
+    const fin = (clase, texto, extra) => { if (estado.dialogo !== n) return; caja.insertAdjacentHTML("beforeend", `<div class="m-retro ${clase}">${texto}</div>${extra || ""}<button class="m-ok" data-a="cerrar">Entendido</button>`); caja.querySelectorAll('[data-a="cerrar"]').forEach((b) => (b.onclick = cerrarDialogo)); };
+    if (!r.acierto) {
+      snd.mal(); if (RC.espera > 0) n.hastaMs = ahoraMs() + RC.espera * 60000;
+      fin("mal", `Esa no era. ${r.retro ? html(r.retro) + "<br>" : ""}${RC.espera > 0 ? `El punto queda agotado <b>${RC.espera} min</b>; busca otro o vuelve luego.` : "Puedes intentarlo de nuevo."}`); return;
+    }
+    snd.bien();
+    caja.insertAdjacentHTML("beforeend", '<div class="m-retro bien" data-c="esp">⏳ Recogiendo…</div>');
+    let res;
+    try {
+      if (op.alRecolectar) res = await op.alRecolectar({ item: n.item, zona: n.zona });
+      else { // sin base de datos (demo): se simula con las mismas reglas
+        if (RC.limite > 0 && recogidoHoy >= RC.limite) res = { ok: false, limite: true };
+        else { let dar = cantidadPorRecoleccion(n.item, inv, RC.cantidad); if (RC.limite > 0) dar = Math.min(dar, RC.limite - recogidoHoy); dar = Math.min(dar, MAX_POR_ITEM - (inv[n.item] || 0)); res = { ok: true, cantidad: dar, inventario: { ...inv, [n.item]: (inv[n.item] || 0) + dar }, hoy: recogidoHoy + dar }; }
+      }
+    } catch (e) { res = { ok: false, error: (e && e.message) || "No se pudo guardar." }; }
+    const esp = caja.querySelector('[data-c="esp"]'); if (esp) esp.remove();
+    if (!vivo) return;
+    if (res && res.ok) {
+      Object.keys(inv).forEach((k) => delete inv[k]); Object.assign(inv, res.inventario || {}); recogidoHoy = res.hoy ?? recogidoHoy + (res.cantidad || 0);
+      if (RC.respawn > 0) n.hastaMs = ahoraMs() + RC.respawn * 60000;
+      aviso(`+${res.cantidad} ${ITEMS[n.item].emoji}`, "#bbf7d0"); snd.estrella(); { const tt = d.querySelector(".m-titulo"); if (tt) tt.textContent = `Recurso · hoy ${recogidoHoy}${RC.limite > 0 ? "/" + RC.limite : ""}`; }
+      fin("bien", `¡Correcto! Recogiste <b>+${res.cantidad} ${ITEMS[n.item].emoji} ${ITEMS[n.item].nombre.toLowerCase()}</b>.${RC.limite > 0 ? `<br>Hoy: ${recogidoHoy}/${RC.limite}` : ""}`);
+    } else if (res && res.limite) { if (res.hoy != null) recogidoHoy = res.hoy; fin("mal", "¡Correcto! Pero hoy ya llegaste al límite de recolección. ¡Vuelve mañana!"); }
+    else if (res && res.lleno) fin("mal", "Tu mochila ya tiene el máximo de ese recurso.");
+    else fin("mal", `No se pudo recoger: ${html((res && (res.error || res.mensaje)) || "intenta de nuevo")}. No se gastó nada; responde otra vez.`);
+  }
+
+  // ---- la mochila: lo que llevas y lo que puedes fabricar ----
+  const mochilaEl = q(".m-mochila"); let ocupadoMochila = false;
+  function abrirMochila() {
+    if (!RC || estado.dialogo || estado.cambiando || estado.duelo || estado.mapaAbierto) return;
+    estado.mochilaAbierta = true; teclas.clear(); joy.x = joy.y = 0; renderMochila("mochila");
+  }
+  function cerrarMochila() { estado.mochilaAbierta = false; mochilaEl.classList.add("oculto"); mochilaEl.innerHTML = ""; cv.focus(); }
+  function renderMochila(tab, msg) {
+    const items = Object.keys(ITEMS).filter((k) => (inv[k] || 0) > 0 && ITEMS[k].tipo !== "decoracion" || (inv[k] || 0) > 0);
+    let cuerpo;
+    if (tab === "mochila") {
+      cuerpo = items.length ? `<div class="m-inv">${items.map((k) => { const it = ITEMS[k]; return `<div class="m-slot" data-item="${k}"><span class="e">${it.emoji}</span><b>${html(it.nombre)}</b><small>× ${inv[k]}${it.desc ? "<br>" + html(it.desc) : ""}</small>${it.tipo === "consumible" ? `<button class="m-chico" data-usar="${k}">Usar</button>` : ""}</div>`; }).join("")}</div>` : '<p class="m-texto">Tu mochila está vacía. Busca ✨ recursos en el Bosque, la Montaña y el Lago.</p>';
+    } else {
+      cuerpo = Object.keys(RECETAS).map((id) => {
+        const it = ITEMS[id], p = puedeFabricar(id, inv), f = faltantes(id, inv);
+        const ing = Object.entries(RECETAS[id].ingredientes).map(([k, n]) => `<span class="m-ing ${f[k] ? "falta" : ""}">${ITEMS[k].emoji} ${Math.min(inv[k] || 0, 99)}/${n}</span>`).join("");
+        const nota = p.motivo === "ya_tiene" ? " · ya la tienes ✔" : p.motivo === "lleno" ? " · mochila llena" : (inv[id] ? ` · tienes ${inv[id]}` : "");
+        return `<div class="m-receta"><span class="e">${it.emoji}</span><div class="t"><b>${html(it.nombre)}</b>${nota}<br>${it.desc ? html(it.desc) + "<br>" : ""}${ing}</div><button class="m-chico" data-fab="${id}" ${p.ok ? "" : "disabled"}>Fabricar</button></div>`;
+      }).join("");
+    }
+    mochilaEl.innerHTML = `<div class="m-tarjeta"><div class="m-cab"><span class="m-emo">🎒</span><div><div class="m-quien">Mi mochila</div><div class="m-titulo">Hoy recogiste ${recogidoHoy}${RC.limite > 0 ? "/" + RC.limite : ""}</div></div><button class="m-cerrar" data-a="cerrar" aria-label="Cerrar">✕</button></div><div class="m-tabs"><button class="m-tab ${tab === "mochila" ? "act" : ""}" data-tab="mochila">🎒 Mochila</button><button class="m-tab ${tab === "fabricar" ? "act" : ""}" data-tab="fabricar">🔨 Fabricar</button></div>${msg ? `<div class="m-msg ${msg.mal ? "mal" : ""}">${html(msg.texto)}</div>` : ""}${cuerpo}<button class="m-ok" data-a="cerrar">Cerrar</button></div>`;
+    mochilaEl.classList.remove("oculto");
+    mochilaEl.querySelectorAll('[data-a="cerrar"]').forEach((b) => (b.onclick = cerrarMochila));
+    mochilaEl.querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => renderMochila(b.dataset.tab)));
+    mochilaEl.querySelectorAll("[data-fab]").forEach((b) => (b.onclick = () => fabricarItem(b.dataset.fab)));
+    mochilaEl.querySelectorAll("[data-usar]").forEach((b) => (b.onclick = () => usarItem(b.dataset.usar)));
+  }
+  async function fabricarItem(id) {
+    if (ocupadoMochila || !RC) return; ocupadoMochila = true;
+    try {
+      let r;
+      try {
+        if (op.alFabricar) r = await op.alFabricar({ receta: id });
+        else { const p = puedeFabricar(id, inv); if (!p.ok) r = { ok: false, motivo: p.motivo, inventario: { ...inv } }; else { const n = { ...inv }; for (const [k, c] of Object.entries(RECETAS[id].ingredientes)) n[k] = (n[k] || 0) - c; n[id] = (n[id] || 0) + 1; Object.keys(n).forEach((k) => { if (!n[k]) delete n[k]; }); r = { ok: true, inventario: n }; } }
+      } catch (e) { r = { ok: false, error: (e && e.message) || "No se pudo fabricar." }; }
+      if (!vivo || !estado.mochilaAbierta) return;
+      if (r && r.inventario) { Object.keys(inv).forEach((k) => delete inv[k]); Object.assign(inv, r.inventario); }
+      if (r && r.ok) { snd.estrella(); renderMochila("fabricar", { texto: `¡Fabricaste ${ITEMS[id].emoji} ${ITEMS[id].nombre}!` }); }
+      else renderMochila("fabricar", { mal: true, texto: r && r.error ? `No se pudo fabricar: ${r.error}` : "No se pudo fabricar: revisa los ingredientes." });
+    } finally { ocupadoMochila = false; }
+  }
+  async function usarItem(id) {
+    if (ocupadoMochila || !RC) return; ocupadoMochila = true;
+    try {
+      let r;
+      try {
+        if (op.alUsar) r = await op.alUsar({ item: id });
+        else { const vida = estado.vida == null ? VIDA_MAX : estado.vida, cura = Math.min(ITEMS[id].cura || 0, VIDA_MAX - vida); if ((inv[id] || 0) < 1) r = { ok: false, mensaje: "No tienes ese objeto." }; else if (cura <= 0) r = { ok: false, lleno: true, mensaje: "Ya tienes la vida llena: no se gastó." }; else { const n = { ...inv, [id]: inv[id] - 1 }; if (!n[id]) delete n[id]; r = { ok: true, curado: cura, vida: vida + cura, inventario: n }; } }
+      } catch (e) { r = { ok: false, mensaje: (e && e.message) || "No se pudo usar." }; }
+      if (!vivo || !estado.mochilaAbierta) return;
+      if (r && r.inventario) { Object.keys(inv).forEach((k) => delete inv[k]); Object.assign(inv, r.inventario); }
+      if (r && r.ok) { if (typeof r.vida === "number") estado.vida = r.vida; actualizarHud(); snd.estrella(); renderMochila("mochila", { texto: `${ITEMS[id].emoji} +${r.curado} ❤️ · vida ${estado.vida}` }); }
+      else renderMochila("mochila", { mal: true, texto: (r && r.mensaje) || "No se pudo usar." });
+    } finally { ocupadoMochila = false; }
   }
 
   // ---- movimiento ----
@@ -1463,7 +1612,7 @@ export async function iniciarMundo(raiz, op) {
   function actualizar(dt) {
     estado.fase += dt;
     const esc = estado.escena;
-    const bloqueada = estado.dialogo || estado.mapaAbierto || estado.duelo || estado.cambiando || !q(".m-fin").classList.contains("oculto");
+    const bloqueada = estado.dialogo || estado.mapaAbierto || estado.mochilaAbierta || estado.duelo || estado.cambiando || !q(".m-fin").classList.contains("oculto");
     const [ax, ay] = bloqueada ? [0, 0] : leerEntrada();
     estado.caminando = !!(ax || ay);
     if (estado.caminando) {
@@ -1489,11 +1638,11 @@ export async function iniciarMundo(raiz, op) {
     }
     // el más cercano con quien se puede interactuar
     let mejor = null, md = 1e9;
-    for (const n of [...esc.npcs, ...esc.puertas]) { const rad = n.radio || 40, d = Math.hypot(n.x - estado.x, n.y - estado.y); if (d < rad && d < md) { md = d; mejor = n; } }
+    for (const n of [...esc.npcs, ...esc.puertas]) { if (n.tipo === "recurso" && ahoraMs() < (n.hastaMs || 0)) continue; const rad = n.radio || 40, d = Math.hypot(n.x - estado.x, n.y - estado.y); if (d < rad && d < md) { md = d; mejor = n; } }
     estado.cercano = mejor;
     const av = q(".m-aviso"), ba = q(".m-accion");
     if (mejor && !estado.dialogo && !estado.cambiando) {
-      av.textContent = (mejor.tipo === "puerta" ? `🚪 Entrar a ${mejor.nombre}` : `💬 Hablar con ${mejor.nombre}`) + (tactil ? "" : " (E)"); av.classList.remove("oculto"); ba.classList.add("listo"); ba.textContent = mejor.tipo === "puerta" ? "🚪" : "💬";
+      av.textContent = (mejor.tipo === "puerta" ? `🚪 Entrar a ${mejor.nombre}` : mejor.tipo === "recurso" ? `${ITEMS[mejor.item].emoji} Recoger ${mejor.nombre.toLowerCase()}` : `💬 Hablar con ${mejor.nombre}`) + (tactil ? "" : " (E)"); av.classList.remove("oculto"); ba.classList.add("listo"); ba.textContent = mejor.tipo === "puerta" ? "🚪" : mejor.tipo === "recurso" ? ITEMS[mejor.item].emoji : "💬";
     } else { av.classList.add("oculto"); ba.classList.remove("listo"); }
     for (const a of estado.avisos) a.t += dt; estado.avisos = estado.avisos.filter((a) => a.t < 1.3);
   }
@@ -1507,6 +1656,13 @@ export async function iniciarMundo(raiz, op) {
   }
   function etiqueta(texto, x, y, color) { ctx.font = "bold 9px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.75)"; ctx.strokeText(texto, x, y); ctx.fillStyle = color || "#fff"; ctx.fillText(texto, x, y); }
   const emoji = (txt, x, y, px) => { ctx.globalAlpha = 1; ctx.fillStyle = "#000"; ctx.font = px + "px " + FUENTE_EMOJI; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.fillText(txt, Math.round(x - camX), Math.round(y - camY)); };
+  function dibujarRecurso(n, t) {
+    const listo = ahoraMs() >= (n.hastaMs || 0), sx = Math.round(n.x - camX), sy = Math.round(n.y - camY);
+    sombra(n.x, n.y, 11, 4);
+    ctx.globalAlpha = listo ? 1 : 0.28; ctx.fillStyle = "#000"; ctx.font = (listo ? 24 : 16) + "px " + FUENTE_EMOJI; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+    ctx.fillText(ITEMS[n.item].emoji, sx, sy - 2); ctx.globalAlpha = 1;
+    if (listo) { ctx.font = "9px " + FUENTE_EMOJI; ctx.fillText("✨", sx + 11, sy - 20 + Math.sin(t * 4 + n.x) * 2); }
+  }
   function dibujar() {
     const esc = estado.escena, t = estado.fase;
     camX = Math.round(Math.min(Math.max(estado.x - LW / 2, 0), Math.max(0, esc.ancho - LW))); camY = Math.round(Math.min(Math.max(estado.y - 12 - LH / 2, 0), Math.max(0, esc.alto - LH)));
@@ -1519,6 +1675,7 @@ export async function iniciarMundo(raiz, op) {
     esc.objetos(lista, ctx, camX, camY, visible, t);
     for (const s of esc.estrellas) if (!s.tomada && visible(s.x, s.y)) lista.push({ y: s.y, d: () => emoji("⭐", s.x, s.y - 8 + Math.sin(t * 4 + s.x) * 2, 16) });
     for (const n of esc.npcs) lista.push({ y: n.y, d: () => {
+      if (n.tipo === "recurso") { dibujarRecurso(n, t); return; }
       sombra(n.x, n.y, 9, 3.5);
       if (n.tipo === "retador") { const sx = Math.round(n.x - camX), sy = Math.round(n.y - camY); ctx.fillStyle = `rgba(220,38,38,${(puedeRetar(n) ? 0.3 : 0.1) + 0.12 * Math.sin(t * 4)})`; ctx.beginPath(); ctx.ellipse(sx, sy, 17, 7, 0, 0, 7); ctx.fill(); } // aura roja: se nota que es peligroso
       dibujarPersonaje(n.clave, n.dir, n.x, n.y, n.caminando, n.fasePaso || 0);
@@ -1567,6 +1724,8 @@ export async function iniciarMundo(raiz, op) {
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) e.preventDefault();
     if (k === "m") { alternarSonido(); return; }
     if (estado.duelo) { manejarTeclaDuelo(k); return; }
+    if (estado.mochilaAbierta) { if (e.key === "Escape" || k === "i") cerrarMochila(); return; }
+    if (k === "i" && RC && !estado.dialogo && !estado.mapaAbierto && !estado.cambiando) { abrirMochila(); return; }
     if (k === "p") { if (estado.mapaAbierto) cerrarMapa(); else abrirMapa(); return; }
     if (estado.mapaAbierto) { if (e.key === "Escape") cerrarMapa(); return; }
     if (estado.dialogo) {
@@ -1590,6 +1749,7 @@ export async function iniciarMundo(raiz, op) {
   function alternarSonido() { const mudo = snd.alternar(); q(".b-sonido").textContent = mudo ? "🔇" : "🔊"; toast(mudo ? "Sonido apagado" : "Sonido encendido", 1200); }
   q(".b-sonido").onclick = alternarSonido;
   q(".b-mapa").onclick = () => (estado.mapaAbierto ? cerrarMapa() : abrirMapa());
+  if (RC) { q(".b-mochila").classList.remove("oculto"); q(".b-mochila").onclick = () => (estado.mochilaAbierta ? cerrarMochila() : abrirMochila()); }
   q(".b-salir").onclick = () => op.alSalir && op.alSalir();
   q(".b-seguir").onclick = () => { q(".m-fin").classList.add("oculto"); cv.focus(); };
 
@@ -1603,7 +1763,7 @@ export async function iniciarMundo(raiz, op) {
   ultimo = performance.now(); rafId = requestAnimationFrame(cuadro);
 
   const api = {
-    estado, escenas, exterior, interiores, misiones, hechas, snd, chocaEn, interactuar, cambiarEscena, pasos, bosque: escenaDeZona.bosque, naturales, escenaDeZona, zonas: () => zonas, recalcularZonas, abrirMapa, cerrarMapa, viajarRapido, insignias, esperaHasta, poolDeZona, R, retosGanados, esperaReto, abrirRetador, iniciarReto, poolDeZonaReto, puedeRetar, abrirGuardian, iniciarDuelo, contestarDuelo, terminarDuelo, cerrarDuelo,
+    estado, escenas, exterior, interiores, misiones, hechas, snd, chocaEn, interactuar, cambiarEscena, pasos, bosque: escenaDeZona.bosque, naturales, escenaDeZona, zonas: () => zonas, recalcularZonas, abrirMapa, cerrarMapa, viajarRapido, insignias, esperaHasta, poolDeZona, R, retosGanados, esperaReto, abrirRetador, iniciarReto, poolDeZonaReto, puedeRetar, abrirGuardian, iniciarDuelo, contestarDuelo, terminarDuelo, cerrarDuelo, RC, inv, abrirRecurso, abrirMochila, cerrarMochila, fabricarItem, usarItem, recogidoHoy: () => recogidoHoy,
     destruir() {
       if (!vivo) return; // por si se llama dos veces
       vivo = false; estado.activo = false; cancelAnimationFrame(rafId); temporizadores.forEach(clearTimeout); temporizadores.clear();
