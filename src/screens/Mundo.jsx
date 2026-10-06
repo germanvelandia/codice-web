@@ -24,7 +24,7 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
   useNivelesPersonaje(); // para que el nivel se actualice si cambian en "Editar niveles"
 
   const cargar = async () => {
-    const [pers, mej, mis, hec, zon, pos, due, ret, rec, par, aci] = await Promise.allSettled([api.fetchPersonajeElegido(idEst), api.fetchMejorasDeEstudiante(idEst), mundoApi.fetchMisionesMundo(estudianteInfo.grado_id), mundoApi.fetchHechasMundo(idEst), mundoApi.fetchZonasMundo(estudianteInfo.grado_id), mundoApi.fetchPosadaMundo(), mundoApi.fetchDuelosMundo(idEst), mundoApi.fetchRetosMundo(idEst), mundoApi.fetchRecolectaMundo(idEst), mundoApi.fetchParcelaMundo(idEst), mundoApi.fetchAcertijosMundo(idEst, estudianteInfo.grado_id)]);
+    const [pers, mej, mis, hec, zon, pos, due, ret, rec, par, aci, sec] = await Promise.allSettled([api.fetchPersonajeElegido(idEst), api.fetchMejorasDeEstudiante(idEst), mundoApi.fetchMisionesMundo(estudianteInfo.grado_id), mundoApi.fetchHechasMundo(idEst), mundoApi.fetchZonasMundo(estudianteInfo.grado_id), mundoApi.fetchPosadaMundo(), mundoApi.fetchDuelosMundo(idEst), mundoApi.fetchRetosMundo(idEst), mundoApi.fetchRecolectaMundo(idEst), mundoApi.fetchParcelaMundo(idEst), mundoApi.fetchAcertijosMundo(idEst, estudianteInfo.grado_id), mundoApi.fetchSecretosMundo(idEst, estudianteInfo.grado_id)]);
     // El "modo prueba" es SOLO para cuando todavía no se corrió el SQL 62 (no existen las tablas).
     // Si las tablas existen pero el curso no tiene misiones, el mundo funciona normal, sin misiones.
     const hayTablas = mis.status === "fulfilled" && hec.status === "fulfilled";
@@ -48,6 +48,8 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
       parcela: par.status === "fulfilled" && hayTablas ? par.value : { activo: false },
       // Sin el SQL 70 (o sin modo real) las mesas de la Casa de los Acertijos quedan "no disponibles".
       acertijos: aci.status === "fulfilled" && hayTablas ? aci.value : { activo: false },
+      // Sin el SQL 71 (o sin modo real) no hay misiones ocultas.
+      secretos: sec.status === "fulfilled" && hayTablas ? sec.value : { activo: false },
     });
     setCargando(false);
   };
@@ -79,6 +81,7 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
           recolecta: info.recolecta, alRecolectar: (r) => mundoApi.recolectarRecurso(idEst, r), alFabricar: (r) => mundoApi.fabricarEnMundo(idEst, r.receta), alUsar: (r) => mundoApi.usarItemMundo(idEst, r),
           parcela: info.parcela, alColocar: (r) => mundoApi.colocarEnParcela(idEst, r), alQuitar: (r) => mundoApi.quitarDeParcela(idEst, r),
           acertijos: info.acertijos, alAcertijo: (r) => mundoApi.completarAcertijoMundo(idEst, r),
+          secretos: info.secretos, alSecreto: (r) => mundoApi.hallarSecretoMundo(idEst, r),
           alCompletar: async (m) => (info.modoPrueba ? { ok: true } : mundoApi.completarMisionMundo(idEst, m)),
           alSalir: () => { setJugando(false); },
         });
@@ -96,7 +99,8 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
       mundoApi.fetchRetosMundo(idEst).then((r) => setInfo((i) => (i && !i.modoPrueba ? { ...i, retos: r } : i))).catch(() => {});
       mundoApi.fetchRecolectaMundo(idEst).then((c) => setInfo((i) => (i && !i.modoPrueba ? { ...i, recolecta: c } : i))).catch(() => {});
       mundoApi.fetchParcelaMundo(idEst).then((pc) => setInfo((i) => (i && !i.modoPrueba ? { ...i, parcela: pc } : i))).catch(() => {});
-      mundoApi.fetchAcertijosMundo(idEst, estudianteInfo.grado_id).then((a) => setInfo((i) => (i && !i.modoPrueba ? { ...i, acertijos: a } : i))).catch(() => {}); } // las insignias que ganó mientras jugaba
+      mundoApi.fetchAcertijosMundo(idEst, estudianteInfo.grado_id).then((a) => setInfo((i) => (i && !i.modoPrueba ? { ...i, acertijos: a } : i))).catch(() => {});
+      mundoApi.fetchSecretosMundo(idEst, estudianteInfo.grado_id).then((x) => setInfo((i) => (i && !i.modoPrueba ? { ...i, secretos: x } : i))).catch(() => {}); } // las insignias que ganó mientras jugaba
   }, [jugando]);
 
   if (cargando) return <p className="text-sm text-slate-400">Preparando el mundo…</p>;
