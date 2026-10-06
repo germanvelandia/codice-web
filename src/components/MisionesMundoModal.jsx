@@ -128,12 +128,15 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
             <button type="button" onClick={() => setPestana("misiones")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "misiones" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🎯 Misiones</button>
             <button type="button" onClick={() => setPestana("zonas")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "zonas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🗺️ Zonas</button>
             <button type="button" onClick={() => setPestana("posada")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "posada" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🛏️ Posada</button>
+            <button type="button" onClick={() => setPestana("duelos")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "duelos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>⚔️ Duelos</button>
           </div>
         )}
         {sinTabla ? (
           <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">Todavía no se crearon las tablas de las misiones. Corre <b>62_mundo.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</div>
         ) : cargando ? (
           <p className="text-sm text-slate-400">Cargando…</p>
+        ) : pestana === "duelos" && !editando ? (
+          <PanelDuelos misiones={misiones} />
         ) : pestana === "posada" && !editando ? (
           <PanelPosada />
         ) : pestana === "zonas" && !editando ? (
@@ -412,6 +415,103 @@ function PanelPosada() {
           {aviso && <span className="text-xs font-semibold text-emerald-600">{aviso}</span>}
           <button type="button" onClick={guardar} disabled={guardando} className="text-sm font-bold px-5 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">{guardando ? "Guardando…" : "Guardar"}</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ----- Pestaña "Duelos": reglas de los duelos con los Guardianes, de dónde salen las preguntas y la insignia como requisito -----
+function PanelDuelos({ misiones }) {
+  const [f, setF] = useState(null);                  // la configuración como texto, para poder escribir
+  const [cats, setCats] = useState([]);              // categorías de Preguntados
+  const [resumen, setResumen] = useState({});        // cuántos ganaron cada insignia
+  const [error, setError] = useState("");
+  const [aviso, setAviso] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const relojAviso = useRef(null);
+  useEffect(() => () => clearTimeout(relojAviso.current), []);
+  const cargar = async () => {
+    try {
+      const c = await mundoApi.fetchConfigMundo();
+      const g = { activo: c.duelo_activo === 1, aciertos: String(c.duelo_aciertos), vidas: String(c.duelo_vidas), espera: String(c.duelo_espera_min), xp: String(c.duelo_xp), oro: String(c.duelo_oro), banco: {}, exige: {} };
+      ZONAS.forEach((z) => { g.banco[z.key] = String(c[`duelo_banco_${z.key}`] ?? 0); g.exige[z.key] = c[`duelo_exige_${z.key}`] === 1; });
+      setF(g); setError("");
+    } catch (e) { setError(e.message || "No se pudo cargar la configuración."); }
+    mundoApi.fetchCategoriasParaDuelo().then(setCats).catch(() => setCats([]));
+    mundoApi.fetchInsigniasResumen().then(setResumen).catch(() => setResumen({}));
+  };
+  useEffect(() => { cargar(); }, []);
+
+  if (error && !f) {
+    const sin = /does not exist|relation|schema cache/i.test(error);
+    return <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">{sin ? <>Todavía no se crearon las tablas de los duelos. Corre <b>65_mundo_posada_y_zonas.sql</b> y después <b>66_mundo_duelos.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</> : error}</div>;
+  }
+  if (!f) return <p className="text-sm text-slate-400">Cargando…</p>;
+
+  const num = (v) => (v === "" ? NaN : Number(v));
+  const rangos = [["aciertos", "Las preguntas a acertar", 1, 20], ["vidas", "Los corazones", 1, 10], ["espera", "La espera", 0, 1440], ["xp", "El XP del premio", 0, 1000], ["oro", "El oro del premio", 0, 1000]];
+  const errorDe = () => { for (const [k, nombre, min, max] of rangos) { const n = num(f[k]); if (!Number.isInteger(n) || n < min || n > max) return `${nombre} tiene que ser un número entero entre ${min} y ${max}.`; } return ""; };
+  const poolZona = (z) => { const banco = cats.find((c) => String(c.id) === f.banco[z.key]); return { misiones: misiones.filter((m) => m.activo && m.zona === z.key).length, banco: banco ? banco.preguntas : 0 }; };
+  const guardar = async () => {
+    const e = errorDe(); if (e) { setError(e); return; }
+    setGuardando(true); setError("");
+    try {
+      const pares = [["duelo_activo", f.activo ? 1 : 0], ["duelo_aciertos", num(f.aciertos)], ["duelo_vidas", num(f.vidas)], ["duelo_espera_min", num(f.espera)], ["duelo_xp", num(f.xp)], ["duelo_oro", num(f.oro)]];
+      ZONAS.forEach((z) => { pares.push([`duelo_banco_${z.key}`, Number(f.banco[z.key]) || 0]); if (ZONAS.some((x) => x.previa === z.key)) pares.push([`duelo_exige_${z.key}`, f.exige[z.key] ? 1 : 0]); });
+      for (const [k, v] of pares) await mundoApi.guardarConfigMundo(k, v);
+      setAviso("Guardado ✓"); clearTimeout(relojAviso.current); relojAviso.current = setTimeout(() => setAviso(""), 2400);
+    } catch (er) { setError("No se pudo guardar: " + (er.message || "error desconocido")); }
+    setGuardando(false);
+  };
+  const input = "w-20 text-sm rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none bg-white";
+  const A = num(f.aciertos), V = num(f.vidas);
+
+  return (
+    <div>
+      <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 leading-relaxed">
+        Cada zona tiene un <b>Guardián</b> que espera en su arena. El estudiante lo reta a un <b>duelo de preguntas</b>: el Guardián tiene una barra de maestría (hay que acertar varias preguntas) y el estudiante tiene corazones (cada error le cuesta uno).
+        Al ganar por primera vez recibe la <b>insignia</b> de la zona y un premio. Las preguntas salen de las <b>misiones de esa zona</b> y, si querés, de una categoría de <b>Preguntados</b>.
+      </div>
+      {error && <div className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-2.5 mb-3">{error}</div>}
+      <div className="rounded-xl border border-slate-200 p-4 mb-3">
+        <label className="flex items-center gap-2 text-sm font-semibold text-slate-800 mb-4"><input type="checkbox" checked={f.activo} onChange={(e) => setF((x) => ({ ...x, activo: e.target.checked }))} /> Los duelos están activos</label>
+        <div className="flex flex-wrap items-center gap-2 mb-2 text-sm text-slate-700">
+          Para vencer al Guardián hay que acertar <input type="number" min="1" max="20" value={f.aciertos} onChange={(e) => setF((x) => ({ ...x, aciertos: e.target.value }))} className={input} aria-label="Preguntas a acertar" /> preguntas antes de perder
+          <input type="number" min="1" max="10" value={f.vidas} onChange={(e) => setF((x) => ({ ...x, vidas: e.target.value }))} className={input} aria-label="Corazones" /> ❤️ corazones.
+        </div>
+        <div className="flex flex-wrap items-center gap-2 mb-2 text-sm text-slate-700">
+          Si pierde, espera <input type="number" min="0" max="1440" value={f.espera} onChange={(e) => setF((x) => ({ ...x, espera: e.target.value }))} className={input} aria-label="Minutos de espera" /> minutos para reintentar <span className="text-[11px] text-slate-400">(0 = sin espera)</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-sm text-slate-700">
+          Premio de la primera victoria en cada zona: <input type="number" min="0" max="1000" value={f.xp} onChange={(e) => setF((x) => ({ ...x, xp: e.target.value }))} className={input} aria-label="XP del premio" /> ✨ XP y
+          <input type="number" min="0" max="1000" value={f.oro} onChange={(e) => setF((x) => ({ ...x, oro: e.target.value }))} className={input} aria-label="Oro del premio" /> 🪙
+        </div>
+      </div>
+      {ZONAS.map((z) => {
+        const pl = poolZona(z), total = pl.misiones + pl.banco, esUltima = !ZONAS.some((x) => x.previa === z.key), siguiente = ZONAS.find((x) => x.previa === z.key);
+        const faltan = Number.isInteger(A) && total < A, justas = Number.isInteger(A) && Number.isInteger(V) && !faltan && total < A + V - 1;
+        return (
+          <div key={z.key} className="rounded-xl border border-slate-200 p-4 mb-3">
+            <div className="flex items-start gap-2 mb-2">
+              <div className="flex-1"><div className="text-sm font-bold text-slate-800">{z.insignia.emoji} {z.insignia.nombre}</div><div className="text-[11px] text-slate-500">Guardián: {z.guardian.nombre} · {z.guardian.titulo} · en {z.emoji} {z.nombre}</div></div>
+              <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 rounded-full px-2.5 py-1">🏅 {resumen[z.key] || 0} {(resumen[z.key] || 0) === 1 ? "estudiante la ganó" : "estudiantes la ganaron"}</span>
+            </div>
+            <label className="text-[11px] text-slate-500 block mb-1">Preguntas del Guardián</label>
+            <select value={f.banco[z.key]} onChange={(e) => setF((x) => ({ ...x, banco: { ...x.banco, [z.key]: e.target.value } }))} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white mb-1" aria-label={`Banco de preguntas de ${z.nombre}`}>
+              <option value="0">Solo las misiones de esta zona</option>
+              {cats.map((c) => <option key={c.id} value={String(c.id)}>{c.emoji} Preguntados: {c.nombre} ({c.preguntas} {c.preguntas === 1 ? "pregunta" : "preguntas"})</option>)}
+            </select>
+            <div className={`text-[11px] mb-2 ${faltan ? "text-rose-600 font-semibold" : justas ? "text-amber-700" : "text-slate-400"}`} data-testid={`pool-${z.key}`}>
+              {pl.misiones} de misiones{pl.banco ? ` + ${pl.banco} del banco` : ""} = {total} {total === 1 ? "pregunta" : "preguntas"}.{faltan ? ` ⚠️ Con menos de ${A} el Guardián no puede hacer duelos.` : justas ? ` Conviene tener al menos ${A + V - 1} para que se pueda fallar sin quedarse sin preguntas.` : ""}
+            </div>
+            {!esUltima && <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={f.exige[z.key]} onChange={(e) => setF((x) => ({ ...x, exige: { ...x.exige, [z.key]: e.target.checked } }))} aria-label={`Exigir la insignia de ${z.nombre}`} /> Hace falta esta insignia para pasar a {siguiente.emoji} {siguiente.nombre}</label>}
+          </div>
+        );
+      })}
+      <div className="flex items-center gap-3 justify-end">
+        {aviso && <span className="text-xs font-semibold text-emerald-600">{aviso}</span>}
+        <button type="button" onClick={guardar} disabled={guardando} className="text-sm font-bold px-5 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">{guardando ? "Guardando…" : "Guardar duelos"}</button>
       </div>
     </div>
   );
