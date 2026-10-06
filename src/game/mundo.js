@@ -7,7 +7,7 @@
 //  Uso:  const mundo = await iniciarMundo(contenedor, opciones);   …   mundo.destruir();
 // =====================================================================================
 
-import { ZONAS, estadoZonas, misionesDisponibles, zonaDeMision } from "./zonas";
+import { ZONAS, RETADORES, estadoZonas, misionesDisponibles, zonaDeMision } from "./zonas";
 import { armarPool, crearDuelo, esperaRestanteMin } from "./duelo";
 
 const TILE = 32;
@@ -92,6 +92,11 @@ const CSS = `
 .mundo .m-d-luchador.golpeado img { animation: m-sacudir .35s; }
 .mundo .m-d-fin { text-align: center; background: rgba(255,255,255,.08); border-radius: 20px; padding: 22px 16px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
 .mundo .m-d-fin .grande { font-size: 60px; line-height: 1; } .mundo .m-d-fin h3 { margin: 0; font-size: 20px; } .mundo .m-d-fin p { margin: 0; font-size: 14px; line-height: 1.45; }
+.mundo .m-vida.baja { color: #fca5a5; }
+.mundo .m-d-tiempo { height: 8px; border-radius: 99px; background: rgba(255,255,255,.15); overflow: hidden; }
+.mundo .m-d-tiempo i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #f59e0b, #ef4444); }
+@keyframes m-flash { 0% { opacity: .8; } 100% { opacity: 0; } }
+.mundo.danio::after { content: ""; position: absolute; inset: 0; background: rgba(220,38,38,.55); pointer-events: none; z-index: 40; animation: m-flash .7s ease-out forwards; }
 .mundo .m-viaje { margin-top: 8px; border: 0; border-radius: 99px; padding: 7px 14px; font-weight: 800; font-size: 12px; background: var(--acento); color: #fff; cursor: pointer; font-family: inherit; }
 .mundo .m-barra { height: 9px; border-radius: 99px; background: var(--borde); overflow: hidden; margin: 6px 0 2px; }
 .mundo .m-barra > i { display: block; height: 100%; background: var(--acento); }
@@ -123,6 +128,7 @@ const PLANTILLA = `
     <div class="m-der">
       <span class="m-chip">✨ <span class="h-xp">0</span> XP</span>
       <span class="m-chip">🪙 <span class="h-oro">0</span></span>
+      <span class="m-chip m-vida oculto">❤️ <span class="h-vida">100</span></span>
       <span class="m-chip">🎯 <span class="h-mis">0/0</span></span>
       <span class="m-chip">⭐ <span class="h-est">0/6</span></span>
       <button class="m-boton b-mapa" aria-label="Mapa del mundo">🗺️ Mapa</button>
@@ -299,14 +305,14 @@ function imagenesPorton(etiqueta, emoji) {
   return (_imgsPorton[clave] = { cerrado: pintar(false), abierto: pintar(true) });
 }
 // Un portón en el borde este: 4 casillas de alto desde la fila "ty". Cerrado no se puede cruzar; abierto, al pisar la franja se viaja a la zona siguiente.
-function crearPortonEste({ ty, zona, nombre, etiqueta, emoji }) {
-  const x0 = 54 * TILE, y0 = ty * TILE;
+function crearPortonEste({ ty, zona, nombre, etiqueta, emoji, cols = MW }) {
+  const x0 = (cols - 2) * TILE, y0 = ty * TILE;
   return {
     id: zona, zona, nombre, abierto: false, x: x0, y: y0, w: 2 * TILE, h: 4 * TILE, base: y0 + 4 * TILE, imgs: imagenesPorton(etiqueta, emoji),
     bloqueo: { x: x0 + 10, y: y0 + 8, w: 46, h: 4 * TILE - 16 },                       // mientras está cerrado, no se puede pasar
-    disparador: { x: 55 * TILE + 8, y: y0 + 24, w: 32, h: 80 },                         // abierto: al pisar esta franja se viaja
-    guardia: { x: 52 * TILE + 8, y: y0 + 6 },                                            // dónde está el guardia
-    retorno: { x: 52 * TILE + 10, y: (ty + 2) * TILE + 8 },                              // dónde aparece quien vuelve de la zona siguiente
+    disparador: { x: (cols - 1) * TILE + 8, y: y0 + 24, w: 32, h: 80 },                         // abierto: al pisar esta franja se viaja
+    guardia: { x: (cols - 4) * TILE + 8, y: y0 + 6 },                                            // dónde está el guardia
+    retorno: { x: (cols - 4) * TILE + 10, y: (ty + 2) * TILE + 8 },                              // dónde aparece quien vuelve de la zona siguiente
   };
 }
 const dibujarPorton = (ctx, p, camX, camY) => ctx.drawImage(p.abierto ? p.imgs.abierto : p.imgs.cerrado, p.x - 6 - camX, p.y - 44 - camY);
@@ -496,11 +502,12 @@ const OFFSETS_BASE = [[74, 12], [-74, 22], [8, -60], [-34, 62], [62, 58]]; // d�
 function crearZonaNatural(def) {
   const { arbolImg, rocaImg } = graficosBase();
   const rand = rng(def.seed);
-  const dentro = (x, y) => x >= 0 && y >= 0 && x < MW && y < MH;
-  const tipo = Array.from({ length: MH }, () => new Uint8Array(MW));
-  const ocupado = Array.from({ length: MH }, () => new Uint8Array(MW)); // 1 = no poner árboles ni rocas
+  const COLS = def.cols || MW, FILAS = def.filas || MH, PWZ = COLS * TILE, PHZ = FILAS * TILE; // cada zona puede tener su propio tamaño
+  const dentro = (x, y) => x >= 0 && y >= 0 && x < COLS && y < FILAS;
+  const tipo = Array.from({ length: FILAS }, () => new Uint8Array(COLS));
+  const ocupado = Array.from({ length: FILAS }, () => new Uint8Array(COLS)); // 1 = no poner árboles ni rocas
   const obstaculos = [], arboles = [], rocas = [];
-  const circulo = (cx, cy, r, fn) => { for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) { const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy); if (d <= r) fn(x, y, d); } };
+  const circulo = (cx, cy, r, fn) => { for (let y = 0; y < FILAS; y++) for (let x = 0; x < COLS; x++) { const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy); if (d <= r) fn(x, y, d); } };
   const reservar = (cx, cy, r) => circulo(cx, cy, r, (x, y) => (ocupado[y][x] = 1));
   const camino = (x1, y1, x2, y2) => {
     const pintar = (x, y) => { for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) { const a = x + dx, b = y + dy; if (!dentro(a, b)) continue; if (K_LIBRES.has(tipo[b][a])) tipo[b][a] = K.CAMINO; ocupado[b][a] = 1; } };
@@ -508,24 +515,26 @@ function crearZonaNatural(def) {
     for (let x = x1; x !== x2; x += sx) pintar(x, y1);
     for (let y = y1; y !== y2; y += sy) pintar(x2, y);
   };
-  const meta = def.terreno({ K, tipo, ocupado, dentro, rocas, circulo, reservar, camino });
-  if (def.arena) reservar(def.arena.cx, def.arena.cy, def.arena.r + 1.5);              // sin árboles alrededor de la arena del Guardián
+  const meta = def.terreno({ K, tipo, ocupado, dentro, rocas, circulo, reservar, camino, obstaculos, cols: COLS, filas: FILAS });
+  const decorados = meta.decorados || [];
+  if (def.arena) reservar(def.arena.cx, def.arena.cy, def.arena.r + 1.5);
+  (meta.retadores || []).forEach((r) => reservar(r.cx, r.cy, 2.2));                       // sin árboles donde espera cada retador              // sin árboles alrededor de la arena del Guardián
 
   // entrada (borde oeste) y salida (portón en el borde este)
   const ey = def.entradaTy, sal = def.salida;
   const enEntrada = (x, y) => x <= 5 && y >= ey - 2 && y <= ey + 5;
-  const enSalida = (x, y) => !!sal && x >= 52 && y >= sal.ty - 1 && y <= sal.ty + 4;
-  for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (enEntrada(x, y) || enSalida(x, y)) ocupado[y][x] = 1;
+  const enSalida = (x, y) => !!sal && x >= COLS - 4 && y >= sal.ty - 1 && y <= sal.ty + 4;
+  for (let y = 0; y < FILAS; y++) for (let x = 0; x < COLS; x++) if (enEntrada(x, y) || enSalida(x, y)) ocupado[y][x] = 1;
   const spawn = { x: 4 * TILE, y: (ey + 1) * TILE + 26 };
 
   // el bosque: árboles y rocas
   const esLibre = (x, y) => dentro(x, y) && K_LIBRES.has(tipo[y][x]) && !ocupado[y][x];
-  for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
-    const borde = Math.min(x, y, MW - 1 - x, MH - 1 - y);
+  for (let y = 0; y < FILAS; y++) for (let x = 0; x < COLS; x++) {
+    const borde = Math.min(x, y, COLS - 1 - x, FILAS - 1 - y);
     if (!K_LIBRES.has(tipo[y][x]) || enEntrada(x, y) || enSalida(x, y)) continue;
     if ((borde === 0 && rand() < 0.95) || (borde === 1 && rand() < 0.75) || (borde === 2 && esLibre(x, y) && rand() < 0.45)) arboles.push({ x: x * TILE + 16 + (rand() * 8 - 4), y: y * TILE + 30 + (rand() * 4 - 2), v: rand() < 0.5 ? 0 : 1 });
   }
-  for (let y = 3; y < MH - 3; y++) for (let x = 3; x < MW - 3; x++) {
+  for (let y = 3; y < FILAS - 3; y++) for (let x = 3; x < COLS - 3; x++) {
     if (!esLibre(x, y)) continue;
     const r = rand();
     if (r < def.densidadArboles) arboles.push({ x: x * TILE + 16 + (rand() * 10 - 5), y: y * TILE + 30 + (rand() * 4 - 2), v: rand() < 0.5 ? 0 : 1 });
@@ -541,13 +550,13 @@ function crearZonaNatural(def) {
   for (const [lugar, sp] of Object.entries(meta.spots)) slotsPorLugar[lugar] = (sp.offsets || OFFSETS_BASE).map(([dx, dy]) => ({ x: sp.cx * TILE + 16 + dx, y: sp.cy * TILE + 16 + dy }));
 
   // estrellas para recoger
-  const estrellas = []; { const r = rng(def.seed + 55); let n = 0; while (estrellas.length < 4 && n++ < 8000) { const x = 4 + Math.floor(r() * (MW - 8)), y = 4 + Math.floor(r() * (MH - 8)), t = tipo[y][x]; if (!K_CAMINABLES.has(t) || t === K.PUENTE) continue; const px = x * TILE + 16, py = y * TILE + 16; if (Math.hypot(px - spawn.x, py - spawn.y) < 9 * TILE) continue; if (obstaculos.some((o) => px > o.x - 14 && px < o.x + o.w + 14 && py > o.y - 14 && py < o.y + o.h + 14)) continue; if (estrellas.some((s) => Math.hypot(s.x - px, s.y - py) < 10 * TILE)) continue; estrellas.push({ x: px, y: py, tomada: false }); } }
+  const estrellas = []; { const r = rng(def.seed + 55); let n = 0; while (estrellas.length < (def.estrellas || 4) && n++ < 8000) { const x = 4 + Math.floor(r() * (COLS - 8)), y = 4 + Math.floor(r() * (FILAS - 8)), t = tipo[y][x]; if (!K_CAMINABLES.has(t) || t === K.PUENTE) continue; const px = x * TILE + 16, py = y * TILE + 16; if (Math.hypot(px - spawn.x, py - spawn.y) < 9 * TILE) continue; if (obstaculos.some((o) => px > o.x - 14 && px < o.x + o.w + 14 && py > o.y - 14 && py < o.y + o.h + 14)) continue; if (estrellas.some((s) => Math.hypot(s.x - px, s.y - py) < 10 * TILE)) continue; estrellas.push({ x: px, y: py, tomada: false }); } }
 
   // ---------- dibujos pre-armados ----------
   const paleta = { ...PALETA_BASE, ...(def.paleta || {}) };
   const suelo = (() => {
-    const [cv, g] = lienzo(PW, PH), r = rng(def.seed + 31);
-    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
+    const [cv, g] = lienzo(PWZ, PHZ), r = rng(def.seed + 31);
+    for (let y = 0; y < FILAS; y++) for (let x = 0; x < COLS; x++) {
       const t = tipo[y][x], px = x * TILE, py = y * TILE, [variantes, claro, oscuro] = paleta[t];
       g.fillStyle = variantes[(x * 7 + y * 13) % variantes.length]; g.fillRect(px, py, TILE, TILE);
       for (let i = 0; i < 7; i++) { g.fillStyle = r() < 0.5 ? claro : oscuro; g.fillRect(px + Math.floor(r() * 30), py + Math.floor(r() * 30), 2, 2); }
@@ -568,25 +577,27 @@ function crearZonaNatural(def) {
     if (meta.decor) meta.decor(g, r, tipo);
     return cv;
   })();
-  const aguaTiles = []; for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (tipo[y][x] === K.AGUA) aguaTiles.push([x, y]);
-  const [miniBase, mg] = lienzo(MW * 3, MH * 3);
-  for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) { mg.fillStyle = paleta[tipo[y][x]][0][0]; mg.fillRect(x * 3, y * 3, 3, 3); }
+  const aguaTiles = []; for (let y = 0; y < FILAS; y++) for (let x = 0; x < COLS; x++) if (tipo[y][x] === K.AGUA) aguaTiles.push([x, y]);
+  const [miniBase, mg] = lienzo(COLS * 3, FILAS * 3);
+  for (let y = 0; y < FILAS; y++) for (let x = 0; x < COLS; x++) { mg.fillStyle = paleta[tipo[y][x]][0][0]; mg.fillRect(x * 3, y * 3, 3, 3); }
   for (const t of arboles) { mg.fillStyle = "#235f27"; mg.fillRect(Math.floor(t.x / TILE) * 3, Math.floor(t.y / TILE) * 3, 3, 3); }
 
   if (def.arena) dibujarArena(suelo.getContext("2d"), def.arena.cx, def.arena.cy, (ZONAS.find((z) => z.key === def.id) || ZONAS[0]).insignia.color);
-  const portones = sal ? [crearPortonEste({ ty: sal.ty, zona: sal.zona, nombre: sal.nombre, etiqueta: sal.etiqueta, emoji: sal.emoji })] : [];
+  const portones = sal ? [crearPortonEste({ ty: sal.ty, zona: sal.zona, nombre: sal.nombre, etiqueta: sal.etiqueta, emoji: sal.emoji, cols: COLS })] : [];
   const pisoDe = { [K.PUENTE]: "madera", [K.PIEDRA]: "piedra", [K.CAMINO]: "tierra", [K.ARENA]: "tierra", [K.ROCOSO]: "tierra", [K.NIEVE]: "nieve" };
   return {
     id: def.id, zona: def.id, nombre: def.nombre, icono: def.icono, exterior: true, guardian: def.arena ? { x: def.arena.cx * TILE + 16, y: def.arena.cy * TILE + 24 } : null,
-    ancho: PW, alto: PH, suelo, fondo: def.fondo, obstaculos, spawn, edificios: [], portones, estrellas, mini: { base: miniBase, k: (MW * 3) / PW },
+    ancho: PWZ, alto: PHZ, suelo, fondo: def.fondo, obstaculos, spawn, edificios: [], portones, estrellas, mini: { base: miniBase, k: (COLS * 3) / PWZ, cols: COLS },
+    cols: COLS, filas: FILAS, vecinos: def.vecinos, retadores: (meta.retadores || []).map((r) => ({ x: r.cx * TILE + 16, y: r.cy * TILE + 24 })),
     npcs: [], puertas: [], salidas: [{ x: 0, y: ey * TILE, w: 40, h: 4 * TILE, volver: true }], slotsPorLugar,
     bloqueado,
     piso: (x, y) => { const tx = Math.floor(x / TILE), ty = Math.floor(y / TILE); return dentro(tx, ty) ? pisoDe[tipo[ty][tx]] || "pasto" : "pasto"; },
-    puntoLibre(r, chocaFn) { for (let i = 0; i < 600; i++) { const x = (5 + r() * 44) * TILE, y = (5 + r() * 30) * TILE; if (K_CAMINABLES.has(tipo[Math.floor(y / TILE)][Math.floor(x / TILE)]) && !chocaFn(x, y) && Math.hypot(x - spawn.x, y - spawn.y) > 80) return { x, y }; } return { x: spawn.x + 100, y: spawn.y }; },
+    puntoLibre(r, chocaFn) { for (let i = 0; i < 600; i++) { const x = (5 + r() * (COLS - 12)) * TILE, y = (5 + r() * (FILAS - 10)) * TILE; if (K_CAMINABLES.has(tipo[Math.floor(y / TILE)][Math.floor(x / TILE)]) && !chocaFn(x, y) && Math.hypot(x - spawn.x, y - spawn.y) > 80) return { x, y }; } return { x: spawn.x + 100, y: spawn.y }; },
     objetos(lista, ctx, camX, camY, visible) {
       for (const a of arboles) if (visible(a.x, a.y)) lista.push({ y: a.y, d: () => ctx.drawImage(arbolImg[a.v], Math.round(a.x - 22 - camX), Math.round(a.y - 52 - camY)) });
       for (const r of rocas) if (visible(r.x, r.y)) lista.push({ y: r.y, d: () => ctx.drawImage(rocaImg, Math.round(r.x - 13 - camX), Math.round(r.y - 14 - camY)) });
       for (const p of portones) lista.push({ y: p.base, d: () => dibujarPorton(ctx, p, camX, camY) });
+      for (const d of decorados) if (visible(d.x, d.y)) lista.push({ y: d.y, d: () => d.dibujar(ctx, Math.round(d.x - camX), Math.round(d.y - camY)) }); // carpas, columnas, el gran roble…
     },
     efectos(ctx, t, camX, camY, LW, LH) {
       ctx.fillStyle = "rgba(255,255,255,.35)";
@@ -595,27 +606,63 @@ function crearZonaNatural(def) {
   };
 }
 
-// ---- EL BOSQUE DE LA CURIOSIDAD: un arroyo con puente, un claro, un rincón junto al agua y un mirador ----
+// ---- EL BOSQUE DE LA CURIOSIDAD: grande, con un arroyo que se cruza por dos puentes y 7 lugares repartidos por todo el mapa ----
+// Para llegar a los rincones lejanos hay que recorrer senderos que se ramifican (y hay un circuito que vuelve al sendero principal).
 const DEF_BOSQUE = {
-  id: "bosque", nombre: "Bosque de la Curiosidad", icono: "🌲", seed: 777, fondo: "#17391c", entradaTy: 19,
-  salida: { ty: 19, zona: "montana", nombre: "Camino a la Montaña del Esfuerzo", etiqueta: "Montaña", emoji: "🏔️" },
-  densidadArboles: 0.17, densidadRocas: 0.015, arena: { cx: 46, cy: 14, r: 2.4 },
+  id: "bosque", nombre: "Bosque de la Curiosidad", icono: "🌲", seed: 777, fondo: "#17391c", cols: 84, filas: 60, entradaTy: 29, vecinos: 9, estrellas: 7,
+  salida: { ty: 29, zona: "montana", nombre: "Camino a la Montaña del Esfuerzo", etiqueta: "Montaña", emoji: "🏔️" },
+  densidadArboles: 0.17, densidadRocas: 0.015, arena: { cx: 75, cy: 22, r: 2.4 },
   paleta: { [K.PASTO]: [["#3f8a3c", "#438f40", "#3a8137"], "#58a64f", "#2f6e2e"] },
-  flores: { prob: 0.05, probZona: 0.28, zonas: [{ cx: 26, cy: 20, r: 5 }] },
-  terreno({ K, tipo, ocupado, dentro, rocas, circulo, reservar, camino }) {
-    const cxArroyo = (y) => 40 + Math.round(3 * Math.sin(y / 5));
-    for (let y = 0; y < MH; y++) { for (let dx = -1; dx <= 1; dx++) if (dentro(cxArroyo(y) + dx, y)) tipo[y][cxArroyo(y) + dx] = K.AGUA; for (let k = -3; k <= 3; k++) if (dentro(cxArroyo(y) + k, y)) ocupado[y][cxArroyo(y) + k] = 1; }
-    for (const y of [20, 21]) for (let x = cxArroyo(y) - 2; x <= cxArroyo(y) + 2; x++) if (dentro(x, y)) tipo[y][x] = K.PUENTE;
-    const MIRADOR = { cx: 12, cy: 9, r: 3.6 };
-    reservar(26, 20, 8); reservar(46, 25, 5.2); reservar(MIRADOR.cx, MIRADOR.cy, MIRADOR.r + 3);
+  flores: { prob: 0.05, probZona: 0.28, zonas: [{ cx: 24, cy: 30, r: 5 }, { cx: 10, cy: 50, r: 3 }] },
+  terreno({ K, tipo, ocupado, dentro, rocas, circulo, reservar, camino, obstaculos, filas }) {
+    const rio = (y) => 58 + Math.round(4 * Math.sin(y / 6));                                 // el arroyo baja de norte a sur con curvas
+    for (let y = 0; y < filas; y++) { for (let dx = -1; dx <= 1; dx++) if (dentro(rio(y) + dx, y)) tipo[y][rio(y) + dx] = K.AGUA; for (let k = -3; k <= 3; k++) if (dentro(rio(y) + k, y)) ocupado[y][rio(y) + k] = 1; }
+    for (const y of [30, 31, 52, 53]) for (let x = rio(y) - 2; x <= rio(y) + 2; x++) if (dentro(x, y)) tipo[y][x] = K.PUENTE; // dos puentes
+    const CLARO = { cx: 24, cy: 30 }, ARROYO = { cx: 70, cy: 38 }, MIRADOR = { cx: 10, cy: 10, r: 3.6 }, CAMPA = { cx: 10, cy: 50 }, CASCADA = { cx: 68, cy: 11 }, ROBLE = { cx: 36, cy: 52 }, RUINAS = { cx: 74, cy: 50 };
+    reservar(CLARO.cx, CLARO.cy, 8); [ARROYO, CAMPA, CASCADA, ROBLE, RUINAS].forEach((p) => reservar(p.cx, p.cy, 5.7)); reservar(MIRADOR.cx, MIRADOR.cy, MIRADOR.r + 3);
     circulo(MIRADOR.cx, MIRADOR.cy, MIRADOR.r, (x, y) => { if (tipo[y][x] === K.PASTO) tipo[y][x] = K.PIEDRA; });
-    camino(1, 20, 21, 20); camino(31, 20, 53, 20); camino(46, 20, 46, 25); camino(21, 19, 12, 13); camino(46, 20, 46, 16);
-    for (let a = 0; a < 6.283; a += 0.62) { if (Math.abs(a - Math.PI / 2) < 0.7) continue; rocas.push({ x: (MIRADOR.cx + Math.cos(a) * (MIRADOR.r + 1.1)) * TILE, y: (MIRADOR.cy + Math.sin(a) * (MIRADOR.r + 1.1)) * TILE }); } // un anillo de rocas alrededor del mirador, menos por donde sube el sendero
-    return { spots: {
-      claro: { cx: 26, cy: 20, offsets: [[74, 12], [-74, 22], [8, -70], [-36, 84], [64, 76]] },
-      arroyo: { cx: 46, cy: 25, offsets: [[54, -30], [-40, 14], [14, 58], [-20, -56], [62, 34]] },
-      mirador: { cx: MIRADOR.cx, cy: MIRADOR.cy, offsets: [[52, 22], [-52, 22], [2, -36], [34, 62], [-34, 62]] },
-    } };
+    circulo(RUINAS.cx, RUINAS.cy, 3.4, (x, y) => { if (tipo[y][x] === K.PASTO) tipo[y][x] = K.PIEDRA; });                   // el suelo de las ruinas
+    for (let y = 3; y <= 6; y++) for (let x = 66; x <= 70; x++) tipo[y][x] = K.ACANTILADO;                                 // la pared de la cascada
+    for (let y = 7; y <= 8; y++) for (let x = 66; x <= 70; x++) tipo[y][x] = K.AGUA;                                       // y la laguna a sus pies
+    camino(1, 30, 81, 30);                                                                                                  // el sendero principal, hasta el portón
+    camino(20, 29, 10, 29); camino(10, 29, 10, 14);                                                                         // al noroeste: el Mirador
+    camino(10, 31, 10, 46);                                                                                                 // al suroeste: el Campamento
+    camino(24, 32, 24, 52); camino(24, 52, 34, 52); camino(34, 52, 65, 52);                                                 // al sur: el Gran Roble y el segundo puente
+    camino(66, 32, 66, 52);                                                                                                 // por la orilla este hacia el sur…
+    camino(66, 48, 72, 48); camino(66, 38, 69, 38);                                                                         // …a las Ruinas y al Arroyo
+    camino(66, 29, 66, 12);                                                                                                 // al noreste: la Cascada
+    camino(76, 30, 76, 25);                                                                                                 // a la arena del Guardián
+    for (let a = 0; a < 6.283; a += 0.62) { if (Math.abs(a - Math.PI / 2) < 0.7) continue; rocas.push({ x: (MIRADOR.cx + Math.cos(a) * (MIRADOR.r + 1.1)) * TILE, y: (MIRADOR.cy + Math.sin(a) * (MIRADOR.r + 1.1)) * TILE }); }
+    // ---- objetos con volumen (se dibujan con profundidad y bloquean el paso) ----
+    const decorados = [];
+    const carpa = (a, b) => { const [c, g] = lienzo(70, 56); g.fillStyle = "rgba(0,0,0,.2)"; g.beginPath(); g.ellipse(35, 52, 32, 5, 0, 0, 7); g.fill(); g.fillStyle = a; g.beginPath(); g.moveTo(4, 50); g.lineTo(35, 6); g.lineTo(66, 50); g.closePath(); g.fill(); g.fillStyle = b; g.beginPath(); g.moveTo(35, 6); g.lineTo(66, 50); g.lineTo(44, 50); g.closePath(); g.fill(); g.fillStyle = "#2a1a10"; g.beginPath(); g.moveTo(29, 50); g.lineTo(35, 26); g.lineTo(41, 50); g.closePath(); g.fill(); return c; };
+    const carpas = [carpa("#c0562b", "#9a3f1c"), carpa("#3a6ea5", "#2a5483")];
+    [[-62, -66], [62, -66]].forEach(([dx, dy], i) => { const x = CAMPA.cx * TILE + 16 + dx, y = CAMPA.cy * TILE + 16 + dy; decorados.push({ x, y, dibujar: (ctx, px, py) => ctx.drawImage(carpas[i], px - 35, py - 54) }); obstaculos.push({ x: x - 24, y: y - 8, w: 48, h: 8 }); });
+    const columna = (alto) => { const [c, g] = lienzo(26, 72); g.fillStyle = "rgba(0,0,0,.2)"; g.beginPath(); g.ellipse(13, 68, 12, 4, 0, 0, 7); g.fill(); g.fillStyle = "#b7b2a3"; g.fillRect(4, 72 - alto, 18, alto - 6); g.fillStyle = "#d4cfc0"; g.fillRect(4, 72 - alto, 6, alto - 6); g.fillStyle = "#9a9586"; g.fillRect(2, 62, 22, 8); g.fillStyle = "rgba(0,0,0,.25)"; g.fillRect(7, 72 - alto + 10, 2, 14); g.fillRect(14, 72 - alto + 22, 2, 12); for (let i = 0; i < 4; i++) g.fillRect(4 + i * 5, 72 - alto - 2 + (i % 2) * 3, 5, 4); return c; };
+    const columnas = [columna(60), columna(44), columna(54)];
+    [[-92, -52], [-18, -92], [86, -60]].forEach(([dx, dy], i) => { const x = RUINAS.cx * TILE + 16 + dx, y = RUINAS.cy * TILE + 16 + dy; decorados.push({ x, y, dibujar: (ctx, px, py) => ctx.drawImage(columnas[i], px - 13, py - 68) }); obstaculos.push({ x: x - 10, y: y - 8, w: 20, h: 8 }); });
+    const roble = graficosBase().arbolImg[0], rx = ROBLE.cx * TILE + 16, ry = ROBLE.cy * TILE + 16 - 18;
+    decorados.push({ x: rx, y: ry, dibujar: (ctx, px, py) => ctx.drawImage(roble, px - 54, py - 128, 108, 136) }); obstaculos.push({ x: rx - 13, y: ry - 10, w: 26, h: 10 });  // el Gran Roble: un árbol enorme
+    return {
+      spots: {
+        claro: { cx: CLARO.cx, cy: CLARO.cy, offsets: [[74, 12], [-74, 22], [8, -70], [-36, 84], [64, 76]] },
+        arroyo: { cx: ARROYO.cx, cy: ARROYO.cy, offsets: [[54, -30], [-40, 14], [14, 58], [-20, -56], [62, 34]] },
+        mirador: { cx: MIRADOR.cx, cy: MIRADOR.cy, offsets: [[52, 22], [-52, 22], [2, -36], [34, 62], [-34, 62]] },
+        campamento: { cx: CAMPA.cx, cy: CAMPA.cy, offsets: [[74, 14], [-74, 24], [8, -20], [-34, 66], [62, 62]] },
+        cascada: { cx: CASCADA.cx, cy: CASCADA.cy },
+        roble: { cx: ROBLE.cx, cy: ROBLE.cy, offsets: [[78, 14], [-78, 24], [66, 62], [-34, 66], [-76, -44]] },
+        ruinas: { cx: RUINAS.cx, cy: RUINAS.cy, offsets: [[40, 18], [-40, 28], [8, -14], [-20, 66], [58, 62]] },
+      },
+      retadores: [{ cx: 27, cy: 42 }, { cx: 69, cy: 20 }, { cx: 13, cy: 22 }, { cx: 48, cy: 50 }],
+      decorados,
+      decor(g, r) {
+        for (let i = 0; i < 90; i++) { const x = 66 * TILE + 4 + Math.floor(r() * 5 * TILE - 8); g.fillStyle = `rgba(255,255,255,${0.25 + r() * 0.4})`; g.fillRect(x, 3 * TILE + Math.floor(r() * 4 * TILE), 2, 6 + Math.floor(r() * 18)); } // la cascada cae por la pared
+        g.fillStyle = "rgba(255,255,255,.55)"; g.beginPath(); g.ellipse(68 * TILE + 16, 7 * TILE + 4, 70, 12, 0, 0, 7); g.fill();                                                        // la espuma de la laguna
+        const fx = CAMPA.cx * TILE + 16, fy = CAMPA.cy * TILE + 30; g.fillStyle = "rgba(255,160,50,.22)"; g.beginPath(); g.ellipse(fx, fy, 48, 28, 0, 0, 7); g.fill();                  // la fogata del campamento
+        for (let a = 0; a < 6.283; a += 0.7) { g.fillStyle = "#7c7c88"; g.beginPath(); g.ellipse(fx + Math.cos(a) * 15, fy + Math.sin(a) * 8, 4, 3, 0, 0, 7); g.fill(); }
+        g.fillStyle = "#4a2f17"; g.fillRect(fx - 9, fy - 2, 18, 4); g.fillStyle = "#ff8a1f"; g.beginPath(); g.ellipse(fx, fy - 4, 6, 8, 0, 0, 7); g.fill(); g.fillStyle = "#ffd94a"; g.beginPath(); g.ellipse(fx, fy - 2, 3, 5, 0, 0, 7); g.fill();
+      },
+    };
   },
 };
 
@@ -643,6 +690,7 @@ const DEF_MONTANA = {
       cueva: { cx: 23, cy: 18, offsets: [[64, 8], [-64, 14], [0, -14], [34, 46], [-34, 50]] },
       cumbre: { cx: 30, cy: 6, offsets: [[70, 6], [-70, 14], [0, -50], [-28, 46], [34, 46]] },
     },
+    retadores: [{ cx: 38, cy: 35 }, { cx: 30, cy: 19 }],
     decor(g) { // la boca de la cueva en la pared y la bandera de la cumbre
       const cx = 23 * TILE, cy = 14 * TILE; g.fillStyle = "#15121a"; g.beginPath(); g.moveTo(cx - 38, cy + 2 * TILE - 2); g.quadraticCurveTo(cx - 38, cy + 4, cx, cy + 4); g.quadraticCurveTo(cx + 38, cy + 4, cx + 38, cy + 2 * TILE - 2); g.closePath(); g.fill();
       g.fillStyle = "#2a2430"; g.beginPath(); g.ellipse(cx, cy + 2 * TILE - 2, 30, 8, 0, 0, 7); g.fill(); g.strokeStyle = "#8a858f"; g.lineWidth = 3; g.beginPath(); g.moveTo(cx - 38, cy + 2 * TILE - 2); g.quadraticCurveTo(cx - 38, cy + 4, cx, cy + 4); g.quadraticCurveTo(cx + 38, cy + 4, cx + 38, cy + 2 * TILE - 2); g.stroke();
@@ -670,6 +718,7 @@ const DEF_LAGO = {
       muelle: { cx: 23, cy: 21, offsets: [[-64, -54], [16, -54], [-64, 36], [16, 36], [-24, -54]] },
       isla: { cx: 39, cy: 20 },
     },
+    retadores: [{ cx: 6, cy: 18 }, { cx: 30, cy: 6 }],
     decor(g, r, tipoG) { // nenúfares sobre el agua
       for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (tipoG[y][x] === K.AGUA && r() < 0.025) { const px = x * TILE + 6 + r() * 20, py = y * TILE + 6 + r() * 20; g.fillStyle = "#3f9b4a"; g.beginPath(); g.ellipse(px, py, 7, 4, 0, 0, 7); g.fill(); if (r() < 0.4) { g.fillStyle = "#f8bbd0"; g.fillRect(px - 1, py - 1, 3, 3); } }
     } };
@@ -913,7 +962,7 @@ export async function iniciarMundo(raiz, op) {
   raiz.innerHTML = PLANTILLA;
   const q = (s) => raiz.querySelector(s);
   const cv = q(".m-canvas"), ctx = cv.getContext("2d"), mini = q(".m-mini"), mctx = mini.getContext("2d");
-  const sprites = op.sprites, claves = Object.keys(sprites), J = op.jugador;
+  const sprites = { ...op.sprites }, claves = Object.keys(op.sprites), J = op.jugador; // copia local: los sprites oscurecidos de los retadores no tocan los originales
   const claveJugador = sprites[J.clave] ? J.clave : claves[0];
   const otras = claves.filter((k) => k !== claveJugador);
   const temporizadores = new Set(); const espera = (fn, ms) => { const t = setTimeout(() => { temporizadores.delete(t); fn(); }, ms); temporizadores.add(t); };
@@ -926,6 +975,15 @@ export async function iniciarMundo(raiz, op) {
   // ---- cuadros de caminata de todos los personajes y direcciones ----
   const pasos = {};
   claves.forEach((k) => { pasos[k] = {}; DIRS8.forEach((dd) => { pasos[k][dd] = fabricarPasos(imgs[k][dd]); }); });
+
+  // ---- los retadores se ven oscurecidos y rojizos: se arma una copia teñida de cada sprite que usan ----
+  const spriteRetador = (def, i) => (sprites[def.sprite] && def.sprite !== claveJugador ? def.sprite : otras[i % otras.length]);
+  const claveSombra = (k) => k + "@sombra";
+  const teñir = (im) => { const W = im.naturalWidth || im.width, H = im.naturalHeight || im.height, [c, g] = lienzo(W, H); g.drawImage(im, 0, 0); g.globalCompositeOperation = "source-atop"; g.fillStyle = "rgba(140,0,40,.52)"; g.fillRect(0, 0, W, H); g.fillStyle = "rgba(0,0,0,.28)"; g.fillRect(0, 0, W, H); return c; };
+  new Set(RETADORES.map((r, i) => spriteRetador(r, i))).forEach((k) => {
+    const kT = claveSombra(k); imgs[kT] = {}; pasos[kT] = {}; sprites[kT] = { ancla: sprites[k].ancla, dirs: {} };
+    DIRS8.forEach((d) => { imgs[kT][d] = teñir(imgs[k][d]); sprites[kT].dirs[d] = imgs[kT][d].toDataURL("image/png"); pasos[kT][d] = fabricarPasos(imgs[kT][d]); });
+  });
 
   // ---- escenas ----
   const exterior = crearExterior();
@@ -988,6 +1046,18 @@ export async function iniciarMundo(raiz, op) {
     const sp = sprites[z.guardian.sprite] && z.guardian.sprite !== claveJugador ? z.guardian.sprite : otras[ZONAS.indexOf(z) % otras.length];
     esc.npcs.push({ tipo: "guardian", zona: z.key, nombre: z.guardian.nombre, titulo: z.guardian.titulo, clave: sp, x: esc.guardian.x, y: esc.guardian.y, dir: "south", solido: true });
   });
+  // ---- los retadores: personajes hostiles con retos difíciles (la docente los configura zona por zona) ----
+  const R = op.retos && op.retos.activo ? op.retos : null;
+  const retosGanados = new Set((op.retos && op.retos.ganados) || []);
+  const esperaReto = { ...((op.retos && op.retos.esperaHasta) || {}) };
+  if (R) naturales.forEach((esc) => {
+    if (!(R.zonas && R.zonas[esc.zona])) return;
+    const lista = ZONAS.find((zz) => zz.key === esc.zona).retadores || [];
+    lista.forEach((def, idx) => {
+      const p = esc.retadores && esc.retadores[idx]; if (!p || retosGanados.has(def.id)) return;
+      esc.npcs.push({ tipo: "retador", id: def.id, zona: esc.zona, nombre: def.nombre, frase: def.frase, clave: claveSombra(spriteRetador(def, RETADORES.findIndex((r) => r.id === def.id))), x: p.x, y: p.y, dir: "south", solido: true });
+    });
+  });
 
   // ---- aldeanos: muchos personajes caminando por ahí ----
   let contadorAldeanos = 0;
@@ -997,7 +1067,7 @@ export async function iniciarMundo(raiz, op) {
       esc.npcs.push({ tipo: "aldeano", nombre: NOMBRES_ALDEANOS[k % NOMBRES_ALDEANOS.length], clave: otras[k % otras.length], frase: FRASES[(k * 5 + 1) % FRASES.length], x: p.x, y: p.y, dir: "south", meta: null, pausa: rand() * 2, caminando: false });
     }
   }
-  poblar(exterior, op.aldeanos ?? 9); Object.values(interiores).forEach((s) => poblar(s, op.aldeanosDentro ?? 2)); naturales.forEach((n) => poblar(n, op.aldeanosZonas ?? op.aldeanosBosque ?? 5));
+  poblar(exterior, op.aldeanos ?? 9); Object.values(interiores).forEach((s) => poblar(s, op.aldeanosDentro ?? 2)); naturales.forEach((n) => poblar(n, op.aldeanosZonas ?? op.aldeanosBosque ?? n.vecinos ?? 5));
 
   // ---- sonido ----
   const snd = op.sonido === false ? crearSonido.apagado || { reanudar() {}, alternar() { return true; }, musica() {}, paso() {}, estrella() {}, bien() {}, mal() {}, hablar() {}, puerta() {}, golpe() {}, derrota() {}, fanfarria() {}, destruir() {}, mudo: true } : crearSonido();
@@ -1018,7 +1088,7 @@ export async function iniciarMundo(raiz, op) {
   const temaMusical = (esc) => (naturales.includes(esc) ? esc.id : esc.exterior ? "exterior" : "interior");
   const totalEstrellas = () => exterior.estrellas.length + naturales.filter((n) => zonas[n.zona] && zonas[n.zona].desbloqueada).reduce((a, n) => a + n.estrellas.length, 0);
   function actualizarHud() {
-    q(".h-xp").textContent = estado.xp; q(".h-oro").textContent = estado.oro; const disp = disponibles(); q(".h-mis").textContent = `${disp.filter((m) => hechas.has(m.id)).length}/${disp.length}`; q(".h-est").textContent = `${estado.est}/${totalEstrellas()}`;
+    q(".h-xp").textContent = estado.xp; q(".h-oro").textContent = estado.oro; { const cv = q(".m-vida"); if (estado.vida == null) cv.classList.add("oculto"); else { cv.classList.remove("oculto"); q(".h-vida").textContent = estado.vida; cv.classList.toggle("baja", estado.vida <= 30); } } const disp = disponibles(); q(".h-mis").textContent = `${disp.filter((m) => hechas.has(m.id)).length}/${disp.length}`; q(".h-est").textContent = `${estado.est}/${totalEstrellas()}`;
     posicionarMini();
   }
   function ajustarLienzo() {
@@ -1114,23 +1184,29 @@ export async function iniciarMundo(raiz, op) {
       <div class="m-d-arena">
         <div class="m-d-luchador" data-lado="yo"><img src="${sprites[claveJugador].dirs.north}" alt=""><div class="m-d-nombre">${html(estado.nombre)}</div><div class="m-d-cor"></div></div>
         <div class="m-d-vs">⚔️</div>
-        <div class="m-d-luchador" data-lado="rival"><img src="${sprites[E.n.clave].dirs.south}" alt=""><div class="m-d-nombre">${html(E.n.nombre)}</div><div class="m-d-sub">${z.insignia.emoji} ${html(z.insignia.nombre)}${E.practica ? " · práctica" : ""}</div><div class="m-d-seg" title="Maestría del guardián"></div></div>
+        <div class="m-d-luchador" data-lado="rival"><img src="${sprites[E.n.clave].dirs.south}" alt=""><div class="m-d-nombre">${html(E.n.nombre)}</div><div class="m-d-sub">${E.reto ? `☠️ Retador · si pierdes: −${danioPrevisto()} ❤️` : `${z.insignia.emoji} ${html(z.insignia.nombre)}${E.practica ? " · práctica" : ""}`}</div><div class="m-d-seg" title="Maestría del guardián"></div></div>
       </div>
       <div class="m-d-preg"><div class="m-d-num">Pregunta ${pr.numero}</div>${html(p.texto)}</div>
+      ${E.reto && R.tiempo > 0 ? '<div class="m-d-tiempo"><i></i></div>' : ""}
       <div class="m-d-ops">${ops}</div><div class="m-d-fb"></div>
       <div class="m-d-pie"><button class="m-d-btn sec" data-a="rendirse">🏳️ Rendirme</button><button class="m-d-btn oculto" data-a="siguiente">Siguiente ▶</button></div></div>`;
     dueloEl.classList.remove("oculto"); barrasDuelo();
+    clearTimeout(E.reloj);
+    if (E.reto && R.tiempo > 0) {                                                       // cuenta regresiva: si se acaba, cuenta como error
+      const barra = dueloEl.querySelector(".m-d-tiempo i"); barra.getBoundingClientRect(); barra.style.transition = `width ${R.tiempo}s linear`; barra.style.width = "0%";
+      E.reloj = setTimeout(() => { if (estado.duelo === E && !E.bloqueado) contestarDuelo(-1); }, R.tiempo * 1000); temporizadores.add(E.reloj);
+    }
     dueloEl.querySelectorAll(".m-d-op").forEach((b) => (b.onclick = () => contestarDuelo(Number(b.dataset.i))));
     dueloEl.querySelector('[data-a="rendirse"]').onclick = () => { if (E.bloqueado) return; E.d.rendirse(); terminarDuelo(); };
     dueloEl.querySelector('[data-a="siguiente"]').onclick = siguienteDuelo;
   }
   function contestarDuelo(i) {
     const E = estado.duelo; if (!E || E.bloqueado || E.d.progreso().fin) return;
-    E.bloqueado = true; const r = E.d.responder(i);
+    clearTimeout(E.reloj); E.bloqueado = true; const r = E.d.responder(i);
     dueloEl.querySelectorAll(".m-d-op").forEach((b, k) => { b.disabled = true; if (k === r.correcta) b.classList.add("bien"); else if (k === i) b.classList.add("mal"); });
     const fb = dueloEl.querySelector(".m-d-fb"), lado = dueloEl.querySelector(`[data-lado="${r.acierto ? "rival" : "yo"}"]`);
     if (r.acierto) { snd.golpe(); fb.textContent = "💥 ¡Golpe certero!" + (r.retro ? " " + r.retro : ""); }
-    else { snd.mal(); fb.textContent = "💔 Fallaste." + (r.pista ? " " + r.pista : ""); }
+    else { snd.mal(); fb.textContent = (i === -1 ? "⏱️ ¡Se acabó el tiempo!" : "💔 Fallaste.") + (r.pista && !E.reto ? " " + r.pista : ""); }   // los retos no dan pistas
     if (lado) lado.classList.add("golpeado"); barrasDuelo();
     const sig = dueloEl.querySelector('[data-a="siguiente"]'); sig.textContent = r.fin ? "Ver el resultado ▶" : "Siguiente ▶"; sig.classList.remove("oculto"); sig.focus();
   }
@@ -1140,7 +1216,8 @@ export async function iniciarMundo(raiz, op) {
     const b = dueloEl.querySelector('[data-a="cerrar-duelo"]'); b.onclick = cerrarDuelo; b.focus();
   }
   async function terminarDuelo() {
-    const E = estado.duelo; if (!E) return; E.bloqueado = true;
+    const E = estado.duelo; if (!E) return; clearTimeout(E.reloj); E.bloqueado = true;
+    if (E.reto) return terminarReto(E);
     const pr = E.d.progreso(), gano = pr.fin === "gana", z = zonaDe(E.n.zona);
     pantallaFinalDuelo("⏳", "Un momento…", "Guardando el resultado del duelo…");
     let r = null, fallo = false;
@@ -1163,10 +1240,67 @@ export async function iniciarMundo(raiz, op) {
     snd.derrota(); if (!E.practica && D.esperaMin > 0) esperaHasta[E.n.zona] = Date.now() + D.esperaMin * 60000;
     pantallaFinalDuelo("💔", `${E.n.nombre} resistió`, `${marcador}<br>${!E.practica && D.esperaMin > 0 ? `Puedes volver a intentarlo en ${D.esperaMin} min. ` : "¡Puedes volver a intentarlo cuando quieras! "}Repasa las misiones de la zona: ahí está lo que te pregunto.`);
   }
-  function cerrarDuelo() { estado.duelo = null; dueloEl.classList.add("oculto"); dueloEl.innerHTML = ""; snd.musica(temaMusical(estado.escena)); cv.focus(); }
+  function cerrarDuelo() { if (estado.duelo) clearTimeout(estado.duelo.reloj); estado.duelo = null; dueloEl.classList.add("oculto"); dueloEl.innerHTML = ""; snd.musica(temaMusical(estado.escena)); cv.focus(); }
   function manejarTeclaDuelo(k) {
     const n = Number(k); if (n >= 1 && n <= 6) { const b = dueloEl.querySelector(`.m-d-op[data-i="${n - 1}"]`); if (b && !b.disabled) b.click(); return; }
     if (k === "Enter" || k === " ") { const sig = dueloEl.querySelector('[data-a="siguiente"]:not(.oculto)'), fin = dueloEl.querySelector('[data-a="cerrar-duelo"]'); if (sig) sig.click(); else if (fin) fin.click(); }
+  }
+
+  // ---- retadores: te cortan el paso, te retan a un duelo difícil y, si pierdes, te quitan vida ----
+  const ahoraMs = () => Date.now();
+  const _poolReto = {};
+  const poolDeZonaReto = (clave) => _poolReto[clave] || (_poolReto[clave] = (() => { const banco = (R && R.bancos && R.bancos[clave]) || []; return armarPool(banco.length ? [] : misiones.filter((m) => zonaDeMision(m) === clave), banco); })()); // con banco propio, solo salen sus preguntas
+  const danioPrevisto = () => Math.min(R.danio, Math.max(0, (estado.vida == null ? R.danio + R.vidaMin : estado.vida) - R.vidaMin)); // nunca por debajo de la vida mínima
+  const heridoParaRetos = () => estado.vida != null && estado.vida <= R.vidaMin;
+  const puedeRetar = (n) => !!R && poolDeZonaReto(n.zona).length >= R.aciertos && !heridoParaRetos() && ahoraMs() >= (esperaReto[n.id] || 0);
+  function flashDanio() { raiz.classList.remove("danio"); void raiz.offsetWidth; raiz.classList.add("danio"); espera(() => raiz.classList.remove("danio"), 800); }
+  function abrirRetador(n, emboscada) {
+    estado.dialogo = n; n.hablando = true; n.ignorarHasta = ahoraMs() + 25000; if (emboscada) snd.mal(); else snd.hablar(); // si lo cierra, no vuelve a cortarle el paso por un rato
+    const esp = esperaRestanteMin(esperaReto[n.id]);
+    let cuerpo, botones = "";
+    if (poolDeZonaReto(n.zona).length < R.aciertos) cuerpo = `${html(n.frase)}<br><br>…pero hoy no tengo preguntas preparadas. ¡Sigue tu camino!`;
+    else if (heridoParaRetos()) cuerpo = "Te ves muy herido… no es honor pelear así. Descansa en la 🛏️ Posada y vuelve cuando estés mejor.";
+    else if (esp > 0) cuerpo = `Aún me estoy recuperando de tu última visita. Vuelve en <b>${esp} min</b>.`;
+    else {
+      cuerpo = `${html(n.frase)}<br><br>Debes acertar <b>${R.aciertos}</b> preguntas${R.tiempo ? ` (¡<b>${R.tiempo} s</b> por pregunta, sin pistas!)` : " (sin pistas)"} y solo puedes fallar <b>${R.vidas - 1}</b>.<br>☠️ Si pierdes: <b>−${danioPrevisto()} ❤️</b>. Si ganas: +${R.premio.xp} XP · +${R.premio.oro} 🪙 y me voy.`;
+      botones = '<button class="m-ok" data-a="reto">⚔️ ¡Aceptar el reto!</button>';
+    }
+    const d = abrirTarjeta(`${cabecera(n, "☠️ Retador")}<p class="m-texto">${cuerpo}</p>${botones}<button class="m-ok" data-a="cerrar" style="${botones ? "background:var(--borde);color:inherit;margin-top:6px" : ""}">${botones ? "🏃 Huir" : "Entendido"}</button>`);
+    d.querySelectorAll('[data-a="cerrar"]').forEach((b) => (b.onclick = cerrarDialogo));
+    const br = d.querySelector('[data-a="reto"]'); if (br) br.onclick = () => iniciarReto(n);
+  }
+  function iniciarReto(n) {
+    const d = crearDuelo({ pool: poolDeZonaReto(n.zona), aciertos: R.aciertos, vidas: R.vidas, rand: op.rngDuelo || Math.random });
+    if (d.imposible) { toast("Este retador todavía no tiene preguntas.", 3200); return; }
+    ocultarDialogo(); estado.duelo = { n, d, practica: false, reto: true, bloqueado: false }; teclas.clear(); joy.x = joy.y = 0;
+    snd.musica("duelo"); renderDuelo();
+  }
+  async function terminarReto(E) {
+    const n = E.n, pr = E.d.progreso(), gano = pr.fin === "gana", esc = estado.escena;
+    pantallaFinalDuelo("⏳", "Un momento…", "Guardando el resultado…");
+    let r = null, fallo = false;
+    try {
+      if (op.modoPrueba || !op.alReto) { const dn = gano ? 0 : danioPrevisto(); r = { ok: true, local: true, danio: dn, vida: estado.vida == null ? null : estado.vida - dn, xp: R.premio.xp, oro: R.premio.oro }; }
+      else r = await op.alReto({ enemigo: n.id, zona: n.zona, ganado: gano, aciertos: pr.aciertos, errores: pr.errores });
+    } catch (e) { fallo = true; }
+    if (estado.duelo !== E) return;
+    const marcador = `Acertaste ${pr.aciertos} de ${pr.necesarios}.`;
+    if (fallo) { snd.mal(); pantallaFinalDuelo("⚠️", "No se pudo guardar", `No se pudo guardar el resultado${gano ? ": no se entregó el premio" : ", pero tu vida NO cambió"}. Inténtalo de nuevo en un momento.`); return; }
+    if (gano) {
+      if (r.yaTenia) { snd.bien(); pantallaFinalDuelo("🏆", "¡Victoria!", `${marcador}<br>Ya habías derrotado a este retador: no hay premio nuevo.`); }
+      else {
+        estado.xp += r.xp || 0; estado.oro += r.oro || 0; estado.ganado.xp += r.xp || 0; estado.ganado.oro += r.oro || 0; retosGanados.add(n.id);
+        const i = esc.npcs.indexOf(n); if (i >= 0) esc.npcs.splice(i, 1); snd.fanfarria();
+        pantallaFinalDuelo("🏆", `¡Derrotaste a ${n.nombre}!`, `${marcador}<br>🎁 +${r.xp || 0} XP · +${r.oro || 0} 🪙${op.modoPrueba ? " · 🧪 modo prueba (no se guarda)" : ""}<br>El retador huye del sendero.`);
+      }
+    } else {
+      esperaReto[n.id] = ahoraMs() + (R.espera || 0) * 60000;
+      if (typeof r.vida === "number") estado.vida = r.vida;
+      if (r.danio > 0) { flashDanio(); aviso(`−${r.danio} ❤️`, "#fca5a5"); }
+      snd.derrota();
+      pantallaFinalDuelo("💔", `${n.nombre} te venció`, `${marcador}<br>${r.danio > 0 ? `☠️ Perdiste <b>${r.danio} ❤️</b>.` : "Esta vez no te quitó vida."} ${estado.vida != null ? `Tu vida: <b>${estado.vida}/${VIDA_MAX}</b>. ` : ""}Puedes recuperarla en la 🛏️ Posada.${R.espera ? ` Vuelve a intentarlo en ${R.espera} min.` : ""}${op.modoPrueba ? " 🧪 modo prueba (no se guarda)" : ""}`);
+    }
+    actualizarHud();
   }
 
   // ---- la posada: se recupera vida a cambio de oro (la docente decide si está abierta, cuánto cuesta y cuánta vida da) ----
@@ -1298,7 +1432,7 @@ export async function iniciarMundo(raiz, op) {
   function interactuar() {
     if (estado.dialogo || estado.mapaAbierto || estado.duelo || estado.cambiando || !estado.activo || !estado.cercano) return;
     const n = estado.cercano;
-    if (n.tipo === "puerta") entrarEdificio(n.edificio); else if (n.tipo === "guardia") abrirGuardia(n); else if (n.tipo === "posadero") abrirPosada(n); else if (n.tipo === "guardian") abrirGuardian(n); else if (n.tipo === "mision") abrirMision(n); else if (n.tipo === "aldeano") abrirCharla(n);
+    if (n.tipo === "puerta") entrarEdificio(n.edificio); else if (n.tipo === "guardia") abrirGuardia(n); else if (n.tipo === "posadero") abrirPosada(n); else if (n.tipo === "guardian") abrirGuardian(n); else if (n.tipo === "retador") abrirRetador(n, false); else if (n.tipo === "mision") abrirMision(n); else if (n.tipo === "aldeano") abrirCharla(n);
   }
 
   // ---- movimiento ----
@@ -1348,7 +1482,11 @@ export async function iniciarMundo(raiz, op) {
     if (!estado.cambiando) { const sal = esc.salidas.find((s) => estado.x > s.x && estado.x < s.x + s.w && estado.y > s.y && estado.y < s.y + s.h && (!s.activa || s.activa())); if (sal) (sal.accion || salirDeEdificio)(); }
     // personajes
     for (const n of esc.npcs) if (n.tipo === "aldeano") moverAldeano(n, esc, dt);
-    for (const n of esc.npcs) if ((n.hablando || Math.hypot(n.x - estado.x, n.y - estado.y) < 90) && n.tipo !== "puerta") { if (n.tipo === "mision" || n.tipo === "guardia" || n.tipo === "posadero" || n.tipo === "guardian" || n.hablando) n.dir = direccionDe(estado.x - n.x, estado.y - n.y); }
+    for (const n of esc.npcs) if ((n.hablando || Math.hypot(n.x - estado.x, n.y - estado.y) < 90) && n.tipo !== "puerta") { if (n.tipo === "mision" || n.tipo === "guardia" || n.tipo === "posadero" || n.tipo === "guardian" || n.tipo === "retador" || n.hablando) n.dir = direccionDe(estado.x - n.x, estado.y - n.y); }
+    // emboscada: un retador te corta el paso si te acercas demasiado (si lo cierras o huyes, te deja en paz un rato)
+    if (R && !bloqueada) for (const n of esc.npcs) {
+      if (n.tipo === "retador" && ahoraMs() > (n.ignorarHasta || 0) && Math.hypot(n.x - estado.x, n.y - estado.y) < 84 && puedeRetar(n)) { abrirRetador(n, true); break; }
+    }
     // el más cercano con quien se puede interactuar
     let mejor = null, md = 1e9;
     for (const n of [...esc.npcs, ...esc.puertas]) { const rad = n.radio || 40, d = Math.hypot(n.x - estado.x, n.y - estado.y); if (d < rad && d < md) { md = d; mejor = n; } }
@@ -1381,10 +1519,13 @@ export async function iniciarMundo(raiz, op) {
     esc.objetos(lista, ctx, camX, camY, visible, t);
     for (const s of esc.estrellas) if (!s.tomada && visible(s.x, s.y)) lista.push({ y: s.y, d: () => emoji("⭐", s.x, s.y - 8 + Math.sin(t * 4 + s.x) * 2, 16) });
     for (const n of esc.npcs) lista.push({ y: n.y, d: () => {
-      sombra(n.x, n.y, 9, 3.5); dibujarPersonaje(n.clave, n.dir, n.x, n.y, n.caminando, n.fasePaso || 0);
+      sombra(n.x, n.y, 9, 3.5);
+      if (n.tipo === "retador") { const sx = Math.round(n.x - camX), sy = Math.round(n.y - camY); ctx.fillStyle = `rgba(220,38,38,${(puedeRetar(n) ? 0.3 : 0.1) + 0.12 * Math.sin(t * 4)})`; ctx.beginPath(); ctx.ellipse(sx, sy, 17, 7, 0, 0, 7); ctx.fill(); } // aura roja: se nota que es peligroso
+      dibujarPersonaje(n.clave, n.dir, n.x, n.y, n.caminando, n.fasePaso || 0);
       if (n.tipo === "mision") { const hecha = hechas.has(n.mision.id), b = hecha ? 0 : Math.sin(t * 5 + n.x) * 3, an = sprites[n.clave].ancla; emoji(hecha ? "✅" : "❗", n.x, n.y - an.by - 4 + b, 18); }
       else if (n.tipo === "guardia") emoji(n.porton.abierto ? "🔓" : "🔒", n.x, n.y - sprites[n.clave].ancla.by - 4, 18);
       else if (n.tipo === "posadero") emoji("🛏️", n.x, n.y - sprites[n.clave].ancla.by - 4, 18);
+      else if (n.tipo === "retador") emoji(puedeRetar(n) ? "☠️" : "💤", n.x, n.y - sprites[n.clave].ancla.by - 4 + Math.sin(t * 5 + n.x) * 2, 18);
       else if (n.tipo === "guardian") emoji(insignias.has(n.zona) ? ZONAS.find((zz) => zz.key === n.zona).insignia.emoji : "⚔️", n.x, n.y - sprites[n.clave].ancla.by - 4, 18);
       else if (Math.hypot(n.x - estado.x, n.y - estado.y) < 60) etiqueta(n.nombre, Math.round(n.x - camX), Math.round(n.y - sprites[n.clave].ancla.by - camY - 3), "#e8edf8");
     } });
@@ -1402,11 +1543,12 @@ export async function iniciarMundo(raiz, op) {
     if (esc.exterior) dibujarMini(esc);
   }
   function dibujarMini(esc) {
-    const m = esc.mini, k = m.k * (mini.width / (MW * 3));
+    const m = esc.mini, k = m.k * (mini.width / ((m.cols || MW) * 3));
     mctx.clearRect(0, 0, mini.width, mini.height); mctx.drawImage(m.base, 0, 0, mini.width, mini.height);
     const punto = (x, y, col, r) => { mctx.fillStyle = col; mctx.beginPath(); mctx.arc(x * k, y * k, r, 0, 7); mctx.fill(); mctx.strokeStyle = "#000"; mctx.lineWidth = 0.8; mctx.stroke(); };
     for (const e of esc.edificios) { const total = misiones.filter((mm) => mm.lugar === e.id).length; if (total) punto(e.puerta.x, e.puerta.y, pendientesEn(e.id) ? "#fbbf24" : "#34d399", 3.4); }
     for (const n of esc.npcs) if (n.tipo === "mision") punto(n.x, n.y, hechas.has(n.mision.id) ? "#34d399" : "#fbbf24", 3.2);
+    for (const n of esc.npcs) if (n.tipo === "retador") punto(n.x, n.y, "#dc2626", 3);                       // los retadores, en rojo
     for (const p of esc.portones) punto(p.disparador.x, p.disparador.y + 40, p.abierto ? "#34d399" : "#ef4444", 3.4); // el portón: rojo cerrado, verde abierto
     { const v = esc.salidas.find((s) => s.volver); if (v) punto(v.x + 20, v.y + 64, "#34d399", 3.4); }                // la vuelta a la zona anterior
     for (const s of esc.estrellas) if (!s.tomada) { mctx.fillStyle = "#fff"; mctx.fillRect(s.x * k - 1, s.y * k - 1, 2, 2); }
@@ -1461,7 +1603,7 @@ export async function iniciarMundo(raiz, op) {
   ultimo = performance.now(); rafId = requestAnimationFrame(cuadro);
 
   const api = {
-    estado, escenas, exterior, interiores, misiones, hechas, snd, chocaEn, interactuar, cambiarEscena, pasos, bosque: escenaDeZona.bosque, naturales, escenaDeZona, zonas: () => zonas, recalcularZonas, abrirMapa, cerrarMapa, viajarRapido, insignias, esperaHasta, poolDeZona, abrirGuardian, iniciarDuelo, contestarDuelo, terminarDuelo, cerrarDuelo,
+    estado, escenas, exterior, interiores, misiones, hechas, snd, chocaEn, interactuar, cambiarEscena, pasos, bosque: escenaDeZona.bosque, naturales, escenaDeZona, zonas: () => zonas, recalcularZonas, abrirMapa, cerrarMapa, viajarRapido, insignias, esperaHasta, poolDeZona, R, retosGanados, esperaReto, abrirRetador, iniciarReto, poolDeZonaReto, puedeRetar, abrirGuardian, iniciarDuelo, contestarDuelo, terminarDuelo, cerrarDuelo,
     destruir() {
       if (!vivo) return; // por si se llama dos veces
       vivo = false; estado.activo = false; cancelAnimationFrame(rafId); temporizadores.forEach(clearTimeout); temporizadores.clear();
