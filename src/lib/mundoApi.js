@@ -1,5 +1,5 @@
 import { supabase } from "./supabaseClient";
-import { zonaDeMision, ZONAS } from "../game/zonas";
+import { zonaDeMision, ZONAS, RETADORES } from "../game/zonas";
 
 // Todo lo que el Mundo CÓDICE necesita de la base de datos: las misiones del mundo, cuáles
 // ya completó cada estudiante, y entregar el premio (XP y monedas) al completarlas.
@@ -152,7 +152,7 @@ export const CONFIG_POSADA_DEFECTO = { posada_activa: 1, posada_costo: 15, posad
 export async function fetchConfigMundo() {
   const { data, error } = await supabase.from("mundo_config").select("*");
   if (error) throw error;
-  const cfg = { ...CONFIG_POSADA_DEFECTO, ...CONFIG_DUELO_DEFECTO };
+  const cfg = { ...CONFIG_POSADA_DEFECTO, ...CONFIG_DUELO_DEFECTO, ...CONFIG_RETO_DEFECTO };
   (data || []).forEach((f) => { if (f.clave in cfg && Number.isFinite(Number(f.valor))) cfg[f.clave] = Number(f.valor); });
   return cfg;
 }
@@ -266,5 +266,82 @@ export async function fetchInsigniasResumen() {
   const { data, error } = await supabase.from("mundo_insignias").select("zona");
   if (error) throw error;
   const r = {}; (data || []).forEach((f) => { r[f.zona] = (r[f.zona] || 0) + 1; });
+  return r;
+}
+
+// =====================================================================================
+//  RETADORES: personajes hostiles con retos difíciles. Si el estudiante pierde, le quitan vida
+//  (nunca por debajo de una vida mínima). Si gana, recibe un premio y el retador se va.
+//  El daño y el premio los calcula SIEMPRE la base de datos, con la vida real del estudiante.
+// =====================================================================================
+export const CONFIG_RETO_DEFECTO = {
+  reto_activo: 1, reto_danio: 15, reto_vida_min: 20, reto_aciertos: 3, reto_vidas: 2, reto_tiempo: 20, reto_espera_min: 5, reto_xp: 30, reto_oro: 15,
+  reto_zona_bosque: 1, reto_zona_montana: 0, reto_zona_lago: 0, reto_banco_bosque: 0, reto_banco_montana: 0, reto_banco_lago: 0,
+};
+
+// Todo lo que necesita el juego para los retadores de UN estudiante. Si todavía no existe la tabla (SQL 67), falla y no hay retadores.
+export async function fetchRetosMundo(estudianteId) {
+  const cfg = await fetchConfigMundo();
+  const { data, error } = await supabase.from("mundo_retos").select("enemigo, ganado, creado_en").eq("estudiante_id", estudianteId).order("creado_en", { ascending: false }).limit(400);
+  if (error) throw error;
+  const ganados = [...new Set((data || []).filter((f) => f.ganado).map((f) => f.enemigo))];
+  const esperaHasta = {};
+  if (cfg.reto_espera_min > 0) {
+    for (const f of data || []) { if (f.ganado || f.enemigo in esperaHasta) continue; const t = Date.parse(f.creado_en) + cfg.reto_espera_min * 60000; esperaHasta[f.enemigo] = t > Date.now() ? t : 0; }
+  }
+  const zonas = {}, bancos = {};
+  await Promise.all(ZONAS.filter((z) => (z.retadores || []).length).map(async (z) => {
+    zonas[z.key] = cfg[`reto_zona_${z.key}`] === 1;
+    if (zonas[z.key] && cfg[`reto_banco_${z.key}`] > 0) {
+      const { data: preg } = await supabase.from("trivia_preguntas").select("pregunta, opciones, correcta").eq("categoria_id", cfg[`reto_banco_${z.key}`]).eq("activa", true).limit(80);
+      bancos[z.key] = preg || [];
+    }
+  }));
+  return { activo: cfg.reto_activo === 1, danio: Math.max(0, cfg.reto_danio), vidaMin: Math.max(0, cfg.reto_vida_min), aciertos: Math.max(1, cfg.reto_aciertos), vidas: Math.max(1, cfg.reto_vidas), tiempo: Math.max(0, cfg.reto_tiempo), espera: Math.max(0, cfg.reto_espera_min), premio: { xp: cfg.reto_xp, oro: cfg.reto_oro }, zonas, bancos, ganados, esperaHasta };
+}
+
+// Registra el resultado de un reto.
+//  - Perder: se calcula el daño con la vida REAL (nunca por debajo de la vida mínima). Si no se puede aplicar, no se registra nada.
+//  - Ganar: premio SOLO la primera vez; si el premio falla, se deshace la victoria para poder reintentar.
+export async function registrarReto(estudianteId, { enemigo, zona, ganado, aciertos = 0, errores = 0 }) {
+  const def = RETADORES.find((r) => r.id === enemigo);
+  if (!def) throw new Error("Retador desconocido.");
+  const cfg = await fetchConfigMundo();
+  if (!ganado) {
+    const { data: prog, error: e1 } = await supabase.from("progreso").select("vida").eq("estudiante_id", estudianteId).maybeSingle();
+    if (e1) throw e1;
+    const vida = typeof prog?.vida === "number" ? prog.vida : VIDA_MAX;
+    const danio = Math.min(Math.max(0, cfg.reto_danio), Math.max(0, vida - Math.max(0, cfg.reto_vida_min)));
+    let nueva = vida;
+    if (danio > 0) {
+      const { data, error } = await supabase.rpc("ajustar_progreso", { p_estudiante_id: estudianteId, p_delta_xp: 0, p_delta_vida: -danio, p_delta_monedas: 0 });
+      if (error) throw error;
+      nueva = typeof data?.[0]?.vida === "number" ? data[0].vida : vida - danio;
+    }
+    try { await supabase.from("mundo_retos").insert({ estudiante_id: estudianteId, enemigo, zona: zona || def.zona, ganado: false, aciertos, errores, danio }); } catch { /* el intento es secundario */ }
+    if (danio > 0) { try { await supabase.from("historial_gamificacion").insert({ estudiante_id: estudianteId, etiqueta: `☠️ ${def.nombre} te venció`, xp: 0, vida: -danio, monedas: 0, categoria: "general" }); } catch { /* el historial es secundario */ } }
+    return { ok: true, danio, vida: nueva };
+  }
+  const { error: eIns } = await supabase.from("mundo_retos").insert({ estudiante_id: estudianteId, enemigo, zona: zona || def.zona, ganado: true, aciertos, errores, danio: 0 });
+  if (eIns) {
+    if (eIns.code === "23505" || /duplicate|unique/i.test(eIns.message || "")) return { ok: true, yaTenia: true };
+    throw eIns;
+  }
+  const xp = cfg.reto_xp, oro = cfg.reto_oro;
+  if (xp || oro) {
+    const { error } = await supabase.rpc("ajustar_progreso", { p_estudiante_id: estudianteId, p_delta_xp: xp, p_delta_vida: 0, p_delta_monedas: oro });
+    if (error) { await supabase.from("mundo_retos").delete().eq("estudiante_id", estudianteId).eq("enemigo", enemigo).eq("ganado", true); throw error; }
+    try { await supabase.from("historial_gamificacion").insert({ estudiante_id: estudianteId, etiqueta: `⚔️ Derrotó a ${def.nombre}`, xp, vida: 0, monedas: oro, categoria: "general" }); } catch { /* el historial es secundario */ }
+  }
+  return { ok: true, xp, oro };
+}
+
+// ----- para el editor de la docente -----
+// Cuántos retadores fueron derrotados por zona y cuántas derrotas hubo: { derrotados: { zona: n }, derrotas: n, danioTotal: n }
+export async function fetchRetosResumen() {
+  const { data, error } = await supabase.from("mundo_retos").select("zona, ganado, danio");
+  if (error) throw error;
+  const r = { derrotados: {}, derrotas: 0, danioTotal: 0 };
+  (data || []).forEach((f) => { if (f.ganado) r.derrotados[f.zona] = (r.derrotados[f.zona] || 0) + 1; else { r.derrotas += 1; r.danioTotal += Number(f.danio) || 0; } });
   return r;
 }
