@@ -27,6 +27,8 @@ const GaleriaPersonajesRol = lazy(() => import("../components/GaleriaPersonajesR
 const VistaNivelesPersonaje = lazy(() => import("../components/VistaNivelesPersonaje"));
 // El editor de niveles también se carga aparte, solo al abrir su pestaña.
 const EditorNivelesPersonaje = lazy(() => import("../components/EditorNivelesPersonaje"));
+// El editor de las misiones del Mundo también se carga aparte, solo al abrirlo.
+const MisionesMundoModal = lazy(() => import("../components/MisionesMundoModal"));
 
 // Privilegios de clase que un estudiante compró (corona, estandarte…): acá el docente
 // los marca como usados cuando los concede, o los vuelve a habilitar.
@@ -219,6 +221,13 @@ function PiezasPersonajeModal({ onClose }) {
 }
 
 // Ícono de estrella para el botón de la barra de acciones.
+function IconoMundo({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" /><path d="M2 12h20" /><path d="M12 2a15 15 0 0 1 0 20a15 15 0 0 1 0-20Z" />
+    </svg>
+  );
+}
 function IconoEstrella({ size = 16, color = "currentColor" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -2469,6 +2478,7 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
   const [importarDatosAbierto, setImportarDatosAbierto] = useState(false);
   const [observadoresGradoAbierto, setObservadoresGradoAbierto] = useState(false);
   const [piezasAbierto, setPiezasAbierto] = useState(false);
+  const [misionesMundoAbierto, setMisionesMundoAbierto] = useState(false);
   const [mejorasPorEst, setMejorasPorEst] = useState({});
   const [modoSeleccion, setModoSeleccion] = useState(false);
   const [seleccionados, setSeleccionados] = useState([]);
@@ -2585,6 +2595,7 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
           <TarjetaAccion Icono={BookOpen} color={PALETA_ACCIONES[7]} label="Planilla en blanco" onClick={() => setPlanillaBlancoAbierta(true)} />
           <TarjetaAccion Icono={Package} color={PALETA_ACCIONES[8]} label="Importar varios" onClick={() => setImportarAbierto(true)} />
           <TarjetaAccion Icono={IconoEstrella} color={{ fondo: "#FEF9C3", icono: "#A16207" }} label="Piezas del personaje" onClick={() => setPiezasAbierto(true)} />
+          <TarjetaAccion Icono={IconoMundo} color={{ fondo: "#DCFCE7", icono: "#15803D" }} label="Misiones del Mundo" onClick={() => setMisionesMundoAbierto(true)} />
           <TarjetaAccion Icono={Archive} color={{ fondo: "#FEE2E2", icono: "#B91C1C" }} label={modoSeleccion ? "Cancelar selección" : "Quitar varios"} destacada={modoSeleccion}
             onClick={() => { setModoSeleccion((v) => !v); setSeleccionados([]); setConfirmacionTexto(""); }} />
         </div>
@@ -2631,6 +2642,7 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
         <ImportarDatosPersonalesModal estudiantes={estudiantes} onClose={() => setImportarDatosAbierto(false)} onGuardado={cargar} />
       )}
       {piezasAbierto && <PiezasPersonajeModal onClose={() => setPiezasAbierto(false)} />}
+      {misionesMundoAbierto && <Suspense fallback={null}><MisionesMundoModal onClose={() => setMisionesMundoAbierto(false)} /></Suspense>}
       {observadoresGradoAbierto && (
         <ObservadorPorGradoModal gradoId={gradoId} onClose={() => setObservadoresGradoAbierto(false)} />
       )}
