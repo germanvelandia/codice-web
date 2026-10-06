@@ -52,6 +52,7 @@ import { VistaComarcaOakhaven, TarjetaComarcaPublica, urlDeTarjeta, urlQR } from
 // no forman parte del paquete principal que carga la pantalla de inicio.
 const PersonajeRol = lazy(() => import("./components/PersonajeRol"));
 const PersonajeConMejoras = lazy(() => import("./components/PersonajeConMejoras"));
+const VistaMundo = lazy(() => import("./screens/Mundo"));
 import { EditorTexto, TextoEnriquecido, textoPlano } from "./components/RichText";
 import { InstitucionModal } from "./screens/Institucion";
 import { AdministracionModal } from "./screens/Administracion";
@@ -1151,6 +1152,7 @@ const MENU_CODICE_GRUPOS = [
     key: "diversion", label: "Diversión", icono: "🎡", items: [
       { key: "preguntados", label: "Preguntados", icono: "🎡" },
       { key: "personaje", label: "Personaje", icono: "🎨" },
+      { key: "mundo", label: "Mundo", icono: "🌍" },
     ],
   },
   {
@@ -1167,7 +1169,7 @@ const MENU_CODICE = MENU_CODICE_GRUPOS.flatMap((g) => g.items);
 // siendo la misma (la key de MENU_CODICE).
 const ICONO_MAPA = {
   album: "🏯", biblioteca: "📚", codice: "📖", forja: "⚒️", guias: "🗺️",
-  inicio: "🏰", misiones: "⚔️", notas: "📜", personaje: "🧙", historial: "📖", perfil: "🛡️", preguntados: "🎡",
+  inicio: "🏰", mundo: "🌍", misiones: "⚔️", notas: "📜", personaje: "🧙", historial: "📖", perfil: "🛡️", preguntados: "🎡",
   proyectos: "🏹", ranking: "👑", recompensas: "💎", salonhonor: "🏆",
 };
 
@@ -2495,6 +2497,10 @@ function PortalEstudiante() {
 
           {vista === "personaje" && estudianteInfo && (
             <MarcoSeccion zonaLabel="Diversión — Personaje" icono="🎡"><VistaPersonaje estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} /></MarcoSeccion>
+          )}
+
+          {vista === "mundo" && estudianteInfo && (
+            <MarcoSeccion zonaLabel="Diversión — Mundo" icono="🎡"><Suspense fallback={<p className="text-sm text-slate-400">Cargando…</p>}><VistaMundo estudianteInfo={estudianteInfo} datos={datos} onProgreso={() => consultar()} onIrAPersonaje={() => setVista("personaje")} /></Suspense></MarcoSeccion>
           )}
 
           {vista === "historial" && estudianteInfo && (
