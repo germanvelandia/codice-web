@@ -12,6 +12,7 @@ export const ESCENAS_SECRETO = [
   { key: "mercado", emoji: "🛒", nombre: "Mercado del Códice" },
   { key: "posada", emoji: "🛏️", nombre: "Posada del Descanso" },
   { key: "acertijos", emoji: "🧩", nombre: "Casa de los Acertijos" },
+  { key: "comarca", emoji: "🏰", nombre: "Sala de la Comarca" },
   { key: "bosque", emoji: "🌲", nombre: "Bosque de la Curiosidad" },
   { key: "montana", emoji: "⛰️", nombre: "Montaña" },
   { key: "lago", emoji: "🌊", nombre: "Lago" },
