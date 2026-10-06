@@ -3,6 +3,7 @@ import * as mundoApi from "../lib/mundoApi";
 import { ZONAS, LUGARES, zonaDeLugar, zonaPorClave } from "../game/zonas";
 import { esNivel, claveNivel, nivelDeClave, nivelDeGrado, nivelesDe, nombreNivel, etiquetaPara, cursosDelNivel, misionVisiblePara, cursoSaturado as cursoSaturadoDe, etiquetaSaturado } from "../lib/gradosMundo";
 import { ITEMS, RECETAS } from "../game/items";
+import { TIPOS_ACERTIJO, CLAVES_TIPO, validarContenido } from "../game/acertijos";
 import { planEdicion, coincideBusqueda } from "../lib/edicionMasiva";
 import { aObjetos, analizarImportacion, filasParaExportar, filasPlantilla, crearLibro, leerLibro } from "../lib/importarMisiones";
 
@@ -198,12 +199,15 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
             <button type="button" onClick={() => setPestana("duelos")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "duelos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>⚔️ Duelos</button>
             <button type="button" onClick={() => setPestana("retos")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "retos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>☠️ Retadores</button>
             <button type="button" onClick={() => setPestana("recursos")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "recursos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🎒 Recursos</button>
+            <button type="button" onClick={() => setPestana("acertijos")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "acertijos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🧩 Acertijos</button>
           </div>
         )}
         {sinTabla ? (
           <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">Todavía no se crearon las tablas de las misiones. Corre <b>62_mundo.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</div>
         ) : cargando ? (
           <p className="text-sm text-slate-400">Cargando…</p>
+        ) : pestana === "acertijos" && !editando ? (
+          <PanelAcertijos cursos={cursos} niveles={niveles} gradoActual={gradoActual} />
         ) : pestana === "recursos" && !editando ? (
           <PanelRecursos />
         ) : pestana === "retos" && !editando ? (
@@ -754,6 +758,107 @@ function PanelRetos({ misiones }) {
   );
 }
 
+
+// ----- Pestaña "Acertijos": sopa de letras, criptograma, ahorcado y rompecabezas de la Casa de los Acertijos -----
+const acertijoVacio = (curso) => ({ tipo: "sopa", titulo: "", contenido: "", pista: "", tam: "10", grado_id: curso || "", xp: "20", oro: "5", activo: true });
+function PanelAcertijos({ cursos, niveles, gradoActual }) {
+  const [lista, setLista] = useState(null);
+  const [conteo, setConteo] = useState({});
+  const [form, setForm] = useState(null);       // null = viendo la lista; { id?, ...campos } = editando
+  const [error, setError] = useState("");
+  const [aviso, setAviso] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const [faltaSql, setFaltaSql] = useState(false);
+  const relojAviso = useRef(null);
+  useEffect(() => () => clearTimeout(relojAviso.current), []);
+  const avisar = (t) => { setAviso(t); clearTimeout(relojAviso.current); relojAviso.current = setTimeout(() => setAviso(""), 2400); };
+  const cargar = async () => {
+    try { setLista(await mundoApi.fetchAcertijosAdmin()); mundoApi.fetchConteoAcertijos().then(setConteo).catch(() => {}); }
+    catch (e) { if (/does not exist|relation|schema cache/i.test(e.message || "")) setFaltaSql(true); else setError(e.message || "No se pudieron cargar los acertijos."); setLista([]); }
+  };
+  useEffect(() => { cargar(); }, []);
+  if (lista === null) return <p className="text-sm text-slate-400">Cargando…</p>;
+  if (faltaSql) return <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">Todavía no se crearon las tablas de los acertijos. Corre <b>70_mundo_acertijos.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</div>;
+  const input = "w-full text-sm rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none bg-white";
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const aForm2 = (a) => ({ id: a.id, tipo: a.tipo, titulo: a.titulo, contenido: a.contenido, pista: a.pista, tam: String(a.tam || (a.tipo === "rompe" ? 3 : 10)), grado_id: a.grado_id || "", xp: String(a.xp), oro: String(a.oro), activo: a.activo });
+  const errorForm = () => {
+    if (!form.titulo.trim()) return "Ponle un título al acertijo.";
+    const tam = form.tipo === "sopa" ? Number(form.tam) : undefined; const e = validarContenido(form.tipo, form.contenido, { tam }); if (e) return e;
+    for (const [k, n] of [["xp", "El XP"], ["oro", "El oro"]]) { const v = Number(form[k]); if (form[k] === "" || !Number.isInteger(v) || v < 0 || v > 500) return `${n} tiene que ser un número entero entre 0 y 500.`; }
+    return "";
+  };
+  const guardar = async () => {
+    const e = errorForm(); if (e) { setError(e); return; }
+    setGuardando(true); setError("");
+    try {
+      const campos = { ...form, tam: form.tipo === "sopa" || form.tipo === "rompe" ? Number(form.tam) : null, xp: Number(form.xp), oro: Number(form.oro) };
+      if (form.id) await mundoApi.editarAcertijoMundo(form.id, campos); else await mundoApi.crearAcertijoMundo(campos);
+      setForm(null); avisar("Guardado ✓"); await cargar();
+    } catch (er) { setError("No se pudo guardar: " + (er.message || "error desconocido")); }
+    setGuardando(false);
+  };
+  const alternar = async (a) => { try { await mundoApi.editarAcertijoMundo(a.id, { ...a, activo: !a.activo }); await cargar(); } catch (er) { setError("No se pudo cambiar: " + (er.message || "")); } };
+  const borrar = async (a) => { if (!window.confirm(`¿Borrar el acertijo "${a.titulo}"? También se borra el registro de quiénes lo resolvieron (los premios ya entregados no se tocan).`)) return; try { await mundoApi.eliminarAcertijoMundo(a.id); await cargar(); } catch (er) { setError("No se pudo borrar: " + (er.message || "")); } };
+
+  if (form) {
+    const T = TIPOS_ACERTIJO[form.tipo];
+    return (
+      <div data-testid="form-acertijo">
+        <h4 className="text-sm font-bold text-slate-800 mb-2">{form.id ? "✏️ Editar acertijo" : "➕ Nuevo acertijo"}</h4>
+        {error && <div className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-2.5 mb-3" data-testid="error-acertijo">{error}</div>}
+        <div className="grid sm:grid-cols-2 gap-3 mb-3">
+          <div><label className="text-[11px] text-slate-500 block mb-1">Tipo de juego</label>
+            <select value={form.tipo} onChange={(e) => setForm((f) => ({ ...f, tipo: e.target.value, tam: e.target.value === "rompe" ? "3" : "10" }))} className={input} aria-label="Tipo">{CLAVES_TIPO.map((k) => <option key={k} value={k}>{TIPOS_ACERTIJO[k].emoji} {TIPOS_ACERTIJO[k].nombre}</option>)}</select></div>
+          <div><label className="text-[11px] text-slate-500 block mb-1">¿Para qué grado o curso es?</label>
+            <select value={form.grado_id} onChange={(e) => set("grado_id", e.target.value)} className={input} aria-label="Grado">
+              <option value="">🌐 Todos los cursos</option>
+              {[...new Set([...niveles, ...(esNivel(form.grado_id) ? [nivelDeClave(form.grado_id)] : [])])].map((n) => <option key={n} value={claveNivel(n)}>📚 Todo {nombreNivel(n).toLowerCase()}</option>)}
+              {cursos.map((c) => <option key={c} value={c}>🏫 Solo el curso {c}</option>)}
+            </select></div>
+        </div>
+        <div className="mb-3"><label className="text-[11px] text-slate-500 block mb-1">Título (lo ve el estudiante)</label><input value={form.titulo} onChange={(e) => set("titulo", e.target.value)} maxLength={80} className={input} aria-label="Título" placeholder="Ej: Valores de convivencia" /></div>
+        <div className="mb-3"><label className="text-[11px] text-slate-500 block mb-1">{form.tipo === "rompe" ? "Enlace de la imagen (opcional)" : form.tipo === "sopa" ? "Palabras a buscar" : "Frase o palabra"}</label>
+          <textarea value={form.contenido} onChange={(e) => set("contenido", e.target.value)} rows={form.tipo === "rompe" ? 1 : 3} className={input} aria-label="Contenido" />
+          <div className="text-[11px] text-slate-400 mt-1">{T.ayuda}</div></div>
+        <div className="mb-3"><label className="text-[11px] text-slate-500 block mb-1">Pista (opcional)</label><input value={form.pista} onChange={(e) => set("pista", e.target.value)} maxLength={140} className={input} aria-label="Pista" /></div>
+        <div className="grid grid-cols-3 gap-3 mb-3">
+          {(form.tipo === "sopa" || form.tipo === "rompe") && <div><label className="text-[11px] text-slate-500 block mb-1">{form.tipo === "sopa" ? "Tamaño (8 a 16)" : "Fichas por lado"}</label>
+            {form.tipo === "sopa" ? <input type="number" min="8" max="16" value={form.tam} onChange={(e) => set("tam", e.target.value)} className={input} aria-label="Tamaño" /> : <select value={form.tam} onChange={(e) => set("tam", e.target.value)} className={input} aria-label="Tamaño"><option value="3">3 × 3 (fácil)</option><option value="4">4 × 4 (difícil)</option></select>}</div>}
+          <div><label className="text-[11px] text-slate-500 block mb-1">XP</label><input type="number" min="0" max="500" value={form.xp} onChange={(e) => set("xp", e.target.value)} className={input} aria-label="XP" /></div>
+          <div><label className="text-[11px] text-slate-500 block mb-1">Oro</label><input type="number" min="0" max="500" value={form.oro} onChange={(e) => set("oro", e.target.value)} className={input} aria-label="Oro" /></div>
+        </div>
+        <label className="flex items-center gap-2 text-sm text-slate-700 mb-4"><input type="checkbox" checked={form.activo} onChange={(e) => set("activo", e.target.checked)} /> Visible para los estudiantes</label>
+        <div className="flex gap-2 justify-end">
+          <button type="button" onClick={() => { setForm(null); setError(""); }} disabled={guardando} className="text-sm text-slate-500 px-4 py-2">Cancelar</button>
+          <button type="button" onClick={guardar} disabled={guardando} className="text-sm font-bold px-5 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">{guardando ? "Guardando…" : "Guardar acertijo"}</button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 leading-relaxed">En la <b>Casa de los Acertijos</b> (una casa nueva en la aldea) hay una mesa por juego: 🔤 sopa de letras, 🔐 criptograma, 🪢 ahorcado y 🧩 rompecabezas. Tú cargas el contenido aquí y cada estudiante gana el premio <b>una sola vez</b> por acertijo (después puede repetirlo por diversión). La cuadrícula, los números y el orden se mezclan solos cada vez.</div>
+      {error && <div className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-2.5 mb-3">{error}</div>}
+      <div className="flex items-center gap-3 mb-3"><button type="button" onClick={() => { setError(""); setForm(acertijoVacio(gradoActual && nivelDeGrado(gradoActual) ? "" : "")); }} className="text-sm font-bold px-4 py-2 rounded-lg bg-violet-500 text-white">➕ Nuevo acertijo</button>{aviso && <span className="text-xs font-semibold text-emerald-600">{aviso}</span>}</div>
+      {lista.length === 0 && <p className="text-sm text-slate-400 py-4 text-center">Todavía no hay acertijos. ¡Crea el primero!</p>}
+      <div className="rounded-xl border border-slate-200 divide-y divide-slate-100" data-testid="lista-acertijos">
+        {lista.map((a) => (
+          <div key={a.id} className={`px-3 py-2.5 flex items-center gap-2 ${a.activo ? "" : "opacity-50"}`}>
+            <span className="text-xl">{TIPOS_ACERTIJO[a.tipo]?.emoji || "🧩"}</span>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold text-slate-800 truncate">{a.titulo}{!a.activo && <span className="ml-2 text-[10px] rounded-full px-2 py-0.5 bg-slate-100 text-slate-500">OCULTO</span>}</div>
+              <div className="text-[11px] text-slate-500">{TIPOS_ACERTIJO[a.tipo]?.nombre} · {a.grado_id ? etiquetaPara(a.grado_id) : "Todos los cursos"} · +{a.xp} XP · +{a.oro} 🪙 · resuelto por {conteo[a.id] || 0}</div>
+            </div>
+            <button type="button" onClick={() => { setError(""); setForm(aForm2(a)); }} className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700">Editar</button>
+            <button type="button" onClick={() => alternar(a)} className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700">{a.activo ? "Ocultar" : "Mostrar"}</button>
+            <button type="button" onClick={() => borrar(a)} className="text-xs px-2.5 py-1 rounded-lg bg-rose-50 text-rose-600">Borrar</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // ----- Pestaña "Recursos": recoger madera, piedra, peces y hierba (cada recolección pide una pregunta) y fabricar objetos -----
 function PanelRecursos() {
