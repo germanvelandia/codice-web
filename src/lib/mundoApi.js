@@ -1,5 +1,6 @@
 import { supabase } from "./supabaseClient";
 import { zonaDeMision, ZONAS, RETADORES } from "../game/zonas";
+import { misionVisiblePara } from "./gradosMundo";
 
 // Todo lo que el Mundo CÓDICE necesita de la base de datos: las misiones del mundo, cuáles
 // ya completó cada estudiante, y entregar el premio (XP y monedas) al completarlas.
@@ -35,7 +36,7 @@ export async function fetchMisionesMundo(gradoId) {
   const { data, error } = await supabase.from("mundo_misiones").select("*").eq("activo", true).order("orden").order("id");
   if (error) throw error;
   return (data || [])
-    .filter((m) => !m.grado_id || (gradoId != null && String(m.grado_id) === String(gradoId)))
+    .filter((m) => gradoId != null ? misionVisiblePara(m.grado_id, gradoId) : !m.grado_id)   // para todos, para todo su nivel (octavo…) o para su curso
     .map(normalizarMision).filter((m) => m.opciones.length >= 2);
 }
 
@@ -84,6 +85,19 @@ export async function crearMisionMundo(campos) {
   const { data, error } = await supabase.from("mundo_misiones").insert({ ...campos, docente_id: userData?.user?.id || null }).select().single();
   if (error) throw error;
   return data;
+}
+
+// Crea muchas misiones de una vez (para el Excel). Devuelve cuántas se crearon.
+export async function crearMisionesMundo(lista) {
+  const { data: userData } = await supabase.auth.getUser();
+  const docente = userData?.user?.id || null; let creadas = 0;
+  for (let i = 0; i < lista.length; i += 50) {
+    const trozo = lista.slice(i, i + 50).map((c) => ({ ...c, docente_id: docente }));
+    const { error } = await supabase.from("mundo_misiones").insert(trozo);
+    if (error) { const e = new Error(error.message); e.creadas = creadas; throw e; }
+    creadas += trozo.length;
+  }
+  return creadas;
 }
 
 export async function editarMisionMundo(id, campos) {
