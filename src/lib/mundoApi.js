@@ -2,6 +2,7 @@ import { supabase } from "./supabaseClient";
 import { zonaDeMision, ZONAS, RETADORES } from "../game/zonas";
 import { misionVisiblePara } from "./gradosMundo";
 import { validarContenido, CLAVES_TIPO } from "../game/acertijos";
+import { CONFIG_COMARCA_DEFECTO, calcularAporte, diaColombia, puedeBatallar } from "../game/comarca";
 import { validarSecreto, limpiarSecreto, secretoJugable } from "../game/secretos";
 import { ITEMS, RECETAS, MAX_POR_ITEM, PARCELA, esDecoracion, celdaValida, puedeFabricar, cantidadPorRecoleccion } from "../game/items";
 
@@ -65,7 +66,7 @@ export async function completarMisionMundo(estudianteId, mision) {
     ]);
     if (rpc.error) throw rpc.error;
     const fila = rpc.data?.[0];
-    return { ok: true, xp: fila?.xp, oro: fila?.monedas };
+    return { ok: true, xp: fila?.xp, oro: fila?.monedas, comarca: await aportarAComarca(estudianteId, { xp, oro, motivo: `Mundo CÓDICE: ${mision.titulo}` }) };
   } catch (e) {
     await supabase.from("mundo_misiones_hechas").delete().eq("estudiante_id", estudianteId).eq("mision_id", mision.id);
     return { ok: false, mensaje: (e && e.message) || "no se pudo entregar el premio" };
@@ -192,7 +193,7 @@ export const CONFIG_POSADA_DEFECTO = { posada_activa: 1, posada_costo: 15, posad
 export async function fetchConfigMundo() {
   const { data, error } = await supabase.from("mundo_config").select("*");
   if (error) throw error;
-  const cfg = { ...CONFIG_POSADA_DEFECTO, ...CONFIG_DUELO_DEFECTO, ...CONFIG_RETO_DEFECTO, ...CONFIG_RECOLECTA_DEFECTO };
+  const cfg = { ...CONFIG_POSADA_DEFECTO, ...CONFIG_DUELO_DEFECTO, ...CONFIG_RETO_DEFECTO, ...CONFIG_RECOLECTA_DEFECTO, ...CONFIG_COMARCA_DEFECTO };
   (data || []).forEach((f) => { if (f.clave in cfg && Number.isFinite(Number(f.valor))) cfg[f.clave] = Number(f.valor); });
   return cfg;
 }
@@ -286,7 +287,7 @@ export async function registrarDuelo(estudianteId, zona, { ganado, aciertos = 0,
     if (error) { await supabase.from("mundo_insignias").delete().eq("estudiante_id", estudianteId).eq("zona", zona); throw error; }
     try { await supabase.from("historial_gamificacion").insert({ estudiante_id: estudianteId, etiqueta: `🏅 Insignia: ${(ZONAS.find((z) => z.key === zona) || {}).insignia?.nombre || zona}`, xp, vida: 0, monedas: oro, categoria: "general" }); } catch { /* el historial es secundario */ }
   }
-  return { ok: true, xp, oro };
+  return { ok: true, xp, oro, comarca: await aportarAComarca(estudianteId, { xp, oro, motivo: "Mundo CÓDICE: insignia" }) };
 }
 
 // ----- para el editor de la docente -----
@@ -373,7 +374,7 @@ export async function registrarReto(estudianteId, { enemigo, zona, ganado, acier
     if (error) { await supabase.from("mundo_retos").delete().eq("estudiante_id", estudianteId).eq("enemigo", enemigo).eq("ganado", true); throw error; }
     try { await supabase.from("historial_gamificacion").insert({ estudiante_id: estudianteId, etiqueta: `⚔️ Derrotó a ${def.nombre}`, xp, vida: 0, monedas: oro, categoria: "general" }); } catch { /* el historial es secundario */ }
   }
-  return { ok: true, xp, oro };
+  return { ok: true, xp, oro, comarca: await aportarAComarca(estudianteId, { xp, oro, motivo: `Mundo CÓDICE: derrotó a ${def.nombre}` }) };
 }
 
 // ----- para el editor de la docente -----
@@ -579,7 +580,7 @@ export async function completarAcertijoMundo(estudianteId, { id }) {
     ]);
     if (rpc.error) throw rpc.error;
     const fila = rpc.data?.[0];
-    return { ok: true, xp: fila?.xp, oro: fila?.monedas };
+    return { ok: true, xp: fila?.xp, oro: fila?.monedas, comarca: await aportarAComarca(estudianteId, { xp: a.xp, oro: a.oro, motivo: `Mundo CÓDICE: acertijo ${a.titulo}` }) };
   } catch (e) {
     await supabase.from("mundo_acertijos_hechos").delete().eq("estudiante_id", estudianteId).eq("acertijo_id", id);
     return { ok: false, mensaje: (e && e.message) || "no se pudo entregar el premio" };
@@ -662,7 +663,7 @@ export async function hallarSecretoMundo(estudianteId, { id }) {
     ]);
     if (rpc.error) throw rpc.error;
     const fila = rpc.data?.[0];
-    return { ok: true, xp: fila?.xp, oro: fila?.monedas };
+    return { ok: true, xp: fila?.xp, oro: fila?.monedas, comarca: await aportarAComarca(estudianteId, { xp: x.xp, oro: x.oro, motivo: `Mundo CÓDICE: secreto ${x.nombre}` }) };
   } catch (e) {
     await supabase.from("mundo_secretos_hallados").delete().eq("estudiante_id", estudianteId).eq("secreto_id", id);
     return { ok: false, mensaje: (e && e.message) || "no se pudo entregar el premio" };
@@ -696,4 +697,89 @@ export async function fetchConteoSecretos() {
   const { data, error } = await supabase.from("mundo_secretos_hallados").select("secreto_id");
   if (error) throw error;
   const c = {}; (data || []).forEach((f) => { c[f.secreto_id] = (c[f.secreto_id] || 0) + 1; }); return c;
+}
+
+// =====================================================================================
+//  COMARCA DE OAKHAVEN dentro del mundo
+//  El reino de cada estudiante sale de la Comarca activa de su curso (SQL 72). Las escrituras en la Comarca pasan por
+//  funciones de la base (mundo_comarca_*), porque esas tablas solo las puede escribir la docente.
+// =====================================================================================
+const miReinoDe = async (estudianteId) => {
+  const { data, error } = await supabase.rpc("mundo_comarca_mi_reino", { p_estudiante_id: estudianteId });
+  if (error) throw error;
+  const f = (data || [])[0];
+  return f ? { sesionId: f.sesion_id, reinoId: f.reino_id } : null;
+};
+
+// Todo lo que necesita la Sala de la Comarca: { activo, hay, sesionId, miReinoId, reinos, provincias, batallasHoy, batallas, aportes }.
+// activo=false: la docente apagó la integración. hay=false: el curso no tiene una Comarca activa (o el estudiante no tiene reino).
+export async function fetchComarcaMundo(estudianteId) {
+  const cfg = await fetchConfigMundo();
+  const base = {
+    activo: cfg.comarca_activo === 1, hay: false, reinos: [], provincias: [], batallasHoy: 0, ahora: Date.now(),
+    batallas: { activo: cfg.comarca_batallas_activo === 1, dia: cfg.comarca_batallas_dia, aciertos: Math.max(1, cfg.comarca_batalla_aciertos), vidas: Math.max(1, cfg.comarca_batalla_vidas), proteccionMin: cfg.comarca_proteccion_min },
+    aportes: { activo: cfg.comarca_aportes_activo === 1, oroPorGp: cfg.comarca_oro_por_gp, xpPorFp: cfg.comarca_xp_por_fp, topeGp: cfg.comarca_tope_gp_dia, topeFp: cfg.comarca_tope_fp_dia },
+  };
+  if (!base.activo) return base;
+  const mi = await miReinoDe(estudianteId);
+  if (!mi) return base;
+  const [r, p, d] = await Promise.all([
+    supabase.from("comarca_reinos").select("*").eq("sesion_id", mi.sesionId).order("orden"),
+    supabase.from("comarca_provincias").select("*").eq("sesion_id", mi.sesionId).order("id"),
+    supabase.from("comarca_duelos").select("id").eq("sesion_id", mi.sesionId).eq("estudiante_id", estudianteId).eq("origen", "mundo").gte("creado_en", new Date(inicioDelDia()).toISOString()),
+  ]);
+  if (r.error) throw r.error; if (p.error) throw p.error;
+  return { ...base, hay: true, sesionId: mi.sesionId, miReinoId: mi.reinoId, reinos: r.data || [], provincias: p.data || [], batallasHoy: d.error ? 0 : (d.data || []).length };
+}
+
+// Suma al reino del estudiante el GP/FP que corresponde a lo que acaba de ganar. NUNCA lanza error: si algo falla, simplemente no aporta
+// (así un problema con la Comarca no puede deshacer el premio del estudiante). Devuelve { gp, fp } o null.
+export async function aportarAComarca(estudianteId, { xp = 0, oro = 0, motivo = "Mundo CÓDICE" } = {}) {
+  try {
+    const cfg = await fetchConfigMundo();
+    if (cfg.comarca_activo !== 1 || cfg.comarca_aportes_activo !== 1) return null;
+    const mi = await miReinoDe(estudianteId); if (!mi) return null;
+    const { data: filas, error: eF } = await supabase.from("mundo_comarca_aportes").select("*").eq("estudiante_id", estudianteId).eq("sesion_id", mi.sesionId);
+    if (eF) return null;
+    const calc = calcularAporte({ xp, oro, fila: (filas || [])[0] || null, cfg, hoy: diaColombia() });
+    if (calc.gp > 0 || calc.fp > 0) {
+      const { error } = await supabase.rpc("mundo_comarca_sumar", { p_estudiante_id: estudianteId, p_gp: calc.gp, p_fp: calc.fp, p_motivo: motivo });
+      if (error) return null;                                      // no se guarda el resto: se reintenta con la próxima recompensa
+    }
+    await supabase.from("mundo_comarca_aportes").upsert({ estudiante_id: estudianteId, sesion_id: mi.sesionId, ...calc.fila }, { onConflict: "estudiante_id,sesion_id" });
+    return calc.gp > 0 || calc.fp > 0 ? { gp: calc.gp, fp: calc.fp } : null;
+  } catch { return null; }
+}
+
+// Resultado de una batalla entre reinos. Devuelve { ok, tomada, provincia } o { ok:false, motivo, mensaje }.
+const MENSAJES_BATALLA = {
+  cerrado: "Las batallas entre reinos están cerradas por ahora.", sin_reino: "Tu curso no tiene una Comarca activa o todavía no tienes reino.",
+  limite: "Hoy ya libraste todas tus batallas. ¡Vuelve mañana!", no_existe: "Esa provincia ya no existe.", propia: "Esa provincia ya es de tu reino.",
+  protegida: "Esa provincia acaba de cambiar de dueña y está protegida un rato.", ultima: "Ese reino no puede quedarse sin provincias.",
+};
+export async function batallaComarca(estudianteId, { provinciaId, ganado, aciertos = 0, errores = 0 }) {
+  const cfg = await fetchConfigMundo();
+  const mi = await miReinoDe(estudianteId);
+  const pb = puedeBatallar({ activo: cfg.comarca_activo === 1 && cfg.comarca_batallas_activo === 1, miReinoId: mi && mi.reinoId, limite: cfg.comarca_batallas_dia, batallasHoy: mi ? await (async () => {
+    const { data } = await supabase.from("comarca_duelos").select("id").eq("sesion_id", mi.sesionId).eq("estudiante_id", estudianteId).eq("origen", "mundo").gte("creado_en", new Date(inicioDelDia()).toISOString());
+    return (data || []).length;
+  })() : 0 });
+  if (!pb.ok) return { ok: false, motivo: pb.motivo, mensaje: MENSAJES_BATALLA[pb.motivo] };
+  const { data, error } = await supabase.rpc("mundo_comarca_tomar_provincia", { p_estudiante_id: estudianteId, p_provincia_id: provinciaId, p_ganado: !!ganado, p_aciertos: aciertos, p_errores: errores, p_proteccion_min: cfg.comarca_proteccion_min });
+  if (error) return { ok: false, mensaje: error.message };
+  const f = (data || [])[0];
+  if (!f) return { ok: false, mensaje: "No se pudo registrar la batalla." };
+  if (!f.ok) return { ok: false, motivo: f.motivo, mensaje: MENSAJES_BATALLA[f.motivo] || "No se pudo registrar la batalla." };
+  return { ok: true, tomada: f.motivo === "tomada", provincia: f.provincia_nombre };
+}
+
+// Para el editor de la docente: cuánto ha pasado en el mundo con la Comarca.
+export async function fetchComarcaResumen() {
+  const [d, m] = await Promise.all([
+    supabase.from("comarca_duelos").select("ganador_id, reino_retador_id").eq("origen", "mundo"),
+    supabase.from("comarca_movimientos").select("tipo, cantidad, motivo"),
+  ]);
+  if (d.error) throw d.error;
+  const batallas = d.data || [], movs = (m.data || []).filter((x) => /^Mundo CÓDICE/.test(x.motivo || ""));
+  return { batallas: batallas.length, tomadas: batallas.filter((b) => b.ganador_id === b.reino_retador_id).length, gp: movs.filter((x) => x.tipo === "gp").reduce((a, x) => a + x.cantidad, 0), fp: movs.filter((x) => x.tipo === "fp").reduce((a, x) => a + x.cantidad, 0) };
 }
