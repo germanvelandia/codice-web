@@ -4,6 +4,7 @@ import { ZONAS, LUGARES, zonaDeLugar, zonaPorClave } from "../game/zonas";
 import { esNivel, claveNivel, nivelDeClave, nivelDeGrado, nivelesDe, nombreNivel, etiquetaPara, cursosDelNivel, misionVisiblePara, cursoSaturado as cursoSaturadoDe, etiquetaSaturado } from "../lib/gradosMundo";
 import { ITEMS, RECETAS } from "../game/items";
 import { TIPOS_ACERTIJO, CLAVES_TIPO, validarContenido } from "../game/acertijos";
+import { ESCENAS_SECRETO, OBJETOS_SECRETO, MIN_OPCIONES as MIN_OPC_SEC, MAX_OPCIONES as MAX_OPC_SEC, nombreEscena, validarSecreto } from "../game/secretos";
 import { planEdicion, coincideBusqueda } from "../lib/edicionMasiva";
 import { aObjetos, analizarImportacion, filasParaExportar, filasPlantilla, crearLibro, leerLibro } from "../lib/importarMisiones";
 
@@ -200,12 +201,15 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
             <button type="button" onClick={() => setPestana("retos")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "retos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>☠️ Retadores</button>
             <button type="button" onClick={() => setPestana("recursos")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "recursos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🎒 Recursos</button>
             <button type="button" onClick={() => setPestana("acertijos")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "acertijos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🧩 Acertijos</button>
+            <button type="button" onClick={() => setPestana("secretos")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "secretos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🔎 Secretos</button>
           </div>
         )}
         {sinTabla ? (
           <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">Todavía no se crearon las tablas de las misiones. Corre <b>62_mundo.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</div>
         ) : cargando ? (
           <p className="text-sm text-slate-400">Cargando…</p>
+        ) : pestana === "secretos" && !editando ? (
+          <PanelSecretos cursos={cursos} niveles={niveles} />
         ) : pestana === "acertijos" && !editando ? (
           <PanelAcertijos cursos={cursos} niveles={niveles} gradoActual={gradoActual} />
         ) : pestana === "recursos" && !editando ? (
@@ -758,6 +762,110 @@ function PanelRetos({ misiones }) {
   );
 }
 
+
+// ----- Pestaña "Secretos": objetos brillantes escondidos en el mundo; al examinarlos se responde una pregunta -----
+const secretoVacio = () => ({ nombre: "", emoji: "📜", escena: "biblioteca", pista: "", texto: "", opciones: ["", ""], correcta: 0, retro: "", grado_id: "", xp: "30", oro: "10", activo: true });
+function PanelSecretos({ cursos, niveles }) {
+  const [lista, setLista] = useState(null);
+  const [conteo, setConteo] = useState({});
+  const [form, setForm] = useState(null);
+  const [error, setError] = useState("");
+  const [aviso, setAviso] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const [faltaSql, setFaltaSql] = useState(false);
+  const relojAviso = useRef(null);
+  useEffect(() => () => clearTimeout(relojAviso.current), []);
+  const avisar = (t) => { setAviso(t); clearTimeout(relojAviso.current); relojAviso.current = setTimeout(() => setAviso(""), 2400); };
+  const cargar = async () => {
+    try { setLista(await mundoApi.fetchSecretosAdmin()); mundoApi.fetchConteoSecretos().then(setConteo).catch(() => {}); }
+    catch (e) { if (/does not exist|relation|schema cache/i.test(e.message || "")) setFaltaSql(true); else setError(e.message || "No se pudieron cargar los secretos."); setLista([]); }
+  };
+  useEffect(() => { cargar(); }, []);
+  if (lista === null) return <p className="text-sm text-slate-400">Cargando…</p>;
+  if (faltaSql) return <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">Todavía no se crearon las tablas de los secretos. Corre <b>71_mundo_secretos.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</div>;
+  const input = "w-full text-sm rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none bg-white";
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const aForm3 = (x) => ({ id: x.id, nombre: x.nombre, emoji: x.emoji, escena: x.escena, pista: x.pista, texto: x.texto, opciones: x.opciones.length ? [...x.opciones] : ["", ""], correcta: x.correcta, retro: x.retro, grado_id: x.grado_id || "", xp: String(x.xp), oro: String(x.oro), activo: x.activo });
+  const guardar = async () => {
+    const e = validarSecreto(form); if (e) { setError(e); return; }
+    setGuardando(true); setError("");
+    try {
+      if (form.id) await mundoApi.editarSecretoMundo(form.id, form); else await mundoApi.crearSecretoMundo(form);
+      setForm(null); avisar("Guardado ✓"); await cargar();
+    } catch (er) { setError("No se pudo guardar: " + (er.message || "error desconocido")); }
+    setGuardando(false);
+  };
+  const alternar = async (x) => { try { await mundoApi.editarSecretoMundo(x.id, { ...x, activo: !x.activo }); await cargar(); } catch (er) { setError("No se pudo cambiar: " + (er.message || "")); } };
+  const borrar = async (x) => { if (!window.confirm(`¿Borrar el secreto "${x.nombre}"? También se borra el registro de quiénes lo encontraron (los premios ya entregados no se tocan).`)) return; try { await mundoApi.eliminarSecretoMundo(x.id); await cargar(); } catch (er) { setError("No se pudo borrar: " + (er.message || "")); } };
+
+  if (form) {
+    const ops = form.opciones;
+    const cambiarOp = (i, v) => set("opciones", ops.map((o, k) => (k === i ? v : o)));
+    const quitarOp = (i) => setForm((f) => ({ ...f, opciones: f.opciones.filter((_, k) => k !== i), correcta: f.correcta === i ? 0 : f.correcta > i ? f.correcta - 1 : f.correcta }));
+    return (
+      <div data-testid="form-secreto">
+        <h4 className="text-sm font-bold text-slate-800 mb-2">{form.id ? "✏️ Editar secreto" : "➕ Nuevo secreto"}</h4>
+        {error && <div className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-2.5 mb-3" data-testid="error-secreto">{error}</div>}
+        <div className="grid sm:grid-cols-2 gap-3 mb-3">
+          <div><label className="text-[11px] text-slate-500 block mb-1">Nombre del objeto</label><input value={form.nombre} onChange={(e) => set("nombre", e.target.value)} maxLength={60} className={input} aria-label="Nombre" placeholder="Ej: Pergamino antiguo" /></div>
+          <div><label className="text-[11px] text-slate-500 block mb-1">¿Dónde se esconde?</label>
+            <select value={form.escena} onChange={(e) => set("escena", e.target.value)} className={input} aria-label="Escena">{ESCENAS_SECRETO.map((x) => <option key={x.key} value={x.key}>{x.emoji} {x.nombre}</option>)}</select></div>
+        </div>
+        <div className="mb-3"><label className="text-[11px] text-slate-500 block mb-1">¿Cómo se ve?</label>
+          <div className="flex flex-wrap gap-1.5">{OBJETOS_SECRETO.map((e) => <button type="button" key={e} onClick={() => set("emoji", e)} aria-label={`Objeto ${e}`} className={`text-xl w-10 h-10 rounded-lg border-2 ${form.emoji === e ? "border-violet-500 bg-violet-50" : "border-slate-200"}`}>{e}</button>)}</div></div>
+        <div className="mb-3"><label className="text-[11px] text-slate-500 block mb-1">Rumor (lo cuentan los vecinos mientras no lo encuentren; opcional)</label><input value={form.pista} onChange={(e) => set("pista", e.target.value)} maxLength={160} className={input} aria-label="Rumor" placeholder="Ej: Dicen que algo brilla entre los libros…" /></div>
+        <div className="mb-3"><label className="text-[11px] text-slate-500 block mb-1">Pregunta que aparece al examinarlo</label><textarea value={form.texto} onChange={(e) => set("texto", e.target.value)} rows={2} maxLength={400} className={input} aria-label="Pregunta" /></div>
+        <div className="mb-3"><label className="text-[11px] text-slate-500 block mb-1">Respuestas (marca la correcta)</label>
+          {ops.map((o, i) => (
+            <div key={i} className="flex items-center gap-2 mb-1.5">
+              <input type="radio" name="correcta-secreto" checked={form.correcta === i} onChange={() => set("correcta", i)} aria-label={`Correcta ${i + 1}`} />
+              <input value={o} onChange={(e) => cambiarOp(i, e.target.value)} className={input} aria-label={`Respuesta ${i + 1}`} />
+              {ops.length > MIN_OPC_SEC && <button type="button" onClick={() => quitarOp(i)} aria-label={`Quitar respuesta ${i + 1}`} className="text-slate-400 text-lg px-1">×</button>}
+            </div>
+          ))}
+          {ops.length < MAX_OPC_SEC && <button type="button" onClick={() => set("opciones", [...ops, ""])} className="text-xs text-violet-600 font-semibold">+ Agregar respuesta</button>}</div>
+        <div className="mb-3"><label className="text-[11px] text-slate-500 block mb-1">Mensaje al acertar (opcional)</label><input value={form.retro} onChange={(e) => set("retro", e.target.value)} maxLength={300} className={input} aria-label="Mensaje al acertar" /></div>
+        <div className="grid grid-cols-3 gap-3 mb-3">
+          <div><label className="text-[11px] text-slate-500 block mb-1">Para…</label>
+            <select value={form.grado_id} onChange={(e) => set("grado_id", e.target.value)} className={input} aria-label="Grado">
+              <option value="">🌐 Todos los cursos</option>
+              {[...new Set([...niveles, ...(esNivel(form.grado_id) ? [nivelDeClave(form.grado_id)] : [])])].map((n) => <option key={n} value={claveNivel(n)}>📚 Todo {nombreNivel(n).toLowerCase()}</option>)}
+              {cursos.map((c) => <option key={c} value={c}>🏫 Solo el curso {c}</option>)}
+            </select></div>
+          <div><label className="text-[11px] text-slate-500 block mb-1">XP</label><input type="number" min="0" max="500" value={form.xp} onChange={(e) => set("xp", e.target.value)} className={input} aria-label="XP" /></div>
+          <div><label className="text-[11px] text-slate-500 block mb-1">Oro</label><input type="number" min="0" max="500" value={form.oro} onChange={(e) => set("oro", e.target.value)} className={input} aria-label="Oro" /></div>
+        </div>
+        <label className="flex items-center gap-2 text-sm text-slate-700 mb-4"><input type="checkbox" checked={form.activo} onChange={(e) => set("activo", e.target.checked)} /> Visible para los estudiantes</label>
+        <div className="flex gap-2 justify-end">
+          <button type="button" onClick={() => { setForm(null); setError(""); }} disabled={guardando} className="text-sm text-slate-500 px-4 py-2">Cancelar</button>
+          <button type="button" onClick={guardar} disabled={guardando} className="text-sm font-bold px-5 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">{guardando ? "Guardando…" : "Guardar secreto"}</button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 leading-relaxed">Los <b>secretos</b> son objetos brillantes (📜 🗝️ 💎…) escondidos en una escena del mundo. El estudiante solo los ve <b>cuando se acerca</b>; al examinarlos responde una pregunta y gana XP y oro <b>una sola vez</b>. Mientras no lo encuentre, los vecinos le cuentan tu <b>rumor</b> como pista. La posición dentro de la escena es fija y la elige el juego.</div>
+      {error && <div className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-2.5 mb-3">{error}</div>}
+      <div className="flex items-center gap-3 mb-3"><button type="button" onClick={() => { setError(""); setForm(secretoVacio()); }} className="text-sm font-bold px-4 py-2 rounded-lg bg-violet-500 text-white">➕ Nuevo secreto</button>{aviso && <span className="text-xs font-semibold text-emerald-600">{aviso}</span>}</div>
+      {lista.length === 0 && <p className="text-sm text-slate-400 py-4 text-center">Todavía no hay secretos. ¡Esconde el primero!</p>}
+      <div className="rounded-xl border border-slate-200 divide-y divide-slate-100" data-testid="lista-secretos">
+        {lista.map((x) => (
+          <div key={x.id} className={`px-3 py-2.5 flex items-center gap-2 ${x.activo ? "" : "opacity-50"}`}>
+            <span className="text-xl">{x.emoji}</span>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold text-slate-800 truncate">{x.nombre}{!x.activo && <span className="ml-2 text-[10px] rounded-full px-2 py-0.5 bg-slate-100 text-slate-500">OCULTO</span>}</div>
+              <div className="text-[11px] text-slate-500">{nombreEscena(x.escena).emoji} {nombreEscena(x.escena).nombre} · {x.grado_id ? etiquetaPara(x.grado_id) : "Todos los cursos"} · +{x.xp} XP · +{x.oro} 🪙 · encontrado por {conteo[x.id] || 0}</div>
+            </div>
+            <button type="button" onClick={() => { setError(""); setForm(aForm3(x)); }} className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700">Editar</button>
+            <button type="button" onClick={() => alternar(x)} className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700">{x.activo ? "Ocultar" : "Mostrar"}</button>
+            <button type="button" onClick={() => borrar(x)} className="text-xs px-2.5 py-1 rounded-lg bg-rose-50 text-rose-600">Borrar</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // ----- Pestaña "Acertijos": sopa de letras, criptograma, ahorcado y rompecabezas de la Casa de los Acertijos -----
 const acertijoVacio = (curso) => ({ tipo: "sopa", titulo: "", contenido: "", pista: "", tam: "10", grado_id: curso || "", xp: "20", oro: "5", activo: true });
