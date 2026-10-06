@@ -9,7 +9,7 @@
 
 import { ZONAS, RETADORES, estadoZonas, misionesDisponibles, zonaDeMision } from "./zonas";
 import { armarPool, crearDuelo, esperaRestanteMin } from "./duelo";
-import { ITEMS, RECETAS, RECURSOS_POR_ZONA, MAX_POR_ITEM, puedeFabricar, faltantes, cantidadPorRecoleccion, esHerramienta } from "./items";
+import { ITEMS, RECETAS, RECURSOS_POR_ZONA, MAX_POR_ITEM, PARCELA, celdaValida, esDecoracion, puedeFabricar, faltantes, cantidadPorRecoleccion, esHerramienta } from "./items";
 
 const TILE = 32;
 const DIRS8 = ["east", "south-east", "south", "south-west", "west", "north-west", "north", "north-east"];
@@ -114,6 +114,13 @@ const CSS = `
 .mundo .m-receta .e { font-size: 28px; } .mundo .m-receta .t { flex: 1; min-width: 0; font-size: 12px; line-height: 1.4; } .mundo .m-receta .t b { font-size: 14px; }
 .mundo .m-ing { display: inline-block; margin-right: 8px; white-space: nowrap; } .mundo .m-ing.falta { color: var(--mal); font-weight: 700; }
 .mundo .m-msg { font-size: 13px; padding: 8px 11px; border-radius: 10px; margin-bottom: 8px; background: var(--ok-s); color: var(--ok); font-weight: 700; } .mundo .m-msg.mal { background: var(--mal-s); color: var(--mal); }
+.mundo .m-construir { position: absolute; left: 50%; transform: translateX(-50%); bottom: 156px; z-index: 20; width: min(520px, calc(100% - 16px)); background: var(--panel); color: var(--texto); border: 1px solid var(--borde); border-radius: 16px; padding: 10px 12px; box-shadow: 0 6px 20px rgba(0,0,0,.4); }
+@media (min-width: 700px) { .mundo .m-construir { bottom: 14px; } }
+.mundo .m-construir .m-c-tit { font-weight: 800; font-size: 14px; display: flex; align-items: center; gap: 8px; } .mundo .m-construir .m-c-tit span { margin-left: auto; font-size: 11px; color: var(--suave); font-weight: 600; }
+.mundo .m-construir .m-c-ayuda { font-size: 12px; color: var(--suave); margin: 4px 0 8px; line-height: 1.35; }
+.mundo .m-c-lista { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.mundo .m-c-item { border: 2px solid var(--borde); background: var(--fondo); color: var(--texto); border-radius: 12px; padding: 5px 10px; font-size: 13px; font-weight: 700; } .mundo .m-c-item.sel { border-color: var(--acento); background: var(--panel); box-shadow: 0 0 0 2px var(--acento); }
+.mundo .m-c-msg { font-size: 12px; font-weight: 700; min-height: 16px; color: var(--ok); margin-bottom: 6px; } .mundo .m-c-msg.mal { color: var(--mal); }
 .mundo .m-fundido { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity .18s; }
 .mundo .m-fundido.ver { opacity: 1; pointer-events: auto; }
 .mundo .m-fin { position: absolute; inset: 0; background: rgba(8,14,32,.78); display: flex; align-items: center; justify-content: center; padding: 20px; }
@@ -145,6 +152,7 @@ const PLANTILLA = `
       <span class="m-chip m-vida oculto">❤️ <span class="h-vida">100</span></span>
       <span class="m-chip">🎯 <span class="h-mis">0/0</span></span>
       <span class="m-chip">⭐ <span class="h-est">0/6</span></span>
+      <button class="m-boton b-construir oculto" aria-label="Construir">🔨 Construir</button>
       <button class="m-boton b-mochila oculto" aria-label="Mochila">🎒 Mochila</button>
       <button class="m-boton b-mapa" aria-label="Mapa del mundo">🗺️ Mapa</button>
       <button class="m-boton b-sonido" aria-label="Sonido">🔊</button>
@@ -160,6 +168,7 @@ const PLANTILLA = `
   <div class="m-dialogo oculto"></div>
   <div class="m-mapa oculto"></div>
   <div class="m-mochila oculto"></div>
+  <div class="m-construir oculto"></div>
   <div class="m-duelo oculto"></div>
   <div class="m-fundido"></div>
   <div class="m-fin oculto"><div class="m-tarjeta"><div class="m-grande">🏆</div><h2>¡Completaste todas las misiones!</h2><p class="m-fin-texto"></p><button class="b-seguir">Seguir explorando</button></div></div>
@@ -744,6 +753,47 @@ const DEF_LAGO = {
 };
 
 // =====================================================================================
+//  LA PARCELA: un terreno cercado donde el estudiante coloca los objetos que fabricó
+// =====================================================================================
+function crearParcela() {
+  const COLS = PARCELA.cols, FILAS = PARCELA.filas, W = COLS * TILE, H = FILAS * TILE, mitad = COLS / 2, r = rng(5150);
+  const esCerca = (tx, ty) => tx === 0 || ty === 0 || tx === COLS - 1 || (ty === FILAS - 1 && tx !== mitad - 1 && tx !== mitad);
+  const [suelo, g] = lienzo(W, H);
+  for (let ty = 0; ty < FILAS; ty++) for (let tx = 0; tx < COLS; tx++) {
+    const px = tx * TILE, py = ty * TILE, camino = (tx === mitad - 1 || tx === mitad) && ty >= FILAS - 4;
+    g.fillStyle = camino ? ((tx + ty) % 2 ? "#b79a6a" : "#ae9061") : ((tx + ty) % 2 ? "#4c9a45" : "#478f40"); g.fillRect(px, py, TILE, TILE);
+    for (let i = 0; i < 6; i++) { g.fillStyle = camino ? "#9c8052" : (r() < 0.5 ? "#5fb057" : "#3b7d35"); g.fillRect(px + Math.floor(r() * 30), py + Math.floor(r() * 30), 2, 2); }
+    if (!camino && r() < 0.05) { g.fillStyle = ["#ffffff", "#ffd54f", "#f48fb1"][Math.floor(r() * 3)]; g.fillRect(px + 6 + Math.floor(r() * 18), py + 6 + Math.floor(r() * 18), 3, 3); }
+  }
+  for (let ty = 0; ty < FILAS; ty++) for (let tx = 0; tx < COLS; tx++) if (esCerca(tx, ty)) { // la cerca: postes y dos travesaños
+    const px = tx * TILE, py = ty * TILE;
+    g.fillStyle = "rgba(0,0,0,.2)"; g.fillRect(px, py + 24, TILE, 5);
+    g.fillStyle = "#8a5a2b"; g.fillRect(px, py + 12, TILE, 4); g.fillRect(px, py + 20, TILE, 4);
+    g.fillStyle = "#6b4220"; g.fillRect(px + 4, py + 6, 5, 22); g.fillRect(px + 23, py + 6, 5, 22); g.fillStyle = "#a67340"; g.fillRect(px + 4, py + 6, 5, 2); g.fillRect(px + 23, py + 6, 5, 2);
+  }
+  const obstaculos = []; // las piezas colocadas bloquean el paso
+  return {
+    id: "parcela", zona: "parcela", nombre: "Mi parcela", icono: "🏡", exterior: false, musica: "exterior", parcela: true,
+    ancho: W, alto: H, suelo, fondo: "#17391c", obstaculos, spawn: { x: W / 2, y: H - TILE - 6 }, mini: null, estrellas: [], edificios: [], portones: [],
+    npcs: [], puertas: [], salidas: [{ x: W / 2 - TILE + 6, y: H - TILE + 12, w: 2 * TILE - 12, h: TILE + 20 }], slotsPorLugar: {},
+    bloqueado: (px, py) => { const tx = Math.floor(px / TILE), ty = Math.floor(py / TILE); return tx < 0 || ty < 0 || tx >= COLS || ty >= FILAS ? true : esCerca(tx, ty); },
+    piso: () => "pasto", puntoLibre: () => ({ x: W / 2, y: H - 80 }), piezas: new Map(),
+    objetos(lista, ctx, camX, camY, visible, t) {
+      for (const [k, p] of this.piezas) {
+        const cx = p.x * TILE + 16, by = p.y * TILE + 28; if (!visible(cx, by)) continue;
+        lista.push({ y: by, d: () => {
+          const sx = Math.round(cx - camX), sy = Math.round(by - camY);
+          ctx.fillStyle = "rgba(0,0,0,.25)"; ctx.beginPath(); ctx.ellipse(sx, sy - 2, 11, 4, 0, 0, 7); ctx.fill();
+          if (p.item === "farol") { ctx.fillStyle = `rgba(255,200,80,${0.14 + 0.05 * Math.sin(t * 5 + p.x)})`; ctx.beginPath(); ctx.arc(sx, sy - 14, 30, 0, 7); ctx.fill(); }
+          ctx.globalAlpha = 1; ctx.fillStyle = "#000"; ctx.font = "24px " + FUENTE_EMOJI; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.fillText(ITEMS[p.item].emoji, sx, sy - 3);
+        } });
+      }
+    },
+    efectos: null,
+  };
+}
+
+// =====================================================================================
 //  EL MUNDO POR DENTRO: los interiores de los edificios
 // =====================================================================================
 const TEMAS = {
@@ -1009,7 +1059,8 @@ export async function iniciarMundo(raiz, op) {
   const naturales = [crearZonaNatural(DEF_BOSQUE), crearZonaNatural(DEF_MONTANA), crearZonaNatural(DEF_LAGO)];
   const escenaDeZona = { aldea: exterior }; naturales.forEach((n) => (escenaDeZona[n.zona] = n));
   const conPortones = [exterior, ...naturales];                    // las escenas que tienen un portón hacia la zona siguiente
-  const escenas = { exterior }; naturales.forEach((n) => (escenas[n.id] = n)); Object.values(interiores).forEach((s) => (escenas[s.id] = s));
+  const parcela = crearParcela();
+  const escenas = { exterior, parcela }; naturales.forEach((n) => (escenas[n.id] = n)); Object.values(interiores).forEach((s) => (escenas[s.id] = s));
   const rand = rng(4242);
 
   // ---- colisiones (sirven para el jugador y para los aldeanos) ----
@@ -1101,6 +1152,22 @@ export async function iniciarMundo(raiz, op) {
     }
   });
 
+  // ---- la parcela: un terreno propio al que se entra por un cartel cerca de donde se aparece en la aldea ----
+  const PC = RC && op.parcela && op.parcela.activo ? op.parcela : null;
+  let cartel = null;
+  const obstaculoDe = (p) => ({ x: p.x * TILE + 4, y: p.y * TILE + 14, w: 24, h: 14 });
+  function ponerPieza(p) { const pz = { item: p.item, x: p.x, y: p.y }; pz.obs = obstaculoDe(pz); parcela.piezas.set(`${p.x},${p.y}`, pz); parcela.obstaculos.push(pz.obs); }
+  function sacarPieza(x, y) { const k = `${x},${y}`, pz = parcela.piezas.get(k); if (!pz) return; parcela.piezas.delete(k); const i = parcela.obstaculos.indexOf(pz.obs); if (i >= 0) parcela.obstaculos.splice(i, 1); }
+  if (PC) {
+    (PC.piezas || []).filter((p) => esDecoracion(p.item) && celdaValida(p.x, p.y) && !parcela.piezas.has(`${p.x},${p.y}`)).forEach(ponerPieza);
+    const sp = exterior.spawn, cand = [[-110, -10], [110, -10], [-150, 30], [150, 30], [-70, -60], [70, -60], [-190, -10], [190, -10]];
+    const libre = (x, y) => !chocaEn(exterior, x, y) && exterior.npcs.every((n) => Math.hypot(n.x - x, n.y - y) >= 60) && exterior.edificios.every((e) => Math.hypot(e.puerta.x - x, e.puerta.y - y) >= 70);
+    const [dx, dy] = cand.find(([a, b]) => libre(sp.x + a, sp.y + b)) || cand[0];
+    cartel = { tipo: "parcela_puerta", nombre: "Mi parcela", x: sp.x + dx, y: sp.y + dy, dir: "south", radio: 46, solido: true };
+    exterior.npcs.push(cartel);
+    parcela.salidas[0].accion = () => { snd.puerta(); cambiarEscena(exterior, cartel.x, cartel.y + 36); };
+  }
+
   // ---- aldeanos: muchos personajes caminando por ahí ----
   let contadorAldeanos = 0;
   function poblar(esc, cantidad) {
@@ -1118,7 +1185,7 @@ export async function iniciarMundo(raiz, op) {
   const estado = {
     activo: true, escena: exterior, clave: claveJugador, nombre: J.nombre || "Estudiante", x: exterior.spawn.x, y: exterior.spawn.y, dir: "south", caminando: false,
     xp: J.xp || 0, oro: J.oro || 0, vida: typeof J.vida === "number" ? J.vida : null, descansando: false, ganado: { xp: 0, oro: 0 }, est: 0, cercano: null, dialogo: null, avisos: [], fase: 0, terminado: false, cambiando: false, pasoT: 0.3,
-    comp: { x: exterior.spawn.x, y: exterior.spawn.y }, hechas, fasePaso: 0, movio: false, mapaAbierto: false, duelo: null, mochilaAbierta: false,
+    comp: { x: exterior.spawn.x, y: exterior.spawn.y }, hechas, fasePaso: 0, movio: false, mapaAbierto: false, duelo: null, mochilaAbierta: false, construyendo: false,
   };
   const teclas = new Set(), joy = { x: 0, y: 0 };
 
@@ -1127,7 +1194,7 @@ export async function iniciarMundo(raiz, op) {
   function toast(texto, ms = 2800) { const t = q(".m-toast"); t.textContent = texto; t.classList.remove("oculto"); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.add("oculto"), ms); temporizadores.add(toast.h); }
   function mostrarLugar(esc) { const l = q(".m-lugar"); l.textContent = `${esc.icono} ${esc.nombre}`; l.classList.add("ver"); clearTimeout(mostrarLugar.h); mostrarLugar.h = setTimeout(() => l.classList.remove("ver"), 2400); temporizadores.add(mostrarLugar.h); }
   function posicionarMini() { const h = q(".m-hud").getBoundingClientRect(); mini.style.top = Math.round(h.bottom - raiz.getBoundingClientRect().top + 6) + "px"; q(".m-lugar").style.top = Math.round(h.bottom - raiz.getBoundingClientRect().top + (estado.escena.exterior ? 6 : 6)) + "px"; }
-  const temaMusical = (esc) => (naturales.includes(esc) ? esc.id : esc.exterior ? "exterior" : "interior");
+  const temaMusical = (esc) => (esc.musica ? esc.musica : naturales.includes(esc) ? esc.id : esc.exterior ? "exterior" : "interior");
   const totalEstrellas = () => exterior.estrellas.length + naturales.filter((n) => zonas[n.zona] && zonas[n.zona].desbloqueada).reduce((a, n) => a + n.estrellas.length, 0);
   function actualizarHud() {
     q(".h-xp").textContent = estado.xp; q(".h-oro").textContent = estado.oro; { const cv = q(".m-vida"); if (estado.vida == null) cv.classList.add("oculto"); else { cv.classList.remove("oculto"); q(".h-vida").textContent = estado.vida; cv.classList.toggle("baja", estado.vida <= 30); } } const disp = disponibles(); q(".h-mis").textContent = `${disp.filter((m) => hechas.has(m.id)).length}/${disp.length}`; q(".h-est").textContent = `${estado.est}/${totalEstrellas()}`;
@@ -1146,7 +1213,7 @@ export async function iniciarMundo(raiz, op) {
     const f = q(".m-fundido"); f.classList.add("ver");
     espera(() => {
       estado.escena = esc; estado.x = x; estado.y = y; estado.comp = { x, y };
-      mini.classList.toggle("oculto", !esc.exterior); mostrarLugar(esc); snd.musica(temaMusical(esc)); posicionarMini();
+      mini.classList.toggle("oculto", !esc.exterior); q(".b-construir").classList.toggle("oculto", !(PC && esc === parcela)); if (estado.construyendo) cerrarConstruir(); mostrarLugar(esc); snd.musica(temaMusical(esc)); posicionarMini();
       f.classList.remove("ver"); espera(() => { estado.cambiando = false; }, 200);
     }, 200);
   }
@@ -1474,7 +1541,7 @@ export async function iniciarMundo(raiz, op) {
   function interactuar() {
     if (estado.dialogo || estado.mapaAbierto || estado.mochilaAbierta || estado.duelo || estado.cambiando || !estado.activo || !estado.cercano) return;
     const n = estado.cercano;
-    if (n.tipo === "puerta") entrarEdificio(n.edificio); else if (n.tipo === "guardia") abrirGuardia(n); else if (n.tipo === "posadero") abrirPosada(n); else if (n.tipo === "guardian") abrirGuardian(n); else if (n.tipo === "retador") abrirRetador(n, false); else if (n.tipo === "mision") abrirMision(n); else if (n.tipo === "aldeano") abrirCharla(n); else if (n.tipo === "recurso") abrirRecurso(n);
+    if (n.tipo === "puerta") entrarEdificio(n.edificio); else if (n.tipo === "guardia") abrirGuardia(n); else if (n.tipo === "posadero") abrirPosada(n); else if (n.tipo === "guardian") abrirGuardian(n); else if (n.tipo === "retador") abrirRetador(n, false); else if (n.tipo === "mision") abrirMision(n); else if (n.tipo === "aldeano") abrirCharla(n); else if (n.tipo === "recurso") abrirRecurso(n); else if (n.tipo === "parcela_puerta") { snd.puerta(); cambiarEscena(parcela, parcela.spawn.x, parcela.spawn.y); }
   }
 
   // ---- recoger recursos: cada punto hace una pregunta; si se acierta, se recoge (hay un límite por día) ----
@@ -1539,7 +1606,7 @@ export async function iniciarMundo(raiz, op) {
     const items = Object.keys(ITEMS).filter((k) => (inv[k] || 0) > 0 && ITEMS[k].tipo !== "decoracion" || (inv[k] || 0) > 0);
     let cuerpo;
     if (tab === "mochila") {
-      cuerpo = items.length ? `<div class="m-inv">${items.map((k) => { const it = ITEMS[k]; return `<div class="m-slot" data-item="${k}"><span class="e">${it.emoji}</span><b>${html(it.nombre)}</b><small>× ${inv[k]}${it.desc ? "<br>" + html(it.desc) : ""}</small>${it.tipo === "consumible" ? `<button class="m-chico" data-usar="${k}">Usar</button>` : ""}</div>`; }).join("")}</div>` : '<p class="m-texto">Tu mochila está vacía. Busca ✨ recursos en el Bosque, la Montaña y el Lago.</p>';
+      cuerpo = items.length ? `<div class="m-inv">${items.map((k) => { const it = ITEMS[k]; return `<div class="m-slot" data-item="${k}"><span class="e">${it.emoji}</span><b>${html(it.nombre)}</b><small>× ${inv[k]}${it.desc ? "<br>" + html(it.desc) : ""}</small>${it.tipo === "consumible" ? `<button class="m-chico" data-usar="${k}">Usar</button>` : it.tipo === "decoracion" ? "<small>🏡 para tu parcela</small>" : ""}</div>`; }).join("")}</div>` : '<p class="m-texto">Tu mochila está vacía. Busca ✨ recursos en el Bosque, la Montaña y el Lago.</p>';
     } else {
       cuerpo = Object.keys(RECETAS).map((id) => {
         const it = ITEMS[id], p = puedeFabricar(id, inv), f = faltantes(id, inv);
@@ -1583,6 +1650,67 @@ export async function iniciarMundo(raiz, op) {
       else renderMochila("mochila", { mal: true, texto: (r && r.mensaje) || "No se pudo usar." });
     } finally { ocupadoMochila = false; }
   }
+
+  // ---- construir en la parcela: se elige una pieza de la mochila y se toca una casilla; tocar una pieza la recoge ----
+  const construirEl = q(".m-construir"); let selDeco = null, msgC = null, ocupadoC = false;
+  function renderConstruir() {
+    const lista = Object.keys(ITEMS).filter((k) => esDecoracion(k) && (inv[k] || 0) > 0);
+    if (!selDeco || !(inv[selDeco] > 0)) selDeco = lista[0] || null;
+    construirEl.innerHTML = `<div class="m-c-tit">🔨 Construir<span>${parcela.piezas.size}/${PARCELA.maxPiezas} piezas</span></div>
+      <div class="m-c-ayuda">${lista.length ? "Elige una pieza y toca una casilla del suelo para colocarla. Toca una pieza puesta para recogerla." : "No tienes objetos para colocar. Fabrícalos en la 🎒 Mochila → 🔨 Fabricar (silla, mesa, farol y maceta)."}</div>
+      ${lista.length ? `<div class="m-c-lista">${lista.map((k) => `<button class="m-c-item ${k === selDeco ? "sel" : ""}" data-sel="${k}">${ITEMS[k].emoji} ${html(ITEMS[k].nombre)} × ${inv[k]}</button>`).join("")}</div>` : ""}
+      <div class="m-c-msg ${msgC && msgC.mal ? "mal" : ""}">${msgC ? html(msgC.texto) : ""}</div><button class="m-ok" data-a="listo" style="margin-top:0">Listo</button>`;
+    construirEl.classList.remove("oculto");
+    construirEl.querySelectorAll("[data-sel]").forEach((b) => (b.onclick = () => { selDeco = b.dataset.sel; msgC = null; renderConstruir(); }));
+    construirEl.querySelector('[data-a="listo"]').onclick = cerrarConstruir;
+  }
+  function abrirConstruir() { if (!PC || estado.escena !== parcela || estado.dialogo || estado.mapaAbierto || estado.cambiando) return; estado.construyendo = true; msgC = null; renderConstruir(); }
+  function cerrarConstruir() { estado.construyendo = false; construirEl.classList.add("oculto"); construirEl.innerHTML = ""; cv.focus(); }
+  const alternarConstruir = () => (estado.construyendo ? cerrarConstruir() : abrirConstruir());
+  function mensajeC(texto, mal) { msgC = { texto, mal: !!mal }; if (estado.construyendo) renderConstruir(); }
+  const aplicarInv = (nuevo) => { if (!nuevo) return; Object.keys(inv).forEach((k) => delete inv[k]); Object.assign(inv, nuevo); };
+  async function tocarCelda(tx, ty) {
+    if (!PC || ocupadoC) return;
+    const hay = parcela.piezas.get(`${tx},${ty}`);
+    if (hay) return quitarPieza(tx, ty);
+    if (!celdaValida(tx, ty)) { mensajeC(tx === 0 || ty === 0 || tx === PARCELA.cols - 1 || ty === PARCELA.filas - 1 ? "Eso es la cerca." : "Deja libre el paso de la entrada.", true); return; }
+    if (!selDeco || !(inv[selDeco] > 0)) { mensajeC("Elige una pieza de tu mochila primero.", true); return; }
+    if (parcela.piezas.size >= PARCELA.maxPiezas) { mensajeC(`Tu parcela ya tiene el máximo de ${PARCELA.maxPiezas} piezas.`, true); return; }
+    const o = obstaculoDe({ x: tx, y: ty }), bx = estado.x - 6, by = estado.y - 8;
+    if (bx < o.x + o.w + 1 && bx + 12 > o.x - 1 && by < o.y + o.h + 1 && by + 8 > o.y - 1) { mensajeC("Estás parado ahí: muévete un poco.", true); return; }
+    ocupadoC = true; const item = selDeco;
+    try {
+      let r;
+      try {
+        if (op.alColocar) r = await op.alColocar({ item, x: tx, y: ty });
+        else { const n = { ...inv, [item]: inv[item] - 1 }; if (!n[item]) delete n[item]; r = { ok: true, inventario: n }; }
+      } catch (e) { r = { ok: false, mensaje: (e && e.message) || "No se pudo colocar." }; }
+      if (!vivo) return;
+      if (r && r.ok) { aplicarInv(r.inventario); ponerPieza({ item, x: tx, y: ty }); snd.golpe(); mensajeC(`${ITEMS[item].emoji} ¡Colocado!`); }
+      else { if (r && r.inventario) aplicarInv(r.inventario); mensajeC((r && r.mensaje) || "No se pudo colocar.", true); }
+    } finally { ocupadoC = false; }
+  }
+  async function quitarPieza(tx, ty) {
+    const pz = parcela.piezas.get(`${tx},${ty}`); if (!pz || ocupadoC) return;
+    ocupadoC = true;
+    try {
+      let r;
+      try {
+        if (op.alQuitar) r = await op.alQuitar({ x: tx, y: ty });
+        else if ((inv[pz.item] || 0) >= MAX_POR_ITEM) r = { ok: false, lleno: true, mensaje: "Tu mochila ya tiene el máximo de ese objeto." };
+        else r = { ok: true, item: pz.item, inventario: { ...inv, [pz.item]: (inv[pz.item] || 0) + 1 } };
+      } catch (e) { r = { ok: false, mensaje: (e && e.message) || "No se pudo recoger." }; }
+      if (!vivo) return;
+      if (r && r.ok) { aplicarInv(r.inventario); sacarPieza(tx, ty); snd.paso("tierra"); mensajeC(`${ITEMS[pz.item].emoji} Recogido: vuelve a tu mochila.`); }
+      else if (r && r.vacia) { sacarPieza(tx, ty); mensajeC(r.mensaje, true); }
+      else mensajeC((r && r.mensaje) || "No se pudo recoger.", true);
+    } finally { ocupadoC = false; }
+  }
+  cv.addEventListener("click", (e) => {
+    if (!estado.construyendo || estado.escena !== parcela || estado.dialogo || estado.mochilaAbierta || estado.mapaAbierto || estado.cambiando) return;
+    const rc = cv.getBoundingClientRect(); if (!rc.width || !rc.height) return;
+    tocarCelda(Math.floor(((e.clientX - rc.left) * (LW / rc.width) + camX) / TILE), Math.floor(((e.clientY - rc.top) * (LH / rc.height) + camY) / TILE));
+  });
 
   // ---- movimiento ----
   function leerEntrada() {
@@ -1642,7 +1770,7 @@ export async function iniciarMundo(raiz, op) {
     estado.cercano = mejor;
     const av = q(".m-aviso"), ba = q(".m-accion");
     if (mejor && !estado.dialogo && !estado.cambiando) {
-      av.textContent = (mejor.tipo === "puerta" ? `🚪 Entrar a ${mejor.nombre}` : mejor.tipo === "recurso" ? `${ITEMS[mejor.item].emoji} Recoger ${mejor.nombre.toLowerCase()}` : `💬 Hablar con ${mejor.nombre}`) + (tactil ? "" : " (E)"); av.classList.remove("oculto"); ba.classList.add("listo"); ba.textContent = mejor.tipo === "puerta" ? "🚪" : mejor.tipo === "recurso" ? ITEMS[mejor.item].emoji : "💬";
+      av.textContent = (mejor.tipo === "puerta" ? `🚪 Entrar a ${mejor.nombre}` : mejor.tipo === "parcela_puerta" ? "🏡 Entrar a mi parcela" : mejor.tipo === "recurso" ? `${ITEMS[mejor.item].emoji} Recoger ${mejor.nombre.toLowerCase()}` : `💬 Hablar con ${mejor.nombre}`) + (tactil ? "" : " (E)"); av.classList.remove("oculto"); ba.classList.add("listo"); ba.textContent = mejor.tipo === "puerta" ? "🚪" : mejor.tipo === "parcela_puerta" ? "🏡" : mejor.tipo === "recurso" ? ITEMS[mejor.item].emoji : "💬";
     } else { av.classList.add("oculto"); ba.classList.remove("listo"); }
     for (const a of estado.avisos) a.t += dt; estado.avisos = estado.avisos.filter((a) => a.t < 1.3);
   }
@@ -1656,6 +1784,13 @@ export async function iniciarMundo(raiz, op) {
   }
   function etiqueta(texto, x, y, color) { ctx.font = "bold 9px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.75)"; ctx.strokeText(texto, x, y); ctx.fillStyle = color || "#fff"; ctx.fillText(texto, x, y); }
   const emoji = (txt, x, y, px) => { ctx.globalAlpha = 1; ctx.fillStyle = "#000"; ctx.font = px + "px " + FUENTE_EMOJI; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.fillText(txt, Math.round(x - camX), Math.round(y - camY)); };
+  function dibujarCartel(n, t) {
+    const sx = Math.round(n.x - camX), sy = Math.round(n.y - camY);
+    sombra(n.x, n.y, 10, 4);
+    ctx.fillStyle = "#6b4220"; ctx.fillRect(sx - 2, sy - 18, 4, 18); ctx.fillStyle = "#a67340"; ctx.fillRect(sx - 14, sy - 32, 28, 16); ctx.fillStyle = "#c58f55"; ctx.fillRect(sx - 14, sy - 32, 28, 3);
+    ctx.globalAlpha = 1; ctx.fillStyle = "#000"; ctx.font = "13px " + FUENTE_EMOJI; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.fillText("🏡", sx, sy - 19);
+    if (Math.hypot(n.x - estado.x, n.y - estado.y) < 90) etiqueta(n.nombre, sx, sy - 36, "#fde68a");
+  }
   function dibujarRecurso(n, t) {
     const listo = ahoraMs() >= (n.hastaMs || 0), sx = Math.round(n.x - camX), sy = Math.round(n.y - camY);
     sombra(n.x, n.y, 11, 4);
@@ -1676,6 +1811,7 @@ export async function iniciarMundo(raiz, op) {
     for (const s of esc.estrellas) if (!s.tomada && visible(s.x, s.y)) lista.push({ y: s.y, d: () => emoji("⭐", s.x, s.y - 8 + Math.sin(t * 4 + s.x) * 2, 16) });
     for (const n of esc.npcs) lista.push({ y: n.y, d: () => {
       if (n.tipo === "recurso") { dibujarRecurso(n, t); return; }
+      if (n.tipo === "parcela_puerta") { dibujarCartel(n, t); return; }
       sombra(n.x, n.y, 9, 3.5);
       if (n.tipo === "retador") { const sx = Math.round(n.x - camX), sy = Math.round(n.y - camY); ctx.fillStyle = `rgba(220,38,38,${(puedeRetar(n) ? 0.3 : 0.1) + 0.12 * Math.sin(t * 4)})`; ctx.beginPath(); ctx.ellipse(sx, sy, 17, 7, 0, 0, 7); ctx.fill(); } // aura roja: se nota que es peligroso
       dibujarPersonaje(n.clave, n.dir, n.x, n.y, n.caminando, n.fasePaso || 0);
@@ -1725,6 +1861,7 @@ export async function iniciarMundo(raiz, op) {
     if (k === "m") { alternarSonido(); return; }
     if (estado.duelo) { manejarTeclaDuelo(k); return; }
     if (estado.mochilaAbierta) { if (e.key === "Escape" || k === "i") cerrarMochila(); return; }
+    if (k === "b" && PC && estado.escena === parcela && !estado.dialogo && !estado.mapaAbierto && !estado.cambiando) { alternarConstruir(); return; }
     if (k === "i" && RC && !estado.dialogo && !estado.mapaAbierto && !estado.cambiando) { abrirMochila(); return; }
     if (k === "p") { if (estado.mapaAbierto) cerrarMapa(); else abrirMapa(); return; }
     if (estado.mapaAbierto) { if (e.key === "Escape") cerrarMapa(); return; }
@@ -1749,6 +1886,7 @@ export async function iniciarMundo(raiz, op) {
   function alternarSonido() { const mudo = snd.alternar(); q(".b-sonido").textContent = mudo ? "🔇" : "🔊"; toast(mudo ? "Sonido apagado" : "Sonido encendido", 1200); }
   q(".b-sonido").onclick = alternarSonido;
   q(".b-mapa").onclick = () => (estado.mapaAbierto ? cerrarMapa() : abrirMapa());
+  if (PC) q(".b-construir").onclick = alternarConstruir;
   if (RC) { q(".b-mochila").classList.remove("oculto"); q(".b-mochila").onclick = () => (estado.mochilaAbierta ? cerrarMochila() : abrirMochila()); }
   q(".b-salir").onclick = () => op.alSalir && op.alSalir();
   q(".b-seguir").onclick = () => { q(".m-fin").classList.add("oculto"); cv.focus(); };
@@ -1763,7 +1901,7 @@ export async function iniciarMundo(raiz, op) {
   ultimo = performance.now(); rafId = requestAnimationFrame(cuadro);
 
   const api = {
-    estado, escenas, exterior, interiores, misiones, hechas, snd, chocaEn, interactuar, cambiarEscena, pasos, bosque: escenaDeZona.bosque, naturales, escenaDeZona, zonas: () => zonas, recalcularZonas, abrirMapa, cerrarMapa, viajarRapido, insignias, esperaHasta, poolDeZona, R, retosGanados, esperaReto, abrirRetador, iniciarReto, poolDeZonaReto, puedeRetar, abrirGuardian, iniciarDuelo, contestarDuelo, terminarDuelo, cerrarDuelo, RC, inv, abrirRecurso, abrirMochila, cerrarMochila, fabricarItem, usarItem, recogidoHoy: () => recogidoHoy,
+    estado, escenas, exterior, interiores, misiones, hechas, snd, chocaEn, interactuar, cambiarEscena, pasos, bosque: escenaDeZona.bosque, naturales, escenaDeZona, zonas: () => zonas, recalcularZonas, abrirMapa, cerrarMapa, viajarRapido, insignias, esperaHasta, poolDeZona, R, retosGanados, esperaReto, abrirRetador, iniciarReto, poolDeZonaReto, puedeRetar, abrirGuardian, iniciarDuelo, contestarDuelo, terminarDuelo, cerrarDuelo, RC, inv, abrirRecurso, abrirMochila, cerrarMochila, fabricarItem, usarItem, recogidoHoy: () => recogidoHoy, PC, parcela, cartel: () => cartel, abrirConstruir, cerrarConstruir, tocarCelda,
     destruir() {
       if (!vivo) return; // por si se llama dos veces
       vivo = false; estado.activo = false; cancelAnimationFrame(rafId); temporizadores.forEach(clearTimeout); temporizadores.clear();
