@@ -518,6 +518,37 @@ const FRASES = [
   "Camina con calma: la aldea es grande y hay mucho por descubrir.",
 ];
 const SPRITE_POR_LUGAR = { biblioteca: "cronista_femenino", agora: "defensor_masculino", templo: "peregrino_femenino", mercado: "consejero_masculino", plaza: "maestro_gremio_masculino" };
+// ---------- caminata por código ----------
+// A partir de la pose quieta de cada dirección se arman 4 cuadros de caminata: se levanta una pierna
+// (la mitad izquierda o derecha de la parte de abajo), contacto con el cuerpo 1 px más abajo, se levanta
+// la otra pierna y otra vez contacto. Así los personajes caminan sin tener que dibujar nada más.
+function fabricarPasos(im) {
+  const W = im.naturalWidth || im.width, H = im.naturalHeight || im.height;
+  if (!W || !H) return null;
+  const [, g0] = lienzo(W, H); g0.drawImage(im, 0, 0);
+  const d = g0.getImageData(0, 0, W, H).data;
+  let x0 = W, y0 = H, x1 = -1, y1 = -1;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (d[(y * W + x) * 4 + 3] > 0) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  if (x1 < 0) return null;
+  x1++; y1++; // los bordes de la caja son exclusivos
+  const cx = (x0 + x1) >> 1, alto = Math.max(6, Math.round(0.3 * (y1 - y0))), tope = y1 - alto;
+  const hacer = (lado, lev, rebote) => {
+    const [c, g] = lienzo(W, H), out = g.createImageData(W, H), o = out.data;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4; if (d[i + 3] === 0) continue;
+      let ny = y;
+      if (y < tope) ny = y + rebote;                                                           // el cuerpo baja un poco en el contacto (los pies quedan quietos)
+      else if ((lado === 1 && x < cx) || (lado === 2 && x >= cx)) ny = y - lev;                // la pierna que da el paso se levanta
+      if (ny < 0 || ny >= H) continue;
+      const j = (ny * W + x) * 4;
+      if (ny !== y || o[j + 3] === 0) { o[j] = d[i]; o[j + 1] = d[i + 1]; o[j + 2] = d[i + 2]; o[j + 3] = d[i + 3]; }
+    }
+    g.putImageData(out, 0, 0); return c;
+  };
+  return [hacer(1, 2, 0), hacer(0, 0, 1), hacer(2, 2, 0), hacer(0, 0, 1)];
+}
+const LARGO_PASO = 10.5; // píxeles que hay que avanzar para pasar al siguiente cuadro de la caminata
+
 const html = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 export async function iniciarMundo(raiz, op) {
@@ -534,6 +565,10 @@ export async function iniciarMundo(raiz, op) {
   // ---- imágenes de todos los personajes (8 direcciones cada uno) ----
   const imgs = {};
   await Promise.all(claves.map((k) => { imgs[k] = {}; return Promise.all(DIRS8.map((d) => new Promise((ok) => { const im = new Image(); im.onload = ok; im.onerror = ok; im.src = sprites[k].dirs[d]; imgs[k][d] = im; }))); }));
+
+  // ---- cuadros de caminata de todos los personajes y direcciones ----
+  const pasos = {};
+  claves.forEach((k) => { pasos[k] = {}; DIRS8.forEach((dd) => { pasos[k][dd] = fabricarPasos(imgs[k][dd]); }); });
 
   // ---- escenas ----
   const exterior = crearExterior();
@@ -579,7 +614,7 @@ export async function iniciarMundo(raiz, op) {
   const estado = {
     activo: true, escena: exterior, clave: claveJugador, nombre: J.nombre || "Estudiante", x: exterior.spawn.x, y: exterior.spawn.y, dir: "south", caminando: false,
     xp: J.xp || 0, oro: J.oro || 0, ganado: { xp: 0, oro: 0 }, est: 0, cercano: null, dialogo: null, avisos: [], fase: 0, terminado: false, cambiando: false, pasoT: 0.3,
-    comp: { x: exterior.spawn.x, y: exterior.spawn.y }, hechas,
+    comp: { x: exterior.spawn.x, y: exterior.spawn.y }, hechas, fasePaso: 0, movio: false,
   };
   const teclas = new Set(), joy = { x: 0, y: 0 };
 
@@ -689,10 +724,10 @@ export async function iniciarMundo(raiz, op) {
     if (!v.meta) { const a = rand() * 6.283, d = 40 + rand() * 120; v.meta = { x: v.x + Math.cos(a) * d, y: v.y + Math.sin(a) * d }; }
     const vx = v.meta.x - v.x, vy = v.meta.y - v.y, dist = Math.hypot(vx, vy);
     if (dist < 4) { v.meta = null; v.pausa = 1 + rand() * 3; v.caminando = false; return; }
-    const paso = 38 * dt, dx = (vx / dist) * paso, dy = (vy / dist) * paso; let movio = false;
+    const paso = 38 * dt, dx = (vx / dist) * paso, dy = (vy / dist) * paso, px = v.x, py = v.y; let movio = false;
     if (!chocaEn(esc, v.x + dx, v.y)) { v.x += dx; movio = true; }
     if (!chocaEn(esc, v.x, v.y + dy)) { v.y += dy; movio = true; }
-    v.caminando = movio; v.dir = direccionDe(vx, vy);
+    v.caminando = movio; v.dir = direccionDe(vx, vy); v.fasePaso = (v.fasePaso || 0) + Math.hypot(v.x - px, v.y - py) / LARGO_PASO;
     if (!movio) { v.meta = null; v.pausa = 0.4 + rand(); }
   }
 
@@ -703,9 +738,12 @@ export async function iniciarMundo(raiz, op) {
     const [ax, ay] = bloqueada ? [0, 0] : leerEntrada();
     estado.caminando = !!(ax || ay);
     if (estado.caminando) {
-      mover(ax * 96 * dt, ay * 96 * dt); estado.dir = direccionDe(ax, ay); estado.pasoT += dt;
-      if (estado.pasoT > 0.34) { estado.pasoT = 0; snd.paso(esc.piso(estado.x, estado.y)); }
-    } else estado.pasoT = 0.3;
+      const px = estado.x, py = estado.y;
+      mover(ax * 96 * dt, ay * 96 * dt); estado.dir = direccionDe(ax, ay);
+      const recorrido = Math.hypot(estado.x - px, estado.y - py);       // si choca contra algo, no avanza: no mueve las piernas ni suena
+      estado.movio = recorrido > 0.01; estado.fasePaso += recorrido / LARGO_PASO;
+      if (estado.movio) { estado.pasoT += dt; if (estado.pasoT > 0.34) { estado.pasoT = 0; snd.paso(esc.piso(estado.x, estado.y)); } } else estado.pasoT = 0.3;
+    } else { estado.movio = false; estado.pasoT = 0.3; }
     // el compañero (si tiene uno) camina detrás
     const ox = estado.x - { east: 22, "south-east": 16, south: 0, "south-west": -16, west: -22, "north-west": -16, north: 0, "north-east": 16 }[estado.dir], oy = estado.y - { east: 0, "south-east": 12, south: 22, "south-west": 12, west: 0, "north-west": -12, north: -22, "north-east": -12 }[estado.dir] + 6;
     estado.comp.x += (ox - estado.comp.x) * Math.min(1, dt * 5); estado.comp.y += (oy - estado.comp.y) * Math.min(1, dt * 5);
@@ -729,9 +767,10 @@ export async function iniciarMundo(raiz, op) {
 
   // ---- dibujo ----
   const sombra = (x, y, rx, ry) => { ctx.fillStyle = "rgba(0,0,0,.25)"; ctx.beginPath(); ctx.ellipse(x - camX, y - camY, rx, ry, 0, 0, 7); ctx.fill(); };
-  function dibujarPersonaje(clave, dir, x, y, caminando, t, salto) {
-    const an = sprites[clave].ancla, im = imgs[clave][dir] || imgs[clave].south, b = caminando ? -Math.abs(Math.sin(t * 11 + x)) * 2 : 0;
-    ctx.drawImage(im, Math.round(x - an.cx - camX), Math.round(y - an.by - camY + b + (salto || 0)));
+  function dibujarPersonaje(clave, dir, x, y, caminando, fase) {
+    const an = sprites[clave].ancla, cuadros = pasos[clave] && pasos[clave][dir];
+    const im = caminando && cuadros ? cuadros[Math.floor(fase) % 4] : (imgs[clave][dir] || imgs[clave].south); // en movimiento: cuadros de caminata; quieto: la pose de siempre
+    ctx.drawImage(im, Math.round(x - an.cx - camX), Math.round(y - an.by - camY));
   }
   function etiqueta(texto, x, y, color) { ctx.font = "bold 9px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.75)"; ctx.strokeText(texto, x, y); ctx.fillStyle = color || "#fff"; ctx.fillText(texto, x, y); }
   const emoji = (txt, x, y, px) => { ctx.globalAlpha = 1; ctx.fillStyle = "#000"; ctx.font = px + "px " + FUENTE_EMOJI; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.fillText(txt, Math.round(x - camX), Math.round(y - camY)); };
@@ -747,7 +786,7 @@ export async function iniciarMundo(raiz, op) {
     esc.objetos(lista, ctx, camX, camY, visible, t);
     for (const s of esc.estrellas) if (!s.tomada && visible(s.x, s.y)) lista.push({ y: s.y, d: () => emoji("⭐", s.x, s.y - 8 + Math.sin(t * 4 + s.x) * 2, 16) });
     for (const n of esc.npcs) lista.push({ y: n.y, d: () => {
-      sombra(n.x, n.y, 9, 3.5); dibujarPersonaje(n.clave, n.dir, n.x, n.y, n.caminando, t);
+      sombra(n.x, n.y, 9, 3.5); dibujarPersonaje(n.clave, n.dir, n.x, n.y, n.caminando, n.fasePaso || 0);
       if (n.tipo === "mision") { const hecha = hechas.has(n.mision.id), b = hecha ? 0 : Math.sin(t * 5 + n.x) * 3, an = sprites[n.clave].ancla; emoji(hecha ? "✅" : "❗", n.x, n.y - an.by - 4 + b, 18); }
       else if (Math.hypot(n.x - estado.x, n.y - estado.y) < 60) etiqueta(n.nombre, Math.round(n.x - camX), Math.round(n.y - sprites[n.clave].ancla.by - camY - 3), "#e8edf8");
     } });
@@ -756,7 +795,7 @@ export async function iniciarMundo(raiz, op) {
     lista.push({ y: estado.y, d: () => {
       const an = sprites[estado.clave].ancla;
       if (J.nivel && J.nivel.color) { const a = 0.35 + Math.sin(t * 3) * 0.08, gx = Math.round(estado.x - camX), gy = Math.round(estado.y - camY), gr = ctx.createRadialGradient(gx, gy, 2, gx, gy, 24); gr.addColorStop(0, J.nivel.color + "cc"); gr.addColorStop(1, J.nivel.color + "00"); ctx.globalAlpha = a + 0.4; ctx.fillStyle = gr; ctx.beginPath(); ctx.ellipse(gx, gy, 26, 11, 0, 0, 7); ctx.fill(); ctx.globalAlpha = 1; }
-      sombra(estado.x, estado.y, 10, 4); dibujarPersonaje(estado.clave, estado.dir, estado.x, estado.y, estado.caminando, t);
+      sombra(estado.x, estado.y, 10, 4); dibujarPersonaje(estado.clave, estado.dir, estado.x, estado.y, estado.movio, estado.fasePaso);
       etiqueta(estado.nombre, Math.round(estado.x - camX), Math.round(estado.y - an.by - camY - 3));
     } });
     lista.sort((a, b) => a.y - b.y); for (const o of lista) o.d();
@@ -818,7 +857,7 @@ export async function iniciarMundo(raiz, op) {
   ultimo = performance.now(); rafId = requestAnimationFrame(cuadro);
 
   const api = {
-    estado, escenas, exterior, interiores, misiones, hechas, snd, chocaEn, interactuar, cambiarEscena,
+    estado, escenas, exterior, interiores, misiones, hechas, snd, chocaEn, interactuar, cambiarEscena, pasos,
     destruir() {
       if (!vivo) return; // por si se llama dos veces
       vivo = false; estado.activo = false; cancelAnimationFrame(rafId); temporizadores.forEach(clearTimeout); temporizadores.clear();
