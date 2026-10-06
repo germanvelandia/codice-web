@@ -1,6 +1,7 @@
 import { supabase } from "./supabaseClient";
 import { zonaDeMision, ZONAS, RETADORES } from "../game/zonas";
 import { misionVisiblePara } from "./gradosMundo";
+import { validarContenido, CLAVES_TIPO } from "../game/acertijos";
 import { ITEMS, RECETAS, MAX_POR_ITEM, PARCELA, esDecoracion, celdaValida, puedeFabricar, cantidadPorRecoleccion } from "../game/items";
 
 // Todo lo que el Mundo CÓDICE necesita de la base de datos: las misiones del mundo, cuáles
@@ -539,4 +540,82 @@ export async function fetchParcelaResumen() {
   const { data, error } = await supabase.from("mundo_parcela").select("estudiante_id");
   if (error) throw error;
   return { piezas: (data || []).length, parcelas: new Set((data || []).map((f) => f.estudiante_id)).size };
+}
+
+// =====================================================================================
+//  CASA DE LOS ACERTIJOS: sopa de letras, criptograma, ahorcado y rompecabezas
+//  El premio se gana UNA vez por acertijo: se registra (clave única) y luego se entrega; si el premio falla, se deshace el registro.
+// =====================================================================================
+const normalizarAcertijo = (a) => ({
+  id: a.id, tipo: a.tipo, titulo: a.titulo || "", contenido: a.contenido || "", pista: a.pista || "", tam: a.tam == null ? null : Number(a.tam),
+  grado_id: a.grado_id || "", xp: Math.max(0, Number(a.xp) || 0), oro: Math.max(0, Number(a.oro) || 0), orden: Number(a.orden) || 0, activo: a.activo !== false,
+});
+
+// Lo que necesita la pantalla del estudiante: { activo, lista, hechos }. Sin la tabla (SQL 70 sin correr), las mesas quedan "no disponibles".
+export async function fetchAcertijosMundo(estudianteId, gradoId) {
+  const { data, error } = await supabase.from("mundo_acertijos").select("*").eq("activo", true).order("orden").order("id");
+  if (error) throw error;
+  const lista = (data || []).map(normalizarAcertijo).filter((a) => CLAVES_TIPO.includes(a.tipo) && !validarContenido(a.tipo, a.contenido, { tam: a.tam }) && (gradoId != null ? misionVisiblePara(a.grado_id, gradoId) : !a.grado_id));
+  const { data: h, error: eh } = await supabase.from("mundo_acertijos_hechos").select("acertijo_id").eq("estudiante_id", estudianteId);
+  if (eh) throw eh;
+  return { activo: true, lista, hechos: (h || []).map((f) => f.acertijo_id) };
+}
+
+export async function completarAcertijoMundo(estudianteId, { id }) {
+  const { data: filas, error: eL } = await supabase.from("mundo_acertijos").select("*").eq("id", id).eq("activo", true);
+  if (eL) return { ok: false, mensaje: eL.message };
+  const a = (filas || [])[0] ? normalizarAcertijo(filas[0]) : null;
+  if (!a) return { ok: false, mensaje: "Ese acertijo ya no está disponible." };
+  const { error } = await supabase.from("mundo_acertijos_hechos").insert({ estudiante_id: estudianteId, acertijo_id: id });
+  if (error) {
+    if (error.code === "23505" || /duplicate|unique/i.test(error.message || "")) return { ok: true, yaEstaba: true };
+    return { ok: false, mensaje: error.message };
+  }
+  try {
+    const [, rpc] = await Promise.all([
+      supabase.from("historial_gamificacion").insert({ estudiante_id: estudianteId, etiqueta: `🧩 Acertijo: ${a.titulo}`, xp: a.xp, vida: 0, monedas: a.oro, categoria: "general" }),
+      supabase.rpc("ajustar_progreso", { p_estudiante_id: estudianteId, p_delta_xp: a.xp, p_delta_vida: 0, p_delta_monedas: a.oro }),
+    ]);
+    if (rpc.error) throw rpc.error;
+    const fila = rpc.data?.[0];
+    return { ok: true, xp: fila?.xp, oro: fila?.monedas };
+  } catch (e) {
+    await supabase.from("mundo_acertijos_hechos").delete().eq("estudiante_id", estudianteId).eq("acertijo_id", id);
+    return { ok: false, mensaje: (e && e.message) || "no se pudo entregar el premio" };
+  }
+}
+
+// ----- para el editor de la docente -----
+export async function fetchAcertijosAdmin() {
+  const { data, error } = await supabase.from("mundo_acertijos").select("*").order("orden").order("id");
+  if (error) throw error;
+  return (data || []).map(normalizarAcertijo);
+}
+function limpiarAcertijo(c) {
+  const tipo = c.tipo, err = CLAVES_TIPO.includes(tipo) ? validarContenido(tipo, c.contenido, { tam: c.tam }) : "Elige un tipo de acertijo.";
+  if (err) throw new Error(err);
+  if (!String(c.titulo || "").trim()) throw new Error("Ponle un título al acertijo.");
+  const tam = tipo === "sopa" ? Math.max(8, Math.min(16, Number(c.tam) || 10)) : tipo === "rompe" ? (Number(c.tam) >= 4 ? 4 : 3) : null;
+  return { tipo, titulo: String(c.titulo).trim().slice(0, 80), contenido: String(c.contenido || "").trim(), pista: String(c.pista || "").trim() || null, tam, grado_id: c.grado_id || null, xp: Math.max(0, Math.min(500, Math.floor(Number(c.xp) || 0))), oro: Math.max(0, Math.min(500, Math.floor(Number(c.oro) || 0))), activo: c.activo !== false };
+}
+export async function crearAcertijoMundo(campos) {
+  const limpio = limpiarAcertijo(campos);
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("mundo_acertijos").insert({ ...limpio, docente_id: userData?.user?.id || null }).select().single();
+  if (error) throw error;
+  return normalizarAcertijo(data);
+}
+export async function editarAcertijoMundo(id, campos) {
+  const { error } = await supabase.from("mundo_acertijos").update(limpiarAcertijo(campos)).eq("id", id);
+  if (error) throw error;
+}
+export async function eliminarAcertijoMundo(id) {
+  const { error } = await supabase.from("mundo_acertijos").delete().eq("id", id);
+  if (error) throw error;
+}
+// { [acertijoId]: cuántos estudiantes lo resolvieron }
+export async function fetchConteoAcertijos() {
+  const { data, error } = await supabase.from("mundo_acertijos_hechos").select("acertijo_id");
+  if (error) throw error;
+  const c = {}; (data || []).forEach((f) => { c[f.acertijo_id] = (c[f.acertijo_id] || 0) + 1; }); return c;
 }
