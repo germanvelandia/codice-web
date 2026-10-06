@@ -21,13 +21,19 @@ function normalizarMision(m) {
     id: m.id, lugar: m.lugar || "plaza", npc_nombre: m.npc_nombre || "Aldeano", npc_emoji: m.npc_emoji || null, npc_sprite: m.npc_sprite || null,
     titulo: m.titulo || "Misión", texto: m.texto || "", opciones: Array.isArray(opciones) ? opciones.map(String) : [],
     correcta: Number(m.correcta) || 0, pista: m.pista || "", retro: m.retro || "", xp: Number(m.xp) || 0, oro: Number(m.oro) || 0,
+    grado_id: m.grado_id ? String(m.grado_id) : null,                     // null = para todos los cursos
+    _tieneGrado: Object.prototype.hasOwnProperty.call(m, "grado_id"),     // false si todavía no se corrió el SQL 63
   };
 }
 
-export async function fetchMisionesMundo() {
+// Las misiones que ve un estudiante: las de su curso más las que son para todos los cursos.
+// (Si todavía no se corrió el SQL 63, la tabla no tiene curso y todas son para todos.)
+export async function fetchMisionesMundo(gradoId) {
   const { data, error } = await supabase.from("mundo_misiones").select("*").eq("activo", true).order("orden").order("id");
   if (error) throw error;
-  return (data || []).map(normalizarMision).filter((m) => m.opciones.length >= 2);
+  return (data || [])
+    .filter((m) => !m.grado_id || (gradoId != null && String(m.grado_id) === String(gradoId)))
+    .map(normalizarMision).filter((m) => m.opciones.length >= 2);
 }
 
 export async function fetchHechasMundo(estudianteId) {
