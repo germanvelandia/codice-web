@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import * as mundoApi from "../lib/mundoApi";
 import { ZONAS, LUGARES, zonaDeLugar, zonaPorClave } from "../game/zonas";
 import { esNivel, claveNivel, nivelDeClave, nivelDeGrado, nivelesDe, nombreNivel, etiquetaPara, cursosDelNivel, misionVisiblePara, cursoSaturado as cursoSaturadoDe, etiquetaSaturado } from "../lib/gradosMundo";
+import { ITEMS, RECETAS } from "../game/items";
 import { aObjetos, analizarImportacion, filasParaExportar, filasPlantilla, crearLibro, leerLibro } from "../lib/importarMisiones";
 
 // Editor de las misiones del Mundo CÓDICE: acá se agregan, cambian, ocultan y borran las preguntas
@@ -170,12 +171,15 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
             <button type="button" onClick={() => setPestana("posada")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "posada" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🛏️ Posada</button>
             <button type="button" onClick={() => setPestana("duelos")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "duelos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>⚔️ Duelos</button>
             <button type="button" onClick={() => setPestana("retos")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "retos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>☠️ Retadores</button>
+            <button type="button" onClick={() => setPestana("recursos")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "recursos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🎒 Recursos</button>
           </div>
         )}
         {sinTabla ? (
           <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">Todavía no se crearon las tablas de las misiones. Corre <b>62_mundo.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</div>
         ) : cargando ? (
           <p className="text-sm text-slate-400">Cargando…</p>
+        ) : pestana === "recursos" && !editando ? (
+          <PanelRecursos />
         ) : pestana === "retos" && !editando ? (
           <PanelRetos misiones={misiones} />
         ) : pestana === "duelos" && !editando ? (
@@ -673,6 +677,71 @@ function PanelRetos({ misiones }) {
   );
 }
 
+
+// ----- Pestaña "Recursos": recoger madera, piedra, peces y hierba (cada recolección pide una pregunta) y fabricar objetos -----
+function PanelRecursos() {
+  const [f, setF] = useState(null);
+  const [resumen, setResumen] = useState(null);
+  const [error, setError] = useState("");
+  const [aviso, setAviso] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const [faltaSql, setFaltaSql] = useState(false);
+  const relojAviso = useRef(null);
+  useEffect(() => () => clearTimeout(relojAviso.current), []);
+  useEffect(() => {
+    (async () => {
+      try {
+        const c = await mundoApi.fetchConfigMundo();
+        setF({ activo: c.recolecta_activo === 1, limite: String(c.recolecta_limite_dia), cantidad: String(c.recolecta_cantidad), espera: String(c.recolecta_espera_min), respawn: String(c.recolecta_respawn_min) });
+      } catch (e) { setError(e.message || "No se pudo cargar la configuración."); return; }
+      mundoApi.fetchRecolectaResumen().then(setResumen).catch((e) => { if (/does not exist|relation|schema cache/i.test(e.message || "")) setFaltaSql(true); });
+    })();
+  }, []);
+  if (error && !f) return <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">{error}</div>;
+  if (!f) return <p className="text-sm text-slate-400">Cargando…</p>;
+  const num = (v) => (v === "" ? NaN : Number(v));
+  const rangos = [["limite", "El límite por día", 0, 500], ["cantidad", "La cantidad por recolección", 1, 10], ["espera", "La espera tras equivocarse", 0, 60], ["respawn", "El tiempo para que vuelva el recurso", 0, 60]];
+  const errorDe = () => { for (const [k, nombre, min, max] of rangos) { const n = num(f[k]); if (!Number.isInteger(n) || n < min || n > max) return `${nombre} tiene que ser un número entero entre ${min} y ${max}.`; } return ""; };
+  const guardar = async () => {
+    const e = errorDe(); if (e) { setError(e); return; }
+    setGuardando(true); setError("");
+    try {
+      for (const [k, v] of [["recolecta_activo", f.activo ? 1 : 0], ["recolecta_limite_dia", num(f.limite)], ["recolecta_cantidad", num(f.cantidad)], ["recolecta_espera_min", num(f.espera)], ["recolecta_respawn_min", num(f.respawn)]]) await mundoApi.guardarConfigMundo(k, v);
+      setAviso("Guardado ✓"); clearTimeout(relojAviso.current); relojAviso.current = setTimeout(() => setAviso(""), 2400);
+    } catch (er) { setError("No se pudo guardar: " + (er.message || "error desconocido")); }
+    setGuardando(false);
+  };
+  const input = "w-20 text-sm rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none bg-white";
+  const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
+  return (
+    <div>
+      <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 leading-relaxed">
+        En el Bosque, la Montaña y el Lago hay puntos de recolección (🪵 madera, 🪨 piedra, 🐟 peces, 🌿 hierba). Para recoger, el estudiante <b>responde una pregunta</b> de esa zona. Lo recogido va a su <b>mochila 🎒</b> y con eso puede <b>fabricar</b> herramientas (que dan +1 al recoger), pociones que curan y objetos para decorar.
+      </div>
+      {faltaSql && <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3 mb-3">Todavía no se crearon las tablas de recursos. Corre <b>68_mundo_recursos.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</div>}
+      {error && <div className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-2.5 mb-3">{error}</div>}
+      {resumen && <div className="text-[11px] text-slate-500 mb-3" data-testid="resumen-recursos">🎒 {resumen.recogidas} {resumen.recogidas === 1 ? "unidad recogida" : "unidades recogidas"} por {resumen.estudiantes} {resumen.estudiantes === 1 ? "estudiante" : "estudiantes"}{Object.keys(resumen.porItem).length ? " · " + Object.entries(resumen.porItem).map(([k, n]) => `${ITEMS[k] ? ITEMS[k].emoji : k} ${n}`).join("  ") : ""}</div>}
+      <div className="rounded-xl border border-slate-200 p-4 mb-3">
+        <label className="flex items-center gap-2 text-sm font-semibold text-slate-800 mb-4"><input type="checkbox" checked={f.activo} onChange={(e) => setF((x) => ({ ...x, activo: e.target.checked }))} /> La recolección está activa</label>
+        <div className="flex flex-wrap items-center gap-2 mb-2 text-sm text-slate-700">Cada estudiante puede recoger hasta <input type="number" min="0" max="500" value={f.limite} onChange={set("limite")} className={input} aria-label="Límite por día" /> unidades por día <span className="text-[11px] text-slate-400">(0 = sin límite; el día cambia a la medianoche)</span></div>
+        <div className="flex flex-wrap items-center gap-2 mb-2 text-sm text-slate-700">Cada recolección da <input type="number" min="1" max="10" value={f.cantidad} onChange={set("cantidad")} className={input} aria-label="Unidades por recolección" /> unidades (la herramienta correcta suma +1)</div>
+        <div className="flex flex-wrap items-center gap-2 mb-2 text-sm text-slate-700">Si se equivoca, ese punto queda agotado <input type="number" min="0" max="60" value={f.espera} onChange={set("espera")} className={input} aria-label="Minutos de espera" /> minutos</div>
+        <div className="flex flex-wrap items-center gap-2 text-sm text-slate-700">Después de recogerlo, el punto vuelve en <input type="number" min="0" max="60" value={f.respawn} onChange={set("respawn")} className={input} aria-label="Minutos para que vuelva" /> minutos</div>
+      </div>
+      <div className="rounded-xl border border-slate-200 p-4 mb-3">
+        <div className="text-sm font-bold text-slate-800 mb-2">🔨 Lo que se puede fabricar</div>
+        <ul className="text-xs text-slate-600 space-y-1" data-testid="lista-recetas">
+          {Object.entries(RECETAS).map(([id, r]) => <li key={id}>{ITEMS[id].emoji} <b>{ITEMS[id].nombre}</b> = {Object.entries(r.ingredientes).map(([k, n]) => `${n} ${ITEMS[k].emoji}`).join(" + ")}{ITEMS[id].desc ? <span className="text-slate-400"> · {ITEMS[id].desc}</span> : null}</li>)}
+        </ul>
+        <p className="text-[11px] text-slate-400 mt-2">Las preguntas salen de las misiones de cada zona (o de las de todo el mundo si la zona no tiene). Cuantas más misiones cargues, más variadas serán.</p>
+      </div>
+      <div className="flex items-center gap-3 justify-end">
+        {aviso && <span className="text-xs font-semibold text-emerald-600">{aviso}</span>}
+        <button type="button" onClick={guardar} disabled={guardando} className="text-sm font-bold px-5 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">{guardando ? "Guardando…" : "Guardar recursos"}</button>
+      </div>
+    </div>
+  );
+}
 
 // ----- La revisión de un Excel antes de guardar: qué se crea, qué se actualiza, qué tiene errores -----
 function RevisionImportacion({ analisis, archivo, aplicando, onCancelar, onAplicar }) {
