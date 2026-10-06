@@ -2642,7 +2642,7 @@ export function VistaEstudiantes({ gradoId, grados, reinoFiltro, onVolver, onVer
         <ImportarDatosPersonalesModal estudiantes={estudiantes} onClose={() => setImportarDatosAbierto(false)} onGuardado={cargar} />
       )}
       {piezasAbierto && <PiezasPersonajeModal onClose={() => setPiezasAbierto(false)} />}
-      {misionesMundoAbierto && <Suspense fallback={null}><MisionesMundoModal onClose={() => setMisionesMundoAbierto(false)} /></Suspense>}
+      {misionesMundoAbierto && <Suspense fallback={null}><MisionesMundoModal onClose={() => setMisionesMundoAbierto(false)} grados={grados || []} gradoActual={gradoId} /></Suspense>}
       {observadoresGradoAbierto && (
         <ObservadorPorGradoModal gradoId={gradoId} onClose={() => setObservadoresGradoAbierto(false)} />
       )}
