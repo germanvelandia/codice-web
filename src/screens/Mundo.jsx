@@ -23,15 +23,16 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
   useNivelesPersonaje(); // para que el nivel se actualice si cambian en "Editar niveles"
 
   const cargar = async () => {
-    const [pers, mej, mis, hec] = await Promise.allSettled([api.fetchPersonajeElegido(idEst), api.fetchMejorasDeEstudiante(idEst), mundoApi.fetchMisionesMundo(), mundoApi.fetchHechasMundo(idEst)]);
-    // Si todavía no se corrió el SQL 62 (o no hay misiones cargadas) el mundo funciona en "modo prueba".
-    const hayMisiones = mis.status === "fulfilled" && mis.value.length > 0 && hec.status === "fulfilled";
+    const [pers, mej, mis, hec] = await Promise.allSettled([api.fetchPersonajeElegido(idEst), api.fetchMejorasDeEstudiante(idEst), mundoApi.fetchMisionesMundo(estudianteInfo.grado_id), mundoApi.fetchHechasMundo(idEst)]);
+    // El "modo prueba" es SOLO para cuando todavía no se corrió el SQL 62 (no existen las tablas).
+    // Si las tablas existen pero el curso no tiene misiones, el mundo funciona normal, sin misiones.
+    const hayTablas = mis.status === "fulfilled" && hec.status === "fulfilled";
     setInfo({
       personaje: pers.status === "fulfilled" ? pers.value : null,
       mejoras: mej.status === "fulfilled" ? mej.value.filter((f) => f.mejora) : [],
-      misiones: hayMisiones ? mis.value : mundoApi.MISIONES_EJEMPLO,
-      hechas: hayMisiones ? hec.value : [],
-      modoPrueba: !hayMisiones,
+      misiones: hayTablas ? mis.value : mundoApi.MISIONES_EJEMPLO,
+      hechas: hayTablas ? hec.value : [],
+      modoPrueba: !hayTablas,
     });
     setCargando(false);
   };
@@ -97,7 +98,7 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
               <div className="min-w-0">
                 <div className="text-lg font-bold text-slate-800 truncate">{primerNombre(estudianteInfo.nombre)}</div>
                 <div className="text-xs font-semibold text-violet-600 mb-2">Nivel {nv.nivel} · {nv.nombre}</div>
-                <div className="text-xs text-slate-500">🎯 Misiones: <b className="text-slate-700">{hechas}/{total}</b></div>
+                <div className="text-xs text-slate-500">{total === 0 ? "🎯 Todavía no hay misiones para tu curso" : <>🎯 Misiones: <b className="text-slate-700">{hechas}/{total}</b></>}</div>
               </div>
             </div>
             {info.modoPrueba && (
