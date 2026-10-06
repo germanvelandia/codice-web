@@ -202,12 +202,15 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
             <button type="button" onClick={() => setPestana("recursos")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "recursos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🎒 Recursos</button>
             <button type="button" onClick={() => setPestana("acertijos")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "acertijos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🧩 Acertijos</button>
             <button type="button" onClick={() => setPestana("secretos")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "secretos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🔎 Secretos</button>
+            <button type="button" onClick={() => setPestana("comarca")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "comarca" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🏰 Comarca</button>
           </div>
         )}
         {sinTabla ? (
           <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">Todavía no se crearon las tablas de las misiones. Corre <b>62_mundo.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</div>
         ) : cargando ? (
           <p className="text-sm text-slate-400">Cargando…</p>
+        ) : pestana === "comarca" && !editando ? (
+          <PanelComarca />
         ) : pestana === "secretos" && !editando ? (
           <PanelSecretos cursos={cursos} niveles={niveles} />
         ) : pestana === "acertijos" && !editando ? (
@@ -1032,6 +1035,72 @@ function PanelRecursos() {
       <div className="flex items-center gap-3 justify-end">
         {aviso && <span className="text-xs font-semibold text-emerald-600">{aviso}</span>}
         <button type="button" onClick={guardar} disabled={guardando} className="text-sm font-bold px-5 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">{guardando ? "Guardando…" : "Guardar recursos"}</button>
+      </div>
+    </div>
+  );
+}
+
+// ----- La Sala de la Comarca: aportes de GP/FP y batallas entre reinos -----
+function PanelComarca() {
+  const [f, setF] = useState(null);
+  const [resumen, setResumen] = useState(null);
+  const [error, setError] = useState("");
+  const [aviso, setAviso] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const relojAviso = useRef(null);
+  useEffect(() => () => clearTimeout(relojAviso.current), []);
+  useEffect(() => {
+    (async () => {
+      try {
+        const c = await mundoApi.fetchConfigMundo();
+        setF({ activo: c.comarca_activo === 1, aportes: c.comarca_aportes_activo === 1, oroGp: String(c.comarca_oro_por_gp), xpFp: String(c.comarca_xp_por_fp), topeGp: String(c.comarca_tope_gp_dia), topeFp: String(c.comarca_tope_fp_dia),
+          batallas: c.comarca_batallas_activo === 1, batDia: String(c.comarca_batallas_dia), proteccion: String(c.comarca_proteccion_min), aciertos: String(c.comarca_batalla_aciertos), vidas: String(c.comarca_batalla_vidas) });
+      } catch (e) { setError(e.message || "No se pudo cargar la configuración."); return; }
+      mundoApi.fetchComarcaResumen().then(setResumen).catch(() => setResumen(false));
+    })();
+  }, []);
+  if (error && !f) return <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">{error}</div>;
+  if (!f) return <p className="text-sm text-slate-400">Cargando…</p>;
+  const num = (v) => (v === "" ? NaN : Number(v));
+  const rangos = [["oroGp", "Las monedas por cada GP", 1, 1000], ["xpFp", "El XP por cada FP", 1, 1000], ["topeGp", "El tope diario de GP", 0, 50], ["topeFp", "El tope diario de FP", 0, 50], ["batDia", "Las batallas por día", 0, 20], ["proteccion", "Los minutos de protección", 0, 1440], ["aciertos", "Los aciertos para ganar", 1, 10], ["vidas", "Los corazones", 1, 10]];
+  const errorDe = () => { for (const [k, nombre, min, max] of rangos) { const n = num(f[k]); if (!Number.isInteger(n) || n < min || n > max) return `${nombre} tiene que ser un número entero entre ${min} y ${max}.`; } return ""; };
+  const guardar = async () => {
+    const e = errorDe(); if (e) { setError(e); return; }
+    setGuardando(true); setError("");
+    try {
+      for (const [k, v] of [["comarca_activo", f.activo ? 1 : 0], ["comarca_aportes_activo", f.aportes ? 1 : 0], ["comarca_oro_por_gp", num(f.oroGp)], ["comarca_xp_por_fp", num(f.xpFp)], ["comarca_tope_gp_dia", num(f.topeGp)], ["comarca_tope_fp_dia", num(f.topeFp)],
+        ["comarca_batallas_activo", f.batallas ? 1 : 0], ["comarca_batallas_dia", num(f.batDia)], ["comarca_proteccion_min", num(f.proteccion)], ["comarca_batalla_aciertos", num(f.aciertos)], ["comarca_batalla_vidas", num(f.vidas)]]) await mundoApi.guardarConfigMundo(k, v);
+      setAviso("Guardado ✓"); clearTimeout(relojAviso.current); relojAviso.current = setTimeout(() => setAviso(""), 2400);
+    } catch (er) { setError("No se pudo guardar: " + (er.message || "error desconocido")); }
+    setGuardando(false);
+  };
+  const input = "w-20 text-sm rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none bg-white";
+  const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
+  return (
+    <div>
+      <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 leading-relaxed">
+        La <b>Sala de la Comarca 🏰</b> es un edificio de la aldea con el <b>mapa de los reinos</b> y un <b>Heraldo</b>. Cada estudiante pertenece al reino que tiene en tu Comarca de Oakhaven (el de su curso con sesión activa). Lo que se hace aquí <b>modifica tu Comarca real</b>: el oro y el XP que ganan en el mundo suman <b>GP</b> y <b>FP</b> a su reino, y las batallas pueden cambiar de dueña una provincia.
+      </div>
+      {resumen === false && <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3 mb-3">Todavía no se crearon las funciones de la Comarca en el mundo. Corre <b>72_mundo_comarca.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</div>}
+      {error && <div className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-2.5 mb-3">{error}</div>}
+      {resumen && <div className="text-[11px] text-slate-500 mb-3" data-testid="resumen-comarca">⚔️ {resumen.batallas} {resumen.batallas === 1 ? "batalla librada" : "batallas libradas"} ({resumen.tomadas} {resumen.tomadas === 1 ? "provincia conquistada" : "provincias conquistadas"}) · ⚒️ {resumen.gp} GP y {resumen.fp} FP aportados desde el mundo</div>}
+      <div className="rounded-xl border border-slate-200 p-4 mb-3">
+        <label className="flex items-center gap-2 text-sm font-semibold text-slate-800 mb-3"><input type="checkbox" checked={f.activo} onChange={(e) => setF((x) => ({ ...x, activo: e.target.checked }))} /> La Sala de la Comarca está abierta</label>
+        <label className="flex items-center gap-2 text-sm font-semibold text-slate-800 mb-3"><input type="checkbox" checked={f.aportes} onChange={(e) => setF((x) => ({ ...x, aportes: e.target.checked }))} /> Lo que ganan en el mundo suma GP y FP a su reino</label>
+        <div className="flex flex-wrap items-center gap-2 mb-2 text-sm text-slate-700">Cada <input type="number" min="1" max="1000" value={f.oroGp} onChange={set("oroGp")} className={input} aria-label="Monedas por GP" /> 🪙 ganadas = 1 GP, y cada <input type="number" min="1" max="1000" value={f.xpFp} onChange={set("xpFp")} className={input} aria-label="XP por FP" /> XP = 1 FP</div>
+        <div className="flex flex-wrap items-center gap-2 text-sm text-slate-700">Cada estudiante aporta como máximo <input type="number" min="0" max="50" value={f.topeGp} onChange={set("topeGp")} className={input} aria-label="Tope de GP por día" /> GP y <input type="number" min="0" max="50" value={f.topeFp} onChange={set("topeFp")} className={input} aria-label="Tope de FP por día" /> FP por día <span className="text-[11px] text-slate-400">(el día cambia a la medianoche)</span></div>
+      </div>
+      <div className="rounded-xl border border-slate-200 p-4 mb-3">
+        <label className="flex items-center gap-2 text-sm font-semibold text-slate-800 mb-1"><input type="checkbox" checked={f.batallas} onChange={(e) => setF((x) => ({ ...x, batallas: e.target.checked }))} /> Las batallas entre reinos están abiertas</label>
+        <p className="text-[11px] text-slate-400 mb-3 ml-6">Empiezan <b>cerradas</b>. Ábrelas cuando quieras que los estudiantes puedan quitarse provincias entre reinos (un reino nunca se queda sin su última provincia).</p>
+        <div className="flex flex-wrap items-center gap-2 mb-2 text-sm text-slate-700">Cada estudiante puede librar <input type="number" min="0" max="20" value={f.batDia} onChange={set("batDia")} className={input} aria-label="Batallas por día" /> batallas por día <span className="text-[11px] text-slate-400">(0 = sin límite)</span></div>
+        <div className="flex flex-wrap items-center gap-2 mb-2 text-sm text-slate-700">Para ganar hay que acertar <input type="number" min="1" max="10" value={f.aciertos} onChange={set("aciertos")} className={input} aria-label="Aciertos para ganar" /> preguntas antes de perder <input type="number" min="1" max="10" value={f.vidas} onChange={set("vidas")} className={input} aria-label="Corazones" /> ❤️</div>
+        <div className="flex flex-wrap items-center gap-2 text-sm text-slate-700">Una provincia conquistada queda protegida <input type="number" min="0" max="1440" value={f.proteccion} onChange={set("proteccion")} className={input} aria-label="Minutos de protección" /> minutos <span className="text-[11px] text-slate-400">(así no se la quitan enseguida)</span></div>
+        <p className="text-[11px] text-slate-400 mt-3">Las preguntas salen de las misiones del mundo. El resultado lo reporta el juego del estudiante; si quieres, revisa la Comarca en tu panel después de una batalla.</p>
+      </div>
+      <div className="flex items-center gap-3 justify-end">
+        {aviso && <span className="text-xs font-semibold text-emerald-600">{aviso}</span>}
+        <button type="button" onClick={guardar} disabled={guardando} className="text-sm font-bold px-5 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">{guardando ? "Guardando…" : "Guardar Comarca"}</button>
       </div>
     </div>
   );
