@@ -24,7 +24,7 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
   useNivelesPersonaje(); // para que el nivel se actualice si cambian en "Editar niveles"
 
   const cargar = async () => {
-    const [pers, mej, mis, hec, zon, pos, due, ret, rec] = await Promise.allSettled([api.fetchPersonajeElegido(idEst), api.fetchMejorasDeEstudiante(idEst), mundoApi.fetchMisionesMundo(estudianteInfo.grado_id), mundoApi.fetchHechasMundo(idEst), mundoApi.fetchZonasMundo(estudianteInfo.grado_id), mundoApi.fetchPosadaMundo(), mundoApi.fetchDuelosMundo(idEst), mundoApi.fetchRetosMundo(idEst), mundoApi.fetchRecolectaMundo(idEst)]);
+    const [pers, mej, mis, hec, zon, pos, due, ret, rec, par] = await Promise.allSettled([api.fetchPersonajeElegido(idEst), api.fetchMejorasDeEstudiante(idEst), mundoApi.fetchMisionesMundo(estudianteInfo.grado_id), mundoApi.fetchHechasMundo(idEst), mundoApi.fetchZonasMundo(estudianteInfo.grado_id), mundoApi.fetchPosadaMundo(), mundoApi.fetchDuelosMundo(idEst), mundoApi.fetchRetosMundo(idEst), mundoApi.fetchRecolectaMundo(idEst), mundoApi.fetchParcelaMundo(idEst)]);
     // El "modo prueba" es SOLO para cuando todavía no se corrió el SQL 62 (no existen las tablas).
     // Si las tablas existen pero el curso no tiene misiones, el mundo funciona normal, sin misiones.
     const hayTablas = mis.status === "fulfilled" && hec.status === "fulfilled";
@@ -44,6 +44,8 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
       retos: ret.status === "fulfilled" && hayTablas ? ret.value : { activo: false },
       // Sin el SQL 68 (o sin modo real) no hay recolección ni mochila.
       recolecta: rec.status === "fulfilled" && hayTablas ? rec.value : { activo: false },
+      // Sin el SQL 69 (o sin modo real) no hay parcela.
+      parcela: par.status === "fulfilled" && hayTablas ? par.value : { activo: false },
     });
     setCargando(false);
   };
@@ -73,6 +75,7 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
           retos: info.retos, alReto: (r) => mundoApi.registrarReto(idEst, r), // el daño y el premio los calcula la base de datos
           alDescansar: () => mundoApi.descansarEnPosada(idEst),
           recolecta: info.recolecta, alRecolectar: (r) => mundoApi.recolectarRecurso(idEst, r), alFabricar: (r) => mundoApi.fabricarEnMundo(idEst, r.receta), alUsar: (r) => mundoApi.usarItemMundo(idEst, r),
+          parcela: info.parcela, alColocar: (r) => mundoApi.colocarEnParcela(idEst, r), alQuitar: (r) => mundoApi.quitarDeParcela(idEst, r),
           alCompletar: async (m) => (info.modoPrueba ? { ok: true } : mundoApi.completarMisionMundo(idEst, m)),
           alSalir: () => { setJugando(false); },
         });
@@ -88,7 +91,8 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
     if (salioDelJuego.current) { salioDelJuego.current = false; onProgreso && onProgreso(); mundoApi.fetchHechasMundo(idEst).then((hec) => setInfo((i) => (i && !i.modoPrueba ? { ...i, hechas: hec } : i))).catch(() => {});
       mundoApi.fetchDuelosMundo(idEst).then((d) => setInfo((i) => (i && !i.modoPrueba ? { ...i, duelos: d } : i))).catch(() => {});
       mundoApi.fetchRetosMundo(idEst).then((r) => setInfo((i) => (i && !i.modoPrueba ? { ...i, retos: r } : i))).catch(() => {});
-      mundoApi.fetchRecolectaMundo(idEst).then((c) => setInfo((i) => (i && !i.modoPrueba ? { ...i, recolecta: c } : i))).catch(() => {}); } // las insignias que ganó mientras jugaba
+      mundoApi.fetchRecolectaMundo(idEst).then((c) => setInfo((i) => (i && !i.modoPrueba ? { ...i, recolecta: c } : i))).catch(() => {});
+      mundoApi.fetchParcelaMundo(idEst).then((pc) => setInfo((i) => (i && !i.modoPrueba ? { ...i, parcela: pc } : i))).catch(() => {}); } // las insignias que ganó mientras jugaba
   }, [jugando]);
 
   if (cargando) return <p className="text-sm text-slate-400">Preparando el mundo…</p>;
