@@ -2,6 +2,7 @@ import { supabase } from "./supabaseClient";
 import { zonaDeMision, ZONAS, RETADORES } from "../game/zonas";
 import { misionVisiblePara } from "./gradosMundo";
 import { validarContenido, CLAVES_TIPO } from "../game/acertijos";
+import { validarSecreto, limpiarSecreto, secretoJugable } from "../game/secretos";
 import { ITEMS, RECETAS, MAX_POR_ITEM, PARCELA, esDecoracion, celdaValida, puedeFabricar, cantidadPorRecoleccion } from "../game/items";
 
 // Todo lo que el Mundo CÓDICE necesita de la base de datos: las misiones del mundo, cuáles
@@ -618,4 +619,81 @@ export async function fetchConteoAcertijos() {
   const { data, error } = await supabase.from("mundo_acertijos_hechos").select("acertijo_id");
   if (error) throw error;
   const c = {}; (data || []).forEach((f) => { c[f.acertijo_id] = (c[f.acertijo_id] || 0) + 1; }); return c;
+}
+
+// =====================================================================================
+//  MISIONES OCULTAS: objetos brillantes escondidos en el mundo
+//  El premio se gana UNA vez por secreto: se registra (clave única) y luego se entrega; si el premio falla, se deshace el registro.
+// =====================================================================================
+function normalizarSecreto(f) {
+  let opciones = f.opciones;
+  if (typeof opciones === "string") { try { opciones = JSON.parse(opciones); } catch (e) { opciones = []; } }
+  return {
+    id: f.id, nombre: f.nombre || "Objeto", emoji: f.emoji || "📜", escena: f.escena || "plaza", pista: f.pista || "", texto: f.texto || "",
+    opciones: Array.isArray(opciones) ? opciones.map(String) : [], correcta: Number(f.correcta) || 0, retro: f.retro || "",
+    grado_id: f.grado_id ? String(f.grado_id) : "", xp: Math.max(0, Number(f.xp) || 0), oro: Math.max(0, Number(f.oro) || 0), orden: Number(f.orden) || 0, activo: f.activo !== false,
+  };
+}
+
+// Lo que necesita la pantalla del estudiante: { activo, lista, hallados }.
+export async function fetchSecretosMundo(estudianteId, gradoId) {
+  const { data, error } = await supabase.from("mundo_secretos").select("*").eq("activo", true).order("orden").order("id");
+  if (error) throw error;
+  const lista = (data || []).map(normalizarSecreto).filter((x) => secretoJugable(x) && (gradoId != null ? misionVisiblePara(x.grado_id, gradoId) : !x.grado_id));
+  const { data: h, error: eh } = await supabase.from("mundo_secretos_hallados").select("secreto_id").eq("estudiante_id", estudianteId);
+  if (eh) throw eh;
+  return { activo: true, lista, hallados: (h || []).map((f) => f.secreto_id) };
+}
+
+export async function hallarSecretoMundo(estudianteId, { id }) {
+  const { data: filas, error: eL } = await supabase.from("mundo_secretos").select("*").eq("id", id).eq("activo", true);
+  if (eL) return { ok: false, mensaje: eL.message };
+  const x = (filas || [])[0] ? normalizarSecreto(filas[0]) : null;
+  if (!x) return { ok: false, mensaje: "Ese objeto ya no está disponible." };
+  const { error } = await supabase.from("mundo_secretos_hallados").insert({ estudiante_id: estudianteId, secreto_id: id });
+  if (error) {
+    if (error.code === "23505" || /duplicate|unique/i.test(error.message || "")) return { ok: true, yaEstaba: true };
+    return { ok: false, mensaje: error.message };
+  }
+  try {
+    const [, rpc] = await Promise.all([
+      supabase.from("historial_gamificacion").insert({ estudiante_id: estudianteId, etiqueta: `🔎 Secreto: ${x.nombre}`, xp: x.xp, vida: 0, monedas: x.oro, categoria: "general" }),
+      supabase.rpc("ajustar_progreso", { p_estudiante_id: estudianteId, p_delta_xp: x.xp, p_delta_vida: 0, p_delta_monedas: x.oro }),
+    ]);
+    if (rpc.error) throw rpc.error;
+    const fila = rpc.data?.[0];
+    return { ok: true, xp: fila?.xp, oro: fila?.monedas };
+  } catch (e) {
+    await supabase.from("mundo_secretos_hallados").delete().eq("estudiante_id", estudianteId).eq("secreto_id", id);
+    return { ok: false, mensaje: (e && e.message) || "no se pudo entregar el premio" };
+  }
+}
+
+// ----- para el editor de la docente -----
+export async function fetchSecretosAdmin() {
+  const { data, error } = await supabase.from("mundo_secretos").select("*").order("orden").order("id");
+  if (error) throw error;
+  return (data || []).map(normalizarSecreto);
+}
+function secretoParaGuardar(c) { const err = validarSecreto(c); if (err) throw new Error(err); return limpiarSecreto(c); }
+export async function crearSecretoMundo(campos) {
+  const limpio = secretoParaGuardar(campos);
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from("mundo_secretos").insert({ ...limpio, docente_id: userData?.user?.id || null }).select().single();
+  if (error) throw error;
+  return normalizarSecreto(data);
+}
+export async function editarSecretoMundo(id, campos) {
+  const { error } = await supabase.from("mundo_secretos").update(secretoParaGuardar(campos)).eq("id", id);
+  if (error) throw error;
+}
+export async function eliminarSecretoMundo(id) {
+  const { error } = await supabase.from("mundo_secretos").delete().eq("id", id);
+  if (error) throw error;
+}
+// { [secretoId]: cuántos estudiantes lo encontraron }
+export async function fetchConteoSecretos() {
+  const { data, error } = await supabase.from("mundo_secretos_hallados").select("secreto_id");
+  if (error) throw error;
+  const c = {}; (data || []).forEach((f) => { c[f.secreto_id] = (c[f.secreto_id] || 0) + 1; }); return c;
 }
