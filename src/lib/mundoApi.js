@@ -1,6 +1,7 @@
 import { supabase } from "./supabaseClient";
 import { zonaDeMision, ZONAS, RETADORES } from "../game/zonas";
 import { misionVisiblePara } from "./gradosMundo";
+import { ITEMS, RECETAS, MAX_POR_ITEM, puedeFabricar, cantidadPorRecoleccion } from "../game/items";
 
 // Todo lo que el Mundo CÓDICE necesita de la base de datos: las misiones del mundo, cuáles
 // ya completó cada estudiante, y entregar el premio (XP y monedas) al completarlas.
@@ -166,7 +167,7 @@ export const CONFIG_POSADA_DEFECTO = { posada_activa: 1, posada_costo: 15, posad
 export async function fetchConfigMundo() {
   const { data, error } = await supabase.from("mundo_config").select("*");
   if (error) throw error;
-  const cfg = { ...CONFIG_POSADA_DEFECTO, ...CONFIG_DUELO_DEFECTO, ...CONFIG_RETO_DEFECTO };
+  const cfg = { ...CONFIG_POSADA_DEFECTO, ...CONFIG_DUELO_DEFECTO, ...CONFIG_RETO_DEFECTO, ...CONFIG_RECOLECTA_DEFECTO };
   (data || []).forEach((f) => { if (f.clave in cfg && Number.isFinite(Number(f.valor))) cfg[f.clave] = Number(f.valor); });
   return cfg;
 }
@@ -357,5 +358,111 @@ export async function fetchRetosResumen() {
   if (error) throw error;
   const r = { derrotados: {}, derrotas: 0, danioTotal: 0 };
   (data || []).forEach((f) => { if (f.ganado) r.derrotados[f.zona] = (r.derrotados[f.zona] || 0) + 1; else { r.derrotas += 1; r.danioTotal += Number(f.danio) || 0; } });
+  return r;
+}
+
+// =====================================================================================
+//  RECOGER RECURSOS, MOCHILA Y FABRICAR
+//  Cada recolección exige acertar una pregunta (lo verifica el juego) y tiene un límite por día.
+//  El límite, los ingredientes y el tope por objeto se revisan aquí leyendo la base justo antes de escribir;
+//  si algo falla a medias, se deshace lo hecho.
+// =====================================================================================
+export const CONFIG_RECOLECTA_DEFECTO = { recolecta_activo: 1, recolecta_limite_dia: 30, recolecta_cantidad: 2, recolecta_espera_min: 2, recolecta_respawn_min: 3 };
+
+// El día cambia a la medianoche de Colombia (UTC-5, sin horario de verano). Devuelve ISO UTC del inicio del día actual.
+export function inicioDelDia(ahora = Date.now()) {
+  const OFFSET = 5 * 3600000, local = ahora - OFFSET;
+  return new Date(local - (((local % 86400000) + 86400000) % 86400000) + OFFSET).toISOString();
+}
+
+export async function leerInventario(estudianteId) {
+  const { data, error } = await supabase.from("mundo_inventario").select("item, cantidad").eq("estudiante_id", estudianteId);
+  if (error) throw error;
+  const inv = {}; (data || []).forEach((f) => { if (ITEMS[f.item] && f.cantidad > 0) inv[f.item] = f.cantidad; });
+  return inv;
+}
+
+export async function recogidoHoyDe(estudianteId) {
+  const { data, error } = await supabase.from("mundo_recoleccion").select("cantidad").eq("estudiante_id", estudianteId).gte("creado_en", inicioDelDia());
+  if (error) throw error;
+  return (data || []).reduce((a, f) => a + (Number(f.cantidad) || 0), 0);
+}
+
+async function guardarCantidad(estudianteId, item, cantidad) {
+  const c = Math.max(0, Math.min(MAX_POR_ITEM, Math.floor(cantidad)));
+  const { error } = await supabase.from("mundo_inventario").upsert({ estudiante_id: estudianteId, item, cantidad: c, actualizado_en: new Date().toISOString() }, { onConflict: "estudiante_id,item" });
+  if (error) throw error;
+}
+
+// Vuelve el inventario a como estaba (mapa item → cantidad anterior). Es lo último que se intenta; si falla, no se oculta.
+async function restaurar(estudianteId, antes) {
+  for (const [item, c] of Object.entries(antes)) { try { await guardarCantidad(estudianteId, item, c); } catch { /* mejor esfuerzo */ } }
+}
+
+// Todo lo que necesita el juego: configuración, inventario y lo recogido hoy. Si faltan las tablas (SQL 68), falla y no hay recolección.
+export async function fetchRecolectaMundo(estudianteId) {
+  const cfg = await fetchConfigMundo();
+  const [inventario, hoy] = await Promise.all([leerInventario(estudianteId), recogidoHoyDe(estudianteId)]);
+  return { activo: cfg.recolecta_activo === 1, limite: Math.max(0, cfg.recolecta_limite_dia), cantidad: Math.max(1, cfg.recolecta_cantidad), espera: Math.max(0, cfg.recolecta_espera_min), respawn: Math.max(0, cfg.recolecta_respawn_min), inventario, hoy };
+}
+
+// Recoge: respeta el límite diario y el tope de 99. Devuelve { ok, item, cantidad, inventario, hoy } o { ok:false, limite:true }.
+export async function recolectarRecurso(estudianteId, { item, zona }) {
+  const def = ITEMS[item]; if (!def || def.tipo !== "recurso") throw new Error("Recurso desconocido.");
+  const cfg = await fetchConfigMundo();
+  if (cfg.recolecta_activo !== 1) return { ok: false, mensaje: "La recolección está cerrada por ahora." };
+  const [inv, hoy] = await Promise.all([leerInventario(estudianteId), recogidoHoyDe(estudianteId)]);
+  if (cfg.recolecta_limite_dia > 0 && hoy >= cfg.recolecta_limite_dia) return { ok: false, limite: true, hoy, inventario: inv };
+  const actual = inv[item] || 0;
+  if (actual >= MAX_POR_ITEM) return { ok: false, lleno: true, hoy, inventario: inv };
+  let dar = cantidadPorRecoleccion(item, inv, cfg.recolecta_cantidad);
+  if (cfg.recolecta_limite_dia > 0) dar = Math.min(dar, cfg.recolecta_limite_dia - hoy);
+  dar = Math.min(dar, MAX_POR_ITEM - actual);
+  await guardarCantidad(estudianteId, item, actual + dar);
+  const { error } = await supabase.from("mundo_recoleccion").insert({ estudiante_id: estudianteId, item, zona: zona || null, cantidad: dar });
+  if (error) { await restaurar(estudianteId, { [item]: actual }); throw error; }
+  return { ok: true, item, cantidad: dar, inventario: { ...inv, [item]: actual + dar }, hoy: hoy + dar };
+}
+
+// Fabrica: revisa ingredientes leyendo el inventario real, descuenta y suma. Si algo falla, devuelve todo como estaba.
+export async function fabricarEnMundo(estudianteId, recetaId) {
+  const receta = RECETAS[recetaId]; if (!receta) throw new Error("Receta desconocida.");
+  const inv = await leerInventario(estudianteId);
+  const p = puedeFabricar(recetaId, inv);
+  if (!p.ok) return { ok: false, motivo: p.motivo, faltan: p.faltan, inventario: inv };
+  const antes = {}, nuevo = { ...inv };
+  for (const [k, n] of Object.entries(receta.ingredientes)) { antes[k] = inv[k] || 0; nuevo[k] = (inv[k] || 0) - n; }
+  antes[recetaId] = inv[recetaId] || 0; nuevo[recetaId] = (inv[recetaId] || 0) + 1;
+  try { for (const k of Object.keys(antes)) await guardarCantidad(estudianteId, k, nuevo[k]); }
+  catch (e) { await restaurar(estudianteId, antes); throw e; }
+  Object.keys(nuevo).forEach((k) => { if (!nuevo[k]) delete nuevo[k]; });
+  return { ok: true, item: recetaId, inventario: nuevo };
+}
+
+// Usa un consumible: cura (nunca por encima de VIDA_MAX). No se gasta si la vida ya está llena o si la cura falla.
+export async function usarItemMundo(estudianteId, { item }) {
+  const def = ITEMS[item]; if (!def || def.tipo !== "consumible") return { ok: false, mensaje: "Eso no se puede usar." };
+  const inv = await leerInventario(estudianteId);
+  if (!(inv[item] > 0)) return { ok: false, mensaje: "No tienes ese objeto.", inventario: inv };
+  const { data: prog, error: e1 } = await supabase.from("progreso").select("vida").eq("estudiante_id", estudianteId).maybeSingle();
+  if (e1) throw e1;
+  const vida = typeof prog?.vida === "number" ? prog.vida : VIDA_MAX, cura = Math.min(def.cura || 0, VIDA_MAX - vida);
+  if (cura <= 0) return { ok: false, lleno: true, vida, mensaje: "Ya tienes la vida llena: no se gastó.", inventario: inv };
+  await guardarCantidad(estudianteId, item, inv[item] - 1);
+  const { data, error } = await supabase.rpc("ajustar_progreso", { p_estudiante_id: estudianteId, p_delta_xp: 0, p_delta_vida: cura, p_delta_monedas: 0 });
+  if (error) { await restaurar(estudianteId, { [item]: inv[item] }); throw error; }
+  try { await supabase.from("historial_gamificacion").insert({ estudiante_id: estudianteId, etiqueta: `${def.emoji} ${def.nombre}`, xp: 0, vida: cura, monedas: 0, categoria: "general" }); } catch { /* el historial es secundario */ }
+  const nuevo = { ...inv, [item]: inv[item] - 1 }; if (!nuevo[item]) delete nuevo[item];
+  return { ok: true, curado: cura, vida: typeof data?.[0]?.vida === "number" ? data[0].vida : vida + cura, inventario: nuevo };
+}
+
+// ----- para el editor de la docente -----
+// { recogidas: total de unidades, estudiantes: cuántos recogieron, porItem: { madera: n } }
+export async function fetchRecolectaResumen() {
+  const { data, error } = await supabase.from("mundo_recoleccion").select("estudiante_id, item, cantidad");
+  if (error) throw error;
+  const r = { recogidas: 0, estudiantes: 0, porItem: {} }, set = new Set();
+  (data || []).forEach((f) => { r.recogidas += Number(f.cantidad) || 0; set.add(f.estudiante_id); r.porItem[f.item] = (r.porItem[f.item] || 0) + (Number(f.cantidad) || 0); });
+  r.estudiantes = set.size;
   return r;
 }
