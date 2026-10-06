@@ -3,6 +3,7 @@ import * as mundoApi from "../lib/mundoApi";
 import { ZONAS, LUGARES, zonaDeLugar, zonaPorClave } from "../game/zonas";
 import { esNivel, claveNivel, nivelDeClave, nivelDeGrado, nivelesDe, nombreNivel, etiquetaPara, cursosDelNivel, misionVisiblePara, cursoSaturado as cursoSaturadoDe, etiquetaSaturado } from "../lib/gradosMundo";
 import { ITEMS, RECETAS } from "../game/items";
+import { planEdicion, coincideBusqueda } from "../lib/edicionMasiva";
 import { aObjetos, analizarImportacion, filasParaExportar, filasPlantilla, crearLibro, leerLibro } from "../lib/importarMisiones";
 
 // Editor de las misiones del Mundo CÓDICE: acá se agregan, cambian, ocultan y borran las preguntas
@@ -31,6 +32,11 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
   const [importacion, setImportacion] = useState(null);       // la revisión del Excel antes de guardar: { archivo, analisis }
   const [aplicando, setAplicando] = useState(null);           // { hecho, total } mientras se guarda
   const entradaArchivo = useRef(null);
+  const [seleccion, setSeleccion] = useState([]);          // ids de las misiones marcadas para editar de una vez
+  const [busqueda, setBusqueda] = useState("");
+  const [masivo, setMasivo] = useState(null);                // null = panel cerrado; si no: { grado, lugar, xp, oro, visible }
+  const [errMasivo, setErrMasivo] = useState("");
+  const [aplicandoMasivo, setAplicandoMasivo] = useState(false);
   const [pestana, setPestana] = useState("misiones");       // "misiones" | "zonas"
   const [editando, setEditando] = useState(null); // null | "nueva" | id
   const [form, setForm] = useState(vacia());
@@ -41,7 +47,7 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
   const cargar = async () => {
     try {
       const [m, c] = await Promise.all([mundoApi.fetchMisionesMundoAdmin(), mundoApi.fetchConteoHechasMundo().catch(() => ({}))]);
-      setMisiones(m); setConteo(c); setError("");
+      setMisiones(m); setConteo(c); setError(""); setSeleccion((s) => s.filter((id) => m.some((x) => x.id === id)));
     } catch (e) { setError(e.message || "No se pudieron cargar las misiones."); }
     setCargando(false);
   };
@@ -151,7 +157,27 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
     try { await mundoApi.eliminarMisionMundo(m.id); await cargar(); mostrarAviso("Borrada"); } catch (er) { setError("No se pudo borrar: " + er.message); }
   };
 
-  const lista = misiones.filter((m) => (filtro === "todos" || m.zona === filtro) && (filtroCurso === "todos" || (filtroCurso === "generales" ? !m.grado_id : esNivel(filtroCurso) ? !m.grado_id || m.grado_id === filtroCurso || (!esNivel(m.grado_id) && nivelDeGrado(m.grado_id) === nivelDeClave(filtroCurso)) : misionVisiblePara(m.grado_id, filtroCurso))));
+  const alternarSel = (id) => setSeleccion((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  const abrirMasivo = () => { setMasivo({ grado: "", lugar: "", xp: "", oro: "", visible: "" }); setErrMasivo(""); };
+  const aplicarMasivo = async () => {
+    const plan = planEdicion({ misiones, ids: seleccion, cambios: masivo, cursos, columnaCurso, columnaZona });
+    if (!plan.ok) { setErrMasivo(plan.error); return; }
+    if (!confirm(`Se cambiarán ${plan.cuantas} ${plan.cuantas === 1 ? "misión" : "misiones"}:\n\n• ${plan.resumen.join("\n• ")}\n\n¿Aplicar?`)) return;
+    setAplicandoMasivo(true); setErrMasivo("");
+    try { await mundoApi.editarMisionesMundo(seleccion, plan.campos); await cargar(); setMasivo(null); setSeleccion([]); mostrarAviso(`${plan.cuantas} ${plan.cuantas === 1 ? "misión actualizada" : "misiones actualizadas"} ✓`); }
+    catch (er) { await cargar(); setErrMasivo(`No se pudo terminar: ${er.message || "error"}${er.hechas ? ` (alcanzaron a cambiar ${er.hechas})` : ""}.`); }
+    setAplicandoMasivo(false);
+  };
+  const borrarMasivo = async () => {
+    const sel = misiones.filter((m) => seleccion.includes(m.id)); if (!sel.length) return;
+    const hechas = sel.reduce((a, m) => a + (conteo[m.id] || 0), 0);
+    if (!confirm(`¿Borrar ${sel.length} ${sel.length === 1 ? "misión" : "misiones"}?${hechas ? `\n\nSe borra también el registro de ${hechas} ${hechas === 1 ? "vez completada" : "veces completadas"} (los premios ya entregados no se tocan).` : ""}\n\nSi solo quieres que dejen de aparecer, mejor ocúltalas.`)) return;
+    setAplicandoMasivo(true); setErrMasivo("");
+    try { await mundoApi.eliminarMisionesMundo(sel.map((m) => m.id)); await cargar(); setMasivo(null); setSeleccion([]); mostrarAviso("Borradas"); }
+    catch (er) { await cargar(); setErrMasivo(`No se pudo terminar: ${er.message || "error"}${er.hechas ? ` (alcanzaron a borrarse ${er.hechas})` : ""}.`); }
+    setAplicandoMasivo(false);
+  };
+  const lista = misiones.filter((m) => (filtro === "todos" || m.zona === filtro) && (filtroCurso === "todos" || (filtroCurso === "generales" ? !m.grado_id : esNivel(filtroCurso) ? !m.grado_id || m.grado_id === filtroCurso || (!esNivel(m.grado_id) && nivelDeGrado(m.grado_id) === nivelDeClave(filtroCurso)) : misionVisiblePara(m.grado_id, filtroCurso))) && coincideBusqueda(m, busqueda));
   const input = "w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white";
   const sinTabla = /does not exist|relation|schema cache/i.test(error);
 
@@ -295,13 +321,64 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
               </div>
             )}
             {error && <div className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-2.5 mb-3">{error}</div>}
-            {lista.length === 0 && <p className="text-sm text-slate-400 py-6 text-center">No hay misiones {filtro === "todos" ? "todavía" : "en esta zona"}. Crea la primera con "+ Nueva misión".</p>}
+            {misiones.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 mb-3" data-testid="barra-seleccion">
+                <input type="search" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="🔎 Buscar por título, pregunta o personaje" aria-label="Buscar misiones" className="text-xs rounded-lg px-3 py-1.5 border border-slate-200 bg-white w-64 max-w-full" />
+                <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600"><input type="checkbox" aria-label="Seleccionar todas las que se ven" checked={lista.length > 0 && lista.every((m) => seleccion.includes(m.id))} onChange={(e) => setSeleccion((s) => (e.target.checked ? [...new Set([...s, ...lista.map((m) => m.id)])] : s.filter((id) => !lista.some((m) => m.id === id))))} /> Seleccionar las {lista.length} que se ven</label>
+                {seleccion.length > 0 && <button type="button" onClick={() => { setSeleccion([]); setMasivo(null); }} className="text-[11px] text-slate-500 underline">Quitar selección</button>}
+              </div>
+            )}
+            {seleccion.length > 0 && (
+              <div className="rounded-xl border-2 border-violet-300 bg-violet-50 p-3 mb-3" data-testid="panel-masivo">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-bold text-violet-800">✏️ {seleccion.length} {seleccion.length === 1 ? "misión seleccionada" : "misiones seleccionadas"}</span>
+                  {!masivo && <button type="button" onClick={abrirMasivo} className="text-xs font-bold px-3 py-1.5 rounded-full bg-violet-500 text-white">Editar juntas</button>}
+                  {!masivo && <button type="button" onClick={borrarMasivo} disabled={aplicandoMasivo} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-rose-50 text-rose-600">Borrar</button>}
+                </div>
+                {masivo && (
+                  <div className="mt-3">
+                    <p className="text-[11px] text-slate-500 mb-2">Cambia solo lo que necesites: lo que dejes en “sin cambios” se queda como está en cada misión.</p>
+                    <div className="grid sm:grid-cols-2 gap-3 mb-3">
+                      <div>
+                        <label className="text-[11px] text-slate-500 block mb-1">¿Para qué grado o curso?</label>
+                        <select value={masivo.grado} onChange={(e) => setMasivo((x) => ({ ...x, grado: e.target.value }))} disabled={!columnaCurso} aria-label="Grado o curso" className={input}>
+                          <option value="">— sin cambios —</option><option value="todos">🌐 Todos los cursos</option>
+                          {niveles.map((n) => <option key={n} value={claveNivel(n)}>📚 Todo {nombreNivel(n).toLowerCase()}</option>)}
+                          {cursos.map((c) => <option key={c} value={c}>🏫 Solo el curso {c}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-slate-500 block mb-1">Mover a este lugar</label>
+                        <select value={masivo.lugar} onChange={(e) => setMasivo((x) => ({ ...x, lugar: e.target.value }))} aria-label="Lugar" className={input}>
+                          <option value="">— sin cambios —</option>
+                          {ZONAS.map((z) => <optgroup key={z.key} label={`${z.emoji} ${z.nombre}`}>{z.lugares.map((l) => <option key={l.key} value={l.key}>{l.emoji} {l.nombre}</option>)}</optgroup>)}
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-slate-700">XP <input type="number" min="0" max="1000" value={masivo.xp} placeholder="—" onChange={(e) => setMasivo((x) => ({ ...x, xp: e.target.value }))} className="w-20 text-sm rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none bg-white" aria-label="XP" /> Oro <input type="number" min="0" max="1000" value={masivo.oro} placeholder="—" onChange={(e) => setMasivo((x) => ({ ...x, oro: e.target.value }))} className="w-20 text-sm rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none bg-white" aria-label="Oro" /></div>
+                      <div>
+                        <select value={masivo.visible} onChange={(e) => setMasivo((x) => ({ ...x, visible: e.target.value }))} aria-label="Visibilidad" className={input}>
+                          <option value="">Visibilidad: sin cambios</option><option value="mostrar">👁️ Mostrarlas</option><option value="ocultar">🙈 Ocultarlas</option>
+                        </select>
+                      </div>
+                    </div>
+                    {errMasivo && <div className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-2.5 mb-3" data-testid="error-masivo">{errMasivo}</div>}
+                    <div className="flex gap-2 justify-end">
+                      <button type="button" onClick={() => { setMasivo(null); setErrMasivo(""); }} className="text-sm text-slate-500 px-4 py-2">Cancelar</button>
+                      <button type="button" onClick={aplicarMasivo} disabled={aplicandoMasivo} className="text-sm font-bold px-5 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">{aplicandoMasivo ? "Aplicando…" : `Aplicar a ${seleccion.length}`}</button>
+                    </div>
+                  </div>
+                )}
+                {!masivo && errMasivo && <div className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-2.5 mt-2">{errMasivo}</div>}
+              </div>
+            )}
+            {lista.length === 0 && <p className="text-sm text-slate-400 py-6 text-center">No hay misiones {busqueda.trim() ? "que coincidan con la búsqueda" : filtro === "todos" ? "todavía" : "en esta zona"}. Crea la primera con "+ Nueva misión".</p>}
             <div className="space-y-2">
               {lista.map((m) => {
                 const l = nombreLugar(m.lugar), n = conteo[m.id] || 0;
                 return (
-                  <div key={m.id} className={`rounded-xl border p-3 ${m.activo ? "border-slate-200 bg-white" : "border-slate-200 bg-slate-50 opacity-70"}`}>
+                  <div key={m.id} className={`rounded-xl border p-3 ${seleccion.includes(m.id) ? "border-violet-400 bg-violet-50/50" : m.activo ? "border-slate-200 bg-white" : "border-slate-200 bg-slate-50 opacity-70"}`}>
                     <div className="flex items-start gap-2">
+                      <input type="checkbox" checked={seleccion.includes(m.id)} onChange={() => alternarSel(m.id)} aria-label={`Seleccionar ${m.titulo}`} className="mt-1 shrink-0" />
                       <div className="min-w-0 flex-1">
                         <div className="text-sm font-bold text-slate-800 truncate">{m.titulo}{!m.activo && <span className="ml-2 text-[10px] font-bold text-slate-500 bg-slate-200 rounded-full px-2 py-0.5">OCULTA</span>}</div>
                         <div className="text-[11px] text-slate-500">{l.emoji} {l.nombre} · {m.npc_nombre} · ✨ {m.xp} XP · 🪙 {m.oro}</div>
