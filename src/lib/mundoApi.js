@@ -1,7 +1,7 @@
 import { supabase } from "./supabaseClient";
 import { zonaDeMision, ZONAS, RETADORES } from "../game/zonas";
 import { misionVisiblePara } from "./gradosMundo";
-import { ITEMS, RECETAS, MAX_POR_ITEM, puedeFabricar, cantidadPorRecoleccion } from "../game/items";
+import { ITEMS, RECETAS, MAX_POR_ITEM, PARCELA, esDecoracion, celdaValida, puedeFabricar, cantidadPorRecoleccion } from "../game/items";
 
 // Todo lo que el Mundo CÓDICE necesita de la base de datos: las misiones del mundo, cuáles
 // ya completó cada estudiante, y entregar el premio (XP y monedas) al completarlas.
@@ -465,4 +465,55 @@ export async function fetchRecolectaResumen() {
   (data || []).forEach((f) => { r.recogidas += Number(f.cantidad) || 0; set.add(f.estudiante_id); r.porItem[f.item] = (r.porItem[f.item] || 0) + (Number(f.cantidad) || 0); });
   r.estudiantes = set.size;
   return r;
+}
+
+// =====================================================================================
+//  LA PARCELA: colocar y recoger piezas de decoración
+//  Una casilla solo puede tener una pieza (índice único en la base). Colocar saca la pieza de la mochila y recoger la devuelve;
+//  si el segundo paso falla, se deshace el primero.
+// =====================================================================================
+export async function fetchParcelaMundo(estudianteId) {
+  const { data, error } = await supabase.from("mundo_parcela").select("item, x, y").eq("estudiante_id", estudianteId);
+  if (error) throw error;
+  return { activo: true, piezas: (data || []).filter((f) => esDecoracion(f.item)).map((f) => ({ item: f.item, x: f.x, y: f.y })) };
+}
+
+export async function colocarEnParcela(estudianteId, { item, x, y }) {
+  if (!esDecoracion(item)) return { ok: false, mensaje: "Ese objeto no se puede colocar." };
+  if (!celdaValida(x, y)) return { ok: false, mensaje: "Ahí no se puede construir." };
+  const inv = await leerInventario(estudianteId);
+  if (!(inv[item] > 0)) return { ok: false, mensaje: "No tienes ese objeto.", inventario: inv };
+  const { data: filas, error: eL } = await supabase.from("mundo_parcela").select("x, y").eq("estudiante_id", estudianteId);
+  if (eL) throw eL;
+  if ((filas || []).length >= PARCELA.maxPiezas) return { ok: false, mensaje: `Tu parcela ya tiene el máximo de ${PARCELA.maxPiezas} piezas.`, inventario: inv };
+  if ((filas || []).some((f) => f.x === x && f.y === y)) return { ok: false, ocupado: true, mensaje: "Esa casilla ya está ocupada.", inventario: inv };
+  const { error: eI } = await supabase.from("mundo_parcela").insert({ estudiante_id: estudianteId, item, x, y });
+  if (eI) {
+    if (eI.code === "23505" || /duplicate|unique/i.test(eI.message || "")) return { ok: false, ocupado: true, mensaje: "Esa casilla ya está ocupada.", inventario: inv };
+    throw eI;
+  }
+  try { await guardarCantidad(estudianteId, item, inv[item] - 1); }
+  catch (e) { await supabase.from("mundo_parcela").delete().eq("estudiante_id", estudianteId).eq("x", x).eq("y", y); throw e; }
+  const nuevo = { ...inv, [item]: inv[item] - 1 }; if (!nuevo[item]) delete nuevo[item];
+  return { ok: true, inventario: nuevo };
+}
+
+export async function quitarDeParcela(estudianteId, { x, y }) {
+  const { data: filas, error: eL } = await supabase.from("mundo_parcela").select("item, x, y").eq("estudiante_id", estudianteId).eq("x", x).eq("y", y);
+  if (eL) throw eL;
+  const pieza = (filas || [])[0]; if (!pieza) return { ok: false, mensaje: "Ahí ya no hay nada.", vacia: true };
+  const inv = await leerInventario(estudianteId);
+  if ((inv[pieza.item] || 0) >= MAX_POR_ITEM) return { ok: false, lleno: true, mensaje: "Tu mochila ya tiene el máximo de ese objeto.", inventario: inv };
+  const { error: eD } = await supabase.from("mundo_parcela").delete().eq("estudiante_id", estudianteId).eq("x", x).eq("y", y);
+  if (eD) throw eD;
+  try { await guardarCantidad(estudianteId, pieza.item, (inv[pieza.item] || 0) + 1); }
+  catch (e) { await supabase.from("mundo_parcela").insert({ estudiante_id: estudianteId, item: pieza.item, x, y }); throw e; }
+  return { ok: true, item: pieza.item, inventario: { ...inv, [pieza.item]: (inv[pieza.item] || 0) + 1 } };
+}
+
+// Para el editor de la docente: { piezas, parcelas }
+export async function fetchParcelaResumen() {
+  const { data, error } = await supabase.from("mundo_parcela").select("estudiante_id");
+  if (error) throw error;
+  return { piezas: (data || []).length, parcelas: new Set((data || []).map((f) => f.estudiante_id)).size };
 }
