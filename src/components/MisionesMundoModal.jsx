@@ -682,6 +682,7 @@ function PanelRetos({ misiones }) {
 function PanelRecursos() {
   const [f, setF] = useState(null);
   const [resumen, setResumen] = useState(null);
+  const [parc, setParc] = useState(null);
   const [error, setError] = useState("");
   const [aviso, setAviso] = useState("");
   const [guardando, setGuardando] = useState(false);
@@ -694,6 +695,7 @@ function PanelRecursos() {
         const c = await mundoApi.fetchConfigMundo();
         setF({ activo: c.recolecta_activo === 1, limite: String(c.recolecta_limite_dia), cantidad: String(c.recolecta_cantidad), espera: String(c.recolecta_espera_min), respawn: String(c.recolecta_respawn_min) });
       } catch (e) { setError(e.message || "No se pudo cargar la configuración."); return; }
+      mundoApi.fetchParcelaResumen().then(setParc).catch(() => setParc(false));
       mundoApi.fetchRecolectaResumen().then(setResumen).catch((e) => { if (/does not exist|relation|schema cache/i.test(e.message || "")) setFaltaSql(true); });
     })();
   }, []);
@@ -716,11 +718,13 @@ function PanelRecursos() {
   return (
     <div>
       <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 leading-relaxed">
-        En el Bosque, la Montaña y el Lago hay puntos de recolección (🪵 madera, 🪨 piedra, 🐟 peces, 🌿 hierba). Para recoger, el estudiante <b>responde una pregunta</b> de esa zona. Lo recogido va a su <b>mochila 🎒</b> y con eso puede <b>fabricar</b> herramientas (que dan +1 al recoger), pociones que curan y objetos para decorar.
+        En el Bosque, la Montaña y el Lago hay puntos de recolección (🪵 madera, 🪨 piedra, 🐟 peces, 🌿 hierba). Para recoger, el estudiante <b>responde una pregunta</b> de esa zona. Lo recogido va a su <b>mochila 🎒</b> y con eso puede <b>fabricar</b> herramientas (que dan +1 al recoger), pociones que curan y objetos para decorar su <b>parcela 🏡</b> (un terreno propio al que se entra por el cartel cerca de la plaza).
       </div>
       {faltaSql && <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3 mb-3">Todavía no se crearon las tablas de recursos. Corre <b>68_mundo_recursos.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</div>}
       {error && <div className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-2.5 mb-3">{error}</div>}
       {resumen && <div className="text-[11px] text-slate-500 mb-3" data-testid="resumen-recursos">🎒 {resumen.recogidas} {resumen.recogidas === 1 ? "unidad recogida" : "unidades recogidas"} por {resumen.estudiantes} {resumen.estudiantes === 1 ? "estudiante" : "estudiantes"}{Object.keys(resumen.porItem).length ? " · " + Object.entries(resumen.porItem).map(([k, n]) => `${ITEMS[k] ? ITEMS[k].emoji : k} ${n}`).join("  ") : ""}</div>}
+      {parc === false && <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3 mb-3">Todavía no se creó la tabla de las parcelas. Corre <b>69_mundo_parcela.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</div>}
+      {parc && <div className="text-[11px] text-slate-500 mb-3" data-testid="resumen-parcelas">🏡 {parc.piezas} {parc.piezas === 1 ? "pieza colocada" : "piezas colocadas"} en {parc.parcelas} {parc.parcelas === 1 ? "parcela" : "parcelas"}</div>}
       <div className="rounded-xl border border-slate-200 p-4 mb-3">
         <label className="flex items-center gap-2 text-sm font-semibold text-slate-800 mb-4"><input type="checkbox" checked={f.activo} onChange={(e) => setF((x) => ({ ...x, activo: e.target.checked }))} /> La recolección está activa</label>
         <div className="flex flex-wrap items-center gap-2 mb-2 text-sm text-slate-700">Cada estudiante puede recoger hasta <input type="number" min="0" max="500" value={f.limite} onChange={set("limite")} className={input} aria-label="Límite por día" /> unidades por día <span className="text-[11px] text-slate-400">(0 = sin límite; el día cambia a la medianoche)</span></div>
