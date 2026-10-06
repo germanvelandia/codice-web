@@ -3,6 +3,7 @@ import * as api from "../lib/api";
 import * as mundoApi from "../lib/mundoApi";
 import { nivelPersonaje } from "../lib/mejorasPersonaje";
 import { useNivelesPersonaje } from "../lib/configNiveles";
+import { estadoZonas, misionesDisponibles } from "../game/zonas";
 
 // El personaje con su brillo y equipo (se carga aparte, trae las imágenes).
 const PersonajeConMejoras = lazy(() => import("../components/PersonajeConMejoras"));
@@ -23,7 +24,7 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
   useNivelesPersonaje(); // para que el nivel se actualice si cambian en "Editar niveles"
 
   const cargar = async () => {
-    const [pers, mej, mis, hec] = await Promise.allSettled([api.fetchPersonajeElegido(idEst), api.fetchMejorasDeEstudiante(idEst), mundoApi.fetchMisionesMundo(estudianteInfo.grado_id), mundoApi.fetchHechasMundo(idEst)]);
+    const [pers, mej, mis, hec, zon] = await Promise.allSettled([api.fetchPersonajeElegido(idEst), api.fetchMejorasDeEstudiante(idEst), mundoApi.fetchMisionesMundo(estudianteInfo.grado_id), mundoApi.fetchHechasMundo(idEst), mundoApi.fetchZonasMundo(estudianteInfo.grado_id)]);
     // El "modo prueba" es SOLO para cuando todavía no se corrió el SQL 62 (no existen las tablas).
     // Si las tablas existen pero el curso no tiene misiones, el mundo funciona normal, sin misiones.
     const hayTablas = mis.status === "fulfilled" && hec.status === "fulfilled";
@@ -33,6 +34,9 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
       misiones: hayTablas ? mis.value : mundoApi.MISIONES_EJEMPLO,
       hechas: hayTablas ? hec.value : [],
       modoPrueba: !hayTablas,
+      // Si todavía no se corrió el SQL 64, solo existe la Aldea (ninguna zona nueva está abierta).
+      zonasAbiertas: zon.status === "fulfilled" ? zon.value.abiertas : [],
+      zonasRequisitos: zon.status === "fulfilled" ? zon.value.requisitos : {},
     });
     setCargando(false);
   };
@@ -57,6 +61,7 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
             id: idEst, nombre: primerNombre(estudianteInfo.nombre), clave: `${info.personaje.rolKey}_${info.personaje.genero}`, xp: datos?.xp ?? 0, oro: datos?.monedas ?? 0,
             nivel: nv && nv.nivel > 1 ? { nivel: nv.nivel, nombre: nv.nombre, color: nv.color } : null, companero,
           },
+          zonasAbiertas: info.zonasAbiertas, zonasRequisitos: info.zonasRequisitos,
           alCompletar: async (m) => (info.modoPrueba ? { ok: true } : mundoApi.completarMisionMundo(idEst, m)),
           alSalir: () => { setJugando(false); },
         });
@@ -73,7 +78,8 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
   }, [jugando]);
 
   if (cargando) return <p className="text-sm text-slate-400">Preparando el mundo…</p>;
-  const total = info.misiones.length, hechas = info.misiones.filter((m) => info.hechas.includes(m.id)).length;
+  const zonas = estadoZonas({ misiones: info.misiones, hechas: info.hechas, abiertas: info.zonasAbiertas, requisitos: info.zonasRequisitos });
+  const disp = misionesDisponibles(info.misiones, zonas), total = disp.length, hechas = disp.filter((m) => info.hechas.includes(m.id)).length;
 
   return (
     <div>
@@ -101,6 +107,12 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
                 <div className="text-xs text-slate-500">{total === 0 ? "🎯 Todavía no hay misiones para tu curso" : <>🎯 Misiones: <b className="text-slate-700">{hechas}/{total}</b></>}</div>
               </div>
             </div>
+            {!info.modoPrueba && (
+              <div className="text-[11px] text-slate-500 mb-3 flex flex-wrap gap-1.5">
+                <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-semibold">🏘️ Aldea · abierta</span>
+                <span className={`px-2 py-0.5 rounded-full font-semibold ${zonas.bosque.desbloqueada ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>🌲 Bosque · {zonas.bosque.desbloqueada ? "abierto" : "🔒 cerrado"}</span>
+              </div>
+            )}
             {info.modoPrueba && (
               <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-2.5 mb-3">🧪 <b>Modo prueba:</b> todavía no están activas las misiones del mundo, así que puedes explorar y jugar, pero no se guarda nada ni se entregan premios.</div>
             )}
