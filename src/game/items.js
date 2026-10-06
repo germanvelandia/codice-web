@@ -68,3 +68,17 @@ export function cantidadPorRecoleccion(item, inv, base = 2) {
   const h = herramientaDe(item);
   return Math.max(1, Math.floor(Number(base) || 1)) + (h && cant(inv, h) >= 1 ? 1 : 0);
 }
+
+// =====================================================================================
+//  LA PARCELA: un terreno propio donde cada estudiante coloca sus objetos de decoración
+// =====================================================================================
+export const PARCELA = { cols: 16, filas: 12, maxPiezas: 60 };
+export const esDecoracion = (id) => !!ITEMS[id] && ITEMS[id].tipo === "decoracion";
+// Se puede construir dentro de la cerca (se deja libre el paso de la entrada, abajo al centro).
+export function celdaValida(x, y) {
+  if (!Number.isInteger(x) || !Number.isInteger(y)) return false;
+  if (x < 1 || x > PARCELA.cols - 2 || y < 1 || y > PARCELA.filas - 2) return false;
+  const mitad = PARCELA.cols / 2;
+  if ((x === mitad - 1 || x === mitad) && y >= PARCELA.filas - 3) return false;                // el paso de la entrada
+  return true;
+}
