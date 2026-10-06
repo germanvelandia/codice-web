@@ -8,7 +8,7 @@
 // =====================================================================================
 
 import { ZONAS, RETADORES, estadoZonas, misionesDisponibles, zonaDeMision } from "./zonas";
-import { armarPool, crearDuelo, esperaRestanteMin } from "./duelo";
+import { armarPool, crearDuelo, esperaRestanteMin, barajar } from "./duelo";
 import { ITEMS, RECETAS, RECURSOS_POR_ZONA, MAX_POR_ITEM, PARCELA, celdaValida, esDecoracion, puedeFabricar, faltantes, cantidadPorRecoleccion, esHerramienta } from "./items";
 
 const TILE = 32;
@@ -1476,7 +1476,7 @@ export async function iniciarMundo(raiz, op) {
       abrirTarjeta(`${cabecera(n, m.titulo + " · ✅ completada")}<p class="m-texto">¡Ya completaste esta misión! Gracias por tu ayuda. Sigue explorando: todavía hay más por descubrir.</p><button class="m-ok" data-a="cerrar">Seguir</button>`);
       return;
     }
-    const d = abrirTarjeta(`${cabecera(n, "🎯 " + m.titulo)}<p class="m-texto">${html(m.texto)}</p><div class="m-ops">${(m.opciones || []).map((o, i) => `<button class="m-opcion" data-i="${i}">${i + 1}. ${html(o)}</button>`).join("")}</div><div class="m-retro-caja"></div>`);
+    const d = abrirTarjeta(`${cabecera(n, "🎯 " + m.titulo)}<p class="m-texto">${html(m.texto)}</p><div class="m-ops">${barajar((m.opciones || []).map((o, i) => i), op.rngDuelo || Math.random).map((i, pos) => `<button class="m-opcion" data-i="${i}">${pos + 1}. ${html(m.opciones[i])}</button>`).join("")}</div><div class="m-retro-caja"></div>`);
     d.querySelectorAll(".m-opcion").forEach((b) => (b.onclick = () => responder(n, Number(b.dataset.i), b)));
   }
   async function responder(n, i, boton) {
@@ -1867,7 +1867,7 @@ export async function iniciarMundo(raiz, op) {
     if (estado.mapaAbierto) { if (e.key === "Escape") cerrarMapa(); return; }
     if (estado.dialogo) {
       if (e.key === "Escape") cerrarDialogo();
-      const n = Number(k), btn = n >= 1 && n <= 6 ? raiz.querySelector(`.m-opcion[data-i="${n - 1}"]`) : null; if (btn && !btn.disabled) btn.click(); return;
+      const n = Number(k), btn = n >= 1 && n <= 6 ? raiz.querySelectorAll(".m-dialogo .m-opcion")[n - 1] : null; if (btn && !btn.disabled) btn.click(); return;
     }
     teclas.add(k); if (k === "e" || k === " " || k === "Enter") interactuar();
   }
