@@ -8,6 +8,7 @@
 // =====================================================================================
 
 import { ZONAS, estadoZonas, misionesDisponibles, zonaDeMision } from "./zonas";
+import { armarPool, crearDuelo, esperaRestanteMin } from "./duelo";
 
 const TILE = 32;
 const DIRS8 = ["east", "south-east", "south", "south-west", "west", "north-west", "north", "north-east"];
@@ -67,6 +68,30 @@ const CSS = `
 .mundo .m-zona.aqui { border-color: var(--acento); }
 .mundo .m-zona .m-z-nombre { font-weight: 800; font-size: 14px; }
 .mundo .m-zona .m-z-estado { font-size: 12px; margin-top: 2px; }
+.mundo .m-duelo { position: absolute; inset: 0; z-index: 30; background: radial-gradient(ellipse at 50% 15%, #3b2a66 0%, #14102a 72%); color: #fff; display: flex; align-items: flex-start; justify-content: center; padding: 10px; overflow-y: auto; }
+.mundo .m-d-caja { width: min(640px, 100%); margin: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px 0 18px; }
+.mundo .m-d-arena { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 6px; background: rgba(255,255,255,.06); border: 2px solid rgba(255,255,255,.18); border-radius: 18px; padding: 10px; }
+.mundo .m-d-luchador { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; min-width: 0; }
+.mundo .m-d-luchador img { width: 76px; height: 76px; image-rendering: pixelated; object-fit: contain; }
+.mundo .m-d-nombre { font-weight: 800; font-size: 13px; } .mundo .m-d-sub { font-size: 11px; opacity: .8; } .mundo .m-d-vs { font-size: 26px; }
+.mundo .m-d-seg { display: flex; gap: 3px; flex-wrap: wrap; justify-content: center; }
+.mundo .m-d-seg i { width: 18px; height: 9px; border-radius: 3px; background: #ef4444; box-shadow: 0 0 6px rgba(239,68,68,.6); }
+.mundo .m-d-seg i.vacio { background: rgba(255,255,255,.18); box-shadow: none; }
+.mundo .m-d-cor { font-size: 18px; letter-spacing: 2px; }
+.mundo .m-d-preg { background: #fff; color: #1e1b2e; border-radius: 16px; padding: 14px; font-size: 15px; font-weight: 700; line-height: 1.4; }
+.mundo .m-d-num { font-size: 11px; color: #7c3aed; font-weight: 800; margin-bottom: 4px; }
+.mundo .m-d-ops { display: flex; flex-direction: column; gap: 8px; }
+.mundo .m-d-op { text-align: left; border: 2px solid rgba(255,255,255,.25); background: rgba(255,255,255,.09); color: #fff; border-radius: 14px; padding: 12px 14px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
+.mundo .m-d-op:hover:not(:disabled) { background: rgba(255,255,255,.2); }
+.mundo .m-d-op.bien { background: #16a34a; border-color: #86efac; } .mundo .m-d-op.mal { background: #dc2626; border-color: #fca5a5; }
+.mundo .m-d-fb { min-height: 20px; font-size: 13px; font-weight: 700; padding: 0 4px; }
+.mundo .m-d-pie { display: flex; gap: 8px; justify-content: space-between; }
+.mundo .m-d-btn { border: 0; border-radius: 99px; padding: 10px 18px; font-weight: 800; font-size: 13px; cursor: pointer; font-family: inherit; background: var(--acento); color: #fff; }
+.mundo .m-d-btn.sec { background: rgba(255,255,255,.14); }
+@keyframes m-sacudir { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-7px); } 75% { transform: translateX(7px); } }
+.mundo .m-d-luchador.golpeado img { animation: m-sacudir .35s; }
+.mundo .m-d-fin { text-align: center; background: rgba(255,255,255,.08); border-radius: 20px; padding: 22px 16px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.mundo .m-d-fin .grande { font-size: 60px; line-height: 1; } .mundo .m-d-fin h3 { margin: 0; font-size: 20px; } .mundo .m-d-fin p { margin: 0; font-size: 14px; line-height: 1.45; }
 .mundo .m-viaje { margin-top: 8px; border: 0; border-radius: 99px; padding: 7px 14px; font-weight: 800; font-size: 12px; background: var(--acento); color: #fff; cursor: pointer; font-family: inherit; }
 .mundo .m-barra { height: 9px; border-radius: 99px; background: var(--borde); overflow: hidden; margin: 6px 0 2px; }
 .mundo .m-barra > i { display: block; height: 100%; background: var(--acento); }
@@ -113,6 +138,7 @@ const PLANTILLA = `
   <button class="m-accion oculto" aria-label="Interactuar">💬</button>
   <div class="m-dialogo oculto"></div>
   <div class="m-mapa oculto"></div>
+  <div class="m-duelo oculto"></div>
   <div class="m-fundido"></div>
   <div class="m-fin oculto"><div class="m-tarjeta"><div class="m-grande">🏆</div><h2>¡Completaste todas las misiones!</h2><p class="m-fin-texto"></p><button class="b-seguir">Seguir explorando</button></div></div>
 </div>`;
@@ -121,7 +147,7 @@ const PLANTILLA = `
 //  SONIDO — todo se genera por código (no hay archivos de audio)
 // =====================================================================================
 function crearSonido() {
-  const mudoTotal = { activo: false, mudo: true, reanudar() {}, alternar() { return true; }, musica() {}, paso() {}, estrella() {}, bien() {}, mal() {}, hablar() {}, puerta() {}, destruir() {} };
+  const mudoTotal = { activo: false, mudo: true, reanudar() {}, alternar() { return true; }, musica() {}, paso() {}, estrella() {}, bien() {}, mal() {}, hablar() {}, puerta() {}, golpe() {}, derrota() {}, fanfarria() {}, destruir() {} };
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return mudoTotal;
   let ctx; try { ctx = new AC(); } catch (e) { return mudoTotal; }
@@ -146,9 +172,10 @@ function crearSonido() {
   // música: acordes lentos (La menor, Fa, Do, Sol) con un arpegio suave encima
   const ACORDES = [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]];
   const ACORDES_BOSQUE = [[50, 53, 57], [46, 50, 53], [53, 57, 60], [48, 52, 55]]; // Re menor, Si bemol, Fa, Do: más suave y misteriosa
+  const ACORDES_DUELO = [[57, 60, 64], [53, 57, 60], [55, 59, 62], [52, 56, 59]]; // La menor, Fa, Sol, Mi: tensa y enérgica
   const ACORDES_MONTANA = [[52, 55, 59], [48, 52, 55], [45, 48, 52], [47, 51, 54]]; // Mi menor, Do, La menor, Si: amplia y solemne
   const ACORDES_LAGO = [[48, 52, 55], [53, 57, 60], [45, 48, 52], [50, 53, 57]];    // Do, Fa, La menor, Re menor: calma y reflexión
-  const TEMAS = { exterior: { dur: 0.36, ac: ACORDES }, bosque: { dur: 0.44, ac: ACORDES_BOSQUE }, montana: { dur: 0.55, ac: ACORDES_MONTANA }, lago: { dur: 0.6, ac: ACORDES_LAGO } };
+  const TEMAS = { exterior: { dur: 0.36, ac: ACORDES }, bosque: { dur: 0.44, ac: ACORDES_BOSQUE }, montana: { dur: 0.55, ac: ACORDES_MONTANA }, lago: { dur: 0.6, ac: ACORDES_LAGO }, duelo: { dur: 0.26, ac: ACORDES_DUELO } };
   const ARP = [0, 1, 2, 1, 2, 1, 2, 1];
   let tema = "exterior", n = 0, prox = 0, reloj = null;
   function pasoMusica(i, t) {
@@ -156,6 +183,7 @@ function crearSonido() {
     if (i % 8 === 0) for (const m of ac) tono(musica, "triangle", hz(m - 12), t, dur * 8.2, 0.35);
     if (tema === "exterior") tono(musica, "sine", hz(ac[ARP[i % 8]] + 12), t, dur * 1.4, 0.5);
     else if (tema === "bosque") { if (i % 4 === 0) tono(musica, "sine", hz(ac[ARP[i % 8]] + 12), t, dur * 3, 0.4); }
+    else if (tema === "duelo") tono(musica, "square", hz(ac[ARP[i % 8]] + 12), t, dur * 0.8, 0.1);                                  // un pulso constante, como en una batalla
     else if (tema === "montana") { if (i % 6 === 0) tono(musica, "triangle", hz(ac[ARP[i % 8]]), t, dur * 4, 0.3); }          // notas largas y graves
     else if (tema === "lago") { if (i % 8 === 4) tono(musica, "sine", hz(ac[ARP[i % 8]] + 12), t, dur * 5, 0.32); }          // una nota cristalina de vez en cuando
     else if (i % 2 === 0) tono(musica, "sine", hz(ac[ARP[i % 8]] + 12), t, dur * 2.2, 0.35);
@@ -184,6 +212,9 @@ function crearSonido() {
     estrella() { if (mudo) return; const t = ahora(); tono(fx, "sine", 880, t, 0.14, 0.5); tono(fx, "sine", 1320, t + 0.09, 0.22, 0.5); },
     bien() { if (mudo) return; const t = ahora(); [72, 76, 79, 84].forEach((m, i) => tono(fx, "triangle", hz(m), t + i * 0.09, 0.3, 0.5)); },
     mal() { if (mudo) return; tono(fx, "sawtooth", 170, ahora(), 0.22, 0.35, 110); },
+    golpe() { if (mudo) return; const t = ahora(); ruido(fx, t, 0.12, 0.5, 900, "lowpass"); tono(fx, "square", 220, t, 0.12, 0.3, 120); },
+    derrota() { if (mudo) return; const t = ahora(); [64, 60, 57, 52].forEach((m, i) => tono(fx, "sawtooth", hz(m), t + i * 0.16, 0.3, 0.3)); },
+    fanfarria() { if (mudo) return; const t = ahora(); [72, 76, 79, 84, 79, 84, 88].forEach((m, i) => tono(fx, "triangle", hz(m), t + i * 0.11, i === 6 ? 0.7 : 0.25, 0.55)); },
     hablar() { if (mudo) return; const t = ahora(); tono(fx, "square", 520, t, 0.06, 0.18); tono(fx, "square", 660, t + 0.06, 0.07, 0.18); },
     puerta() { if (mudo) return; const t = ahora(); ruido(fx, t, 0.35, 0.5, 500, "lowpass"); tono(fx, "sine", 90, t, 0.3, 0.6, 60); },
     destruir() { clearInterval(reloj); reloj = null; try { ctx.close(); } catch (e) { /* ya cerrado */ } },
@@ -223,6 +254,24 @@ function graficosBase() {
   const rocaImg = (() => { const [c, g] = lienzo(26, 18); g.fillStyle = "rgba(0,0,0,.2)"; g.beginPath(); g.ellipse(13, 15, 11, 3, 0, 0, 7); g.fill(); g.fillStyle = "#8d8d99"; g.beginPath(); g.ellipse(13, 10, 11, 7, 0, 0, 7); g.fill(); g.fillStyle = "#a9a9b6"; g.beginPath(); g.ellipse(10, 8, 6, 4, 0, 0, 7); g.fill(); return c; })();
   _graficos = { arbolImg, rocaImg };
   return _graficos;
+}
+
+// ---------- la arena donde espera el Guardián de cada zona ----------
+function dibujarArena(g, cx, cy, color) {
+  const x = cx * TILE + 16, y = cy * TILE + 16;
+  g.save();
+  g.fillStyle = "rgba(0,0,0,.18)"; g.beginPath(); g.ellipse(x, y + 6, 78, 52, 0, 0, 7); g.fill();
+  g.fillStyle = "#8f8fa0"; g.beginPath(); g.ellipse(x, y, 74, 48, 0, 0, 7); g.fill();
+  g.fillStyle = "#b3b3c4"; g.beginPath(); g.ellipse(x, y - 2, 68, 43, 0, 0, 7); g.fill();
+  g.strokeStyle = color; g.lineWidth = 4; g.beginPath(); g.ellipse(x, y - 2, 58, 35, 0, 0, 7); g.stroke();
+  g.strokeStyle = "rgba(0,0,0,.18)"; g.lineWidth = 2; g.beginPath(); g.ellipse(x, y - 2, 44, 26, 0, 0, 7); g.stroke();
+  for (let a = 0; a < 6.283; a += 0.785) { g.fillStyle = color; g.fillRect(x + Math.cos(a) * 58 - 2, y - 2 + Math.sin(a) * 35 - 2, 5, 5); }
+  [-1, 1].forEach((lado) => { // dos estandartes a los costados
+    const bx = x + lado * 82; g.fillStyle = "#5a3a22"; g.fillRect(bx - 2, y - 40, 4, 48);
+    g.fillStyle = color; g.beginPath(); g.moveTo(bx + (lado > 0 ? -2 : 2), y - 38); g.lineTo(bx + lado * 22, y - 38); g.lineTo(bx + lado * 22, y - 16); g.lineTo(bx + lado * 10, y - 22); g.lineTo(bx + (lado > 0 ? -2 : 2), y - 16); g.closePath(); g.fill();
+    g.fillStyle = "rgba(255,255,255,.55)"; g.fillRect(bx + lado * 8 - 2, y - 33, 4, 8);
+  });
+  g.restore();
 }
 
 // ---------- portones entre zonas (siempre sobre el borde este del mapa) ----------
@@ -302,6 +351,8 @@ function crearExterior() {
   }
   // El camino hacia el Bosque: sale de la plaza hacia el este y termina en un portón de madera.
   camino(PLAZA.cx + 5, PLAZA.cy, 53, PLAZA.cy);
+  const ARENA = { cx: 41, cy: 17, r: 2.4 };   // la arena de la Guardiana de la Aldea
+  for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (Math.hypot(x + 0.5 - ARENA.cx, y + 0.5 - ARENA.cy) <= ARENA.r + 1.5) ocupado[y][x] = 1;
   const enPorton = (x, y) => x >= 52 && y >= 18 && y <= 23; // sin árboles alrededor del portón
   for (let y = 18; y <= 23; y++) for (let x = 52; x < MW; x++) ocupado[y][x] = 1;
   const spawn = { x: 28 * TILE + 16, y: 24 * TILE };
@@ -401,10 +452,11 @@ function crearExterior() {
     for (let i = 0; i < 6; i++) { const f = (t * 1.4 + i / 6) % 1; ctx.fillRect(Math.round(x + (i - 2.5) * 4 * f), Math.round(y - 28 + 26 * f * f), 2, 2); }
   };
 
+  dibujarArena(suelo.getContext("2d"), ARENA.cx, ARENA.cy, ZONAS[0].insignia.color);
   return {
     id: "exterior", nombre: "Aldea del Códice", icono: "🌍", exterior: true,
     ancho: PW, alto: PH, suelo, fondo: "#2d5a27", obstaculos, spawn, edificios, plaza: PLAZA, estrellas, mini: { base: miniBase, k: (MW * 3) / PW },
-    npcs: [], puertas: edificios.map((e) => ({ tipo: "puerta", id: e.id, edificio: e, nombre: e.nombre, x: e.puerta.x, y: e.puerta.y, radio: 34 })), salidas: [], portones: [porton], zona: "aldea",
+    npcs: [], puertas: edificios.map((e) => ({ tipo: "puerta", id: e.id, edificio: e, nombre: e.nombre, x: e.puerta.x, y: e.puerta.y, radio: 34 })), salidas: [], portones: [porton], zona: "aldea", guardian: { x: ARENA.cx * TILE + 16, y: ARENA.cy * TILE + 24 },
     bloqueado: esAgua,
     piso: (x, y) => { const tx = Math.floor(x / TILE), ty = Math.floor(y / TILE); const t = dentro(tx, ty) ? tipo[ty][tx] : 0; return t === T.PLAZA ? "piedra" : t === T.CAMINO || t === T.ARENA ? "tierra" : "pasto"; },
     // puntos libres para colocar personajes (cerca de la plaza y los caminos)
@@ -457,6 +509,7 @@ function crearZonaNatural(def) {
     for (let y = y1; y !== y2; y += sy) pintar(x2, y);
   };
   const meta = def.terreno({ K, tipo, ocupado, dentro, rocas, circulo, reservar, camino });
+  if (def.arena) reservar(def.arena.cx, def.arena.cy, def.arena.r + 1.5);              // sin árboles alrededor de la arena del Guardián
 
   // entrada (borde oeste) y salida (portón en el borde este)
   const ey = def.entradaTy, sal = def.salida;
@@ -520,10 +573,11 @@ function crearZonaNatural(def) {
   for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) { mg.fillStyle = paleta[tipo[y][x]][0][0]; mg.fillRect(x * 3, y * 3, 3, 3); }
   for (const t of arboles) { mg.fillStyle = "#235f27"; mg.fillRect(Math.floor(t.x / TILE) * 3, Math.floor(t.y / TILE) * 3, 3, 3); }
 
+  if (def.arena) dibujarArena(suelo.getContext("2d"), def.arena.cx, def.arena.cy, (ZONAS.find((z) => z.key === def.id) || ZONAS[0]).insignia.color);
   const portones = sal ? [crearPortonEste({ ty: sal.ty, zona: sal.zona, nombre: sal.nombre, etiqueta: sal.etiqueta, emoji: sal.emoji })] : [];
   const pisoDe = { [K.PUENTE]: "madera", [K.PIEDRA]: "piedra", [K.CAMINO]: "tierra", [K.ARENA]: "tierra", [K.ROCOSO]: "tierra", [K.NIEVE]: "nieve" };
   return {
-    id: def.id, zona: def.id, nombre: def.nombre, icono: def.icono, exterior: true,
+    id: def.id, zona: def.id, nombre: def.nombre, icono: def.icono, exterior: true, guardian: def.arena ? { x: def.arena.cx * TILE + 16, y: def.arena.cy * TILE + 24 } : null,
     ancho: PW, alto: PH, suelo, fondo: def.fondo, obstaculos, spawn, edificios: [], portones, estrellas, mini: { base: miniBase, k: (MW * 3) / PW },
     npcs: [], puertas: [], salidas: [{ x: 0, y: ey * TILE, w: 40, h: 4 * TILE, volver: true }], slotsPorLugar,
     bloqueado,
@@ -545,7 +599,7 @@ function crearZonaNatural(def) {
 const DEF_BOSQUE = {
   id: "bosque", nombre: "Bosque de la Curiosidad", icono: "🌲", seed: 777, fondo: "#17391c", entradaTy: 19,
   salida: { ty: 19, zona: "montana", nombre: "Camino a la Montaña del Esfuerzo", etiqueta: "Montaña", emoji: "🏔️" },
-  densidadArboles: 0.17, densidadRocas: 0.015,
+  densidadArboles: 0.17, densidadRocas: 0.015, arena: { cx: 46, cy: 14, r: 2.4 },
   paleta: { [K.PASTO]: [["#3f8a3c", "#438f40", "#3a8137"], "#58a64f", "#2f6e2e"] },
   flores: { prob: 0.05, probZona: 0.28, zonas: [{ cx: 26, cy: 20, r: 5 }] },
   terreno({ K, tipo, ocupado, dentro, rocas, circulo, reservar, camino }) {
@@ -555,7 +609,7 @@ const DEF_BOSQUE = {
     const MIRADOR = { cx: 12, cy: 9, r: 3.6 };
     reservar(26, 20, 8); reservar(46, 25, 5.2); reservar(MIRADOR.cx, MIRADOR.cy, MIRADOR.r + 3);
     circulo(MIRADOR.cx, MIRADOR.cy, MIRADOR.r, (x, y) => { if (tipo[y][x] === K.PASTO) tipo[y][x] = K.PIEDRA; });
-    camino(1, 20, 21, 20); camino(31, 20, 53, 20); camino(46, 20, 46, 25); camino(21, 19, 12, 13);
+    camino(1, 20, 21, 20); camino(31, 20, 53, 20); camino(46, 20, 46, 25); camino(21, 19, 12, 13); camino(46, 20, 46, 16);
     for (let a = 0; a < 6.283; a += 0.62) { if (Math.abs(a - Math.PI / 2) < 0.7) continue; rocas.push({ x: (MIRADOR.cx + Math.cos(a) * (MIRADOR.r + 1.1)) * TILE, y: (MIRADOR.cy + Math.sin(a) * (MIRADOR.r + 1.1)) * TILE }); } // un anillo de rocas alrededor del mirador, menos por donde sube el sendero
     return { spots: {
       claro: { cx: 26, cy: 20, offsets: [[74, 12], [-74, 22], [8, -70], [-36, 84], [64, 76]] },
@@ -569,7 +623,7 @@ const DEF_BOSQUE = {
 const DEF_MONTANA = {
   id: "montana", nombre: "Montaña del Esfuerzo", icono: "🏔️", seed: 888, fondo: "#2a2f3a", entradaTy: 31,
   salida: { ty: 7, zona: "lago", nombre: "Camino al Lago de la Reflexión", etiqueta: "Lago", emoji: "🏞️" },
-  densidadArboles: 0.03, densidadRocas: 0.05,
+  densidadArboles: 0.03, densidadRocas: 0.05, arena: { cx: 44, cy: 5, r: 2.4 },
   paleta: { [K.PASTO]: [["#5a8f45", "#5e944a", "#547f3f"], "#6fa65a", "#3f6b33"] },
   terreno({ K, tipo, reservar, camino }) {
     for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
@@ -583,7 +637,7 @@ const DEF_MONTANA = {
       for (const y of [26, 27]) if (!(x >= 46 && x <= 49)) tipo[y][x] = K.ACANTILADO;
     }
     reservar(24, 35, 4.5); reservar(23, 18, 4.5); reservar(30, 6, 4.5);
-    camino(1, 32, 47, 32); camino(47, 32, 47, 22); camino(47, 22, 9, 22); camino(9, 22, 9, 9); camino(9, 9, 53, 9);
+    camino(1, 32, 47, 32); camino(47, 32, 47, 22); camino(47, 22, 9, 22); camino(9, 22, 9, 9); camino(9, 9, 53, 9); camino(44, 9, 44, 7);
     return { spots: {
       sendero: { cx: 24, cy: 35, offsets: [[74, 10], [-74, 18], [8, -34], [-30, 52], [60, 50]] },
       cueva: { cx: 23, cy: 18, offsets: [[64, 8], [-64, 14], [0, -14], [34, 46], [-34, 50]] },
@@ -600,7 +654,7 @@ const DEF_MONTANA = {
 // ---- EL LAGO DE LA REFLEXIÓN: un gran lago con un muelle de madera que lleva a una isla ----
 const DEF_LAGO = {
   id: "lago", nombre: "Lago de la Reflexión", icono: "🏞️", seed: 999, fondo: "#1b4a3a", entradaTy: 19, salida: null,
-  densidadArboles: 0.06, densidadRocas: 0.012,
+  densidadArboles: 0.06, densidadRocas: 0.012, arena: { cx: 39, cy: 20, r: 1.6 },
   paleta: { [K.PASTO]: [["#58a64a", "#5cab4e", "#519c44"], "#70bd60", "#3f8636"], [K.AGUA]: [["#3b8fd1"], "#74b6e8", "#2a74b3"] },
   flores: { prob: 0.06, probZona: 0.2, zonas: [{ cx: 8, cy: 26, r: 4 }] },
   terreno({ K, tipo, dentro, reservar, circulo, camino }) {
@@ -915,7 +969,12 @@ export async function iniciarMundo(raiz, op) {
 
   // ---- zonas: la docente abre la zona para el curso, y el estudiante cumple el requisito ----
   const zonasAbiertas = new Set(op.zonasAbiertas || []);
-  let zonas = estadoZonas({ misiones, hechas, abiertas: zonasAbiertas, requisitos: op.zonasRequisitos || {} });
+  // duelos con los Guardianes (si no están activos, no hay guardianes ni se exige ninguna insignia)
+  const D = op.duelos && op.duelos.activo ? op.duelos : null;
+  const insignias = new Set((op.duelos && op.duelos.insignias) || []);
+  const esperaHasta = { ...((op.duelos && op.duelos.esperaHasta) || {}) };
+  const exigen = D ? D.exige || {} : {};
+  let zonas = estadoZonas({ misiones, hechas, abiertas: zonasAbiertas, requisitos: op.zonasRequisitos || {}, insignias, exigen });
   const disponibles = () => misionesDisponibles(misiones, zonas);
   // el guardia del portón: explica qué falta para pasar
   const spriteGuardia = sprites[SPRITE_POR_LUGAR.guardia] && SPRITE_POR_LUGAR.guardia !== claveJugador ? SPRITE_POR_LUGAR.guardia : otras[0];
@@ -923,6 +982,12 @@ export async function iniciarMundo(raiz, op) {
     p.abierto = !!(zonas[p.zona] && zonas[p.zona].desbloqueada);
     esc.npcs.push({ tipo: "guardia", porton: p, nombre: "El guardia del portón", clave: spriteGuardia, x: p.guardia.x, y: p.guardia.y, dir: "east", solido: true });
   }));
+  // el Guardián de cada zona espera en su arena
+  if (D) conPortones.forEach((esc) => {
+    const z = ZONAS.find((zz) => zz.key === esc.zona); if (!z || !esc.guardian) return;
+    const sp = sprites[z.guardian.sprite] && z.guardian.sprite !== claveJugador ? z.guardian.sprite : otras[ZONAS.indexOf(z) % otras.length];
+    esc.npcs.push({ tipo: "guardian", zona: z.key, nombre: z.guardian.nombre, titulo: z.guardian.titulo, clave: sp, x: esc.guardian.x, y: esc.guardian.y, dir: "south", solido: true });
+  });
 
   // ---- aldeanos: muchos personajes caminando por ahí ----
   let contadorAldeanos = 0;
@@ -935,13 +1000,13 @@ export async function iniciarMundo(raiz, op) {
   poblar(exterior, op.aldeanos ?? 9); Object.values(interiores).forEach((s) => poblar(s, op.aldeanosDentro ?? 2)); naturales.forEach((n) => poblar(n, op.aldeanosZonas ?? op.aldeanosBosque ?? 5));
 
   // ---- sonido ----
-  const snd = op.sonido === false ? crearSonido.apagado || { reanudar() {}, alternar() { return true; }, musica() {}, paso() {}, estrella() {}, bien() {}, mal() {}, hablar() {}, puerta() {}, destruir() {}, mudo: true } : crearSonido();
+  const snd = op.sonido === false ? crearSonido.apagado || { reanudar() {}, alternar() { return true; }, musica() {}, paso() {}, estrella() {}, bien() {}, mal() {}, hablar() {}, puerta() {}, golpe() {}, derrota() {}, fanfarria() {}, destruir() {}, mudo: true } : crearSonido();
 
   // ---- estado ----
   const estado = {
     activo: true, escena: exterior, clave: claveJugador, nombre: J.nombre || "Estudiante", x: exterior.spawn.x, y: exterior.spawn.y, dir: "south", caminando: false,
     xp: J.xp || 0, oro: J.oro || 0, vida: typeof J.vida === "number" ? J.vida : null, descansando: false, ganado: { xp: 0, oro: 0 }, est: 0, cercano: null, dialogo: null, avisos: [], fase: 0, terminado: false, cambiando: false, pasoT: 0.3,
-    comp: { x: exterior.spawn.x, y: exterior.spawn.y }, hechas, fasePaso: 0, movio: false, mapaAbierto: false,
+    comp: { x: exterior.spawn.x, y: exterior.spawn.y }, hechas, fasePaso: 0, movio: false, mapaAbierto: false, duelo: null,
   };
   const teclas = new Set(), joy = { x: 0, y: 0 };
 
@@ -950,6 +1015,7 @@ export async function iniciarMundo(raiz, op) {
   function toast(texto, ms = 2800) { const t = q(".m-toast"); t.textContent = texto; t.classList.remove("oculto"); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.add("oculto"), ms); temporizadores.add(toast.h); }
   function mostrarLugar(esc) { const l = q(".m-lugar"); l.textContent = `${esc.icono} ${esc.nombre}`; l.classList.add("ver"); clearTimeout(mostrarLugar.h); mostrarLugar.h = setTimeout(() => l.classList.remove("ver"), 2400); temporizadores.add(mostrarLugar.h); }
   function posicionarMini() { const h = q(".m-hud").getBoundingClientRect(); mini.style.top = Math.round(h.bottom - raiz.getBoundingClientRect().top + 6) + "px"; q(".m-lugar").style.top = Math.round(h.bottom - raiz.getBoundingClientRect().top + (estado.escena.exterior ? 6 : 6)) + "px"; }
+  const temaMusical = (esc) => (naturales.includes(esc) ? esc.id : esc.exterior ? "exterior" : "interior");
   const totalEstrellas = () => exterior.estrellas.length + naturales.filter((n) => zonas[n.zona] && zonas[n.zona].desbloqueada).reduce((a, n) => a + n.estrellas.length, 0);
   function actualizarHud() {
     q(".h-xp").textContent = estado.xp; q(".h-oro").textContent = estado.oro; const disp = disponibles(); q(".h-mis").textContent = `${disp.filter((m) => hechas.has(m.id)).length}/${disp.length}`; q(".h-est").textContent = `${estado.est}/${totalEstrellas()}`;
@@ -968,7 +1034,7 @@ export async function iniciarMundo(raiz, op) {
     const f = q(".m-fundido"); f.classList.add("ver");
     espera(() => {
       estado.escena = esc; estado.x = x; estado.y = y; estado.comp = { x, y };
-      mini.classList.toggle("oculto", !esc.exterior); mostrarLugar(esc); snd.musica(naturales.includes(esc) ? esc.id : esc.exterior ? "exterior" : "interior"); posicionarMini();
+      mini.classList.toggle("oculto", !esc.exterior); mostrarLugar(esc); snd.musica(temaMusical(esc)); posicionarMini();
       f.classList.remove("ver"); espera(() => { estado.cambiando = false; }, 200);
     }, 200);
   }
@@ -990,6 +1056,9 @@ export async function iniciarMundo(raiz, op) {
   function abrirTarjeta(htmlInterno) {
     const d = q(".m-dialogo"); d.classList.remove("oculto"); teclas.clear(); joy.x = joy.y = 0;
     d.innerHTML = `<div class="m-tarjeta">${htmlInterno}</div>`;
+    // Evita el "clic fantasma": el botón 💬 actúa al apoyar el dedo, y el clic que sigue caería sobre el primer botón del diálogo
+    // (que aparece en el mismo lugar). Durante 0,4 s el diálogo ignora toques; el teclado no se ve afectado.
+    d.style.pointerEvents = "none"; clearTimeout(d._relojToque); d._relojToque = setTimeout(() => { d.style.pointerEvents = ""; }, 400);
     d.querySelectorAll('[data-a="cerrar"]').forEach((b) => (b.onclick = cerrarDialogo));
     return d;
   }
@@ -1005,6 +1074,101 @@ export async function iniciarMundo(raiz, op) {
     const d = abrirTarjeta(`${cabecera(n, "Vecino de la aldea")}<p class="m-texto">${html(n.frase)}</p><button class="m-ok" data-a="cerrar">¡Gracias!</button>`);
     d.querySelectorAll('[data-a="cerrar"]').forEach((b) => (b.onclick = cerrarDialogo));
   }
+  // ---- duelos con los Guardianes: batalla de preguntas; al ganar por primera vez, se gana la insignia de la zona ----
+  const dueloEl = q(".m-duelo");
+  const zonaDe = (clave) => ZONAS.find((z) => z.key === clave);
+  const poolDeZona = (clave) => armarPool(misiones.filter((m) => zonaDeMision(m) === clave), (D && D.bancos && D.bancos[clave]) || []);
+  const ocultarDialogo = () => { if (estado.dialogo && estado.dialogo.hablando) estado.dialogo.hablando = false; estado.dialogo = null; q(".m-dialogo").classList.add("oculto"); };
+  function abrirGuardian(n) {
+    estado.dialogo = n; n.hablando = true; snd.hablar();
+    const z = zonaDe(n.zona), tiene = insignias.has(n.zona), pool = poolDeZona(n.zona), espera = tiene ? 0 : esperaRestanteMin(esperaHasta[n.zona]);
+    let cuerpo, botones = "";
+    if (pool.length < D.aciertos) cuerpo = "Todavía no estoy preparado para un duelo. ¡Vuelve más adelante!";
+    else if (tiene) { cuerpo = `¡Ya tienes mi ${z.insignia.emoji} <b>${html(z.insignia.nombre)}</b>! ¿Quieres practicar? (no da premio)`; botones = '<button class="m-ok" data-a="duelo-practica">🏋️ Practicar</button>'; }
+    else if (espera > 0) cuerpo = `Aún estás recuperando fuerzas. Vuelve a retarme en <b>${espera} min</b>.`;
+    else {
+      cuerpo = `${html(z.guardian.reto)}<br><br>Para vencerme debes acertar <b>${D.aciertos}</b> preguntas antes de perder tus <b>${D.vidas}</b> corazones ❤️.<br>Premio: ${z.insignia.emoji} <b>${html(z.insignia.nombre)}</b>${D.premio.xp || D.premio.oro ? ` · +${D.premio.xp} XP · +${D.premio.oro} 🪙` : ""}`;
+      botones = '<button class="m-ok" data-a="duelo">⚔️ ¡Aceptar el duelo!</button>';
+    }
+    const d = abrirTarjeta(`${cabecera(n, n.titulo)}<p class="m-texto">${cuerpo}</p>${botones}<button class="m-ok" data-a="cerrar" style="${botones ? "background:var(--borde);color:inherit;margin-top:6px" : ""}">${botones ? "Ahora no" : "Entendido"}</button>`);
+    d.querySelectorAll('[data-a="cerrar"]').forEach((b) => (b.onclick = cerrarDialogo));
+    const bd = d.querySelector('[data-a="duelo"]'); if (bd) bd.onclick = () => iniciarDuelo(n, false);
+    const bp = d.querySelector('[data-a="duelo-practica"]'); if (bp) bp.onclick = () => iniciarDuelo(n, true);
+  }
+  function iniciarDuelo(n, practica) {
+    const d = crearDuelo({ pool: poolDeZona(n.zona), aciertos: D.aciertos, vidas: D.vidas, rand: op.rngDuelo || Math.random });
+    if (d.imposible) { toast("Todavía no hay preguntas suficientes para este duelo.", 3200); return; }
+    ocultarDialogo(); estado.duelo = { n, d, practica, bloqueado: false }; teclas.clear(); joy.x = joy.y = 0;
+    snd.musica("duelo"); renderDuelo();
+  }
+  function barrasDuelo() {
+    const E = estado.duelo, pr = E.d.progreso();
+    const seg = dueloEl.querySelector(".m-d-seg"), cor = dueloEl.querySelector(".m-d-cor");
+    if (seg) seg.innerHTML = Array.from({ length: pr.necesarios }, (_, i) => `<i class="${i < pr.necesarios - pr.aciertos ? "" : "vacio"}"></i>`).join("");
+    if (cor) cor.textContent = "❤️".repeat(pr.vidasRestantes) + "🖤".repeat(pr.corazones - pr.vidasRestantes);
+  }
+  function renderDuelo() {
+    const E = estado.duelo, d = E.d, z = zonaDe(E.n.zona), pr = d.progreso(), p = d.actual();
+    const ops = p.opciones.map((o, i) => `<button class="m-d-op" data-i="${i}">${i + 1}. ${html(o)}</button>`).join("");
+    dueloEl.innerHTML = `<div class="m-d-caja">
+      <div class="m-d-arena">
+        <div class="m-d-luchador" data-lado="yo"><img src="${sprites[claveJugador].dirs.north}" alt=""><div class="m-d-nombre">${html(estado.nombre)}</div><div class="m-d-cor"></div></div>
+        <div class="m-d-vs">⚔️</div>
+        <div class="m-d-luchador" data-lado="rival"><img src="${sprites[E.n.clave].dirs.south}" alt=""><div class="m-d-nombre">${html(E.n.nombre)}</div><div class="m-d-sub">${z.insignia.emoji} ${html(z.insignia.nombre)}${E.practica ? " · práctica" : ""}</div><div class="m-d-seg" title="Maestría del guardián"></div></div>
+      </div>
+      <div class="m-d-preg"><div class="m-d-num">Pregunta ${pr.numero}</div>${html(p.texto)}</div>
+      <div class="m-d-ops">${ops}</div><div class="m-d-fb"></div>
+      <div class="m-d-pie"><button class="m-d-btn sec" data-a="rendirse">🏳️ Rendirme</button><button class="m-d-btn oculto" data-a="siguiente">Siguiente ▶</button></div></div>`;
+    dueloEl.classList.remove("oculto"); barrasDuelo();
+    dueloEl.querySelectorAll(".m-d-op").forEach((b) => (b.onclick = () => contestarDuelo(Number(b.dataset.i))));
+    dueloEl.querySelector('[data-a="rendirse"]').onclick = () => { if (E.bloqueado) return; E.d.rendirse(); terminarDuelo(); };
+    dueloEl.querySelector('[data-a="siguiente"]').onclick = siguienteDuelo;
+  }
+  function contestarDuelo(i) {
+    const E = estado.duelo; if (!E || E.bloqueado || E.d.progreso().fin) return;
+    E.bloqueado = true; const r = E.d.responder(i);
+    dueloEl.querySelectorAll(".m-d-op").forEach((b, k) => { b.disabled = true; if (k === r.correcta) b.classList.add("bien"); else if (k === i) b.classList.add("mal"); });
+    const fb = dueloEl.querySelector(".m-d-fb"), lado = dueloEl.querySelector(`[data-lado="${r.acierto ? "rival" : "yo"}"]`);
+    if (r.acierto) { snd.golpe(); fb.textContent = "💥 ¡Golpe certero!" + (r.retro ? " " + r.retro : ""); }
+    else { snd.mal(); fb.textContent = "💔 Fallaste." + (r.pista ? " " + r.pista : ""); }
+    if (lado) lado.classList.add("golpeado"); barrasDuelo();
+    const sig = dueloEl.querySelector('[data-a="siguiente"]'); sig.textContent = r.fin ? "Ver el resultado ▶" : "Siguiente ▶"; sig.classList.remove("oculto"); sig.focus();
+  }
+  function siguienteDuelo() { const E = estado.duelo; if (!E) return; if (E.d.progreso().fin) terminarDuelo(); else { E.bloqueado = false; renderDuelo(); } }
+  function pantallaFinalDuelo(icono, titulo, texto) {
+    dueloEl.innerHTML = `<div class="m-d-caja"><div class="m-d-fin"><div class="grande">${icono}</div><h3>${html(titulo)}</h3><p>${texto}</p><button class="m-d-btn" data-a="cerrar-duelo">Volver al juego</button></div></div>`;
+    const b = dueloEl.querySelector('[data-a="cerrar-duelo"]'); b.onclick = cerrarDuelo; b.focus();
+  }
+  async function terminarDuelo() {
+    const E = estado.duelo; if (!E) return; E.bloqueado = true;
+    const pr = E.d.progreso(), gano = pr.fin === "gana", z = zonaDe(E.n.zona);
+    pantallaFinalDuelo("⏳", "Un momento…", "Guardando el resultado del duelo…");
+    let r = null, fallo = false;
+    if (!E.practica) {
+      try { r = op.modoPrueba || !op.alDuelo ? { ok: true, local: true, xp: D.premio.xp, oro: D.premio.oro } : await op.alDuelo({ zona: E.n.zona, ganado: gano, aciertos: pr.aciertos, errores: pr.errores }); }
+      catch (e) { fallo = true; }
+    }
+    if (estado.duelo !== E) return;                       // se salió del juego mientras tanto
+    const marcador = `Acertaste ${pr.aciertos} de ${pr.necesarios} y te quedaron ${pr.vidasRestantes} ❤️.`;
+    if (fallo) { snd.mal(); pantallaFinalDuelo("⚠️", "No se pudo guardar", `${gano ? "¡Le ganaste al guardián, pero" : "El duelo terminó y"} no se pudo guardar el resultado${gano ? ": la insignia no se otorgó" : ""}. Inténtalo de nuevo en un momento.`); return; }
+    if (gano && (E.practica || (r && r.yaTenia))) { snd.bien(); pantallaFinalDuelo("🏆", "¡Victoria!", `${marcador}<br>${E.practica ? "Fue una práctica: no hay premio nuevo." : "Ya tenías esta insignia: no hay premio nuevo."}`); return; }
+    if (gano) {
+      const abiertosAntes = new Set(conPortones.flatMap((e) => e.portones).filter((p) => p.abierto).map((p) => p.zona));
+      insignias.add(E.n.zona); estado.xp += r.xp || 0; estado.oro += r.oro || 0; estado.ganado.xp += r.xp || 0; estado.ganado.oro += r.oro || 0;
+      recalcularZonas(); actualizarHud(); snd.fanfarria();
+      const nuevos = conPortones.flatMap((e) => e.portones).filter((p) => p.abierto && !abiertosAntes.has(p.zona)).map((p) => p.nombre.charAt(0).toLowerCase() + p.nombre.slice(1));
+      pantallaFinalDuelo(z.insignia.emoji, `¡Ganaste la ${z.insignia.nombre}!`, `${marcador}<br>🎁 +${r.xp || 0} XP · +${r.oro || 0} 🪙${op.modoPrueba ? " · 🧪 modo prueba (no se guarda)" : ""}${nuevos.length ? `<br>🔓 ¡Se abrió el ${html(nuevos.join(" y el "))}!` : ""}`);
+      return;
+    }
+    snd.derrota(); if (!E.practica && D.esperaMin > 0) esperaHasta[E.n.zona] = Date.now() + D.esperaMin * 60000;
+    pantallaFinalDuelo("💔", `${E.n.nombre} resistió`, `${marcador}<br>${!E.practica && D.esperaMin > 0 ? `Puedes volver a intentarlo en ${D.esperaMin} min. ` : "¡Puedes volver a intentarlo cuando quieras! "}Repasa las misiones de la zona: ahí está lo que te pregunto.`);
+  }
+  function cerrarDuelo() { estado.duelo = null; dueloEl.classList.add("oculto"); dueloEl.innerHTML = ""; snd.musica(temaMusical(estado.escena)); cv.focus(); }
+  function manejarTeclaDuelo(k) {
+    const n = Number(k); if (n >= 1 && n <= 6) { const b = dueloEl.querySelector(`.m-d-op[data-i="${n - 1}"]`); if (b && !b.disabled) b.click(); return; }
+    if (k === "Enter" || k === " ") { const sig = dueloEl.querySelector('[data-a="siguiente"]:not(.oculto)'), fin = dueloEl.querySelector('[data-a="cerrar-duelo"]'); if (sig) sig.click(); else if (fin) fin.click(); }
+  }
+
   // ---- la posada: se recupera vida a cambio de oro (la docente decide si está abierta, cuánto cuesta y cuánta vida da) ----
   const VIDA_MAX = op.vidaMax ?? 100;
   function planDescanso() {
@@ -1055,7 +1219,9 @@ export async function iniciarMundo(raiz, op) {
     else {
       if (!z.abierta) lineas.push("Tu docente todavía no abrió este camino para tu curso.");
       if (!z.cumplido) lineas.push(`Para pasar necesitas completar ${z.requeridas} ${z.requeridas === 1 ? "misión" : "misiones"} ${zp.de}. Llevas ${z.hechasPrevia} de ${z.requeridas}.`);
-      else if (!z.abierta) lineas.push("¡Ya cumpliste lo que se pide! Solo falta que tu docente abra el camino.");
+
+      if (z.exigeInsignia && !z.insigniaOk) lineas.push(`Necesitas la ${zp.insignia.emoji} ${zp.insignia.nombre}: derrota a ${zp.guardian.nombre}, ${zp.guardian.titulo}.`);
+      if (z.cumplido && z.insigniaOk && !z.abierta) lineas.push("¡Ya cumpliste lo que se pide! Solo falta que tu docente abra el camino.");
     }
     const barra = !z.desbloqueada && !z.cumplido && z.requeridas > 0 ? `<div class="m-barra"><i style="width:${Math.round((z.hechasPrevia / z.requeridas) * 100)}%"></i></div>` : "";
     const d = abrirTarjeta(`${cabecera(n, zd.guardia)}<p class="m-texto">${lineas.map(html).join(" ")}</p>${barra}<button class="m-ok" data-a="cerrar">Entendido</button>`);
@@ -1093,7 +1259,7 @@ export async function iniciarMundo(raiz, op) {
   }
   // Si al completar una misión se cumple el requisito (y la docente ya abrió la zona), el portón se abre en el acto.
   function recalcularZonas() {
-    zonas = estadoZonas({ misiones, hechas, abiertas: zonasAbiertas, requisitos: op.zonasRequisitos || {} });
+    zonas = estadoZonas({ misiones, hechas, abiertas: zonasAbiertas, requisitos: op.zonasRequisitos || {}, insignias, exigen });
     conPortones.forEach((esc) => esc.portones.forEach((p) => {
       const estaba = p.abierto; p.abierto = !!zonas[p.zona].desbloqueada;
       if (!estaba && p.abierto) { estado.terminado = false; espera(() => { aviso("🔓", "#bbf7d0"); toast(`🔓 ¡Se abrió el ${p.nombre.charAt(0).toLowerCase() + p.nombre.slice(1)}!`, 4600); snd.estrella(); }, 350); }
@@ -1101,7 +1267,7 @@ export async function iniciarMundo(raiz, op) {
   }
   // ---- el mapa del mundo: las zonas, cuáles están abiertas y qué falta para entrar ----
   function abrirMapa() {
-    if (estado.dialogo || estado.cambiando) return;
+    if (estado.dialogo || estado.cambiando || estado.duelo) return;
     estado.mapaAbierto = true; teclas.clear(); joy.x = joy.y = 0;
     const aqui = estado.escena.zona || "aldea", mapa = q(".m-mapa");
     const tarjetas = ZONAS.map((z) => {
@@ -1109,12 +1275,15 @@ export async function iniciarMundo(raiz, op) {
       let estadoTxt;
       if (e.desbloqueada) estadoTxt = `🔓 Abierta · ${total ? `🎯 ${hechasZ}/${total} misiones` : "sin misiones todavía"}`;
       else if (z.previa && !zonas[z.previa].desbloqueada) estadoTxt = `🔒 Se desbloquea después de llegar ${pv.a}`;
-      else if (!e.abierta && e.cumplido) estadoTxt = "🔒 Ya cumpliste el requisito · falta que tu docente abra el camino";
+      else if (e.abierta && e.cumplido && !e.insigniaOk) estadoTxt = `🔒 Te falta la ${pv.insignia.emoji} ${pv.insignia.nombre}: derrota a ${pv.guardian.nombre} en ${pv.corto === "la Aldea" ? "la Aldea" : pv.corto}`;
+      else if (!e.abierta && e.cumplido && e.insigniaOk) estadoTxt = "🔒 Ya cumpliste el requisito · falta que tu docente abra el camino";
       else if (!e.abierta) estadoTxt = `🔒 Tu docente todavía no la abrió${e.requeridas ? ` · además, completa ${e.requeridas} misiones ${pv.de} (llevas ${e.hechasPrevia})` : ""}`;
       else estadoTxt = `🔒 Completa ${e.requeridas} ${e.requeridas === 1 ? "misión" : "misiones"} ${pv.de} para entrar (llevas ${e.hechasPrevia})`;
+      if (!e.desbloqueada && e.exigeInsignia && !e.insigniaOk && !estadoTxt.includes("Te falta la")) estadoTxt += ` · y gana la ${pv.insignia.nombre} (derrota a ${pv.guardian.nombre})`;
+      const insTxt = D && e.desbloqueada ? `<div class="m-z-estado">${z.insignia.emoji} ${html(z.insignia.nombre)}: ${insignias.has(z.key) ? "<b>ganada ✔</b>" : `⚔️ derrota a ${html(z.guardian.nombre)} para ganarla`}</div>` : "";
       const barra = !e.desbloqueada && e.abierta && !e.cumplido && e.requeridas > 0 ? `<div class="m-barra"><i style="width:${Math.round((e.hechasPrevia / e.requeridas) * 100)}%"></i></div>` : "";
       const viaje = e.desbloqueada && (z.key !== aqui || (z.key === "aldea" && estado.escena.edificioId)) ? `<button class="m-viaje" data-viaje="${z.key}">🧭 Viajar aquí</button>` : "";
-      return `<div class="m-zona ${z.key === aqui ? "aqui" : ""}"><div class="m-z-nombre">${z.emoji} ${html(z.nombre)}${z.key === aqui ? ' <span style="color:var(--acento)">· 📍 estás aquí</span>' : ""}</div><div class="m-z-estado">${html(estadoTxt)}</div>${barra}${viaje}</div>`;
+      return `<div class="m-zona ${z.key === aqui ? "aqui" : ""}"><div class="m-z-nombre">${z.emoji} ${html(z.nombre)}${z.key === aqui ? ' <span style="color:var(--acento)">· 📍 estás aquí</span>' : ""}</div><div class="m-z-estado">${html(estadoTxt)}</div>${insTxt}${barra}${viaje}</div>`;
     }).join("");
     mapa.innerHTML = `<div class="m-tarjeta"><div class="m-cab"><span class="m-emo">🗺️</span><div><div class="m-quien">Mapa del mundo</div><div class="m-titulo">Las zonas que puedes explorar</div></div><button class="m-cerrar" data-a="cerrar" aria-label="Cerrar">✕</button></div>${tarjetas}<button class="m-ok" data-a="cerrar">Volver al juego</button></div>`;
     mapa.classList.remove("oculto"); mapa.querySelectorAll('[data-a="cerrar"]').forEach((b) => (b.onclick = cerrarMapa));
@@ -1127,9 +1296,9 @@ export async function iniciarMundo(raiz, op) {
   }
   function cerrarMapa() { estado.mapaAbierto = false; q(".m-mapa").classList.add("oculto"); cv.focus(); }
   function interactuar() {
-    if (estado.dialogo || estado.mapaAbierto || estado.cambiando || !estado.activo || !estado.cercano) return;
+    if (estado.dialogo || estado.mapaAbierto || estado.duelo || estado.cambiando || !estado.activo || !estado.cercano) return;
     const n = estado.cercano;
-    if (n.tipo === "puerta") entrarEdificio(n.edificio); else if (n.tipo === "guardia") abrirGuardia(n); else if (n.tipo === "posadero") abrirPosada(n); else if (n.tipo === "mision") abrirMision(n); else if (n.tipo === "aldeano") abrirCharla(n);
+    if (n.tipo === "puerta") entrarEdificio(n.edificio); else if (n.tipo === "guardia") abrirGuardia(n); else if (n.tipo === "posadero") abrirPosada(n); else if (n.tipo === "guardian") abrirGuardian(n); else if (n.tipo === "mision") abrirMision(n); else if (n.tipo === "aldeano") abrirCharla(n);
   }
 
   // ---- movimiento ----
@@ -1160,7 +1329,7 @@ export async function iniciarMundo(raiz, op) {
   function actualizar(dt) {
     estado.fase += dt;
     const esc = estado.escena;
-    const bloqueada = estado.dialogo || estado.mapaAbierto || estado.cambiando || !q(".m-fin").classList.contains("oculto");
+    const bloqueada = estado.dialogo || estado.mapaAbierto || estado.duelo || estado.cambiando || !q(".m-fin").classList.contains("oculto");
     const [ax, ay] = bloqueada ? [0, 0] : leerEntrada();
     estado.caminando = !!(ax || ay);
     if (estado.caminando) {
@@ -1179,7 +1348,7 @@ export async function iniciarMundo(raiz, op) {
     if (!estado.cambiando) { const sal = esc.salidas.find((s) => estado.x > s.x && estado.x < s.x + s.w && estado.y > s.y && estado.y < s.y + s.h && (!s.activa || s.activa())); if (sal) (sal.accion || salirDeEdificio)(); }
     // personajes
     for (const n of esc.npcs) if (n.tipo === "aldeano") moverAldeano(n, esc, dt);
-    for (const n of esc.npcs) if ((n.hablando || Math.hypot(n.x - estado.x, n.y - estado.y) < 90) && n.tipo !== "puerta") { if (n.tipo === "mision" || n.tipo === "guardia" || n.tipo === "posadero" || n.hablando) n.dir = direccionDe(estado.x - n.x, estado.y - n.y); }
+    for (const n of esc.npcs) if ((n.hablando || Math.hypot(n.x - estado.x, n.y - estado.y) < 90) && n.tipo !== "puerta") { if (n.tipo === "mision" || n.tipo === "guardia" || n.tipo === "posadero" || n.tipo === "guardian" || n.hablando) n.dir = direccionDe(estado.x - n.x, estado.y - n.y); }
     // el más cercano con quien se puede interactuar
     let mejor = null, md = 1e9;
     for (const n of [...esc.npcs, ...esc.puertas]) { const rad = n.radio || 40, d = Math.hypot(n.x - estado.x, n.y - estado.y); if (d < rad && d < md) { md = d; mejor = n; } }
@@ -1216,6 +1385,7 @@ export async function iniciarMundo(raiz, op) {
       if (n.tipo === "mision") { const hecha = hechas.has(n.mision.id), b = hecha ? 0 : Math.sin(t * 5 + n.x) * 3, an = sprites[n.clave].ancla; emoji(hecha ? "✅" : "❗", n.x, n.y - an.by - 4 + b, 18); }
       else if (n.tipo === "guardia") emoji(n.porton.abierto ? "🔓" : "🔒", n.x, n.y - sprites[n.clave].ancla.by - 4, 18);
       else if (n.tipo === "posadero") emoji("🛏️", n.x, n.y - sprites[n.clave].ancla.by - 4, 18);
+      else if (n.tipo === "guardian") emoji(insignias.has(n.zona) ? ZONAS.find((zz) => zz.key === n.zona).insignia.emoji : "⚔️", n.x, n.y - sprites[n.clave].ancla.by - 4, 18);
       else if (Math.hypot(n.x - estado.x, n.y - estado.y) < 60) etiqueta(n.nombre, Math.round(n.x - camX), Math.round(n.y - sprites[n.clave].ancla.by - camY - 3), "#e8edf8");
     } });
     if (esc.exterior) for (const e of esc.edificios) { const p = pendientesEn(e.id); if (p > 0 && visible(e.puerta.x, e.puerta.y)) lista.push({ y: e.puerta.y + 40, d: () => emoji("❗", e.puerta.x, e.puerta.y - 58 + Math.sin(t * 5 + e.x) * 3, 20) }); }
@@ -1254,6 +1424,7 @@ export async function iniciarMundo(raiz, op) {
     snd.reanudar(); const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) e.preventDefault();
     if (k === "m") { alternarSonido(); return; }
+    if (estado.duelo) { manejarTeclaDuelo(k); return; }
     if (k === "p") { if (estado.mapaAbierto) cerrarMapa(); else abrirMapa(); return; }
     if (estado.mapaAbierto) { if (e.key === "Escape") cerrarMapa(); return; }
     if (estado.dialogo) {
@@ -1290,7 +1461,7 @@ export async function iniciarMundo(raiz, op) {
   ultimo = performance.now(); rafId = requestAnimationFrame(cuadro);
 
   const api = {
-    estado, escenas, exterior, interiores, misiones, hechas, snd, chocaEn, interactuar, cambiarEscena, pasos, bosque: escenaDeZona.bosque, naturales, escenaDeZona, zonas: () => zonas, recalcularZonas, abrirMapa, cerrarMapa, viajarRapido,
+    estado, escenas, exterior, interiores, misiones, hechas, snd, chocaEn, interactuar, cambiarEscena, pasos, bosque: escenaDeZona.bosque, naturales, escenaDeZona, zonas: () => zonas, recalcularZonas, abrirMapa, cerrarMapa, viajarRapido, insignias, esperaHasta, poolDeZona, abrirGuardian, iniciarDuelo, contestarDuelo, terminarDuelo, cerrarDuelo,
     destruir() {
       if (!vivo) return; // por si se llama dos veces
       vivo = false; estado.activo = false; cancelAnimationFrame(rafId); temporizadores.forEach(clearTimeout); temporizadores.clear();
