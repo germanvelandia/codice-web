@@ -129,12 +129,15 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
             <button type="button" onClick={() => setPestana("zonas")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "zonas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🗺️ Zonas</button>
             <button type="button" onClick={() => setPestana("posada")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "posada" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🛏️ Posada</button>
             <button type="button" onClick={() => setPestana("duelos")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "duelos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>⚔️ Duelos</button>
+            <button type="button" onClick={() => setPestana("retos")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "retos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>☠️ Retadores</button>
           </div>
         )}
         {sinTabla ? (
           <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">Todavía no se crearon las tablas de las misiones. Corre <b>62_mundo.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</div>
         ) : cargando ? (
           <p className="text-sm text-slate-400">Cargando…</p>
+        ) : pestana === "retos" && !editando ? (
+          <PanelRetos misiones={misiones} />
         ) : pestana === "duelos" && !editando ? (
           <PanelDuelos misiones={misiones} />
         ) : pestana === "posada" && !editando ? (
@@ -512,6 +515,108 @@ function PanelDuelos({ misiones }) {
       <div className="flex items-center gap-3 justify-end">
         {aviso && <span className="text-xs font-semibold text-emerald-600">{aviso}</span>}
         <button type="button" onClick={guardar} disabled={guardando} className="text-sm font-bold px-5 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">{guardando ? "Guardando…" : "Guardar duelos"}</button>
+      </div>
+    </div>
+  );
+}
+
+
+// ----- Pestaña "Retadores": personajes hostiles con retos difíciles que quitan vida si el estudiante pierde -----
+function PanelRetos({ misiones }) {
+  const zonasConRetadores = ZONAS.filter((z) => (z.retadores || []).length);
+  const [f, setF] = useState(null);
+  const [cats, setCats] = useState([]);
+  const [resumen, setResumen] = useState(null);
+  const [error, setError] = useState("");
+  const [aviso, setAviso] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const relojAviso = useRef(null);
+  useEffect(() => () => clearTimeout(relojAviso.current), []);
+  const cargar = async () => {
+    try {
+      const c = await mundoApi.fetchConfigMundo();
+      const g = { activo: c.reto_activo === 1, danio: String(c.reto_danio), vidaMin: String(c.reto_vida_min), aciertos: String(c.reto_aciertos), vidas: String(c.reto_vidas), tiempo: String(c.reto_tiempo), espera: String(c.reto_espera_min), xp: String(c.reto_xp), oro: String(c.reto_oro), zona: {}, banco: {} };
+      zonasConRetadores.forEach((z) => { g.zona[z.key] = c[`reto_zona_${z.key}`] === 1; g.banco[z.key] = String(c[`reto_banco_${z.key}`] ?? 0); });
+      setF(g); setError("");
+    } catch (e) { setError(e.message || "No se pudo cargar la configuración."); }
+    mundoApi.fetchCategoriasParaDuelo().then(setCats).catch(() => setCats([]));
+    mundoApi.fetchRetosResumen().then(setResumen).catch(() => setResumen(null));
+  };
+  useEffect(() => { cargar(); }, []);
+
+  if (error && !f) {
+    const sin = /does not exist|relation|schema cache/i.test(error);
+    return <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">{sin ? <>Todavía no se crearon las tablas de los retadores. Corre <b>67_mundo_retadores.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</> : error}</div>;
+  }
+  if (!f) return <p className="text-sm text-slate-400">Cargando…</p>;
+
+  const num = (v) => (v === "" ? NaN : Number(v));
+  const rangos = [["danio", "La vida que quitan", 1, 50], ["vidaMin", "La vida mínima", 0, 90], ["aciertos", "Las preguntas a acertar", 1, 10], ["vidas", "Los corazones", 1, 5], ["tiempo", "El tiempo por pregunta", 0, 120], ["espera", "La espera", 0, 120], ["xp", "El XP del premio", 0, 1000], ["oro", "El oro del premio", 0, 1000]];
+  const errorDe = () => { for (const [k, nombre, min, max] of rangos) { const n = num(f[k]); if (!Number.isInteger(n) || n < min || n > max) return `${nombre} tiene que ser un número entero entre ${min} y ${max}.`; } return ""; };
+  const poolZona = (z) => { const banco = cats.find((c) => String(c.id) === f.banco[z.key]); return banco ? { total: banco.preguntas, fuente: `${banco.preguntas} del banco "${banco.nombre}" (solo salen esas)` } : { total: misiones.filter((m) => m.activo && m.zona === z.key).length, fuente: `${misiones.filter((m) => m.activo && m.zona === z.key).length} de las misiones de la zona` }; };
+  const guardar = async () => {
+    const e = errorDe(); if (e) { setError(e); return; }
+    setGuardando(true); setError("");
+    try {
+      const pares = [["reto_activo", f.activo ? 1 : 0], ["reto_danio", num(f.danio)], ["reto_vida_min", num(f.vidaMin)], ["reto_aciertos", num(f.aciertos)], ["reto_vidas", num(f.vidas)], ["reto_tiempo", num(f.tiempo)], ["reto_espera_min", num(f.espera)], ["reto_xp", num(f.xp)], ["reto_oro", num(f.oro)]];
+      zonasConRetadores.forEach((z) => { pares.push([`reto_zona_${z.key}`, f.zona[z.key] ? 1 : 0], [`reto_banco_${z.key}`, Number(f.banco[z.key]) || 0]); });
+      for (const [k, v] of pares) await mundoApi.guardarConfigMundo(k, v);
+      setAviso("Guardado ✓"); clearTimeout(relojAviso.current); relojAviso.current = setTimeout(() => setAviso(""), 2400);
+    } catch (er) { setError("No se pudo guardar: " + (er.message || "error desconocido")); }
+    setGuardando(false);
+  };
+  const input = "w-20 text-sm rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none bg-white";
+  const A = num(f.aciertos);
+
+  return (
+    <div>
+      <div className="text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-xl p-3 mb-3 leading-relaxed">
+        <b>☠️ Atención:</b> los retadores quitan <b>vida real</b> (la que ves en la ficha del estudiante) cuando el estudiante pierde. Nunca la bajan de la <b>vida mínima</b> que definas, y no pelean con quien ya está tan herido. La vida se recupera en la 🛏️ Posada a cambio de oro. Si preferís no usar esta función, desmarcá "Los retadores están activos".
+      </div>
+      <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 leading-relaxed">
+        Los <b>retadores</b> son personajes oscuros y peligrosos que le cortan el paso al estudiante en el camino. Lo retan a un <b>duelo difícil</b>: menos corazones, tiempo límite por pregunta y sin pistas. Si gana, recibe un premio y el retador se va para siempre. Si pierde, el retador le quita vida y no vuelve a pelear con él por un rato.
+      </div>
+      {error && <div className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-2.5 mb-3">{error}</div>}
+      {resumen && <div className="text-[11px] text-slate-500 mb-3" data-testid="resumen-retos">☠️ {Object.values(resumen.derrotados).reduce((a, b) => a + b, 0)} {Object.values(resumen.derrotados).reduce((a, b) => a + b, 0) === 1 ? "retador derrotado" : "retadores derrotados"} · 💔 {resumen.derrotas} {resumen.derrotas === 1 ? "derrota" : "derrotas"} ({resumen.danioTotal} ❤️ quitados en total)</div>}
+      <div className="rounded-xl border border-slate-200 p-4 mb-3">
+        <label className="flex items-center gap-2 text-sm font-semibold text-slate-800 mb-4"><input type="checkbox" checked={f.activo} onChange={(e) => setF((x) => ({ ...x, activo: e.target.checked }))} /> Los retadores están activos</label>
+        <div className="flex flex-wrap items-center gap-2 mb-2 text-sm text-slate-700">
+          Si el estudiante pierde, le quitan <input type="number" min="1" max="50" value={f.danio} onChange={(e) => setF((x) => ({ ...x, danio: e.target.value }))} className={input} aria-label="Vida que quitan" /> ❤️, pero nunca baja de
+          <input type="number" min="0" max="90" value={f.vidaMin} onChange={(e) => setF((x) => ({ ...x, vidaMin: e.target.value }))} className={input} aria-label="Vida mínima" /> ❤️
+        </div>
+        <div className="flex flex-wrap items-center gap-2 mb-2 text-sm text-slate-700">
+          Para vencerlos: acertar <input type="number" min="1" max="10" value={f.aciertos} onChange={(e) => setF((x) => ({ ...x, aciertos: e.target.value }))} className={input} aria-label="Preguntas a acertar" /> preguntas antes de perder
+          <input type="number" min="1" max="5" value={f.vidas} onChange={(e) => setF((x) => ({ ...x, vidas: e.target.value }))} className={input} aria-label="Corazones" /> ❤️ corazones
+        </div>
+        <div className="flex flex-wrap items-center gap-2 mb-2 text-sm text-slate-700">
+          Tiempo por pregunta: <input type="number" min="0" max="120" value={f.tiempo} onChange={(e) => setF((x) => ({ ...x, tiempo: e.target.value }))} className={input} aria-label="Segundos por pregunta" /> segundos <span className="text-[11px] text-slate-400">(0 = sin tiempo)</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 mb-2 text-sm text-slate-700">
+          Si pierde, ese retador no pelea con él por <input type="number" min="0" max="120" value={f.espera} onChange={(e) => setF((x) => ({ ...x, espera: e.target.value }))} className={input} aria-label="Minutos de espera" /> minutos
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-sm text-slate-700">
+          Premio por derrotar a cada retador (una vez): <input type="number" min="0" max="1000" value={f.xp} onChange={(e) => setF((x) => ({ ...x, xp: e.target.value }))} className={input} aria-label="XP del premio" /> ✨ XP y
+          <input type="number" min="0" max="1000" value={f.oro} onChange={(e) => setF((x) => ({ ...x, oro: e.target.value }))} className={input} aria-label="Oro del premio" /> 🪙
+        </div>
+      </div>
+      {zonasConRetadores.map((z) => {
+        const pl = poolZona(z), faltan = Number.isInteger(A) && pl.total < A;
+        return (
+          <div key={z.key} className="rounded-xl border border-slate-200 p-4 mb-3">
+            <label className="flex items-center gap-2 text-sm font-bold text-slate-800 mb-1"><input type="checkbox" checked={f.zona[z.key]} onChange={(e) => setF((x) => ({ ...x, zona: { ...x.zona, [z.key]: e.target.checked } }))} aria-label={`Retadores en ${z.nombre}`} /> {z.emoji} Hay retadores en {z.nombre}</label>
+            <div className="text-[11px] text-slate-500 mb-2">{z.retadores.length} retadores: {z.retadores.map((r) => r.nombre).join(" · ")}</div>
+            <label className="text-[11px] text-slate-500 block mb-1">Preguntas de los retadores (para que sean difíciles, usá una categoría de Preguntados con preguntas exigentes)</label>
+            <select value={f.banco[z.key]} onChange={(e) => setF((x) => ({ ...x, banco: { ...x.banco, [z.key]: e.target.value } }))} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white mb-1" aria-label={`Banco de preguntas de los retadores de ${z.nombre}`}>
+              <option value="0">Las preguntas de las misiones de esta zona</option>
+              {cats.map((c) => <option key={c.id} value={String(c.id)}>{c.emoji} Preguntados: {c.nombre} ({c.preguntas} {c.preguntas === 1 ? "pregunta" : "preguntas"})</option>)}
+            </select>
+            <div className={`text-[11px] ${faltan ? "text-rose-600 font-semibold" : "text-slate-400"}`} data-testid={`pool-reto-${z.key}`}>Preguntas disponibles: {pl.fuente}.{faltan ? ` ⚠️ Con menos de ${A} los retadores de esta zona no pelean.` : ""}</div>
+          </div>
+        );
+      })}
+      <div className="flex items-center gap-3 justify-end">
+        {aviso && <span className="text-xs font-semibold text-emerald-600">{aviso}</span>}
+        <button type="button" onClick={guardar} disabled={guardando} className="text-sm font-bold px-5 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">{guardando ? "Guardando…" : "Guardar retadores"}</button>
       </div>
     </div>
   );
