@@ -1,17 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import * as mundoApi from "../lib/mundoApi";
+import { ZONAS, LUGARES, zonaDeLugar, zonaPorClave } from "../game/zonas";
 
 // Editor de las misiones del Mundo CÓDICE: acá se agregan, cambian, ocultan y borran las preguntas
 // que los estudiantes encuentran al hablar con los personajes. Los cambios se ven en el mundo
 // apenas se guardan (cada estudiante las carga al entrar).
 
-const LUGARES = [
-  { key: "biblioteca", emoji: "📚", nombre: "Biblioteca" },
-  { key: "agora", emoji: "⚖️", nombre: "Ágora de la Ética" },
-  { key: "templo", emoji: "🕊️", nombre: "Templo de la Gratitud" },
-  { key: "mercado", emoji: "🛒", nombre: "Mercado del Códice" },
-  { key: "plaza", emoji: "🌍", nombre: "Plaza (afuera)" },
-];
 const ROLES = [
   ["maestro_gremio", "👑", "Maestro del Gremio"], ["heraldo", "🕊️", "Heraldo de la Alianza"], ["peregrino", "📜", "Peregrino del Sentido"], ["cronista", "🖋️", "Cronista del Reino"],
   ["defensor", "⚖️", "Defensor del Pacto"], ["consejero", "🏦", "Consejero Real"], ["guardian", "🎨", "Guardián del Símbolo"],
@@ -21,8 +15,8 @@ const MAX_POR_LUGAR = 5; // más de 5 personajes en un mismo lugar no caben sin 
 const MIN_OPCIONES = 2, MAX_OPCIONES = 5;
 const nombreLugar = (k) => LUGARES.find((l) => l.key === k) || { emoji: "📍", nombre: k };
 
-const vacia = (curso) => ({ grado_id: curso || "", lugar: "biblioteca", npc_nombre: "", npc_sprite: "", titulo: "", texto: "", opciones: ["", ""], correcta: 0, pista: "", retro: "", xp: 10, oro: 5, orden: 0, activo: true });
-const aForm = (m) => ({ grado_id: m.grado_id ? String(m.grado_id) : "", lugar: m.lugar || "plaza", npc_nombre: m.npc_nombre || "", npc_sprite: m.npc_sprite || "", titulo: m.titulo || "", texto: m.texto || "", opciones: m.opciones && m.opciones.length >= MIN_OPCIONES ? [...m.opciones] : ["", ""], correcta: Math.min(Number(m.correcta) || 0, Math.max(0, (m.opciones || []).length - 1)), pista: m.pista || "", retro: m.retro || "", xp: m.xp ?? 0, oro: m.oro ?? 0, orden: m.orden ?? 0, activo: m.activo !== false });
+const vacia = (curso) => ({ grado_id: curso || "", zona: "aldea", lugar: "biblioteca", npc_nombre: "", npc_sprite: "", titulo: "", texto: "", opciones: ["", ""], correcta: 0, pista: "", retro: "", xp: 10, oro: 5, orden: 0, activo: true });
+const aForm = (m) => ({ grado_id: m.grado_id ? String(m.grado_id) : "", zona: m.zona || zonaDeLugar(m.lugar), lugar: m.lugar || "plaza", npc_nombre: m.npc_nombre || "", npc_sprite: m.npc_sprite || "", titulo: m.titulo || "", texto: m.texto || "", opciones: m.opciones && m.opciones.length >= MIN_OPCIONES ? [...m.opciones] : ["", ""], correcta: Math.min(Number(m.correcta) || 0, Math.max(0, (m.opciones || []).length - 1)), pista: m.pista || "", retro: m.retro || "", xp: m.xp ?? 0, oro: m.oro ?? 0, orden: m.orden ?? 0, activo: m.activo !== false });
 
 export default function MisionesMundoModal({ onClose, grados = [], gradoActual = "" }) {
   const [misiones, setMisiones] = useState([]);
@@ -31,6 +25,7 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
   const [error, setError] = useState("");
   const [filtro, setFiltro] = useState("todos");
   const [filtroCurso, setFiltroCurso] = useState("todos"); // "todos" | "generales" | id de un curso
+  const [pestana, setPestana] = useState("misiones");       // "misiones" | "zonas"
   const [editando, setEditando] = useState(null); // null | "nueva" | id
   const [form, setForm] = useState(vacia());
   const [errForm, setErrForm] = useState("");
@@ -45,11 +40,14 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
     setCargando(false);
   };
   useEffect(() => { cargar(); }, []);
-  const mostrarAviso = (t) => { setAviso(t); setTimeout(() => setAviso(""), 2600); };
+  const relojAviso = useRef(null);
+  useEffect(() => () => clearTimeout(relojAviso.current), []);
+  const mostrarAviso = (t) => { setAviso(t); clearTimeout(relojAviso.current); relojAviso.current = setTimeout(() => setAviso(""), 2600); }; // un solo temporizador: el aviso nuevo no lo borra el anterior
 
   // Cursos que existen: los del docente más cualquiera que ya tenga misiones propias.
   const cursos = [...new Set([...grados.map((g) => String(g.id)), ...misiones.map((m) => m.grado_id).filter(Boolean).map(String)])];
   const columnaCurso = misiones.length === 0 || misiones.some((m) => m._tieneGrado); // false = falta correr el SQL 63
+  const columnaZona = misiones.length === 0 || misiones.some((m) => m._tieneZona);    // false = falta correr el SQL 64
   const etiquetaCurso = (c) => (c ? `Curso ${c}` : "Todos los cursos");
   // Lo que ve un estudiante de un curso en un lugar: las misiones de su curso más las generales.
   const visiblesParaCurso = (lugar, curso, exceptoId) => misiones.filter((m) => m.lugar === lugar && m.activo && m.id !== exceptoId && (!m.grado_id || String(m.grado_id) === String(curso))).length;
@@ -92,10 +90,11 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
       opciones: form.opciones.map((o) => o.trim()), correcta: form.correcta, pista: form.pista.trim(), retro: form.retro.trim(), xp: Number(form.xp), oro: Number(form.oro), orden: Number(form.orden), activo: form.activo,
     };
     if (columnaCurso) campos.grado_id = form.grado_id || null; // si todavía no existe la columna (SQL 63), no se manda para no romper
+    if (columnaZona) campos.zona = form.zona;                    // ídem para la zona (SQL 64)
     try {
       if (editando === "nueva") await mundoApi.crearMisionMundo(campos); else await mundoApi.editarMisionMundo(editando, campos);
       await cargar(); setEditando(null); mostrarAviso("Guardada ✓");
-    } catch (er) { setErrForm("No se pudo guardar: " + (er.message || "error desconocido") + (/grado_id/i.test(er.message || "") ? "\n\nParece que falta correr 63_mundo_por_curso.sql en Supabase." : "")); }
+    } catch (er) { setErrForm("No se pudo guardar: " + (er.message || "error desconocido") + (/grado_id/i.test(er.message || "") ? "\n\nParece que falta correr 63_mundo_por_curso.sql en Supabase." : /zona/i.test(er.message || "") ? "\n\nParece que falta correr 64_mundo_zonas.sql en Supabase." : "")); }
     setGuardando(false);
   };
 
@@ -124,24 +123,41 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
         </div>
         <p className="text-xs text-slate-400 mb-3">Son las preguntas que tus estudiantes encuentran al hablar con los personajes del mundo. Cada una la da un personaje, en un lugar, y premia con XP y oro. Los cambios se ven apenas se guardan.</p>
 
+        {!sinTabla && !cargando && !editando && (
+          <div className="inline-flex gap-1 rounded-full bg-slate-100 p-1 mb-3">
+            <button type="button" onClick={() => setPestana("misiones")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "misiones" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🎯 Misiones</button>
+            <button type="button" onClick={() => setPestana("zonas")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "zonas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🗺️ Zonas</button>
+          </div>
+        )}
         {sinTabla ? (
           <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">Todavía no se crearon las tablas de las misiones. Corre <b>62_mundo.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</div>
         ) : cargando ? (
           <p className="text-sm text-slate-400">Cargando…</p>
+        ) : pestana === "zonas" && !editando ? (
+          <PanelZonas cursos={grados.length ? grados.map((g) => String(g.id)) : cursos} />
         ) : editando ? (
           <div>
             <h4 className="text-sm font-bold text-slate-800 mb-3">{editando === "nueva" ? "➕ Nueva misión" : "✏️ Editar misión"}</h4>
-            <div className="mb-3">
-              <label className="text-[11px] text-slate-500 block mb-1">¿Para qué curso es?</label>
-              <select value={form.grado_id} onChange={(e) => cambiar("grado_id", e.target.value)} disabled={!columnaCurso} className={input}>
-                <option value="">🌐 Todos los cursos</option>
-                {cursos.map((c) => <option key={c} value={c}>🏫 Curso {c}</option>)}
-              </select>
-              {!columnaCurso && <div className="text-[11px] text-amber-700 mt-1">Para separar por curso, corre primero <b>63_mundo_por_curso.sql</b> en Supabase.</div>}
+            <div className="grid sm:grid-cols-2 gap-3 mb-3">
+              <div>
+                <label className="text-[11px] text-slate-500 block mb-1">¿Para qué curso es?</label>
+                <select value={form.grado_id} onChange={(e) => cambiar("grado_id", e.target.value)} disabled={!columnaCurso} className={input}>
+                  <option value="">🌐 Todos los cursos</option>
+                  {cursos.map((c) => <option key={c} value={c}>🏫 Curso {c}</option>)}
+                </select>
+                {!columnaCurso && <div className="text-[11px] text-amber-700 mt-1">Para separar por curso, corre primero <b>63_mundo_por_curso.sql</b> en Supabase.</div>}
+              </div>
+              <div>
+                <label className="text-[11px] text-slate-500 block mb-1">¿En qué zona del mundo?</label>
+                <select value={form.zona} onChange={(e) => setForm((f) => ({ ...f, zona: e.target.value, lugar: (zonaPorClave(e.target.value) || ZONAS[0]).lugares[0].key }))} disabled={!columnaZona} className={input}>
+                  {ZONAS.map((z) => <option key={z.key} value={z.key}>{z.emoji} {z.nombre}</option>)}
+                </select>
+                {!columnaZona && <div className="text-[11px] text-amber-700 mt-1">Para usar zonas nuevas, corre primero <b>64_mundo_zonas.sql</b>.</div>}
+              </div>
             </div>
             <div className="grid sm:grid-cols-2 gap-3 mb-3">
               <div><label className="text-[11px] text-slate-500 block mb-1">¿Dónde está?</label>
-                <select value={form.lugar} onChange={(e) => cambiar("lugar", e.target.value)} className={input}>{LUGARES.map((l) => <option key={l.key} value={l.key}>{l.emoji} {l.nombre}</option>)}</select></div>
+                <select value={form.lugar} onChange={(e) => cambiar("lugar", e.target.value)} className={input}>{LUGARES.filter((l) => l.zona === form.zona).map((l) => <option key={l.key} value={l.key}>{l.emoji} {l.nombre}</option>)}</select></div>
               <div><label className="text-[11px] text-slate-500 block mb-1">Personaje que la da</label>
                 <select value={form.npc_sprite} onChange={(e) => cambiar("npc_sprite", e.target.value)} className={input}><option value="">Automático (según el lugar)</option>{PERSONAJES.map((p) => <option key={p.valor} value={p.valor}>{p.texto}</option>)}</select></div>
               <div className="sm:col-span-2"><label className="text-[11px] text-slate-500 block mb-1">Nombre del personaje (ej: "La bibliotecaria")</label>
@@ -225,7 +241,7 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
                       <div className="min-w-0 flex-1">
                         <div className="text-sm font-bold text-slate-800 truncate">{m.titulo}{!m.activo && <span className="ml-2 text-[10px] font-bold text-slate-500 bg-slate-200 rounded-full px-2 py-0.5">OCULTA</span>}</div>
                         <div className="text-[11px] text-slate-500">{l.emoji} {l.nombre} · {m.npc_nombre} · ✨ {m.xp} XP · 🪙 {m.oro}</div>
-                        <div className="text-[11px] mt-0.5"><span className={`rounded-full px-2 py-0.5 font-semibold ${m.grado_id ? "bg-sky-50 text-sky-700" : "bg-slate-100 text-slate-500"}`}>{m.grado_id ? `🏫 ${etiquetaCurso(m.grado_id)}` : "🌐 Todos los cursos"}</span></div>
+                        <div className="text-[11px] mt-0.5"><span className={`rounded-full px-2 py-0.5 font-semibold ${m.grado_id ? "bg-sky-50 text-sky-700" : "bg-slate-100 text-slate-500"}`}>{m.grado_id ? `🏫 ${etiquetaCurso(m.grado_id)}` : "🌐 Todos los cursos"}</span>{m.zona && m.zona !== "aldea" && zonaPorClave(m.zona) && <span className="ml-1.5 rounded-full px-2 py-0.5 font-semibold bg-emerald-50 text-emerald-700">{zonaPorClave(m.zona).emoji} {zonaPorClave(m.zona).nombre}</span>}</div>
                         <div className="text-[11px] text-emerald-600 font-semibold mt-0.5">✅ {n} estudiante{n === 1 ? "" : "s"} {n === 1 ? "la completó" : "la completaron"}</div>
                       </div>
                       <div className="flex flex-wrap gap-1 justify-end shrink-0">
@@ -242,6 +258,94 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+
+// ----- Pestaña "Zonas": abrir cada zona por curso y decidir cuántas misiones se piden para entrar -----
+function PanelZonas({ cursos }) {
+  const [datos, setDatos] = useState(null);
+  const [error, setError] = useState("");
+  const [aviso, setAviso] = useState("");
+  const [req, setReq] = useState({});
+  const [ocupado, setOcupado] = useState(false);
+  const zonasNuevas = ZONAS.filter((z) => z.previa);
+
+  const cargar = async () => {
+    try {
+      const d = await mundoApi.fetchZonasAdmin();
+      setDatos(d); setReq(Object.fromEntries(zonasNuevas.map((z) => [z.key, String(d.requisitos[z.key] ?? z.requisitoPorDefecto)]))); setError("");
+    } catch (e) { setError(e.message || "No se pudieron cargar las zonas."); }
+  };
+  useEffect(() => { cargar(); }, []);
+  const relojAviso = useRef(null);
+  useEffect(() => () => clearTimeout(relojAviso.current), []);
+  const avisar = (t) => { setAviso(t); clearTimeout(relojAviso.current); relojAviso.current = setTimeout(() => setAviso(""), 2400); };
+  const abierta = (c, z) => !!datos && datos.abiertas.some((a) => a.grado_id === String(c) && a.zona === z && a.abierta);
+
+  const alternar = async (c, z) => {
+    setError(""); try { await mundoApi.abrirZonaCurso(c, z, !abierta(c, z)); await cargar(); } catch (e) { setError("No se pudo cambiar: " + e.message); }
+  };
+  const paraTodos = async (z, valor) => {
+    setOcupado(true); setError("");
+    try { for (const c of cursos) await mundoApi.abrirZonaCurso(c, z, valor); await cargar(); avisar(valor ? "Abierta para todos tus cursos" : "Cerrada para todos tus cursos"); }
+    catch (e) { setError("No se pudo cambiar: " + e.message); }
+    setOcupado(false);
+  };
+  const guardarReq = async (z) => {
+    const n = Number(req[z]);
+    if (req[z] === "" || !Number.isInteger(n) || n < 0 || n > 20) { setError("La cantidad de misiones tiene que ser un número entero entre 0 y 20."); return; }
+    setError(""); try { await mundoApi.guardarRequisitoZona(z, n); await cargar(); avisar("Guardado ✓"); } catch (e) { setError("No se pudo guardar: " + e.message); }
+  };
+
+  if (error && !datos) {
+    const sin = /does not exist|relation|schema cache/i.test(error);
+    return <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">{sin ? <>Todavía no se crearon las tablas de las zonas. Corre <b>64_mundo_zonas.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</> : error}</div>;
+  }
+  if (!datos) return <p className="text-sm text-slate-400">Cargando…</p>;
+
+  return (
+    <div>
+      <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 leading-relaxed">
+        Una zona nueva se abre para un estudiante cuando se cumplen <b>las dos cosas</b>: <b>vos la abrís para su curso</b> y <b>él completa</b> las misiones que pidas de la zona anterior.
+        Así vos marcás el ritmo de la clase y cada estudiante lo recorre a su paso. Si un curso tiene menos misiones de las que pedís, alcanza con completarlas todas.
+      </div>
+      {error && <div className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-2.5 mb-3">{error}</div>}
+      {aviso && <div className="text-xs font-semibold text-emerald-600 mb-2">{aviso}</div>}
+      {zonasNuevas.map((z) => {
+        const previa = zonaPorClave(z.previa);
+        return (
+          <div key={z.key} className="rounded-xl border border-slate-200 p-4 mb-3">
+            <div className="text-sm font-bold text-slate-800 mb-1">{z.emoji} {z.nombre}</div>
+            <div className="text-[11px] text-slate-500 mb-3">Se entra desde {previa.emoji} {previa.nombre} por el portón del este.</div>
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <label className="text-xs text-slate-600">Misiones de {previa.nombre} que hay que completar:</label>
+              <input type="number" min="0" max="20" value={req[z.key] ?? ""} onChange={(e) => setReq((r) => ({ ...r, [z.key]: e.target.value }))} className="w-20 text-sm rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none bg-white" aria-label={`Misiones requeridas para ${z.nombre}`} />
+              <button type="button" onClick={() => guardarReq(z.key)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-50 text-violet-700">Guardar</button>
+            </div>
+            <div className="flex items-center gap-2 mb-2">
+              <div className="text-[11px] font-bold text-slate-400">ABRIR PARA</div>
+              <div className="flex-1" />
+              <button type="button" disabled={ocupado} onClick={() => paraTodos(z.key, true)} className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 disabled:opacity-40">Abrir para todos mis cursos</button>
+              <button type="button" disabled={ocupado} onClick={() => paraTodos(z.key, false)} className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 disabled:opacity-40">Cerrar para todos</button>
+            </div>
+            {cursos.length === 0 && <p className="text-xs text-slate-400">No encontré cursos para abrir.</p>}
+            <div className="space-y-1.5">
+              {cursos.map((c) => {
+                const ab = abierta(c, z.key);
+                return (
+                  <div key={c} className="flex items-center gap-3 rounded-lg border border-slate-100 px-3 py-2">
+                    <div className="text-sm text-slate-700 flex-1">🏫 Curso {c}</div>
+                    <span className={`text-[11px] font-semibold ${ab ? "text-emerald-600" : "text-slate-400"}`}>{ab ? "🔓 Abierta" : "🔒 Cerrada"}</span>
+                    <button type="button" onClick={() => alternar(c, z.key)} aria-label={`${ab ? "Cerrar" : "Abrir"} ${z.nombre} para el curso ${c}`} className={`text-[11px] font-bold px-3 py-1 rounded-full ${ab ? "bg-slate-100 text-slate-600" : "bg-violet-500 text-white"}`}>{ab ? "Cerrar" : "Abrir"}</button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
