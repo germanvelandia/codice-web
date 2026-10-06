@@ -1,4 +1,5 @@
 import { supabase } from "./supabaseClient";
+import { zonaDeMision } from "../game/zonas";
 
 // Todo lo que el Mundo CÓDICE necesita de la base de datos: las misiones del mundo, cuáles
 // ya completó cada estudiante, y entregar el premio (XP y monedas) al completarlas.
@@ -22,6 +23,8 @@ function normalizarMision(m) {
     titulo: m.titulo || "Misión", texto: m.texto || "", opciones: Array.isArray(opciones) ? opciones.map(String) : [],
     correcta: Number(m.correcta) || 0, pista: m.pista || "", retro: m.retro || "", xp: Number(m.xp) || 0, oro: Number(m.oro) || 0,
     grado_id: m.grado_id ? String(m.grado_id) : null,                     // null = para todos los cursos
+    zona: zonaDeMision(m),                                                 // en qué zona está (si no existe la columna, se deduce del lugar)
+    _tieneZona: Object.prototype.hasOwnProperty.call(m, "zona"),           // false si todavía no se corrió el SQL 64
     _tieneGrado: Object.prototype.hasOwnProperty.call(m, "grado_id"),     // false si todavía no se corrió el SQL 63
   };
 }
@@ -100,4 +103,40 @@ export async function fetchConteoHechasMundo() {
   if (error) throw error;
   const conteo = {}; (data || []).forEach((f) => { conteo[f.mision_id] = (conteo[f.mision_id] || 0) + 1; });
   return conteo;
+}
+
+// =====================================================================================
+//  ZONAS DEL MUNDO: qué abrió la docente para cada curso y cuántas misiones se piden
+// =====================================================================================
+
+// Lo que necesita un estudiante: qué zonas abrió la docente para SU curso y el requisito de cada zona.
+// Si todavía no se corrió el SQL 64 devuelve error (y el mundo se queda solo con la Aldea).
+export async function fetchZonasMundo(gradoId) {
+  const [cfg, ab] = await Promise.all([
+    supabase.from("mundo_zonas_config").select("*"),
+    gradoId == null ? Promise.resolve({ data: [], error: null }) : supabase.from("mundo_zonas_abiertas").select("*").eq("grado_id", String(gradoId)),
+  ]);
+  if (cfg.error) throw cfg.error;
+  if (ab.error) throw ab.error;
+  const requisitos = {}; (cfg.data || []).forEach((f) => { requisitos[f.zona] = Number(f.misiones_requeridas); });
+  return { abiertas: (ab.data || []).filter((f) => f.abierta).map((f) => f.zona), requisitos };
+}
+
+// Para el editor de la docente: los requisitos y TODAS las aperturas por curso.
+export async function fetchZonasAdmin() {
+  const [cfg, ab] = await Promise.all([supabase.from("mundo_zonas_config").select("*"), supabase.from("mundo_zonas_abiertas").select("*")]);
+  if (cfg.error) throw cfg.error;
+  if (ab.error) throw ab.error;
+  const requisitos = {}; (cfg.data || []).forEach((f) => { requisitos[f.zona] = Number(f.misiones_requeridas); });
+  return { requisitos, abiertas: (ab.data || []).map((f) => ({ grado_id: String(f.grado_id), zona: f.zona, abierta: !!f.abierta })) };
+}
+
+export async function guardarRequisitoZona(zona, cantidad) {
+  const { error } = await supabase.from("mundo_zonas_config").upsert({ zona, misiones_requeridas: cantidad }, { onConflict: "zona" });
+  if (error) throw error;
+}
+
+export async function abrirZonaCurso(gradoId, zona, abierta) {
+  const { error } = await supabase.from("mundo_zonas_abiertas").upsert({ grado_id: String(gradoId), zona, abierta }, { onConflict: "grado_id,zona" });
+  if (error) throw error;
 }
