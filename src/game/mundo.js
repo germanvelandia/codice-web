@@ -11,6 +11,7 @@ import { ZONAS, RETADORES, estadoZonas, misionesDisponibles, zonaDeMision } from
 import { armarPool, crearDuelo, esperaRestanteMin, barajar } from "./duelo";
 import { montarJuego } from "./juegosUI";
 import { TIPOS_ACERTIJO } from "./acertijos";
+import { brilloPorDistancia, rumoresPendientes } from "./secretos";
 import { ITEMS, RECETAS, RECURSOS_POR_ZONA, MAX_POR_ITEM, PARCELA, celdaValida, esDecoracion, puedeFabricar, faltantes, cantidadPorRecoleccion, esHerramienta } from "./items";
 
 const TILE = 32;
@@ -1135,6 +1136,16 @@ export async function iniciarMundo(raiz, op) {
     const T0 = TIPOS_ACERTIJO[m.juego]; interiores.acertijos.npcs.push({ tipo: "juego_mesa", juego: m.juego, nombre: T0.nombre, emoji: T0.emoji, x: m.x, y: m.y + 14, solido: false, radio: 58, dir: "south" });
   }
 
+  // las misiones ocultas: objetos brillantes escondidos (se ven solo de cerca); la posición es fija para cada secreto
+  const SEC = op.secretos && op.secretos.activo ? op.secretos : null;
+  const hallados = new Set((SEC && SEC.hallados) || []);
+  if (SEC) for (const sc of SEC.lista) {
+    const esc = sc.escena === "plaza" ? exterior : interiores[sc.escena] || escenaDeZona[sc.escena];
+    if (!esc || esc === parcela) continue;
+    const pt = esc.puntoLibre(rng(7000 + (Number(sc.id) || 0) * 31), (x, y) => chocaEn(esc, x, y));
+    esc.npcs.push({ tipo: "secreto", secreto: sc, nombre: sc.nombre, emoji: sc.emoji, x: pt.x, y: pt.y, solido: false, radio: 46, dir: "south", hallado: hallados.has(sc.id) });
+  }
+
   // ---- zonas: la docente abre la zona para el curso, y el estudiante cumple el requisito ----
   const zonasAbiertas = new Set(op.zonasAbiertas || []);
   // duelos con los Guardianes (si no están activos, no hay guardianes ni se exige ninguna insignia)
@@ -1291,7 +1302,8 @@ export async function iniciarMundo(raiz, op) {
   }
   function abrirCharla(n) {
     estado.dialogo = n; n.hablando = true; snd.hablar();
-    const d = abrirTarjeta(`${cabecera(n, "Vecino de la aldea")}<p class="m-texto">${html(n.frase)}</p><button class="m-ok" data-a="cerrar">¡Gracias!</button>`);
+    const rum = SEC ? rumoresPendientes(SEC.lista, [...hallados]) : [], rr0 = op.rngDuelo || Math.random, rumor = rum.length && rr0() < 0.6 ? rum[Math.floor(rr0() * rum.length)] : null;
+    const d = abrirTarjeta(`${cabecera(n, "Vecino de la aldea")}<p class="m-texto">${html(n.frase)}</p>${rumor ? `<p class="m-texto" data-rumor="${html(String(rumor.id))}">🕵️ <i>Rumor:</i> ${html(rumor.texto)}</p>` : ""}<button class="m-ok" data-a="cerrar">¡Gracias!</button>`);
     d.querySelectorAll('[data-a="cerrar"]').forEach((b) => (b.onclick = cerrarDialogo));
   }
   // ---- duelos con los Guardianes: batalla de preguntas; al ganar por primera vez, se gana la insignia de la zona ----
@@ -1582,7 +1594,7 @@ export async function iniciarMundo(raiz, op) {
   function interactuar() {
     if (estado.dialogo || estado.mapaAbierto || estado.mochilaAbierta || estado.juegoAbierto || estado.duelo || estado.cambiando || !estado.activo || !estado.cercano) return;
     const n = estado.cercano;
-    if (n.tipo === "puerta") entrarEdificio(n.edificio); else if (n.tipo === "guardia") abrirGuardia(n); else if (n.tipo === "posadero") abrirPosada(n); else if (n.tipo === "guardian") abrirGuardian(n); else if (n.tipo === "retador") abrirRetador(n, false); else if (n.tipo === "mision") abrirMision(n); else if (n.tipo === "aldeano") abrirCharla(n); else if (n.tipo === "recurso") abrirRecurso(n); else if (n.tipo === "juego_mesa") abrirMesa(n); else if (n.tipo === "parcela_puerta") { snd.puerta(); cambiarEscena(parcela, parcela.spawn.x, parcela.spawn.y); }
+    if (n.tipo === "puerta") entrarEdificio(n.edificio); else if (n.tipo === "guardia") abrirGuardia(n); else if (n.tipo === "posadero") abrirPosada(n); else if (n.tipo === "guardian") abrirGuardian(n); else if (n.tipo === "retador") abrirRetador(n, false); else if (n.tipo === "mision") abrirMision(n); else if (n.tipo === "aldeano") abrirCharla(n); else if (n.tipo === "recurso") abrirRecurso(n); else if (n.tipo === "juego_mesa") abrirMesa(n); else if (n.tipo === "secreto") abrirSecreto(n); else if (n.tipo === "parcela_puerta") { snd.puerta(); cambiarEscena(parcela, parcela.spawn.x, parcela.spawn.y); }
   }
 
   // ---- recoger recursos: cada punto hace una pregunta; si se acierta, se recoge (hay un límite por día) ----
@@ -1634,6 +1646,32 @@ export async function iniciarMundo(raiz, op) {
     } else if (res && res.limite) { if (res.hoy != null) recogidoHoy = res.hoy; fin("mal", "¡Correcto! Pero hoy ya llegaste al límite de recolección. ¡Vuelve mañana!"); }
     else if (res && res.lleno) fin("mal", "Tu mochila ya tiene el máximo de ese recurso.");
     else fin("mal", `No se pudo recoger: ${html((res && (res.error || res.mensaje)) || "intenta de nuevo")}. No se gastó nada; responde otra vez.`);
+  }
+
+  // ---- misiones ocultas: se examina el objeto, se responde una pregunta y se gana el premio una vez ----
+  function abrirSecreto(n) {
+    const sc = n.secreto; estado.dialogo = n; n.hablando = true; snd.hablar();
+    const total = SEC ? SEC.lista.length : 0;
+    const d = abrirTarjeta(`<div class="m-cab"><span class="m-emo">${html(n.emoji)}</span><div><div class="m-quien">${html(sc.nombre)}</div><div class="m-titulo">🔎 Secreto · ${hallados.size}/${total} encontrados</div></div><button class="m-cerrar" data-a="cerrar" aria-label="Cerrar">✕</button></div><p class="m-texto">¡Encontraste algo escondido! Para quedártelo, responde:<br><b>${html(sc.texto)}</b></p><div class="m-ops">${barajar(sc.opciones.map((o, i) => i), op.rngDuelo || Math.random).map((i, pos) => `<button class="m-opcion" data-i="${i}">${pos + 1}. ${html(sc.opciones[i])}</button>`).join("")}</div><div class="m-retro-caja"></div>`);
+    d.querySelectorAll(".m-opcion").forEach((b) => (b.onclick = () => responderSecreto(n, Number(b.dataset.i), b)));
+  }
+  async function responderSecreto(n, i, boton) {
+    const sc = n.secreto, caja = q(".m-retro-caja"); if (estado.respondiendo || hallados.has(sc.id)) return;
+    if (i !== sc.correcta) { boton.classList.add("mal"); boton.disabled = true; caja.innerHTML = '<div class="m-retro mal">No es esa 🤔 Piénsalo otra vez; el objeto sigue aquí.</div>'; snd.mal(); return; }
+    estado.respondiendo = true; q(".m-ops").querySelectorAll(".m-opcion").forEach((b) => (b.disabled = true)); boton.classList.add("bien");
+    caja.innerHTML = '<div class="m-retro bien">⏳ Guardando tu hallazgo…</div>';
+    let r; try { r = op.modoPrueba || !op.alSecreto ? { ok: true, local: true } : await op.alSecreto({ id: sc.id }); } catch (e) { r = { ok: false, mensaje: e && e.message }; }
+    estado.respondiendo = false; if (!vivo) return;
+    if (!r || r.ok === false) { q(".m-ops").querySelectorAll(".m-opcion").forEach((b) => { b.disabled = false; b.classList.remove("bien"); }); caja.innerHTML = `<div class="m-retro mal">No se pudo guardar tu premio: ${html((r && r.mensaje) || "intenta de nuevo")}. Puedes volver a tocar la respuesta.</div>`; snd.mal(); return; }
+    hallados.add(sc.id); n.hallado = true;
+    if (!r.yaEstaba) {
+      if (r.xp != null) estado.xp = r.xp; else estado.xp += sc.xp || 0;
+      if (r.oro != null) estado.oro = r.oro; else estado.oro += sc.oro || 0;
+      estado.ganado.xp += sc.xp || 0; estado.ganado.oro += sc.oro || 0; aviso(`+${sc.xp || 0} XP`, "#fde68a");
+    }
+    actualizarHud(); snd.fanfarria();
+    caja.innerHTML = `<div class="m-retro bien">${html(sc.retro || "¡Lo encontraste!")}</div><div class="m-premio">${r.yaEstaba ? "Ya habías encontrado este secreto ✅" : `🎁 +${sc.xp || 0} XP · +${sc.oro || 0} 🪙`}${op.modoPrueba ? " · 🧪 modo prueba (no se guarda)" : ""}</div><button class="m-ok" data-a="cerrar">¡Genial!</button>`;
+    caja.querySelector('[data-a="cerrar"]').onclick = cerrarDialogo;
   }
 
   // ---- la Casa de los Acertijos: cada mesa lista los acertijos de su tipo; al resolver uno se gana el premio (una vez) ----
@@ -1851,11 +1889,11 @@ export async function iniciarMundo(raiz, op) {
     }
     // el más cercano con quien se puede interactuar
     let mejor = null, md = 1e9;
-    for (const n of [...esc.npcs, ...esc.puertas]) { if (n.tipo === "recurso" && ahoraMs() < (n.hastaMs || 0)) continue; const rad = n.radio || 40, d = Math.hypot(n.x - estado.x, n.y - estado.y); if (d < rad && d < md) { md = d; mejor = n; } }
+    for (const n of [...esc.npcs, ...esc.puertas]) { if ((n.tipo === "recurso" && ahoraMs() < (n.hastaMs || 0)) || (n.tipo === "secreto" && n.hallado)) continue; const rad = n.radio || 40, d = Math.hypot(n.x - estado.x, n.y - estado.y); if (d < rad && d < md) { md = d; mejor = n; } }
     estado.cercano = mejor;
     const av = q(".m-aviso"), ba = q(".m-accion");
     if (mejor && !estado.dialogo && !estado.cambiando) {
-      av.textContent = (mejor.tipo === "puerta" ? `🚪 Entrar a ${mejor.nombre}` : mejor.tipo === "parcela_puerta" ? "🏡 Entrar a mi parcela" : mejor.tipo === "recurso" ? `${ITEMS[mejor.item].emoji} Recoger ${mejor.nombre.toLowerCase()}` : mejor.tipo === "juego_mesa" ? `${mejor.emoji} Jugar: ${mejor.nombre}` : `💬 Hablar con ${mejor.nombre}`) + (tactil ? "" : " (E)"); av.classList.remove("oculto"); ba.classList.add("listo"); ba.textContent = mejor.tipo === "puerta" ? "🚪" : mejor.tipo === "parcela_puerta" ? "🏡" : mejor.tipo === "recurso" ? ITEMS[mejor.item].emoji : mejor.tipo === "juego_mesa" ? mejor.emoji : "💬";
+      av.textContent = (mejor.tipo === "puerta" ? `🚪 Entrar a ${mejor.nombre}` : mejor.tipo === "parcela_puerta" ? "🏡 Entrar a mi parcela" : mejor.tipo === "recurso" ? `${ITEMS[mejor.item].emoji} Recoger ${mejor.nombre.toLowerCase()}` : mejor.tipo === "juego_mesa" ? `${mejor.emoji} Jugar: ${mejor.nombre}` : mejor.tipo === "secreto" ? "🔎 Examinar algo que brilla" : `💬 Hablar con ${mejor.nombre}`) + (tactil ? "" : " (E)"); av.classList.remove("oculto"); ba.classList.add("listo"); ba.textContent = mejor.tipo === "puerta" ? "🚪" : mejor.tipo === "parcela_puerta" ? "🏡" : mejor.tipo === "recurso" ? ITEMS[mejor.item].emoji : mejor.tipo === "juego_mesa" ? mejor.emoji : mejor.tipo === "secreto" ? "🔎" : "💬";
     } else { av.classList.add("oculto"); ba.classList.remove("listo"); }
     for (const a of estado.avisos) a.t += dt; estado.avisos = estado.avisos.filter((a) => a.t < 1.3);
   }
@@ -1875,6 +1913,14 @@ export async function iniciarMundo(raiz, op) {
     ctx.fillStyle = "#6b4220"; ctx.fillRect(sx - 2, sy - 18, 4, 18); ctx.fillStyle = "#a67340"; ctx.fillRect(sx - 14, sy - 32, 28, 16); ctx.fillStyle = "#c58f55"; ctx.fillRect(sx - 14, sy - 32, 28, 3);
     ctx.globalAlpha = 1; ctx.fillStyle = "#000"; ctx.font = "13px " + FUENTE_EMOJI; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.fillText("🏡", sx, sy - 19);
     if (Math.hypot(n.x - estado.x, n.y - estado.y) < 90) etiqueta(n.nombre, sx, sy - 36, "#fde68a");
+  }
+  function dibujarSecreto(n, t) {
+    if (n.hallado) return;
+    const a = brilloPorDistancia(Math.hypot(n.x - estado.x, n.y - estado.y)); if (a <= 0) return;   // solo se ve cuando te acercas
+    const sx = Math.round(n.x - camX), sy = Math.round(n.y - camY), p = 0.6 + 0.4 * Math.sin(t * 4 + n.x);
+    ctx.globalAlpha = a * 0.5 * p; ctx.fillStyle = "#fde68a"; ctx.beginPath(); ctx.ellipse(sx, sy - 6, 22, 11, 0, 0, 7); ctx.fill();
+    ctx.globalAlpha = a; ctx.fillStyle = "#000"; ctx.font = "20px " + FUENTE_EMOJI; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.fillText(n.emoji, sx, sy - 2 + Math.sin(t * 3 + n.y) * 1.5);
+    ctx.font = "10px " + FUENTE_EMOJI; ctx.fillText("✨", sx + 12 * Math.cos(t * 2 + n.x), sy - 20 + 4 * Math.sin(t * 3 + n.x)); ctx.fillText("✨", sx - 11 * Math.sin(t * 2.4 + n.y), sy - 12 + 3 * Math.cos(t * 3.3)); ctx.globalAlpha = 1;
   }
   function dibujarMesaJuego(n, t) {
     const sx = Math.round(n.x - camX), sy = Math.round(n.y - 40 - camY), lista = AC ? AC.lista.filter((a) => a.tipo === n.juego) : [], pend = lista.filter((a) => !hechosAc.has(a.id)).length;
@@ -1904,6 +1950,7 @@ export async function iniciarMundo(raiz, op) {
       if (n.tipo === "recurso") { dibujarRecurso(n, t); return; }
       if (n.tipo === "parcela_puerta") { dibujarCartel(n, t); return; }
       if (n.tipo === "juego_mesa") { dibujarMesaJuego(n, t); return; }
+      if (n.tipo === "secreto") { dibujarSecreto(n, t); return; }
       sombra(n.x, n.y, 9, 3.5);
       if (n.tipo === "retador") { const sx = Math.round(n.x - camX), sy = Math.round(n.y - camY); ctx.fillStyle = `rgba(220,38,38,${(puedeRetar(n) ? 0.3 : 0.1) + 0.12 * Math.sin(t * 4)})`; ctx.beginPath(); ctx.ellipse(sx, sy, 17, 7, 0, 0, 7); ctx.fill(); } // aura roja: se nota que es peligroso
       dibujarPersonaje(n.clave, n.dir, n.x, n.y, n.caminando, n.fasePaso || 0);
@@ -1994,7 +2041,7 @@ export async function iniciarMundo(raiz, op) {
   ultimo = performance.now(); rafId = requestAnimationFrame(cuadro);
 
   const api = {
-    estado, escenas, exterior, interiores, misiones, hechas, snd, chocaEn, interactuar, cambiarEscena, pasos, bosque: escenaDeZona.bosque, naturales, escenaDeZona, zonas: () => zonas, recalcularZonas, abrirMapa, cerrarMapa, viajarRapido, insignias, esperaHasta, poolDeZona, R, retosGanados, esperaReto, abrirRetador, iniciarReto, poolDeZonaReto, puedeRetar, abrirGuardian, iniciarDuelo, contestarDuelo, terminarDuelo, cerrarDuelo, RC, AC, hechosAc, abrirMesa, abrirJuego, cerrarJuego, juego: () => juegoActual, inv, abrirRecurso, abrirMochila, cerrarMochila, fabricarItem, usarItem, recogidoHoy: () => recogidoHoy, PC, parcela, cartel: () => cartel, abrirConstruir, cerrarConstruir, tocarCelda,
+    estado, escenas, exterior, interiores, misiones, hechas, snd, chocaEn, interactuar, cambiarEscena, pasos, bosque: escenaDeZona.bosque, naturales, escenaDeZona, zonas: () => zonas, recalcularZonas, abrirMapa, cerrarMapa, viajarRapido, insignias, esperaHasta, poolDeZona, R, retosGanados, esperaReto, abrirRetador, iniciarReto, poolDeZonaReto, puedeRetar, abrirGuardian, iniciarDuelo, contestarDuelo, terminarDuelo, cerrarDuelo, RC, AC, hechosAc, SEC, hallados, abrirSecreto, abrirMesa, abrirJuego, cerrarJuego, juego: () => juegoActual, inv, abrirRecurso, abrirMochila, cerrarMochila, fabricarItem, usarItem, recogidoHoy: () => recogidoHoy, PC, parcela, cartel: () => cartel, abrirConstruir, cerrarConstruir, tocarCelda,
     destruir() {
       if (!vivo) return; // por si se llama dos veces
       vivo = false; estado.activo = false; cancelAnimationFrame(rafId); temporizadores.forEach(clearTimeout); temporizadores.clear();
