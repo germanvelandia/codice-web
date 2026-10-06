@@ -21,15 +21,16 @@ const MAX_POR_LUGAR = 5; // más de 5 personajes en un mismo lugar no caben sin 
 const MIN_OPCIONES = 2, MAX_OPCIONES = 5;
 const nombreLugar = (k) => LUGARES.find((l) => l.key === k) || { emoji: "📍", nombre: k };
 
-const vacia = () => ({ lugar: "biblioteca", npc_nombre: "", npc_sprite: "", titulo: "", texto: "", opciones: ["", ""], correcta: 0, pista: "", retro: "", xp: 10, oro: 5, orden: 0, activo: true });
-const aForm = (m) => ({ lugar: m.lugar || "plaza", npc_nombre: m.npc_nombre || "", npc_sprite: m.npc_sprite || "", titulo: m.titulo || "", texto: m.texto || "", opciones: m.opciones && m.opciones.length >= MIN_OPCIONES ? [...m.opciones] : ["", ""], correcta: Math.min(Number(m.correcta) || 0, Math.max(0, (m.opciones || []).length - 1)), pista: m.pista || "", retro: m.retro || "", xp: m.xp ?? 0, oro: m.oro ?? 0, orden: m.orden ?? 0, activo: m.activo !== false });
+const vacia = (curso) => ({ grado_id: curso || "", lugar: "biblioteca", npc_nombre: "", npc_sprite: "", titulo: "", texto: "", opciones: ["", ""], correcta: 0, pista: "", retro: "", xp: 10, oro: 5, orden: 0, activo: true });
+const aForm = (m) => ({ grado_id: m.grado_id ? String(m.grado_id) : "", lugar: m.lugar || "plaza", npc_nombre: m.npc_nombre || "", npc_sprite: m.npc_sprite || "", titulo: m.titulo || "", texto: m.texto || "", opciones: m.opciones && m.opciones.length >= MIN_OPCIONES ? [...m.opciones] : ["", ""], correcta: Math.min(Number(m.correcta) || 0, Math.max(0, (m.opciones || []).length - 1)), pista: m.pista || "", retro: m.retro || "", xp: m.xp ?? 0, oro: m.oro ?? 0, orden: m.orden ?? 0, activo: m.activo !== false });
 
-export default function MisionesMundoModal({ onClose }) {
+export default function MisionesMundoModal({ onClose, grados = [], gradoActual = "" }) {
   const [misiones, setMisiones] = useState([]);
   const [conteo, setConteo] = useState({});
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
   const [filtro, setFiltro] = useState("todos");
+  const [filtroCurso, setFiltroCurso] = useState("todos"); // "todos" | "generales" | id de un curso
   const [editando, setEditando] = useState(null); // null | "nueva" | id
   const [form, setForm] = useState(vacia());
   const [errForm, setErrForm] = useState("");
@@ -46,8 +47,20 @@ export default function MisionesMundoModal({ onClose }) {
   useEffect(() => { cargar(); }, []);
   const mostrarAviso = (t) => { setAviso(t); setTimeout(() => setAviso(""), 2600); };
 
-  const visiblesEn = (lugar, exceptoId) => misiones.filter((m) => m.lugar === lugar && m.activo && m.id !== exceptoId).length;
-  const abrirNueva = (base) => { setForm(base ? aForm(base) : vacia()); setEditando("nueva"); setErrForm(""); };
+  // Cursos que existen: los del docente más cualquiera que ya tenga misiones propias.
+  const cursos = [...new Set([...grados.map((g) => String(g.id)), ...misiones.map((m) => m.grado_id).filter(Boolean).map(String)])];
+  const columnaCurso = misiones.length === 0 || misiones.some((m) => m._tieneGrado); // false = falta correr el SQL 63
+  const etiquetaCurso = (c) => (c ? `Curso ${c}` : "Todos los cursos");
+  // Lo que ve un estudiante de un curso en un lugar: las misiones de su curso más las generales.
+  const visiblesParaCurso = (lugar, curso, exceptoId) => misiones.filter((m) => m.lugar === lugar && m.activo && m.id !== exceptoId && (!m.grado_id || String(m.grado_id) === String(curso))).length;
+  // Devuelve el curso que se pasaría del máximo si esta misión pasa a estar visible (o null si cabe).
+  const cursoSaturado = (lugar, gradoSel, exceptoId) => {
+    if (gradoSel) return visiblesParaCurso(lugar, gradoSel, exceptoId) >= MAX_POR_LUGAR ? String(gradoSel) : null;
+    for (const c of cursos) if (visiblesParaCurso(lugar, c, exceptoId) >= MAX_POR_LUGAR) return c;
+    return misiones.filter((m) => m.lugar === lugar && m.activo && m.id !== exceptoId && !m.grado_id).length >= MAX_POR_LUGAR ? "todos" : null;
+  };
+  const textoSaturado = (lugar, c) => `${nombreLugar(lugar).nombre} ya tiene ${MAX_POR_LUGAR} misiones visibles para ${c === "todos" ? "todos los cursos" : "el curso " + c} (el máximo para que los personajes quepan). Oculta una o elige otro lugar.`;
+  const abrirNueva = (base) => { setForm(base ? aForm(base) : vacia(!columnaCurso ? "" : filtroCurso !== "todos" && filtroCurso !== "generales" ? filtroCurso : gradoActual ? String(gradoActual) : "")); setEditando("nueva"); setErrForm(""); };
   const abrirEditar = (m) => { setForm(aForm(m)); setEditando(m.id); setErrForm(""); };
   const cambiar = (campo, valor) => setForm((f) => ({ ...f, [campo]: valor }));
   const cambiarOpcion = (i, v) => setForm((f) => ({ ...f, opciones: f.opciones.map((o, k) => (k === i ? v : o)) }));
@@ -67,9 +80,7 @@ export default function MisionesMundoModal({ onClose }) {
     if (form.opciones.some((o) => !o.trim())) return "Ninguna respuesta puede quedar vacía (escríbela o quítala con la ✕).";
     const nums = { XP: form.xp, "Oro": form.oro, "Orden": form.orden };
     for (const [n, v] of Object.entries(nums)) { const x = Number(v); if (v === "" || !Number.isInteger(x) || x < 0 || x > 1000) return `${n} tiene que ser un número entero entre 0 y 1000.`; }
-    if (form.activo && visiblesEn(form.lugar, editando === "nueva" ? null : editando) >= MAX_POR_LUGAR) {
-      return `${nombreLugar(form.lugar).nombre} ya tiene ${MAX_POR_LUGAR} misiones visibles (el máximo para que los personajes quepan). Oculta una o elige otro lugar.`;
-    }
+    if (form.activo) { const c = cursoSaturado(form.lugar, form.grado_id, editando === "nueva" ? null : editando); if (c) return textoSaturado(form.lugar, c); }
     return "";
   };
 
@@ -80,15 +91,16 @@ export default function MisionesMundoModal({ onClose }) {
       lugar: form.lugar, npc_nombre: form.npc_nombre.trim() || "Aldeano", npc_sprite: form.npc_sprite || null, titulo: form.titulo.trim(), texto: form.texto.trim(),
       opciones: form.opciones.map((o) => o.trim()), correcta: form.correcta, pista: form.pista.trim(), retro: form.retro.trim(), xp: Number(form.xp), oro: Number(form.oro), orden: Number(form.orden), activo: form.activo,
     };
+    if (columnaCurso) campos.grado_id = form.grado_id || null; // si todavía no existe la columna (SQL 63), no se manda para no romper
     try {
       if (editando === "nueva") await mundoApi.crearMisionMundo(campos); else await mundoApi.editarMisionMundo(editando, campos);
       await cargar(); setEditando(null); mostrarAviso("Guardada ✓");
-    } catch (er) { setErrForm("No se pudo guardar: " + (er.message || "error desconocido")); }
+    } catch (er) { setErrForm("No se pudo guardar: " + (er.message || "error desconocido") + (/grado_id/i.test(er.message || "") ? "\n\nParece que falta correr 63_mundo_por_curso.sql en Supabase." : "")); }
     setGuardando(false);
   };
 
   const alternarVisible = async (m) => {
-    if (!m.activo && visiblesEn(m.lugar, m.id) >= MAX_POR_LUGAR) { setError(`${nombreLugar(m.lugar).nombre} ya tiene ${MAX_POR_LUGAR} misiones visibles. Oculta otra antes de mostrar esta.`); return; }
+    if (!m.activo) { const c = cursoSaturado(m.lugar, m.grado_id, m.id); if (c) { setError(textoSaturado(m.lugar, c)); return; } }
     setError("");
     try { await mundoApi.editarMisionMundo(m.id, { activo: !m.activo }); await cargar(); } catch (er) { setError("No se pudo cambiar: " + er.message); }
   };
@@ -99,7 +111,7 @@ export default function MisionesMundoModal({ onClose }) {
     try { await mundoApi.eliminarMisionMundo(m.id); await cargar(); mostrarAviso("Borrada"); } catch (er) { setError("No se pudo borrar: " + er.message); }
   };
 
-  const lista = misiones.filter((m) => filtro === "todos" || m.lugar === filtro);
+  const lista = misiones.filter((m) => (filtro === "todos" || m.lugar === filtro) && (filtroCurso === "todos" || (filtroCurso === "generales" ? !m.grado_id : !m.grado_id || String(m.grado_id) === filtroCurso)));
   const input = "w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white";
   const sinTabla = /does not exist|relation|schema cache/i.test(error);
 
@@ -119,6 +131,14 @@ export default function MisionesMundoModal({ onClose }) {
         ) : editando ? (
           <div>
             <h4 className="text-sm font-bold text-slate-800 mb-3">{editando === "nueva" ? "➕ Nueva misión" : "✏️ Editar misión"}</h4>
+            <div className="mb-3">
+              <label className="text-[11px] text-slate-500 block mb-1">¿Para qué curso es?</label>
+              <select value={form.grado_id} onChange={(e) => cambiar("grado_id", e.target.value)} disabled={!columnaCurso} className={input}>
+                <option value="">🌐 Todos los cursos</option>
+                {cursos.map((c) => <option key={c} value={c}>🏫 Curso {c}</option>)}
+              </select>
+              {!columnaCurso && <div className="text-[11px] text-amber-700 mt-1">Para separar por curso, corre primero <b>63_mundo_por_curso.sql</b> en Supabase.</div>}
+            </div>
             <div className="grid sm:grid-cols-2 gap-3 mb-3">
               <div><label className="text-[11px] text-slate-500 block mb-1">¿Dónde está?</label>
                 <select value={form.lugar} onChange={(e) => cambiar("lugar", e.target.value)} className={input}>{LUGARES.map((l) => <option key={l.key} value={l.key}>{l.emoji} {l.nombre}</option>)}</select></div>
@@ -185,6 +205,15 @@ export default function MisionesMundoModal({ onClose }) {
               {aviso && <span className="text-xs font-semibold text-emerald-600">{aviso}</span>}
               <button type="button" onClick={() => abrirNueva()} className="text-xs font-bold px-4 py-2 rounded-full bg-violet-500 text-white">+ Nueva misión</button>
             </div>
+            {columnaCurso && cursos.length > 0 && (
+              <div className="flex items-center gap-2 mb-3">
+                <label className="text-[11px] text-slate-500">Mostrar:</label>
+                <select value={filtroCurso} onChange={(e) => setFiltroCurso(e.target.value)} className="text-xs rounded-lg px-2.5 py-1.5 border border-slate-200 bg-white">
+                  <option value="todos">Todas las misiones</option><option value="generales">🌐 Solo las de todos los cursos</option>
+                  {cursos.map((c) => <option key={c} value={c}>🏫 Lo que ve el curso {c}</option>)}
+                </select>
+              </div>
+            )}
             {error && <div className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-2.5 mb-3">{error}</div>}
             {lista.length === 0 && <p className="text-sm text-slate-400 py-6 text-center">No hay misiones {filtro === "todos" ? "todavía" : "en este lugar"}. Crea la primera con "+ Nueva misión".</p>}
             <div className="space-y-2">
@@ -196,6 +225,7 @@ export default function MisionesMundoModal({ onClose }) {
                       <div className="min-w-0 flex-1">
                         <div className="text-sm font-bold text-slate-800 truncate">{m.titulo}{!m.activo && <span className="ml-2 text-[10px] font-bold text-slate-500 bg-slate-200 rounded-full px-2 py-0.5">OCULTA</span>}</div>
                         <div className="text-[11px] text-slate-500">{l.emoji} {l.nombre} · {m.npc_nombre} · ✨ {m.xp} XP · 🪙 {m.oro}</div>
+                        <div className="text-[11px] mt-0.5"><span className={`rounded-full px-2 py-0.5 font-semibold ${m.grado_id ? "bg-sky-50 text-sky-700" : "bg-slate-100 text-slate-500"}`}>{m.grado_id ? `🏫 ${etiquetaCurso(m.grado_id)}` : "🌐 Todos los cursos"}</span></div>
                         <div className="text-[11px] text-emerald-600 font-semibold mt-0.5">✅ {n} estudiante{n === 1 ? "" : "s"} {n === 1 ? "la completó" : "la completaron"}</div>
                       </div>
                       <div className="flex flex-wrap gap-1 justify-end shrink-0">
