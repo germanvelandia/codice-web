@@ -20,6 +20,7 @@ export const ZONAS = [
       { key: "mercado", emoji: "🛒", nombre: "Mercado del Códice" },
       { key: "plaza", emoji: "🌍", nombre: "Plaza (afuera)" },
       { key: "acertijos", emoji: "🧩", nombre: "Casa de los Acertijos" },
+      { key: "comarca", emoji: "🏰", nombre: "Sala de la Comarca" },
       { key: "posada", emoji: "🛏️", nombre: "Posada del Descanso" },
     ],
   },
