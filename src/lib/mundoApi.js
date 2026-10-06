@@ -106,6 +106,29 @@ export async function editarMisionMundo(id, campos) {
   if (error) throw error;
 }
 
+// Cambia los mismos campos a muchas misiones a la vez (en bloques de 200; cada bloque es una sola operación).
+// Devuelve cuántas se actualizaron; si un bloque falla, el error trae cuántas alcanzaron a cambiar (e.hechas).
+export async function editarMisionesMundo(ids, campos) {
+  let hechas = 0;
+  for (let i = 0; i < ids.length; i += 200) {
+    const trozo = ids.slice(i, i + 200);
+    const { error } = await supabase.from("mundo_misiones").update(campos).in("id", trozo);
+    if (error) { const e = new Error(error.message); e.hechas = hechas; throw e; }
+    hechas += trozo.length;
+  }
+  return hechas;
+}
+export async function eliminarMisionesMundo(ids) {
+  let hechas = 0;
+  for (let i = 0; i < ids.length; i += 200) {
+    const trozo = ids.slice(i, i + 200);
+    const { error } = await supabase.from("mundo_misiones").delete().in("id", trozo);
+    if (error) { const e = new Error(error.message); e.hechas = hechas; throw e; }
+    hechas += trozo.length;
+  }
+  return hechas;
+}
+
 // Borrar una misión también borra el registro de quiénes la completaron (los premios ya entregados no se tocan).
 export async function eliminarMisionMundo(id) {
   const { error } = await supabase.from("mundo_misiones").delete().eq("id", id);
