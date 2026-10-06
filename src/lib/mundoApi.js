@@ -140,3 +140,54 @@ export async function abrirZonaCurso(gradoId, zona, abierta) {
   const { error } = await supabase.from("mundo_zonas_abiertas").upsert({ grado_id: String(gradoId), zona, abierta }, { onConflict: "grado_id,zona" });
   if (error) throw error;
 }
+
+// =====================================================================================
+//  LA POSADA DEL DESCANSO: se recupera vida a cambio de oro. La docente decide si está abierta,
+//  cuánto cuesta y cuánta vida da. El descanso lo valida SIEMPRE la base de datos (no lo que cree el navegador).
+// =====================================================================================
+export const VIDA_MAX = 100;
+// Valores por defecto de lo que se puede configurar (la docente los cambia desde el editor)
+export const CONFIG_POSADA_DEFECTO = { posada_activa: 1, posada_costo: 15, posada_vida: 25 };
+
+export async function fetchConfigMundo() {
+  const { data, error } = await supabase.from("mundo_config").select("*");
+  if (error) throw error;
+  const cfg = { ...CONFIG_POSADA_DEFECTO };
+  (data || []).forEach((f) => { if (f.clave in cfg && Number.isFinite(Number(f.valor))) cfg[f.clave] = Number(f.valor); });
+  return cfg;
+}
+
+export async function guardarConfigMundo(clave, valor) {
+  const { error } = await supabase.from("mundo_config").upsert({ clave, valor }, { onConflict: "clave" });
+  if (error) throw error;
+}
+
+// Lo que necesita el juego: { activa, costo, vida }. Si todavía no existe la tabla (SQL 65), la posada queda cerrada.
+export async function fetchPosadaMundo() {
+  try { const c = await fetchConfigMundo(); return { activa: c.posada_activa === 1, costo: c.posada_costo, vida: Math.max(1, c.posada_vida) }; }
+  catch { return { activa: false, costo: CONFIG_POSADA_DEFECTO.posada_costo, vida: CONFIG_POSADA_DEFECTO.posada_vida }; }
+}
+
+// Cuánta vida se recupera y cuánto cuesta para alguien que tiene "vida" (si le falta poco, paga proporcional).
+export function planDeDescanso(vida, cfg) {
+  const falta = Math.max(0, VIDA_MAX - vida), porUso = Math.max(1, cfg.vida), restaura = Math.min(porUso, falta);
+  return { falta, restaura, costo: Math.ceil((cfg.costo * restaura) / porUso) };
+}
+
+export async function descansarEnPosada(estudianteId) {
+  const c = await fetchConfigMundo();
+  if (c.posada_activa !== 1) return { ok: false, mensaje: "La posada está cerrada por ahora. ¡Vuelve pronto!" };
+  const { data: prog, error: e1 } = await supabase.from("progreso").select("vida, monedas").eq("estudiante_id", estudianteId).maybeSingle();
+  if (e1) throw e1;
+  const vida = typeof prog?.vida === "number" ? prog.vida : VIDA_MAX, monedas = prog?.monedas || 0;
+  const plan = planDeDescanso(vida, { costo: c.posada_costo, vida: c.posada_vida });
+  if (plan.falta === 0) return { ok: false, vida, monedas, mensaje: "¡Te ves en plena forma! No necesitas descansar." };
+  if (monedas < plan.costo) return { ok: false, vida, monedas, mensaje: `Descansar cuesta ${plan.costo} 🪙 y tienes ${monedas}. ¡Completa misiones para ganar más oro!` };
+  // 1) se aplica el cambio (si falla, no se registra nada y se avisa)
+  const { data, error } = await supabase.rpc("ajustar_progreso", { p_estudiante_id: estudianteId, p_delta_xp: 0, p_delta_vida: plan.restaura, p_delta_monedas: -plan.costo });
+  if (error) throw error;
+  const fila = data?.[0];
+  // 2) queda en el historial (si esto falla no se deshace el descanso: ya se cobró y se recuperó)
+  try { await supabase.from("historial_gamificacion").insert({ estudiante_id: estudianteId, etiqueta: "🛏️ Posada del Descanso", xp: 0, vida: plan.restaura, monedas: -plan.costo, categoria: "general" }); } catch { /* el historial es secundario */ }
+  return { ok: true, vida: typeof fila?.vida === "number" ? fila.vida : vida + plan.restaura, monedas: typeof fila?.monedas === "number" ? fila.monedas : monedas - plan.costo, restaurado: plan.restaura, costo: plan.costo };
+}
