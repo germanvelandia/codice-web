@@ -10,21 +10,38 @@
 
 export const ZONAS = [
   {
-    key: "aldea", nombre: "Aldea del Códice", emoji: "🏘️",
+    key: "aldea", nombre: "Aldea del Códice", emoji: "🏘️", corto: "la Aldea", de: "de la Aldea", a: "a la Aldea",
     lugares: [
       { key: "biblioteca", emoji: "📚", nombre: "Biblioteca" },
       { key: "agora", emoji: "⚖️", nombre: "Ágora de la Ética" },
       { key: "templo", emoji: "🕊️", nombre: "Templo de la Gratitud" },
       { key: "mercado", emoji: "🛒", nombre: "Mercado del Códice" },
       { key: "plaza", emoji: "🌍", nombre: "Plaza (afuera)" },
+      { key: "posada", emoji: "🛏️", nombre: "Posada del Descanso" },
     ],
   },
   {
-    key: "bosque", nombre: "Bosque de la Curiosidad", emoji: "🌲", previa: "aldea", requisitoPorDefecto: 3,
+    key: "bosque", nombre: "Bosque de la Curiosidad", emoji: "🌲", corto: "el Bosque", de: "del Bosque", a: "al Bosque", guardia: "Guardia del Bosque", previa: "aldea", requisitoPorDefecto: 3,
     lugares: [
       { key: "claro", emoji: "🌼", nombre: "Claro del Bosque" },
       { key: "arroyo", emoji: "💧", nombre: "Arroyo Cantarino" },
       { key: "mirador", emoji: "⛰️", nombre: "Mirador" },
+    ],
+  },
+  {
+    key: "montana", nombre: "Montaña del Esfuerzo", emoji: "🏔️", corto: "la Montaña", de: "de la Montaña", a: "a la Montaña", guardia: "Guardia de la Montaña", previa: "bosque", requisitoPorDefecto: 3,
+    lugares: [
+      { key: "sendero", emoji: "🥾", nombre: "Sendero de Piedra" },
+      { key: "cueva", emoji: "🕳️", nombre: "Cueva del Eco" },
+      { key: "cumbre", emoji: "🚩", nombre: "Cumbre" },
+    ],
+  },
+  {
+    key: "lago", nombre: "Lago de la Reflexión", emoji: "🏞️", corto: "el Lago", de: "del Lago", a: "al Lago", guardia: "Guardia del Lago", previa: "montana", requisitoPorDefecto: 3,
+    lugares: [
+      { key: "orilla", emoji: "🏖️", nombre: "Orilla" },
+      { key: "muelle", emoji: "🛶", nombre: "Muelle" },
+      { key: "isla", emoji: "🌴", nombre: "Isla Serena" },
     ],
   },
 ];
