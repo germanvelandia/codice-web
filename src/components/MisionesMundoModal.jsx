@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import * as mundoApi from "../lib/mundoApi";
 import { ZONAS, LUGARES, zonaDeLugar, zonaPorClave } from "../game/zonas";
+import { esNivel, claveNivel, nivelDeClave, nivelDeGrado, nivelesDe, nombreNivel, etiquetaPara, cursosDelNivel, misionVisiblePara, cursoSaturado as cursoSaturadoDe, etiquetaSaturado } from "../lib/gradosMundo";
+import { aObjetos, analizarImportacion, filasParaExportar, filasPlantilla, crearLibro, leerLibro } from "../lib/importarMisiones";
 
 // Editor de las misiones del Mundo CÓDICE: acá se agregan, cambian, ocultan y borran las preguntas
 // que los estudiantes encuentran al hablar con los personajes. Los cambios se ven en el mundo
@@ -24,7 +26,10 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
   const [filtro, setFiltro] = useState("todos");
-  const [filtroCurso, setFiltroCurso] = useState("todos"); // "todos" | "generales" | id de un curso
+  const [filtroCurso, setFiltroCurso] = useState("todos"); // "todos" | "generales" | "nivel:8" | id de un curso
+  const [importacion, setImportacion] = useState(null);       // la revisión del Excel antes de guardar: { archivo, analisis }
+  const [aplicando, setAplicando] = useState(null);           // { hecho, total } mientras se guarda
+  const entradaArchivo = useRef(null);
   const [pestana, setPestana] = useState("misiones");       // "misiones" | "zonas"
   const [editando, setEditando] = useState(null); // null | "nueva" | id
   const [form, setForm] = useState(vacia());
@@ -44,21 +49,56 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
   useEffect(() => () => clearTimeout(relojAviso.current), []);
   const mostrarAviso = (t) => { setAviso(t); clearTimeout(relojAviso.current); relojAviso.current = setTimeout(() => setAviso(""), 2600); }; // un solo temporizador: el aviso nuevo no lo borra el anterior
 
-  // Cursos que existen: los del docente más cualquiera que ya tenga misiones propias.
-  const cursos = [...new Set([...grados.map((g) => String(g.id)), ...misiones.map((m) => m.grado_id).filter(Boolean).map(String)])];
+  // Cursos que existen: los del docente más cualquiera que ya tenga misiones propias (sin contar las marcas de grado "nivel:8").
+  const cursos = [...new Set([...grados.map((g) => String(g.id)), ...misiones.map((m) => m.grado_id).filter((c) => c && !esNivel(c)).map(String)])];
+  const niveles = nivelesDe(cursos);                                       // por ejemplo ["8", "9", "10"]
   const columnaCurso = misiones.length === 0 || misiones.some((m) => m._tieneGrado); // false = falta correr el SQL 63
   const columnaZona = misiones.length === 0 || misiones.some((m) => m._tieneZona);    // false = falta correr el SQL 64
-  const etiquetaCurso = (c) => (c ? `Curso ${c}` : "Todos los cursos");
-  // Lo que ve un estudiante de un curso en un lugar: las misiones de su curso más las generales.
-  const visiblesParaCurso = (lugar, curso, exceptoId) => misiones.filter((m) => m.lugar === lugar && m.activo && m.id !== exceptoId && (!m.grado_id || String(m.grado_id) === String(curso))).length;
-  // Devuelve el curso que se pasaría del máximo si esta misión pasa a estar visible (o null si cabe).
-  const cursoSaturado = (lugar, gradoSel, exceptoId) => {
-    if (gradoSel) return visiblesParaCurso(lugar, gradoSel, exceptoId) >= MAX_POR_LUGAR ? String(gradoSel) : null;
-    for (const c of cursos) if (visiblesParaCurso(lugar, c, exceptoId) >= MAX_POR_LUGAR) return c;
-    return misiones.filter((m) => m.lugar === lugar && m.activo && m.id !== exceptoId && !m.grado_id).length >= MAX_POR_LUGAR ? "todos" : null;
+  // Si poner una misión visible haría pasar de 5 a algún curso, devuelve cuál (o null si cabe).
+  const cursoSaturado = (lugar, gradoSel, exceptoId) => cursoSaturadoDe(misiones, lugar, gradoSel, exceptoId, cursos);
+  const textoSaturado = (lugar, c) => `${nombreLugar(lugar).nombre} ya tiene ${MAX_POR_LUGAR} misiones visibles para ${etiquetaSaturado(c)} (el máximo para que los personajes quepan). Oculta una o elige otro lugar.`;
+  // ---- Excel: descargar la plantilla, exportar las misiones, o importarlas con una revisión antes de guardar ----
+  const cargarXLSX = async () => { const mod = await import("xlsx"); return mod.utils ? mod : mod.default; }; // se carga solo cuando se usa
+  const hoy = () => new Date().toISOString().slice(0, 10);
+  const bajarPlantilla = async () => {
+    try { const X = await cargarXLSX(); X.writeFile(crearLibro(X, { filas: filasPlantilla(), cursos }), "plantilla_misiones_mundo.xlsx"); }
+    catch (e) { setError("No se pudo crear el Excel: " + (e.message || "error")); }
   };
-  const textoSaturado = (lugar, c) => `${nombreLugar(lugar).nombre} ya tiene ${MAX_POR_LUGAR} misiones visibles para ${c === "todos" ? "todos los cursos" : "el curso " + c} (el máximo para que los personajes quepan). Oculta una o elige otro lugar.`;
-  const abrirNueva = (base) => { setForm(base ? aForm(base) : vacia(!columnaCurso ? "" : filtroCurso !== "todos" && filtroCurso !== "generales" ? filtroCurso : gradoActual ? String(gradoActual) : "")); setEditando("nueva"); setErrForm(""); };
+  const exportar = async () => {
+    try { const X = await cargarXLSX(); X.writeFile(crearLibro(X, { filas: filasParaExportar(misiones), cursos }), `misiones_mundo_${hoy()}.xlsx`); mostrarAviso("Exportadas ✓"); }
+    catch (e) { setError("No se pudo crear el Excel: " + (e.message || "error")); }
+  };
+  const elegirArchivo = (e) => {
+    const f = e.target.files && e.target.files[0]; e.target.value = ""; if (!f) return;
+    setError("");
+    const lector = new FileReader();
+    lector.onload = async (ev) => {
+      try {
+        const X = await cargarXLSX(); const r = aObjetos(leerLibro(X, ev.target.result));
+        if (r.error) { setError(r.error); return; }
+        if (!r.objetos.length) { setError("No encontré misiones en el archivo (solo los encabezados)."); return; }
+        setImportacion({ archivo: f.name, analisis: analizarImportacion(r.objetos, { misiones, cursos, columnaCurso, columnaZona }) });
+      } catch (er) { setError("No se pudo leer el archivo. ¿Es un Excel (.xlsx)? " + (er.message || "")); }
+    };
+    lector.onerror = () => setError("No se pudo leer el archivo.");
+    lector.readAsBinaryString(f);
+  };
+  const aplicarImportacion = async () => {
+    const filas = importacion.analisis.filas.filter((f) => f.estado === "nueva" || f.estado === "actualiza");
+    const nuevas = filas.filter((f) => f.estado === "nueva"), cambios = filas.filter((f) => f.estado === "actualiza");
+    let creadas = 0, actualizadas = 0; setAplicando({ hecho: 0, total: filas.length }); setError("");
+    try {
+      if (nuevas.length) { creadas = await mundoApi.crearMisionesMundo(nuevas.map((f) => f.campos)); setAplicando({ hecho: creadas, total: filas.length }); }
+      for (let i = 0; i < cambios.length; i += 10) { const trozo = cambios.slice(i, i + 10); await Promise.all(trozo.map((f) => mundoApi.editarMisionMundo(f.id, f.campos))); actualizadas += trozo.length; setAplicando({ hecho: creadas + actualizadas, total: filas.length }); }
+      setImportacion(null); await cargar(); mostrarAviso(`Importado ✓ ${creadas} nueva${creadas === 1 ? "" : "s"}, ${actualizadas} actualizada${actualizadas === 1 ? "" : "s"}`);
+    } catch (er) {
+      creadas = er.creadas ?? creadas;
+      setImportacion(null); await cargar();   // primero se recarga la lista (eso limpia los errores) y DESPUÉS se muestra el mensaje
+      setError(`Se detuvo la importación: ${er.message || "error"}. Ya se guardaron ${creadas} nuevas y ${actualizadas} actualizadas. Corrige el problema y vuelve a importar el mismo archivo: lo que ya está guardado no se duplica.`);
+    }
+    setAplicando(null);
+  };
+  const abrirNueva = (base) => { setForm(base ? aForm(base) : vacia(!columnaCurso ? "" : filtroCurso !== "todos" && filtroCurso !== "generales" ? filtroCurso : gradoActual ? (nivelDeGrado(gradoActual) ? claveNivel(nivelDeGrado(gradoActual)) : String(gradoActual)) : "")); setEditando("nueva"); setErrForm(""); };
   const abrirEditar = (m) => { setForm(aForm(m)); setEditando(m.id); setErrForm(""); };
   const cambiar = (campo, valor) => setForm((f) => ({ ...f, [campo]: valor }));
   const cambiarOpcion = (i, v) => setForm((f) => ({ ...f, opciones: f.opciones.map((o, k) => (k === i ? v : o)) }));
@@ -110,7 +150,7 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
     try { await mundoApi.eliminarMisionMundo(m.id); await cargar(); mostrarAviso("Borrada"); } catch (er) { setError("No se pudo borrar: " + er.message); }
   };
 
-  const lista = misiones.filter((m) => (filtro === "todos" || m.zona === filtro) && (filtroCurso === "todos" || (filtroCurso === "generales" ? !m.grado_id : !m.grado_id || String(m.grado_id) === filtroCurso)));
+  const lista = misiones.filter((m) => (filtro === "todos" || m.zona === filtro) && (filtroCurso === "todos" || (filtroCurso === "generales" ? !m.grado_id : esNivel(filtroCurso) ? !m.grado_id || m.grado_id === filtroCurso || (!esNivel(m.grado_id) && nivelDeGrado(m.grado_id) === nivelDeClave(filtroCurso)) : misionVisiblePara(m.grado_id, filtroCurso))));
   const input = "w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white";
   const sinTabla = /does not exist|relation|schema cache/i.test(error);
 
@@ -123,7 +163,7 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
         </div>
         <p className="text-xs text-slate-400 mb-3">Son las preguntas que tus estudiantes encuentran al hablar con los personajes del mundo. Cada una la da un personaje, en un lugar, y premia con XP y oro. Los cambios se ven apenas se guardan.</p>
 
-        {!sinTabla && !cargando && !editando && (
+        {!sinTabla && !cargando && !editando && !importacion && (
           <div className="inline-flex gap-1 rounded-full bg-slate-100 p-1 mb-3">
             <button type="button" onClick={() => setPestana("misiones")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "misiones" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🎯 Misiones</button>
             <button type="button" onClick={() => setPestana("zonas")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "zonas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🗺️ Zonas</button>
@@ -144,15 +184,18 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
           <PanelPosada />
         ) : pestana === "zonas" && !editando ? (
           <PanelZonas cursos={grados.length ? grados.map((g) => String(g.id)) : cursos} />
+        ) : importacion ? (
+          <RevisionImportacion analisis={importacion.analisis} archivo={importacion.archivo} aplicando={aplicando} onCancelar={() => setImportacion(null)} onAplicar={aplicarImportacion} />
         ) : editando ? (
           <div>
             <h4 className="text-sm font-bold text-slate-800 mb-3">{editando === "nueva" ? "➕ Nueva misión" : "✏️ Editar misión"}</h4>
             <div className="grid sm:grid-cols-2 gap-3 mb-3">
               <div>
-                <label className="text-[11px] text-slate-500 block mb-1">¿Para qué curso es?</label>
+                <label className="text-[11px] text-slate-500 block mb-1">¿Para qué grado o curso es?</label>
                 <select value={form.grado_id} onChange={(e) => cambiar("grado_id", e.target.value)} disabled={!columnaCurso} className={input}>
                   <option value="">🌐 Todos los cursos</option>
-                  {cursos.map((c) => <option key={c} value={c}>🏫 Curso {c}</option>)}
+                  {[...new Set([...niveles, ...(esNivel(form.grado_id) ? [nivelDeClave(form.grado_id)] : [])])].map((n) => <option key={n} value={claveNivel(n)}>📚 Todo {nombreNivel(n).toLowerCase()}{cursosDelNivel(cursos, n).length ? ` (${cursosDelNivel(cursos, n).join(", ")})` : ""}</option>)}
+                  {cursos.map((c) => <option key={c} value={c}>🏫 Solo el curso {c}</option>)}
                 </select>
                 {!columnaCurso && <div className="text-[11px] text-amber-700 mt-1">Para separar por curso, corre primero <b>63_mundo_por_curso.sql</b> en Supabase.</div>}
               </div>
@@ -230,11 +273,19 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
               {aviso && <span className="text-xs font-semibold text-emerald-600">{aviso}</span>}
               <button type="button" onClick={() => abrirNueva()} className="text-xs font-bold px-4 py-2 rounded-full bg-violet-500 text-white">+ Nueva misión</button>
             </div>
+            <div className="flex flex-wrap items-center gap-1.5 mb-3">
+              <span className="text-[11px] font-bold text-slate-400 mr-1">EXCEL</span>
+              <button type="button" onClick={bajarPlantilla} className="text-[11px] font-semibold px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700">📥 Descargar plantilla</button>
+              <button type="button" onClick={exportar} disabled={misiones.length === 0} className="text-[11px] font-semibold px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 disabled:opacity-40">📤 Exportar mis misiones</button>
+              <button type="button" onClick={() => entradaArchivo.current && entradaArchivo.current.click()} className="text-[11px] font-semibold px-3 py-1.5 rounded-full bg-violet-50 text-violet-700">📊 Importar desde Excel</button>
+              <input ref={entradaArchivo} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={elegirArchivo} data-testid="archivo-excel" />
+            </div>
             {columnaCurso && cursos.length > 0 && (
               <div className="flex items-center gap-2 mb-3">
                 <label className="text-[11px] text-slate-500">Mostrar:</label>
                 <select value={filtroCurso} onChange={(e) => setFiltroCurso(e.target.value)} className="text-xs rounded-lg px-2.5 py-1.5 border border-slate-200 bg-white">
                   <option value="todos">Todas las misiones</option><option value="generales">🌐 Solo las de todos los cursos</option>
+                  {niveles.map((n) => <option key={n} value={claveNivel(n)}>📚 Lo que ve {nombreNivel(n).toLowerCase()} (todos sus cursos)</option>)}
                   {cursos.map((c) => <option key={c} value={c}>🏫 Lo que ve el curso {c}</option>)}
                 </select>
               </div>
@@ -250,7 +301,7 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
                       <div className="min-w-0 flex-1">
                         <div className="text-sm font-bold text-slate-800 truncate">{m.titulo}{!m.activo && <span className="ml-2 text-[10px] font-bold text-slate-500 bg-slate-200 rounded-full px-2 py-0.5">OCULTA</span>}</div>
                         <div className="text-[11px] text-slate-500">{l.emoji} {l.nombre} · {m.npc_nombre} · ✨ {m.xp} XP · 🪙 {m.oro}</div>
-                        <div className="text-[11px] mt-0.5"><span className={`rounded-full px-2 py-0.5 font-semibold ${m.grado_id ? "bg-sky-50 text-sky-700" : "bg-slate-100 text-slate-500"}`}>{m.grado_id ? `🏫 ${etiquetaCurso(m.grado_id)}` : "🌐 Todos los cursos"}</span>{m.zona && m.zona !== "aldea" && zonaPorClave(m.zona) && <span className="ml-1.5 rounded-full px-2 py-0.5 font-semibold bg-emerald-50 text-emerald-700">{zonaPorClave(m.zona).emoji} {zonaPorClave(m.zona).nombre}</span>}</div>
+                        <div className="text-[11px] mt-0.5"><span className={`rounded-full px-2 py-0.5 font-semibold ${m.grado_id ? "bg-sky-50 text-sky-700" : "bg-slate-100 text-slate-500"}`}>{m.grado_id ? `${esNivel(m.grado_id) ? "📚" : "🏫"} ${etiquetaPara(m.grado_id)}` : "🌐 Todos los cursos"}</span>{m.zona && m.zona !== "aldea" && zonaPorClave(m.zona) && <span className="ml-1.5 rounded-full px-2 py-0.5 font-semibold bg-emerald-50 text-emerald-700">{zonaPorClave(m.zona).emoji} {zonaPorClave(m.zona).nombre}</span>}</div>
                         <div className="text-[11px] text-emerald-600 font-semibold mt-0.5">✅ {n} estudiante{n === 1 ? "" : "s"} {n === 1 ? "la completó" : "la completaron"}</div>
                       </div>
                       <div className="flex flex-wrap gap-1 justify-end shrink-0">
@@ -617,6 +668,51 @@ function PanelRetos({ misiones }) {
       <div className="flex items-center gap-3 justify-end">
         {aviso && <span className="text-xs font-semibold text-emerald-600">{aviso}</span>}
         <button type="button" onClick={guardar} disabled={guardando} className="text-sm font-bold px-5 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">{guardando ? "Guardando…" : "Guardar retadores"}</button>
+      </div>
+    </div>
+  );
+}
+
+
+// ----- La revisión de un Excel antes de guardar: qué se crea, qué se actualiza, qué tiene errores -----
+function RevisionImportacion({ analisis, archivo, aplicando, onCancelar, onAplicar }) {
+  const { filas, resumen } = analisis;
+  const aplicables = resumen.nuevas + resumen.actualizadas;
+  const estado = { nueva: ["✅", "Nueva", "bg-emerald-50 text-emerald-700"], actualiza: ["🔄", "Se actualiza", "bg-sky-50 text-sky-700"], igual: ["＝", "Sin cambios", "bg-slate-100 text-slate-500"], error: ["❌", "Con error", "bg-rose-50 text-rose-700"] };
+  return (
+    <div>
+      <h4 className="text-sm font-bold text-slate-800 mb-1">📊 Revisar antes de importar</h4>
+      <p className="text-[11px] text-slate-400 mb-3">Archivo: {archivo}. Todavía no se guardó nada.</p>
+      <div className="flex flex-wrap gap-1.5 mb-3" data-testid="resumen-importacion">
+        <span className="text-xs font-semibold rounded-full px-3 py-1 bg-emerald-50 text-emerald-700">✅ {resumen.nuevas} nueva{resumen.nuevas === 1 ? "" : "s"}</span>
+        <span className="text-xs font-semibold rounded-full px-3 py-1 bg-sky-50 text-sky-700">🔄 {resumen.actualizadas} para actualizar</span>
+        <span className="text-xs font-semibold rounded-full px-3 py-1 bg-slate-100 text-slate-500">＝ {resumen.iguales} sin cambios</span>
+        <span className={`text-xs font-semibold rounded-full px-3 py-1 ${resumen.errores ? "bg-rose-50 text-rose-700" : "bg-slate-100 text-slate-400"}`}>❌ {resumen.errores} con error</span>
+        {resumen.ocultas > 0 && <span className="text-xs font-semibold rounded-full px-3 py-1 bg-amber-50 text-amber-700">🙈 {resumen.ocultas} quedarán ocultas</span>}
+        {resumen.ejemplos > 0 && <span className="text-xs rounded-full px-3 py-1 bg-slate-100 text-slate-400">{resumen.ejemplos} de ejemplo ignorada{resumen.ejemplos === 1 ? "" : "s"}</span>}
+      </div>
+      {resumen.errores > 0 && <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-2.5 mb-3">Las filas con error <b>no se importan</b>. Corrígelas en el Excel y vuelve a importar el mismo archivo: lo que ya está guardado no se duplica.</div>}
+      {filas.length === 0 && <p className="text-sm text-slate-400 py-4 text-center">No hay filas para importar (solo ejemplos o filas vacías).</p>}
+      <div className="max-h-72 overflow-y-auto rounded-xl border border-slate-200 divide-y divide-slate-100 mb-3" data-testid="filas-importacion">
+        {filas.map((f) => {
+          const [icono, texto, color] = estado[f.estado];
+          return (
+            <div key={f.fila} className="px-3 py-2 text-xs">
+              <div className="flex items-start gap-2">
+                <span className="text-slate-400 w-12 shrink-0">Fila {f.fila}</span>
+                <span className={`rounded-full px-2 py-0.5 font-semibold shrink-0 ${color}`}>{icono} {texto}</span>
+                <span className="font-semibold text-slate-700 min-w-0 truncate">{f.titulo || "(sin título)"}</span>
+              </div>
+              {f.errores.map((e, i) => <div key={i} className="text-rose-600 mt-1 ml-14">• {e}</div>)}
+              {f.avisos.map((a, i) => <div key={i} className="text-amber-700 mt-1 ml-14">• {a}</div>)}
+            </div>
+          );
+        })}
+      </div>
+      {aplicando && <div className="text-xs text-slate-500 mb-2" data-testid="progreso-importacion">Guardando… {aplicando.hecho} de {aplicando.total}</div>}
+      <div className="flex gap-2 justify-end">
+        <button type="button" onClick={onCancelar} disabled={!!aplicando} className="text-sm text-slate-500 px-4 py-2 disabled:opacity-40">Cancelar</button>
+        <button type="button" onClick={onAplicar} disabled={!!aplicando || aplicables === 0} className="text-sm font-bold px-5 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-40">{aplicando ? "Guardando…" : aplicables === 0 ? "Nada para importar" : `Importar ${aplicables} ${aplicables === 1 ? "misión" : "misiones"}`}</button>
       </div>
     </div>
   );
