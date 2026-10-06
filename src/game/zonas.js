@@ -11,6 +11,8 @@
 export const ZONAS = [
   {
     key: "aldea", nombre: "Aldea del Códice", emoji: "🏘️", corto: "la Aldea", de: "de la Aldea", a: "a la Aldea",
+    insignia: { nombre: "Insignia de la Comunidad", emoji: "🏅", color: "#f59e0b" },
+    guardian: { nombre: "Maestra Aldana", titulo: "Guardiana de la Aldea", sprite: "maestro_gremio_femenino", reto: "Conoces bien nuestra aldea. ¿Conoces también sus valores? ¡Demuéstralo!" },
     lugares: [
       { key: "biblioteca", emoji: "📚", nombre: "Biblioteca" },
       { key: "agora", emoji: "⚖️", nombre: "Ágora de la Ética" },
@@ -22,6 +24,8 @@ export const ZONAS = [
   },
   {
     key: "bosque", nombre: "Bosque de la Curiosidad", emoji: "🌲", corto: "el Bosque", de: "del Bosque", a: "al Bosque", guardia: "Guardia del Bosque", previa: "aldea", requisitoPorDefecto: 3,
+    insignia: { nombre: "Insignia de la Curiosidad", emoji: "🌿", color: "#22c55e" },
+    guardian: { nombre: "Silvano", titulo: "Guardián del Bosque", sprite: "cronista_masculino", reto: "El bosque premia a quien pregunta. ¿Tienes la curiosidad y el saber para vencerme?" },
     lugares: [
       { key: "claro", emoji: "🌼", nombre: "Claro del Bosque" },
       { key: "arroyo", emoji: "💧", nombre: "Arroyo Cantarino" },
@@ -30,6 +34,8 @@ export const ZONAS = [
   },
   {
     key: "montana", nombre: "Montaña del Esfuerzo", emoji: "🏔️", corto: "la Montaña", de: "de la Montaña", a: "a la Montaña", guardia: "Guardia de la Montaña", previa: "bosque", requisitoPorDefecto: 3,
+    insignia: { nombre: "Insignia del Esfuerzo", emoji: "⛰️", color: "#64748b" },
+    guardian: { nombre: "Roca", titulo: "Guardián de la Montaña", sprite: "guardian_masculino", reto: "Nadie llega a mi cumbre sin esfuerzo. ¡Veamos de qué estás hecho!" },
     lugares: [
       { key: "sendero", emoji: "🥾", nombre: "Sendero de Piedra" },
       { key: "cueva", emoji: "🕳️", nombre: "Cueva del Eco" },
@@ -38,6 +44,8 @@ export const ZONAS = [
   },
   {
     key: "lago", nombre: "Lago de la Reflexión", emoji: "🏞️", corto: "el Lago", de: "del Lago", a: "al Lago", guardia: "Guardia del Lago", previa: "montana", requisitoPorDefecto: 3,
+    insignia: { nombre: "Insignia de la Reflexión", emoji: "💧", color: "#0ea5e9" },
+    guardian: { nombre: "Marisol", titulo: "Guardiana del Lago", sprite: "consejero_femenino", reto: "Aquí se piensa antes de responder. ¿Estás listo para el último reto?" },
     lugares: [
       { key: "orilla", emoji: "🏖️", nombre: "Orilla" },
       { key: "muelle", emoji: "🛶", nombre: "Muelle" },
@@ -57,19 +65,24 @@ export const zonaDeMision = (m) => (m && m.zona && zonaPorClave(m.zona) ? m.zona
 //   hechas    : ids de las que ya completó
 //   abiertas  : claves de las zonas que la docente abrió para su curso
 //   requisitos: { zona: cantidad } que pidió la docente (si falta, se usa el valor por defecto)
-export function estadoZonas({ misiones = [], hechas = [], abiertas = [], requisitos = {} } = {}) {
+//   insignias : claves de las zonas cuya insignia ya ganó (venciendo al Guardián)
+//   exigen    : { zona: true } si la docente exige la insignia de ESA zona para pasar a la siguiente
+export function estadoZonas({ misiones = [], hechas = [], abiertas = [], requisitos = {}, insignias = [], exigen = {} } = {}) {
   const hs = hechas instanceof Set ? hechas : new Set(hechas);
   const ab = abiertas instanceof Set ? abiertas : new Set(abiertas);
+  const ins = insignias instanceof Set ? insignias : new Set(insignias);
   const out = {};
   for (const z of ZONAS) {
-    if (!z.previa) { out[z.key] = { zona: z.key, abierta: true, requeridas: 0, pedidas: 0, hechasPrevia: 0, totalPrevia: 0, cumplido: true, desbloqueada: true }; continue; }
+    const tieneInsignia = ins.has(z.key);
+    if (!z.previa) { out[z.key] = { zona: z.key, abierta: true, requeridas: 0, pedidas: 0, hechasPrevia: 0, totalPrevia: 0, cumplido: true, exigeInsignia: false, insigniaOk: true, tieneInsignia, desbloqueada: true }; continue; }
     const previas = misiones.filter((m) => zonaDeMision(m) === z.previa);
     const total = previas.length, hechasPrevia = previas.filter((m) => hs.has(m.id)).length;
     const pedidasCfg = requisitos && requisitos[z.key] != null ? Number(requisitos[z.key]) : NaN;
     const pedidas = Number.isFinite(pedidasCfg) ? Math.max(0, Math.floor(pedidasCfg)) : z.requisitoPorDefecto;
     const requeridas = Math.min(pedidas, total); // si hay menos misiones que las pedidas, alcanza con completarlas todas: nadie queda trabado
     const cumplido = hechasPrevia >= requeridas, abierta = ab.has(z.key);
-    out[z.key] = { zona: z.key, previa: z.previa, abierta, pedidas, requeridas, hechasPrevia, totalPrevia: total, cumplido, desbloqueada: abierta && out[z.previa].desbloqueada && cumplido };
+    const exigeInsignia = !!(exigen && exigen[z.previa]), insigniaOk = !exigeInsignia || ins.has(z.previa);
+    out[z.key] = { zona: z.key, previa: z.previa, abierta, pedidas, requeridas, hechasPrevia, totalPrevia: total, cumplido, exigeInsignia, insigniaOk, tieneInsignia, desbloqueada: abierta && out[z.previa].desbloqueada && cumplido && insigniaOk };
   }
   return out;
 }
