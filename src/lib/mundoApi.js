@@ -1,5 +1,5 @@
 import { supabase } from "./supabaseClient";
-import { zonaDeMision } from "../game/zonas";
+import { zonaDeMision, ZONAS } from "../game/zonas";
 
 // Todo lo que el Mundo CÓDICE necesita de la base de datos: las misiones del mundo, cuáles
 // ya completó cada estudiante, y entregar el premio (XP y monedas) al completarlas.
@@ -152,7 +152,7 @@ export const CONFIG_POSADA_DEFECTO = { posada_activa: 1, posada_costo: 15, posad
 export async function fetchConfigMundo() {
   const { data, error } = await supabase.from("mundo_config").select("*");
   if (error) throw error;
-  const cfg = { ...CONFIG_POSADA_DEFECTO };
+  const cfg = { ...CONFIG_POSADA_DEFECTO, ...CONFIG_DUELO_DEFECTO };
   (data || []).forEach((f) => { if (f.clave in cfg && Number.isFinite(Number(f.valor))) cfg[f.clave] = Number(f.valor); });
   return cfg;
 }
@@ -190,4 +190,81 @@ export async function descansarEnPosada(estudianteId) {
   // 2) queda en el historial (si esto falla no se deshace el descanso: ya se cobró y se recuperó)
   try { await supabase.from("historial_gamificacion").insert({ estudiante_id: estudianteId, etiqueta: "🛏️ Posada del Descanso", xp: 0, vida: plan.restaura, monedas: -plan.costo, categoria: "general" }); } catch { /* el historial es secundario */ }
   return { ok: true, vida: typeof fila?.vida === "number" ? fila.vida : vida + plan.restaura, monedas: typeof fila?.monedas === "number" ? fila.monedas : monedas - plan.costo, restaurado: plan.restaura, costo: plan.costo };
+}
+
+// =====================================================================================
+//  DUELOS CON LOS GUARDIANES E INSIGNIAS
+//  Cada zona tiene un Guardián. Al vencerlo por primera vez, el estudiante gana la insignia de la zona
+//  (una sola vez) y un premio. Lo que vale lo decide siempre la base de datos, no el navegador.
+// =====================================================================================
+export const CONFIG_DUELO_DEFECTO = {
+  duelo_activo: 1, duelo_aciertos: 4, duelo_vidas: 3, duelo_espera_min: 0, duelo_xp: 40, duelo_oro: 20,
+  duelo_banco_aldea: 0, duelo_banco_bosque: 0, duelo_banco_montana: 0, duelo_banco_lago: 0,
+  duelo_exige_aldea: 0, duelo_exige_bosque: 0, duelo_exige_montana: 0,
+};
+
+// Todo lo que necesita el juego para los duelos de UN estudiante. Si todavía no existen las tablas (SQL 66), falla
+// y el mundo se queda sin Guardianes.
+export async function fetchDuelosMundo(estudianteId) {
+  const cfg = await fetchConfigMundo();
+  const [ins, intentos] = await Promise.all([
+    supabase.from("mundo_insignias").select("zona").eq("estudiante_id", estudianteId),
+    supabase.from("mundo_duelos").select("zona, creado_en").eq("estudiante_id", estudianteId).eq("ganado", false).order("creado_en", { ascending: false }).limit(60),
+  ]);
+  if (ins.error) throw ins.error;
+  const insignias = (ins.data || []).map((f) => f.zona);
+  // espera tras perder: se cuenta desde la última derrota de cada zona
+  const esperaHasta = {};
+  if (cfg.duelo_espera_min > 0 && !intentos.error) {
+    for (const f of intentos.data || []) { if (f.zona in esperaHasta) continue; const t = Date.parse(f.creado_en) + cfg.duelo_espera_min * 60000; esperaHasta[f.zona] = t > Date.now() ? t : 0; }
+  }
+  // preguntas extra: la categoría de Preguntados que la docente asignó a cada zona
+  const bancos = {};
+  await Promise.all(ZONAS.filter((z) => cfg[`duelo_banco_${z.key}`] > 0).map(async (z) => {
+    const { data } = await supabase.from("trivia_preguntas").select("pregunta, opciones, correcta").eq("categoria_id", cfg[`duelo_banco_${z.key}`]).eq("activa", true).limit(80);
+    bancos[z.key] = data || [];
+  }));
+  const exige = {}; ZONAS.forEach((z) => { exige[z.key] = cfg[`duelo_exige_${z.key}`] === 1; });
+  return { activo: cfg.duelo_activo === 1, aciertos: Math.max(1, cfg.duelo_aciertos), vidas: Math.max(1, cfg.duelo_vidas), esperaMin: Math.max(0, cfg.duelo_espera_min), premio: { xp: cfg.duelo_xp, oro: cfg.duelo_oro }, exige, bancos, insignias, esperaHasta };
+}
+
+// Registra el resultado de un duelo.
+//  - Perder: queda anotado (para la espera).
+//  - Ganar: se otorga la insignia (única por estudiante y zona) y el premio SOLO la primera vez.
+//    Si el premio falla, se deshace la insignia para poder reintentar (no se pierde nada).
+export async function registrarDuelo(estudianteId, zona, { ganado, aciertos = 0, errores = 0 }) {
+  try { await supabase.from("mundo_duelos").insert({ estudiante_id: estudianteId, zona, ganado: !!ganado, aciertos, errores }); } catch { /* el intento es secundario */ }
+  if (!ganado) return { ok: true };
+  const { error: eIns } = await supabase.from("mundo_insignias").insert({ estudiante_id: estudianteId, zona });
+  if (eIns) {
+    if (eIns.code === "23505" || /duplicate|unique/i.test(eIns.message || "")) return { ok: true, yaTenia: true }; // ya la tenía: sin premio doble
+    throw eIns;
+  }
+  const cfg = await fetchConfigMundo(), xp = cfg.duelo_xp, oro = cfg.duelo_oro;
+  if (xp || oro) {
+    const { error } = await supabase.rpc("ajustar_progreso", { p_estudiante_id: estudianteId, p_delta_xp: xp, p_delta_vida: 0, p_delta_monedas: oro });
+    if (error) { await supabase.from("mundo_insignias").delete().eq("estudiante_id", estudianteId).eq("zona", zona); throw error; }
+    try { await supabase.from("historial_gamificacion").insert({ estudiante_id: estudianteId, etiqueta: `🏅 Insignia: ${(ZONAS.find((z) => z.key === zona) || {}).insignia?.nombre || zona}`, xp, vida: 0, monedas: oro, categoria: "general" }); } catch { /* el historial es secundario */ }
+  }
+  return { ok: true, xp, oro };
+}
+
+// ----- para el editor de la docente -----
+// Las categorías de Preguntados con cuántas preguntas activas tienen.
+export async function fetchCategoriasParaDuelo() {
+  const [cats, pregs] = await Promise.all([
+    supabase.from("trivia_categorias").select("id, nombre, emoji").eq("activa", true).order("id"),
+    supabase.from("trivia_preguntas").select("categoria_id").eq("activa", true),
+  ]);
+  if (cats.error) throw cats.error;
+  const cuenta = {}; (pregs.data || []).forEach((p) => { cuenta[p.categoria_id] = (cuenta[p.categoria_id] || 0) + 1; });
+  return (cats.data || []).map((c) => ({ id: c.id, nombre: c.nombre, emoji: c.emoji || "❓", preguntas: cuenta[c.id] || 0 }));
+}
+
+// Cuántos estudiantes ganaron la insignia de cada zona: { zona: cantidad }
+export async function fetchInsigniasResumen() {
+  const { data, error } = await supabase.from("mundo_insignias").select("zona");
+  if (error) throw error;
+  const r = {}; (data || []).forEach((f) => { r[f.zona] = (r[f.zona] || 0) + 1; });
+  return r;
 }
