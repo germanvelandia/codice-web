@@ -24,7 +24,7 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
   useNivelesPersonaje(); // para que el nivel se actualice si cambian en "Editar niveles"
 
   const cargar = async () => {
-    const [pers, mej, mis, hec, zon, pos, due, ret, rec, par] = await Promise.allSettled([api.fetchPersonajeElegido(idEst), api.fetchMejorasDeEstudiante(idEst), mundoApi.fetchMisionesMundo(estudianteInfo.grado_id), mundoApi.fetchHechasMundo(idEst), mundoApi.fetchZonasMundo(estudianteInfo.grado_id), mundoApi.fetchPosadaMundo(), mundoApi.fetchDuelosMundo(idEst), mundoApi.fetchRetosMundo(idEst), mundoApi.fetchRecolectaMundo(idEst), mundoApi.fetchParcelaMundo(idEst)]);
+    const [pers, mej, mis, hec, zon, pos, due, ret, rec, par, aci] = await Promise.allSettled([api.fetchPersonajeElegido(idEst), api.fetchMejorasDeEstudiante(idEst), mundoApi.fetchMisionesMundo(estudianteInfo.grado_id), mundoApi.fetchHechasMundo(idEst), mundoApi.fetchZonasMundo(estudianteInfo.grado_id), mundoApi.fetchPosadaMundo(), mundoApi.fetchDuelosMundo(idEst), mundoApi.fetchRetosMundo(idEst), mundoApi.fetchRecolectaMundo(idEst), mundoApi.fetchParcelaMundo(idEst), mundoApi.fetchAcertijosMundo(idEst, estudianteInfo.grado_id)]);
     // El "modo prueba" es SOLO para cuando todavía no se corrió el SQL 62 (no existen las tablas).
     // Si las tablas existen pero el curso no tiene misiones, el mundo funciona normal, sin misiones.
     const hayTablas = mis.status === "fulfilled" && hec.status === "fulfilled";
@@ -46,6 +46,8 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
       recolecta: rec.status === "fulfilled" && hayTablas ? rec.value : { activo: false },
       // Sin el SQL 69 (o sin modo real) no hay parcela.
       parcela: par.status === "fulfilled" && hayTablas ? par.value : { activo: false },
+      // Sin el SQL 70 (o sin modo real) las mesas de la Casa de los Acertijos quedan "no disponibles".
+      acertijos: aci.status === "fulfilled" && hayTablas ? aci.value : { activo: false },
     });
     setCargando(false);
   };
@@ -76,6 +78,7 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
           alDescansar: () => mundoApi.descansarEnPosada(idEst),
           recolecta: info.recolecta, alRecolectar: (r) => mundoApi.recolectarRecurso(idEst, r), alFabricar: (r) => mundoApi.fabricarEnMundo(idEst, r.receta), alUsar: (r) => mundoApi.usarItemMundo(idEst, r),
           parcela: info.parcela, alColocar: (r) => mundoApi.colocarEnParcela(idEst, r), alQuitar: (r) => mundoApi.quitarDeParcela(idEst, r),
+          acertijos: info.acertijos, alAcertijo: (r) => mundoApi.completarAcertijoMundo(idEst, r),
           alCompletar: async (m) => (info.modoPrueba ? { ok: true } : mundoApi.completarMisionMundo(idEst, m)),
           alSalir: () => { setJugando(false); },
         });
@@ -92,7 +95,8 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
       mundoApi.fetchDuelosMundo(idEst).then((d) => setInfo((i) => (i && !i.modoPrueba ? { ...i, duelos: d } : i))).catch(() => {});
       mundoApi.fetchRetosMundo(idEst).then((r) => setInfo((i) => (i && !i.modoPrueba ? { ...i, retos: r } : i))).catch(() => {});
       mundoApi.fetchRecolectaMundo(idEst).then((c) => setInfo((i) => (i && !i.modoPrueba ? { ...i, recolecta: c } : i))).catch(() => {});
-      mundoApi.fetchParcelaMundo(idEst).then((pc) => setInfo((i) => (i && !i.modoPrueba ? { ...i, parcela: pc } : i))).catch(() => {}); } // las insignias que ganó mientras jugaba
+      mundoApi.fetchParcelaMundo(idEst).then((pc) => setInfo((i) => (i && !i.modoPrueba ? { ...i, parcela: pc } : i))).catch(() => {});
+      mundoApi.fetchAcertijosMundo(idEst, estudianteInfo.grado_id).then((a) => setInfo((i) => (i && !i.modoPrueba ? { ...i, acertijos: a } : i))).catch(() => {}); } // las insignias que ganó mientras jugaba
   }, [jugando]);
 
   if (cargando) return <p className="text-sm text-slate-400">Preparando el mundo…</p>;
