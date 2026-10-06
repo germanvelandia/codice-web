@@ -24,7 +24,7 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
   useNivelesPersonaje(); // para que el nivel se actualice si cambian en "Editar niveles"
 
   const cargar = async () => {
-    const [pers, mej, mis, hec, zon, pos, due] = await Promise.allSettled([api.fetchPersonajeElegido(idEst), api.fetchMejorasDeEstudiante(idEst), mundoApi.fetchMisionesMundo(estudianteInfo.grado_id), mundoApi.fetchHechasMundo(idEst), mundoApi.fetchZonasMundo(estudianteInfo.grado_id), mundoApi.fetchPosadaMundo(), mundoApi.fetchDuelosMundo(idEst)]);
+    const [pers, mej, mis, hec, zon, pos, due, ret] = await Promise.allSettled([api.fetchPersonajeElegido(idEst), api.fetchMejorasDeEstudiante(idEst), mundoApi.fetchMisionesMundo(estudianteInfo.grado_id), mundoApi.fetchHechasMundo(idEst), mundoApi.fetchZonasMundo(estudianteInfo.grado_id), mundoApi.fetchPosadaMundo(), mundoApi.fetchDuelosMundo(idEst), mundoApi.fetchRetosMundo(idEst)]);
     // El "modo prueba" es SOLO para cuando todavía no se corrió el SQL 62 (no existen las tablas).
     // Si las tablas existen pero el curso no tiene misiones, el mundo funciona normal, sin misiones.
     const hayTablas = mis.status === "fulfilled" && hec.status === "fulfilled";
@@ -40,6 +40,8 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
       posada: pos.status === "fulfilled" ? pos.value : { activa: false, costo: 15, vida: 25 },
       // Sin el SQL 66 (o sin modo real) no hay Guardianes ni se exige ninguna insignia.
       duelos: due.status === "fulfilled" && hayTablas ? due.value : { activo: false, insignias: [], exige: {} },
+      // Sin el SQL 67 (o sin modo real) no hay retadores.
+      retos: ret.status === "fulfilled" && hayTablas ? ret.value : { activo: false },
     });
     setCargando(false);
   };
@@ -66,6 +68,7 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
           },
           zonasAbiertas: info.zonasAbiertas, zonasRequisitos: info.zonasRequisitos, posada: info.posada, duelos: info.duelos,
           alDuelo: (r) => mundoApi.registrarDuelo(idEst, r.zona, r),
+          retos: info.retos, alReto: (r) => mundoApi.registrarReto(idEst, r), // el daño y el premio los calcula la base de datos
           alDescansar: () => mundoApi.descansarEnPosada(idEst),
           alCompletar: async (m) => (info.modoPrueba ? { ok: true } : mundoApi.completarMisionMundo(idEst, m)),
           alSalir: () => { setJugando(false); },
@@ -80,7 +83,8 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
   useEffect(() => { // al salir del mundo se refresca el progreso del portal y las misiones hechas
     if (jugando) { salioDelJuego.current = true; return; }
     if (salioDelJuego.current) { salioDelJuego.current = false; onProgreso && onProgreso(); mundoApi.fetchHechasMundo(idEst).then((hec) => setInfo((i) => (i && !i.modoPrueba ? { ...i, hechas: hec } : i))).catch(() => {});
-      mundoApi.fetchDuelosMundo(idEst).then((d) => setInfo((i) => (i && !i.modoPrueba ? { ...i, duelos: d } : i))).catch(() => {}); } // las insignias que ganó mientras jugaba
+      mundoApi.fetchDuelosMundo(idEst).then((d) => setInfo((i) => (i && !i.modoPrueba ? { ...i, duelos: d } : i))).catch(() => {});
+      mundoApi.fetchRetosMundo(idEst).then((r) => setInfo((i) => (i && !i.modoPrueba ? { ...i, retos: r } : i))).catch(() => {}); } // las insignias que ganó mientras jugaba
   }, [jugando]);
 
   if (cargando) return <p className="text-sm text-slate-400">Preparando el mundo…</p>;
