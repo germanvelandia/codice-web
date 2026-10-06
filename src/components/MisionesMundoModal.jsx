@@ -110,7 +110,7 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
     try { await mundoApi.eliminarMisionMundo(m.id); await cargar(); mostrarAviso("Borrada"); } catch (er) { setError("No se pudo borrar: " + er.message); }
   };
 
-  const lista = misiones.filter((m) => (filtro === "todos" || m.lugar === filtro) && (filtroCurso === "todos" || (filtroCurso === "generales" ? !m.grado_id : !m.grado_id || String(m.grado_id) === filtroCurso)));
+  const lista = misiones.filter((m) => (filtro === "todos" || m.zona === filtro) && (filtroCurso === "todos" || (filtroCurso === "generales" ? !m.grado_id : !m.grado_id || String(m.grado_id) === filtroCurso)));
   const input = "w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white";
   const sinTabla = /does not exist|relation|schema cache/i.test(error);
 
@@ -127,12 +127,15 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
           <div className="inline-flex gap-1 rounded-full bg-slate-100 p-1 mb-3">
             <button type="button" onClick={() => setPestana("misiones")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "misiones" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🎯 Misiones</button>
             <button type="button" onClick={() => setPestana("zonas")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "zonas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🗺️ Zonas</button>
+            <button type="button" onClick={() => setPestana("posada")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "posada" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🛏️ Posada</button>
           </div>
         )}
         {sinTabla ? (
           <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">Todavía no se crearon las tablas de las misiones. Corre <b>62_mundo.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</div>
         ) : cargando ? (
           <p className="text-sm text-slate-400">Cargando…</p>
+        ) : pestana === "posada" && !editando ? (
+          <PanelPosada />
         ) : pestana === "zonas" && !editando ? (
           <PanelZonas cursos={grados.length ? grados.map((g) => String(g.id)) : cursos} />
         ) : editando ? (
@@ -214,8 +217,8 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
           <div>
             <div className="flex flex-wrap items-center gap-1.5 mb-3">
               <button type="button" onClick={() => setFiltro("todos")} className={`text-xs px-3 py-1.5 rounded-full ${filtro === "todos" ? "bg-violet-500 text-white" : "bg-slate-100 text-slate-600"}`}>Todas ({misiones.length})</button>
-              {LUGARES.map((l) => (
-                <button key={l.key} type="button" onClick={() => setFiltro(l.key)} className={`text-xs px-3 py-1.5 rounded-full ${filtro === l.key ? "bg-violet-500 text-white" : "bg-slate-100 text-slate-600"}`}>{l.emoji} {l.nombre.split(" ")[0]} ({misiones.filter((m) => m.lugar === l.key).length})</button>
+              {ZONAS.map((z) => (
+                <button key={z.key} type="button" onClick={() => setFiltro(z.key)} className={`text-xs px-3 py-1.5 rounded-full ${filtro === z.key ? "bg-violet-500 text-white" : "bg-slate-100 text-slate-600"}`}>{z.emoji} {z.nombre.split(" ")[0]} ({misiones.filter((m) => m.zona === z.key).length})</button>
               ))}
               <div className="flex-1" />
               {aviso && <span className="text-xs font-semibold text-emerald-600">{aviso}</span>}
@@ -231,7 +234,7 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
               </div>
             )}
             {error && <div className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-2.5 mb-3">{error}</div>}
-            {lista.length === 0 && <p className="text-sm text-slate-400 py-6 text-center">No hay misiones {filtro === "todos" ? "todavía" : "en este lugar"}. Crea la primera con "+ Nueva misión".</p>}
+            {lista.length === 0 && <p className="text-sm text-slate-400 py-6 text-center">No hay misiones {filtro === "todos" ? "todavía" : "en esta zona"}. Crea la primera con "+ Nueva misión".</p>}
             <div className="space-y-2">
               {lista.map((m) => {
                 const l = nombreLugar(m.lugar), n = conteo[m.id] || 0;
@@ -318,7 +321,7 @@ function PanelZonas({ cursos }) {
         return (
           <div key={z.key} className="rounded-xl border border-slate-200 p-4 mb-3">
             <div className="text-sm font-bold text-slate-800 mb-1">{z.emoji} {z.nombre}</div>
-            <div className="text-[11px] text-slate-500 mb-3">Se entra desde {previa.emoji} {previa.nombre} por el portón del este.</div>
+            <div className="text-[11px] text-slate-500 mb-3">Se entra desde {previa.emoji} {previa.nombre} por el portón del este. {previa.previa && <>El estudiante también tiene que haber llegado a {previa.nombre}.</>}</div>
             <div className="flex flex-wrap items-center gap-2 mb-4">
               <label className="text-xs text-slate-600">Misiones de {previa.nombre} que hay que completar:</label>
               <input type="number" min="0" max="20" value={req[z.key] ?? ""} onChange={(e) => setReq((r) => ({ ...r, [z.key]: e.target.value }))} className="w-20 text-sm rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none bg-white" aria-label={`Misiones requeridas para ${z.nombre}`} />
@@ -346,6 +349,70 @@ function PanelZonas({ cursos }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+
+// ----- Pestaña "Posada": abrirla o cerrarla, cuánto cuesta descansar y cuánta vida da -----
+function PanelPosada() {
+  const [cfg, setCfg] = useState(null);                 // { activa, costo, vida } como texto, para poder escribir
+  const [error, setError] = useState("");
+  const [aviso, setAviso] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const relojAviso = useRef(null);
+  useEffect(() => () => clearTimeout(relojAviso.current), []);
+  const cargar = async () => {
+    try { const c = await mundoApi.fetchConfigMundo(); setCfg({ activa: c.posada_activa === 1, costo: String(c.posada_costo), vida: String(c.posada_vida) }); setError(""); }
+    catch (e) { setError(e.message || "No se pudo cargar la posada."); }
+  };
+  useEffect(() => { cargar(); }, []);
+
+  if (error && !cfg) {
+    const sin = /does not exist|relation|schema cache/i.test(error);
+    return <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">{sin ? <>Todavía no se creó la configuración de la posada. Corre <b>65_mundo_posada_y_zonas.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</> : error}</div>;
+  }
+  if (!cfg) return <p className="text-sm text-slate-400">Cargando…</p>;
+
+  const costo = Number(cfg.costo), vida = Number(cfg.vida);
+  const valido = cfg.costo !== "" && Number.isInteger(costo) && costo >= 0 && costo <= 1000 && cfg.vida !== "" && Number.isInteger(vida) && vida >= 1 && vida <= mundoApi.VIDA_MAX;
+  const ejemplo = (v) => mundoApi.planDeDescanso(v, { costo, vida });
+  const guardar = async () => {
+    if (!valido) { setError(`El costo tiene que ser un número entero entre 0 y 1000, y la vida entre 1 y ${mundoApi.VIDA_MAX}.`); return; }
+    setGuardando(true); setError("");
+    try {
+      await mundoApi.guardarConfigMundo("posada_activa", cfg.activa ? 1 : 0); await mundoApi.guardarConfigMundo("posada_costo", costo); await mundoApi.guardarConfigMundo("posada_vida", vida);
+      setAviso("Guardado ✓"); clearTimeout(relojAviso.current); relojAviso.current = setTimeout(() => setAviso(""), 2400);
+    } catch (e) { setError("No se pudo guardar: " + (e.message || "error desconocido")); }
+    setGuardando(false);
+  };
+  const input = "w-24 text-sm rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none bg-white";
+  const ej60 = valido ? ejemplo(60) : null, ej95 = valido ? ejemplo(95) : null;
+
+  return (
+    <div>
+      <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 leading-relaxed">
+        La <b>🛏️ Posada del Descanso</b> está en la aldea. Ahí los estudiantes recuperan <b>vida</b> a cambio de <b>oro</b>. Vos decidís si está abierta, cuánto cuesta y cuánta vida da.
+        La vida y el oro se descuentan de verdad en su progreso, y queda anotado en su historial.
+      </div>
+      {error && <div className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-2.5 mb-3">{error}</div>}
+      <div className="rounded-xl border border-slate-200 p-4">
+        <label className="flex items-center gap-2 text-sm font-semibold text-slate-800 mb-4"><input type="checkbox" checked={cfg.activa} onChange={(e) => setCfg((c) => ({ ...c, activa: e.target.checked }))} /> La posada está abierta</label>
+        <div className="flex flex-wrap items-center gap-2 mb-2 text-sm text-slate-700">
+          Recuperar <input type="number" min="1" max={mundoApi.VIDA_MAX} value={cfg.vida} onChange={(e) => setCfg((c) => ({ ...c, vida: e.target.value }))} className={input} aria-label="Vida que se recupera" /> ❤️ de vida cuesta
+          <input type="number" min="0" max="1000" value={cfg.costo} onChange={(e) => setCfg((c) => ({ ...c, costo: e.target.value }))} className={input} aria-label="Monedas que cuesta" /> 🪙
+        </div>
+        <p className="text-[11px] text-slate-400 mb-3">Si al estudiante le falta menos vida de la que se recupera, paga proporcional (nunca de más). Poné 0 monedas para que descansar sea gratis.</p>
+        {valido && (
+          <div className="text-xs text-slate-600 bg-violet-50 rounded-lg p-3 mb-3" data-testid="ejemplo-posada">
+            <b>Ejemplos:</b> con 60 de vida, descansa y recupera <b>{ej60.restaura} ❤️</b> por <b>{ej60.costo} 🪙</b>. Con 95 de vida, recupera <b>{ej95.restaura} ❤️</b> por <b>{ej95.costo} 🪙</b>.
+          </div>
+        )}
+        <div className="flex items-center gap-3 justify-end">
+          {aviso && <span className="text-xs font-semibold text-emerald-600">{aviso}</span>}
+          <button type="button" onClick={guardar} disabled={guardando} className="text-sm font-bold px-5 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">{guardando ? "Guardando…" : "Guardar"}</button>
+        </div>
+      </div>
     </div>
   );
 }
