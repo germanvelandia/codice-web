@@ -6,6 +6,7 @@ import { ITEMS, RECETAS } from "../game/items";
 import { TIPOS_ACERTIJO, CLAVES_TIPO, validarContenido } from "../game/acertijos";
 import { ESCENAS_SECRETO, OBJETOS_SECRETO, MIN_OPCIONES as MIN_OPC_SEC, MAX_OPCIONES as MAX_OPC_SEC, nombreEscena, validarSecreto } from "../game/secretos";
 import { LLAVES, TEXTO_PRUEBA, validarConfigLlaves } from "../game/llaves";
+import { TIPOS as TIPOS_MON, CLAVES_TIPO as CLAVES_TIPO_MON, NIVEL_MAX as NIVEL_MAX_MON } from "../game/monstruos";
 import { planEdicion, coincideBusqueda } from "../lib/edicionMasiva";
 import { aObjetos, analizarImportacion, filasParaExportar, filasPlantilla, crearLibro, leerLibro } from "../lib/importarMisiones";
 
@@ -205,12 +206,15 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
             <button type="button" onClick={() => setPestana("secretos")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "secretos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🔎 Secretos</button>
             <button type="button" onClick={() => setPestana("comarca")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "comarca" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🏰 Comarca</button>
             <button type="button" onClick={() => setPestana("llaves")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "llaves" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🗝️ Llaves</button>
+            <button type="button" onClick={() => setPestana("monstruos")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "monstruos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🐲 Monstruos</button>
           </div>
         )}
         {sinTabla ? (
           <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">Todavía no se crearon las tablas de las misiones. Corre <b>62_mundo.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</div>
         ) : cargando ? (
           <p className="text-sm text-slate-400">Cargando…</p>
+        ) : pestana === "monstruos" && !editando ? (
+          <PanelMonstruos />
         ) : pestana === "llaves" && !editando ? (
           <PanelLlaves />
         ) : pestana === "comarca" && !editando ? (
@@ -1095,6 +1099,75 @@ function PanelLlaves() {
       <div className="flex items-center gap-3 justify-end">
         {aviso && <span className="text-xs font-semibold text-emerald-600">{aviso}</span>}
         <button type="button" onClick={guardar} disabled={guardando} className="text-sm font-bold px-5 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">{guardando ? "Guardando…" : "Guardar llaves"}</button>
+      </div>
+    </div>
+  );
+}
+
+// ----- Laboratorio de monstruos y duelos (SQL 74) -----
+const CAMPOS_MON = [
+  ["monstruos_equipo_max", "equipoMax", 1, 6, "Monstruos por estudiante (máximo)"],
+  ["monstruos_puntos", "puntos", 4, 40, "Puntos para repartir al crear (vida, ataque, defensa, velocidad)"],
+  ["monstruos_premios_dia", "premiosDia", 0, 50, "Victorias con premio por día (después, solo diversión)"],
+  ["monstruos_xp", "xp", 0, 200, "XP base por victoria (se ajusta según el nivel del rival)"],
+  ["monstruos_oro", "oro", 0, 200, "Oro base por victoria"],
+];
+function PanelMonstruos() {
+  const [f, setF] = useState(null);
+  const [resumen, setResumen] = useState(null);
+  const [error, setError] = useState("");
+  const [aviso, setAviso] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const relojAviso = useRef(null);
+  useEffect(() => () => clearTimeout(relojAviso.current), []);
+  useEffect(() => {
+    (async () => {
+      try {
+        const c = await mundoApi.fetchConfigMundo();
+        const x = { activo: c.monstruos_activo === 1 }; CAMPOS_MON.forEach(([clave, k]) => { x[k] = String(c[clave]); });
+        setF(x);
+      } catch (e) { setError(e.message || "No se pudo cargar la configuración."); return; }
+      mundoApi.fetchMonstruosResumen().then(setResumen).catch(() => setResumen(false));
+    })();
+  }, []);
+  if (error && !f) return <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">{error}</div>;
+  if (!f) return <p className="text-sm text-slate-400">Cargando…</p>;
+  const guardar = async () => {
+    for (const [, k, mn, mx, txt] of CAMPOS_MON) { const n = Number(f[k]); if (f[k] === "" || !Number.isInteger(n) || n < mn || n > mx) { setError(`"${txt}": escribe un número entero entre ${mn} y ${mx}.`); return; } }
+    setGuardando(true); setError("");
+    try {
+      await mundoApi.guardarConfigMundo("monstruos_activo", f.activo ? 1 : 0);
+      for (const [clave, k] of CAMPOS_MON) await mundoApi.guardarConfigMundo(clave, Number(f[k]));
+      setAviso("Guardado ✓"); clearTimeout(relojAviso.current); relojAviso.current = setTimeout(() => setAviso(""), 2400);
+    } catch (er) { setError("No se pudo guardar: " + (er.message || "error desconocido")); }
+    setGuardando(false);
+  };
+  const input = "w-20 text-sm rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none bg-white";
+  return (
+    <div>
+      <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 leading-relaxed">
+        Cada estudiante <b>crea su monstruo</b> en el <b>🧪 Laboratorio</b> de la aldea: elige nombre, aspecto, tipo y reparte puntos. Con él reta a los <b>monstruos salvajes</b> y a los <b>jefes</b> del Bosque, la Montaña y el Lago.
+        <ul className="mt-2 space-y-1">
+          <li>🔥→🌿→⚡→💧→🔥 <b>Tipos:</b> {CLAVES_TIPO_MON.map((t) => `${TIPOS_MON[t].emoji} ${TIPOS_MON[t].nombre} (${TIPOS_MON[t].lema})`).join(" · ")}. Cada tipo pega fuerte al siguiente.</li>
+          <li>📈 <b>Niveles:</b> el monstruo gana XP en cada victoria y sube hasta el nivel {NIVEL_MAX_MON}; cada nivel lo hace más fuerte. Los rivales tienen su propio nivel: ganarle a uno más fuerte da más premio.</li>
+          <li>🎯 <b>Pregunta para atacar:</b> por turnos; el estudiante elige habilidad y responde una pregunta (de tus misiones de la zona) para pegar fuerte. ⚡ <b>Pelea rápida:</b> pelean solos y cada 3 rondas hay una pregunta clave (premio algo menor).</li>
+        </ul>
+        <p className="mt-2">Los resultados los informa el juego (no se pueden verificar), por eso hay un <b>tope diario</b> de victorias con premio. El premio de XP y oro cuenta como cualquier otra actividad del mundo.</p>
+      </div>
+      {resumen === false && <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3 mb-3">Todavía no se crearon las tablas de los monstruos. Corre <b>74_mundo_monstruos.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</div>}
+      {error && <div className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-2.5 mb-3">{error}</div>}
+      {resumen && <div className="text-[11px] text-slate-500 mb-3" data-testid="resumen-monstruos">🐲 {resumen.monstruos} {resumen.monstruos === 1 ? "monstruo creado" : "monstruos creados"} por {resumen.estudiantes} {resumen.estudiantes === 1 ? "estudiante" : "estudiantes"} · ⚔️ {resumen.duelos} duelos ({resumen.victorias} victorias) · {CLAVES_TIPO_MON.map((t) => `${TIPOS_MON[t].emoji} ${resumen.porTipo[t] || 0}`).join(" · ")}</div>}
+      <div className="rounded-xl border border-slate-200 p-4 mb-3">
+        <label className="flex items-center gap-2 text-sm font-semibold text-slate-800 mb-3"><input type="checkbox" checked={f.activo} onChange={(e) => setF((x) => ({ ...x, activo: e.target.checked }))} /> El Laboratorio y los duelos de monstruos están activos</label>
+        <div className="space-y-2">
+          {CAMPOS_MON.map(([clave, k, mn, mx, txt]) => (
+            <label key={clave} className="flex flex-wrap items-center gap-2 text-sm text-slate-700"><input type="number" min={mn} max={mx} value={f[k]} onChange={(e) => setF((x) => ({ ...x, [k]: e.target.value }))} className={input} aria-label={txt} /> {txt}</label>
+          ))}
+        </div>
+      </div>
+      <div className="flex items-center gap-3 justify-end">
+        {aviso && <span className="text-xs font-semibold text-emerald-600">{aviso}</span>}
+        <button type="button" onClick={guardar} disabled={guardando} className="text-sm font-bold px-5 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">{guardando ? "Guardando…" : "Guardar monstruos"}</button>
       </div>
     </div>
   );
