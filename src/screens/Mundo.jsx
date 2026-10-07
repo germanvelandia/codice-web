@@ -24,7 +24,7 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
   useNivelesPersonaje(); // para que el nivel se actualice si cambian en "Editar niveles"
 
   const cargar = async () => {
-    const [pers, mej, mis, hec, zon, pos, due, ret, rec, par, aci, sec, com, llv, mon] = await Promise.allSettled([api.fetchPersonajeElegido(idEst), api.fetchMejorasDeEstudiante(idEst), mundoApi.fetchMisionesMundo(estudianteInfo.grado_id), mundoApi.fetchHechasMundo(idEst), mundoApi.fetchZonasMundo(estudianteInfo.grado_id), mundoApi.fetchPosadaMundo(), mundoApi.fetchDuelosMundo(idEst), mundoApi.fetchRetosMundo(idEst), mundoApi.fetchRecolectaMundo(idEst), mundoApi.fetchParcelaMundo(idEst), mundoApi.fetchAcertijosMundo(idEst, estudianteInfo.grado_id), mundoApi.fetchSecretosMundo(idEst, estudianteInfo.grado_id), mundoApi.fetchComarcaMundo(idEst), mundoApi.fetchLlavesMundo(idEst), mundoApi.fetchMonstruosMundo(idEst, estudianteInfo.grado_id)]);
+    const [pers, mej, mis, hec, zon, pos, due, ret, rec, par, aci, sec, com, llv, mon, evt] = await Promise.allSettled([api.fetchPersonajeElegido(idEst), api.fetchMejorasDeEstudiante(idEst), mundoApi.fetchMisionesMundo(estudianteInfo.grado_id), mundoApi.fetchHechasMundo(idEst), mundoApi.fetchZonasMundo(estudianteInfo.grado_id), mundoApi.fetchPosadaMundo(), mundoApi.fetchDuelosMundo(idEst), mundoApi.fetchRetosMundo(idEst), mundoApi.fetchRecolectaMundo(idEst), mundoApi.fetchParcelaMundo(idEst), mundoApi.fetchAcertijosMundo(idEst, estudianteInfo.grado_id), mundoApi.fetchSecretosMundo(idEst, estudianteInfo.grado_id), mundoApi.fetchComarcaMundo(idEst), mundoApi.fetchLlavesMundo(idEst), mundoApi.fetchMonstruosMundo(idEst, estudianteInfo.grado_id), mundoApi.fetchEventoMundo(idEst, estudianteInfo.grado_id)]);
     // El "modo prueba" es SOLO para cuando todavía no se corrió el SQL 62 (no existen las tablas).
     // Si las tablas existen pero el curso no tiene misiones, el mundo funciona normal, sin misiones.
     const hayTablas = mis.status === "fulfilled" && hec.status === "fulfilled";
@@ -56,6 +56,8 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
       comarca: com.status === "fulfilled" && hayTablas ? com.value : { activo: false },
       // Sin el SQL 74 (o sin modo real) no hay Laboratorio ni monstruos.
       monstruos: mon.status === "fulfilled" && hayTablas ? mon.value : { activo: false },
+      // Sin el SQL 77 (o sin modo real) no hay eventos temporales.
+      eventos: evt.status === "fulfilled" && hayTablas ? evt.value : { activo: false, evento: null },
     });
     setCargando(false);
   };
@@ -92,6 +94,7 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
           monstruos: info.monstruos, alCrearMonstruo: (c) => mundoApi.crearMonstruoMundo(idEst, c), alMonstruo: (r) => mundoApi.registrarDueloMonstruo(idEst, r, estudianteInfo.grado_id),
           alRivales: () => mundoApi.fetchRivalesMundo(idEst), alLiga: () => mundoApi.fetchLigaMundo(idEst, estudianteInfo.grado_id),
           alAdoptarMonstruo: (r) => mundoApi.adoptarMonstruoMundo(idEst, r, estudianteInfo.grado_id), alCapturar: (r) => mundoApi.capturarMonstruoMundo(idEst, r),
+          eventos: info.eventos, alEvento: (r) => mundoApi.responderEventoMundo(idEst, r, estudianteInfo.grado_id),
           comarca: info.comarca, alComarca: () => mundoApi.fetchComarcaMundo(idEst), alBatalla: (r) => mundoApi.batallaComarca(idEst, r),
           alCompletar: async (m) => (info.modoPrueba ? { ok: true } : mundoApi.completarMisionMundo(idEst, m)),
           alSalir: () => { setJugando(false); },
@@ -114,6 +117,7 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
       mundoApi.fetchSecretosMundo(idEst, estudianteInfo.grado_id).then((x) => setInfo((i) => (i && !i.modoPrueba ? { ...i, secretos: x } : i))).catch(() => {});
       mundoApi.fetchLlavesMundo(idEst).then((l) => setInfo((i) => (i && !i.modoPrueba ? { ...i, llaves: l } : i))).catch(() => {});
       mundoApi.fetchMonstruosMundo(idEst, estudianteInfo.grado_id).then((m) => setInfo((i) => (i && !i.modoPrueba ? { ...i, monstruos: m } : i))).catch(() => {});
+      mundoApi.fetchEventoMundo(idEst, estudianteInfo.grado_id).then((e) => setInfo((i) => (i && !i.modoPrueba ? { ...i, eventos: e } : i))).catch(() => {});
       mundoApi.fetchComarcaMundo(idEst).then((c) => setInfo((i) => (i && !i.modoPrueba ? { ...i, comarca: c } : i))).catch(() => {}); } // las insignias que ganó mientras jugaba
   }, [jugando]);
 
