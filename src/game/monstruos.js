@@ -14,6 +14,9 @@ export const CONFIG_MONSTRUOS_DEFECTO = {
   monstruos_oro: 6,           // monedas por victoria
   monstruos_captura_activo: 1, // se puede intentar capturar al salvaje que se derrota
   monstruos_capturas_dia: 3,   // capturas por día (las que salen bien)
+  monstruos_pvp_activo: 1,     // la Arena: duelos contra la copia del monstruo de un compañero
+  monstruos_pvp_dia: 5,        // victorias con premio por día en la Arena
+  monstruos_pvp_pct: 60,       // % del premio normal que da ganar en la Arena
 };
 
 // Cada tipo es fuerte contra el siguiente: Fuego → Planta → Electricidad → Agua → Fuego
@@ -193,5 +196,31 @@ export function validarCaptura(c) {
   let u = 0;
   for (const k of ESTATS) { const v = Number(c.puntos && c.puntos[k]); if (!Number.isInteger(v) || v < 0 || v > MAX_PUNTOS_POR_ESTAT) return "Puntos inválidos."; u += v; }
   if (u < 1 || u > 40) return "Puntos inválidos.";
+  return "";
+}
+
+// ---- Fase E3/E4: Arena (duelo contra la copia del monstruo de un compañero) y ligas ----
+export const PUNTOS_LIGA = { victoria: 3, derrota: 1 };
+// Solo cuenta el primer duelo del día contra cada rival (así nadie suma puntos repitiendo el mismo duelo)
+export const puntosLiga = ({ ganado, primeraDelDia }) => (!primeraDelDia ? 0 : ganado ? PUNTOS_LIGA.victoria : PUNTOS_LIGA.derrota);
+// La configuración con la que se calcula el premio de la Arena: un porcentaje del premio normal y su propio tope diario
+export function cfgArena(cfg) {
+  const pct = Math.max(0, Math.min(100, ent(cfg.monstruos_pvp_pct, CONFIG_MONSTRUOS_DEFECTO.monstruos_pvp_pct)));
+  return { ...cfg, monstruos_xp: Math.round(ent(cfg.monstruos_xp) * pct / 100), monstruos_oro: Math.round(ent(cfg.monstruos_oro) * pct / 100), monstruos_premios_dia: ent(cfg.monstruos_pvp_dia, CONFIG_MONSTRUOS_DEFECTO.monstruos_pvp_dia) };
+}
+// Tabla de posiciones: más puntos, luego más victorias, luego menos duelos jugados, luego nombre
+export function ordenarTabla(filas) {
+  return [...filas].sort((a, b) => b.puntos - a.puntos || b.victorias - a.victorias || a.duelos - b.duelos || String(a.nombre).localeCompare(String(b.nombre), "es")).map((f, i) => ({ ...f, puesto: i + 1 }));
+}
+// Premio del 1.º, 2.º y 3.º puesto (100 %, 60 % y 40 % del premio base de la liga)
+export const PORCENTAJE_PUESTO = { 1: 100, 2: 60, 3: 40 };
+export const premioPuesto = (base, puesto) => { const pc = PORCENTAJE_PUESTO[puesto] || 0; return { xp: Math.round(ent(base.xp) * pc / 100), oro: Math.round(ent(base.oro) * pc / 100) }; };
+export function validarLiga(c) {
+  const nombre = txt(c && c.nombre);
+  if (nombre.length < 3) return "Ponle un nombre a la liga (al menos 3 letras).";
+  if (nombre.length > 40) return "El nombre es muy largo (máximo 40 letras).";
+  if (!txt(c.grado_id)) return "Elige el curso de la liga.";
+  for (const [k, t] of [["premio_xp", "El premio de XP"], ["premio_oro", "El premio de oro"]]) { const v = Number(c[k]); if (!Number.isInteger(v) || v < 0 || v > 1000) return `${t} va de 0 a 1000.`; }
+  if (c.fin) { const d = new Date(c.fin); if (Number.isNaN(d.getTime())) return "La fecha de cierre no es válida."; }
   return "";
 }
