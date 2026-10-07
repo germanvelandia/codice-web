@@ -1117,12 +1117,12 @@ export async function iniciarMundo(raiz, op) {
   const rand = rng(4242);
 
   // ---- colisiones (sirven para el jugador y para los aldeanos) ----
-  function chocaEn(esc, x, y) {
+  function chocaEn(esc, x, y, yo) {
     const bx = x - 6, by = y - 8, bw = 12, bh = 8;
     if (esc.bloqueado(bx, by) || esc.bloqueado(bx + bw, by) || esc.bloqueado(bx, by + bh) || esc.bloqueado(bx + bw, by + bh)) return true;
     for (const o of esc.obstaculos) if (bx < o.x + o.w && bx + bw > o.x && by < o.y + o.h && by + bh > o.y) return true;
     for (const p of esc.portones || []) if (!p.abierto && bx < p.bloqueo.x + p.bloqueo.w && bx + bw > p.bloqueo.x && by < p.bloqueo.y + p.bloqueo.h && by + bh > p.bloqueo.y) return true; // portón cerrado
-    for (const n of esc.npcs) if (n.solido && bx < n.x + 13 && bx + bw > n.x - 13 && by < n.y + 3 && by + bh > n.y - 12) return true; // zona sólida de los personajes de misión: los vecinos no se les encimen
+    for (const n of esc.npcs) if (n !== yo && n.solido && bx < n.x + 13 && bx + bw > n.x - 13 && by < n.y + 3 && by + bh > n.y - 12) return true; // zona sólida de los personajes de misión: los vecinos no se les encimen
     return false;
   }
 
@@ -1966,15 +1966,27 @@ export async function iniciarMundo(raiz, op) {
     if (dx && !chocaEn(estado.escena, estado.x + dx, estado.y)) estado.x += dx;
     if (dy && !chocaEn(estado.escena, estado.x, estado.y + dy)) estado.y += dy;
   }
+  // Todos los personajes se mueven: los aldeanos recorren la zona; los demás (misiones, guardianes, guardias, posadera, heraldo, retadores) dan pasitos
+  // alrededor de su sitio (a lo sumo RADIO_PASEO píxeles), para que sigan siendo fáciles de encontrar. Se quedan quietos mientras hablas con ellos o si estás cerca.
+  const RADIO_PASEO = { mision: 26, posadero: 20, comarca_heraldo: 24, guardian: 22, retador: 14, guardia: 12 };
   function moverAldeano(v, esc, dt) {
+    const R = v.tipo === "aldeano" ? Infinity : RADIO_PASEO[v.tipo];
+    if (!R || !v.clave) return;
     if (v.hablando) { v.caminando = false; return; }
+    if (R !== Infinity && !v.casa) v.casa = { x: v.x, y: v.y };
+    const cerca = R !== Infinity && Math.hypot(v.x - estado.x, v.y - estado.y) < 70;     // te recibe quieto y mirándote
+    if (cerca) { v.caminando = false; v.meta = null; return; }
     if (v.pausa > 0) { v.pausa -= dt; v.caminando = false; return; }
-    if (!v.meta) { const a = rand() * 6.283, d = 40 + rand() * 120; v.meta = { x: v.x + Math.cos(a) * d, y: v.y + Math.sin(a) * d }; }
+    if (!v.meta) {
+      if (R === Infinity) { const a = rand() * 6.283, d = 40 + rand() * 120; v.meta = { x: v.x + Math.cos(a) * d, y: v.y + Math.sin(a) * d }; }
+      else { const a = rand() * 6.283, d = R * (0.3 + 0.7 * rand()); v.meta = { x: v.casa.x + Math.cos(a) * d, y: v.casa.y + Math.sin(a) * d }; }
+    }
     const vx = v.meta.x - v.x, vy = v.meta.y - v.y, dist = Math.hypot(vx, vy);
-    if (dist < 4) { v.meta = null; v.pausa = 1 + rand() * 3; v.caminando = false; return; }
-    const paso = 38 * dt, dx = (vx / dist) * paso, dy = (vy / dist) * paso, px = v.x, py = v.y; let movio = false;
-    if (!chocaEn(esc, v.x + dx, v.y)) { v.x += dx; movio = true; }
-    if (!chocaEn(esc, v.x, v.y + dy)) { v.y += dy; movio = true; }
+    if (dist < 3) { v.meta = null; v.pausa = (R === Infinity ? 1 : 2) + rand() * (R === Infinity ? 3 : 4); v.caminando = false; return; }
+    const vel = R === Infinity ? 38 : 28, paso = Math.min(vel * dt, dist), dx = (vx / dist) * paso, dy = (vy / dist) * paso, px = v.x, py = v.y; let movio = false;
+    const libre = (x, y) => !chocaEn(esc, x, y, v) && Math.hypot(x - estado.x, y - estado.y) > 26;   // sin chocar con nada ni encimarse al jugador
+    if (libre(v.x + dx, v.y)) { v.x += dx; movio = true; }
+    if (libre(v.x, v.y + dy)) { v.y += dy; movio = true; }
     v.caminando = movio; v.dir = direccionDe(vx, vy); v.fasePaso = (v.fasePaso || 0) + Math.hypot(v.x - px, v.y - py) / LARGO_PASO;
     if (!movio) { v.meta = null; v.pausa = 0.4 + rand(); }
   }
@@ -2000,7 +2012,7 @@ export async function iniciarMundo(raiz, op) {
     // salida de los edificios (caminar hacia la puerta)
     if (!estado.cambiando) { const sal = esc.salidas.find((s) => estado.x > s.x && estado.x < s.x + s.w && estado.y > s.y && estado.y < s.y + s.h && (!s.activa || s.activa())); if (sal) (sal.accion || salirDeEdificio)(); }
     // personajes
-    for (const n of esc.npcs) if (n.tipo === "aldeano") moverAldeano(n, esc, dt);
+    for (const n of esc.npcs) if (n.clave && n.tipo !== "puerta") moverAldeano(n, esc, dt);
     for (const n of esc.npcs) if ((n.hablando || Math.hypot(n.x - estado.x, n.y - estado.y) < 90) && n.tipo !== "puerta") { if (n.tipo === "mision" || n.tipo === "guardia" || n.tipo === "comarca_heraldo" || n.tipo === "posadero" || n.tipo === "guardian" || n.tipo === "retador" || n.hablando) n.dir = direccionDe(estado.x - n.x, estado.y - n.y); }
     // emboscada: un retador te corta el paso si te acercas demasiado (si lo cierras o huyes, te deja en paz un rato)
     if (R && !bloqueada) for (const n of esc.npcs) {
