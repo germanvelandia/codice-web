@@ -6,7 +6,7 @@ import { ITEMS, RECETAS } from "../game/items";
 import { TIPOS_ACERTIJO, CLAVES_TIPO, validarContenido } from "../game/acertijos";
 import { ESCENAS_SECRETO, OBJETOS_SECRETO, MIN_OPCIONES as MIN_OPC_SEC, MAX_OPCIONES as MAX_OPC_SEC, nombreEscena, validarSecreto } from "../game/secretos";
 import { LLAVES, TEXTO_PRUEBA, validarConfigLlaves } from "../game/llaves";
-import { TIPOS as TIPOS_MON, CLAVES_TIPO as CLAVES_TIPO_MON, NIVEL_MAX as NIVEL_MAX_MON, EMOJIS_MONSTRUO, ESTATS as ESTATS_MON, NOMBRE_ESTAT as NOMBRE_ESTAT_MON, MAX_PUNTOS_POR_ESTAT as MAX_PTS_MON, CATALOGO_NIVEL_MAX, puntosUsados as puntosUsadosMon, validarCatalogo, statsDe as statsMon } from "../game/monstruos";
+import { TIPOS as TIPOS_MON, CLAVES_TIPO as CLAVES_TIPO_MON, NIVEL_MAX as NIVEL_MAX_MON, EMOJIS_MONSTRUO, ESTATS as ESTATS_MON, NOMBRE_ESTAT as NOMBRE_ESTAT_MON, MAX_PUNTOS_POR_ESTAT as MAX_PTS_MON, CATALOGO_NIVEL_MAX, puntosUsados as puntosUsadosMon, validarCatalogo, statsDe as statsMon, validarLiga, PUNTOS_LIGA, PORCENTAJE_PUESTO } from "../game/monstruos";
 import { planEdicion, coincideBusqueda } from "../lib/edicionMasiva";
 import { aObjetos, analizarImportacion, filasParaExportar, filasPlantilla, crearLibro, leerLibro } from "../lib/importarMisiones";
 
@@ -30,7 +30,7 @@ const aForm = (m) => ({ grado_id: m.grado_id ? String(m.grado_id) : "", zona: m.
 const MENU_MUNDO = [
   { id: "contenido", icono: "📚", nombre: "Contenido", ayuda: "Lo que los estudiantes responden: preguntas con personajes, acertijos y misiones ocultas.", tabs: [["misiones", "🎯 Misiones"], ["acertijos", "🧩 Acertijos"], ["secretos", "🔎 Secretos"]] },
   { id: "mapa", icono: "🗺️", nombre: "Mapa y recursos", ayuda: "Qué zonas están abiertas, qué se puede recolectar y dónde se recuperan.", tabs: [["zonas", "🗺️ Zonas"], ["recursos", "🎒 Recursos"], ["posada", "🛏️ Posada"]] },
-  { id: "combate", icono: "⚔️", nombre: "Combate", ayuda: "Guardianes, retadores y monstruos: los duelos del mundo.", tabs: [["duelos", "⚔️ Guardianes"], ["retos", "☠️ Retadores"], ["monstruos", "🐲 Monstruos"]] },
+  { id: "combate", icono: "⚔️", nombre: "Combate", ayuda: "Guardianes, retadores, monstruos y ligas: los duelos del mundo.", tabs: [["duelos", "⚔️ Guardianes"], ["retos", "☠️ Retadores"], ["monstruos", "🐲 Monstruos"], ["ligas", "🏆 Ligas"]] },
   { id: "aventura", icono: "🏰", nombre: "Aventura", ayuda: "Metas grandes: reinos de la Comarca y las tres llaves de la Cámara del Códice.", tabs: [["comarca", "🏰 Comarca"], ["llaves", "🗝️ Llaves"]] },
 ];
 
@@ -224,6 +224,8 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
           <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">Todavía no se crearon las tablas de las misiones. Corre <b>62_mundo.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</div>
         ) : cargando ? (
           <p className="text-sm text-slate-400">Cargando…</p>
+        ) : pestana === "ligas" && !editando ? (
+          <PanelLigas cursos={cursos} />
         ) : pestana === "monstruos" && !editando ? (
           <PanelMonstruos cursos={cursos} niveles={niveles} />
         ) : pestana === "llaves" && !editando ? (
@@ -1123,6 +1125,8 @@ const CAMPOS_MON = [
   ["monstruos_xp", "xp", 0, 200, "XP base por victoria (se ajusta según el nivel del rival)"],
   ["monstruos_oro", "oro", 0, 200, "Oro base por victoria"],
   ["monstruos_capturas_dia", "capturasDia", 0, 20, "Capturas de salvajes por día (por estudiante)"],
+  ["monstruos_pvp_dia", "pvpDia", 0, 50, "Arena: victorias con premio por día"],
+  ["monstruos_pvp_pct", "pvpPct", 0, 100, "Arena: % del premio normal que da ganarle a un compañero"],
 ];
 function PanelMonstruos({ cursos = [], niveles = [] }) {
   const [f, setF] = useState(null);
@@ -1136,7 +1140,7 @@ function PanelMonstruos({ cursos = [], niveles = [] }) {
     (async () => {
       try {
         const c = await mundoApi.fetchConfigMundo();
-        const x = { activo: c.monstruos_activo === 1, captura: c.monstruos_captura_activo === 1, puntosCfg: c.monstruos_puntos }; CAMPOS_MON.forEach(([clave, k]) => { x[k] = String(c[clave]); });
+        const x = { activo: c.monstruos_activo === 1, captura: c.monstruos_captura_activo === 1, pvp: c.monstruos_pvp_activo === 1, puntosCfg: c.monstruos_puntos }; CAMPOS_MON.forEach(([clave, k]) => { x[k] = String(c[clave]); });
         setF(x);
       } catch (e) { setError(e.message || "No se pudo cargar la configuración."); return; }
       mundoApi.fetchMonstruosResumen().then(setResumen).catch(() => setResumen(false));
@@ -1150,6 +1154,7 @@ function PanelMonstruos({ cursos = [], niveles = [] }) {
     try {
       await mundoApi.guardarConfigMundo("monstruos_activo", f.activo ? 1 : 0);
       await mundoApi.guardarConfigMundo("monstruos_captura_activo", f.captura ? 1 : 0);
+      await mundoApi.guardarConfigMundo("monstruos_pvp_activo", f.pvp ? 1 : 0);
       for (const [clave, k] of CAMPOS_MON) await mundoApi.guardarConfigMundo(clave, Number(f[k]));
       setAviso("Guardado ✓"); clearTimeout(relojAviso.current); relojAviso.current = setTimeout(() => setAviso(""), 2400);
     } catch (er) { setError("No se pudo guardar: " + (er.message || "error desconocido")); }
@@ -1164,6 +1169,7 @@ function PanelMonstruos({ cursos = [], niveles = [] }) {
           <li>🔥→🌿→⚡→💧→🔥 <b>Tipos:</b> {CLAVES_TIPO_MON.map((t) => `${TIPOS_MON[t].emoji} ${TIPOS_MON[t].nombre} (${TIPOS_MON[t].lema})`).join(" · ")}. Cada tipo pega fuerte al siguiente.</li>
           <li>📈 <b>Niveles:</b> el monstruo gana XP en cada victoria y sube hasta el nivel {NIVEL_MAX_MON}; cada nivel lo hace más fuerte. Los rivales tienen su propio nivel: ganarle a uno más fuerte da más premio.</li>
           <li>🎯 <b>Pregunta para atacar:</b> por turnos; el estudiante elige habilidad y responde una pregunta (de tus misiones de la zona) para pegar fuerte. ⚡ <b>Pelea rápida:</b> pelean solos y cada 3 rondas hay una pregunta clave (premio algo menor).</li>
+        <li>⚔️ <b>Arena (en el Laboratorio):</b> el estudiante pelea contra una <b>copia</b> del monstruo de un compañero de su curso, sin que el compañero esté conectado. El premio es un porcentaje del normal, con su propio tope diario y una sola vez por rival cada día. Las ligas de la pestaña 🏆 suman puntos con estos duelos.</li>
         </ul>
         <p className="mt-2">Los resultados los informa el juego (no se pueden verificar), por eso hay un <b>tope diario</b> de victorias con premio. El premio de XP y oro cuenta como cualquier otra actividad del mundo.</p>
       </div>
@@ -1173,6 +1179,7 @@ function PanelMonstruos({ cursos = [], niveles = [] }) {
       <div className="rounded-xl border border-slate-200 p-4 mb-3">
         <label className="flex items-center gap-2 text-sm font-semibold text-slate-800 mb-3"><input type="checkbox" checked={f.activo} onChange={(e) => setF((x) => ({ ...x, activo: e.target.checked }))} /> El Laboratorio y los duelos de monstruos están activos</label>
         <label className="flex items-center gap-2 text-sm font-semibold text-slate-800 mb-3"><input type="checkbox" checked={f.captura} onChange={(e) => setF((x) => ({ ...x, captura: e.target.checked }))} /> 🎯 Se puede intentar capturar a los salvajes después de vencerlos (los jefes no)</label>
+        <label className="flex items-center gap-2 text-sm font-semibold text-slate-800 mb-3"><input type="checkbox" checked={f.pvp} onChange={(e) => setF((x) => ({ ...x, pvp: e.target.checked }))} /> ⚔️ La Arena está abierta: duelos contra la copia del monstruo de un compañero</label>
         <div className="space-y-2">
           {CAMPOS_MON.map(([clave, k, mn, mx, txt]) => (
             <label key={clave} className="flex flex-wrap items-center gap-2 text-sm text-slate-700"><input type="number" min={mn} max={mx} value={f[k]} onChange={(e) => setF((x) => ({ ...x, [k]: e.target.value }))} className={input} aria-label={txt} /> {txt}</label>
@@ -1272,6 +1279,99 @@ function CatalogoMonstruos({ cursos, niveles, puntos }) {
               <button type="button" onClick={() => alternar(x)} className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600">{x.activo ? "Ocultar" : "Mostrar"}</button>
               <button type="button" onClick={() => borrar(x)} className="px-2.5 py-1.5 rounded-lg border border-rose-200 text-rose-600">Quitar</button>
             </div>
+          </li>))}</ul>
+      )}
+    </div>
+  );
+}
+
+// ----- Ligas de monstruos (SQL 76): una liga por curso; los duelos de la Arena suman puntos; la docente la cierra y premia al podio -----
+function PanelLigas({ cursos = [] }) {
+  const vacio = () => ({ nombre: "", grado_id: cursos[0] || "", fin: "", premio_xp: "100", premio_oro: "50" });
+  const [ligas, setLigas] = useState(null);
+  const [form, setForm] = useState(null);
+  const [tablas, setTablas] = useState({});
+  const [error, setError] = useState("");
+  const [aviso, setAviso] = useState("");
+  const [ocupada, setOcupada] = useState(false);
+  const relojAviso = useRef(null);
+  useEffect(() => () => clearTimeout(relojAviso.current), []);
+  const cargar = async () => { try { setLigas(await mundoApi.fetchLigasAdmin()); setError(""); } catch (e) { setLigas(false); setError(e.message || "No se pudieron cargar las ligas."); } };
+  useEffect(() => { cargar(); }, []);
+  const mostrarAviso = (t) => { setAviso(t); clearTimeout(relojAviso.current); relojAviso.current = setTimeout(() => setAviso(""), 3000); };
+  const input = "w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white";
+  const set = (k, v) => setForm((x) => ({ ...x, [k]: v }));
+  const crear = async () => {
+    const campos = { ...form, premio_xp: Number(form.premio_xp), premio_oro: Number(form.premio_oro), fin: form.fin ? `${form.fin}T23:59:59-05:00` : "" };
+    const e = validarLiga(campos); if (e) { setError(e); return; }
+    setOcupada(true); setError("");
+    try { await mundoApi.crearLiga(campos); await cargar(); setForm(null); mostrarAviso("Liga abierta ✓ Los duelos de la Arena ya suman puntos."); } catch (er) { setError("No se pudo crear: " + (er.message || "error")); }
+    setOcupada(false);
+  };
+  const verTabla = async (l) => {
+    if (tablas[l.id]) { setTablas((t) => { const c = { ...t }; delete c[l.id]; return c; }); return; }
+    try { const t = await mundoApi.fetchTablaLiga(l); setTablas((x) => ({ ...x, [l.id]: t })); } catch (er) { setError("No se pudo cargar la tabla: " + er.message); }
+  };
+  const cerrar = async (l) => {
+    if (!confirm(`¿Cerrar la liga "${l.nombre}" y premiar al podio?\n\nLos premios se entregan ahora (1.º ${l.premio.xp} XP y ${l.premio.oro} oro; 2.º 60 %; 3.º 40 %). Después ya no suma más puntos.`)) return;
+    setOcupada(true); setError("");
+    try { const r = await mundoApi.cerrarLiga(l.id); await cargar(); if (r.ok) mostrarAviso(r.ganadores.length ? "Liga cerrada y premios entregados 🏆" : "Liga cerrada (nadie sumó puntos, no hubo premios)"); else setError(`La liga se cerró, pero faltan ${r.pendientes ?? ""} premios por entregar (${r.mensaje}). Usa "Entregar premios pendientes".`); } catch (er) { setError("No se pudo cerrar: " + er.message); }
+    setOcupada(false);
+  };
+  const entregar = async (l) => {
+    setOcupada(true); setError("");
+    try { const r = await mundoApi.entregarPremiosLiga(l.id); await cargar(); if (r.ok) mostrarAviso("Premios entregados ✓"); else setError(`Aún faltan premios (${r.mensaje}).`); } catch (er) { setError("No se pudo entregar: " + er.message); }
+    setOcupada(false);
+  };
+  const borrar = async (l) => {
+    if (!confirm(`¿Borrar la liga "${l.nombre}"?${l.estado === "cerrada" ? "\n\nLos premios ya entregados no se tocan." : "\n\nSe pierden sus puntos."}`)) return;
+    try { await mundoApi.eliminarLiga(l.id); await cargar(); mostrarAviso("Liga borrada"); } catch (er) { setError("No se pudo borrar: " + er.message); }
+  };
+  if (ligas === false) return <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">Todavía no se crearon las tablas de las ligas. Corre <b>76_mundo_arena_ligas.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.{error ? ` (${error})` : ""}</div>;
+  if (!ligas) return <p className="text-sm text-slate-400">Cargando…</p>;
+  return (
+    <div data-testid="panel-ligas">
+      <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 leading-relaxed">
+        Una <b>liga</b> es un torneo de la <b>⚔️ Arena</b> para <b>un curso</b>. Mientras está abierta, cada duelo contra un compañero suma puntos: <b>victoria {PUNTOS_LIGA.victoria}</b>, <b>derrota {PUNTOS_LIGA.derrota}</b> (solo cuenta el primer duelo del día contra cada compañero, así nadie suma repitiendo). Los estudiantes ven su puesto y la tabla dentro del juego.
+        <p className="mt-2">Al <b>cerrarla</b> se premia al podio con XP y oro: 🥇 {PORCENTAJE_PUESTO[1]} % · 🥈 {PORCENTAJE_PUESTO[2]} % · 🥉 {PORCENTAJE_PUESTO[3]} % del premio base (solo quienes sumaron puntos). Puedes ponerle una fecha de cierre: después de ella ya no suma, y la cierras tú cuando quieras.</p>
+      </div>
+      {error && <div className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-2.5 mb-3">{error}</div>}
+      {aviso && <div className="text-xs font-semibold text-emerald-600 mb-2">{aviso}</div>}
+      {form ? (
+        <div className="rounded-xl border border-violet-200 bg-violet-50/40 p-4 mb-3">
+          <div className="grid sm:grid-cols-2 gap-3 mb-3">
+            <div className="sm:col-span-2"><label className="text-[11px] text-slate-500 block mb-1">Nombre de la liga</label><input value={form.nombre} maxLength={40} onChange={(e) => set("nombre", e.target.value)} className={input} aria-label="Nombre de la liga" placeholder="Ej: Liga de Otoño" /></div>
+            <div><label className="text-[11px] text-slate-500 block mb-1">Curso</label>
+              <select value={form.grado_id} onChange={(e) => set("grado_id", e.target.value)} className={input} aria-label="Curso de la liga"><option value="">Elige un curso…</option>{cursos.map((c) => <option key={c} value={c}>🏫 {c}</option>)}</select></div>
+            <div><label className="text-[11px] text-slate-500 block mb-1">Cierra el (opcional)</label><input type="date" value={form.fin} onChange={(e) => set("fin", e.target.value)} className={input} aria-label="Fecha de cierre" /></div>
+            <div><label className="text-[11px] text-slate-500 block mb-1">Premio del 1.º · XP</label><input type="number" min="0" max="1000" value={form.premio_xp} onChange={(e) => set("premio_xp", e.target.value)} className={input} aria-label="XP del primer puesto" /></div>
+            <div><label className="text-[11px] text-slate-500 block mb-1">Premio del 1.º · oro</label><input type="number" min="0" max="1000" value={form.premio_oro} onChange={(e) => set("premio_oro", e.target.value)} className={input} aria-label="Oro del primer puesto" /></div>
+          </div>
+          <div className="flex items-center gap-2 justify-end">
+            <button type="button" onClick={() => { setForm(null); setError(""); }} className="text-sm px-4 py-2 rounded-lg border border-slate-200 text-slate-600">Cancelar</button>
+            <button type="button" onClick={crear} disabled={ocupada} className="text-sm font-bold px-5 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">{ocupada ? "Abriendo…" : "Abrir la liga"}</button>
+          </div>
+        </div>
+      ) : <div className="flex justify-end mb-3"><button type="button" onClick={() => { setForm(vacio()); setError(""); }} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-violet-500 text-white">+ Nueva liga</button></div>}
+      {ligas.length === 0 && !form ? <p className="text-xs text-slate-400">Todavía no hay ligas. Abre la primera para que la Arena empiece a sumar puntos.</p> : (
+        <ul className="space-y-2">{ligas.map((l) => (
+          <li key={l.id} className="rounded-xl border border-slate-200 p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xl">🏆</span>
+              <div className="flex-1 min-w-0"><div className="text-sm font-semibold text-slate-800 truncate">{l.nombre}</div>
+                <div className="text-[11px] text-slate-500">Curso {l.grado_id} · {l.estado === "cerrada" ? "cerrada" : l.vigente ? "abierta" : "abierta (fecha vencida: ya no suma)"}{l.fin ? ` · cierra el ${new Date(l.fin).toLocaleDateString("es-CO", { day: "numeric", month: "short" })}` : ""} · 1.º {l.premio.xp} XP + {l.premio.oro} 🪙</div></div>
+              <div className="flex flex-wrap gap-1 text-xs">
+                <button type="button" onClick={() => verTabla(l)} className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600">{tablas[l.id] ? "Ocultar tabla" : "Ver tabla"}</button>
+                {l.estado === "abierta" && <button type="button" onClick={() => cerrar(l)} disabled={ocupada} className="px-2.5 py-1.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 font-semibold disabled:opacity-50">Cerrar y premiar</button>}
+                {l.estado === "cerrada" && l.ganadores.some((g) => !g.entregado) && <button type="button" onClick={() => entregar(l)} disabled={ocupada} className="px-2.5 py-1.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 font-semibold disabled:opacity-50">Entregar premios pendientes</button>}
+                <button type="button" onClick={() => borrar(l)} className="px-2.5 py-1.5 rounded-lg border border-rose-200 text-rose-600">Borrar</button>
+              </div>
+            </div>
+            {l.estado === "cerrada" && <div className="text-[11px] text-slate-600 mt-2">{l.ganadores.length ? l.ganadores.map((g) => `${g.puesto === 1 ? "🥇" : g.puesto === 2 ? "🥈" : "🥉"} ${g.nombre} (${g.puntos} pts, +${g.xp} XP, +${g.oro} 🪙${g.entregado ? "" : " · pendiente"})`).join("  ·  ") : "Nadie sumó puntos: no hubo premios."}</div>}
+            {tablas[l.id] && (
+              <table className="w-full text-xs mt-2" data-testid={`tabla-liga-${l.id}`}><thead><tr className="text-left text-slate-400"><th className="py-1">#</th><th>Estudiante</th><th>Pts</th><th>V</th><th>D</th></tr></thead>
+                <tbody>{tablas[l.id].length === 0 ? <tr><td colSpan={5} className="py-2 text-slate-400">Todavía nadie ha jugado.</td></tr> : tablas[l.id].map((f) => <tr key={f.estudianteId} className="border-t border-slate-100"><td className="py-1">{f.puesto}</td><td>{f.nombre}</td><td className="font-semibold">{f.puntos}</td><td>{f.victorias}</td><td>{f.duelos}</td></tr>)}</tbody></table>
+            )}
           </li>))}</ul>
       )}
     </div>
