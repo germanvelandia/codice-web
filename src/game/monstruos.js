@@ -12,6 +12,8 @@ export const CONFIG_MONSTRUOS_DEFECTO = {
   monstruos_premios_dia: 6,   // victorias por día que dan premio (después se puede seguir peleando por diversión)
   monstruos_xp: 12,           // XP de CÓDICE por victoria (se ajusta por la diferencia de nivel)
   monstruos_oro: 6,           // monedas por victoria
+  monstruos_captura_activo: 1, // se puede intentar capturar al salvaje que se derrota
+  monstruos_capturas_dia: 3,   // capturas por día (las que salen bien)
 };
 
 // Cada tipo es fuerte contra el siguiente: Fuego → Planta → Electricidad → Agua → Fuego
@@ -164,3 +166,32 @@ export function salvajeDe(zona, semilla) {
   return { nombre, tipo, emoji, nivel, puntos, jefe: false };
 }
 export function jefeDe(zona) { const j = JEFES[zona]; return j ? { ...j, puntos: { hp: 8, atk: 6, def: 3, vel: 3 }, jefe: true } : null; }
+
+// ---- Fase E2: catálogo de la docente y captura de salvajes ----
+export const CATALOGO_NIVEL_MAX = 5;   // los monstruos del catálogo empiezan entre el nivel 1 y este
+// Un monstruo del catálogo: igual que uno creado, más el nivel con el que empieza.
+export function validarCatalogo(c, { puntos = CONFIG_MONSTRUOS_DEFECTO.monstruos_puntos } = {}) {
+  const e = validarMonstruo(c, { puntos }); if (e) return e;
+  const n = Number(c.nivel);
+  if (!Number.isInteger(n) || n < 1 || n > CATALOGO_NIVEL_MAX) return `El nivel inicial va de 1 a ${CATALOGO_NIVEL_MAX}.`;
+  return "";
+}
+// Probabilidad de capturar al salvaje (después de ganarle y de acertar la pregunta). Los jefes no se capturan.
+export function probCaptura({ nivelYo, nivelRival, jefe = false }) {
+  if (jefe) return 0;
+  const p = 0.5 + 0.08 * (ent(nivelYo, 1) - ent(nivelRival, 1));
+  return Math.max(0.15, Math.min(0.9, p));
+}
+// El capturado nace con la mitad del nivel del salvaje (mínimo 1)
+export const nivelCapturado = (nivelRival) => Math.max(1, Math.floor(ent(nivelRival, 1) / 2));
+// Valida lo que el juego dice haber capturado (nombre, tipo, emoji y puntos; el nivel lo pone el servidor)
+export function validarCaptura(c) {
+  const nombre = txt(c && c.nombre);
+  if (nombre.length < 2 || nombre.length > 20) return "Nombre inválido.";
+  if (!CLAVES_TIPO.includes(c.tipo)) return "Tipo inválido.";
+  if (!EMOJIS_MONSTRUO.includes(c.emoji)) return "Aspecto inválido.";
+  let u = 0;
+  for (const k of ESTATS) { const v = Number(c.puntos && c.puntos[k]); if (!Number.isInteger(v) || v < 0 || v > MAX_PUNTOS_POR_ESTAT) return "Puntos inválidos."; u += v; }
+  if (u < 1 || u > 40) return "Puntos inválidos.";
+  return "";
+}
