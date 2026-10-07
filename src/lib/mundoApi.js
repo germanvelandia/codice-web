@@ -4,7 +4,7 @@ import { misionVisiblePara } from "./gradosMundo";
 import { validarContenido, CLAVES_TIPO } from "../game/acertijos";
 import { CONFIG_COMARCA_DEFECTO, calcularAporte, diaColombia, puedeBatallar } from "../game/comarca";
 import { validarSecreto, limpiarSecreto, secretoJugable } from "../game/secretos";
-import { CONFIG_MONSTRUOS_DEFECTO, validarMonstruo, limpiarMonstruo, nivelDeXp, xpParaNivel, NIVEL_MAX, calcularPremioMonstruo, validarCatalogo, validarCaptura, nivelCapturado } from "../game/monstruos";
+import { CONFIG_MONSTRUOS_DEFECTO, validarMonstruo, limpiarMonstruo, nivelDeXp, xpParaNivel, NIVEL_MAX, calcularPremioMonstruo, validarCatalogo, validarCaptura, nivelCapturado, cfgArena, puntosLiga, ordenarTabla, premioPuesto, validarLiga } from "../game/monstruos";
 import { CONFIG_LLAVES_DEFECTO, LLAVES, llaveDe, puedeConseguir, camaraDesbloqueada } from "../game/llaves";
 import { ITEMS, RECETAS, MAX_POR_ITEM, PARCELA, esDecoracion, celdaValida, puedeFabricar, cantidadPorRecoleccion } from "../game/items";
 
@@ -865,15 +865,15 @@ const inicioDiaColombia = () => `${diaColombia()}T05:00:00Z`;   // la medianoche
 // Lo que necesita el juego de UN estudiante: su equipo y cuántas victorias con premio lleva hoy. Si falta el SQL 74, falla y el mundo se queda sin monstruos.
 export async function fetchMonstruosMundo(estudianteId, gradoId) {
   const cfg = await fetchConfigMundo();
-  const base = { activo: cfg.monstruos_activo === 1, equipoMax: Math.max(1, cfg.monstruos_equipo_max), puntos: Math.max(1, cfg.monstruos_puntos), premiosDia: cfg.monstruos_premios_dia, premio: { xp: cfg.monstruos_xp, oro: cfg.monstruos_oro }, equipo: [], premiosHoy: 0, catalogo: [], captura: { activa: false, dia: cfg.monstruos_capturas_dia, hoy: 0 } };
+  const base = { activo: cfg.monstruos_activo === 1, equipoMax: Math.max(1, cfg.monstruos_equipo_max), puntos: Math.max(1, cfg.monstruos_puntos), premiosDia: cfg.monstruos_premios_dia, premio: { xp: cfg.monstruos_xp, oro: cfg.monstruos_oro }, equipo: [], premiosHoy: 0, arena: { activa: false, dia: 0, pct: 0, hoy: 0 }, catalogo: [], captura: { activa: false, dia: cfg.monstruos_capturas_dia, hoy: 0 } };
   if (!base.activo) return base;
   const [m, d] = await Promise.all([
     supabase.from("mundo_monstruos").select("*").eq("estudiante_id", estudianteId).order("id"),
-    supabase.from("mundo_monstruos_duelos").select("id").eq("estudiante_id", estudianteId).eq("premiado", true).gte("creado_en", inicioDiaColombia()),
+    supabase.from("mundo_monstruos_duelos").select("*").eq("estudiante_id", estudianteId).eq("premiado", true).gte("creado_en", inicioDiaColombia()),
   ]);
   if (m.error) throw m.error;
   if (d.error) throw d.error;
-  const equipo = (m.data || []).map(normalizarMonstruo), res = { ...base, equipo, premiosHoy: (d.data || []).length };
+  const equipo = (m.data || []).map(normalizarMonstruo), res = { ...base, equipo, premiosHoy: (d.data || []).filter((f) => f.rival_monstruo_id == null).length, arena: { activa: cfg.monstruos_pvp_activo === 1, dia: cfg.monstruos_pvp_dia, pct: cfg.monstruos_pvp_pct, hoy: (d.data || []).filter((f) => f.rival_monstruo_id != null).length } };
   // Catálogo y capturas (SQL 75): si todavía no se corrió, el Laboratorio funciona igual, solo sin esto.
   try {
     const { data: cat, error: eC } = await supabase.from("mundo_catalogo_monstruos").select("*").eq("activo", true).order("id");
@@ -966,40 +966,170 @@ export async function crearMonstruoMundo(estudianteId, campos) {
 
 // Registra un duelo de monstruos y entrega el premio (XP del monstruo, y XP/oro del estudiante) si todavía no llegó al tope del día.
 // ganado lo reporta el juego del estudiante (no se puede verificar desde aquí).
-export async function registrarDueloMonstruo(estudianteId, { monstruoId, rivalNombre = "", rivalNivel = 1, zona = null, jefe = false, modo = "turnos", ganado = false }) {
+export async function registrarDueloMonstruo(estudianteId, { monstruoId, rivalNombre = "", rivalNivel = 1, zona = null, jefe = false, modo = "turnos", ganado = false, rivalMonstruoId = null }, gradoId = null) {
   const cfg = await fetchConfigMundo();
   if (cfg.monstruos_activo !== 1) return { ok: false, mensaje: "Los duelos de monstruos están cerrados por ahora." };
+  const arena = rivalMonstruoId != null;
+  if (arena && cfg.monstruos_pvp_activo !== 1) return { ok: false, mensaje: "La Arena está cerrada por ahora." };
   const { data: filas, error: eM } = await supabase.from("mundo_monstruos").select("*").eq("id", monstruoId).eq("estudiante_id", estudianteId);
   if (eM) return { ok: false, mensaje: eM.message };
   const mon = (filas || [])[0]; if (!mon) return { ok: false, mensaje: "Ese monstruo no es tuyo." };
   const m0 = normalizarMonstruo(mon);
-  const { data: hoy, error: eH } = await supabase.from("mundo_monstruos_duelos").select("id").eq("estudiante_id", estudianteId).eq("premiado", true).gte("creado_en", inicioDiaColombia());
+  const { data: hoyTodos, error: eH } = await supabase.from("mundo_monstruos_duelos").select("*").eq("estudiante_id", estudianteId).gte("creado_en", inicioDiaColombia());
   if (eH) return { ok: false, mensaje: eH.message };
-  const modoOk = modo === "rapida" ? "rapida" : "turnos", nivelRival = Math.max(1, Math.min(NIVEL_MAX, Math.floor(Number(rivalNivel) || 1)));
-  const premio = calcularPremioMonstruo({ ganado: !!ganado, nivelYo: m0.nivel, nivelRival, jefe: !!jefe, modo: modoOk, premiosHoy: (hoy || []).length, cfg });
+  const hoy = hoyTodos || [];
+  const modoOk = modo === "rapida" ? "rapida" : "turnos";
+  let nivelRival = Math.max(1, Math.min(NIVEL_MAX, Math.floor(Number(rivalNivel) || 1))), nombreRival = String(rivalNombre).slice(0, 40), premio, repetido = false, ligaId = null, ligaPts = 0;
+  if (arena) {
+    // El rival se lee del servidor (nivel y nombre): el juego no puede inventarlo. Tiene que ser de un compañero del mismo curso.
+    const { data: rf, error: eR } = await supabase.from("mundo_monstruos").select("*").eq("id", rivalMonstruoId);
+    if (eR) return { ok: false, mensaje: eR.message };
+    const riv = (rf || [])[0]; if (!riv || riv.estudiante_id === estudianteId) return { ok: false, mensaje: "Ese rival no es válido." };
+    const { data: comp, error: eC } = await supabase.rpc("mundo_companeros", { p_estudiante_id: estudianteId });
+    if (eC) return { ok: false, mensaje: eC.message };
+    if (!(comp || []).some((c) => c.id === riv.estudiante_id)) return { ok: false, mensaje: "Ese monstruo no es de tu curso." };
+    nivelRival = nivelDeXp(riv.xp).nivel; nombreRival = String(riv.nombre).slice(0, 40);
+    const arenaHoy = hoy.filter((f) => f.premiado && f.rival_monstruo_id != null).length;
+    repetido = !!ganado && hoy.some((f) => f.rival_monstruo_id === rivalMonstruoId && f.ganado && f.premiado);
+    premio = repetido ? { xpMonstruo: 0, xp: 0, oro: 0, tope: false } : calcularPremioMonstruo({ ganado: !!ganado, nivelYo: m0.nivel, nivelRival, jefe: false, modo: modoOk, premiosHoy: arenaHoy, cfg: cfgArena(cfg) });
+    try {   // ¿hay una liga abierta para su curso? (SQL 76)
+      const { data: lg } = await supabase.from("mundo_ligas").select("*").eq("estado", "abierta");
+      const l = (lg || []).filter((x) => x.grado_id === gradoId && (!x.fin || new Date(x.fin).getTime() > Date.now())).sort((p, q) => q.id - p.id)[0];
+      if (l) { ligaId = l.id; ligaPts = puntosLiga({ ganado: !!ganado, primeraDelDia: !hoy.some((f) => f.rival_monstruo_id === rivalMonstruoId) }); }
+    } catch (e) { /* sin ligas */ }
+  } else {
+    premio = calcularPremioMonstruo({ ganado: !!ganado, nivelYo: m0.nivel, nivelRival, jefe: !!jefe, modo: modoOk, premiosHoy: hoy.filter((f) => f.premiado && f.rival_monstruo_id == null).length, cfg });
+  }
   const premiado = premio.xpMonstruo > 0;
-  const { data: duelo, error } = await supabase.from("mundo_monstruos_duelos").insert({ estudiante_id: estudianteId, monstruo_id: monstruoId, rival: String(rivalNombre).slice(0, 40), rival_nivel: nivelRival, zona, jefe: !!jefe, modo: modoOk, ganado: !!ganado, premiado, xp_monstruo: premio.xpMonstruo }).select().maybeSingle();
+  const fila = { estudiante_id: estudianteId, monstruo_id: monstruoId, rival: nombreRival, rival_nivel: nivelRival, zona: arena ? "arena" : zona, jefe: arena ? false : !!jefe, modo: modoOk, ganado: !!ganado, premiado, xp_monstruo: premio.xpMonstruo };
+  if (arena) { fila.rival_monstruo_id = rivalMonstruoId; if (ligaId != null) { fila.liga_id = ligaId; fila.liga_puntos = ligaPts; } }
+  const { data: duelo, error } = await supabase.from("mundo_monstruos_duelos").insert(fila).select().maybeSingle();
   if (error) return { ok: false, mensaje: error.message };
   const xpTope = xpParaNivel(NIVEL_MAX), xpNueva = Math.min(xpTope, m0.xp + premio.xpMonstruo);
   const deshacer = async () => { await supabase.from("mundo_monstruos").update({ xp: m0.xp }).eq("id", monstruoId); if (duelo && duelo.id != null) await supabase.from("mundo_monstruos_duelos").delete().eq("id", duelo.id); };
   try {
     if (premiado) { const { error: eU } = await supabase.from("mundo_monstruos").update({ xp: xpNueva }).eq("id", monstruoId); if (eU) throw eU; }
-    let fila = null, comarca = null;
+    let fp = null, comarca = null;
     if (premio.xp > 0 || premio.oro > 0) {
       const [, rpc] = await Promise.all([
-        supabase.from("historial_gamificacion").insert({ estudiante_id: estudianteId, etiqueta: `🐲 Duelo de monstruos: ${m0.nombre} vs ${String(rivalNombre).slice(0, 30) || "rival"}`, xp: premio.xp, vida: 0, monedas: premio.oro, categoria: "general" }),
+        supabase.from("historial_gamificacion").insert({ estudiante_id: estudianteId, etiqueta: `🐲 ${arena ? "Arena" : "Duelo de monstruos"}: ${m0.nombre} vs ${nombreRival.slice(0, 30) || "rival"}`, xp: premio.xp, vida: 0, monedas: premio.oro, categoria: "general" }),
         supabase.rpc("ajustar_progreso", { p_estudiante_id: estudianteId, p_delta_xp: premio.xp, p_delta_vida: 0, p_delta_monedas: premio.oro }),
       ]);
       if (rpc.error) throw rpc.error;
-      fila = rpc.data?.[0];
-      comarca = await aportarAComarca(estudianteId, { xp: premio.xp, oro: premio.oro, motivo: "Mundo CÓDICE: duelo de monstruos" });
+      fp = rpc.data?.[0];
+      comarca = await aportarAComarca(estudianteId, { xp: premio.xp, oro: premio.oro, motivo: arena ? "Mundo CÓDICE: Arena de monstruos" : "Mundo CÓDICE: duelo de monstruos" });
     }
     const nuevo = nivelDeXp(xpNueva).nivel;
-    return { ok: true, dueloId: duelo ? duelo.id : null, premio, xp: fila?.xp, oro: fila?.monedas, comarca, monstruo: { id: monstruoId, xp: xpNueva, nivel: nuevo }, subio: nuevo > m0.nivel, premiosHoy: (hoy || []).length + (premiado ? 1 : 0) };
+    const res = { ok: true, dueloId: duelo ? duelo.id : null, premio, xp: fp?.xp, oro: fp?.monedas, comarca, monstruo: { id: monstruoId, xp: xpNueva, nivel: nuevo }, subio: nuevo > m0.nivel };
+    if (arena) { res.repetido = repetido; res.arenaHoy = hoy.filter((f) => f.premiado && f.rival_monstruo_id != null).length + (premiado ? 1 : 0); res.ligaPuntos = ligaId != null ? ligaPts : null; }
+    else res.premiosHoy = hoy.filter((f) => f.premiado && f.rival_monstruo_id == null).length + (premiado ? 1 : 0);
+    return res;
   } catch (e) {
     await deshacer();
     return { ok: false, mensaje: (e && e.message) || "no se pudo entregar el premio" };
   }
+}
+
+// ---- Arena (SQL 76): los monstruos de los compañeros del mismo curso ----
+export async function fetchRivalesMundo(estudianteId) {
+  const cfg = await fetchConfigMundo();
+  const base = { activo: cfg.monstruos_pvp_activo === 1 && cfg.monstruos_activo === 1, dia: cfg.monstruos_pvp_dia, pct: cfg.monstruos_pvp_pct, hoy: 0, lista: [] };
+  if (!base.activo) return base;
+  const { data: comp, error } = await supabase.rpc("mundo_companeros", { p_estudiante_id: estudianteId });
+  if (error) throw error;
+  const nombres = new Map((comp || []).filter((c) => c.id !== estudianteId).map((c) => [c.id, nombreBonito(c.nombre)]));
+  if (!nombres.size) return base;
+  const [m, d] = await Promise.all([
+    supabase.from("mundo_monstruos").select("*").in("estudiante_id", [...nombres.keys()]).order("id"),
+    supabase.from("mundo_monstruos_duelos").select("*").eq("estudiante_id", estudianteId).gte("creado_en", inicioDiaColombia()),
+  ]);
+  if (m.error) throw m.error;
+  if (d.error) throw d.error;
+  const hoy = d.data || [], ganados = new Set(hoy.filter((f) => f.rival_monstruo_id != null && f.ganado && f.premiado).map((f) => f.rival_monstruo_id));
+  const retos = {};
+  try { const { data: r } = await supabase.from("mundo_monstruos_duelos").select("*").in("rival_monstruo_id", (m.data || []).map((x) => x.id)); (r || []).forEach((f) => { retos[f.rival_monstruo_id] = (retos[f.rival_monstruo_id] || 0) + 1; }); } catch (e) { /* sin conteo */ }
+  const lista = (m.data || []).map(normalizarMonstruo).map((x, i) => ({ monstruoId: x.id, estudianteId: (m.data[i]).estudiante_id, dueno: nombres.get(m.data[i].estudiante_id) || "Compañero", nombre: x.nombre, tipo: x.tipo, emoji: x.emoji, puntos: x.puntos, nivel: x.nivel, retos: retos[x.id] || 0, ganadoHoy: ganados.has(x.id) }));
+  lista.sort((p, q) => p.dueno.localeCompare(q.dueno, "es") || p.nivel - q.nivel);
+  return { ...base, hoy: hoy.filter((f) => f.premiado && f.rival_monstruo_id != null).length, lista };
+}
+
+// ---- Ligas (SQL 76) ----
+const nombreBonito = (n) => { const t = String(n || "").trim().split(/\s+/)[0] || "Estudiante"; return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase(); };
+const ligaVigente = (l, ahora = Date.now()) => l.estado === "abierta" && (!l.fin || new Date(l.fin).getTime() > ahora);
+const normalizarLiga = (l) => ({ id: l.id, nombre: l.nombre, grado_id: l.grado_id, estado: l.estado, fin: l.fin || null, premio: { xp: Number(l.premio_xp) || 0, oro: Number(l.premio_oro) || 0 }, ganadores: (typeof l.ganadores === "string" ? (() => { try { return JSON.parse(l.ganadores); } catch { return []; } })() : l.ganadores) || [], vigente: ligaVigente(l) });
+function tablaDe(duelos, nombres) {
+  const m = new Map(); nombres.forEach((nombre, id) => m.set(id, { estudianteId: id, nombre, puntos: 0, victorias: 0, duelos: 0 }));
+  (duelos || []).forEach((f) => { const x = m.get(f.estudiante_id) || { estudianteId: f.estudiante_id, nombre: "Estudiante", puntos: 0, victorias: 0, duelos: 0 }; x.puntos += Number(f.liga_puntos) || 0; x.duelos++; if (f.ganado) x.victorias++; m.set(f.estudiante_id, x); });
+  return ordenarTabla([...m.values()]);
+}
+export async function fetchLigaMundo(estudianteId, gradoId) {
+  const { data: lg, error } = await supabase.from("mundo_ligas").select("*").order("id");
+  if (error) throw error;
+  const ligas = (lg || []).map(normalizarLiga).filter((l) => l.grado_id === gradoId);
+  const abierta = ligas.filter((l) => l.vigente).pop(), cerrada = ligas.filter((l) => l.estado === "cerrada").pop();
+  const res = { activa: !!abierta, liga: abierta || null, tabla: [], miPuesto: null, misPuntos: 0, cerrada: cerrada ? { nombre: cerrada.nombre, ganadores: cerrada.ganadores } : null };
+  if (!abierta) return res;
+  const [d, c] = await Promise.all([supabase.from("mundo_monstruos_duelos").select("*").eq("liga_id", abierta.id), supabase.rpc("mundo_companeros", { p_estudiante_id: estudianteId })]);
+  if (d.error) throw d.error;
+  if (c.error) throw c.error;
+  res.tabla = tablaDe(d.data, new Map((c.data || []).map((x) => [x.id, nombreBonito(x.nombre)])));
+  const yo = res.tabla.find((f) => f.estudianteId === estudianteId); if (yo) { res.miPuesto = yo.puesto; res.misPuntos = yo.puntos; }
+  return res;
+}
+
+// Para la docente
+export async function fetchLigasAdmin() {
+  const { data, error } = await supabase.from("mundo_ligas").select("*").order("id");
+  if (error) throw error;
+  return (data || []).map(normalizarLiga).reverse();
+}
+export async function crearLiga(campos) {
+  const err = validarLiga(campos); if (err) throw new Error(err);
+  const { error } = await supabase.from("mundo_ligas").insert({ nombre: String(campos.nombre).trim(), grado_id: campos.grado_id, fin: campos.fin ? new Date(campos.fin).toISOString() : null, premio_xp: Number(campos.premio_xp), premio_oro: Number(campos.premio_oro), estado: "abierta" });
+  if (error) throw error;
+}
+export async function eliminarLiga(id) {
+  const { data: ds, error: e0 } = await supabase.from("mundo_monstruos_duelos").select("*").eq("liga_id", id); if (e0) throw e0;
+  if ((ds || []).length) { const { error: e1 } = await supabase.from("mundo_monstruos_duelos").update({ liga_id: null, liga_puntos: 0 }).eq("liga_id", id); if (e1) throw e1; }
+  const { error } = await supabase.from("mundo_ligas").delete().eq("id", id); if (error) throw error;
+}
+export async function fetchTablaLiga(liga) {
+  const { data: ds, error } = await supabase.from("mundo_monstruos_duelos").select("*").eq("liga_id", liga.id);
+  if (error) throw error;
+  const ids = [...new Set((ds || []).map((f) => f.estudiante_id))], nombres = new Map();
+  if (ids.length) { const { data: es } = await supabase.from("estudiantes").select("id, nombre").in("id", ids); (es || []).forEach((e) => nombres.set(e.id, e.nombre)); }
+  return tablaDe(ds, nombres);
+}
+// Cierra la liga: fija el podio (solo con puntos) y entrega los premios. Si algo falla, quedan pendientes y se pueden reintentar.
+export async function cerrarLiga(id) {
+  const { data: ls, error } = await supabase.from("mundo_ligas").select("*").eq("id", id);
+  if (error) return { ok: false, mensaje: error.message };
+  const l = (ls || [])[0] ? normalizarLiga(ls[0]) : null; if (!l) return { ok: false, mensaje: "No existe esa liga." };
+  if (l.estado === "cerrada") return entregarPremiosLiga(id);
+  const tabla = await fetchTablaLiga(l);
+  const ganadores = tabla.filter((f) => f.puntos > 0).slice(0, 3).map((f) => ({ puesto: f.puesto, estudiante_id: f.estudianteId, nombre: f.nombre, puntos: f.puntos, ...premioPuesto(l.premio, f.puesto), entregado: false }));
+  const { error: eU } = await supabase.from("mundo_ligas").update({ estado: "cerrada", cerrada_en: new Date().toISOString(), ganadores }).eq("id", id);
+  if (eU) return { ok: false, mensaje: eU.message };
+  return entregarPremiosLiga(id);
+}
+export async function entregarPremiosLiga(id) {
+  const { data: ls, error } = await supabase.from("mundo_ligas").select("*").eq("id", id);
+  if (error) return { ok: false, mensaje: error.message };
+  const l = (ls || [])[0] ? normalizarLiga(ls[0]) : null; if (!l) return { ok: false, mensaje: "No existe esa liga." };
+  const g = l.ganadores.map((x) => ({ ...x }));
+  for (const x of g) {
+    if (x.entregado) continue;
+    if (x.xp > 0 || x.oro > 0) {
+      const [, rpc] = await Promise.all([
+        supabase.from("historial_gamificacion").insert({ estudiante_id: x.estudiante_id, etiqueta: `🏆 Liga de monstruos «${l.nombre}»: ${x.puesto}.º puesto`, xp: x.xp, vida: 0, monedas: x.oro, categoria: "general" }),
+        supabase.rpc("ajustar_progreso", { p_estudiante_id: x.estudiante_id, p_delta_xp: x.xp, p_delta_vida: 0, p_delta_monedas: x.oro }),
+      ]);
+      if (rpc.error) { await supabase.from("mundo_ligas").update({ ganadores: g }).eq("id", id); return { ok: false, mensaje: rpc.error.message, ganadores: g, pendientes: g.filter((y) => !y.entregado).length }; }
+    }
+    x.entregado = true;
+    await supabase.from("mundo_ligas").update({ ganadores: g }).eq("id", id);
+  }
+  return { ok: true, ganadores: g, pendientes: 0 };
 }
 
 // Para la pestaña de la docente
