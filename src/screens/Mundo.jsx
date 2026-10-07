@@ -24,7 +24,7 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
   useNivelesPersonaje(); // para que el nivel se actualice si cambian en "Editar niveles"
 
   const cargar = async () => {
-    const [pers, mej, mis, hec, zon, pos, due, ret, rec, par, aci, sec, com, llv, mon] = await Promise.allSettled([api.fetchPersonajeElegido(idEst), api.fetchMejorasDeEstudiante(idEst), mundoApi.fetchMisionesMundo(estudianteInfo.grado_id), mundoApi.fetchHechasMundo(idEst), mundoApi.fetchZonasMundo(estudianteInfo.grado_id), mundoApi.fetchPosadaMundo(), mundoApi.fetchDuelosMundo(idEst), mundoApi.fetchRetosMundo(idEst), mundoApi.fetchRecolectaMundo(idEst), mundoApi.fetchParcelaMundo(idEst), mundoApi.fetchAcertijosMundo(idEst, estudianteInfo.grado_id), mundoApi.fetchSecretosMundo(idEst, estudianteInfo.grado_id), mundoApi.fetchComarcaMundo(idEst), mundoApi.fetchLlavesMundo(idEst), mundoApi.fetchMonstruosMundo(idEst)]);
+    const [pers, mej, mis, hec, zon, pos, due, ret, rec, par, aci, sec, com, llv, mon] = await Promise.allSettled([api.fetchPersonajeElegido(idEst), api.fetchMejorasDeEstudiante(idEst), mundoApi.fetchMisionesMundo(estudianteInfo.grado_id), mundoApi.fetchHechasMundo(idEst), mundoApi.fetchZonasMundo(estudianteInfo.grado_id), mundoApi.fetchPosadaMundo(), mundoApi.fetchDuelosMundo(idEst), mundoApi.fetchRetosMundo(idEst), mundoApi.fetchRecolectaMundo(idEst), mundoApi.fetchParcelaMundo(idEst), mundoApi.fetchAcertijosMundo(idEst, estudianteInfo.grado_id), mundoApi.fetchSecretosMundo(idEst, estudianteInfo.grado_id), mundoApi.fetchComarcaMundo(idEst), mundoApi.fetchLlavesMundo(idEst), mundoApi.fetchMonstruosMundo(idEst, estudianteInfo.grado_id)]);
     // El "modo prueba" es SOLO para cuando todavía no se corrió el SQL 62 (no existen las tablas).
     // Si las tablas existen pero el curso no tiene misiones, el mundo funciona normal, sin misiones.
     const hayTablas = mis.status === "fulfilled" && hec.status === "fulfilled";
@@ -90,6 +90,7 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
           secretos: info.secretos, alSecreto: (r) => mundoApi.hallarSecretoMundo(idEst, r),
           llaves: info.llaves, alLlave: (r) => mundoApi.conseguirLlaveMundo(idEst, r), alCamara: () => mundoApi.abrirCamaraMundo(idEst),
           monstruos: info.monstruos, alCrearMonstruo: (c) => mundoApi.crearMonstruoMundo(idEst, c), alMonstruo: (r) => mundoApi.registrarDueloMonstruo(idEst, r),
+          alAdoptarMonstruo: (r) => mundoApi.adoptarMonstruoMundo(idEst, r, estudianteInfo.grado_id), alCapturar: (r) => mundoApi.capturarMonstruoMundo(idEst, r),
           comarca: info.comarca, alComarca: () => mundoApi.fetchComarcaMundo(idEst), alBatalla: (r) => mundoApi.batallaComarca(idEst, r),
           alCompletar: async (m) => (info.modoPrueba ? { ok: true } : mundoApi.completarMisionMundo(idEst, m)),
           alSalir: () => { setJugando(false); },
@@ -111,7 +112,7 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
       mundoApi.fetchAcertijosMundo(idEst, estudianteInfo.grado_id).then((a) => setInfo((i) => (i && !i.modoPrueba ? { ...i, acertijos: a } : i))).catch(() => {});
       mundoApi.fetchSecretosMundo(idEst, estudianteInfo.grado_id).then((x) => setInfo((i) => (i && !i.modoPrueba ? { ...i, secretos: x } : i))).catch(() => {});
       mundoApi.fetchLlavesMundo(idEst).then((l) => setInfo((i) => (i && !i.modoPrueba ? { ...i, llaves: l } : i))).catch(() => {});
-      mundoApi.fetchMonstruosMundo(idEst).then((m) => setInfo((i) => (i && !i.modoPrueba ? { ...i, monstruos: m } : i))).catch(() => {});
+      mundoApi.fetchMonstruosMundo(idEst, estudianteInfo.grado_id).then((m) => setInfo((i) => (i && !i.modoPrueba ? { ...i, monstruos: m } : i))).catch(() => {});
       mundoApi.fetchComarcaMundo(idEst).then((c) => setInfo((i) => (i && !i.modoPrueba ? { ...i, comarca: c } : i))).catch(() => {}); } // las insignias que ganó mientras jugaba
   }, [jugando]);
 
