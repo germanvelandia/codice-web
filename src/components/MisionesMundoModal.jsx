@@ -6,7 +6,7 @@ import { ITEMS, RECETAS } from "../game/items";
 import { TIPOS_ACERTIJO, CLAVES_TIPO, validarContenido } from "../game/acertijos";
 import { ESCENAS_SECRETO, OBJETOS_SECRETO, MIN_OPCIONES as MIN_OPC_SEC, MAX_OPCIONES as MAX_OPC_SEC, nombreEscena, validarSecreto } from "../game/secretos";
 import { LLAVES, TEXTO_PRUEBA, validarConfigLlaves } from "../game/llaves";
-import { TIPOS as TIPOS_MON, CLAVES_TIPO as CLAVES_TIPO_MON, NIVEL_MAX as NIVEL_MAX_MON } from "../game/monstruos";
+import { TIPOS as TIPOS_MON, CLAVES_TIPO as CLAVES_TIPO_MON, NIVEL_MAX as NIVEL_MAX_MON, EMOJIS_MONSTRUO, ESTATS as ESTATS_MON, NOMBRE_ESTAT as NOMBRE_ESTAT_MON, MAX_PUNTOS_POR_ESTAT as MAX_PTS_MON, CATALOGO_NIVEL_MAX, puntosUsados as puntosUsadosMon, validarCatalogo, statsDe as statsMon } from "../game/monstruos";
 import { planEdicion, coincideBusqueda } from "../lib/edicionMasiva";
 import { aObjetos, analizarImportacion, filasParaExportar, filasPlantilla, crearLibro, leerLibro } from "../lib/importarMisiones";
 
@@ -225,7 +225,7 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
         ) : cargando ? (
           <p className="text-sm text-slate-400">Cargando…</p>
         ) : pestana === "monstruos" && !editando ? (
-          <PanelMonstruos />
+          <PanelMonstruos cursos={cursos} niveles={niveles} />
         ) : pestana === "llaves" && !editando ? (
           <PanelLlaves />
         ) : pestana === "comarca" && !editando ? (
@@ -1122,8 +1122,9 @@ const CAMPOS_MON = [
   ["monstruos_premios_dia", "premiosDia", 0, 50, "Victorias con premio por día (después, solo diversión)"],
   ["monstruos_xp", "xp", 0, 200, "XP base por victoria (se ajusta según el nivel del rival)"],
   ["monstruos_oro", "oro", 0, 200, "Oro base por victoria"],
+  ["monstruos_capturas_dia", "capturasDia", 0, 20, "Capturas de salvajes por día (por estudiante)"],
 ];
-function PanelMonstruos() {
+function PanelMonstruos({ cursos = [], niveles = [] }) {
   const [f, setF] = useState(null);
   const [resumen, setResumen] = useState(null);
   const [error, setError] = useState("");
@@ -1135,7 +1136,7 @@ function PanelMonstruos() {
     (async () => {
       try {
         const c = await mundoApi.fetchConfigMundo();
-        const x = { activo: c.monstruos_activo === 1 }; CAMPOS_MON.forEach(([clave, k]) => { x[k] = String(c[clave]); });
+        const x = { activo: c.monstruos_activo === 1, captura: c.monstruos_captura_activo === 1, puntosCfg: c.monstruos_puntos }; CAMPOS_MON.forEach(([clave, k]) => { x[k] = String(c[clave]); });
         setF(x);
       } catch (e) { setError(e.message || "No se pudo cargar la configuración."); return; }
       mundoApi.fetchMonstruosResumen().then(setResumen).catch(() => setResumen(false));
@@ -1148,6 +1149,7 @@ function PanelMonstruos() {
     setGuardando(true); setError("");
     try {
       await mundoApi.guardarConfigMundo("monstruos_activo", f.activo ? 1 : 0);
+      await mundoApi.guardarConfigMundo("monstruos_captura_activo", f.captura ? 1 : 0);
       for (const [clave, k] of CAMPOS_MON) await mundoApi.guardarConfigMundo(clave, Number(f[k]));
       setAviso("Guardado ✓"); clearTimeout(relojAviso.current); relojAviso.current = setTimeout(() => setAviso(""), 2400);
     } catch (er) { setError("No se pudo guardar: " + (er.message || "error desconocido")); }
@@ -1170,6 +1172,7 @@ function PanelMonstruos() {
       {resumen && <div className="text-[11px] text-slate-500 mb-3" data-testid="resumen-monstruos">🐲 {resumen.monstruos} {resumen.monstruos === 1 ? "monstruo creado" : "monstruos creados"} por {resumen.estudiantes} {resumen.estudiantes === 1 ? "estudiante" : "estudiantes"} · ⚔️ {resumen.duelos} duelos ({resumen.victorias} victorias) · {CLAVES_TIPO_MON.map((t) => `${TIPOS_MON[t].emoji} ${resumen.porTipo[t] || 0}`).join(" · ")}</div>}
       <div className="rounded-xl border border-slate-200 p-4 mb-3">
         <label className="flex items-center gap-2 text-sm font-semibold text-slate-800 mb-3"><input type="checkbox" checked={f.activo} onChange={(e) => setF((x) => ({ ...x, activo: e.target.checked }))} /> El Laboratorio y los duelos de monstruos están activos</label>
+        <label className="flex items-center gap-2 text-sm font-semibold text-slate-800 mb-3"><input type="checkbox" checked={f.captura} onChange={(e) => setF((x) => ({ ...x, captura: e.target.checked }))} /> 🎯 Se puede intentar capturar a los salvajes después de vencerlos (los jefes no)</label>
         <div className="space-y-2">
           {CAMPOS_MON.map(([clave, k, mn, mx, txt]) => (
             <label key={clave} className="flex flex-wrap items-center gap-2 text-sm text-slate-700"><input type="number" min={mn} max={mx} value={f[k]} onChange={(e) => setF((x) => ({ ...x, [k]: e.target.value }))} className={input} aria-label={txt} /> {txt}</label>
@@ -1180,6 +1183,97 @@ function PanelMonstruos() {
         {aviso && <span className="text-xs font-semibold text-emerald-600">{aviso}</span>}
         <button type="button" onClick={guardar} disabled={guardando} className="text-sm font-bold px-5 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">{guardando ? "Guardando…" : "Guardar monstruos"}</button>
       </div>
+      <CatalogoMonstruos cursos={cursos} niveles={niveles} puntos={Number(f.puntosCfg) || 20} />
+    </div>
+  );
+}
+
+// El catálogo: monstruos que prepara la docente y que los estudiantes adoptan en la máquina del Laboratorio
+function CatalogoMonstruos({ cursos, niveles, puntos }) {
+  const vacio = () => ({ id: null, nombre: "", tipo: "fuego", emoji: EMOJIS_MONSTRUO[0], nivel: 1, grado_id: "", puntos: (() => { const r = Math.floor(puntos / 4); return { hp: r + (puntos - r * 4), atk: r, def: r, vel: r }; })() });
+  const [lista, setLista] = useState(null);
+  const [conteo, setConteo] = useState({});
+  const [form, setForm] = useState(null);
+  const [error, setError] = useState("");
+  const [aviso, setAviso] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const relojAviso = useRef(null);
+  useEffect(() => () => clearTimeout(relojAviso.current), []);
+  const cargar = async () => {
+    try { setLista(await mundoApi.fetchCatalogoMonstruosAdmin()); mundoApi.fetchConteoCatalogo().then(setConteo).catch(() => {}); setError(""); }
+    catch (e) { setLista(false); setError(e.message || "No se pudo cargar el catálogo."); }
+  };
+  useEffect(() => { cargar(); }, []);
+  const mostrarAviso = (t) => { setAviso(t); clearTimeout(relojAviso.current); relojAviso.current = setTimeout(() => setAviso(""), 2400); };
+  const input = "w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white";
+  const set = (k, v) => setForm((x) => ({ ...x, [k]: v }));
+  const ajustar = (k, d) => setForm((x) => ({ ...x, puntos: { ...x.puntos, [k]: x.puntos[k] + d } }));
+  const guardar = async () => {
+    const e = validarCatalogo(form, { puntos }); if (e) { setError(e); return; }
+    setGuardando(true); setError("");
+    try { await mundoApi.guardarCatalogoMonstruo(form, form.id); await cargar(); setForm(null); mostrarAviso(form.id != null ? "Cambios guardados ✓" : "Agregado al catálogo ✓"); }
+    catch (er) { setError("No se pudo guardar: " + (er.message || "error")); }
+    setGuardando(false);
+  };
+  const alternar = async (x) => { try { await mundoApi.alternarCatalogoMonstruo(x.id, !x.activo); await cargar(); } catch (er) { setError("No se pudo cambiar: " + er.message); } };
+  const borrar = async (x) => {
+    const n = conteo[x.id] || 0;
+    if (!confirm(`¿Quitar a "${x.nombre}" del catálogo?${n ? `\n\n${n} estudiante${n === 1 ? "" : "s"} ya lo adoptó; sus monstruos se quedan como están.` : ""}\n\nSi solo quieres que deje de aparecer, mejor ocúltalo.`)) return;
+    try { await mundoApi.eliminarCatalogoMonstruo(x.id); await cargar(); mostrarAviso("Quitado"); } catch (er) { setError("No se pudo quitar: " + er.message); }
+  };
+  if (lista === false) return <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3 mt-4">Para el catálogo y la captura corre <b>75_mundo_catalogo_monstruos.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.{error ? ` (${error})` : ""}</div>;
+  if (!lista) return <p className="text-sm text-slate-400 mt-4">Cargando catálogo…</p>;
+  const usados = form ? puntosUsadosMon(form.puntos) : 0, st = form ? statsMon({ puntos: form.puntos, nivel: form.nivel || 1 }) : null;
+  return (
+    <div className="mt-5 border-t border-slate-200 pt-4" data-testid="catalogo-monstruos">
+      <div className="flex items-center justify-between mb-2">
+        <h4 className="text-sm font-bold text-slate-800">📖 Catálogo del Laboratorio</h4>
+        {!form && <button type="button" onClick={() => { setForm(vacio()); setError(""); }} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-violet-500 text-white">+ Nuevo monstruo</button>}
+      </div>
+      <p className="text-[11px] text-slate-400 mb-3">Monstruos que preparas tú: cada estudiante puede adoptar cada uno una vez (cuenta para su equipo). Puedes darles un nivel inicial de 1 a {CATALOGO_NIVEL_MAX} y elegir qué curso los ve.</p>
+      {error && <div className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-2.5 mb-3">{error}</div>}
+      {aviso && <div className="text-xs font-semibold text-emerald-600 mb-2">{aviso}</div>}
+      {form ? (
+        <div className="rounded-xl border border-violet-200 bg-violet-50/40 p-4 mb-3">
+          <div className="grid sm:grid-cols-2 gap-3 mb-3">
+            <div><label className="text-[11px] text-slate-500 block mb-1">Nombre</label><input value={form.nombre} maxLength={20} onChange={(e) => set("nombre", e.target.value)} className={input} aria-label="Nombre del monstruo" placeholder="Ej: Sabio Ético" /></div>
+            <div><label className="text-[11px] text-slate-500 block mb-1">Nivel inicial</label>
+              <select value={form.nivel} onChange={(e) => set("nivel", Number(e.target.value))} className={input} aria-label="Nivel inicial">{Array.from({ length: CATALOGO_NIVEL_MAX }, (_, i) => i + 1).map((n) => <option key={n} value={n}>Nivel {n}</option>)}</select></div>
+            <div><label className="text-[11px] text-slate-500 block mb-1">¿Quién lo ve?</label>
+              <select value={form.grado_id} onChange={(e) => set("grado_id", e.target.value)} className={input} aria-label="Curso del monstruo">
+                <option value="">🌐 Todos los cursos</option>
+                {[...new Set([...niveles, ...(esNivel(form.grado_id) ? [nivelDeClave(form.grado_id)] : [])])].map((n) => <option key={n} value={claveNivel(n)}>📚 Todo {nombreNivel(n).toLowerCase()}</option>)}
+                {cursos.map((c) => <option key={c} value={c}>🏫 Solo el curso {c}</option>)}
+              </select></div>
+            <div><label className="text-[11px] text-slate-500 block mb-1">Tipo</label>
+              <div className="flex flex-wrap gap-1">{CLAVES_TIPO_MON.map((t) => <button key={t} type="button" onClick={() => set("tipo", t)} aria-pressed={form.tipo === t} className={`text-xs px-2.5 py-1.5 rounded-lg border ${form.tipo === t ? "border-violet-500 bg-violet-100 font-semibold" : "border-slate-200 bg-white"}`}>{TIPOS_MON[t].emoji} {TIPOS_MON[t].nombre}</button>)}</div></div>
+          </div>
+          <label className="text-[11px] text-slate-500 block mb-1">Aspecto</label>
+          <div className="flex flex-wrap gap-1 mb-3">{EMOJIS_MONSTRUO.map((e) => <button key={e} type="button" onClick={() => set("emoji", e)} aria-pressed={form.emoji === e} className={`text-xl w-10 h-10 rounded-lg border ${form.emoji === e ? "border-violet-500 bg-violet-100" : "border-slate-200 bg-white"}`}>{e}</button>)}</div>
+          <label className="text-[11px] text-slate-500 block mb-1">Puntos · quedan <b>{puntos - usados}</b> de {puntos} (máximo {MAX_PTS_MON} por estadística)</label>
+          <div className="grid grid-cols-2 gap-2 mb-3">{ESTATS_MON.map((k) => (
+            <div key={k} className="flex items-center gap-2 text-sm text-slate-700"><span className="w-24">{NOMBRE_ESTAT_MON[k]} <small className="text-slate-400">({st[k]})</small></span>
+              <button type="button" onClick={() => ajustar(k, -1)} disabled={form.puntos[k] <= 0} className="w-7 h-7 rounded-lg border border-slate-200 bg-white disabled:opacity-40" aria-label={`menos ${NOMBRE_ESTAT_MON[k]}`}>−</button><b className="w-5 text-center">{form.puntos[k]}</b>
+              <button type="button" onClick={() => ajustar(k, 1)} disabled={form.puntos[k] >= MAX_PTS_MON || usados >= puntos} className="w-7 h-7 rounded-lg border border-slate-200 bg-white disabled:opacity-40" aria-label={`más ${NOMBRE_ESTAT_MON[k]}`}>+</button></div>))}</div>
+          <div className="flex items-center gap-2 justify-end">
+            <button type="button" onClick={() => { setForm(null); setError(""); }} className="text-sm px-4 py-2 rounded-lg border border-slate-200 text-slate-600">Cancelar</button>
+            <button type="button" onClick={guardar} disabled={guardando} className="text-sm font-bold px-5 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">{guardando ? "Guardando…" : form.id != null ? "Guardar cambios" : "Agregar al catálogo"}</button>
+          </div>
+        </div>
+      ) : null}
+      {lista.length === 0 && !form ? <p className="text-xs text-slate-400">Todavía no hay monstruos en el catálogo.</p> : (
+        <ul className="space-y-2">{lista.map((x) => (
+          <li key={x.id} className={`flex items-center gap-3 rounded-xl border p-3 ${x.activo ? "border-slate-200" : "border-slate-200 bg-slate-50 opacity-70"}`}>
+            <span className="text-2xl">{x.emoji}</span>
+            <div className="flex-1 min-w-0"><div className="text-sm font-semibold text-slate-800 truncate">{x.nombre} <span className="text-[11px] font-normal text-slate-500">· {TIPOS_MON[x.tipo].emoji} {TIPOS_MON[x.tipo].nombre} · Nv {x.nivel}</span></div>
+              <div className="text-[11px] text-slate-500">{x.grado_id ? etiquetaPara(x.grado_id) : "Todos los cursos"} · adoptado por {conteo[x.id] || 0}{x.activo ? "" : " · oculto"}</div></div>
+            <div className="flex gap-1 text-xs">
+              <button type="button" onClick={() => { setForm({ ...x, puntos: { ...x.puntos } }); setError(""); }} className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600">Editar</button>
+              <button type="button" onClick={() => alternar(x)} className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600">{x.activo ? "Ocultar" : "Mostrar"}</button>
+              <button type="button" onClick={() => borrar(x)} className="px-2.5 py-1.5 rounded-lg border border-rose-200 text-rose-600">Quitar</button>
+            </div>
+          </li>))}</ul>
+      )}
     </div>
   );
 }
