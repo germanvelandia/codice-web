@@ -4,6 +4,7 @@ import { misionVisiblePara } from "./gradosMundo";
 import { validarContenido, CLAVES_TIPO } from "../game/acertijos";
 import { CONFIG_COMARCA_DEFECTO, calcularAporte, diaColombia, puedeBatallar } from "../game/comarca";
 import { validarSecreto, limpiarSecreto, secretoJugable } from "../game/secretos";
+import { CONFIG_LLAVES_DEFECTO, LLAVES, llaveDe, puedeConseguir, camaraDesbloqueada } from "../game/llaves";
 import { ITEMS, RECETAS, MAX_POR_ITEM, PARCELA, esDecoracion, celdaValida, puedeFabricar, cantidadPorRecoleccion } from "../game/items";
 
 // Todo lo que el Mundo CÓDICE necesita de la base de datos: las misiones del mundo, cuáles
@@ -193,7 +194,7 @@ export const CONFIG_POSADA_DEFECTO = { posada_activa: 1, posada_costo: 15, posad
 export async function fetchConfigMundo() {
   const { data, error } = await supabase.from("mundo_config").select("*");
   if (error) throw error;
-  const cfg = { ...CONFIG_POSADA_DEFECTO, ...CONFIG_DUELO_DEFECTO, ...CONFIG_RETO_DEFECTO, ...CONFIG_RECOLECTA_DEFECTO, ...CONFIG_COMARCA_DEFECTO };
+  const cfg = { ...CONFIG_POSADA_DEFECTO, ...CONFIG_DUELO_DEFECTO, ...CONFIG_RETO_DEFECTO, ...CONFIG_RECOLECTA_DEFECTO, ...CONFIG_COMARCA_DEFECTO, ...CONFIG_LLAVES_DEFECTO };
   (data || []).forEach((f) => { if (f.clave in cfg && Number.isFinite(Number(f.valor))) cfg[f.clave] = Number(f.valor); });
   return cfg;
 }
@@ -782,4 +783,75 @@ export async function fetchComarcaResumen() {
   if (d.error) throw d.error;
   const batallas = d.data || [], movs = (m.data || []).filter((x) => /^Mundo CÓDICE/.test(x.motivo || ""));
   return { batallas: batallas.length, tomadas: batallas.filter((b) => b.ganador_id === b.reino_retador_id).length, gp: movs.filter((x) => x.tipo === "gp").reduce((a, x) => a + x.cantidad, 0), fp: movs.filter((x) => x.tipo === "fp").reduce((a, x) => a + x.cantidad, 0) };
+}
+
+
+// ----- Las Tres Llaves y la Cámara del Códice (SQL 73) -----
+// Lo que necesita el juego de UN estudiante: qué llaves tiene y si ya reclamó el cofre. Si falta el SQL 73, falla y el mundo se queda sin llaves.
+export async function fetchLlavesMundo(estudianteId) {
+  const cfg = await fetchConfigMundo();
+  const base = { activo: cfg.llaves_activo === 1, orden: cfg.llaves_orden === 1, tengo: [], abierta: false, premio: { xp: cfg.llaves_xp, oro: cfg.llaves_oro }, duelo: { aciertos: Math.max(1, cfg.llaves_duelo_aciertos), vidas: Math.max(1, cfg.llaves_duelo_vidas) } };
+  if (!base.activo) return base;
+  const [l, c] = await Promise.all([
+    supabase.from("mundo_llaves").select("llave").eq("estudiante_id", estudianteId),
+    supabase.from("mundo_camara").select("id").eq("estudiante_id", estudianteId),
+  ]);
+  if (l.error) throw l.error;
+  if (c.error) throw c.error;
+  return { ...base, tengo: (l.data || []).map((f) => Number(f.llave)).filter((n) => llaveDe(n)).sort(), abierta: (c.data || []).length > 0 };
+}
+
+// Guarda que el estudiante ganó una llave. Respeta el orden (si la docente lo exige). Ganar la misma llave dos veces no hace nada.
+export async function conseguirLlaveMundo(estudianteId, { llave }) {
+  const l = llaveDe(llave); if (!l) return { ok: false, mensaje: "Esa llave no existe." };
+  const cfg = await fetchConfigMundo();
+  if (cfg.llaves_activo !== 1) return { ok: false, mensaje: "Las llaves están cerradas por ahora." };
+  const { data, error: eL } = await supabase.from("mundo_llaves").select("llave").eq("estudiante_id", estudianteId);
+  if (eL) return { ok: false, mensaje: eL.message };
+  const tengo = (data || []).map((f) => Number(f.llave));
+  if (tengo.includes(l.n)) return { ok: true, yaEstaba: true, tengo };
+  const pc = puedeConseguir(l.n, tengo, cfg.llaves_orden === 1);
+  if (!pc.ok) return { ok: false, mensaje: pc.motivo === "falta_anterior" ? `Primero necesitas la ${pc.falta.nombre}.` : "No se puede conseguir esa llave." };
+  const { error } = await supabase.from("mundo_llaves").insert({ estudiante_id: estudianteId, llave: l.n });
+  if (error) {
+    if (error.code === "23505" || /duplicate|unique/i.test(error.message || "")) return { ok: true, yaEstaba: true, tengo };
+    return { ok: false, mensaje: error.message };
+  }
+  return { ok: true, tengo: [...tengo, l.n].sort() };
+}
+
+// Reclama el cofre de la Cámara (una sola vez): hay que tener las 3 llaves. Entrega el premio y suma a la Comarca.
+export async function abrirCamaraMundo(estudianteId) {
+  const cfg = await fetchConfigMundo();
+  if (cfg.llaves_activo !== 1) return { ok: false, mensaje: "La Cámara está cerrada por ahora." };
+  const { data, error: eL } = await supabase.from("mundo_llaves").select("llave").eq("estudiante_id", estudianteId);
+  if (eL) return { ok: false, mensaje: eL.message };
+  if (!camaraDesbloqueada((data || []).map((f) => Number(f.llave)))) return { ok: false, mensaje: "Todavía te faltan llaves." };
+  const { error } = await supabase.from("mundo_camara").insert({ estudiante_id: estudianteId });
+  if (error) {
+    if (error.code === "23505" || /duplicate|unique/i.test(error.message || "")) return { ok: true, yaEstaba: true };
+    return { ok: false, mensaje: error.message };
+  }
+  const xp = cfg.llaves_xp, oro = cfg.llaves_oro;
+  try {
+    const [, rpc] = await Promise.all([
+      supabase.from("historial_gamificacion").insert({ estudiante_id: estudianteId, etiqueta: "🔐 Cámara del Códice", xp, vida: 0, monedas: oro, categoria: "general" }),
+      supabase.rpc("ajustar_progreso", { p_estudiante_id: estudianteId, p_delta_xp: xp, p_delta_vida: 0, p_delta_monedas: oro }),
+    ]);
+    if (rpc.error) throw rpc.error;
+    const fila = rpc.data?.[0];
+    return { ok: true, xp: fila?.xp, oro: fila?.monedas, premio: { xp, oro }, comarca: await aportarAComarca(estudianteId, { xp, oro, motivo: "Mundo CÓDICE: Cámara del Códice" }) };
+  } catch (e) {
+    await supabase.from("mundo_camara").delete().eq("estudiante_id", estudianteId);
+    return { ok: false, mensaje: (e && e.message) || "no se pudo entregar el premio" };
+  }
+}
+
+// Para la pestaña de la docente: cuántos estudiantes tienen cada llave y cuántos ya abrieron la Cámara.
+export async function fetchLlavesResumen() {
+  const [l, c] = await Promise.all([supabase.from("mundo_llaves").select("estudiante_id, llave"), supabase.from("mundo_camara").select("estudiante_id")]);
+  if (l.error) throw l.error;
+  if (c.error) throw c.error;
+  const porLlave = { 1: 0, 2: 0, 3: 0 }; (l.data || []).forEach((f) => { if (porLlave[f.llave] != null) porLlave[f.llave]++; });
+  return { porLlave, estudiantes: new Set((l.data || []).map((f) => f.estudiante_id)).size, abiertas: (c.data || []).length };
 }
