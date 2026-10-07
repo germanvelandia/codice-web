@@ -5,8 +5,11 @@ import { esNivel, claveNivel, nivelDeClave, nivelDeGrado, nivelesDe, nombreNivel
 import { ITEMS, RECETAS } from "../game/items";
 import { TIPOS_ACERTIJO, CLAVES_TIPO, validarContenido } from "../game/acertijos";
 import { ESCENAS_SECRETO, OBJETOS_SECRETO, MIN_OPCIONES as MIN_OPC_SEC, MAX_OPCIONES as MAX_OPC_SEC, nombreEscena, validarSecreto } from "../game/secretos";
-import { LLAVES, TEXTO_PRUEBA, validarConfigLlaves } from "../game/llaves";
+import { LLAVES, TEXTO_PRUEBA, validarConfigLlaves, llavesEfectivas, validarLlavesConfig, ZONAS_LLAVE, CUADRANTES, MAX_PISTA } from "../game/llaves";
 import { TIPOS as TIPOS_MON, CLAVES_TIPO as CLAVES_TIPO_MON, NIVEL_MAX as NIVEL_MAX_MON, EMOJIS_MONSTRUO, ESTATS as ESTATS_MON, NOMBRE_ESTAT as NOMBRE_ESTAT_MON, MAX_PUNTOS_POR_ESTAT as MAX_PTS_MON, CATALOGO_NIVEL_MAX, puntosUsados as puntosUsadosMon, validarCatalogo, statsDe as statsMon, validarLiga, PUNTOS_LIGA, PORCENTAJE_PUESTO } from "../game/monstruos";
+import { filtrarSeguimiento, ORDENES_SEGUIMIENTO, ETIQUETA_ESTADO, textoUltima, filasParaExcel } from "../game/seguimiento";
+import { objetosDeAcertijos, objetosDeSecretos, analizarAcertijos, analizarSecretos, crearLibroContenido, LIBRO_ACERTIJOS, LIBRO_SECRETOS, leerHoja } from "../lib/importarContenido";
+import { validarEvento, EMOJIS_EVENTO, EMOJIS_JEFE, ZONAS_JEFE_EVENTO, MAX_PREGUNTAS_EVENTO, fechaDeInicio, fechaDeFin, textoFechas, textoBono, MAX_DIAS_EVENTO } from "../game/eventos";
 import { planEdicion, coincideBusqueda } from "../lib/edicionMasiva";
 import { aObjetos, analizarImportacion, filasParaExportar, filasPlantilla, crearLibro, leerLibro } from "../lib/importarMisiones";
 
@@ -31,7 +34,8 @@ const MENU_MUNDO = [
   { id: "contenido", icono: "📚", nombre: "Contenido", ayuda: "Lo que los estudiantes responden: preguntas con personajes, acertijos y misiones ocultas.", tabs: [["misiones", "🎯 Misiones"], ["acertijos", "🧩 Acertijos"], ["secretos", "🔎 Secretos"]] },
   { id: "mapa", icono: "🗺️", nombre: "Mapa y recursos", ayuda: "Qué zonas están abiertas, qué se puede recolectar y dónde se recuperan.", tabs: [["zonas", "🗺️ Zonas"], ["recursos", "🎒 Recursos"], ["posada", "🛏️ Posada"]] },
   { id: "combate", icono: "⚔️", nombre: "Combate", ayuda: "Guardianes, retadores, monstruos y ligas: los duelos del mundo.", tabs: [["duelos", "⚔️ Guardianes"], ["retos", "☠️ Retadores"], ["monstruos", "🐲 Monstruos"], ["ligas", "🏆 Ligas"]] },
-  { id: "aventura", icono: "🏰", nombre: "Aventura", ayuda: "Metas grandes: reinos de la Comarca y las tres llaves de la Cámara del Códice.", tabs: [["comarca", "🏰 Comarca"], ["llaves", "🗝️ Llaves"]] },
+  { id: "seguimiento", icono: "📊", nombre: "Seguimiento", ayuda: "Quién está jugando y quién no: un resumen por estudiante de lo que ha hecho en el mundo.", tabs: [["estudiantes", "📊 Estudiantes"]] },
+  { id: "aventura", icono: "🏰", nombre: "Aventura", ayuda: "Metas grandes: reinos de la Comarca, las tres llaves de la Cámara del Códice y eventos con fechas (XP doble, jefes, preguntas de un tema).", tabs: [["comarca", "🏰 Comarca"], ["llaves", "🗝️ Llaves"], ["eventos", "🎉 Eventos"]] },
 ];
 
 export default function MisionesMundoModal({ onClose, grados = [], gradoActual = "" }) {
@@ -224,10 +228,14 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
           <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">Todavía no se crearon las tablas de las misiones. Corre <b>62_mundo.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</div>
         ) : cargando ? (
           <p className="text-sm text-slate-400">Cargando…</p>
+        ) : pestana === "estudiantes" && !editando ? (
+          <PanelSeguimiento cursos={cursos} />
         ) : pestana === "ligas" && !editando ? (
           <PanelLigas cursos={cursos} />
         ) : pestana === "monstruos" && !editando ? (
           <PanelMonstruos cursos={cursos} niveles={niveles} />
+        ) : pestana === "eventos" && !editando ? (
+          <PanelEventos cursos={cursos} niveles={niveles} />
         ) : pestana === "llaves" && !editando ? (
           <PanelLlaves />
         ) : pestana === "comarca" && !editando ? (
@@ -805,8 +813,10 @@ function PanelSecretos({ cursos, niveles }) {
     catch (e) { if (/does not exist|relation|schema cache/i.test(e.message || "")) setFaltaSql(true); else setError(e.message || "No se pudieron cargar los secretos."); setLista([]); }
   };
   useEffect(() => { cargar(); }, []);
+  const imp = useImportarExcel({ hoja: "Secretos", archivoPlantilla: "plantilla_secretos_mundo.xlsx", libro: LIBRO_SECRETOS, objetos: objetosDeSecretos, analizar: analizarSecretos, crear: mundoApi.crearSecretosMundo, existentes: lista || [], cursos, recargar: cargar, avisar, setError, singular: "secreto nuevo", plural: "secretos nuevos" });
   if (lista === null) return <p className="text-sm text-slate-400">Cargando…</p>;
   if (faltaSql) return <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">Todavía no se crearon las tablas de los secretos. Corre <b>71_mundo_secretos.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</div>;
+  if (imp.vista) return imp.vista;
   const input = "w-full text-sm rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none bg-white";
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const aForm3 = (x) => ({ id: x.id, nombre: x.nombre, emoji: x.emoji, escena: x.escena, pista: x.pista, texto: x.texto, opciones: x.opciones.length ? [...x.opciones] : ["", ""], correcta: x.correcta, retro: x.retro, grado_id: x.grado_id || "", xp: String(x.xp), oro: String(x.oro), activo: x.activo });
@@ -871,7 +881,7 @@ function PanelSecretos({ cursos, niveles }) {
     <div>
       <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 leading-relaxed">Los <b>secretos</b> son objetos brillantes (📜 🗝️ 💎…) escondidos en una escena del mundo. El estudiante solo los ve <b>cuando se acerca</b>; al examinarlos responde una pregunta y gana XP y oro <b>una sola vez</b>. Mientras no lo encuentre, los vecinos le cuentan tu <b>rumor</b> como pista. La posición dentro de la escena es fija y la elige el juego.</div>
       {error && <div className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-2.5 mb-3">{error}</div>}
-      <div className="flex items-center gap-3 mb-3"><button type="button" onClick={() => { setError(""); setForm(secretoVacio()); }} className="text-sm font-bold px-4 py-2 rounded-lg bg-violet-500 text-white">➕ Nuevo secreto</button>{aviso && <span className="text-xs font-semibold text-emerald-600">{aviso}</span>}</div>
+      <div className="flex items-center gap-3 mb-3"><button type="button" onClick={() => { setError(""); setForm(secretoVacio()); }} className="text-sm font-bold px-4 py-2 rounded-lg bg-violet-500 text-white">➕ Nuevo secreto</button>{imp.botones}{aviso && <span className="text-xs font-semibold text-emerald-600">{aviso}</span>}</div>
       {lista.length === 0 && <p className="text-sm text-slate-400 py-4 text-center">Todavía no hay secretos. ¡Esconde el primero!</p>}
       <div className="rounded-xl border border-slate-200 divide-y divide-slate-100" data-testid="lista-secretos">
         {lista.map((x) => (
@@ -889,6 +899,50 @@ function PanelSecretos({ cursos, niveles }) {
       </div>
     </div>
   );
+}
+
+// ----- Importar acertijos / secretos desde Excel: plantilla, lectura, revisión y creación (solo crea; lo que ya existe se omite) -----
+// cfg = { hoja, archivoPlantilla, libro(cursos), objetos(aoa), analizar(objetos, ctx), crear(lista), existentes, cursos, recargar, avisar, setError, singular, plural }
+function useImportarExcel(cfg) {
+  const [rev, setRev] = useState(null);          // { archivo, analisis }
+  const [aplicando, setAplicando] = useState(null);
+  const entrada = useRef(null);
+  const X = async () => { const mod = await import("xlsx"); return mod.utils ? mod : mod.default; };
+  const plantilla = async () => {
+    try { const x = await X(); x.writeFile(crearLibroContenido(x, cfg.libro(cfg.cursos)), cfg.archivoPlantilla); }
+    catch (e) { cfg.setError("No se pudo crear el Excel: " + (e.message || "error")); }
+  };
+  const elegir = (e) => {
+    const f = e.target.files && e.target.files[0]; e.target.value = ""; if (!f) return;
+    cfg.setError("");
+    const lector = new FileReader();
+    lector.onload = async (ev) => {
+      try {
+        const x = await X(), r = cfg.objetos(leerHoja(x, ev.target.result, cfg.hoja));
+        if (r.error) { cfg.setError(r.error); return; }
+        if (!r.objetos.length) { cfg.setError(`No encontré ${cfg.plural} en el archivo (solo los encabezados).`); return; }
+        setRev({ archivo: f.name, analisis: cfg.analizar(r.objetos, { existentes: cfg.existentes, cursos: cfg.cursos }) });
+      } catch (er) { cfg.setError("No se pudo leer el archivo. ¿Es un Excel (.xlsx)? " + (er.message || "")); }
+    };
+    lector.onerror = () => cfg.setError("No se pudo leer el archivo.");
+    lector.readAsBinaryString(f);
+  };
+  const aplicar = async () => {
+    const nuevas = rev.analisis.filas.filter((f) => f.estado === "nueva"); let creadas = 0;
+    setAplicando({ hecho: 0, total: nuevas.length }); cfg.setError("");
+    try { creadas = await cfg.crear(nuevas.map((f) => f.campos)); setRev(null); await cfg.recargar(); cfg.avisar(`Importado ✓ ${creadas} ${creadas === 1 ? cfg.singular : cfg.plural}`); }
+    catch (er) { creadas = er.creadas ?? creadas; setRev(null); await cfg.recargar(); cfg.setError(`Se detuvo la importación: ${er.message || "error"}. Ya se guardaron ${creadas}. Corrige el problema y vuelve a importar el mismo archivo: lo que ya está guardado se omite.`); }
+    setAplicando(null);
+  };
+  const vista = rev ? <RevisionImportacion analisis={rev.analisis} archivo={rev.archivo} aplicando={aplicando} onCancelar={() => setRev(null)} onAplicar={aplicar} soloNuevas /> : null;
+  const botones = (
+    <>
+      <button type="button" onClick={plantilla} className="text-xs px-3 py-2 rounded-lg border border-slate-200 text-slate-600" data-testid="btn-plantilla">📥 Plantilla</button>
+      <button type="button" onClick={() => entrada.current && entrada.current.click()} className="text-xs px-3 py-2 rounded-lg border border-slate-200 text-slate-600" data-testid="btn-importar">📤 Importar desde Excel</button>
+      <input ref={entrada} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={elegir} data-testid="archivo-excel-contenido" />
+    </>
+  );
+  return { vista, botones };
 }
 
 // ----- Pestaña "Acertijos": sopa de letras, criptograma, ahorcado y rompecabezas de la Casa de los Acertijos -----
@@ -909,8 +963,10 @@ function PanelAcertijos({ cursos, niveles, gradoActual }) {
     catch (e) { if (/does not exist|relation|schema cache/i.test(e.message || "")) setFaltaSql(true); else setError(e.message || "No se pudieron cargar los acertijos."); setLista([]); }
   };
   useEffect(() => { cargar(); }, []);
+  const imp = useImportarExcel({ hoja: "Acertijos", archivoPlantilla: "plantilla_acertijos_mundo.xlsx", libro: LIBRO_ACERTIJOS, objetos: objetosDeAcertijos, analizar: analizarAcertijos, crear: mundoApi.crearAcertijosMundo, existentes: lista || [], cursos, recargar: cargar, avisar, setError, singular: "acertijo nuevo", plural: "acertijos nuevos" });
   if (lista === null) return <p className="text-sm text-slate-400">Cargando…</p>;
   if (faltaSql) return <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">Todavía no se crearon las tablas de los acertijos. Corre <b>70_mundo_acertijos.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</div>;
+  if (imp.vista) return imp.vista;
   const input = "w-full text-sm rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none bg-white";
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const aForm2 = (a) => ({ id: a.id, tipo: a.tipo, titulo: a.titulo, contenido: a.contenido, pista: a.pista, tam: String(a.tam || (a.tipo === "rompe" ? 3 : 10)), grado_id: a.grado_id || "", xp: String(a.xp), oro: String(a.oro), activo: a.activo });
@@ -972,7 +1028,7 @@ function PanelAcertijos({ cursos, niveles, gradoActual }) {
     <div>
       <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 leading-relaxed">En la <b>Casa de los Acertijos</b> (una casa nueva en la aldea) hay una mesa por juego: 🔤 sopa de letras, 🔐 criptograma, 🪢 ahorcado y 🧩 rompecabezas. Tú cargas el contenido aquí y cada estudiante gana el premio <b>una sola vez</b> por acertijo (después puede repetirlo por diversión). La cuadrícula, los números y el orden se mezclan solos cada vez.</div>
       {error && <div className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-2.5 mb-3">{error}</div>}
-      <div className="flex items-center gap-3 mb-3"><button type="button" onClick={() => { setError(""); setForm(acertijoVacio(gradoActual && nivelDeGrado(gradoActual) ? "" : "")); }} className="text-sm font-bold px-4 py-2 rounded-lg bg-violet-500 text-white">➕ Nuevo acertijo</button>{aviso && <span className="text-xs font-semibold text-emerald-600">{aviso}</span>}</div>
+      <div className="flex items-center gap-3 mb-3"><button type="button" onClick={() => { setError(""); setForm(acertijoVacio(gradoActual && nivelDeGrado(gradoActual) ? "" : "")); }} className="text-sm font-bold px-4 py-2 rounded-lg bg-violet-500 text-white">➕ Nuevo acertijo</button>{imp.botones}{aviso && <span className="text-xs font-semibold text-emerald-600">{aviso}</span>}</div>
       {lista.length === 0 && <p className="text-sm text-slate-400 py-4 text-center">Todavía no hay acertijos. ¡Crea el primero!</p>}
       <div className="rounded-xl border border-slate-200 divide-y divide-slate-100" data-testid="lista-acertijos">
         {lista.map((a) => (
@@ -1062,18 +1118,81 @@ function PanelRecursos() {
 }
 
 // ----- Las Tres Llaves y la Cámara del Códice -----
+function PanelSeguimiento({ cursos = [] }) {
+  const [datos, setDatos] = useState(null);
+  const [error, setError] = useState("");
+  const [filtro, setFiltro] = useState({ grado: "", estado: "", texto: "", orden: "inactivos" });
+  const [cargando, setCargando] = useState(false);
+  const cargar = async () => {
+    setCargando(true); setError("");
+    try { setDatos(await mundoApi.fetchSeguimientoMundo()); } catch (e) { setError("No se pudo leer el seguimiento: " + (e.message || "error desconocido")); }
+    setCargando(false);
+  };
+  useEffect(() => { cargar(); }, []);
+  const exportar = async () => {
+    try {
+      const mod = await import("xlsx"), X = mod.utils ? mod : mod.default;
+      const libro = X.utils.book_new(); X.utils.book_append_sheet(libro, X.utils.json_to_sheet(filasParaExcel(filtrarSeguimiento(datos.filas, filtro))), "Seguimiento");
+      X.writeFile(libro, `seguimiento_mundo_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } catch (e) { setError("No se pudo exportar: " + (e.message || "")); }
+  };
+  if (!datos) return error ? <div className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-3">{error} <button className="underline ml-1" onClick={cargar}>Reintentar</button></div> : <p className="text-sm text-slate-400">Cargando…</p>;
+  const filas = filtrarSeguimiento(datos.filas, filtro), r = datos.resumen;
+  const input = "text-sm rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none bg-white";
+  const chip = (id, texto, n) => <button key={id} type="button" onClick={() => setFiltro((f) => ({ ...f, estado: f.estado === id ? "" : id }))} aria-pressed={filtro.estado === id} data-testid={"chip-" + id} className={`text-xs px-3 py-1.5 rounded-full border ${filtro.estado === id ? "bg-violet-50 border-violet-400 text-violet-700 font-semibold" : "border-slate-200 text-slate-600"}`}>{texto} · {n}</button>;
+  const cursosLista = [...new Set([...datos.grados, ...cursos])].sort((a, b) => String(a).localeCompare(String(b), "es", { numeric: true }));
+  return (
+    <div data-testid="panel-seguimiento">
+      <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 leading-relaxed">
+        Una fila por estudiante con lo que ha hecho en el mundo. <b>Jugó esta semana</b> = hizo algo en los últimos 7 días (misión, acertijo, secreto, llave, reto, recolección o duelo de monstruos). Los totales son lo que cada estudiante <i>puede</i> hacer en su curso. Las llaves van de 0 a 3 y el 🔐 indica que ya abrió la Cámara.
+      </div>
+      {error && <div className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-2.5 mb-3">{error}</div>}
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {chip("activo", "🟢 Jugaron esta semana", r.activos)}{chip("inactivo", "🟡 Sin jugar", r.inactivos)}{chip("nunca", "⚪ Nunca han jugado", r.nunca)}
+        <span className="text-[11px] text-slate-400 self-center ml-1">{r.total} estudiantes · {r.accionesSemana} acciones esta semana</span>
+      </div>
+      <div className="flex flex-wrap gap-2 mb-3 items-center">
+        <select value={filtro.grado} onChange={(e) => setFiltro((f) => ({ ...f, grado: e.target.value }))} className={input} aria-label="Curso" data-testid="seg-curso"><option value="">Todos los cursos</option>{cursosLista.map((c) => <option key={c} value={c}>Curso {c}</option>)}</select>
+        <select value={filtro.orden} onChange={(e) => setFiltro((f) => ({ ...f, orden: e.target.value }))} className={input} aria-label="Ordenar" data-testid="seg-orden">{Object.entries(ORDENES_SEGUIMIENTO).map(([k, v]) => <option key={k} value={k}>Ordenar: {v}</option>)}</select>
+        <input value={filtro.texto} onChange={(e) => setFiltro((f) => ({ ...f, texto: e.target.value }))} placeholder="Buscar estudiante…" className={input + " flex-1 min-w-[8rem]"} aria-label="Buscar" />
+        <button type="button" onClick={cargar} disabled={cargando} className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600">{cargando ? "Actualizando…" : "🔄 Actualizar"}</button>
+        <button type="button" onClick={exportar} className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600" data-testid="seg-excel">📤 Excel</button>
+      </div>
+      {filas.length === 0 ? <p className="text-sm text-slate-400 text-center py-6">Ningún estudiante coincide con el filtro.</p> : (
+        <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <table className="w-full text-xs" data-testid="tabla-seguimiento">
+            <thead className="bg-slate-50 text-slate-500"><tr>
+              <th className="text-left px-2 py-2 font-semibold">Estudiante</th><th className="px-2 py-2 font-semibold" title="Misiones hechas / disponibles">🎯</th><th className="px-2 py-2 font-semibold" title="Acertijos">🧩</th><th className="px-2 py-2 font-semibold" title="Secretos">🔎</th>
+              <th className="px-2 py-2 font-semibold" title="Llaves (de 3)">🗝️</th><th className="px-2 py-2 font-semibold" title="Nivel de su mejor monstruo">🐲</th><th className="px-2 py-2 font-semibold" title="Acciones en los últimos 7 días">Semana</th><th className="text-left px-2 py-2 font-semibold">Última vez</th>
+            </tr></thead>
+            <tbody>{filas.map((f) => (
+              <tr key={f.id} className="border-t border-slate-100" data-estado={f.estado}>
+                <td className="px-2 py-1.5"><span title={ETIQUETA_ESTADO[f.estado]}>{f.estado === "activo" ? "🟢" : f.estado === "inactivo" ? "🟡" : "⚪"}</span> <b className="text-slate-700">{f.nombre}</b> <span className="text-slate-400">{f.grado}</span></td>
+                <td className="px-2 py-1.5 text-center">{f.misiones}/{f.misionesTotal}</td><td className="px-2 py-1.5 text-center">{f.acertijos}/{f.acertijosTotal}</td><td className="px-2 py-1.5 text-center">{f.secretos}/{f.secretosTotal}</td>
+                <td className="px-2 py-1.5 text-center">{f.llaves}/3{f.camara ? " 🔐" : ""}</td><td className="px-2 py-1.5 text-center">{f.monstruos ? `Nv ${f.nivelMonstruo}${f.monstruos > 1 ? ` (${f.monstruos})` : ""}` : "—"}</td>
+                <td className="px-2 py-1.5 text-center font-semibold">{f.semana}</td><td className="px-2 py-1.5 text-slate-500">{textoUltima(f)}</td>
+              </tr>))}</tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PanelLlaves() {
   const [f, setF] = useState(null);
   const [resumen, setResumen] = useState(null);
   const [error, setError] = useState("");
   const [aviso, setAviso] = useState("");
   const [guardando, setGuardando] = useState(false);
+  const [lk, setLk] = useState(null);          // dónde y cómo va cada llave: [{ llave, zona, prueba, cuadrante, pista }]; null = falta el SQL 77
   const relojAviso = useRef(null);
   useEffect(() => () => clearTimeout(relojAviso.current), []);
   useEffect(() => {
     (async () => {
       try {
         const c = await mundoApi.fetchConfigMundo();
+        mundoApi.fetchLlavesConfigAdmin().then((r) => setLk(llavesEfectivas(r.filas).map((l) => ({ llave: l.n, zona: l.zona, prueba: l.prueba, cuadrante: l.cuadrante, pista: String((r.filas.find((x) => Number(x.llave) === l.n) || {}).pista || "") })))).catch(() => setLk(null));
         setF({ activo: c.llaves_activo === 1, orden: c.llaves_orden === 1, xp: String(c.llaves_xp), oro: String(c.llaves_oro), aciertos: String(c.llaves_duelo_aciertos), vidas: String(c.llaves_duelo_vidas) });
       } catch (e) { setError(e.message || "No se pudo cargar la configuración."); return; }
       mundoApi.fetchLlavesResumen().then(setResumen).catch(() => setResumen(false));
@@ -1082,9 +1201,10 @@ function PanelLlaves() {
   if (error && !f) return <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">{error}</div>;
   if (!f) return <p className="text-sm text-slate-400">Cargando…</p>;
   const guardar = async () => {
-    const e = validarConfigLlaves(f); if (e) { setError(e); return; }
+    const e = validarConfigLlaves(f) || (lk ? validarLlavesConfig(lk) : ""); if (e) { setError(e); return; }
     setGuardando(true); setError("");
     try {
+      if (lk) await mundoApi.guardarLlavesConfig(lk);
       for (const [k, v] of [["llaves_activo", f.activo ? 1 : 0], ["llaves_orden", f.orden ? 1 : 0], ["llaves_xp", Number(f.xp)], ["llaves_oro", Number(f.oro)], ["llaves_duelo_aciertos", Number(f.aciertos)], ["llaves_duelo_vidas", Number(f.vidas)]]) await mundoApi.guardarConfigMundo(k, v);
       setAviso("Guardado ✓"); clearTimeout(relojAviso.current); relojAviso.current = setTimeout(() => setAviso(""), 2400);
     } catch (er) { setError("No se pudo guardar: " + (er.message || "error desconocido")); }
@@ -1092,16 +1212,44 @@ function PanelLlaves() {
   };
   const input = "w-20 text-sm rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none bg-white";
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
+  const efectivas = lk ? llavesEfectivas(lk) : LLAVES;
+  const cambiarLlave = (n, campo, valor) => setLk((a) => a.map((x) => (x.llave === n ? { ...x, [campo]: valor } : x)));
+  const restablecer = async () => {
+    if (!window.confirm("¿Volver a las llaves de siempre (bronce en el Bosque, plata en la Montaña, oro en el Lago, con sus pistas)?")) return;
+    try { await mundoApi.restablecerLlavesConfig(); setLk(llavesEfectivas([]).map((l) => ({ llave: l.n, zona: l.zona, prueba: l.prueba, cuadrante: "auto", pista: "" }))); setAviso("Llaves restablecidas ✓"); clearTimeout(relojAviso.current); relojAviso.current = setTimeout(() => setAviso(""), 2400); }
+    catch (er) { setError("No se pudo restablecer: " + (er.message || "error")); }
+  };
+  const sel = "w-full text-sm rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none bg-white";
   return (
     <div>
       <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 leading-relaxed">
         Para empezar a <b>recorrer todo el mundo</b>: hay <b>3 llaves escondidas</b>, cada una en una zona y con su propia prueba. Con las 3 se abre la puerta sellada de la <b>🔐 Cámara del Códice</b> (en la aldea) y se reclama un cofre con un premio grande.
-        <ul className="mt-2 space-y-1">{LLAVES.map((l) => <li key={l.n}>{l.medalla} <b>{l.nombre}</b> · {l.lugar} · {TEXTO_PRUEBA[l.prueba]}{l.prueba === "acertijo" ? " (usa tus acertijos; si no hay, una pregunta)" : l.prueba === "pregunta" ? " (de las misiones de la zona)" : " (con preguntas de las misiones)"}</li>)}</ul>
+        <ul className="mt-2 space-y-1">{efectivas.map((l) => <li key={l.n}>{l.medalla} <b>{l.nombre}</b> · {l.lugar} · {TEXTO_PRUEBA[l.prueba]}{l.prueba === "acertijo" ? " (usa tus acertijos; si no hay, una pregunta)" : l.prueba === "pregunta" ? " (de las misiones de la zona)" : " (con preguntas de las misiones)"}</li>)}</ul>
         <p className="mt-2">La puerta y cada llave dan una <b>pista</b> de dónde buscar la siguiente. Las preguntas salen de tus misiones del mundo, y los acertijos de la 🧩 Casa de los Acertijos. Cada estudiante recibe el premio del cofre <b>una sola vez</b>.</p>
       </div>
       {resumen === false && <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3 mb-3">Todavía no se crearon las tablas de las llaves. Corre <b>73_mundo_llaves.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</div>}
       {error && <div className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-2.5 mb-3">{error}</div>}
       {resumen && <div className="text-[11px] text-slate-500 mb-3" data-testid="resumen-llaves">🗝️ {resumen.estudiantes} {resumen.estudiantes === 1 ? "estudiante ha conseguido" : "estudiantes han conseguido"} llaves · 🥉 {resumen.porLlave[1]} · 🥈 {resumen.porLlave[2]} · 🥇 {resumen.porLlave[3]} · 🔐 {resumen.abiertas} {resumen.abiertas === 1 ? "cofre abierto" : "cofres abiertos"}</div>}
+      {lk ? (
+        <div className="rounded-xl border border-slate-200 p-4 mb-3" data-testid="llaves-donde">
+          <div className="flex items-center justify-between mb-1"><h4 className="text-sm font-bold text-slate-800">📍 Dónde y cómo va cada llave</h4><button type="button" onClick={restablecer} className="text-[11px] text-slate-500 underline">Volver a las de siempre</button></div>
+          <p className="text-[11px] text-slate-400 mb-3">Tú decides la zona, la prueba, el rincón del mapa y la pista que se lee. Si dejas la pista en blanco y cambias algo, el juego escribe una sola. Se aplica cuando el estudiante vuelve a entrar al mundo.</p>
+          <div className="space-y-3">{efectivas.map((l) => { const r = lk.find((x) => x.llave === l.n); const auto = llavesEfectivas(lk.map((x) => (x.llave === l.n ? { ...x, pista: "" } : x)))[l.n - 1].pista; return (
+            <div key={l.n} className="rounded-lg bg-slate-50 border border-slate-100 p-3">
+              <div className="text-xs font-bold text-slate-700 mb-2">{l.medalla} {l.nombre}</div>
+              <div className="grid sm:grid-cols-3 gap-2 mb-2">
+                <label className="text-[11px] text-slate-500">Zona<select value={r.zona} onChange={(e) => cambiarLlave(l.n, "zona", e.target.value)} className={sel} aria-label={`Zona de la llave ${l.n}`}>{ZONAS_LLAVE.map((z) => <option key={z[0]} value={z[0]}>{z[1]} {z[2]}</option>)}</select></label>
+                <label className="text-[11px] text-slate-500">Prueba<select value={r.prueba} onChange={(e) => cambiarLlave(l.n, "prueba", e.target.value)} className={sel} aria-label={`Prueba de la llave ${l.n}`}>{Object.entries(TEXTO_PRUEBA).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+                <label className="text-[11px] text-slate-500">Rincón<select value={r.cuadrante} onChange={(e) => cambiarLlave(l.n, "cuadrante", e.target.value)} className={sel} aria-label={`Rincón de la llave ${l.n}`}>{Object.entries(CUADRANTES).map(([k, v]) => <option key={k} value={k}>{v.nombre}</option>)}</select></label>
+              </div>
+              <label className="text-[11px] text-slate-500 block">Pista para encontrar esta llave (se lee en la puerta sellada{l.n > 1 ? " y al conseguir la anterior" : ""})
+                <textarea value={r.pista} maxLength={MAX_PISTA} rows={2} onChange={(e) => cambiarLlave(l.n, "pista", e.target.value)} placeholder={auto} className={sel + " mt-1"} aria-label={`Pista de la llave ${l.n}`} />
+              </label>
+            </div>); })}</div>
+        </div>
+      ) : (
+        <div className="text-[11px] bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-2.5 mb-3">Para elegir dónde va cada llave y qué pista lleva, corre <b>77_mundo_eventos_llaves.sql</b> en Supabase y vuelve a abrir esto. Mientras tanto las llaves quedan como siempre.</div>
+      )}
       <div className="rounded-xl border border-slate-200 p-4 mb-3">
         <label className="flex items-center gap-2 text-sm font-semibold text-slate-800 mb-3"><input type="checkbox" checked={f.activo} onChange={(e) => setF((x) => ({ ...x, activo: e.target.checked }))} /> Las llaves y la Cámara están activas</label>
         <label className="flex items-center gap-2 text-sm font-semibold text-slate-800 mb-1"><input type="checkbox" checked={f.orden} onChange={(e) => setF((x) => ({ ...x, orden: e.target.checked }))} /> Hay que conseguirlas en orden (bronce → plata → oro)</label>
@@ -1378,6 +1526,147 @@ function PanelLigas({ cursos = [] }) {
   );
 }
 
+// ----- Eventos temporales (SQL 77): XP/oro multiplicados, jefe especial y preguntas de un tema durante unas fechas -----
+const MULTIPLICADORES = [1, 1.5, 2, 2.5, 3, 4, 5];
+const hoyColombia = () => new Date(Date.now() - 5 * 3600000).toISOString().slice(0, 10);
+const sumarDias = (f, d) => new Date(Date.parse(f + "T00:00:00Z") + d * 86400000).toISOString().slice(0, 10);
+const preguntaEventoVacia = () => ({ texto: "", opciones: ["", ""], correcta: 0, pista: "" });
+const eventoVacio = () => ({ nombre: "", emoji: "🎉", descripcion: "", desde: hoyColombia(), hasta: sumarDias(hoyColombia(), 6), grado_id: "", xp_mult: 2, oro_mult: 1, jefe: null, preguntas: [], premio_xp: "15", premio_oro: "5", activo: true });
+const jefeVacio = () => ({ nombre: "", emoji: "👹", tipo: CLAVES_TIPO_MON[0], nivel: 5, zona: "bosque" });
+const aFormEvento = (e) => ({ id: e.id, nombre: e.nombre, emoji: e.emoji, descripcion: e.descripcion || "", desde: fechaDeInicio(e.inicio), hasta: fechaDeFin(e.fin), grado_id: e.grado_id || "", xp_mult: e.xp_mult, oro_mult: e.oro_mult, jefe: e.jefe ? { ...e.jefe } : null, preguntas: (e.preguntas || []).map((p) => ({ texto: p.texto, opciones: [...(p.opciones || [])], correcta: p.correcta, pista: p.pista || "" })), premio_xp: String(e.premio_xp ?? 0), premio_oro: String(e.premio_oro ?? 0), activo: e.activo !== false });
+function PanelEventos({ cursos = [], niveles = [] }) {
+  const [lista, setLista] = useState(null);       // null = cargando · false = falta el SQL 77
+  const [conteo, setConteo] = useState({});
+  const [form, setForm] = useState(null);
+  const [error, setError] = useState("");
+  const [aviso, setAviso] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const relojAviso = useRef(null);
+  useEffect(() => () => clearTimeout(relojAviso.current), []);
+  const avisar = (t) => { setAviso(t); clearTimeout(relojAviso.current); relojAviso.current = setTimeout(() => setAviso(""), 2600); };
+  const cargar = async () => {
+    try { setLista(await mundoApi.fetchEventosAdmin()); mundoApi.fetchConteoEventos().then(setConteo).catch(() => {}); }
+    catch (e) { if (/does not exist|relation|schema cache/i.test(e.message || "")) setLista(false); else { setError(e.message || "No se pudieron cargar los eventos."); setLista([]); } }
+  };
+  useEffect(() => { cargar(); }, []);
+  if (lista === false) return <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">Todavía no se crearon las tablas de los eventos. Corre <b>77_mundo_eventos_llaves.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</div>;
+  if (lista === null) return <p className="text-sm text-slate-400">Cargando…</p>;
+  const input = "w-full text-sm rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none bg-white";
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const setJefe = (k, v) => setForm((f) => ({ ...f, jefe: { ...f.jefe, [k]: v } }));
+  const setPreg = (i, cambio) => setForm((f) => ({ ...f, preguntas: f.preguntas.map((p, k) => (k === i ? { ...p, ...cambio } : p)) }));
+  const guardar = async () => {
+    const e = validarEvento(form); if (e) { setError(e); return; }
+    setGuardando(true); setError("");
+    try { await mundoApi.guardarEvento(form, form.id ?? null); setForm(null); await cargar(); avisar("Evento guardado ✓"); }
+    catch (er) { setError("No se pudo guardar: " + (er.message || "error desconocido")); }
+    setGuardando(false);
+  };
+  const alternar = async (e) => { try { await mundoApi.alternarEvento(e.id, !e.activo); await cargar(); } catch (er) { setError("No se pudo cambiar: " + (er.message || "")); } };
+  const borrar = async (e) => { if (!window.confirm(`¿Borrar el evento "${e.nombre}"? Los premios ya entregados no se tocan.`)) return; try { await mundoApi.eliminarEvento(e.id); await cargar(); avisar("Evento borrado"); } catch (er) { setError("No se pudo borrar: " + (er.message || "")); } };
+  const copiar = (e) => { const f = aFormEvento(e); delete f.id; f.nombre = e.nombre + " (copia)"; const dur = Math.round((Date.parse(f.hasta) - Date.parse(f.desde)) / 86400000); f.desde = hoyColombia(); f.hasta = sumarDias(f.desde, dur); setError(""); setForm(f); };
+  const ESTADO = { en_curso: ["🟢 En curso", "bg-emerald-50 text-emerald-700"], proximo: ["⏳ Próximo", "bg-sky-50 text-sky-700"], terminado: ["⚪ Terminado", "bg-slate-100 text-slate-500"], apagado: ["⏸ Apagado", "bg-amber-50 text-amber-700"] };
+  const etiquetaCurso = (g) => (!g ? "Todos los cursos" : esNivel(g) ? `Todo ${nombreNivel(nivelDeClave(g)).toLowerCase()}` : `Curso ${g}`);
+
+  if (form) {
+    const hayPreg = form.preguntas.length > 0;
+    return (
+      <div data-testid="form-evento">
+        <h4 className="text-sm font-bold text-slate-800 mb-2">{form.id ? "✏️ Editar evento" : "➕ Nuevo evento"}</h4>
+        {error && <div className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-2.5 mb-3" data-testid="error-evento">{error}</div>}
+        <div className="grid sm:grid-cols-2 gap-3 mb-3">
+          <div className="sm:col-span-2"><label className="text-[11px] text-slate-500 block mb-1">Nombre del evento</label><input value={form.nombre} maxLength={60} onChange={(e) => set("nombre", e.target.value)} className={input} aria-label="Nombre del evento" placeholder="Ej: Semana de la Ética" /></div>
+          <div className="sm:col-span-2"><label className="text-[11px] text-slate-500 block mb-1">Ícono</label><div className="flex flex-wrap gap-1.5">{EMOJIS_EVENTO.map((e) => <button type="button" key={e} onClick={() => set("emoji", e)} aria-label={`Ícono ${e}`} className={`text-xl w-10 h-10 rounded-lg border-2 ${form.emoji === e ? "border-violet-500 bg-violet-50" : "border-slate-200"}`}>{e}</button>)}</div></div>
+          <div className="sm:col-span-2"><label className="text-[11px] text-slate-500 block mb-1">Descripción (la lee el Heraldo; opcional)</label><textarea value={form.descripcion} maxLength={240} rows={2} onChange={(e) => set("descripcion", e.target.value)} className={input} aria-label="Descripción del evento" placeholder="Ej: Esta semana vivimos la ética: responde las preguntas del Heraldo y vence a la Sombra del Egoísmo." /></div>
+          <div><label className="text-[11px] text-slate-500 block mb-1">Empieza el</label><input type="date" value={form.desde} onChange={(e) => set("desde", e.target.value)} className={input} aria-label="Fecha de inicio" /></div>
+          <div><label className="text-[11px] text-slate-500 block mb-1">Termina el (inclusive)</label><input type="date" value={form.hasta} onChange={(e) => set("hasta", e.target.value)} className={input} aria-label="Fecha de cierre del evento" /></div>
+          <div className="sm:col-span-2"><label className="text-[11px] text-slate-500 block mb-1">¿Para quién es?</label>
+            <select value={form.grado_id} onChange={(e) => set("grado_id", e.target.value)} className={input} aria-label="Curso del evento">
+              <option value="">🌐 Todos los cursos</option>
+              {[...new Set([...niveles, ...(esNivel(form.grado_id) ? [nivelDeClave(form.grado_id)] : [])])].map((n) => <option key={n} value={claveNivel(n)}>📚 Todo {nombreNivel(n).toLowerCase()}</option>)}
+              {cursos.map((c) => <option key={c} value={c}>🏫 Solo el curso {c}</option>)}
+            </select></div>
+        </div>
+        <div className="rounded-xl border border-slate-200 p-3 mb-3">
+          <div className="text-xs font-bold text-slate-700 mb-2">✨ Bono de premios <span className="font-normal text-slate-400">— multiplica lo que se gana en misiones, acertijos, secretos, retos, insignias, duelos de monstruos y el cofre</span></div>
+          <div className="flex flex-wrap items-center gap-3 text-sm text-slate-700">
+            <label>XP ×<select value={form.xp_mult} onChange={(e) => set("xp_mult", Number(e.target.value))} className="ml-1 text-sm rounded-lg px-2 py-1 border border-slate-200 bg-white" aria-label="Multiplicador de XP">{MULTIPLICADORES.map((m) => <option key={m} value={m}>{m}</option>)}</select></label>
+            <label>Oro ×<select value={form.oro_mult} onChange={(e) => set("oro_mult", Number(e.target.value))} className="ml-1 text-sm rounded-lg px-2 py-1 border border-slate-200 bg-white" aria-label="Multiplicador de oro">{MULTIPLICADORES.map((m) => <option key={m} value={m}>{m}</option>)}</select></label>
+            <span className="text-[11px] text-slate-400">×1 = sin bono</span>
+          </div>
+        </div>
+        <div className="rounded-xl border border-slate-200 p-3 mb-3">
+          <label className="flex items-center gap-2 text-xs font-bold text-slate-700"><input type="checkbox" checked={!!form.jefe} onChange={(e) => set("jefe", e.target.checked ? jefeVacio() : null)} aria-label="Con jefe especial" /> 👹 Jefe especial del evento <span className="font-normal text-slate-400">— aparece solo durante el evento (necesita los monstruos activos)</span></label>
+          {form.jefe && (
+            <div className="grid sm:grid-cols-2 gap-3 mt-3">
+              <div><label className="text-[11px] text-slate-500 block mb-1">Nombre del jefe</label><input value={form.jefe.nombre} maxLength={30} onChange={(e) => setJefe("nombre", e.target.value)} className={input} aria-label="Nombre del jefe" placeholder="Ej: Sombra del Egoísmo" /></div>
+              <div><label className="text-[11px] text-slate-500 block mb-1">Dónde aparece</label><select value={form.jefe.zona} onChange={(e) => setJefe("zona", e.target.value)} className={input} aria-label="Zona del jefe">{ZONAS_JEFE_EVENTO.map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select></div>
+              <div><label className="text-[11px] text-slate-500 block mb-1">Tipo</label><select value={form.jefe.tipo} onChange={(e) => setJefe("tipo", e.target.value)} className={input} aria-label="Tipo del jefe">{CLAVES_TIPO_MON.map((k) => <option key={k} value={k}>{TIPOS_MON[k].emoji} {TIPOS_MON[k].nombre}</option>)}</select></div>
+              <div><label className="text-[11px] text-slate-500 block mb-1">Nivel (1 a {NIVEL_MAX_MON})</label><input type="number" min="1" max={NIVEL_MAX_MON} value={form.jefe.nivel} onChange={(e) => setJefe("nivel", e.target.value === "" ? "" : Number(e.target.value))} className={input} aria-label="Nivel del jefe" /></div>
+              <div className="sm:col-span-2"><label className="text-[11px] text-slate-500 block mb-1">Cómo se ve</label><div className="flex flex-wrap gap-1.5">{EMOJIS_JEFE.map((e) => <button type="button" key={e} onClick={() => setJefe("emoji", e)} aria-label={`Jefe ${e}`} className={`text-xl w-10 h-10 rounded-lg border-2 ${form.jefe.emoji === e ? "border-violet-500 bg-violet-50" : "border-slate-200"}`}>{e}</button>)}</div></div>
+              <p className="sm:col-span-2 text-[11px] text-slate-400">Se pelea como cualquier jefe (da el doble de premio) y, además, recibe el bono del evento. Cada estudiante lo enfrenta desde el juego; si lo vence, vuelve a aparecer a los pocos minutos.</p>
+            </div>
+          )}
+        </div>
+        <div className="rounded-xl border border-slate-200 p-3 mb-3">
+          <div className="text-xs font-bold text-slate-700 mb-1">❓ Preguntas del tema <span className="font-normal text-slate-400">— las hace el Heraldo del evento en la plaza; cada una se premia una sola vez ({form.preguntas.length}/{MAX_PREGUNTAS_EVENTO})</span></div>
+          {form.preguntas.map((p, i) => (
+            <div key={i} className="rounded-lg bg-slate-50 border border-slate-100 p-3 mt-2" data-testid={`preg-evento-${i}`}>
+              <div className="flex items-center justify-between mb-1"><span className="text-[11px] font-bold text-slate-500">Pregunta {i + 1}</span><button type="button" onClick={() => setForm((f) => ({ ...f, preguntas: f.preguntas.filter((_, k) => k !== i) }))} className="text-xs text-rose-600" aria-label={`Quitar pregunta ${i + 1}`}>Quitar</button></div>
+              <textarea value={p.texto} maxLength={300} rows={2} onChange={(e) => setPreg(i, { texto: e.target.value })} className={input} aria-label={`Texto de la pregunta ${i + 1}`} placeholder="Escribe la pregunta" />
+              <div className="mt-2">{p.opciones.map((o, k) => (
+                <div key={k} className="flex items-center gap-2 mb-1.5">
+                  <input type="radio" name={`correcta-ev-${i}`} checked={p.correcta === k} onChange={() => setPreg(i, { correcta: k })} aria-label={`Correcta ${k + 1} de la pregunta ${i + 1}`} />
+                  <input value={o} maxLength={120} onChange={(e) => setPreg(i, { opciones: p.opciones.map((x, j) => (j === k ? e.target.value : x)) })} className={input} aria-label={`Respuesta ${k + 1} de la pregunta ${i + 1}`} />
+                  {p.opciones.length > 2 && <button type="button" onClick={() => setPreg(i, { opciones: p.opciones.filter((_, j) => j !== k), correcta: p.correcta === k ? 0 : p.correcta > k ? p.correcta - 1 : p.correcta })} className="text-slate-400 text-lg px-1" aria-label={`Quitar respuesta ${k + 1} de la pregunta ${i + 1}`}>×</button>}
+                </div>))}
+                {p.opciones.length < 5 && <button type="button" onClick={() => setPreg(i, { opciones: [...p.opciones, ""] })} className="text-xs text-violet-600 font-semibold">+ Agregar respuesta</button>}</div>
+              <input value={p.pista} maxLength={160} onChange={(e) => setPreg(i, { pista: e.target.value })} className={input + " mt-2"} aria-label={`Pista de la pregunta ${i + 1}`} placeholder="Pista si se equivoca (opcional)" />
+            </div>))}
+          {form.preguntas.length < MAX_PREGUNTAS_EVENTO && <button type="button" onClick={() => setForm((f) => ({ ...f, preguntas: [...f.preguntas, preguntaEventoVacia()] }))} className="mt-2 text-xs font-semibold text-violet-600" data-testid="agregar-pregunta-evento">+ Agregar pregunta</button>}
+          {hayPreg && (
+            <div className="flex flex-wrap items-center gap-2 mt-3 text-sm text-slate-700">Cada pregunta da <input type="number" min="0" max="200" value={form.premio_xp} onChange={(e) => set("premio_xp", e.target.value)} className="w-20 text-sm rounded-lg px-2.5 py-1.5 border border-slate-200 bg-white" aria-label="XP por pregunta" /> XP y <input type="number" min="0" max="200" value={form.premio_oro} onChange={(e) => set("premio_oro", e.target.value)} className="w-20 text-sm rounded-lg px-2.5 py-1.5 border border-slate-200 bg-white" aria-label="Oro por pregunta" /> 🪙 <span className="text-[11px] text-slate-400">(también reciben el bono del evento)</span></div>
+          )}
+        </div>
+        <label className="flex items-center gap-2 text-sm text-slate-700 mb-4"><input type="checkbox" checked={form.activo} onChange={(e) => set("activo", e.target.checked)} /> Activo (si lo apagas, no se ve aunque estén las fechas)</label>
+        <div className="flex gap-2 justify-end">
+          <button type="button" onClick={() => { setForm(null); setError(""); }} disabled={guardando} className="text-sm text-slate-500 px-4 py-2">Cancelar</button>
+          <button type="button" onClick={guardar} disabled={guardando} className="text-sm font-bold px-5 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">{guardando ? "Guardando…" : "Guardar evento"}</button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div data-testid="panel-eventos">
+      <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 leading-relaxed">
+        Un <b>evento</b> es una temporada especial del mundo, por ejemplo la <b>Semana de la Ética</b>. Entre las fechas que elijas (hora de Colombia, máximo {MAX_DIAS_EVENTO} días) puede tener: <b>XP y/u oro multiplicados</b> en todo lo que da premio, un <b>jefe especial</b> y un <b>Heraldo</b> en la plaza con <b>preguntas de un tema</b>. Empieza y termina solo; los estudiantes ven un aviso al entrar.
+        <p className="mt-2">Ojo: el bono suma de verdad XP y oro a tus estudiantes. Si por error dos eventos coinciden para el mismo curso, vale el más reciente.</p>
+      </div>
+      {error && <div className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-2.5 mb-3">{error}</div>}
+      <div className="flex items-center gap-3 mb-3"><button type="button" onClick={() => { setError(""); setForm(eventoVacio()); }} className="text-sm font-bold px-4 py-2 rounded-lg bg-violet-500 text-white" data-testid="nuevo-evento">➕ Nuevo evento</button>{aviso && <span className="text-xs font-semibold text-emerald-600">{aviso}</span>}</div>
+      {lista.length === 0 && <p className="text-sm text-slate-400 py-4 text-center">Todavía no hay eventos. ¡Crea el primero!</p>}
+      <ul className="space-y-2" data-testid="lista-eventos">
+        {lista.map((e) => { const [txtE, clsE] = ESTADO[e.estado] || ESTADO.terminado, c = conteo[e.id], bono = textoBono(e), np = (e.preguntas || []).length; return (
+          <li key={e.id} className={`rounded-xl border border-slate-200 p-3 ${e.estado === "terminado" || e.estado === "apagado" ? "opacity-70" : ""}`}>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-2xl">{e.emoji}</span>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-slate-800 truncate">{e.nombre} <span className={`ml-1 text-[10px] rounded-full px-2 py-0.5 font-semibold ${clsE}`}>{txtE}</span></div>
+                <div className="text-[11px] text-slate-500">{textoFechas(e)} · {etiquetaCurso(e.grado_id)}{bono ? ` · ${bono}` : ""}{e.jefe ? ` · 👹 ${e.jefe.nombre}` : ""}{np ? ` · ❓ ${np} pregunta${np === 1 ? "" : "s"}` : ""}{c ? ` · ${c.estudiantes} estudiante${c.estudiantes === 1 ? "" : "s"} participaron` : ""}</div>
+              </div>
+              <div className="flex flex-wrap gap-1 text-xs">
+                <button type="button" onClick={() => { setError(""); setForm(aFormEvento(e)); }} className="px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-700">Editar</button>
+                <button type="button" onClick={() => copiar(e)} className="px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-700">Copiar</button>
+                <button type="button" onClick={() => alternar(e)} className="px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-700">{e.activo ? "Apagar" : "Encender"}</button>
+                <button type="button" onClick={() => borrar(e)} className="px-2.5 py-1.5 rounded-lg bg-rose-50 text-rose-600">Borrar</button>
+              </div>
+            </div>
+          </li>); })}
+      </ul>
+    </div>
+  );
+}
+
 // ----- La Sala de la Comarca: aportes de GP/FP y batallas entre reinos -----
 function PanelComarca() {
   const [f, setF] = useState(null);
@@ -1445,18 +1734,18 @@ function PanelComarca() {
 }
 
 // ----- La revisión de un Excel antes de guardar: qué se crea, qué se actualiza, qué tiene errores -----
-function RevisionImportacion({ analisis, archivo, aplicando, onCancelar, onAplicar }) {
+function RevisionImportacion({ analisis, archivo, aplicando, onCancelar, onAplicar, soloNuevas = false }) {
   const { filas, resumen } = analisis;
   const aplicables = resumen.nuevas + resumen.actualizadas;
-  const estado = { nueva: ["✅", "Nueva", "bg-emerald-50 text-emerald-700"], actualiza: ["🔄", "Se actualiza", "bg-sky-50 text-sky-700"], igual: ["＝", "Sin cambios", "bg-slate-100 text-slate-500"], error: ["❌", "Con error", "bg-rose-50 text-rose-700"] };
+  const estado = { nueva: ["✅", "Nueva", "bg-emerald-50 text-emerald-700"], actualiza: ["🔄", "Se actualiza", "bg-sky-50 text-sky-700"], igual: ["＝", soloNuevas ? "Ya existe" : "Sin cambios", "bg-slate-100 text-slate-500"], error: ["❌", "Con error", "bg-rose-50 text-rose-700"] };
   return (
     <div>
       <h4 className="text-sm font-bold text-slate-800 mb-1">📊 Revisar antes de importar</h4>
       <p className="text-[11px] text-slate-400 mb-3">Archivo: {archivo}. Todavía no se guardó nada.</p>
       <div className="flex flex-wrap gap-1.5 mb-3" data-testid="resumen-importacion">
         <span className="text-xs font-semibold rounded-full px-3 py-1 bg-emerald-50 text-emerald-700">✅ {resumen.nuevas} nueva{resumen.nuevas === 1 ? "" : "s"}</span>
-        <span className="text-xs font-semibold rounded-full px-3 py-1 bg-sky-50 text-sky-700">🔄 {resumen.actualizadas} para actualizar</span>
-        <span className="text-xs font-semibold rounded-full px-3 py-1 bg-slate-100 text-slate-500">＝ {resumen.iguales} sin cambios</span>
+        {!soloNuevas && <span className="text-xs font-semibold rounded-full px-3 py-1 bg-sky-50 text-sky-700">🔄 {resumen.actualizadas} para actualizar</span>}
+        <span className="text-xs font-semibold rounded-full px-3 py-1 bg-slate-100 text-slate-500">＝ {resumen.iguales} {soloNuevas ? "ya existían (se omiten)" : "sin cambios"}</span>
         <span className={`text-xs font-semibold rounded-full px-3 py-1 ${resumen.errores ? "bg-rose-50 text-rose-700" : "bg-slate-100 text-slate-400"}`}>❌ {resumen.errores} con error</span>
         {resumen.ocultas > 0 && <span className="text-xs font-semibold rounded-full px-3 py-1 bg-amber-50 text-amber-700">🙈 {resumen.ocultas} quedarán ocultas</span>}
         {resumen.ejemplos > 0 && <span className="text-xs rounded-full px-3 py-1 bg-slate-100 text-slate-400">{resumen.ejemplos} de ejemplo ignorada{resumen.ejemplos === 1 ? "" : "s"}</span>}
@@ -1482,7 +1771,7 @@ function RevisionImportacion({ analisis, archivo, aplicando, onCancelar, onAplic
       {aplicando && <div className="text-xs text-slate-500 mb-2" data-testid="progreso-importacion">Guardando… {aplicando.hecho} de {aplicando.total}</div>}
       <div className="flex gap-2 justify-end">
         <button type="button" onClick={onCancelar} disabled={!!aplicando} className="text-sm text-slate-500 px-4 py-2 disabled:opacity-40">Cancelar</button>
-        <button type="button" onClick={onAplicar} disabled={!!aplicando || aplicables === 0} className="text-sm font-bold px-5 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-40">{aplicando ? "Guardando…" : aplicables === 0 ? "Nada para importar" : `Importar ${aplicables} ${aplicables === 1 ? "misión" : "misiones"}`}</button>
+        <button type="button" onClick={onAplicar} disabled={!!aplicando || aplicables === 0} className="text-sm font-bold px-5 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-40">{aplicando ? "Guardando…" : aplicables === 0 ? "Nada para importar" : `Importar ${aplicables} ${soloNuevas ? (aplicables === 1 ? "nueva" : "nuevas") : (aplicables === 1 ? "misión" : "misiones")}`}</button>
       </div>
     </div>
   );
