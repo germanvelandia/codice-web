@@ -5,7 +5,9 @@ import { validarContenido, CLAVES_TIPO } from "../game/acertijos";
 import { CONFIG_COMARCA_DEFECTO, calcularAporte, diaColombia, puedeBatallar } from "../game/comarca";
 import { validarSecreto, limpiarSecreto, secretoJugable } from "../game/secretos";
 import { CONFIG_MONSTRUOS_DEFECTO, validarMonstruo, limpiarMonstruo, nivelDeXp, xpParaNivel, NIVEL_MAX, calcularPremioMonstruo, validarCatalogo, validarCaptura, nivelCapturado, cfgArena, puntosLiga, ordenarTabla, premioPuesto, validarLiga } from "../game/monstruos";
-import { CONFIG_LLAVES_DEFECTO, LLAVES, llaveDe, puedeConseguir, camaraDesbloqueada } from "../game/llaves";
+import { CONFIG_LLAVES_DEFECTO, LLAVES, llaveDe, puedeConseguir, camaraDesbloqueada, validarLlavesConfig, llavesEfectivas } from "../game/llaves";
+import { resumirSeguimiento } from "../game/seguimiento";
+import { eventoVigente, elegirEvento, aplicarBono, aplicaA, validarEvento, limpiarEvento, normalizarEvento, preguntasJugables, jefeJugable, estadoEvento, textoHasta } from "../game/eventos";
 import { ITEMS, RECETAS, MAX_POR_ITEM, PARCELA, esDecoracion, celdaValida, puedeFabricar, cantidadPorRecoleccion } from "../game/items";
 
 // Todo lo que el Mundo CÓDICE necesita de la base de datos: las misiones del mundo, cuáles
@@ -60,7 +62,7 @@ export async function completarMisionMundo(estudianteId, mision) {
     if (error.code === "23505") return { ok: true, yaEstaba: true }; // ya la tenía registrada (por ejemplo, desde otro dispositivo)
     return { ok: false, mensaje: error.message };
   }
-  const xp = mision.xp || 0, oro = mision.oro || 0;
+  const b = await bonoEvento(estudianteId, mision.xp || 0, mision.oro || 0), xp = b.xp, oro = b.oro;
   try {
     const [, rpc] = await Promise.all([
       supabase.from("historial_gamificacion").insert({ estudiante_id: estudianteId, etiqueta: `🌍 Mundo: ${mision.titulo}`, xp, vida: 0, monedas: oro, categoria: "general" }),
@@ -68,7 +70,7 @@ export async function completarMisionMundo(estudianteId, mision) {
     ]);
     if (rpc.error) throw rpc.error;
     const fila = rpc.data?.[0];
-    return { ok: true, xp: fila?.xp, oro: fila?.monedas, comarca: await aportarAComarca(estudianteId, { xp, oro, motivo: `Mundo CÓDICE: ${mision.titulo}` }) };
+    return { ok: true, xp: fila?.xp, oro: fila?.monedas, evento: b.evento, comarca: await aportarAComarca(estudianteId, { xp, oro, motivo: `Mundo CÓDICE: ${mision.titulo}` }) };
   } catch (e) {
     await supabase.from("mundo_misiones_hechas").delete().eq("estudiante_id", estudianteId).eq("mision_id", mision.id);
     return { ok: false, mensaje: (e && e.message) || "no se pudo entregar el premio" };
@@ -283,13 +285,13 @@ export async function registrarDuelo(estudianteId, zona, { ganado, aciertos = 0,
     if (eIns.code === "23505" || /duplicate|unique/i.test(eIns.message || "")) return { ok: true, yaTenia: true }; // ya la tenía: sin premio doble
     throw eIns;
   }
-  const cfg = await fetchConfigMundo(), xp = cfg.duelo_xp, oro = cfg.duelo_oro;
+  const cfg = await fetchConfigMundo(), b = await bonoEvento(estudianteId, cfg.duelo_xp, cfg.duelo_oro), xp = b.xp, oro = b.oro;
   if (xp || oro) {
     const { error } = await supabase.rpc("ajustar_progreso", { p_estudiante_id: estudianteId, p_delta_xp: xp, p_delta_vida: 0, p_delta_monedas: oro });
     if (error) { await supabase.from("mundo_insignias").delete().eq("estudiante_id", estudianteId).eq("zona", zona); throw error; }
     try { await supabase.from("historial_gamificacion").insert({ estudiante_id: estudianteId, etiqueta: `🏅 Insignia: ${(ZONAS.find((z) => z.key === zona) || {}).insignia?.nombre || zona}`, xp, vida: 0, monedas: oro, categoria: "general" }); } catch { /* el historial es secundario */ }
   }
-  return { ok: true, xp, oro, comarca: await aportarAComarca(estudianteId, { xp, oro, motivo: "Mundo CÓDICE: insignia" }) };
+  return { ok: true, xp, oro, evento: b.evento, comarca: await aportarAComarca(estudianteId, { xp, oro, motivo: "Mundo CÓDICE: insignia" }) };
 }
 
 // ----- para el editor de la docente -----
@@ -370,13 +372,13 @@ export async function registrarReto(estudianteId, { enemigo, zona, ganado, acier
     if (eIns.code === "23505" || /duplicate|unique/i.test(eIns.message || "")) return { ok: true, yaTenia: true };
     throw eIns;
   }
-  const xp = cfg.reto_xp, oro = cfg.reto_oro;
+  const b = await bonoEvento(estudianteId, cfg.reto_xp, cfg.reto_oro), xp = b.xp, oro = b.oro;
   if (xp || oro) {
     const { error } = await supabase.rpc("ajustar_progreso", { p_estudiante_id: estudianteId, p_delta_xp: xp, p_delta_vida: 0, p_delta_monedas: oro });
     if (error) { await supabase.from("mundo_retos").delete().eq("estudiante_id", estudianteId).eq("enemigo", enemigo).eq("ganado", true); throw error; }
     try { await supabase.from("historial_gamificacion").insert({ estudiante_id: estudianteId, etiqueta: `⚔️ Derrotó a ${def.nombre}`, xp, vida: 0, monedas: oro, categoria: "general" }); } catch { /* el historial es secundario */ }
   }
-  return { ok: true, xp, oro, comarca: await aportarAComarca(estudianteId, { xp, oro, motivo: `Mundo CÓDICE: derrotó a ${def.nombre}` }) };
+  return { ok: true, xp, oro, evento: b.evento, comarca: await aportarAComarca(estudianteId, { xp, oro, motivo: `Mundo CÓDICE: derrotó a ${def.nombre}` }) };
 }
 
 // ----- para el editor de la docente -----
@@ -575,14 +577,15 @@ export async function completarAcertijoMundo(estudianteId, { id }) {
     if (error.code === "23505" || /duplicate|unique/i.test(error.message || "")) return { ok: true, yaEstaba: true };
     return { ok: false, mensaje: error.message };
   }
+  const b = await bonoEvento(estudianteId, a.xp, a.oro);
   try {
     const [, rpc] = await Promise.all([
-      supabase.from("historial_gamificacion").insert({ estudiante_id: estudianteId, etiqueta: `🧩 Acertijo: ${a.titulo}`, xp: a.xp, vida: 0, monedas: a.oro, categoria: "general" }),
-      supabase.rpc("ajustar_progreso", { p_estudiante_id: estudianteId, p_delta_xp: a.xp, p_delta_vida: 0, p_delta_monedas: a.oro }),
+      supabase.from("historial_gamificacion").insert({ estudiante_id: estudianteId, etiqueta: `🧩 Acertijo: ${a.titulo}`, xp: b.xp, vida: 0, monedas: b.oro, categoria: "general" }),
+      supabase.rpc("ajustar_progreso", { p_estudiante_id: estudianteId, p_delta_xp: b.xp, p_delta_vida: 0, p_delta_monedas: b.oro }),
     ]);
     if (rpc.error) throw rpc.error;
     const fila = rpc.data?.[0];
-    return { ok: true, xp: fila?.xp, oro: fila?.monedas, comarca: await aportarAComarca(estudianteId, { xp: a.xp, oro: a.oro, motivo: `Mundo CÓDICE: acertijo ${a.titulo}` }) };
+    return { ok: true, xp: fila?.xp, oro: fila?.monedas, evento: b.evento, comarca: await aportarAComarca(estudianteId, { xp: b.xp, oro: b.oro, motivo: `Mundo CÓDICE: acertijo ${a.titulo}` }) };
   } catch (e) {
     await supabase.from("mundo_acertijos_hechos").delete().eq("estudiante_id", estudianteId).eq("acertijo_id", id);
     return { ok: false, mensaje: (e && e.message) || "no se pudo entregar el premio" };
@@ -658,14 +661,15 @@ export async function hallarSecretoMundo(estudianteId, { id }) {
     if (error.code === "23505" || /duplicate|unique/i.test(error.message || "")) return { ok: true, yaEstaba: true };
     return { ok: false, mensaje: error.message };
   }
+  const b = await bonoEvento(estudianteId, x.xp, x.oro);
   try {
     const [, rpc] = await Promise.all([
-      supabase.from("historial_gamificacion").insert({ estudiante_id: estudianteId, etiqueta: `🔎 Secreto: ${x.nombre}`, xp: x.xp, vida: 0, monedas: x.oro, categoria: "general" }),
-      supabase.rpc("ajustar_progreso", { p_estudiante_id: estudianteId, p_delta_xp: x.xp, p_delta_vida: 0, p_delta_monedas: x.oro }),
+      supabase.from("historial_gamificacion").insert({ estudiante_id: estudianteId, etiqueta: `🔎 Secreto: ${x.nombre}`, xp: b.xp, vida: 0, monedas: b.oro, categoria: "general" }),
+      supabase.rpc("ajustar_progreso", { p_estudiante_id: estudianteId, p_delta_xp: b.xp, p_delta_vida: 0, p_delta_monedas: b.oro }),
     ]);
     if (rpc.error) throw rpc.error;
     const fila = rpc.data?.[0];
-    return { ok: true, xp: fila?.xp, oro: fila?.monedas, comarca: await aportarAComarca(estudianteId, { xp: x.xp, oro: x.oro, motivo: `Mundo CÓDICE: secreto ${x.nombre}` }) };
+    return { ok: true, xp: fila?.xp, oro: fila?.monedas, evento: b.evento, comarca: await aportarAComarca(estudianteId, { xp: b.xp, oro: b.oro, motivo: `Mundo CÓDICE: secreto ${x.nombre}` }) };
   } catch (e) {
     await supabase.from("mundo_secretos_hallados").delete().eq("estudiante_id", estudianteId).eq("secreto_id", id);
     return { ok: false, mensaje: (e && e.message) || "no se pudo entregar el premio" };
@@ -793,13 +797,14 @@ export async function fetchLlavesMundo(estudianteId) {
   const cfg = await fetchConfigMundo();
   const base = { activo: cfg.llaves_activo === 1, orden: cfg.llaves_orden === 1, tengo: [], abierta: false, premio: { xp: cfg.llaves_xp, oro: cfg.llaves_oro }, duelo: { aciertos: Math.max(1, cfg.llaves_duelo_aciertos), vidas: Math.max(1, cfg.llaves_duelo_vidas) } };
   if (!base.activo) return base;
-  const [l, c] = await Promise.all([
+  const [l, c, k] = await Promise.all([
     supabase.from("mundo_llaves").select("llave").eq("estudiante_id", estudianteId),
     supabase.from("mundo_camara").select("id").eq("estudiante_id", estudianteId),
+    supabase.from("mundo_llaves_config").select("llave, zona, prueba, cuadrante, pista"),   // SQL 77: si todavía no existe, las llaves quedan como siempre
   ]);
   if (l.error) throw l.error;
   if (c.error) throw c.error;
-  return { ...base, tengo: (l.data || []).map((f) => Number(f.llave)).filter((n) => llaveDe(n)).sort(), abierta: (c.data || []).length > 0 };
+  return { ...base, config: k.error ? [] : (k.data || []), tengo: (l.data || []).map((f) => Number(f.llave)).filter((n) => llaveDe(n)).sort(), abierta: (c.data || []).length > 0 };
 }
 
 // Guarda que el estudiante ganó una llave. Respeta el orden (si la docente lo exige). Ganar la misma llave dos veces no hace nada.
@@ -833,7 +838,7 @@ export async function abrirCamaraMundo(estudianteId) {
     if (error.code === "23505" || /duplicate|unique/i.test(error.message || "")) return { ok: true, yaEstaba: true };
     return { ok: false, mensaje: error.message };
   }
-  const xp = cfg.llaves_xp, oro = cfg.llaves_oro;
+  const b = await bonoEvento(estudianteId, cfg.llaves_xp, cfg.llaves_oro), xp = b.xp, oro = b.oro;
   try {
     const [, rpc] = await Promise.all([
       supabase.from("historial_gamificacion").insert({ estudiante_id: estudianteId, etiqueta: "🔐 Cámara del Códice", xp, vida: 0, monedas: oro, categoria: "general" }),
@@ -841,7 +846,7 @@ export async function abrirCamaraMundo(estudianteId) {
     ]);
     if (rpc.error) throw rpc.error;
     const fila = rpc.data?.[0];
-    return { ok: true, xp: fila?.xp, oro: fila?.monedas, premio: { xp, oro }, comarca: await aportarAComarca(estudianteId, { xp, oro, motivo: "Mundo CÓDICE: Cámara del Códice" }) };
+    return { ok: true, xp: fila?.xp, oro: fila?.monedas, premio: { xp, oro }, evento: b.evento, comarca: await aportarAComarca(estudianteId, { xp, oro, motivo: "Mundo CÓDICE: Cámara del Códice" }) };
   } catch (e) {
     await supabase.from("mundo_camara").delete().eq("estudiante_id", estudianteId);
     return { ok: false, mensaje: (e && e.message) || "no se pudo entregar el premio" };
@@ -1000,6 +1005,8 @@ export async function registrarDueloMonstruo(estudianteId, { monstruoId, rivalNo
   } else {
     premio = calcularPremioMonstruo({ ganado: !!ganado, nivelYo: m0.nivel, nivelRival, jefe: !!jefe, modo: modoOk, premiosHoy: hoy.filter((f) => f.premiado && f.rival_monstruo_id == null).length, cfg });
   }
+  let bonoEv = null;
+  if (premio.xp > 0 || premio.oro > 0) { const b = await bonoEvento(estudianteId, premio.xp, premio.oro, gradoId); if (b.evento) { premio = { ...premio, xp: b.xp, oro: b.oro }; bonoEv = b.evento; } }
   const premiado = premio.xpMonstruo > 0;
   const fila = { estudiante_id: estudianteId, monstruo_id: monstruoId, rival: nombreRival, rival_nivel: nivelRival, zona: arena ? "arena" : zona, jefe: arena ? false : !!jefe, modo: modoOk, ganado: !!ganado, premiado, xp_monstruo: premio.xpMonstruo };
   if (arena) { fila.rival_monstruo_id = rivalMonstruoId; if (ligaId != null) { fila.liga_id = ligaId; fila.liga_puntos = ligaPts; } }
@@ -1020,7 +1027,7 @@ export async function registrarDueloMonstruo(estudianteId, { monstruoId, rivalNo
       comarca = await aportarAComarca(estudianteId, { xp: premio.xp, oro: premio.oro, motivo: arena ? "Mundo CÓDICE: Arena de monstruos" : "Mundo CÓDICE: duelo de monstruos" });
     }
     const nuevo = nivelDeXp(xpNueva).nivel;
-    const res = { ok: true, dueloId: duelo ? duelo.id : null, premio, xp: fp?.xp, oro: fp?.monedas, comarca, monstruo: { id: monstruoId, xp: xpNueva, nivel: nuevo }, subio: nuevo > m0.nivel };
+    const res = { ok: true, dueloId: duelo ? duelo.id : null, premio, evento: bonoEv, xp: fp?.xp, oro: fp?.monedas, comarca, monstruo: { id: monstruoId, xp: xpNueva, nivel: nuevo }, subio: nuevo > m0.nivel };
     if (arena) { res.repetido = repetido; res.arenaHoy = hoy.filter((f) => f.premiado && f.rival_monstruo_id != null).length + (premiado ? 1 : 0); res.ligaPuntos = ligaId != null ? ligaPts : null; }
     else res.premiosHoy = hoy.filter((f) => f.premiado && f.rival_monstruo_id == null).length + (premiado ? 1 : 0);
     return res;
@@ -1140,3 +1147,177 @@ export async function fetchMonstruosResumen() {
   const porTipo = {}; (m.data || []).forEach((f) => { porTipo[f.tipo] = (porTipo[f.tipo] || 0) + 1; });
   return { monstruos: (m.data || []).length, estudiantes: new Set((m.data || []).map((f) => f.estudiante_id)).size, duelos: (d.data || []).length, victorias: (d.data || []).filter((f) => f.ganado).length, porTipo, capturados: (m.data || []).filter((f) => f.origen === "capturado").length, adoptados: (m.data || []).filter((f) => f.origen === "catalogo").length };
 }
+
+
+// =====================================================================================
+//  SEGUIMIENTO DE LA DOCENTE: un resumen por estudiante (lo lee la docente con sesión)
+//  Lee por páginas (Supabase devuelve máximo 1000 filas por consulta). Si una tabla todavía no existe
+//  (porque no se corrió su SQL) se trata como vacía en vez de romper todo el panel.
+// =====================================================================================
+async function leerTodo(tabla, cols, opcional = true) {
+  const TAM = 1000, out = [];
+  for (let desde = 0; desde < 200000; desde += TAM) {
+    const { data, error } = await supabase.from(tabla).select(cols).range(desde, desde + TAM - 1);
+    if (error) { if (opcional) return []; throw error; }
+    out.push(...(data || []));
+    if (!data || data.length < TAM) break;
+  }
+  return out;
+}
+export async function fetchSeguimientoMundo(ahora = Date.now()) {
+  let est = [];
+  try { est = await leerTodo("estudiantes", "id, nombre, apellidos, grado_id, activo", false); }
+  catch { est = await leerTodo("estudiantes", "id, nombre, grado_id", false); }
+  const T = (tabla, cols, col) => leerTodo(tabla, cols).then((f) => f.map((x) => ({ ...x, cuando: x[col] })));
+  const [mis, ac, se, hm, ha, hs, ll, ca, ins, re, rec, mon, dm, du] = await Promise.all([
+    leerTodo("mundo_misiones", "id, grado_id, activo"), leerTodo("mundo_acertijos", "id, grado_id, activo"), leerTodo("mundo_secretos", "id, grado_id, activo"),
+    T("mundo_misiones_hechas", "estudiante_id, mision_id, hecha_en", "hecha_en"), T("mundo_acertijos_hechos", "estudiante_id, acertijo_id, hecho_en", "hecho_en"), T("mundo_secretos_hallados", "estudiante_id, secreto_id, hallado_en", "hallado_en"),
+    T("mundo_llaves", "estudiante_id, llave, creado_en", "creado_en"), T("mundo_camara", "estudiante_id, abierta_en", "abierta_en"), T("mundo_insignias", "estudiante_id, zona, ganada_en", "ganada_en"),
+    T("mundo_retos", "estudiante_id, ganado, creado_en", "creado_en"), T("mundo_recoleccion", "estudiante_id, cantidad, creado_en", "creado_en"),
+    T("mundo_monstruos", "estudiante_id, xp, creado_en", "creado_en"), T("mundo_monstruos_duelos", "estudiante_id, ganado, creado_en", "creado_en"), T("mundo_duelos", "estudiante_id, ganado, creado_en", "creado_en"),
+  ]);
+  return resumirSeguimiento({ estudiantes: est, misiones: mis, acertijos: ac, secretos: se, eventos: { misiones: hm, acertijos: ha, secretos: hs, llaves: ll, camara: ca, insignias: ins, retos: re, recoleccion: rec, monstruos: mon, duelosMon: dm, duelos: du }, ahora });
+}
+
+
+// ----- Llaves a gusto de la docente (SQL 77) -----
+// Devuelve las 3 llaves tal como las ve el mundo (con lo que la docente haya cambiado) + las filas guardadas.
+export async function fetchLlavesConfigAdmin() {
+  const { data, error } = await supabase.from("mundo_llaves_config").select("llave, zona, prueba, cuadrante, pista");
+  if (error) throw error;
+  return { filas: data || [], llaves: llavesEfectivas(data || []) };
+}
+// lista = [{ llave:1, zona, prueba, cuadrante, pista }, …]. La pista vacía = la que se escribe sola.
+export async function guardarLlavesConfig(lista) {
+  const err = validarLlavesConfig(lista); if (err) throw new Error(err);
+  const filas = lista.map((c) => ({ llave: Number(c.llave), zona: c.zona, prueba: c.prueba, cuadrante: c.cuadrante || "auto", pista: String(c.pista || "").trim() || null }));
+  for (const f of filas) {
+    const { error } = await supabase.from("mundo_llaves_config").upsert(f, { onConflict: "llave" });
+    if (error) throw error;
+  }
+}
+// Volver a las llaves de siempre
+export async function restablecerLlavesConfig() {
+  const { error } = await supabase.from("mundo_llaves_config").delete().in("llave", [1, 2, 3]);
+  if (error) throw error;
+}
+
+
+// ----- Importar acertijos y secretos desde Excel: se crean de 50 en 50; cada uno se vuelve a validar aquí -----
+async function crearEnTandas(tabla, filas) {
+  const { data: userData } = await supabase.auth.getUser();
+  const docente = userData?.user?.id || null; let creadas = 0;
+  for (let i = 0; i < filas.length; i += 50) {
+    const trozo = filas.slice(i, i + 50).map((c) => ({ ...c, docente_id: docente }));
+    const { error } = await supabase.from(tabla).insert(trozo);
+    if (error) { const e = new Error(error.message); e.creadas = creadas; throw e; }
+    creadas += trozo.length;
+  }
+  return creadas;
+}
+export async function crearAcertijosMundo(lista) { return crearEnTandas("mundo_acertijos", lista.map(limpiarAcertijo)); }
+export async function crearSecretosMundo(lista) { return crearEnTandas("mundo_secretos", lista.map(secretoParaGuardar)); }
+
+
+// =====================================================================================
+//  EVENTOS TEMPORALES (SQL 77): bonos de XP/oro, jefe especial y preguntas de un tema durante unas fechas
+// =====================================================================================
+let _cacheEv = { t: 0, lista: null };
+const _gradoDe = new Map();
+export function limpiarCacheEventos() { _cacheEv = { t: 0, lista: null }; _gradoDe.clear(); }
+// Los eventos que no han terminado (el juego los consulta a menudo: se guardan 30 segundos)
+async function eventosEnMarcha(fresco = false) {
+  if (!fresco && _cacheEv.lista && Date.now() - _cacheEv.t < 30000) return _cacheEv.lista;
+  const { data, error } = await supabase.from("mundo_eventos").select("*").eq("activo", true);
+  if (error) throw error;
+  const lista = (data || []).map(normalizarEvento).filter((e) => estadoEvento(e) !== "terminado");
+  _cacheEv = { t: Date.now(), lista };
+  return lista;
+}
+async function gradoDeEstudiante(estudianteId, gradoId) {
+  if (gradoId != null && gradoId !== "") return String(gradoId);
+  if (_gradoDe.has(estudianteId)) return _gradoDe.get(estudianteId);
+  const { data, error } = await supabase.rpc("mundo_mi_grado", { p_estudiante_id: estudianteId });
+  if (error) return "";
+  const g = Array.isArray(data) ? (data[0] && (data[0].mundo_mi_grado ?? data[0])) : data; const v = g == null ? "" : String(g);
+  _gradoDe.set(estudianteId, v); return v;
+}
+const resumenEvento = (ev, b) => ({ id: ev.id, nombre: ev.nombre, emoji: ev.emoji, xpMult: ev.xp_mult, oroMult: ev.oro_mult, extraXp: b.extraXp, extraOro: b.extraOro, hasta: textoHasta(ev) });
+// El evento que le toca a este estudiante ahora (o null). Nunca lanza: si algo falla, simplemente no hay evento.
+export async function eventoDe(estudianteId, gradoId = null) {
+  try {
+    const lista = (await eventosEnMarcha()).filter((e) => eventoVigente(e)); if (!lista.length) return null;
+    return elegirEvento(lista, Date.now(), await gradoDeEstudiante(estudianteId, gradoId));
+  } catch { return null; }
+}
+// xp y oro de un premio → con el bono del evento. Nunca bloquea un premio: ante cualquier fallo devuelve el premio sin cambios.
+export async function bonoEvento(estudianteId, xp, oro, gradoId = null) {
+  const base = { xp: Math.max(0, Math.floor(Number(xp) || 0)), oro: Math.max(0, Math.floor(Number(oro) || 0)), evento: null };
+  try {
+    const ev = await eventoDe(estudianteId, gradoId); if (!ev || (ev.xp_mult === 1 && ev.oro_mult === 1)) return base;
+    const b = aplicarBono(base.xp, base.oro, ev); if (!b.extraXp && !b.extraOro) return base;
+    return { xp: b.xp, oro: b.oro, evento: resumenEvento(ev, b) };
+  } catch { return base; }
+}
+
+// Lo que necesita el juego de UN estudiante: el evento de ahora, su jefe, sus preguntas y cuáles ya respondió. Falla si falta el SQL 77.
+export async function fetchEventoMundo(estudianteId, gradoId) {
+  const lista = (await eventosEnMarcha(true)).filter((e) => eventoVigente(e));
+  const ev = elegirEvento(lista, Date.now(), await gradoDeEstudiante(estudianteId, gradoId));
+  if (!ev) return { activo: true, evento: null };
+  const { data, error } = await supabase.from("mundo_eventos_hechos").select("idx").eq("estudiante_id", estudianteId).eq("evento_id", ev.id);
+  if (error) throw error;
+  return { activo: true, evento: { id: ev.id, nombre: ev.nombre, emoji: ev.emoji, descripcion: ev.descripcion, xpMult: ev.xp_mult, oroMult: ev.oro_mult, fin: ev.fin, hasta: textoHasta(ev), jefe: jefeJugable(ev), preguntas: preguntasJugables(ev), hechas: (data || []).map((f) => Number(f.idx)), premio: { xp: ev.premio_xp, oro: ev.premio_oro } } };
+}
+// Responder bien una pregunta del evento: se registra (una sola vez) y se entrega el premio; si el premio falla, se deshace
+export async function responderEventoMundo(estudianteId, { eventoId, idx }, gradoId = null) {
+  let ev;
+  try { ev = (await eventosEnMarcha(true)).find((e) => e.id === eventoId); } catch (e) { return { ok: false, mensaje: e.message }; }
+  if (!ev || !eventoVigente(ev) || !aplicaA(ev, await gradoDeEstudiante(estudianteId, gradoId))) return { ok: false, mensaje: "Ese evento ya terminó." };
+  const q = preguntasJugables(ev).find((p) => p.idx === Number(idx)); if (!q) return { ok: false, mensaje: "Esa pregunta ya no está disponible." };
+  const { error } = await supabase.from("mundo_eventos_hechos").insert({ estudiante_id: estudianteId, evento_id: ev.id, idx: q.idx });
+  if (error) {
+    if (error.code === "23505" || /duplicate|unique/i.test(error.message || "")) return { ok: true, yaEstaba: true };
+    return { ok: false, mensaje: error.message };
+  }
+  const b = await bonoEvento(estudianteId, ev.premio_xp, ev.premio_oro, gradoId);
+  try {
+    let fila = null;
+    if (b.xp > 0 || b.oro > 0) {
+      const [, rpc] = await Promise.all([
+        supabase.from("historial_gamificacion").insert({ estudiante_id: estudianteId, etiqueta: `${ev.emoji} ${ev.nombre}: pregunta ${q.idx + 1}`, xp: b.xp, vida: 0, monedas: b.oro, categoria: "general" }),
+        supabase.rpc("ajustar_progreso", { p_estudiante_id: estudianteId, p_delta_xp: b.xp, p_delta_vida: 0, p_delta_monedas: b.oro }),
+      ]);
+      if (rpc.error) throw rpc.error;
+      fila = rpc.data?.[0];
+    }
+    return { ok: true, xp: fila?.xp, oro: fila?.monedas, premio: { xp: b.xp, oro: b.oro }, evento: b.evento, comarca: b.xp || b.oro ? await aportarAComarca(estudianteId, { xp: b.xp, oro: b.oro, motivo: `Mundo CÓDICE: ${ev.nombre}` }) : null };
+  } catch (e) {
+    await supabase.from("mundo_eventos_hechos").delete().eq("estudiante_id", estudianteId).eq("evento_id", ev.id).eq("idx", q.idx);
+    return { ok: false, mensaje: (e && e.message) || "no se pudo entregar el premio" };
+  }
+}
+
+// ----- para el editor de la docente -----
+export async function fetchEventosAdmin() {
+  const { data, error } = await supabase.from("mundo_eventos").select("*").order("inicio", { ascending: false });
+  if (error) throw error;
+  return (data || []).map(normalizarEvento).map((e) => ({ ...e, estado: estadoEvento(e) })).sort((a, b) => Date.parse(b.inicio) - Date.parse(a.inicio));
+}
+// { [eventoId]: { estudiantes: cuántos respondieron al menos una, respuestas: total } }
+export async function fetchConteoEventos() {
+  const { data, error } = await supabase.from("mundo_eventos_hechos").select("estudiante_id, evento_id");
+  if (error) throw error;
+  const r = {}, vistos = {};
+  (data || []).forEach((f) => { const k = f.evento_id; r[k] = r[k] || { estudiantes: 0, respuestas: 0 }; r[k].respuestas++; vistos[k] = vistos[k] || new Set(); vistos[k].add(f.estudiante_id); r[k].estudiantes = vistos[k].size; });
+  return r;
+}
+export async function guardarEvento(campos, id = null) {
+  const err = validarEvento(campos); if (err) throw new Error(err);
+  const limpio = limpiarEvento(campos);
+  if (id != null) { const { error } = await supabase.from("mundo_eventos").update(limpio).eq("id", id); if (error) throw error; }
+  else { const { data: u } = await supabase.auth.getUser(); const { error } = await supabase.from("mundo_eventos").insert({ ...limpio, docente_id: u?.user?.id || null }); if (error) throw error; }
+  limpiarCacheEventos();
+}
+export async function alternarEvento(id, activo) { const { error } = await supabase.from("mundo_eventos").update({ activo }).eq("id", id); if (error) throw error; limpiarCacheEventos(); }
+export async function eliminarEvento(id) { const { error } = await supabase.from("mundo_eventos").delete().eq("id", id); if (error) throw error; limpiarCacheEventos(); }
