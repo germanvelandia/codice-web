@@ -13,7 +13,7 @@ import { montarJuego } from "./juegosUI";
 import { TIPOS_ACERTIJO } from "./acertijos";
 import { resumenReinos, reinosAtacables, puedeBatallar, nombreCortoProvincia, estaProtegida } from "./comarca";
 import { brilloPorDistancia, rumoresPendientes } from "./secretos";
-import { TIPOS as TIPOS_MON, CLAVES_TIPO as CLAVES_TIPO_MON, EMOJIS_MONSTRUO, ESTATS as ESTATS_MON, NOMBRE_ESTAT, BASE as BASE_MON, MAX_PUNTOS_POR_ESTAT, HABILIDADES, nivelDeXp, statsDe, puntosUsados, validarMonstruo, crearCombate, calcularPremioMonstruo, salvajeDe, jefeDe } from "./monstruos";
+import { TIPOS as TIPOS_MON, CLAVES_TIPO as CLAVES_TIPO_MON, EMOJIS_MONSTRUO, ESTATS as ESTATS_MON, NOMBRE_ESTAT, BASE as BASE_MON, MAX_PUNTOS_POR_ESTAT, HABILIDADES, nivelDeXp, statsDe, puntosUsados, validarMonstruo, crearCombate, calcularPremioMonstruo, salvajeDe, jefeDe, probCaptura, nivelCapturado, xpParaNivel as xpParaNivelMon } from "./monstruos";
 import { LLAVES, llaveDe, puedeConseguir, siguienteLlave, cuantas, camaraDesbloqueada, TEXTO_PRUEBA } from "./llaves";
 import { ITEMS, RECETAS, RECURSOS_POR_ZONA, MAX_POR_ITEM, PARCELA, celdaValida, esDecoracion, puedeFabricar, faltantes, cantidadPorRecoleccion, esHerramienta } from "./items";
 
@@ -1211,7 +1211,7 @@ export async function iniciarMundo(raiz, op) {
   }
 
   // los monstruos: la máquina del Laboratorio y los salvajes (y un jefe) de cada zona
-  const MON = op.monstruos && op.monstruos.activo ? { ...op.monstruos, equipo: (op.monstruos.equipo || []).map((m) => ({ ...m, nivel: nivelDeXp(m.xp || 0).nivel })) } : null;   // { equipo, equipoMax, puntos, premiosDia, premiosHoy, premio }
+  const MON = op.monstruos && op.monstruos.activo ? { catalogo: [], captura: { activa: false, dia: 0, hoy: 0 }, ...op.monstruos, equipo: (op.monstruos.equipo || []).map((m) => ({ ...m, nivel: nivelDeXp(m.xp || 0).nivel })) } : null;   // { equipo, equipoMax, puntos, premiosDia, premiosHoy, premio }
   if (MON) {
     const lab = interiores.laboratorio && interiores.laboratorio.laboratorio;
     if (lab) interiores.laboratorio.npcs.push({ tipo: "lab_maquina", nombre: "Máquina de monstruos", emoji: "🧪", x: lab.maquina.x, y: lab.maquina.y + 14, solido: false, radio: 62, dir: "south" });
@@ -1854,9 +1854,30 @@ export async function iniciarMundo(raiz, op) {
       `${msg ? `<div class="m-msg">${html(msg)}</div>` : ""}${MON.equipo.length ? MON.equipo.map((m) => tarjetaMon(m)).join("") : '<p class="m-texto">Todavía no tienes monstruos. 🥚 ¡Crea el primero en la máquina del 🧪 Laboratorio de Monstruos (en la aldea)!</p>'}
        <p class="cm-nota">⚔️ Reta a los monstruos salvajes del Bosque, la Montaña y el Lago. Ganar da XP a tu monstruo: ¡sube de nivel y se vuelve más fuerte!</p>
        ${enLab ? (lleno ? '<p class="cm-nota">Tu equipo está completo.</p>' : '<button class="m-ok" data-a="crear">➕ Crear un monstruo</button>') : (lleno ? "" : '<p class="cm-nota">Para crear uno nuevo, usa la 🧪 máquina del Laboratorio.</p>')}
+       ${enLab && MON.catalogo.length ? `<button class="m-ok" data-a="catalogo" style="background:#8b5cf6;margin-top:6px">📖 Catálogo del Laboratorio (${MON.catalogo.filter((c) => !c.adoptado).length} por adoptar)</button>` : ""}
+       ${MON.captura.activa ? `<p class="cm-nota">🎯 Al vencer a un salvaje puedes intentar capturarlo (hoy ${MON.captura.hoy}/${MON.captura.dia}).</p>` : ""}
        <button class="m-ok" data-a="cerrar-mon" style="background:var(--borde);color:inherit;margin-top:6px">Cerrar</button>`));
     monEl.querySelectorAll('[data-a="cerrar-mon"]').forEach((b) => (b.onclick = cerrarMon));
     const bc = monEl.querySelector('[data-a="crear"]'); if (bc) bc.onclick = () => formCrear(null);
+    const bk = monEl.querySelector('[data-a="catalogo"]'); if (bk) bk.onclick = () => abrirCatalogo();
+  }
+  // El catálogo que preparó la docente: el estudiante adopta los que quiera (uno de cada uno, hasta llenar el equipo)
+  function abrirCatalogo(msg) {
+    const lleno = MON.equipo.length >= MON.equipoMax;
+    ponerMon(marcoMon(cabMon("📖", "Catálogo del Laboratorio", `Equipo ${MON.equipo.length}/${MON.equipoMax}`),
+      `${msg ? `<div class="m-msg">${html(msg)}</div>` : ""}<p class="cm-nota">Monstruos preparados por tu docente. Cada uno se adopta una sola vez y nace con su nivel.</p>
+       ${MON.catalogo.map((c) => `<div>${tarjetaMon({ ...c, xp: xpParaNivelMon(c.nivel) })}${c.adoptado ? '<p class="cm-nota">✔ Ya lo tienes</p>' : `<button class="m-ok" data-adoptar="${c.id}" ${lleno ? "disabled" : ""} style="margin-bottom:10px">${lleno ? "Equipo completo" : `🤝 Adoptar a ${html(c.nombre)}`}</button>`}</div>`).join("")}
+       <button class="m-ok" data-a="volver" style="background:var(--borde);color:inherit;margin-top:6px">◀ Volver</button>`));
+    monEl.querySelector('[data-a="volver"]').onclick = () => abrirEquipo(true);
+    monEl.querySelectorAll("[data-adoptar]").forEach((b) => (b.onclick = async () => {
+      if (estado.respondiendo) return; const c = MON.catalogo.find((x) => String(x.id) === b.dataset.adoptar); if (!c) return;
+      estado.respondiendo = true; monEl.querySelectorAll("[data-adoptar]").forEach((x) => (x.disabled = true));
+      let r; try { r = op.modoPrueba || !op.alAdoptarMonstruo ? { ok: true, local: true, monstruo: { id: -(MON.equipo.length + 50), nombre: c.nombre, tipo: c.tipo, emoji: c.emoji, puntos: { ...c.puntos }, xp: xpParaNivelMon(c.nivel), origen: "catalogo" } } : await op.alAdoptarMonstruo({ catalogoId: c.id }); } catch (e) { r = { ok: false, mensaje: e && e.message }; }
+      estado.respondiendo = false; if (!vivo || !estado.monAbierto) return;
+      if (!r || r.ok === false) { abrirCatalogo(`No se pudo adoptar: ${(r && r.mensaje) || "intenta de nuevo"}`); return; }
+      c.adoptado = true; MON.equipo.push({ ...r.monstruo, nivel: nivelDeXp(r.monstruo.xp || 0).nivel }); snd.fanfarria();
+      abrirCatalogo(`🎉 ¡${c.nombre} se unió a tu equipo!${op.modoPrueba ? " (modo prueba: no se guarda)" : ""}`);
+    }));
   }
   function formCrear(f0, msg) {
     const P = MON.puntos, rep0 = Math.floor(P / 4), f = f0 || { nombre: "", tipo: "fuego", emoji: "🦊", puntos: { hp: rep0 + (P - rep0 * 4), atk: rep0, def: rep0, vel: rep0 } };
@@ -1984,10 +2005,40 @@ export async function iniciarMundo(raiz, op) {
     if (gano) D.n.hastaMs = ahoraMs() + 150000;       // el monstruo se va y vuelve en 2,5 min
     gano ? snd.fanfarria() : snd.derrota();
     const nvInfo = r.monstruo ? nivelDeXp(r.monstruo.xp) : null;
+    const capAct = gano && !D.n.jefe && MON.captura.activa && (r.dueloId != null || r.local) && D.pool.length > 0, capTope = MON.captura.hoy >= MON.captura.dia, capLleno = MON.equipo.length >= MON.equipoMax;
+    const puedeCapturar = capAct && !capTope && !capLleno, notaCaptura = capAct && !puedeCapturar ? `<p class="cm-nota">${capTope ? "Ya llegaste al tope de capturas de hoy." : "Tu equipo está completo: no cabe otro monstruo."}</p>` : "";
     monEl.innerHTML = marcoMon(cabMon(gano ? "🏆" : "💔", gano ? `¡Venciste a ${rv.nombre}!` : `${rv.nombre} te venció`, "Resultado del duelo"),
       `<div class="mn-log">${gano ? `🎁 ${p.tope ? "Ya llegaste al tope de premios de hoy: sigues ganando experiencia solo por diversión. 😉" : `<b>+${p.xpMonstruo}</b> XP para ${html(mi.nombre)} · <b>+${p.xp}</b> XP · <b>+${p.oro}</b> 🪙`}${op.modoPrueba ? " · 🧪 modo prueba (no se guarda)" : ""}` : `Esta vez no fue. ${html(mi.nombre)} puede intentarlo otra vez${c.yo.nivel < rv.nivel ? " (o subir de nivel antes con monstruos más débiles)" : ""}. 💪`}${r.subio ? `<br>🎉 <b>¡${html(mi.nombre)} subió a nivel ${r.monstruo.nivel}!</b> Sus estadísticas crecieron.` : ""}${gano && nvInfo && !nvInfo.maximo ? `<br><small>XP ${nvInfo.xpEnNivel}/${nvInfo.xpParaSiguiente} para el siguiente nivel</small>` : ""}</div>
+       ${puedeCapturar ? `<button class="m-ok" data-a="capturar" style="background:#8b5cf6;margin-bottom:6px">🎯 Intentar capturarlo (${Math.round(probCaptura({ nivelYo: c.yo.nivel, nivelRival: rv.nivel }) * 100)}% si aciertas la pregunta)</button>` : ""}${notaCaptura}
        <button class="m-ok" data-a="cerrar-mon">Volver al mundo</button>`);
     monEl.querySelectorAll('[data-a="cerrar-mon"]').forEach((b) => (b.onclick = cerrarMon));
+    const bcap = monEl.querySelector('[data-a="capturar"]'); if (bcap) bcap.onclick = () => preguntaCaptura(D, r, rv, mi, c);
+  }
+  // Después de ganarle a un salvaje: una pregunta; si se acierta, hay una probabilidad (según los niveles) de que se una al equipo
+  function preguntaCaptura(D, r, rv, mi, c) {
+    if (estado.respondiendo) return;
+    let libres = D.pool.map((p, i) => i).filter((i) => !D.usadas.has(i)); if (!libres.length) libres = D.pool.map((p, i) => i);
+    const q0 = D.pool[libres[Math.floor(aleat() * libres.length)]], texto = String(q0.texto ?? q0.pregunta ?? ""), ops = barajar(q0.opciones.map((o, i) => i), op.rngDuelo || Math.random);
+    monEl.innerHTML = marcoMon(cabMon("🎯", `Capturar a ${rv.nombre}`, "Responde para atraparlo"), `<div class="mn-log"><b>${html(texto)}</b></div><div class="mn-acc">${ops.map((i, pos) => `<button class="m-opcion mn-op" data-i="${i}">${pos + 1}. ${html(q0.opciones[i])}</button>`).join("")}</div>`);
+    monEl.querySelectorAll('[data-a="cerrar-mon"]').forEach((b) => (b.onclick = cerrarMon));
+    monEl.querySelectorAll(".mn-op").forEach((b) => (b.onclick = () => {
+      if (estado.respondiendo) return; estado.respondiendo = true; const ok = Number(b.dataset.i) === Number(q0.correcta);
+      monEl.querySelectorAll(".mn-op").forEach((x) => { x.disabled = true; if (Number(x.dataset.i) === Number(q0.correcta)) x.classList.add("bien"); }); if (!ok) b.classList.add("mal"); ok ? snd.bien() : snd.mal();
+      monReloj = setTimeout(async () => {
+        const fin = (emo, tit, texto2) => { estado.respondiendo = false; if (!vivo || !estado.monAbierto) return; monEl.innerHTML = marcoMon(cabMon(emo, tit, "Captura"), `<div class="mn-log">${texto2}</div><button class="m-ok" data-a="cerrar-mon">Volver al mundo</button>`); monEl.querySelectorAll('[data-a="cerrar-mon"]').forEach((x) => (x.onclick = cerrarMon)); };
+        if (!ok) { snd.derrota(); fin("💨", `¡${rv.nombre} escapó!`, `Fallaste la pregunta y se escapó. La respuesta era: ${html(q0.opciones[q0.correcta])}`); return; }
+        const sale = aleat() < probCaptura({ nivelYo: c.yo.nivel, nivelRival: rv.nivel });
+        if (!sale) { snd.mal(); fin("💨", `¡${rv.nombre} escapó!`, "Acertaste, pero se soltó de la red. 😅 ¡Otra vez será!"); return; }
+        const guardar = async () => {
+          let rc; try { rc = op.modoPrueba || !op.alCapturar ? { ok: true, local: true, monstruo: { id: -(MON.equipo.length + 80), nombre: rv.nombre, tipo: rv.tipo, emoji: rv.emoji, puntos: { ...rv.puntos }, xp: xpParaNivelMon(nivelCapturado(rv.nivel)), origen: "capturado" } } : await op.alCapturar({ dueloId: r.dueloId, nombre: rv.nombre, tipo: rv.tipo, emoji: rv.emoji, puntos: rv.puntos }); } catch (e) { rc = { ok: false, mensaje: e && e.message }; }
+          if (!vivo || !estado.monAbierto) return;
+          if (!rc || rc.ok === false) { snd.mal(); fin("⚠️", "No se pudo guardar la captura", `¡Lo atrapaste, pero no se guardó (${html(String((rc && rc.mensaje) || "sin conexión").replace(/[.\s]+$/, ""))}). Puedes reintentar.<br><button class="m-ok" data-a="reintentar-cap" style="margin-top:8px">🔄 Reintentar</button>`); const br = monEl.querySelector('[data-a="reintentar-cap"]'); if (br) br.onclick = () => { estado.respondiendo = true; monEl.innerHTML = marcoMon(cabMon("🎯", `Capturando a ${rv.nombre}`, "Captura"), '<div class="mn-log">⏳ Guardando…</div>'); guardar(); }; return; }
+          MON.equipo.push({ ...rc.monstruo, nivel: nivelDeXp(rc.monstruo.xp || 0).nivel }); MON.captura.hoy = rc.capturasHoy != null ? rc.capturasHoy : MON.captura.hoy + 1; D.n.hastaMs = ahoraMs() + 600000; snd.fanfarria();
+          fin("🎉", `¡Capturaste a ${rv.nombre}!`, `${html(rv.nombre)} (Nv ${nivelDeXp(rc.monstruo.xp || 0).nivel}) se une a tu equipo. 🐾${op.modoPrueba ? " · 🧪 modo prueba (no se guarda)" : ""}`);
+        };
+        await guardar();
+      }, 900);
+    }));
   }
 
   // ---- las Tres Llaves y la Cámara del Códice ----
