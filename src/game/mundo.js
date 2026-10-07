@@ -13,6 +13,7 @@ import { montarJuego } from "./juegosUI";
 import { TIPOS_ACERTIJO } from "./acertijos";
 import { resumenReinos, reinosAtacables, puedeBatallar, nombreCortoProvincia, estaProtegida } from "./comarca";
 import { brilloPorDistancia, rumoresPendientes } from "./secretos";
+import { TIPOS as TIPOS_MON, CLAVES_TIPO as CLAVES_TIPO_MON, EMOJIS_MONSTRUO, ESTATS as ESTATS_MON, NOMBRE_ESTAT, BASE as BASE_MON, MAX_PUNTOS_POR_ESTAT, HABILIDADES, nivelDeXp, statsDe, puntosUsados, validarMonstruo, crearCombate, calcularPremioMonstruo, salvajeDe, jefeDe } from "./monstruos";
 import { LLAVES, llaveDe, puedeConseguir, siguienteLlave, cuantas, camaraDesbloqueada, TEXTO_PRUEBA } from "./llaves";
 import { ITEMS, RECETAS, RECURSOS_POR_ZONA, MAX_POR_ITEM, PARCELA, celdaValida, esDecoracion, puedeFabricar, faltantes, cantidadPorRecoleccion, esHerramienta } from "./items";
 
@@ -138,6 +139,23 @@ const CSS = `
 .mundo .cm-provs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .mundo .cm-prov { font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--borde); } .mundo .cm-prov.prot { border-color: #f59e0b; }
 .mundo .cm-nota { font-size: 12px; color: var(--suave); line-height: 1.4; margin: 6px 0; }
+.mundo .m-mon { position: absolute; inset: 0; z-index: 27; background: rgba(8,14,32,.9); display: flex; align-items: center; justify-content: center; padding: 10px; overflow-y: auto; }
+.mundo .m-mon .m-tarjeta { width: min(600px, 100%); max-height: 100%; overflow-y: auto; }
+.mundo .mn-tarj { display: flex; gap: 10px; align-items: center; border: 2px solid var(--borde); border-radius: 12px; background: var(--fondo); padding: 8px 10px; margin-bottom: 8px; }
+.mundo .mn-emo { font-size: 38px; line-height: 1; } .mundo .mn-info { flex: 1; min-width: 0; font-size: 12px; } .mundo .mn-info b { font-size: 14px; }
+.mundo .mn-tipo { display: inline-block; font-size: 11px; font-weight: 800; padding: 1px 8px; border-radius: 99px; color: #fff; margin-left: 4px; }
+.mundo .mn-barra { height: 8px; border-radius: 99px; background: var(--borde); overflow: hidden; margin: 3px 0; } .mundo .mn-barra i { display: block; height: 100%; border-radius: 99px; background: var(--ok); transition: width .5s; }
+.mundo .mn-barra.xp i { background: #8b5cf6; } .mundo .mn-barra.baja i { background: var(--mal); }
+.mundo .mn-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; font-size: 11px; color: var(--suave); text-align: center; margin-top: 4px; } .mundo .mn-stats b { display: block; color: var(--texto); font-size: 13px; }
+.mundo .mn-sel { cursor: pointer; } .mundo .mn-sel.act { border-color: var(--acento); box-shadow: 0 0 0 2px var(--acento) inset; }
+.mundo .mn-iconos { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; } .mundo .mn-ico { font-size: 26px; width: 44px; height: 44px; border-radius: 10px; border: 2px solid var(--borde); background: var(--fondo); } .mundo .mn-ico.act { border-color: var(--acento); background: var(--ok-s); }
+.mundo .mn-tipos { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin: 4px 0 8px; } .mundo .mn-tp { padding: 7px; border-radius: 10px; border: 2px solid var(--borde); background: var(--fondo); color: var(--texto); font-weight: 700; font-size: 12px; } .mundo .mn-tp.act { border-color: var(--acento); background: var(--ok-s); }
+.mundo .mn-fila { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; font-size: 13px; } .mundo .mn-fila span { flex: 1; } .mundo .mn-fila button { width: 32px; height: 32px; border-radius: 8px; border: 2px solid var(--borde); background: var(--fondo); color: var(--texto); font-weight: 900; font-size: 16px; } .mundo .mn-fila button:disabled { opacity: .35; } .mundo .mn-fila b { width: 26px; text-align: center; }
+.mundo .mn-input { width: 100%; padding: 9px 11px; border-radius: 10px; border: 2px solid var(--borde); background: var(--fondo); color: var(--texto); font-size: 15px; font-weight: 700; margin: 4px 0 8px; box-sizing: border-box; }
+.mundo .mn-lado { display: flex; align-items: center; gap: 10px; border: 2px solid var(--borde); border-radius: 12px; background: var(--fondo); padding: 8px 10px; margin-bottom: 8px; } .mundo .mn-lado .mn-emo { font-size: 44px; } .mundo .mn-lado.rival { flex-direction: row-reverse; text-align: right; }
+.mundo .mn-lado .mn-info { flex: 1; } .mundo .mn-emo.golpe { animation: m-sacudir .35s; }
+.mundo .mn-log { background: rgba(0,0,0,.18); border-radius: 10px; padding: 8px 10px; font-size: 13px; line-height: 1.5; margin-bottom: 8px; min-height: 40px; }
+.mundo .mn-acc { display: flex; flex-direction: column; gap: 6px; } .mundo .mn-hab { display: flex; gap: 8px; align-items: center; text-align: left; } .mundo .mn-hab small { margin-left: auto; color: var(--suave); font-size: 11px; }
 .mundo .m-tabs { display: flex; gap: 6px; margin: 4px 0 10px; }
 .mundo .m-tab { flex: 1; padding: 8px; border-radius: 10px; border: 2px solid var(--borde); background: var(--fondo); color: var(--texto); font-weight: 700; font-size: 13px; }
 .mundo .m-tab.act { border-color: var(--acento); color: var(--acento); }
@@ -191,6 +209,7 @@ const PLANTILLA = `
       <span class="m-chip">⭐ <span class="h-est">0/6</span></span>
       <button class="m-boton b-construir oculto" aria-label="Construir">🔨 Construir</button>
       <button class="m-boton b-mochila oculto" aria-label="Mochila">🎒 Mochila</button>
+      <button class="m-boton b-monstruos oculto" aria-label="Monstruos">🐲 Monstruos</button>
       <button class="m-boton b-mapa" aria-label="Mapa del mundo">🗺️ Mapa</button>
       <button class="m-boton b-sonido" aria-label="Sonido">🔊</button>
       <button class="m-boton b-salir">↩ Salir</button>
@@ -207,6 +226,7 @@ const PLANTILLA = `
   <div class="m-mochila oculto"></div>
   <div class="m-juego oculto"></div>
   <div class="m-comarca oculto"></div>
+  <div class="m-mon oculto"></div>
   <div class="m-construir oculto"></div>
   <div class="m-duelo oculto"></div>
   <div class="m-fundido"></div>
@@ -307,6 +327,7 @@ const EDIFICIOS_DEF = [
   { id: "acertijos", nombre: "Casa de los Acertijos", x: 31, y: 29, w: 7, h: 5, pared: "#e6dcc0", techo: "#d9822b", icono: "🧩", interior: { cols: 16, filas: 11, tema: "acertijos" } },
   { id: "comarca", nombre: "Sala de la Comarca", x: 19, y: 29, w: 7, h: 5, pared: "#cfd6e6", techo: "#8c2f48", icono: "🏰", interior: { cols: 16, filas: 11, tema: "comarca" } },
   { id: "camara", nombre: "Cámara del Códice", x: 47, y: 29, w: 7, h: 5, pared: "#8f93ad", techo: "#2a2f55", icono: "🔐", interior: { cols: 14, filas: 10, tema: "camara" } },
+  { id: "laboratorio", nombre: "Laboratorio de Monstruos", x: 3, y: 16, w: 7, h: 5, pared: "#bfe0d8", techo: "#2f6b66", icono: "🧪", interior: { cols: 16, filas: 11, tema: "laboratorio" } },
   { id: "posada", nombre: "Posada del Descanso", x: 13, y: 16, w: 7, h: 5, pared: "#e8d5b5", techo: "#2f7d6b", icono: "🛏️", interior: { cols: 16, filas: 11, tema: "posada" } },
 ];
 
@@ -844,6 +865,7 @@ const TEMAS = {
   templo: { piso: ["#cfc8dc", "#c4bdd2"], linea: "#a79fba", pared: "#9b8fb5", zocalo: "#6f6390", sonido: "piedra", fondo: "#120f1a" },
   mercado: { piso: ["#a77b4a", "#9d7243"], linea: "#7e5a33", pared: "#c98f4a", zocalo: "#8a5a2b", sonido: "madera", fondo: "#150f0a" },
   camara: { piso: ["#343a58", "#2e344f"], linea: "#1f2440", pared: "#262b4a", zocalo: "#161a33", sonido: "piedra", fondo: "#0a0b17" },
+  laboratorio: { piso: ["#cfe3df", "#c3d9d4"], linea: "#9fbcb5", pared: "#2f6b66", zocalo: "#1d4642", sonido: "piedra", fondo: "#0c1a19" },
   comarca: { piso: ["#c7ccd9", "#bcc2d1"], linea: "#9aa1b8", pared: "#8c2f48", zocalo: "#5c1e30", sonido: "piedra", fondo: "#140c10" },
   acertijos: { piso: ["#8a76b8", "#7f6bae"], linea: "#65529a", pared: "#4c3b82", zocalo: "#2f2457", sonido: "piedra", fondo: "#100c1c" },
   posada: { piso: ["#c49a6c", "#bb9163"], linea: "#8f6d44", pared: "#e3cfa6", zocalo: "#8a5a2b", sonido: "madera", fondo: "#150f0a" },
@@ -946,6 +968,10 @@ function disenoInterior(tema, W, H) {
     base.muebles = [["columna", 70, 120], ["columna", W - 70, 120], ["columna", 70, 230], ["columna", W - 70, 230], ["planta", 52, 300], ["planta", W - 52, 300]];
     base.camara = { cofre: { x: cx, y: 180 } };
     base.slots = [{ x: cx - 90, y: 250 }, { x: cx + 90, y: 250 }, { x: cx, y: 270 }];
+  } else if (tema === "laboratorio") {
+    base.muebles = [["estante", 80, 86], ["estante", W - 80, 86], ["mesa", 96, 250], ["mesa", W - 96, 250], ["planta", 52, 324], ["planta", W - 52, 324]];
+    base.laboratorio = { maquina: { x: cx, y: 190 } };
+    base.slots = [{ x: cx - 100, y: 300 }, { x: cx + 100, y: 300 }, { x: cx, y: 290 }];
   } else if (tema === "comarca") {
     base.muebles = [["estante", 80, 86], ["estante", W - 80, 86], ["columna", 96, 150], ["columna", W - 96, 150], ["columna", 96, 270], ["columna", W - 96, 270], ["mesa", cx, 214], ["planta", 52, 324], ["planta", W - 52, 324]];
     base.comarca = { mapa: { x: cx, y: 214 }, heraldo: { x: cx + 80, y: 140 } };
@@ -995,6 +1021,7 @@ function crearInterior(def, edificio) {
   if (def.tema === "mercado") { rr(g, W / 2 - 60, 190, 120, 70, "#c0562b"); rr(g, W / 2 - 54, 196, 108, 58, "#e0b36a"); }
   if (def.tema === "comarca") { rr(g, W / 2 - 34, 2 * TILE, 68, H - 3 * TILE, "#27508a"); rr(g, W / 2 - 30, 2 * TILE, 4, H - 3 * TILE, "#e8c36a"); rr(g, W / 2 + 26, 2 * TILE, 4, H - 3 * TILE, "#e8c36a"); g.font = "22px " + FUENTE_EMOJI; g.textAlign = "center"; g.textBaseline = "middle"; g.fillStyle = "#fff"; g.fillText("🏰", W / 2, 26); }
   if (def.tema === "camara") { g.fillStyle = "#1a1d3a"; g.beginPath(); g.ellipse(W / 2, 200, 120, 54, 0, 0, 7); g.fill(); g.strokeStyle = "#e8c36a"; g.lineWidth = 3; g.beginPath(); g.ellipse(W / 2, 200, 112, 48, 0, 0, 7); g.stroke(); g.font = "18px " + FUENTE_EMOJI; g.textAlign = "center"; g.textBaseline = "middle"; g.fillStyle = "#fff"; g.fillText("🥉   🥈   🥇", W / 2, 232); }
+  if (def.tema === "laboratorio") { g.fillStyle = "#2a5d63"; g.beginPath(); g.ellipse(W / 2, 200, 110, 50, 0, 0, 7); g.fill(); g.strokeStyle = "#e8c36a"; g.lineWidth = 3; g.beginPath(); g.ellipse(W / 2, 200, 102, 44, 0, 0, 7); g.stroke(); g.font = "18px " + FUENTE_EMOJI; g.textAlign = "center"; g.textBaseline = "middle"; g.fillStyle = "#fff"; g.fillText("🔥 💧 🌿 ⚡", W / 2, 244); }
   if (def.tema === "acertijos") { g.fillStyle = "#3a2c6e"; g.beginPath(); g.ellipse(W / 2, 268, 190, 46, 0, 0, 7); g.fill(); g.strokeStyle = "#e8c36a"; g.lineWidth = 3; g.beginPath(); g.ellipse(W / 2, 268, 182, 40, 0, 0, 7); g.stroke(); }
   if (def.tema === "posada") { g.fillStyle = "#8c2f48"; g.beginPath(); g.ellipse(W / 2 - 70, 268, 96, 40, 0, 0, 7); g.fill(); g.strokeStyle = "#e8c36a"; g.lineWidth = 3; g.beginPath(); g.ellipse(W / 2 - 70, 268, 88, 34, 0, 0, 7); g.stroke(); }
 
@@ -1011,7 +1038,7 @@ function crearInterior(def, edificio) {
   return {
     id: "int_" + edificio.id, nombre: edificio.nombre, icono: edificio.icono, exterior: false, edificioId: edificio.id,
     ancho: W, alto: H, suelo, fondo: tm.fondo, obstaculos, spawn: { x: W / 2, y: H - TILE - 6 }, mini: null, estrellas: [],
-    npcs: [], puertas: [], salidas, slots: dis.slots, mesas: dis.mesas || null, comarca: dis.comarca || null, camara: dis.camara || null, velas: dis.velas, posadero: dis.posadero || null, bloqueado: () => false, piso: () => tm.sonido,
+    npcs: [], puertas: [], salidas, slots: dis.slots, mesas: dis.mesas || null, comarca: dis.comarca || null, camara: dis.camara || null, laboratorio: dis.laboratorio || null, velas: dis.velas, posadero: dis.posadero || null, bloqueado: () => false, piso: () => tm.sonido,
     puntoLibre(rand, chocaFn) { for (let i = 0; i < 300; i++) { const x = TILE * 2 + rand() * (W - TILE * 4), y = TILE * 4 + rand() * (H - TILE * 6); if (!chocaFn(x, y)) return { x, y }; } return { x: W / 2, y: H - 80 }; },
     objetos(lista, ctx, camX, camY, visible, t) {
       for (const m of muebles) lista.push({ y: m.y, d: () => ctx.drawImage(m.img, Math.round(m.x - m.w / 2 - camX), Math.round(m.y - m.h - camY)) });
@@ -1181,6 +1208,20 @@ export async function iniciarMundo(raiz, op) {
     }
     const ca = interiores.camara && interiores.camara.camara;
     if (ca) interiores.camara.npcs.push({ tipo: "camara_cofre", nombre: "Cofre del Códice", emoji: "💰", x: ca.cofre.x, y: ca.cofre.y + 14, solido: false, radio: 60, dir: "south" });
+  }
+
+  // los monstruos: la máquina del Laboratorio y los salvajes (y un jefe) de cada zona
+  const MON = op.monstruos && op.monstruos.activo ? { ...op.monstruos, equipo: (op.monstruos.equipo || []).map((m) => ({ ...m, nivel: nivelDeXp(m.xp || 0).nivel })) } : null;   // { equipo, equipoMax, puntos, premiosDia, premiosHoy, premio }
+  if (MON) {
+    const lab = interiores.laboratorio && interiores.laboratorio.laboratorio;
+    if (lab) interiores.laboratorio.npcs.push({ tipo: "lab_maquina", nombre: "Máquina de monstruos", emoji: "🧪", x: lab.maquina.x, y: lab.maquina.y + 14, solido: false, radio: 62, dir: "south" });
+    for (const zona of ["bosque", "montana", "lago"]) {
+      const esc = escenaDeZona[zona], zi = { bosque: 1, montana: 2, lago: 3 }[zona]; if (!esc) continue;
+      for (let i = 0; i < 4; i++) {
+        const mon = i === 3 ? jefeDe(zona) : salvajeDe(zona, zi * 100 + i * 7 + 3), pt = esc.puntoLibre(rng(11000 + zi * 997 + i * 53), (x, y) => chocaEn(esc, x, y));
+        esc.npcs.push({ tipo: "salvaje", mon, nombre: mon.nombre, emoji: mon.emoji, zona, jefe: !!mon.jefe, x: pt.x, y: pt.y, casa: { x: pt.x, y: pt.y }, solido: false, radio: mon.jefe ? 54 : 44, dir: "south", hastaMs: 0, pausa: i * 0.7, meta: null });
+      }
+    }
   }
 
   // las misiones ocultas: objetos brillantes escondidos (se ven solo de cerca); la posición es fija para cada secreto
@@ -1642,9 +1683,9 @@ export async function iniciarMundo(raiz, op) {
   }
   function cerrarMapa() { estado.mapaAbierto = false; q(".m-mapa").classList.add("oculto"); cv.focus(); }
   function interactuar() {
-    if (estado.dialogo || estado.mapaAbierto || estado.mochilaAbierta || estado.juegoAbierto || estado.comarcaAbierto || estado.duelo || estado.cambiando || !estado.activo || !estado.cercano) return;
+    if (estado.dialogo || estado.mapaAbierto || estado.mochilaAbierta || estado.juegoAbierto || estado.comarcaAbierto || estado.monAbierto || estado.duelo || estado.cambiando || !estado.activo || !estado.cercano) return;
     const n = estado.cercano;
-    if (n.tipo === "puerta") { if (n.edificio.id === "camara" && !(LL && camaraDesbloqueada(LL.tengo))) abrirPuertaSellada(n); else entrarEdificio(n.edificio); } else if (n.tipo === "llave") abrirLlave(n); else if (n.tipo === "camara_cofre") abrirCofre(n); else if (n.tipo === "guardia") abrirGuardia(n); else if (n.tipo === "posadero") abrirPosada(n); else if (n.tipo === "guardian") abrirGuardian(n); else if (n.tipo === "retador") abrirRetador(n, false); else if (n.tipo === "mision") abrirMision(n); else if (n.tipo === "aldeano") abrirCharla(n); else if (n.tipo === "recurso") abrirRecurso(n); else if (n.tipo === "juego_mesa") abrirMesa(n); else if (n.tipo === "secreto") abrirSecreto(n); else if (n.tipo === "comarca_mapa") abrirMapaComarca(); else if (n.tipo === "comarca_heraldo") abrirHeraldo(n); else if (n.tipo === "parcela_puerta") { snd.puerta(); cambiarEscena(parcela, parcela.spawn.x, parcela.spawn.y); }
+    if (n.tipo === "puerta") { if (n.edificio.id === "camara" && !(LL && camaraDesbloqueada(LL.tengo))) abrirPuertaSellada(n); else entrarEdificio(n.edificio); } else if (n.tipo === "llave") abrirLlave(n); else if (n.tipo === "salvaje") abrirSalvaje(n); else if (n.tipo === "lab_maquina") abrirEquipo(true); else if (n.tipo === "camara_cofre") abrirCofre(n); else if (n.tipo === "guardia") abrirGuardia(n); else if (n.tipo === "posadero") abrirPosada(n); else if (n.tipo === "guardian") abrirGuardian(n); else if (n.tipo === "retador") abrirRetador(n, false); else if (n.tipo === "mision") abrirMision(n); else if (n.tipo === "aldeano") abrirCharla(n); else if (n.tipo === "recurso") abrirRecurso(n); else if (n.tipo === "juego_mesa") abrirMesa(n); else if (n.tipo === "secreto") abrirSecreto(n); else if (n.tipo === "comarca_mapa") abrirMapaComarca(); else if (n.tipo === "comarca_heraldo") abrirHeraldo(n); else if (n.tipo === "parcela_puerta") { snd.puerta(); cambiarEscena(parcela, parcela.spawn.x, parcela.spawn.y); }
   }
 
   // ---- recoger recursos: cada punto hace una pregunta; si se acierta, se recoge (hay un límite por día) ----
@@ -1789,6 +1830,165 @@ export async function iniciarMundo(raiz, op) {
     } else { snd.derrota(); pantallaFinalDuelo("🛡️", `${reino.nombre} defendió su provincia`, `${marcador}<br>${html(corto)} sigue siendo de ${html(reino.nombre)}. ¡Repasa las misiones y vuelve a intentarlo!`); }
   }
   const B0 = () => (COM && COM.batallas) || {};
+
+  // ---- monstruos: equipo, laboratorio, duelos contra salvajes y jefes ----
+  const monEl = q(".m-mon"); let monReloj = 0;
+  const NMAX = 20;
+  const aleat = () => (op.rngDuelo || Math.random)();
+  function cerrarMon() { clearTimeout(monReloj); estado.monAbierto = false; estado.monDuelo = null; monEl.classList.add("oculto"); monEl.innerHTML = ""; snd.musica(temaMusical(estado.escena)); cv.focus(); }
+  const barra = (valor, max, extra = "") => `<div class="mn-barra ${extra}"><i style="width:${Math.max(0, Math.min(100, max ? (valor / max) * 100 : 0))}%"></i></div>`;
+  const etiquetaTipo = (t) => `<span class="mn-tipo" style="background:${TIPOS_MON[t].color}">${TIPOS_MON[t].emoji} ${TIPOS_MON[t].nombre}</span>`;
+  function tarjetaMon(m, extra = "", clases = "") {
+    const st = statsDe(m), nv = nivelDeXp(m.xp || 0);
+    return `<div class="mn-tarj ${clases}" ${extra}><span class="mn-emo">${html(m.emoji)}</span><div class="mn-info"><b>${html(m.nombre)}</b> · Nv ${nv.nivel}${etiquetaTipo(m.tipo)}${barra(nv.xpEnNivel, nv.xpParaSiguiente || 1, "xp")}<small>${nv.maximo ? "Nivel máximo ⭐" : `XP ${nv.xpEnNivel}/${nv.xpParaSiguiente}`}</small><div class="mn-stats">${ESTATS_MON.map((k) => `<span><b>${st[k]}</b>${NOMBRE_ESTAT[k]}</span>`).join("")}</div></div></div>`;
+  }
+  const marcoMon = (cab, cuerpo) => `<div class="m-tarjeta">${cab}${cuerpo}</div>`;
+  const cabMon = (emo, quien, titulo) => `<div class="m-cab"><span class="m-emo">${emo}</span><div><div class="m-quien">${html(quien)}</div><div class="m-titulo">${html(titulo)}</div></div><button class="m-cerrar" data-a="cerrar-mon" aria-label="Cerrar">✕</button></div>`;
+  function ponerMon(htmlInt) { estado.monAbierto = true; teclas.clear(); joy.x = joy.y = 0; monEl.innerHTML = htmlInt; monEl.classList.remove("oculto"); monEl.querySelectorAll('[data-a="cerrar-mon"]').forEach((b) => (b.onclick = cerrarMon)); }
+
+  // El equipo (y, en el Laboratorio, la máquina para crear monstruos)
+  function abrirEquipo(enLab, msg) {
+    if (!MON || estado.dialogo || estado.cambiando || estado.duelo || estado.mapaAbierto || estado.juegoAbierto) return;
+    const lleno = MON.equipo.length >= MON.equipoMax;
+    ponerMon(marcoMon(cabMon("🐲", enLab ? "Máquina de monstruos" : "Mis monstruos", `Equipo ${MON.equipo.length}/${MON.equipoMax}`),
+      `${msg ? `<div class="m-msg">${html(msg)}</div>` : ""}${MON.equipo.length ? MON.equipo.map((m) => tarjetaMon(m)).join("") : '<p class="m-texto">Todavía no tienes monstruos. 🥚 ¡Crea el primero en la máquina del 🧪 Laboratorio de Monstruos (en la aldea)!</p>'}
+       <p class="cm-nota">⚔️ Reta a los monstruos salvajes del Bosque, la Montaña y el Lago. Ganar da XP a tu monstruo: ¡sube de nivel y se vuelve más fuerte!</p>
+       ${enLab ? (lleno ? '<p class="cm-nota">Tu equipo está completo.</p>' : '<button class="m-ok" data-a="crear">➕ Crear un monstruo</button>') : (lleno ? "" : '<p class="cm-nota">Para crear uno nuevo, usa la 🧪 máquina del Laboratorio.</p>')}
+       <button class="m-ok" data-a="cerrar-mon" style="background:var(--borde);color:inherit;margin-top:6px">Cerrar</button>`));
+    monEl.querySelectorAll('[data-a="cerrar-mon"]').forEach((b) => (b.onclick = cerrarMon));
+    const bc = monEl.querySelector('[data-a="crear"]'); if (bc) bc.onclick = () => formCrear(null);
+  }
+  function formCrear(f0, msg) {
+    const P = MON.puntos, rep0 = Math.floor(P / 4), f = f0 || { nombre: "", tipo: "fuego", emoji: "🦊", puntos: { hp: rep0 + (P - rep0 * 4), atk: rep0, def: rep0, vel: rep0 } };
+    const usados = puntosUsados(f.puntos), resto = P - usados, st = statsDe({ puntos: f.puntos, nivel: 1 }), err = validarMonstruo(f, { puntos: P });
+    ponerMon(marcoMon(cabMon("🧪", "Laboratorio de Monstruos", "Crea tu monstruo"),
+      `${msg ? `<div class="m-msg mal">${html(msg)}</div>` : ""}<label class="cm-nota">Nombre</label><input class="mn-input" maxlength="20" placeholder="Ej: Logikmon" value="${html(f.nombre)}">
+       <label class="cm-nota">Cómo se ve</label><div class="mn-iconos">${EMOJIS_MONSTRUO.map((e) => `<button class="mn-ico ${f.emoji === e ? "act" : ""}" data-emo="${e}">${e}</button>`).join("")}</div>
+       <label class="cm-nota">Tipo (cada uno es fuerte contra el siguiente: 🔥→🌿→⚡→💧→🔥)</label><div class="mn-tipos">${CLAVES_TIPO_MON.map((t) => `<button class="mn-tp ${f.tipo === t ? "act" : ""}" data-tipo="${t}">${TIPOS_MON[t].emoji} ${TIPOS_MON[t].nombre} · ${TIPOS_MON[t].lema}</button>`).join("")}</div>
+       <label class="cm-nota">Reparte tus puntos · te quedan <b>${resto}</b> de ${P}</label>
+       ${ESTATS_MON.map((k) => `<div class="mn-fila"><span>${NOMBRE_ESTAT[k]} <small style="color:var(--suave)">(${st[k]})</small></span><button data-menos="${k}" ${f.puntos[k] <= 0 ? "disabled" : ""}>−</button><b>${f.puntos[k]}</b><button data-mas="${k}" ${resto <= 0 || f.puntos[k] >= MAX_PUNTOS_POR_ESTAT ? "disabled" : ""}>+</button></div>`).join("")}
+       <p class="cm-nota">Cada punto da ${ESTATS_MON.map((k) => `+${{ hp: 4, atk: 1, def: 1, vel: 1 }[k]} ${NOMBRE_ESTAT[k].toLowerCase()}`).join(", ")}. Máximo ${MAX_PUNTOS_POR_ESTAT} por estadística.</p>
+       <div class="mn-retro-caja"><div class="m-retro mal" style="${err && usados === P ? "" : "display:none"}">${html(err)}</div></div>
+       <button class="m-ok" data-a="guardar" ${err ? "disabled" : ""}>🥚 ¡Crear monstruo!</button><button class="m-ok" data-a="volver" style="background:var(--borde);color:inherit;margin-top:6px">◀ Volver</button>`));
+    const inp = monEl.querySelector(".mn-input"), leer = () => ({ ...f, nombre: inp.value });
+    inp.oninput = () => { f.nombre = inp.value; const e2 = validarMonstruo(f, { puntos: P }); monEl.querySelector('[data-a="guardar"]').disabled = !!e2; };
+    monEl.querySelectorAll("[data-emo]").forEach((b) => (b.onclick = () => formCrear({ ...leer(), emoji: b.dataset.emo })));
+    monEl.querySelectorAll("[data-tipo]").forEach((b) => (b.onclick = () => formCrear({ ...leer(), tipo: b.dataset.tipo })));
+    monEl.querySelectorAll("[data-mas]").forEach((b) => (b.onclick = () => formCrear({ ...leer(), puntos: { ...f.puntos, [b.dataset.mas]: f.puntos[b.dataset.mas] + 1 } })));
+    monEl.querySelectorAll("[data-menos]").forEach((b) => (b.onclick = () => formCrear({ ...leer(), puntos: { ...f.puntos, [b.dataset.menos]: f.puntos[b.dataset.menos] - 1 } })));
+    monEl.querySelector('[data-a="volver"]').onclick = () => abrirEquipo(true);
+    monEl.querySelector('[data-a="guardar"]').onclick = async () => {
+      const campos = leer(), e2 = validarMonstruo(campos, { puntos: P }); if (e2 || estado.respondiendo) return;
+      estado.respondiendo = true; monEl.querySelector('[data-a="guardar"]').disabled = true; monEl.querySelector(".mn-retro-caja").innerHTML = '<div class="m-retro bien">⏳ Creando tu monstruo…</div>';
+      let r; try { r = op.modoPrueba || !op.alCrearMonstruo ? { ok: true, local: true, monstruo: { id: -(MON.equipo.length + 1), nombre: campos.nombre.trim(), tipo: campos.tipo, emoji: campos.emoji, puntos: { ...campos.puntos }, xp: 0, nivel: 1, origen: "creado" } } : await op.alCrearMonstruo(campos); } catch (e) { r = { ok: false, mensaje: e && e.message }; }
+      estado.respondiendo = false; if (!vivo || !estado.monAbierto) return;
+      if (!r || r.ok === false) { formCrear(campos, `No se pudo crear: ${(r && r.mensaje) || "intenta de nuevo"}`); return; }
+      MON.equipo.push({ ...r.monstruo, nivel: nivelDeXp(r.monstruo.xp || 0).nivel }); snd.fanfarria();
+      abrirEquipo(true, `🎉 ¡Nació ${r.monstruo.nombre}!${op.modoPrueba ? " (modo prueba: no se guarda)" : ""}`);
+    };
+  }
+
+  // Reto a un monstruo salvaje (o a un jefe)
+  function abrirSalvaje(n) {
+    estado.dialogo = n; n.hablando = true; snd.hablar();
+    const rv = n.mon, d0 = (cuerpo, botones) => { const d = abrirTarjeta(`<div class="m-cab"><span class="m-emo">${html(n.emoji)}</span><div><div class="m-quien">${n.jefe ? "👑 " : ""}${html(n.nombre)}</div><div class="m-titulo">${n.jefe ? "Jefe" : "Monstruo salvaje"} · Nv ${rv.nivel} · ${TIPOS_MON[rv.tipo].emoji} ${TIPOS_MON[rv.tipo].nombre}</div></div><button class="m-cerrar" data-a="cerrar" aria-label="Cerrar">✕</button></div>${cuerpo}${botones}`); d.querySelectorAll('[data-a="cerrar"]').forEach((b) => (b.onclick = cerrarDialogo)); return d; };
+    if (!MON.equipo.length) { d0('<p class="m-texto">¡Un monstruo salvaje! 🐾 Pero no tienes ningún monstruo que te acompañe. Crea el tuyo en el <b>🧪 Laboratorio de Monstruos</b> de la aldea.</p>', '<button class="m-ok" data-a="cerrar">Entendido</button>'); return; }
+    let elegido = MON.equipo.reduce((a, m) => (nivelDeXp(m.xp).nivel > nivelDeXp(a.xp).nivel ? m : a), MON.equipo[0]);
+    const pintar = () => {
+      const d = d0(`<p class="m-texto">${n.jefe ? "El jefe de la zona te desafía. ¡Es muy fuerte!" : "¡Un monstruo salvaje te desafía!"} Elige a tu monstruo y cómo pelear:</p>${MON.equipo.map((m) => tarjetaMon(m, `data-mid="${m.id}"`, `mn-sel ${m.id === elegido.id ? "act" : ""}`)).join("")}
+        <button class="m-ok" data-modo="turnos">🎯 Pregunta para atacar</button><p class="cm-nota">Eliges la habilidad y respondes una pregunta: si aciertas pegas fuerte.</p>
+        <button class="m-ok" data-modo="rapida" style="background:#8b5cf6">⚡ Pelea rápida</button><p class="cm-nota">Pelean solos; cada 3 rondas respondes una pregunta clave que potencia tu golpe (premio algo menor).</p>
+        <button class="m-ok" data-a="cerrar" style="background:var(--borde);color:inherit">Ahora no</button>`, "");
+      d.querySelectorAll("[data-mid]").forEach((b) => (b.onclick = () => { elegido = MON.equipo.find((m) => String(m.id) === b.dataset.mid); pintar(); }));
+      d.querySelectorAll("[data-modo]").forEach((b) => (b.onclick = () => iniciarMonDuelo(n, elegido, b.dataset.modo)));
+    };
+    pintar();
+  }
+  function iniciarMonDuelo(n, mi, modo) {
+    const pool = poolRecurso(n.zona).filter((p) => p && Array.isArray(p.opciones) && p.opciones.length >= 2);
+    if (!pool.length) { cerrarDialogo(); toast("Todavía no hay preguntas para un duelo de monstruos.", 3200); return; }
+    const comb = crearCombate({ yo: { ...mi, nivel: nivelDeXp(mi.xp || 0).nivel }, rival: n.mon, modo, rand: op.rngDuelo || Math.random });
+    ocultarDialogo(); estado.monDuelo = { n, mi, comb, modo, pool, usadas: new Set(), hab: null, ocupado: false, ultimo: null };
+    snd.musica("duelo"); pintarMonDuelo("inicio");
+  }
+  const textoEv = (D, ev) => {
+    const quien = ev.quien === "yo" ? D.comb.yo.nombre : D.comb.rival.nombre, hab = HABILIDADES[ev.habilidad] || HABILIDADES.basico;
+    if (ev.habilidad === "guardia") return `🛡️ <b>${html(quien)}</b> se cubre y recupera <b>${ev.cura || 0}</b> PV.`;
+    if (ev.fallo) return `💨 <b>${html(quien)}</b> usó ${hab.emoji} ${hab.nombre}… ¡y falló!`;
+    return `${hab.emoji} <b>${html(quien)}</b> usó ${hab.nombre}: <b>−${ev.danio} PV</b>${ev.tipo === "super" ? " · ¡súper efectivo! 💥" : ev.tipo === "poco" ? " · poco efectivo" : ""}`;
+  };
+  function panelesDuelo(D) {
+    const A = D.comb.yo, R = D.comb.rival, fila = (L, lado) => `<div class="mn-lado ${lado}"><span class="mn-emo" data-lado="${lado}">${html(L.emoji)}</span><div class="mn-info"><b>${html(L.nombre)}</b> · Nv ${L.nivel}${etiquetaTipo(L.tipo)}${barra(L.hp, L.hpMax, L.hp / L.hpMax < 0.3 ? "baja" : "")}<small>${L.hp}/${L.hpMax} PV</small></div></div>`;
+    return fila(R, "rival") + fila(A, "yo");
+  }
+  function pintarMonDuelo(fase, extra) {
+    const D = estado.monDuelo; if (!D) return; clearTimeout(monReloj);
+    const c = D.comb, modoTxt = D.modo === "rapida" ? "⚡ Pelea rápida" : "🎯 Pregunta para atacar";
+    let cuerpo = "", log = extra || "";
+    if (fase === "inicio") { log = `¡${html(c.yo.nombre)} (Nv ${c.yo.nivel}) contra ${html(c.rival.nombre)} (Nv ${c.rival.nivel})! ${c.yo.nivel > c.rival.nivel ? "Tienes ventaja de nivel. 💪" : c.yo.nivel < c.rival.nivel ? "Es de más nivel: ¡cuidado! 😬" : "Parejos."}`; fase = D.modo === "rapida" ? "ronda" : "elegir"; }
+    if (fase === "elegir") {
+      cuerpo = `<div class="mn-acc">${["basico", "fuerte", "guardia"].map((h) => `<button class="m-opcion mn-op mn-hab" data-h="${h}">${HABILIDADES[h].emoji} ${HABILIDADES[h].nombre} <small>${HABILIDADES[h].poder ? "poder " + HABILIDADES[h].poder : "sin pregunta"}</small></button>`).join("")}</div><p class="cm-nota" id="mn-ayuda">${HABILIDADES.basico.textoFalla}</p>`;
+    } else if (fase === "ronda") {
+      const pr = c.necesitaPregunta();
+      if (pr) return preguntaMon(null, log || "¡Pregunta clave! Si aciertas, tu golpe será fuerte.");
+      cuerpo = `<div class="mn-acc"><button class="m-ok mn-sig" data-a="auto">▶ Siguiente ronda</button></div>`;
+    } else if (fase === "resultado") {
+      const ult = D.ultimo; cuerpo = `<div class="mn-acc"><button class="m-ok mn-sig" data-a="sig">${c.estado.fin ? "🏁 Ver resultado" : "Siguiente ▶"}</button></div>`; log = (ult.veredicto ? `<div>${ult.veredicto}</div>` : "") + ult.eventos.map((e) => `<div>${textoEv(D, e)}</div>`).join("");
+    }
+    monEl.innerHTML = marcoMon(cabMon("🐲", "Duelo de monstruos", `${modoTxt}${D.n.jefe ? " · 👑 Jefe" : ""}`), `${panelesDuelo(D)}<div class="mn-log">${log || "…"}</div>${cuerpo}`);
+    estado.monAbierto = true; monEl.classList.remove("oculto");
+    monEl.querySelectorAll('[data-a="cerrar-mon"]').forEach((b) => (b.onclick = cerrarMon));
+    monEl.querySelectorAll("[data-h]").forEach((b) => { b.onmouseenter = () => { const a = q("#mn-ayuda") || monEl.querySelector("#mn-ayuda"); if (a) a.textContent = HABILIDADES[b.dataset.h].textoFalla; }; b.onclick = () => { if (b.dataset.h === "guardia") resolverMon({ habilidad: "guardia" }, null); else preguntaMon(b.dataset.h, `${HABILIDADES[b.dataset.h].emoji} ${HABILIDADES[b.dataset.h].nombre}: ${HABILIDADES[b.dataset.h].textoFalla}`); }; });
+    const au = monEl.querySelector('[data-a="auto"]'); if (au) au.onclick = () => resolverMon({ acierto: null }, null);
+    const sg = monEl.querySelector('[data-a="sig"]'); if (sg) sg.onclick = () => (c.estado.fin ? terminarMon() : pintarMonDuelo(D.modo === "rapida" ? "ronda" : "elegir"));
+  }
+  function preguntaMon(hab, aviso) {
+    const D = estado.monDuelo; if (!D || D.ocupado) return; D.hab = hab;
+    let libres = D.pool.map((p, i) => i).filter((i) => !D.usadas.has(i)); if (!libres.length) { D.usadas.clear(); libres = D.pool.map((p, i) => i); }
+    const idx = libres[Math.floor(aleat() * libres.length)]; D.usadas.add(idx);
+    const q0 = D.pool[idx], texto = String(q0.texto ?? q0.pregunta ?? ""), ops = barajar(q0.opciones.map((o, i) => i), op.rngDuelo || Math.random);
+    monEl.innerHTML = marcoMon(cabMon("🐲", "Duelo de monstruos", D.modo === "rapida" ? "⚡ Pregunta clave" : "🎯 Responde para atacar"), `${panelesDuelo(D)}<div class="mn-log">${aviso || ""}<br><b>${html(texto)}</b></div><div class="mn-acc">${ops.map((i, pos) => `<button class="m-opcion mn-op" data-i="${i}">${pos + 1}. ${html(q0.opciones[i])}</button>`).join("")}</div>`);
+    estado.monAbierto = true; monEl.classList.remove("oculto");
+    monEl.querySelectorAll('[data-a="cerrar-mon"]').forEach((b) => (b.onclick = cerrarMon));
+    monEl.querySelectorAll(".mn-op").forEach((b) => (b.onclick = () => {
+      if (D.ocupado) return; D.ocupado = true; const ok = Number(b.dataset.i) === Number(q0.correcta);
+      monEl.querySelectorAll(".mn-op").forEach((x) => { x.disabled = true; if (Number(x.dataset.i) === Number(q0.correcta)) x.classList.add("bien"); }); if (!ok) b.classList.add("mal"); ok ? snd.bien() : snd.mal();
+      monReloj = setTimeout(() => { D.ocupado = false; resolverMon(D.modo === "rapida" ? { acierto: ok } : { habilidad: D.hab, acierto: ok }, ok ? "✅ <b>¡Correcto!</b>" : `❌ <b>Fallaste.</b> La respuesta era: ${html(q0.opciones[q0.correcta])}`); }, 900);
+    }));
+  }
+  function resolverMon(a, veredicto) {
+    const D = estado.monDuelo; if (!D) return; const r = D.comb.turno(a); D.ultimo = { eventos: r.eventos, veredicto };
+    pintarMonDuelo("resultado");
+    const yoG = r.eventos.some((e) => e.quien === "yo" && e.danio > 0), rivG = r.eventos.some((e) => e.quien === "rival" && e.danio > 0);
+    if (yoG) { snd.golpe && snd.golpe(); const el = monEl.querySelector('.mn-emo[data-lado="rival"]'); if (el) el.classList.add("golpe"); } if (rivG) { const el = monEl.querySelector('.mn-emo[data-lado="yo"]'); if (el) el.classList.add("golpe"); }
+  }
+  async function terminarMon() {
+    const D = estado.monDuelo; if (!D || D.ocupado) return; D.ocupado = true; const c = D.comb, gano = c.estado.fin === "gana", mi = D.mi, rv = D.n.mon;
+    monEl.innerHTML = marcoMon(cabMon(gano ? "🏆" : "💔", gano ? "¡Victoria!" : "Derrota", "Resultado del duelo"), '<p class="m-texto">⏳ Registrando el duelo…</p>');
+    let r;
+    try {
+      if (op.modoPrueba || !op.alMonstruo) {
+        const premio = calcularPremioMonstruo({ ganado: gano, nivelYo: c.yo.nivel, nivelRival: rv.nivel, jefe: !!D.n.jefe, modo: D.modo, premiosHoy: MON.premiosHoy, cfg: { monstruos_premios_dia: MON.premiosDia, monstruos_xp: MON.premio.xp, monstruos_oro: MON.premio.oro } });
+        const xpN = (mi.xp || 0) + premio.xpMonstruo, nv = nivelDeXp(xpN).nivel; r = { ok: true, local: true, premio, monstruo: { id: mi.id, xp: xpN, nivel: nv }, subio: nv > c.yo.nivel, premiosHoy: MON.premiosHoy + (premio.xpMonstruo > 0 ? 1 : 0) };
+      } else r = await op.alMonstruo({ monstruoId: mi.id, rivalNombre: rv.nombre, rivalNivel: rv.nivel, zona: D.n.zona, jefe: !!D.n.jefe, modo: D.modo, ganado: gano });
+    } catch (e) { r = { ok: false, mensaje: e && e.message }; }
+    D.ocupado = false; if (!vivo || estado.monDuelo !== D) return;
+    if (!r || r.ok === false) { snd.mal(); monEl.innerHTML = marcoMon(cabMon("⚠️", "No se pudo registrar", gano ? "Ganaste el duelo" : "Resultado del duelo"), `<p class="m-texto">${gano ? "¡Ganaste, pero el resultado no se guardó" : "El resultado no se guardó"} (${html(String((r && r.mensaje) || "sin conexión").replace(/[.\s]+$/, ""))}). Puedes reintentar.</p><button class="m-ok mn-sig" data-a="reintentar">🔄 Reintentar</button><button class="m-ok" data-a="cerrar-mon" style="background:var(--borde);color:inherit;margin-top:6px">Salir sin guardar</button>`); monEl.querySelectorAll('[data-a="cerrar-mon"]').forEach((b) => (b.onclick = cerrarMon)); monEl.querySelector('[data-a="reintentar"]').onclick = terminarMon; return; }
+    const p = r.premio || { xpMonstruo: 0, xp: 0, oro: 0 };
+    const mm = MON.equipo.find((m) => m.id === mi.id); if (mm && r.monstruo) { mm.xp = r.monstruo.xp; mm.nivel = r.monstruo.nivel; }
+    if (r.premiosHoy != null) MON.premiosHoy = r.premiosHoy;
+    if (p.xp > 0 || p.oro > 0) {
+      if (r.xp != null) estado.xp = r.xp; else estado.xp += p.xp; if (r.oro != null) estado.oro = r.oro; else estado.oro += p.oro;
+      estado.ganado.xp += p.xp; estado.ganado.oro += p.oro; aviso(`+${p.xp} XP`, "#fde68a"); aporteComarca(r.comarca); actualizarHud();
+    }
+    if (gano) D.n.hastaMs = ahoraMs() + 150000;       // el monstruo se va y vuelve en 2,5 min
+    gano ? snd.fanfarria() : snd.derrota();
+    const nvInfo = r.monstruo ? nivelDeXp(r.monstruo.xp) : null;
+    monEl.innerHTML = marcoMon(cabMon(gano ? "🏆" : "💔", gano ? `¡Venciste a ${rv.nombre}!` : `${rv.nombre} te venció`, "Resultado del duelo"),
+      `<div class="mn-log">${gano ? `🎁 ${p.tope ? "Ya llegaste al tope de premios de hoy: sigues ganando experiencia solo por diversión. 😉" : `<b>+${p.xpMonstruo}</b> XP para ${html(mi.nombre)} · <b>+${p.xp}</b> XP · <b>+${p.oro}</b> 🪙`}${op.modoPrueba ? " · 🧪 modo prueba (no se guarda)" : ""}` : `Esta vez no fue. ${html(mi.nombre)} puede intentarlo otra vez${c.yo.nivel < rv.nivel ? " (o subir de nivel antes con monstruos más débiles)" : ""}. 💪`}${r.subio ? `<br>🎉 <b>¡${html(mi.nombre)} subió a nivel ${r.monstruo.nivel}!</b> Sus estadísticas crecieron.` : ""}${gano && nvInfo && !nvInfo.maximo ? `<br><small>XP ${nvInfo.xpEnNivel}/${nvInfo.xpParaSiguiente} para el siguiente nivel</small>` : ""}</div>
+       <button class="m-ok" data-a="cerrar-mon">Volver al mundo</button>`);
+    monEl.querySelectorAll('[data-a="cerrar-mon"]').forEach((b) => (b.onclick = cerrarMon));
+  }
 
   // ---- las Tres Llaves y la Cámara del Códice ----
   const llavesTxt = () => LLAVES.map((l) => `${LL.tengo.includes(l.n) ? "✅" : "🔒"} ${l.medalla} ${l.nombre}`).join("<br>");
@@ -2121,10 +2321,22 @@ export async function iniciarMundo(raiz, op) {
     if (!movio) { v.meta = null; v.pausa = 0.4 + rand(); }
   }
 
+  function moverSalvaje(v, esc, dt) {           // los monstruos salvajes pasean cerca de su guarida
+    if (ahoraMs() < (v.hastaMs || 0) || v.hablando) return;
+    if (Math.hypot(v.x - estado.x, v.y - estado.y) < 40) return;
+    if (v.pausa > 0) { v.pausa -= dt; return; }
+    const R = v.jefe ? 16 : 38;
+    if (!v.meta) { const a = rand() * 6.283, d = R * (0.3 + 0.7 * rand()); v.meta = { x: v.casa.x + Math.cos(a) * d, y: v.casa.y + Math.sin(a) * d }; }
+    const vx = v.meta.x - v.x, vy = v.meta.y - v.y, dist = Math.hypot(vx, vy);
+    if (dist < 2) { v.meta = null; v.pausa = 1 + rand() * 3; return; }
+    const paso = Math.min(24 * dt, dist), dx = (vx / dist) * paso, dy = (vy / dist) * paso;
+    if (!chocaEn(esc, v.x + dx, v.y, v) && Math.hypot(v.x + dx - estado.x, v.y - estado.y) > 26) v.x += dx; else v.meta = null;
+    if (!chocaEn(esc, v.x, v.y + dy, v) && Math.hypot(v.x - estado.x, v.y + dy - estado.y) > 26) v.y += dy; else v.meta = null;
+  }
   function actualizar(dt) {
     estado.fase += dt;
     const esc = estado.escena;
-    const bloqueada = estado.dialogo || estado.mapaAbierto || estado.mochilaAbierta || estado.duelo || estado.cambiando || !q(".m-fin").classList.contains("oculto");
+    const bloqueada = estado.dialogo || estado.mapaAbierto || estado.mochilaAbierta || estado.monAbierto || estado.duelo || estado.cambiando || !q(".m-fin").classList.contains("oculto");
     const [ax, ay] = bloqueada ? [0, 0] : leerEntrada();
     estado.caminando = !!(ax || ay);
     if (estado.caminando) {
@@ -2142,7 +2354,7 @@ export async function iniciarMundo(raiz, op) {
     // salida de los edificios (caminar hacia la puerta)
     if (!estado.cambiando) { const sal = esc.salidas.find((s) => estado.x > s.x && estado.x < s.x + s.w && estado.y > s.y && estado.y < s.y + s.h && (!s.activa || s.activa())); if (sal) (sal.accion || salirDeEdificio)(); }
     // personajes
-    for (const n of esc.npcs) if (n.clave && n.tipo !== "puerta") moverAldeano(n, esc, dt);
+    for (const n of esc.npcs) if (n.clave && n.tipo !== "puerta") moverAldeano(n, esc, dt); else if (n.tipo === "salvaje") moverSalvaje(n, esc, dt);
     for (const n of esc.npcs) if ((n.hablando || Math.hypot(n.x - estado.x, n.y - estado.y) < 90) && n.tipo !== "puerta") { if (n.tipo === "mision" || n.tipo === "guardia" || n.tipo === "comarca_heraldo" || n.tipo === "posadero" || n.tipo === "guardian" || n.tipo === "retador" || n.hablando) n.dir = direccionDe(estado.x - n.x, estado.y - n.y); }
     // emboscada: un retador te corta el paso si te acercas demasiado (si lo cierras o huyes, te deja en paz un rato)
     if (R && !bloqueada) for (const n of esc.npcs) {
@@ -2150,11 +2362,11 @@ export async function iniciarMundo(raiz, op) {
     }
     // el más cercano con quien se puede interactuar
     let mejor = null, md = 1e9;
-    for (const n of [...esc.npcs, ...esc.puertas]) { if ((n.tipo === "recurso" && ahoraMs() < (n.hastaMs || 0)) || (n.tipo === "secreto" && n.hallado) || (n.tipo === "llave" && n.tengo)) continue; const rad = n.radio || 40, d = Math.hypot(n.x - estado.x, n.y - estado.y); if (d < rad && d < md) { md = d; mejor = n; } }
+    for (const n of [...esc.npcs, ...esc.puertas]) { if ((n.tipo === "recurso" && ahoraMs() < (n.hastaMs || 0)) || (n.tipo === "secreto" && n.hallado) || (n.tipo === "llave" && n.tengo) || (n.tipo === "salvaje" && ahoraMs() < (n.hastaMs || 0))) continue; const rad = n.radio || 40, d = Math.hypot(n.x - estado.x, n.y - estado.y); if (d < rad && d < md) { md = d; mejor = n; } }
     estado.cercano = mejor;
     const av = q(".m-aviso"), ba = q(".m-accion");
     if (mejor && !estado.dialogo && !estado.cambiando) {
-      av.textContent = (mejor.tipo === "puerta" ? `🚪 Entrar a ${mejor.nombre}` : mejor.tipo === "parcela_puerta" ? "🏡 Entrar a mi parcela" : mejor.tipo === "recurso" ? `${ITEMS[mejor.item].emoji} Recoger ${mejor.nombre.toLowerCase()}` : mejor.tipo === "juego_mesa" ? `${mejor.emoji} Jugar: ${mejor.nombre}` : mejor.tipo === "secreto" ? "🔎 Examinar algo que brilla" : mejor.tipo === "llave" ? "🗝️ Examinar la llave" : mejor.tipo === "camara_cofre" ? "💰 Abrir el cofre" : mejor.tipo === "comarca_mapa" ? "🗺️ Ver el mapa de la Comarca" : `💬 Hablar con ${mejor.nombre}`) + (tactil ? "" : " (E)"); av.classList.remove("oculto"); ba.classList.add("listo"); ba.textContent = mejor.tipo === "puerta" ? "🚪" : mejor.tipo === "parcela_puerta" ? "🏡" : mejor.tipo === "recurso" ? ITEMS[mejor.item].emoji : mejor.tipo === "juego_mesa" ? mejor.emoji : mejor.tipo === "secreto" ? "🔎" : mejor.tipo === "llave" ? "🗝️" : mejor.tipo === "camara_cofre" ? "💰" : mejor.tipo === "comarca_mapa" ? "🗺️" : "💬";
+      av.textContent = (mejor.tipo === "puerta" ? `🚪 Entrar a ${mejor.nombre}` : mejor.tipo === "parcela_puerta" ? "🏡 Entrar a mi parcela" : mejor.tipo === "recurso" ? `${ITEMS[mejor.item].emoji} Recoger ${mejor.nombre.toLowerCase()}` : mejor.tipo === "juego_mesa" ? `${mejor.emoji} Jugar: ${mejor.nombre}` : mejor.tipo === "secreto" ? "🔎 Examinar algo que brilla" : mejor.tipo === "llave" ? "🗝️ Examinar la llave" : mejor.tipo === "salvaje" ? `⚔️ Retar a ${mejor.nombre} (Nv ${mejor.mon.nivel})` : mejor.tipo === "lab_maquina" ? "🧪 Usar la máquina de monstruos" : mejor.tipo === "camara_cofre" ? "💰 Abrir el cofre" : mejor.tipo === "comarca_mapa" ? "🗺️ Ver el mapa de la Comarca" : `💬 Hablar con ${mejor.nombre}`) + (tactil ? "" : " (E)"); av.classList.remove("oculto"); ba.classList.add("listo"); ba.textContent = mejor.tipo === "puerta" ? "🚪" : mejor.tipo === "parcela_puerta" ? "🏡" : mejor.tipo === "recurso" ? ITEMS[mejor.item].emoji : mejor.tipo === "juego_mesa" ? mejor.emoji : mejor.tipo === "secreto" ? "🔎" : mejor.tipo === "llave" ? "🗝️" : mejor.tipo === "salvaje" ? "⚔️" : mejor.tipo === "lab_maquina" ? "🧪" : mejor.tipo === "camara_cofre" ? "💰" : mejor.tipo === "comarca_mapa" ? "🗺️" : "💬";
     } else { av.classList.add("oculto"); ba.classList.remove("listo"); }
     for (const a of estado.avisos) a.t += dt; estado.avisos = estado.avisos.filter((a) => a.t < 1.3);
   }
@@ -2183,6 +2395,20 @@ export async function iniciarMundo(raiz, op) {
     ctx.globalAlpha = a * (libre ? 1 : 0.55); ctx.fillStyle = "#000"; ctx.font = "22px " + FUENTE_EMOJI; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.fillText(libre ? "🗝️" : "🔒", sx, sy - 2 + Math.sin(t * 3 + n.y) * 1.5);
     ctx.font = "10px " + FUENTE_EMOJI; if (libre) { ctx.fillText(lk.medalla, sx + 13 * Math.cos(t * 2 + n.x), sy - 22 + 4 * Math.sin(t * 3 + n.x)); } ctx.globalAlpha = 1;
     if (d < 70) etiqueta(lk.nombre, sx, sy - 30, lk.color);
+  }
+  function dibujarSalvaje(n, t) {
+    if (ahoraMs() < (n.hastaMs || 0)) return;
+    const sx = Math.round(n.x - camX), sy = Math.round(n.y - camY), tp = TIPOS_MON[n.mon.tipo], px = n.jefe ? 32 : 22, sal = Math.abs(Math.sin(t * 3 + n.x)) * 3;
+    sombra(n.x, n.y, n.jefe ? 14 : 8, n.jefe ? 5 : 3);
+    ctx.globalAlpha = 0.35; ctx.fillStyle = tp.color; ctx.beginPath(); ctx.ellipse(sx, sy - 2, n.jefe ? 17 : 11, n.jefe ? 7 : 5, 0, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
+    ctx.fillStyle = "#000"; ctx.font = px + "px " + FUENTE_EMOJI; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.fillText(n.emoji, sx, sy - 4 - sal);
+    if (Math.hypot(n.x - estado.x, n.y - estado.y) < 90) etiqueta(`${n.jefe ? "👑 " : ""}${n.nombre} · Nv ${n.mon.nivel} ${tp.emoji}`, sx, sy - px - 10 - sal, n.jefe ? "#fca5a5" : "#e8edf8");
+  }
+  function dibujarMaquina(n, t) {
+    const sx = Math.round(n.x - camX), sy = Math.round(n.y - 30 - camY);
+    ctx.globalAlpha = 1; ctx.fillStyle = "#000"; ctx.font = "26px " + FUENTE_EMOJI; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.fillText("🧪", sx, sy + Math.sin(t * 3) * 2);
+    ctx.font = "11px " + FUENTE_EMOJI; ctx.fillText("✨", sx + 14 * Math.cos(t * 2), sy - 18 + 4 * Math.sin(t * 3)); ctx.fillText("🥚", sx - 15, sy - 6 + 2 * Math.sin(t * 2.4));
+    if (Math.hypot(n.x - estado.x, n.y - estado.y) < 100) etiqueta(n.nombre, sx, sy - 26, "#a7f3d0");
   }
   function dibujarCofre(n, t) {
     const sx = Math.round(n.x - camX), sy = Math.round(n.y - 28 - camY);
@@ -2228,6 +2454,8 @@ export async function iniciarMundo(raiz, op) {
       if (n.tipo === "juego_mesa") { dibujarMesaJuego(n, t); return; }
       if (n.tipo === "secreto") { dibujarSecreto(n, t); return; }
       if (n.tipo === "llave") { dibujarLlave(n, t); return; }
+      if (n.tipo === "salvaje") { dibujarSalvaje(n, t); return; }
+      if (n.tipo === "lab_maquina") { dibujarMaquina(n, t); return; }
       if (n.tipo === "camara_cofre") { dibujarCofre(n, t); return; }
       if (n.tipo === "comarca_mapa") { ctx.globalAlpha = 1; ctx.fillStyle = "#000"; ctx.font = "22px " + FUENTE_EMOJI; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.fillText(n.emoji, Math.round(n.x - camX), Math.round(n.y - 40 - camY) + Math.sin(t * 3 + n.x) * 2); if (Math.hypot(n.x - estado.x, n.y - estado.y) < 90) etiqueta(n.nombre, Math.round(n.x - camX), Math.round(n.y - 66 - camY), "#fde68a"); return; }
       sombra(n.x, n.y, 9, 3.5);
@@ -2277,6 +2505,13 @@ export async function iniciarMundo(raiz, op) {
   function alTeclaAbajo(e) {
     snd.reanudar(); const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) e.preventDefault();
+    if (estado.monAbierto) {
+      if (e.key === "Escape") { cerrarMon(); return; }
+      if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+      if (/^[1-6]$/.test(e.key)) { const b = monEl.querySelectorAll(".mn-op")[Number(e.key) - 1]; if (b && !b.disabled) b.click(); }
+      else if (e.key === "Enter" || e.key === " ") { const b = monEl.querySelector(".mn-sig"); if (b) b.click(); }
+      return;
+    }
     if (estado.comarcaAbierto) { if (e.key === "Escape") cerrarComarca(); return; }
     if (estado.juegoAbierto) { if (e.key === "Escape") cerrarJuego(); else if (juegoActual && juegoActual.tecla(e.key.length === 1 ? e.key.toUpperCase() : e.key)) e.preventDefault(); return; }
     if (k === "m") { alternarSonido(); return; }
@@ -2308,6 +2543,7 @@ export async function iniciarMundo(raiz, op) {
   q(".b-sonido").onclick = alternarSonido;
   q(".b-mapa").onclick = () => (estado.mapaAbierto ? cerrarMapa() : abrirMapa());
   if (PC) q(".b-construir").onclick = alternarConstruir;
+  if (MON) { q(".b-monstruos").classList.remove("oculto"); q(".b-monstruos").onclick = () => { if (estado.monAbierto) cerrarMon(); else abrirEquipo(false); }; }
   if (RC) { q(".b-mochila").classList.remove("oculto"); q(".b-mochila").onclick = () => (estado.mochilaAbierta ? cerrarMochila() : abrirMochila()); }
   q(".b-salir").onclick = () => op.alSalir && op.alSalir();
   q(".b-seguir").onclick = () => { q(".m-fin").classList.add("oculto"); cv.focus(); };
@@ -2322,7 +2558,7 @@ export async function iniciarMundo(raiz, op) {
   ultimo = performance.now(); rafId = requestAnimationFrame(cuadro);
 
   const api = {
-    estado, escenas, exterior, interiores, misiones, hechas, snd, chocaEn, interactuar, cambiarEscena, pasos, bosque: escenaDeZona.bosque, naturales, escenaDeZona, zonas: () => zonas, recalcularZonas, abrirMapa, cerrarMapa, viajarRapido, insignias, esperaHasta, poolDeZona, R, retosGanados, esperaReto, abrirRetador, iniciarReto, poolDeZonaReto, puedeRetar, abrirGuardian, iniciarDuelo, contestarDuelo, terminarDuelo, cerrarDuelo, RC, AC, hechosAc, LL, abrirLlave, abrirPuertaSellada, abrirCofre, COM, abrirMapaComarca, cerrarComarca, abrirHeraldo, vistaHeraldo, iniciarBatalla, SEC, hallados, abrirSecreto, abrirMesa, abrirJuego, cerrarJuego, juego: () => juegoActual, inv, abrirRecurso, abrirMochila, cerrarMochila, fabricarItem, usarItem, recogidoHoy: () => recogidoHoy, PC, parcela, cartel: () => cartel, abrirConstruir, cerrarConstruir, tocarCelda,
+    estado, escenas, exterior, interiores, misiones, hechas, snd, chocaEn, interactuar, cambiarEscena, pasos, bosque: escenaDeZona.bosque, naturales, escenaDeZona, zonas: () => zonas, recalcularZonas, abrirMapa, cerrarMapa, viajarRapido, insignias, esperaHasta, poolDeZona, R, retosGanados, esperaReto, abrirRetador, iniciarReto, poolDeZonaReto, puedeRetar, abrirGuardian, iniciarDuelo, contestarDuelo, terminarDuelo, cerrarDuelo, RC, AC, hechosAc, MON, abrirEquipo, abrirSalvaje, iniciarMonDuelo, monDuelo: () => estado.monDuelo, LL, abrirLlave, abrirPuertaSellada, abrirCofre, COM, abrirMapaComarca, cerrarComarca, abrirHeraldo, vistaHeraldo, iniciarBatalla, SEC, hallados, abrirSecreto, abrirMesa, abrirJuego, cerrarJuego, juego: () => juegoActual, inv, abrirRecurso, abrirMochila, cerrarMochila, fabricarItem, usarItem, recogidoHoy: () => recogidoHoy, PC, parcela, cartel: () => cartel, abrirConstruir, cerrarConstruir, tocarCelda,
     destruir() {
       if (!vivo) return; // por si se llama dos veces
       vivo = false; estado.activo = false; cancelAnimationFrame(rafId); temporizadores.forEach(clearTimeout); temporizadores.clear();
