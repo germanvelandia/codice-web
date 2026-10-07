@@ -26,6 +26,14 @@ const nombreLugar = (k) => LUGARES.find((l) => l.key === k) || { emoji: "📍", 
 const vacia = (curso) => ({ grado_id: curso || "", zona: "aldea", lugar: "biblioteca", npc_nombre: "", npc_sprite: "", titulo: "", texto: "", opciones: ["", ""], correcta: 0, pista: "", retro: "", xp: 10, oro: 5, orden: 0, activo: true });
 const aForm = (m) => ({ grado_id: m.grado_id ? String(m.grado_id) : "", zona: m.zona || zonaDeLugar(m.lugar), lugar: m.lugar || "plaza", npc_nombre: m.npc_nombre || "", npc_sprite: m.npc_sprite || "", titulo: m.titulo || "", texto: m.texto || "", opciones: m.opciones && m.opciones.length >= MIN_OPCIONES ? [...m.opciones] : ["", ""], correcta: Math.min(Number(m.correcta) || 0, Math.max(0, (m.opciones || []).length - 1)), pista: m.pista || "", retro: m.retro || "", xp: m.xp ?? 0, oro: m.oro ?? 0, orden: m.orden ?? 0, activo: m.activo !== false });
 
+// El menú se agrupa en 4 secciones para no tener una fila interminable de pestañas.
+const MENU_MUNDO = [
+  { id: "contenido", icono: "📚", nombre: "Contenido", ayuda: "Lo que los estudiantes responden: preguntas con personajes, acertijos y misiones ocultas.", tabs: [["misiones", "🎯 Misiones"], ["acertijos", "🧩 Acertijos"], ["secretos", "🔎 Secretos"]] },
+  { id: "mapa", icono: "🗺️", nombre: "Mapa y recursos", ayuda: "Qué zonas están abiertas, qué se puede recolectar y dónde se recuperan.", tabs: [["zonas", "🗺️ Zonas"], ["recursos", "🎒 Recursos"], ["posada", "🛏️ Posada"]] },
+  { id: "combate", icono: "⚔️", nombre: "Combate", ayuda: "Guardianes, retadores y monstruos: los duelos del mundo.", tabs: [["duelos", "⚔️ Guardianes"], ["retos", "☠️ Retadores"], ["monstruos", "🐲 Monstruos"]] },
+  { id: "aventura", icono: "🏰", nombre: "Aventura", ayuda: "Metas grandes: reinos de la Comarca y las tres llaves de la Cámara del Códice.", tabs: [["comarca", "🏰 Comarca"], ["llaves", "🗝️ Llaves"]] },
+];
+
 export default function MisionesMundoModal({ onClose, grados = [], gradoActual = "" }) {
   const [misiones, setMisiones] = useState([]);
   const [conteo, setConteo] = useState({});
@@ -182,6 +190,7 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
     setAplicandoMasivo(false);
   };
   const lista = misiones.filter((m) => (filtro === "todos" || m.zona === filtro) && (filtroCurso === "todos" || (filtroCurso === "generales" ? !m.grado_id : esNivel(filtroCurso) ? !m.grado_id || m.grado_id === filtroCurso || (!esNivel(m.grado_id) && nivelDeGrado(m.grado_id) === nivelDeClave(filtroCurso)) : misionVisiblePara(m.grado_id, filtroCurso))) && coincideBusqueda(m, busqueda));
+  const grupoActual = MENU_MUNDO.find((g) => g.tabs.some(([id]) => id === pestana)) || MENU_MUNDO[0];
   const input = "w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white";
   const sinTabla = /does not exist|relation|schema cache/i.test(error);
 
@@ -195,18 +204,20 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
         <p className="text-xs text-slate-400 mb-3">Son las preguntas que tus estudiantes encuentran al hablar con los personajes del mundo. Cada una la da un personaje, en un lugar, y premia con XP y oro. Los cambios se ven apenas se guardan.</p>
 
         {!sinTabla && !cargando && !editando && !importacion && (
-          <div className="inline-flex gap-1 rounded-full bg-slate-100 p-1 mb-3">
-            <button type="button" onClick={() => setPestana("misiones")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "misiones" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🎯 Misiones</button>
-            <button type="button" onClick={() => setPestana("zonas")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "zonas" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🗺️ Zonas</button>
-            <button type="button" onClick={() => setPestana("posada")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "posada" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🛏️ Posada</button>
-            <button type="button" onClick={() => setPestana("duelos")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "duelos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>⚔️ Duelos</button>
-            <button type="button" onClick={() => setPestana("retos")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "retos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>☠️ Retadores</button>
-            <button type="button" onClick={() => setPestana("recursos")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "recursos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🎒 Recursos</button>
-            <button type="button" onClick={() => setPestana("acertijos")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "acertijos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🧩 Acertijos</button>
-            <button type="button" onClick={() => setPestana("secretos")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "secretos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🔎 Secretos</button>
-            <button type="button" onClick={() => setPestana("comarca")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "comarca" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🏰 Comarca</button>
-            <button type="button" onClick={() => setPestana("llaves")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "llaves" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🗝️ Llaves</button>
-            <button type="button" onClick={() => setPestana("monstruos")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "monstruos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🐲 Monstruos</button>
+          <div className="mb-3">
+            <div className="flex flex-wrap gap-1 rounded-2xl bg-slate-100 p-1" role="tablist" aria-label="Secciones">
+              {MENU_MUNDO.map((g) => (
+                <button key={g.id} type="button" role="tab" aria-selected={grupoActual.id === g.id} onClick={() => { if (grupoActual.id !== g.id) setPestana(g.tabs[0][0]); }}
+                  className={`flex-1 min-w-[7.5rem] text-xs font-semibold px-3 py-2 rounded-xl transition ${grupoActual.id === g.id ? "bg-violet-500 text-white shadow-sm" : "text-slate-600 hover:bg-white"}`}>{g.icono} {g.nombre}</button>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-1.5 mt-2 px-1" role="tablist" aria-label={grupoActual.nombre}>
+              {grupoActual.tabs.map(([id, texto]) => (
+                <button key={id} type="button" role="tab" aria-selected={pestana === id} onClick={() => setPestana(id)}
+                  className={`text-xs px-3 py-1.5 rounded-full border ${pestana === id ? "bg-violet-50 border-violet-400 text-violet-700 font-semibold" : "border-slate-200 text-slate-600 hover:border-violet-300"}`}>{texto}</button>
+              ))}
+            </div>
+            <p className="text-[11px] text-slate-400 mt-2 px-1">{grupoActual.ayuda}</p>
           </div>
         )}
         {sinTabla ? (
