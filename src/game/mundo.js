@@ -1057,22 +1057,24 @@ function fabricarPasos(im) {
   if (x1 < 0) return null;
   x1++; y1++; // los bordes de la caja son exclusivos
   const cx = (x0 + x1) >> 1, alto = Math.max(6, Math.round(0.3 * (y1 - y0))), tope = y1 - alto;
-  const hacer = (lado, lev, rebote) => {
+  // lado: qué pierna se mueve (1 izquierda, 2 derecha, 0 ninguna) · lev: cuánto se levanta (px) · rebote: cuánto baja el cuerpo (px) · bal: balanceo del torso hacia el lado de apoyo (px)
+  const hacer = (lado, lev, rebote, bal) => {
     const [c, g] = lienzo(W, H), out = g.createImageData(W, H), o = out.data;
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
       const i = (y * W + x) * 4; if (d[i + 3] === 0) continue;
-      let ny = y;
-      if (y < tope) ny = y + rebote;                                                           // el cuerpo baja un poco en el contacto (los pies quedan quietos)
+      let ny = y, nx = x;
+      if (y < tope) { ny = y + rebote; if (bal) nx = x + Math.round(bal * Math.min(1, (tope - y) / Math.max(1, tope - y0)) ); }   // el cuerpo baja en el contacto y se inclina un poco; los pies quedan quietos
       else if ((lado === 1 && x < cx) || (lado === 2 && x >= cx)) ny = y - lev;                // la pierna que da el paso se levanta
-      if (ny < 0 || ny >= H) continue;
-      const j = (ny * W + x) * 4;
-      if (ny !== y || o[j + 3] === 0) { o[j] = d[i]; o[j + 1] = d[i + 1]; o[j + 2] = d[i + 2]; o[j + 3] = d[i + 3]; }
+      if (ny < 0 || ny >= H || nx < 0 || nx >= W) continue;
+      const j = (ny * W + nx) * 4;
+      if (ny !== y || nx !== x || o[j + 3] === 0) { o[j] = d[i]; o[j + 1] = d[i + 1]; o[j + 2] = d[i + 2]; o[j + 3] = d[i + 3]; }
     }
     g.putImageData(out, 0, 0); return c;
   };
-  return [hacer(1, 2, 0), hacer(0, 0, 1), hacer(2, 2, 0), hacer(0, 0, 1)];
+  // Ciclo de 6 cuadros: apoyo → pierna en el aire (cuerpo arriba) → cruce, y lo mismo con la otra pierna. La pierna sube en 2 tiempos (1 px y luego 2) para que el paso no "salte".
+  return [hacer(1, 1, 1, 0), hacer(1, 2, 0, 1), hacer(0, 0, 1, 0), hacer(2, 1, 1, 0), hacer(2, 2, 0, -1), hacer(0, 0, 1, 0)];
 }
-const LARGO_PASO = 10.5; // píxeles que hay que avanzar para pasar al siguiente cuadro de la caminata
+const LARGO_PASO = 8; // píxeles que hay que avanzar para pasar al siguiente cuadro de la caminata (6 cuadros = 48 px por ciclo completo)
 
 const html = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -2019,7 +2021,7 @@ export async function iniciarMundo(raiz, op) {
   const sombra = (x, y, rx, ry) => { ctx.fillStyle = "rgba(0,0,0,.25)"; ctx.beginPath(); ctx.ellipse(x - camX, y - camY, rx, ry, 0, 0, 7); ctx.fill(); };
   function dibujarPersonaje(clave, dir, x, y, caminando, fase) {
     const an = sprites[clave].ancla, cuadros = pasos[clave] && pasos[clave][dir];
-    const im = caminando && cuadros ? cuadros[Math.floor(fase) % 4] : (imgs[clave][dir] || imgs[clave].south); // en movimiento: cuadros de caminata; quieto: la pose de siempre
+    const im = caminando && cuadros ? cuadros[Math.floor(fase) % cuadros.length] : (imgs[clave][dir] || imgs[clave].south); // en movimiento: cuadros de caminata; quieto: la pose de siempre
     ctx.drawImage(im, Math.round(x - an.cx - camX), Math.round(y - an.by - camY));
   }
   function etiqueta(texto, x, y, color) { ctx.font = "bold 9px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.75)"; ctx.strokeText(texto, x, y); ctx.fillStyle = color || "#fff"; ctx.fillText(texto, x, y); }
