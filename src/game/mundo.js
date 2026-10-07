@@ -1215,6 +1215,7 @@ export async function iniciarMundo(raiz, op) {
   if (MON) {
     const lab = interiores.laboratorio && interiores.laboratorio.laboratorio;
     if (lab) interiores.laboratorio.npcs.push({ tipo: "lab_maquina", nombre: "Máquina de monstruos", emoji: "🧪", x: lab.maquina.x, y: lab.maquina.y + 14, solido: false, radio: 62, dir: "south" });
+    if (lab && MON.arena && MON.arena.activa && op.alRivales) interiores.laboratorio.npcs.push({ tipo: "lab_arena", nombre: "Arena de monstruos", emoji: "⚔️", x: lab.maquina.x + 175, y: lab.maquina.y + 4, solido: false, radio: 62, dir: "south" });
     for (const zona of ["bosque", "montana", "lago"]) {
       const esc = escenaDeZona[zona], zi = { bosque: 1, montana: 2, lago: 3 }[zona]; if (!esc) continue;
       for (let i = 0; i < 4; i++) {
@@ -1685,7 +1686,7 @@ export async function iniciarMundo(raiz, op) {
   function interactuar() {
     if (estado.dialogo || estado.mapaAbierto || estado.mochilaAbierta || estado.juegoAbierto || estado.comarcaAbierto || estado.monAbierto || estado.duelo || estado.cambiando || !estado.activo || !estado.cercano) return;
     const n = estado.cercano;
-    if (n.tipo === "puerta") { if (n.edificio.id === "camara" && !(LL && camaraDesbloqueada(LL.tengo))) abrirPuertaSellada(n); else entrarEdificio(n.edificio); } else if (n.tipo === "llave") abrirLlave(n); else if (n.tipo === "salvaje") abrirSalvaje(n); else if (n.tipo === "lab_maquina") abrirEquipo(true); else if (n.tipo === "camara_cofre") abrirCofre(n); else if (n.tipo === "guardia") abrirGuardia(n); else if (n.tipo === "posadero") abrirPosada(n); else if (n.tipo === "guardian") abrirGuardian(n); else if (n.tipo === "retador") abrirRetador(n, false); else if (n.tipo === "mision") abrirMision(n); else if (n.tipo === "aldeano") abrirCharla(n); else if (n.tipo === "recurso") abrirRecurso(n); else if (n.tipo === "juego_mesa") abrirMesa(n); else if (n.tipo === "secreto") abrirSecreto(n); else if (n.tipo === "comarca_mapa") abrirMapaComarca(); else if (n.tipo === "comarca_heraldo") abrirHeraldo(n); else if (n.tipo === "parcela_puerta") { snd.puerta(); cambiarEscena(parcela, parcela.spawn.x, parcela.spawn.y); }
+    if (n.tipo === "puerta") { if (n.edificio.id === "camara" && !(LL && camaraDesbloqueada(LL.tengo))) abrirPuertaSellada(n); else entrarEdificio(n.edificio); } else if (n.tipo === "llave") abrirLlave(n); else if (n.tipo === "salvaje") abrirSalvaje(n); else if (n.tipo === "lab_arena") abrirArena(); else if (n.tipo === "lab_maquina") abrirEquipo(true); else if (n.tipo === "camara_cofre") abrirCofre(n); else if (n.tipo === "guardia") abrirGuardia(n); else if (n.tipo === "posadero") abrirPosada(n); else if (n.tipo === "guardian") abrirGuardian(n); else if (n.tipo === "retador") abrirRetador(n, false); else if (n.tipo === "mision") abrirMision(n); else if (n.tipo === "aldeano") abrirCharla(n); else if (n.tipo === "recurso") abrirRecurso(n); else if (n.tipo === "juego_mesa") abrirMesa(n); else if (n.tipo === "secreto") abrirSecreto(n); else if (n.tipo === "comarca_mapa") abrirMapaComarca(); else if (n.tipo === "comarca_heraldo") abrirHeraldo(n); else if (n.tipo === "parcela_puerta") { snd.puerta(); cambiarEscena(parcela, parcela.spawn.x, parcela.spawn.y); }
   }
 
   // ---- recoger recursos: cada punto hace una pregunta; si se acierta, se recoge (hay un límite por día) ----
@@ -1909,14 +1910,50 @@ export async function iniciarMundo(raiz, op) {
     };
   }
 
+  // ---- Arena: duelos contra la copia del monstruo de un compañero, y la liga del curso ----
+  const medalla = (i) => (i === 1 ? "🥇" : i === 2 ? "🥈" : i === 3 ? "🥉" : `${i}.º`);
+  async function abrirArena() {
+    if (!MON || estado.dialogo || estado.cambiando || estado.duelo || estado.mapaAbierto || estado.juegoAbierto || estado.monAbierto) return;
+    if (!op.alRivales || op.modoPrueba) { toast("La Arena solo funciona con tu cuenta (no en modo prueba).", 3200); return; }
+    ponerMon(marcoMon(cabMon("⚔️", "Arena de monstruos", "Buscando rivales…"), '<p class="m-texto">⏳ Un momento…</p><button class="m-ok" data-a="cerrar-mon" style="background:var(--borde);color:inherit">Cancelar</button>'));
+    let rv = null, lg = null; try { rv = await op.alRivales(); } catch (e) { rv = null; }
+    if (op.alLiga) { try { lg = await op.alLiga(); } catch (e) { lg = null; } }
+    if (!vivo || !estado.monAbierto) return;
+    if (!rv || !rv.activo) { ponerMon(marcoMon(cabMon("⚔️", "Arena de monstruos", "No disponible"), '<p class="m-texto">La Arena no está disponible por ahora. 😕 Pídele a tu docente que la active.</p><button class="m-ok" data-a="cerrar-mon">Cerrar</button>')); return; }
+    pintarArena(rv, lg);
+  }
+  function pintarArena(rv, lg, msg) {
+    const hayLiga = lg && lg.activa, tuEquipo = MON.equipo.length > 0;
+    const banner = hayLiga ? `<div class="mn-log">🏆 <b>${html(lg.liga.nombre)}</b>${lg.liga.fin ? ` · hasta el ${new Date(lg.liga.fin).toLocaleDateString("es-CO", { day: "numeric", month: "short" })}` : ""}<br>Vas en el puesto <b>${lg.miPuesto || "—"}</b> de ${lg.tabla.length} con <b>${lg.misPuntos}</b> pts · premio: ${lg.liga.premio.xp} XP + ${lg.liga.premio.oro} 🪙 al 1.º<br><button class="m-ok" data-a="tabla" style="margin-top:6px">📊 Ver la tabla</button></div>` : lg && lg.cerrada && lg.cerrada.ganadores.length ? `<div class="mn-log">🏆 Última liga: <b>${html(lg.cerrada.nombre)}</b> · ${lg.cerrada.ganadores.map((g) => `${medalla(g.puesto)} ${html(g.nombre)}`).join(" · ")}</div>` : "";
+    const filas = rv.lista.map((x) => `<div class="mn-tarj"><span class="mn-emo">${html(x.emoji)}</span><div class="mn-info"><b>${html(x.nombre)}</b> · Nv ${x.nivel}${etiquetaTipo(x.tipo)}<small>🧑 de ${html(x.dueno)} · retado ${x.retos} ${x.retos === 1 ? "vez" : "veces"}${x.ganadoHoy ? " · ✅ ya le ganaste hoy" : ""}</small></div><button class="m-ok" data-retar="${x.monstruoId}" style="width:auto;padding:8px 12px;margin:0" ${tuEquipo ? "" : "disabled"}>⚔️ Retar</button></div>`).join("");
+    ponerMon(marcoMon(cabMon("⚔️", "Arena de monstruos", "Duelos contra tus compañeros"),
+      `${msg ? `<div class="m-msg">${html(msg)}</div>` : ""}${banner}<p class="cm-nota">Peleas contra una <b>copia</b> del monstruo de un compañero de tu curso (él no tiene que estar conectado). Ganar da ${rv.pct}% del premio normal, hasta ${rv.dia} victorias al día (hoy ${rv.hoy}/${rv.dia}), y una sola vez por rival cada día.</p>
+       ${!tuEquipo ? '<div class="m-msg mal">Primero necesitas un monstruo: crea el tuyo en la máquina del 🧪 Laboratorio.</div>' : ""}${filas || '<p class="m-texto">Todavía nadie de tu curso tiene un monstruo. 🥚 ¡Invítalos al Laboratorio!</p>'}
+       <button class="m-ok" data-a="cerrar-mon" style="background:var(--borde);color:inherit;margin-top:6px">Cerrar</button>`));
+    monEl.querySelectorAll('[data-a="cerrar-mon"]').forEach((b) => (b.onclick = cerrarMon));
+    const bt = monEl.querySelector('[data-a="tabla"]'); if (bt) bt.onclick = () => pintarTabla(rv, lg);
+    monEl.querySelectorAll("[data-retar]").forEach((b) => (b.onclick = () => {
+      const x = rv.lista.find((y) => String(y.monstruoId) === b.dataset.retar); if (!x) return;
+      cerrarMon();
+      abrirSalvaje({ tipo: "arena_rival", nombre: x.nombre, emoji: x.emoji, jefe: false, zona: "aldea", hastaMs: 0, mon: { nombre: x.nombre, tipo: x.tipo, emoji: x.emoji, nivel: x.nivel, puntos: x.puntos }, pvp: { monstruoId: x.monstruoId, dueno: x.dueno }, x: estado.x, y: estado.y });
+    }));
+  }
+  function pintarTabla(rv, lg) {
+    const filas = lg.tabla.slice(0, 12).map((f) => `<div class="mn-fila" style="${f.estudianteId === op.jugador.id ? "font-weight:800;background:#ede9fe;border-radius:8px;padding:2px 6px" : ""}"><span>${medalla(f.puesto)} ${html(f.nombre)}${f.estudianteId === op.jugador.id ? " (tú)" : ""}</span><b>${f.puntos} pts</b><small style="color:var(--suave)">${f.victorias}V · ${f.duelos}D</small></div>`).join("");
+    ponerMon(marcoMon(cabMon("🏆", lg.liga.nombre, "Tabla de posiciones"),
+      `${filas}<p class="cm-nota">Cada duelo de la Arena suma: <b>victoria 3 pts</b>, <b>derrota 1 pt</b>. Solo cuenta el primer duelo del día contra cada compañero. Premio al podio: 🥇 ${lg.liga.premio.xp} XP · ${lg.liga.premio.oro} 🪙 · 🥈 60 % · 🥉 40 %.</p>
+       <button class="m-ok" data-a="volver" style="background:var(--borde);color:inherit">◀ Volver</button>`));
+    monEl.querySelector('[data-a="volver"]').onclick = () => pintarArena(rv, lg);
+  }
+
   // Reto a un monstruo salvaje (o a un jefe)
   function abrirSalvaje(n) {
     estado.dialogo = n; n.hablando = true; snd.hablar();
-    const rv = n.mon, d0 = (cuerpo, botones) => { const d = abrirTarjeta(`<div class="m-cab"><span class="m-emo">${html(n.emoji)}</span><div><div class="m-quien">${n.jefe ? "👑 " : ""}${html(n.nombre)}</div><div class="m-titulo">${n.jefe ? "Jefe" : "Monstruo salvaje"} · Nv ${rv.nivel} · ${TIPOS_MON[rv.tipo].emoji} ${TIPOS_MON[rv.tipo].nombre}</div></div><button class="m-cerrar" data-a="cerrar" aria-label="Cerrar">✕</button></div>${cuerpo}${botones}`); d.querySelectorAll('[data-a="cerrar"]').forEach((b) => (b.onclick = cerrarDialogo)); return d; };
+    const rv = n.mon, d0 = (cuerpo, botones) => { const d = abrirTarjeta(`<div class="m-cab"><span class="m-emo">${html(n.emoji)}</span><div><div class="m-quien">${n.jefe ? "👑 " : ""}${html(n.nombre)}</div><div class="m-titulo">${n.pvp ? "Monstruo de " + html(n.pvp.dueno) : n.jefe ? "Jefe" : "Monstruo salvaje"} · Nv ${rv.nivel} · ${TIPOS_MON[rv.tipo].emoji} ${TIPOS_MON[rv.tipo].nombre}</div></div><button class="m-cerrar" data-a="cerrar" aria-label="Cerrar">✕</button></div>${cuerpo}${botones}`); d.querySelectorAll('[data-a="cerrar"]').forEach((b) => (b.onclick = cerrarDialogo)); return d; };
     if (!MON.equipo.length) { d0('<p class="m-texto">¡Un monstruo salvaje! 🐾 Pero no tienes ningún monstruo que te acompañe. Crea el tuyo en el <b>🧪 Laboratorio de Monstruos</b> de la aldea.</p>', '<button class="m-ok" data-a="cerrar">Entendido</button>'); return; }
     let elegido = MON.equipo.reduce((a, m) => (nivelDeXp(m.xp).nivel > nivelDeXp(a.xp).nivel ? m : a), MON.equipo[0]);
     const pintar = () => {
-      const d = d0(`<p class="m-texto">${n.jefe ? "El jefe de la zona te desafía. ¡Es muy fuerte!" : "¡Un monstruo salvaje te desafía!"} Elige a tu monstruo y cómo pelear:</p>${MON.equipo.map((m) => tarjetaMon(m, `data-mid="${m.id}"`, `mn-sel ${m.id === elegido.id ? "act" : ""}`)).join("")}
+      const d = d0(`<p class="m-texto">${n.pvp ? `Es una copia del monstruo de <b>${html(n.pvp.dueno)}</b>: no tiene que estar conectado. ¡Que gane el mejor!` : n.jefe ? "El jefe de la zona te desafía. ¡Es muy fuerte!" : "¡Un monstruo salvaje te desafía!"} Elige a tu monstruo y cómo pelear:</p>${MON.equipo.map((m) => tarjetaMon(m, `data-mid="${m.id}"`, `mn-sel ${m.id === elegido.id ? "act" : ""}`)).join("")}
         <button class="m-ok" data-modo="turnos">🎯 Pregunta para atacar</button><p class="cm-nota">Eliges la habilidad y respondes una pregunta: si aciertas pegas fuerte.</p>
         <button class="m-ok" data-modo="rapida" style="background:#8b5cf6">⚡ Pelea rápida</button><p class="cm-nota">Pelean solos; cada 3 rondas respondes una pregunta clave que potencia tu golpe (premio algo menor).</p>
         <button class="m-ok" data-a="cerrar" style="background:var(--borde);color:inherit">Ahora no</button>`, "");
@@ -1991,13 +2028,14 @@ export async function iniciarMundo(raiz, op) {
       if (op.modoPrueba || !op.alMonstruo) {
         const premio = calcularPremioMonstruo({ ganado: gano, nivelYo: c.yo.nivel, nivelRival: rv.nivel, jefe: !!D.n.jefe, modo: D.modo, premiosHoy: MON.premiosHoy, cfg: { monstruos_premios_dia: MON.premiosDia, monstruos_xp: MON.premio.xp, monstruos_oro: MON.premio.oro } });
         const xpN = (mi.xp || 0) + premio.xpMonstruo, nv = nivelDeXp(xpN).nivel; r = { ok: true, local: true, premio, monstruo: { id: mi.id, xp: xpN, nivel: nv }, subio: nv > c.yo.nivel, premiosHoy: MON.premiosHoy + (premio.xpMonstruo > 0 ? 1 : 0) };
-      } else r = await op.alMonstruo({ monstruoId: mi.id, rivalNombre: rv.nombre, rivalNivel: rv.nivel, zona: D.n.zona, jefe: !!D.n.jefe, modo: D.modo, ganado: gano });
+      } else r = await op.alMonstruo({ monstruoId: mi.id, rivalNombre: rv.nombre, rivalNivel: rv.nivel, zona: D.n.zona, jefe: !!D.n.jefe, modo: D.modo, ganado: gano, rivalMonstruoId: D.n.pvp ? D.n.pvp.monstruoId : null });
     } catch (e) { r = { ok: false, mensaje: e && e.message }; }
     D.ocupado = false; if (!vivo || estado.monDuelo !== D) return;
     if (!r || r.ok === false) { snd.mal(); monEl.innerHTML = marcoMon(cabMon("⚠️", "No se pudo registrar", gano ? "Ganaste el duelo" : "Resultado del duelo"), `<p class="m-texto">${gano ? "¡Ganaste, pero el resultado no se guardó" : "El resultado no se guardó"} (${html(String((r && r.mensaje) || "sin conexión").replace(/[.\s]+$/, ""))}). Puedes reintentar.</p><button class="m-ok mn-sig" data-a="reintentar">🔄 Reintentar</button><button class="m-ok" data-a="cerrar-mon" style="background:var(--borde);color:inherit;margin-top:6px">Salir sin guardar</button>`); monEl.querySelectorAll('[data-a="cerrar-mon"]').forEach((b) => (b.onclick = cerrarMon)); monEl.querySelector('[data-a="reintentar"]').onclick = terminarMon; return; }
     const p = r.premio || { xpMonstruo: 0, xp: 0, oro: 0 };
     const mm = MON.equipo.find((m) => m.id === mi.id); if (mm && r.monstruo) { mm.xp = r.monstruo.xp; mm.nivel = r.monstruo.nivel; }
     if (r.premiosHoy != null) MON.premiosHoy = r.premiosHoy;
+    if (r.arenaHoy != null && MON.arena) MON.arena.hoy = r.arenaHoy;
     if (p.xp > 0 || p.oro > 0) {
       if (r.xp != null) estado.xp = r.xp; else estado.xp += p.xp; if (r.oro != null) estado.oro = r.oro; else estado.oro += p.oro;
       estado.ganado.xp += p.xp; estado.ganado.oro += p.oro; aviso(`+${p.xp} XP`, "#fde68a"); aporteComarca(r.comarca); actualizarHud();
@@ -2005,10 +2043,10 @@ export async function iniciarMundo(raiz, op) {
     if (gano) D.n.hastaMs = ahoraMs() + 150000;       // el monstruo se va y vuelve en 2,5 min
     gano ? snd.fanfarria() : snd.derrota();
     const nvInfo = r.monstruo ? nivelDeXp(r.monstruo.xp) : null;
-    const capAct = gano && !D.n.jefe && MON.captura.activa && (r.dueloId != null || r.local) && D.pool.length > 0, capTope = MON.captura.hoy >= MON.captura.dia, capLleno = MON.equipo.length >= MON.equipoMax;
+    const capAct = gano && !D.n.jefe && !D.n.pvp && MON.captura.activa && (r.dueloId != null || r.local) && D.pool.length > 0, capTope = MON.captura.hoy >= MON.captura.dia, capLleno = MON.equipo.length >= MON.equipoMax;
     const puedeCapturar = capAct && !capTope && !capLleno, notaCaptura = capAct && !puedeCapturar ? `<p class="cm-nota">${capTope ? "Ya llegaste al tope de capturas de hoy." : "Tu equipo está completo: no cabe otro monstruo."}</p>` : "";
     monEl.innerHTML = marcoMon(cabMon(gano ? "🏆" : "💔", gano ? `¡Venciste a ${rv.nombre}!` : `${rv.nombre} te venció`, "Resultado del duelo"),
-      `<div class="mn-log">${gano ? `🎁 ${p.tope ? "Ya llegaste al tope de premios de hoy: sigues ganando experiencia solo por diversión. 😉" : `<b>+${p.xpMonstruo}</b> XP para ${html(mi.nombre)} · <b>+${p.xp}</b> XP · <b>+${p.oro}</b> 🪙`}${op.modoPrueba ? " · 🧪 modo prueba (no se guarda)" : ""}` : `Esta vez no fue. ${html(mi.nombre)} puede intentarlo otra vez${c.yo.nivel < rv.nivel ? " (o subir de nivel antes con monstruos más débiles)" : ""}. 💪`}${r.subio ? `<br>🎉 <b>¡${html(mi.nombre)} subió a nivel ${r.monstruo.nivel}!</b> Sus estadísticas crecieron.` : ""}${gano && nvInfo && !nvInfo.maximo ? `<br><small>XP ${nvInfo.xpEnNivel}/${nvInfo.xpParaSiguiente} para el siguiente nivel</small>` : ""}</div>
+      `<div class="mn-log">${gano ? `🎁 ${p.tope ? "Ya llegaste al tope de premios de hoy: sigues ganando experiencia solo por diversión. 😉" : `<b>+${p.xpMonstruo}</b> XP para ${html(mi.nombre)} · <b>+${p.xp}</b> XP · <b>+${p.oro}</b> 🪙`}${op.modoPrueba ? " · 🧪 modo prueba (no se guarda)" : ""}` : `Esta vez no fue. ${html(mi.nombre)} puede intentarlo otra vez${c.yo.nivel < rv.nivel ? " (o subir de nivel antes con monstruos más débiles)" : ""}. 💪`}${D.n.pvp && r.repetido ? "<br><small>Ya le habías ganado a este monstruo hoy: no hay premio otra vez, ¡pero sirve para practicar!</small>" : ""}${D.n.pvp && r.ligaPuntos != null ? (r.ligaPuntos > 0 ? `<br>🏆 <b>+${r.ligaPuntos}</b> ${r.ligaPuntos === 1 ? "punto" : "puntos"} de liga` : "<br><small>🏆 Tu duelo de hoy contra este compañero ya había sumado puntos de liga.</small>") : ""}${r.subio ? `<br>🎉 <b>¡${html(mi.nombre)} subió a nivel ${r.monstruo.nivel}!</b> Sus estadísticas crecieron.` : ""}${gano && nvInfo && !nvInfo.maximo ? `<br><small>XP ${nvInfo.xpEnNivel}/${nvInfo.xpParaSiguiente} para el siguiente nivel</small>` : ""}</div>
        ${puedeCapturar ? `<button class="m-ok" data-a="capturar" style="background:#8b5cf6;margin-bottom:6px">🎯 Intentar capturarlo (${Math.round(probCaptura({ nivelYo: c.yo.nivel, nivelRival: rv.nivel }) * 100)}% si aciertas la pregunta)</button>` : ""}${notaCaptura}
        <button class="m-ok" data-a="cerrar-mon">Volver al mundo</button>`);
     monEl.querySelectorAll('[data-a="cerrar-mon"]').forEach((b) => (b.onclick = cerrarMon));
@@ -2417,7 +2455,7 @@ export async function iniciarMundo(raiz, op) {
     estado.cercano = mejor;
     const av = q(".m-aviso"), ba = q(".m-accion");
     if (mejor && !estado.dialogo && !estado.cambiando) {
-      av.textContent = (mejor.tipo === "puerta" ? `🚪 Entrar a ${mejor.nombre}` : mejor.tipo === "parcela_puerta" ? "🏡 Entrar a mi parcela" : mejor.tipo === "recurso" ? `${ITEMS[mejor.item].emoji} Recoger ${mejor.nombre.toLowerCase()}` : mejor.tipo === "juego_mesa" ? `${mejor.emoji} Jugar: ${mejor.nombre}` : mejor.tipo === "secreto" ? "🔎 Examinar algo que brilla" : mejor.tipo === "llave" ? "🗝️ Examinar la llave" : mejor.tipo === "salvaje" ? `⚔️ Retar a ${mejor.nombre} (Nv ${mejor.mon.nivel})` : mejor.tipo === "lab_maquina" ? "🧪 Usar la máquina de monstruos" : mejor.tipo === "camara_cofre" ? "💰 Abrir el cofre" : mejor.tipo === "comarca_mapa" ? "🗺️ Ver el mapa de la Comarca" : `💬 Hablar con ${mejor.nombre}`) + (tactil ? "" : " (E)"); av.classList.remove("oculto"); ba.classList.add("listo"); ba.textContent = mejor.tipo === "puerta" ? "🚪" : mejor.tipo === "parcela_puerta" ? "🏡" : mejor.tipo === "recurso" ? ITEMS[mejor.item].emoji : mejor.tipo === "juego_mesa" ? mejor.emoji : mejor.tipo === "secreto" ? "🔎" : mejor.tipo === "llave" ? "🗝️" : mejor.tipo === "salvaje" ? "⚔️" : mejor.tipo === "lab_maquina" ? "🧪" : mejor.tipo === "camara_cofre" ? "💰" : mejor.tipo === "comarca_mapa" ? "🗺️" : "💬";
+      av.textContent = (mejor.tipo === "puerta" ? `🚪 Entrar a ${mejor.nombre}` : mejor.tipo === "parcela_puerta" ? "🏡 Entrar a mi parcela" : mejor.tipo === "recurso" ? `${ITEMS[mejor.item].emoji} Recoger ${mejor.nombre.toLowerCase()}` : mejor.tipo === "juego_mesa" ? `${mejor.emoji} Jugar: ${mejor.nombre}` : mejor.tipo === "secreto" ? "🔎 Examinar algo que brilla" : mejor.tipo === "llave" ? "🗝️ Examinar la llave" : mejor.tipo === "salvaje" ? `⚔️ Retar a ${mejor.nombre} (Nv ${mejor.mon.nivel})` : mejor.tipo === "lab_maquina" ? "🧪 Usar la máquina de monstruos" : mejor.tipo === "lab_arena" ? "⚔️ Entrar a la Arena de monstruos" : mejor.tipo === "camara_cofre" ? "💰 Abrir el cofre" : mejor.tipo === "comarca_mapa" ? "🗺️ Ver el mapa de la Comarca" : `💬 Hablar con ${mejor.nombre}`) + (tactil ? "" : " (E)"); av.classList.remove("oculto"); ba.classList.add("listo"); ba.textContent = mejor.tipo === "puerta" ? "🚪" : mejor.tipo === "parcela_puerta" ? "🏡" : mejor.tipo === "recurso" ? ITEMS[mejor.item].emoji : mejor.tipo === "juego_mesa" ? mejor.emoji : mejor.tipo === "secreto" ? "🔎" : mejor.tipo === "llave" ? "🗝️" : mejor.tipo === "salvaje" ? "⚔️" : mejor.tipo === "lab_maquina" ? "🧪" : mejor.tipo === "lab_arena" ? "⚔️" : mejor.tipo === "camara_cofre" ? "💰" : mejor.tipo === "comarca_mapa" ? "🗺️" : "💬";
     } else { av.classList.add("oculto"); ba.classList.remove("listo"); }
     for (const a of estado.avisos) a.t += dt; estado.avisos = estado.avisos.filter((a) => a.t < 1.3);
   }
@@ -2460,6 +2498,12 @@ export async function iniciarMundo(raiz, op) {
     ctx.globalAlpha = 1; ctx.fillStyle = "#000"; ctx.font = "26px " + FUENTE_EMOJI; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.fillText("🧪", sx, sy + Math.sin(t * 3) * 2);
     ctx.font = "11px " + FUENTE_EMOJI; ctx.fillText("✨", sx + 14 * Math.cos(t * 2), sy - 18 + 4 * Math.sin(t * 3)); ctx.fillText("🥚", sx - 15, sy - 6 + 2 * Math.sin(t * 2.4));
     if (Math.hypot(n.x - estado.x, n.y - estado.y) < 100) etiqueta(n.nombre, sx, sy - 26, "#a7f3d0");
+  }
+  function dibujarArena(n, t) {
+    const sx = Math.round(n.x - camX), sy = Math.round(n.y - 30 - camY);
+    ctx.globalAlpha = 1; ctx.fillStyle = "#000"; ctx.font = "26px " + FUENTE_EMOJI; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.fillText("⚔️", sx, sy + Math.sin(t * 3 + 1) * 2);
+    ctx.font = "13px " + FUENTE_EMOJI; ctx.fillText("🏆", sx + 15 * Math.cos(t * 1.6), sy - 20 + 3 * Math.sin(t * 2.2));
+    if (Math.hypot(n.x - estado.x, n.y - estado.y) < 100) etiqueta(n.nombre, sx, sy - 26, "#fecaca");
   }
   function dibujarCofre(n, t) {
     const sx = Math.round(n.x - camX), sy = Math.round(n.y - 28 - camY);
@@ -2507,6 +2551,7 @@ export async function iniciarMundo(raiz, op) {
       if (n.tipo === "llave") { dibujarLlave(n, t); return; }
       if (n.tipo === "salvaje") { dibujarSalvaje(n, t); return; }
       if (n.tipo === "lab_maquina") { dibujarMaquina(n, t); return; }
+      if (n.tipo === "lab_arena") { dibujarArena(n, t); return; }
       if (n.tipo === "camara_cofre") { dibujarCofre(n, t); return; }
       if (n.tipo === "comarca_mapa") { ctx.globalAlpha = 1; ctx.fillStyle = "#000"; ctx.font = "22px " + FUENTE_EMOJI; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.fillText(n.emoji, Math.round(n.x - camX), Math.round(n.y - 40 - camY) + Math.sin(t * 3 + n.x) * 2); if (Math.hypot(n.x - estado.x, n.y - estado.y) < 90) etiqueta(n.nombre, Math.round(n.x - camX), Math.round(n.y - 66 - camY), "#fde68a"); return; }
       sombra(n.x, n.y, 9, 3.5);
