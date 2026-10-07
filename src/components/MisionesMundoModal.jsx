@@ -5,6 +5,7 @@ import { esNivel, claveNivel, nivelDeClave, nivelDeGrado, nivelesDe, nombreNivel
 import { ITEMS, RECETAS } from "../game/items";
 import { TIPOS_ACERTIJO, CLAVES_TIPO, validarContenido } from "../game/acertijos";
 import { ESCENAS_SECRETO, OBJETOS_SECRETO, MIN_OPCIONES as MIN_OPC_SEC, MAX_OPCIONES as MAX_OPC_SEC, nombreEscena, validarSecreto } from "../game/secretos";
+import { LLAVES, TEXTO_PRUEBA, validarConfigLlaves } from "../game/llaves";
 import { planEdicion, coincideBusqueda } from "../lib/edicionMasiva";
 import { aObjetos, analizarImportacion, filasParaExportar, filasPlantilla, crearLibro, leerLibro } from "../lib/importarMisiones";
 
@@ -203,12 +204,15 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
             <button type="button" onClick={() => setPestana("acertijos")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "acertijos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🧩 Acertijos</button>
             <button type="button" onClick={() => setPestana("secretos")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "secretos" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🔎 Secretos</button>
             <button type="button" onClick={() => setPestana("comarca")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "comarca" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🏰 Comarca</button>
+            <button type="button" onClick={() => setPestana("llaves")} className={`text-xs px-3 py-1.5 rounded-full ${pestana === "llaves" ? "bg-violet-500 text-white" : "text-slate-600"}`}>🗝️ Llaves</button>
           </div>
         )}
         {sinTabla ? (
           <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">Todavía no se crearon las tablas de las misiones. Corre <b>62_mundo.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</div>
         ) : cargando ? (
           <p className="text-sm text-slate-400">Cargando…</p>
+        ) : pestana === "llaves" && !editando ? (
+          <PanelLlaves />
         ) : pestana === "comarca" && !editando ? (
           <PanelComarca />
         ) : pestana === "secretos" && !editando ? (
@@ -1035,6 +1039,62 @@ function PanelRecursos() {
       <div className="flex items-center gap-3 justify-end">
         {aviso && <span className="text-xs font-semibold text-emerald-600">{aviso}</span>}
         <button type="button" onClick={guardar} disabled={guardando} className="text-sm font-bold px-5 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">{guardando ? "Guardando…" : "Guardar recursos"}</button>
+      </div>
+    </div>
+  );
+}
+
+// ----- Las Tres Llaves y la Cámara del Códice -----
+function PanelLlaves() {
+  const [f, setF] = useState(null);
+  const [resumen, setResumen] = useState(null);
+  const [error, setError] = useState("");
+  const [aviso, setAviso] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const relojAviso = useRef(null);
+  useEffect(() => () => clearTimeout(relojAviso.current), []);
+  useEffect(() => {
+    (async () => {
+      try {
+        const c = await mundoApi.fetchConfigMundo();
+        setF({ activo: c.llaves_activo === 1, orden: c.llaves_orden === 1, xp: String(c.llaves_xp), oro: String(c.llaves_oro), aciertos: String(c.llaves_duelo_aciertos), vidas: String(c.llaves_duelo_vidas) });
+      } catch (e) { setError(e.message || "No se pudo cargar la configuración."); return; }
+      mundoApi.fetchLlavesResumen().then(setResumen).catch(() => setResumen(false));
+    })();
+  }, []);
+  if (error && !f) return <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">{error}</div>;
+  if (!f) return <p className="text-sm text-slate-400">Cargando…</p>;
+  const guardar = async () => {
+    const e = validarConfigLlaves(f); if (e) { setError(e); return; }
+    setGuardando(true); setError("");
+    try {
+      for (const [k, v] of [["llaves_activo", f.activo ? 1 : 0], ["llaves_orden", f.orden ? 1 : 0], ["llaves_xp", Number(f.xp)], ["llaves_oro", Number(f.oro)], ["llaves_duelo_aciertos", Number(f.aciertos)], ["llaves_duelo_vidas", Number(f.vidas)]]) await mundoApi.guardarConfigMundo(k, v);
+      setAviso("Guardado ✓"); clearTimeout(relojAviso.current); relojAviso.current = setTimeout(() => setAviso(""), 2400);
+    } catch (er) { setError("No se pudo guardar: " + (er.message || "error desconocido")); }
+    setGuardando(false);
+  };
+  const input = "w-20 text-sm rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none bg-white";
+  const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
+  return (
+    <div>
+      <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 leading-relaxed">
+        Para empezar a <b>recorrer todo el mundo</b>: hay <b>3 llaves escondidas</b>, cada una en una zona y con su propia prueba. Con las 3 se abre la puerta sellada de la <b>🔐 Cámara del Códice</b> (en la aldea) y se reclama un cofre con un premio grande.
+        <ul className="mt-2 space-y-1">{LLAVES.map((l) => <li key={l.n}>{l.medalla} <b>{l.nombre}</b> · {l.lugar} · {TEXTO_PRUEBA[l.prueba]}{l.prueba === "acertijo" ? " (usa tus acertijos; si no hay, una pregunta)" : l.prueba === "pregunta" ? " (de las misiones de la zona)" : " (con preguntas de las misiones)"}</li>)}</ul>
+        <p className="mt-2">La puerta y cada llave dan una <b>pista</b> de dónde buscar la siguiente. Las preguntas salen de tus misiones del mundo, y los acertijos de la 🧩 Casa de los Acertijos. Cada estudiante recibe el premio del cofre <b>una sola vez</b>.</p>
+      </div>
+      {resumen === false && <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3 mb-3">Todavía no se crearon las tablas de las llaves. Corre <b>73_mundo_llaves.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</div>}
+      {error && <div className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-2.5 mb-3">{error}</div>}
+      {resumen && <div className="text-[11px] text-slate-500 mb-3" data-testid="resumen-llaves">🗝️ {resumen.estudiantes} {resumen.estudiantes === 1 ? "estudiante ha conseguido" : "estudiantes han conseguido"} llaves · 🥉 {resumen.porLlave[1]} · 🥈 {resumen.porLlave[2]} · 🥇 {resumen.porLlave[3]} · 🔐 {resumen.abiertas} {resumen.abiertas === 1 ? "cofre abierto" : "cofres abiertos"}</div>}
+      <div className="rounded-xl border border-slate-200 p-4 mb-3">
+        <label className="flex items-center gap-2 text-sm font-semibold text-slate-800 mb-3"><input type="checkbox" checked={f.activo} onChange={(e) => setF((x) => ({ ...x, activo: e.target.checked }))} /> Las llaves y la Cámara están activas</label>
+        <label className="flex items-center gap-2 text-sm font-semibold text-slate-800 mb-1"><input type="checkbox" checked={f.orden} onChange={(e) => setF((x) => ({ ...x, orden: e.target.checked }))} /> Hay que conseguirlas en orden (bronce → plata → oro)</label>
+        <p className="text-[11px] text-slate-400 mb-3 ml-6">Con orden, cada llave da la pista de la siguiente y siguen un hilo. Sin orden, pueden buscarlas en cualquier orden.</p>
+        <div className="flex flex-wrap items-center gap-2 mb-2 text-sm text-slate-700">El cofre da <input type="number" min="0" max="1000" value={f.xp} onChange={set("xp")} className={input} aria-label="XP del cofre" /> XP y <input type="number" min="0" max="1000" value={f.oro} onChange={set("oro")} className={input} aria-label="Oro del cofre" /> 🪙</div>
+        <div className="flex flex-wrap items-center gap-2 text-sm text-slate-700">En el duelo de la llave de plata hay que acertar <input type="number" min="1" max="10" value={f.aciertos} onChange={set("aciertos")} className={input} aria-label="Aciertos del duelo" /> preguntas antes de perder <input type="number" min="1" max="10" value={f.vidas} onChange={set("vidas")} className={input} aria-label="Corazones del duelo" /> ❤️</div>
+      </div>
+      <div className="flex items-center gap-3 justify-end">
+        {aviso && <span className="text-xs font-semibold text-emerald-600">{aviso}</span>}
+        <button type="button" onClick={guardar} disabled={guardando} className="text-sm font-bold px-5 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">{guardando ? "Guardando…" : "Guardar llaves"}</button>
       </div>
     </div>
   );
