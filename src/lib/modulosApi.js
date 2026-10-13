@@ -2,6 +2,7 @@
 import { supabase } from "./supabaseClient";
 import { gradoDeEstudiante, bonoEvento, aportarAComarca } from "./mundoApi";
 import { estadoModulos, resumenPorMateria, esCorrecta, errorActividad, errorModulo, limpiarActividad, ordenarModulos } from "./modulos";
+import { requeridos } from "./leccion";
 
 const lanzar = (error) => { if (error) { const e = new Error(error.message || "error"); e.code = error.code; throw e; } };
 const faltaTabla = (e) => /does not exist|relation|schema cache/i.test((e && e.message) || "");
@@ -42,7 +43,7 @@ export const siguienteNumero = (modulos, materiaId) => 1 + Math.max(0, ...modulo
 
 export async function guardarActividad(moduloId, a, siguienteOrden = 1) {
   const e = errorActividad(a); if (e) throw new Error(e);
-  const l = limpiarActividad(a), campos = { tipo: l.tipo, titulo: l.titulo, contenido: l.contenido, opciones: l.opciones, correcta: l.correcta, activa: a.activa !== false };
+  const l = limpiarActividad(a), campos = { tipo: l.tipo, titulo: l.titulo, contenido: l.contenido, opciones: l.opciones, correcta: l.correcta, activa: a.activa !== false, ...(l.tipo === "leccion" ? { bloques: l.bloques } : {}) };
   if (a.id) { const { error } = await supabase.from("modulo_actividades").update(campos).eq("id", a.id); lanzar(error); return a.id; }
   const { data, error } = await supabase.from("modulo_actividades").insert({ ...campos, modulo_id: moduloId, orden: siguienteOrden }).select("id"); lanzar(error);
   return data?.[0]?.id;
@@ -102,6 +103,15 @@ export async function completarActividad(estudianteId, actividadId, { respuesta 
   if (!estado) return { ok: false, mensaje: "Ese módulo no está disponible para tu curso." };
   if (estado.estado === "bloqueado") return { ok: false, mensaje: "Primero termina el módulo anterior." };
   const yaEstaba = d.hechas.includes(a.id);
+  if (!yaEstaba && a.tipo === "leccion") {
+    const falta = requeridos(a.bloques).reflexiones; // las reflexiones sí se pueden comprobar: tienen que estar guardadas
+    if (falta.length) {
+      const { data: rf, error: er } = await supabase.from("modulo_reflexiones").select("bloque_id").eq("estudiante_id", estudianteId).eq("actividad_id", a.id);
+      if (er) return { ok: false, mensaje: er.message };
+      const hay = new Set((rf || []).map((x) => x.bloque_id));
+      if (falta.some((id) => !hay.has(id))) return { ok: true, correcto: false, faltaReflexion: true, mensaje: "Escribe y guarda tu reflexión para terminar la lección." };
+    }
+  }
   if (!yaEstaba) {
     if (a.tipo === "pregunta" && !esCorrecta(a, respuesta)) return { ok: true, correcto: false };
     const { error } = await supabase.from("modulo_avance").insert({ estudiante_id: estudianteId, actividad_id: a.id, modulo_id: a.modulo_id });
@@ -139,4 +149,53 @@ async function cerrarModulo(estudianteId, m, grado) {
     // la actividad queda hecha: al reintentar con la última actividad se vuelve a intentar el cierre
     return { error: (e && e.message) || "no se pudo entregar el premio" };
   }
+}
+
+// Crea los módulos que salieron de la respuesta de la IA (con sus actividades buenas). Si algo falla a la mitad, deshace ese módulo.
+// modulos = salida de leerRespuestaIA().modulos (ya editados por la docente) · base = { materia_id, grado_id, libre }
+// → { creados: [{id, nombre, actividades}], total actividades }
+export async function crearModulosDesdeIA(modulos, base = {}, existentes = []) {
+  const { data: u } = await supabase.auth.getUser();
+  const docente_id = u?.user?.id || null;
+  let numero = siguienteNumero(existentes, base.materia_id);
+  const creados = []; let acts = 0;
+  for (const m of modulos) {
+    const buenas = m.actividades.filter((a) => !a.error);
+    const e = errorModulo({ nombre: m.nombre, numero, xp: m.xp, oro: m.oro }); if (e) { const er = new Error(e); er.creados = creados; throw er; }
+    const { data, error } = await supabase.from("modulos").insert(camposModulo({ ...base, numero, nombre: m.nombre, descripcion: m.descripcion, emoji: m.emoji, xp: m.xp, oro: m.oro, activo: base.activo !== false }, docente_id)).select("id");
+    if (error || !data?.[0]) { const er = new Error(`No se pudo crear el módulo "${m.nombre}": ${error?.message || "sin respuesta"}`); er.creados = creados; throw er; }
+    const id = data[0].id;
+    if (buenas.length) {
+      const filas = buenas.map((a, i) => { const l = limpiarActividad(a); return { modulo_id: id, orden: i + 1, tipo: l.tipo, titulo: l.titulo, contenido: l.contenido, opciones: l.opciones, correcta: l.correcta, activa: true, ...(l.tipo === "leccion" ? { bloques: l.bloques } : {}) }; });
+      const { error: e2 } = await supabase.from("modulo_actividades").insert(filas);
+      if (e2) { await supabase.from("modulos").delete().eq("id", id); const er = new Error(`No se pudieron guardar las actividades de "${m.nombre}": ${e2.message}`); er.creados = creados; throw er; }
+    }
+    creados.push({ id, nombre: m.nombre, actividades: buenas.length }); acts += buenas.length; numero++;
+  }
+  return { creados, actividades: acts };
+}
+
+// ============================ REFLEXIONES ============================
+// El estudiante guarda (o corrige) lo que escribió en un bloque de reflexión
+export async function guardarReflexion(estudianteId, actividadId, bloqueId, texto) {
+  const t = String(texto ?? "").trim();
+  if (!t) return { ok: false, mensaje: "Escribe algo antes de guardar." };
+  if (t.length > 2000) return { ok: false, mensaje: "Tu reflexión es muy larga (máximo 2000 letras)." };
+  const { error } = await supabase.from("modulo_reflexiones").upsert({ estudiante_id: estudianteId, actividad_id: actividadId, bloque_id: String(bloqueId), texto: t, actualizado_en: new Date().toISOString() }, { onConflict: "estudiante_id,actividad_id,bloque_id" });
+  return error ? { ok: false, mensaje: error.message } : { ok: true };
+}
+// → { [bloqueId]: texto }
+export async function fetchReflexiones(estudianteId, actividadId) {
+  const { data, error } = await supabase.from("modulo_reflexiones").select("bloque_id,texto").eq("estudiante_id", estudianteId).eq("actividad_id", actividadId);
+  if (error) return {};
+  const o = {}; (data || []).forEach((r) => (o[r.bloque_id] = r.texto)); return o;
+}
+// Para la docente: lo que escribió cada estudiante en una lección → [{ estudiante_id, nombre, bloque_id, texto, actualizado_en }]
+export async function fetchReflexionesAdmin(actividadId) {
+  const { data, error } = await supabase.from("modulo_reflexiones").select("*").eq("actividad_id", actividadId); lanzar(error);
+  const filas = data || []; if (!filas.length) return [];
+  const ids = [...new Set(filas.map((f) => f.estudiante_id))];
+  const { data: es } = await supabase.from("estudiantes").select("id,nombre").in("id", ids);
+  const nom = new Map((es || []).map((e) => [e.id, e.nombre]));
+  return filas.map((f) => ({ ...f, nombre: nom.get(f.estudiante_id) || `Estudiante ${f.estudiante_id}` })).sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), "es"));
 }
