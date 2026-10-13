@@ -1235,7 +1235,7 @@ async function eventosEnMarcha(fresco = false) {
   _cacheEv = { t: Date.now(), lista };
   return lista;
 }
-async function gradoDeEstudiante(estudianteId, gradoId) {
+export async function gradoDeEstudiante(estudianteId, gradoId) {
   if (gradoId != null && gradoId !== "") return String(gradoId);
   if (_gradoDe.has(estudianteId)) return _gradoDe.get(estudianteId);
   const { data, error } = await supabase.rpc("mundo_mi_grado", { p_estudiante_id: estudianteId });
