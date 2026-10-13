@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { LeccionVista } from "./LeccionVista";
 import * as api from "../lib/modulosApi";
 import { TIPOS_ACTIVIDAD, urlSegura, videoIncrustable } from "../lib/modulos";
 
@@ -74,7 +75,8 @@ function Modulo({ estudianteId, gradoId, moduloId, onVolver, onCompleto }) {
   const hacer = async (a, respuesta = null) => {
     if (ocupado) return; setOcupado(true); setError("");
     const r = await api.completarActividad(estudianteId, a.id, { respuesta }, gradoId);
-    if (!r.ok) setError(r.mensaje || "No se pudo guardar tu avance."); 
+    if (!r.ok) setError(r.mensaje || "No se pudo guardar tu avance.");
+    else if (r.faltaReflexion) setError(r.mensaje);
     else if (r.correcto === false) setFallo((f) => ({ ...f, [a.id]: respuesta }));
     else { setFallo((f) => { const n = { ...f }; delete n[a.id]; return n; }); if (r.moduloCompleto && r.premio) { setFinal(r); onCompleto(r); } }
     await cargar(); setOcupado(false);
@@ -97,6 +99,7 @@ function Modulo({ estudianteId, gradoId, moduloId, onVolver, onCompleto }) {
         {actividades.map((a) => (
           <article key={a.id} className={`rounded-2xl border p-3 ${a.hecha ? "bg-emerald-50 border-emerald-200" : "bg-white border-slate-200"}`} data-testid={`act-${a.id}`} data-hecha={a.hecha ? "1" : "0"}>
             <div className="flex items-center gap-2 mb-2"><span>{a.hecha ? "✅" : TIPOS_ACTIVIDAD[a.tipo]?.emoji}</span><h4 className="text-sm font-semibold text-slate-800 flex-1">{a.titulo}</h4><span className="text-[10px] text-slate-400">{TIPOS_ACTIVIDAD[a.tipo]?.nombre}</span></div>
+            {a.tipo === "leccion" && <LeccionDeActividad a={a} estudianteId={estudianteId} onTerminar={() => hacer(a)} />}
             {a.tipo === "lectura" && <p className="text-sm text-slate-700 whitespace-pre-wrap mb-2">{a.contenido}</p>}
             {a.tipo === "enlace" && urlSegura(a.contenido) && <a href={urlSegura(a.contenido)} target="_blank" rel="noopener noreferrer" className="text-sm text-violet-600 underline break-all block mb-2">🔗 Abrir el enlace</a>}
             {a.tipo === "video" && (videoIncrustable(a.contenido)
@@ -114,10 +117,18 @@ function Modulo({ estudianteId, gradoId, moduloId, onVolver, onCompleto }) {
                 {fallo[a.id] != null && !a.hecha && <p className="text-xs text-rose-600 mt-2" data-testid={`mal-${a.id}`}>Esa no es. ¡Inténtalo otra vez!</p>}
               </div>
             )}
-            {a.tipo !== "pregunta" && !a.hecha && <button disabled={ocupado} onClick={() => hacer(a)} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60" data-testid={`hecho-${a.id}`}>{a.tipo === "lectura" ? "Ya la leí" : a.tipo === "video" ? "Ya lo vi" : "Ya lo revisé"}</button>}
+            {a.tipo !== "pregunta" && a.tipo !== "leccion" && !a.hecha && <button disabled={ocupado} onClick={() => hacer(a)} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60" data-testid={`hecho-${a.id}`}>{a.tipo === "lectura" ? "Ya la leí" : a.tipo === "video" ? "Ya lo vi" : "Ya lo revisé"}</button>}
           </article>
         ))}
       </div>
     </div>
   );
+}
+
+// Carga lo que el estudiante ya escribió en las reflexiones y muestra la lección
+function LeccionDeActividad({ a, estudianteId, onTerminar }) {
+  const [refl, setRefl] = useState(null);
+  useEffect(() => { let vivo = true; api.fetchReflexiones(estudianteId, a.id).then((r) => vivo && setRefl(r)); return () => { vivo = false; }; }, [a.id, estudianteId]);
+  if (!refl) return <p className="text-sm text-slate-400">Abriendo la lección…</p>;
+  return <LeccionVista actividad={a} hecha={a.hecha} reflexiones={refl} onGuardarReflexion={(bloqueId, texto) => api.guardarReflexion(estudianteId, a.id, bloqueId, texto)} onTerminar={onTerminar} />;
 }
