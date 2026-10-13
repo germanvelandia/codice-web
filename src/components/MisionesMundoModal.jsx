@@ -10,6 +10,7 @@ import { TIPOS as TIPOS_MON, CLAVES_TIPO as CLAVES_TIPO_MON, NIVEL_MAX as NIVEL_
 import { filtrarSeguimiento, ORDENES_SEGUIMIENTO, ETIQUETA_ESTADO, textoUltima, filasParaExcel } from "../game/seguimiento";
 import { objetosDeAcertijos, objetosDeSecretos, analizarAcertijos, analizarSecretos, crearLibroContenido, LIBRO_ACERTIJOS, LIBRO_SECRETOS, leerHoja } from "../lib/importarContenido";
 import { validarEvento, EMOJIS_EVENTO, EMOJIS_JEFE, ZONAS_JEFE_EVENTO, MAX_PREGUNTAS_EVENTO, fechaDeInicio, fechaDeFin, textoFechas, textoBono, MAX_DIAS_EVENTO } from "../game/eventos";
+import { MIN_PREGUNTAS as MIN_PREG_ALT, JUEGOS_ALT, validarPruebaAlt } from "../game/mundosAlt";
 import { planEdicion, coincideBusqueda } from "../lib/edicionMasiva";
 import { aObjetos, analizarImportacion, filasParaExportar, filasPlantilla, crearLibro, leerLibro } from "../lib/importarMisiones";
 
@@ -35,7 +36,7 @@ const MENU_MUNDO = [
   { id: "mapa", icono: "🗺️", nombre: "Mapa y recursos", ayuda: "Qué zonas están abiertas, qué se puede recolectar y dónde se recuperan.", tabs: [["zonas", "🗺️ Zonas"], ["recursos", "🎒 Recursos"], ["posada", "🛏️ Posada"]] },
   { id: "combate", icono: "⚔️", nombre: "Combate", ayuda: "Guardianes, retadores, monstruos y ligas: los duelos del mundo.", tabs: [["duelos", "⚔️ Guardianes"], ["retos", "☠️ Retadores"], ["monstruos", "🐲 Monstruos"], ["ligas", "🏆 Ligas"]] },
   { id: "seguimiento", icono: "📊", nombre: "Seguimiento", ayuda: "Quién está jugando y quién no: un resumen por estudiante de lo que ha hecho en el mundo.", tabs: [["estudiantes", "📊 Estudiantes"]] },
-  { id: "aventura", icono: "🏰", nombre: "Aventura", ayuda: "Metas grandes: reinos de la Comarca, las tres llaves de la Cámara del Códice y eventos con fechas (XP doble, jefes, preguntas de un tema).", tabs: [["comarca", "🏰 Comarca"], ["llaves", "🗝️ Llaves"], ["eventos", "🎉 Eventos"]] },
+  { id: "aventura", icono: "🏰", nombre: "Aventura", ayuda: "Metas grandes: reinos de la Comarca, las tres llaves de la Cámara del Códice y eventos con fechas (XP doble, jefes, preguntas de un tema) y los mundos alternos (la Oca y las Plataformas).", tabs: [["comarca", "🏰 Comarca"], ["llaves", "🗝️ Llaves"], ["eventos", "🎉 Eventos"], ["mundos", "🎲 Mundos alternos"]] },
 ];
 
 export default function MisionesMundoModal({ onClose, grados = [], gradoActual = "" }) {
@@ -236,6 +237,8 @@ export default function MisionesMundoModal({ onClose, grados = [], gradoActual =
           <PanelMonstruos cursos={cursos} niveles={niveles} />
         ) : pestana === "eventos" && !editando ? (
           <PanelEventos cursos={cursos} niveles={niveles} />
+        ) : pestana === "mundos" && !editando ? (
+          <PanelMundosAlt cursos={cursos} niveles={niveles} />
         ) : pestana === "llaves" && !editando ? (
           <PanelLlaves />
         ) : pestana === "comarca" && !editando ? (
@@ -1522,6 +1525,158 @@ function PanelLigas({ cursos = [] }) {
             )}
           </li>))}</ul>
       )}
+    </div>
+  );
+}
+
+
+// ----- Mundos alternos (SQL 78): la Oca 🎲 y las Plataformas 🍄, con preguntas del banco de trivia + las propias -----
+const pruebaVacia = () => ({ juego: "ambos", texto: "", opciones: ["", ""], correcta: 0, pista: "", retro: "", grado_id: "", activa: true });
+function PanelMundosAlt({ cursos = [], niveles = [] }) {
+  const [cfg, setCfg] = useState(null);             // null = cargando · false = falta el SQL 78
+  const [f, setF] = useState(null);
+  const [cats, setCats] = useState([]);
+  const [propias, setPropias] = useState([]);
+  const [resumen, setResumen] = useState(null);
+  const [form, setForm] = useState(null);           // pregunta en edición: { id?, ...campos }
+  const [filtro, setFiltro] = useState("todos");
+  const [error, setError] = useState("");
+  const [aviso, setAviso] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const relojAviso = useRef(null);
+  useEffect(() => () => clearTimeout(relojAviso.current), []);
+  const avisar = (t) => { setAviso(t); clearTimeout(relojAviso.current); relojAviso.current = setTimeout(() => setAviso(""), 2400); };
+  const cargar = async () => {
+    try {
+      const c = await mundoApi.fetchConfigMundo();
+      setF({ oca: { activo: c.oca_activo === 1, banco: String(c.oca_banco ?? 0), xp: String(c.oca_xp), oro: String(c.oca_oro), penal: String(c.oca_penal) }, plat: { activo: c.plat_activo === 1, banco: String(c.plat_banco ?? 0), xp: String(c.plat_xp), oro: String(c.plat_oro), corazones: String(c.plat_corazones), puerta: String(c.plat_puerta) } });
+      setPropias(await mundoApi.fetchPruebasAlt()); setCfg(true); setError("");
+      mundoApi.fetchCategoriasParaDuelo().then(setCats).catch(() => setCats([]));
+      mundoApi.fetchResumenAlt(30).then(setResumen).catch(() => setResumen(null));
+    } catch (e) { if (/does not exist|relation|schema cache/i.test(e.message || "")) setCfg(false); else { setError(e.message || "No se pudo cargar."); setCfg(false); } }
+  };
+  useEffect(() => { cargar(); }, []);
+  if (cfg === false) return <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">{error || <>Todavía no se crearon las tablas de los mundos alternos. Corre <b>78_mundos_alternos.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</>}</div>;
+  if (cfg === null || !f) return <p className="text-sm text-slate-400">Cargando…</p>;
+  const input = "w-full text-sm rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none bg-white";
+  const num = "w-20 text-sm rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none bg-white";
+  const setJ = (j, k, v) => setF((x) => ({ ...x, [j]: { ...x[j], [k]: v } }));
+  const n = (v) => (v === "" ? NaN : Number(v));
+  const rangos = { oca: [["xp", "El XP de la Oca", 0, 1000], ["oro", "El oro de la Oca", 0, 1000], ["penal", "Las casillas que retrocede", 1, 6]], plat: [["xp", "El XP de cada nivel", 0, 1000], ["oro", "El oro de cada nivel", 0, 1000], ["corazones", "Los corazones", 1, 5], ["puerta", "Las respuestas de la puerta", 1, 5]] };
+  const errorCfg = () => { for (const j of ["oca", "plat"]) for (const [k, nombre, min, max] of rangos[j]) { const v = n(f[j][k]); if (!Number.isInteger(v) || v < min || v > max) return `${nombre} tiene que ser un número entero entre ${min} y ${max}.`; } return ""; };
+  const guardarCfg = async () => {
+    const e = errorCfg(); if (e) { setError(e); return; }
+    setGuardando(true); setError("");
+    try {
+      const pares = [["oca_activo", f.oca.activo ? 1 : 0], ["oca_banco", Number(f.oca.banco) || 0], ["oca_xp", n(f.oca.xp)], ["oca_oro", n(f.oca.oro)], ["oca_penal", n(f.oca.penal)], ["plat_activo", f.plat.activo ? 1 : 0], ["plat_banco", Number(f.plat.banco) || 0], ["plat_xp", n(f.plat.xp)], ["plat_oro", n(f.plat.oro)], ["plat_corazones", n(f.plat.corazones)], ["plat_puerta", n(f.plat.puerta)]];
+      for (const [k, v] of pares) await mundoApi.guardarConfigMundo(k, v);
+      avisar("Guardado ✓");
+    } catch (er) { setError("No se pudo guardar: " + (er.message || "error desconocido")); }
+    setGuardando(false);
+  };
+  const aportan = (j) => propias.filter((p) => p.activa && (p.juego === "ambos" || p.juego === j)).length;
+  const delBanco = (j) => { const c = cats.find((x) => String(x.id) === f[j].banco); return c ? c.preguntas : 0; };
+  const bloqueJuego = (j) => {
+    const I = JUEGOS_ALT[j], total = aportan(j) + delBanco(j), min = MIN_PREG_ALT[j];
+    return (
+      <div className="rounded-xl border border-slate-200 p-4 mb-3" data-testid={`cfg-${j}`}>
+        <label className="flex items-center gap-2 text-sm font-bold text-slate-800 mb-2"><input type="checkbox" checked={f[j].activo} onChange={(e) => setJ(j, "activo", e.target.checked)} aria-label={`${I.nombre} activo`} /> {I.emoji} {I.nombre} {j === "oca" ? "(tablero de 35 casillas con pruebas)" : "(3 niveles de plataformas)"}</label>
+        <div className="flex flex-wrap items-center gap-2 mb-2 text-sm text-slate-700">
+          Premio {j === "oca" ? "al llegar a la meta" : "por cada nivel superado"} (una vez al día): <input type="number" min="0" max="1000" value={f[j].xp} onChange={(e) => setJ(j, "xp", e.target.value)} className={num} aria-label={`XP ${I.corto}`} /> ✨ XP y <input type="number" min="0" max="1000" value={f[j].oro} onChange={(e) => setJ(j, "oro", e.target.value)} className={num} aria-label={`Oro ${I.corto}`} /> 🪙
+        </div>
+        {j === "oca" ? (
+          <div className="flex flex-wrap items-center gap-2 mb-2 text-sm text-slate-700">Si falla una prueba retrocede <input type="number" min="1" max="6" value={f.oca.penal} onChange={(e) => setJ("oca", "penal", e.target.value)} className={num} aria-label="Casillas que retrocede" /> casillas</div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2 mb-2 text-sm text-slate-700">Tiene <input type="number" min="1" max="5" value={f.plat.corazones} onChange={(e) => setJ("plat", "corazones", e.target.value)} className={num} aria-label="Corazones" /> ❤️ y la puerta del saber pide <input type="number" min="1" max="5" value={f.plat.puerta} onChange={(e) => setJ("plat", "puerta", e.target.value)} className={num} aria-label="Respuestas de la puerta" /> respuestas correctas</div>
+        )}
+        <label className="text-[11px] text-slate-500 block mb-1">Banco de preguntas (de Preguntados). Además entran tus preguntas propias de abajo y las preguntas de las misiones del curso.</label>
+        <select value={f[j].banco} onChange={(e) => setJ(j, "banco", e.target.value)} className={input + " mb-1"} aria-label={`Banco de ${I.corto}`}>
+          <option value="0">Sin banco (solo mis preguntas propias y las de las misiones)</option>
+          {cats.map((c) => <option key={c.id} value={String(c.id)}>{c.emoji} Preguntados: {c.nombre} ({c.preguntas} {c.preguntas === 1 ? "pregunta" : "preguntas"})</option>)}
+        </select>
+        <div className={`text-[11px] ${total < min ? "text-amber-700 font-semibold" : "text-slate-400"}`} data-testid={`pool-${j}`}>Sin contar las misiones: {delBanco(j)} del banco + {aportan(j)} propias = {total}. {total < min ? `⚠️ Se necesitan ${min} en total para abrir el juego (las preguntas de las misiones del curso también cuentan).` : "Suficientes para abrirlo."}</div>
+      </div>
+    );
+  };
+  // ---- preguntas propias ----
+  const juegoNombre = { ambos: "🎲🍄 Ambos", oca: "🎲 Oca", plat: "🍄 Plataformas" };
+  const etiquetaCurso = (g) => (!g ? "Todos los cursos" : esNivel(g) ? `Todo ${nombreNivel(nivelDeClave(g)).toLowerCase()}` : `Curso ${g}`);
+  const setP = (k, v) => setForm((x) => ({ ...x, [k]: v }));
+  const guardarPregunta = async () => {
+    const e = validarPruebaAlt(form); if (e) { setError(e); return; }
+    setGuardando(true); setError("");
+    try { await mundoApi.guardarPruebaAlt(form, form.id ?? null); setForm(null); setPropias(await mundoApi.fetchPruebasAlt()); avisar("Pregunta guardada ✓"); }
+    catch (er) { setError("No se pudo guardar: " + (er.message || "error desconocido")); }
+    setGuardando(false);
+  };
+  const alternar = async (p) => { try { await mundoApi.alternarPruebaAlt(p.id, !p.activa); setPropias(await mundoApi.fetchPruebasAlt()); } catch (er) { setError(er.message || "No se pudo cambiar."); } };
+  const borrar = async (p) => { if (typeof window !== "undefined" && window.confirm && !window.confirm("¿Borrar esta pregunta?")) return; try { await mundoApi.eliminarPruebaAlt(p.id); setPropias(await mundoApi.fetchPruebasAlt()); } catch (er) { setError(er.message || "No se pudo borrar."); } };
+  const visibles = propias.filter((p) => filtro === "todos" || p.juego === filtro);
+  const uso = (j) => { const r = resumen && resumen[j]; if (!r) return "—"; const tot = r.aciertos + r.errores; return `hoy ${r.hoy} · 30 días: ${r.total} ${r.total === 1 ? "premio" : "premios"} de ${r.estudiantes} ${r.estudiantes === 1 ? "estudiante" : "estudiantes"}${tot ? ` · ${Math.round((100 * r.aciertos) / tot)}% de aciertos` : ""}`; };
+
+  return (
+    <div data-testid="panel-mundos">
+      <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 leading-relaxed">
+        En la plaza hay un <b>portal</b> hacia dos mundos aparte. En la <b>🎲 Oca</b> el estudiante tira el dado y avanza por un tablero: en las casillas ❓ responde una pregunta (si acierta avanza más, si falla retrocede), y hay ocas, puentes, dragones y un pozo del que solo se sale respondiendo bien. En las <b>🍄 Plataformas</b> corre y salta por tres niveles: golpea bloques ❓ para responder preguntas, y una <b>puerta del saber</b> solo se abre con suficientes respuestas correctas. El premio de cada prueba se da <b>una vez al día</b>; puede volver a jugar por diversión.
+        <p className="mt-2">Ojo: los premios suman de verdad XP y oro, y si hay un 🎉 evento activo se multiplican.</p>
+      </div>
+      {error && <div className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-2.5 mb-3">{error}</div>}
+      {resumen && <div className="text-[11px] text-slate-500 mb-3 space-y-0.5" data-testid="resumen-mundos"><div>🎲 Oca: {uso("oca")}</div><div>🍄 Plataformas: {uso("plat")}</div></div>}
+      {bloqueJuego("oca")}
+      {bloqueJuego("plat")}
+      <div className="flex items-center gap-3 justify-end mb-5">
+        {aviso && <span className="text-xs font-semibold text-emerald-600">{aviso}</span>}
+        <button type="button" onClick={guardarCfg} disabled={guardando} className="text-sm font-bold px-5 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-50">{guardando ? "Guardando…" : "Guardar mundos alternos"}</button>
+      </div>
+
+      <div className="flex items-center gap-2 mb-2 flex-wrap">
+        <h3 className="text-sm font-bold text-slate-800 flex-1">✍️ Mis preguntas para estos mundos ({propias.length})</h3>
+        <select value={filtro} onChange={(e) => setFiltro(e.target.value)} className="text-xs rounded-lg px-2 py-1 border border-slate-200 bg-white" aria-label="Filtrar por juego"><option value="todos">Todas</option><option value="ambos">Para ambos</option><option value="oca">Solo Oca</option><option value="plat">Solo Plataformas</option></select>
+        {!form && <button type="button" onClick={() => setForm(pruebaVacia())} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-violet-500 text-white">+ Nueva pregunta</button>}
+      </div>
+      {form && (
+        <div className="rounded-xl border-2 border-violet-200 bg-violet-50/40 p-3 mb-3 space-y-2" data-testid="form-prueba">
+          <textarea value={form.texto} onChange={(e) => setP("texto", e.target.value)} rows={2} maxLength={300} placeholder="La pregunta…" className={input} aria-label="Pregunta" />
+          <div className="space-y-1.5">
+            {form.opciones.map((o, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input type="radio" name="correcta-alt" checked={form.correcta === i} onChange={() => setP("correcta", i)} aria-label={`Opción ${i + 1} es la correcta`} />
+                <input value={o} onChange={(e) => setP("opciones", form.opciones.map((x, k) => (k === i ? e.target.value : x)))} maxLength={120} placeholder={`Opción ${i + 1}${form.correcta === i ? " (correcta)" : ""}`} className={input} aria-label={`Opción ${i + 1}`} />
+                {form.opciones.length > 2 && <button type="button" onClick={() => setForm((x) => ({ ...x, opciones: x.opciones.filter((_, k) => k !== i), correcta: x.correcta === i ? 0 : x.correcta > i ? x.correcta - 1 : x.correcta }))} className="text-xs text-rose-500 px-1" aria-label={`Quitar opción ${i + 1}`}>✕</button>}
+              </div>
+            ))}
+            {form.opciones.length < 4 && <button type="button" onClick={() => setP("opciones", [...form.opciones, ""])} className="text-xs font-semibold text-violet-600">+ Agregar opción</button>}
+          </div>
+          <div className="grid sm:grid-cols-2 gap-2">
+            <select value={form.juego} onChange={(e) => setP("juego", e.target.value)} className={input} aria-label="Juego"><option value="ambos">🎲🍄 Para la Oca y las Plataformas</option><option value="oca">🎲 Solo la Oca</option><option value="plat">🍄 Solo las Plataformas</option></select>
+            <select value={form.grado_id} onChange={(e) => setP("grado_id", e.target.value)} className={input} aria-label="Curso de la pregunta">
+              <option value="">🌐 Todos los cursos</option>
+              {[...new Set([...niveles, ...(esNivel(form.grado_id) ? [nivelDeClave(form.grado_id)] : [])])].map((nv) => <option key={nv} value={claveNivel(nv)}>📚 Todo {nombreNivel(nv).toLowerCase()}</option>)}
+              {cursos.map((c) => <option key={c} value={c}>🏫 Solo el curso {c}</option>)}
+            </select>
+          </div>
+          <input value={form.pista} onChange={(e) => setP("pista", e.target.value)} maxLength={200} placeholder="Pista que se muestra si falla (opcional)" className={input} aria-label="Pista" />
+          <input value={form.retro} onChange={(e) => setP("retro", e.target.value)} maxLength={300} placeholder="Explicación de la respuesta (opcional)" className={input} aria-label="Explicación" />
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => { setForm(null); setError(""); }} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600">Cancelar</button>
+            <button type="button" onClick={guardarPregunta} disabled={guardando} className="text-xs font-bold px-4 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-50">{guardando ? "Guardando…" : form.id != null ? "Guardar cambios" : "Agregar pregunta"}</button>
+          </div>
+        </div>
+      )}
+      {visibles.length === 0 && !form && <p className="text-sm text-slate-400 py-3 text-center">{propias.length ? "No hay preguntas con ese filtro." : "Todavía no escribiste preguntas propias. Los juegos usan el banco de Preguntados y las preguntas de las misiones."}</p>}
+      <ul className="space-y-1.5" data-testid="lista-pruebas">
+        {visibles.map((p) => (
+          <li key={p.id} className={`rounded-xl border p-2.5 text-sm ${p.activa ? "border-slate-200 bg-white" : "border-slate-100 bg-slate-50 opacity-60"}`}>
+            <div className="font-semibold text-slate-800">{p.texto}</div>
+            <div className="text-[11px] text-slate-500 mt-0.5">{juegoNombre[p.juego]} · {etiquetaCurso(p.grado_id)} · ✅ {p.opciones[p.correcta]}{p.activa ? "" : " · apagada"}</div>
+            <div className="flex gap-3 mt-1.5 text-[11px] font-semibold">
+              <button type="button" onClick={() => { setForm({ ...p, opciones: [...p.opciones] }); setError(""); }} className="text-violet-600">Editar</button>
+              <button type="button" onClick={() => alternar(p)} className="text-slate-500">{p.activa ? "Apagar" : "Encender"}</button>
+              <button type="button" onClick={() => borrar(p)} className="text-rose-500">Borrar</button>
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
