@@ -36,6 +36,8 @@ import { VistaBajasVida } from "./screens/BajasVida";
 import { VistaCorregirNombres } from "./screens/CorregirNombres";
 import { VistaDireccionCurso } from "./screens/DireccionCurso";
 import { VistaGuiasEstudio, GuiasEstudiante } from "./screens/GuiasEstudio";
+import { ModulosAdmin } from "./components/ModulosAdmin";
+import { ModulosEstudiante } from "./components/Modulosestudiante";
 import { VistaConsignasCodice } from "./screens/ConsignasCodice";
 import { VistaTriviaAdmin } from "./screens/TriviaAdmin";
 import { VistaBancoPreguntas } from "./screens/BancoPreguntas";
@@ -1134,6 +1136,7 @@ const MENU_CODICE_GRUPOS = [
       { key: "misiones", label: "Misiones", icono: "⚔️" },
       { key: "forja", label: "Forja", icono: "🔨" },
       { key: "guias", label: "Guías", icono: "📘" },
+      { key: "modulos", label: "Módulos", icono: "🧭" },
       { key: "biblioteca", label: "Biblioteca", icono: "📚" },
       { key: "proyectos", label: "Proyectos", icono: "📜" },
       { key: "historial", label: "Historial", icono: "🗂️" },
@@ -1168,7 +1171,7 @@ const MENU_CODICE = MENU_CODICE_GRUPOS.flatMap((g) => g.items);
 // del emoji genérico — puramente decorativo, la navegación real sigue
 // siendo la misma (la key de MENU_CODICE).
 const ICONO_MAPA = {
-  album: "🏯", biblioteca: "📚", codice: "📖", forja: "⚒️", guias: "🗺️",
+  album: "🏯", biblioteca: "📚", codice: "📖", forja: "⚒️", guias: "🗺️", modulos: "🧭",
   inicio: "🏰", mundo: "🌍", misiones: "⚔️", notas: "📜", personaje: "🧙", historial: "📖", perfil: "🛡️", preguntados: "🎡",
   proyectos: "🏹", ranking: "👑", recompensas: "💎", salonhonor: "🏆",
 };
@@ -2483,6 +2486,10 @@ function PortalEstudiante() {
             <MarcoSeccion zonaLabel="Estudio — Guías" icono="🎓"><GuiasEstudiante gradoId={estudianteInfo.grado_id} estudianteId={estudianteInfo.id} /></MarcoSeccion>
           )}
 
+          {vista === "modulos" && estudianteInfo && (
+            <MarcoSeccion zonaLabel="Estudio — Módulos" icono="🎓"><ModulosEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} onPremio={() => consultar()} /></MarcoSeccion>
+          )}
+
           {vista === "codice" && estudianteInfo && (
             <MarcoSeccion zonaLabel="Estudio — Códice" icono="🎓"><CodiceEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} /></MarcoSeccion>
           )}
@@ -2666,6 +2673,7 @@ const MENU_PANEL_GRUPOS = [
       { key: "tablerosemanal", label: "Tablero Semanal", icono: "🗓️" },
       { key: "rubricas", label: "Rúbricas", icono: "🎯" },
       { key: "guiasestudio", label: "Guías de Estudio", icono: "📘" },
+      { key: "modulosestudio", label: "Módulos de Estudio", icono: "🧭" },
       { key: "biblioteca", label: "Biblioteca", icono: "📚" },
       { key: "actividadesprogramadas", label: "Actividades Programadas", icono: "🎮" },
       { key: "herr_bancopreguntas", label: "Banco de Preguntas", icono: "🗂️" },
@@ -3122,6 +3130,7 @@ function Panel({ session }) {
         {tab === "objetos" && <VistaObjetos grados={grados} gradoActivo={gradoActivo} />}
         {tab === "direccioncurso" && <MarcoSeccion zonaLabel="Convivencial — Dirección de Curso" icono="🤝"><VistaDireccionCurso grados={grados} gradoActivo={gradoActivo} esAdmin={esAdminEfectivo} /></MarcoSeccion>}
         {tab === "guiasestudio" && <MarcoSeccion zonaLabel="Planeación — Guías de Estudio" icono="🗺️"><VistaGuiasEstudio grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
+        {tab === "modulosestudio" && grados.length > 0 && <MarcoSeccion zonaLabel="Planeación — Módulos de Estudio" icono="🗺️"><ModulosAdmin grados={grados} /></MarcoSeccion>}
         {tab === "actividadesprogramadas" && <MarcoSeccion zonaLabel="Planeación — Actividades Programadas" icono="🗺️"><VistaActividadesProgramadas grados={grados} /></MarcoSeccion>}
         {tab === "evaluaciones" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Misiones" icono="🎓"><VistaEvaluaciones grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
         {tab === "proyectosforja" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — La Forja" icono="🎓"><VistaProyectosForja grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
