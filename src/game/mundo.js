@@ -15,6 +15,9 @@ import { resumenReinos, reinosAtacables, puedeBatallar, nombreCortoProvincia, es
 import { brilloPorDistancia, rumoresPendientes } from "./secretos";
 import { TIPOS as TIPOS_MON, CLAVES_TIPO as CLAVES_TIPO_MON, EMOJIS_MONSTRUO, ESTATS as ESTATS_MON, NOMBRE_ESTAT, BASE as BASE_MON, MAX_PUNTOS_POR_ESTAT, HABILIDADES, nivelDeXp, statsDe, puntosUsados, validarMonstruo, crearCombate, calcularPremioMonstruo, salvajeDe, jefeDe, probCaptura, nivelCapturado, xpParaNivel as xpParaNivelMon } from "./monstruos";
 import { textoBono as textoBonoEvento } from "./eventos";
+import { abrirOca, CSS_OCA } from "./oca";
+import { abrirPlataformas, CSS_PLAT } from "./plataformas";
+import { JUEGOS_ALT } from "./mundosAlt";
 import { LLAVES, llaveDe, puedeConseguir, siguienteLlave, cuantas, camaraDesbloqueada, TEXTO_PRUEBA, llavesEfectivas, enCuadrante } from "./llaves";
 import { ITEMS, RECETAS, RECURSOS_POR_ZONA, MAX_POR_ITEM, PARCELA, celdaValida, esDecoracion, puedeFabricar, faltantes, cantidadPorRecoleccion, esHerramienta } from "./items";
 
@@ -193,7 +196,7 @@ const CSS = `
 }`;
 function asegurarCss() {
   if (document.getElementById("mundo-css")) return;
-  const el = document.createElement("style"); el.id = "mundo-css"; el.textContent = CSS; document.head.appendChild(el);
+  const el = document.createElement("style"); el.id = "mundo-css"; el.textContent = CSS + CSS_OCA + CSS_PLAT; document.head.appendChild(el);
 }
 
 const PLANTILLA = `
@@ -228,6 +231,7 @@ const PLANTILLA = `
   <div class="m-juego oculto"></div>
   <div class="m-comarca oculto"></div>
   <div class="m-mon oculto"></div>
+  <div class="m-alt oculto"></div>
   <div class="m-construir oculto"></div>
   <div class="m-duelo oculto"></div>
   <div class="m-fundido"></div>
@@ -1229,6 +1233,10 @@ export async function iniciarMundo(raiz, op) {
     }
   }
 
+  // ---- mundos alternos: un portal en la plaza hacia la Oca y las Plataformas ----
+  const ALT = op.alt && op.alt.activo && op.alt.juegos && Object.values(op.alt.juegos).some((j) => j.activo) ? op.alt : null;
+  if (ALT) { const pl = exterior.plaza; exterior.npcs.push({ tipo: "portal_alt", nombre: "Portal de los mundos alternos", x: pl.cx * TILE + 150, y: pl.cy * TILE - 44, solido: false, radio: 58, dir: "south" }); }
+
   // ---- evento temporal: un Heraldo en la plaza con las preguntas del tema, y un jefe especial en una zona ----
   const EV = op.eventos && op.eventos.evento ? { ...op.eventos.evento, preguntas: op.eventos.evento.preguntas || [], hechas: new Set(op.eventos.evento.hechas || []) } : null;
   if (EV) {
@@ -1702,9 +1710,9 @@ export async function iniciarMundo(raiz, op) {
   }
   function cerrarMapa() { estado.mapaAbierto = false; q(".m-mapa").classList.add("oculto"); cv.focus(); }
   function interactuar() {
-    if (estado.dialogo || estado.mapaAbierto || estado.mochilaAbierta || estado.juegoAbierto || estado.comarcaAbierto || estado.monAbierto || estado.duelo || estado.cambiando || !estado.activo || !estado.cercano) return;
+    if (estado.dialogo || estado.mapaAbierto || estado.mochilaAbierta || estado.juegoAbierto || estado.comarcaAbierto || estado.monAbierto || estado.altAbierto || estado.duelo || estado.cambiando || !estado.activo || !estado.cercano) return;
     const n = estado.cercano;
-    if (n.tipo === "puerta") { if (n.edificio.id === "camara" && !(LL && camaraDesbloqueada(LL.tengo))) abrirPuertaSellada(n); else entrarEdificio(n.edificio); } else if (n.tipo === "llave") abrirLlave(n); else if (n.tipo === "salvaje") abrirSalvaje(n); else if (n.tipo === "evento_heraldo") abrirEvento(n); else if (n.tipo === "lab_arena") abrirArena(); else if (n.tipo === "lab_maquina") abrirEquipo(true); else if (n.tipo === "camara_cofre") abrirCofre(n); else if (n.tipo === "guardia") abrirGuardia(n); else if (n.tipo === "posadero") abrirPosada(n); else if (n.tipo === "guardian") abrirGuardian(n); else if (n.tipo === "retador") abrirRetador(n, false); else if (n.tipo === "mision") abrirMision(n); else if (n.tipo === "aldeano") abrirCharla(n); else if (n.tipo === "recurso") abrirRecurso(n); else if (n.tipo === "juego_mesa") abrirMesa(n); else if (n.tipo === "secreto") abrirSecreto(n); else if (n.tipo === "comarca_mapa") abrirMapaComarca(); else if (n.tipo === "comarca_heraldo") abrirHeraldo(n); else if (n.tipo === "parcela_puerta") { snd.puerta(); cambiarEscena(parcela, parcela.spawn.x, parcela.spawn.y); }
+    if (n.tipo === "puerta") { if (n.edificio.id === "camara" && !(LL && camaraDesbloqueada(LL.tengo))) abrirPuertaSellada(n); else entrarEdificio(n.edificio); } else if (n.tipo === "llave") abrirLlave(n); else if (n.tipo === "salvaje") abrirSalvaje(n); else if (n.tipo === "portal_alt") abrirPortal(n); else if (n.tipo === "evento_heraldo") abrirEvento(n); else if (n.tipo === "lab_arena") abrirArena(); else if (n.tipo === "lab_maquina") abrirEquipo(true); else if (n.tipo === "camara_cofre") abrirCofre(n); else if (n.tipo === "guardia") abrirGuardia(n); else if (n.tipo === "posadero") abrirPosada(n); else if (n.tipo === "guardian") abrirGuardian(n); else if (n.tipo === "retador") abrirRetador(n, false); else if (n.tipo === "mision") abrirMision(n); else if (n.tipo === "aldeano") abrirCharla(n); else if (n.tipo === "recurso") abrirRecurso(n); else if (n.tipo === "juego_mesa") abrirMesa(n); else if (n.tipo === "secreto") abrirSecreto(n); else if (n.tipo === "comarca_mapa") abrirMapaComarca(); else if (n.tipo === "comarca_heraldo") abrirHeraldo(n); else if (n.tipo === "parcela_puerta") { snd.puerta(); cambiarEscena(parcela, parcela.spawn.x, parcela.spawn.y); }
   }
 
   // ---- recoger recursos: cada punto hace una pregunta; si se acierta, se recoge (hay un límite por día) ----
@@ -1798,6 +1806,40 @@ export async function iniciarMundo(raiz, op) {
     if (sumar) { estado.ganado.xp += e.extraXp || 0; estado.ganado.oro += e.extraOro || 0; }
     toast(`${e.emoji} ${e.nombre}: ${[e.extraXp ? `+${e.extraXp} XP` : "", e.extraOro ? `+${e.extraOro} 🪙` : ""].filter(Boolean).join(" y ")} extra`, 3800);
   }
+  // ---- portal de los mundos alternos ----
+  const altEl = q(".m-alt");
+  function estadoAlt(j) { const J = ALT.juegos[j]; return J; }
+  function abrirPortal(n) {
+    estado.dialogo = n; n.hablando = true; snd.hablar();
+    const fila = (j) => {
+      const J = estadoAlt(j), I = JUEGOS_ALT[j], hechas = J.claves.filter((k) => k.hoy).length, tot = J.claves.length;
+      const nota = !J.estado.ok ? (J.estado.motivo === "apagado" ? "Cerrado por ahora." : `Aún faltan ${J.estado.faltan} preguntas para abrirlo.`) : hechas >= tot ? "Premio de hoy ya ganado ✅ (puedes jugar por diversión)" : j === "plat" ? `Premios de hoy: ${hechas}/${tot} · ${J.xp} XP + ${J.oro} 🪙 por nivel` : `Premio: ${J.xp} XP + ${J.oro} 🪙 al llegar a la meta`;
+      return `<button class="m-opcion" data-alt="${j}" ${J.estado.ok ? "" : "disabled"} style="text-align:left"><b>${I.emoji} ${html(I.nombre)}</b><br><span style="font-size:12px;opacity:.8">${html(nota)}</span></button>`;
+    };
+    const d = abrirTarjeta(`${cabecera(n, "🌀 Mundos alternos")}<p class="m-texto">Más allá del portal hay dos mundos distintos donde tus conocimientos son tu mejor herramienta. ¡Pasa las pruebas para ganar premios!</p><div class="m-ops">${fila("oca")}${fila("plat")}</div><button class="m-ok" data-a="cerrar">Ahora no</button>`);
+    d.querySelectorAll('[data-a="cerrar"]').forEach((b) => (b.onclick = cerrarDialogo));
+    d.querySelectorAll("[data-alt]").forEach((b) => (b.onclick = () => abrirAlt(b.dataset.alt)));
+  }
+  function abrirAlt(juego) {
+    const J = ALT && ALT.juegos[juego]; if (!J || !J.estado.ok) return;
+    ocultarDialogo(); estado.altAbierto = true; teclas.clear(); joy.x = joy.y = 0; snd.reanudar();
+    const guardar = (r) => {
+      if (op.modoPrueba || !op.alAlt) return Promise.resolve({ ok: true, local: true });
+      return Promise.resolve(op.alAlt(r)).then((res) => {
+        if (res && res.ok && !res.yaEstaba) {
+          const pr = res.premio || {};
+          if (res.xp != null) estado.xp = res.xp; else estado.xp += pr.xp || 0;
+          if (res.oro != null) estado.oro = res.oro; else estado.oro += pr.oro || 0;
+          estado.ganado.xp += pr.xp || 0; estado.ganado.oro += pr.oro || 0; aviso(`+${pr.xp || 0} XP`, "#fde68a"); aporteComarca(res.comarca); avisoEvento(res, true); actualizarHud();
+        }
+        if (res && res.ok) { const k = J.claves.find((x) => x.clave === r.clave); if (k) k.hoy = true; }
+        return res;
+      });
+    };
+    const base = { pool: J.pool, rng: op.rngAlt, dado: op.dadoAlt, rapido: !!op.rapidoAlt, sonido: snd, emoji: undefined, alResultado: guardar, alSalir: () => { estado.altAbierto = false; altActual = null; cv.focus(); } };
+    altActual = juego === "oca" ? abrirOca(altEl, { ...base, penal: J.penal }) : abrirPlataformas(altEl, { ...base, corazones: J.corazones, puerta: J.puerta, hechos: new Set(J.claves.filter((k) => k.hoy).map((k) => k.clave)), nivelInicial: op.nivelAlt || undefined });
+  }
+  let altActual = null;
   function abrirEvento(n) {
     estado.dialogo = n; n.hablando = true; snd.hablar();
     const total = EV.preguntas.length, hechas = EV.preguntas.filter((p) => EV.hechas.has(p.idx)).length, bono = textoBonoEv();
@@ -2516,7 +2558,7 @@ export async function iniciarMundo(raiz, op) {
     estado.cercano = mejor;
     const av = q(".m-aviso"), ba = q(".m-accion");
     if (mejor && !estado.dialogo && !estado.cambiando) {
-      av.textContent = (mejor.tipo === "puerta" ? `🚪 Entrar a ${mejor.nombre}` : mejor.tipo === "parcela_puerta" ? "🏡 Entrar a mi parcela" : mejor.tipo === "recurso" ? `${ITEMS[mejor.item].emoji} Recoger ${mejor.nombre.toLowerCase()}` : mejor.tipo === "juego_mesa" ? `${mejor.emoji} Jugar: ${mejor.nombre}` : mejor.tipo === "secreto" ? "🔎 Examinar algo que brilla" : mejor.tipo === "llave" ? "🗝️ Examinar la llave" : mejor.tipo === "salvaje" ? `⚔️ Retar a ${mejor.nombre} (Nv ${mejor.mon.nivel})` : mejor.tipo === "lab_maquina" ? "🧪 Usar la máquina de monstruos" : mejor.tipo === "lab_arena" ? "⚔️ Entrar a la Arena de monstruos" : mejor.tipo === "camara_cofre" ? "💰 Abrir el cofre" : mejor.tipo === "comarca_mapa" ? "🗺️ Ver el mapa de la Comarca" : `💬 Hablar con ${mejor.nombre}`) + (tactil ? "" : " (E)"); av.classList.remove("oculto"); ba.classList.add("listo"); ba.textContent = mejor.tipo === "puerta" ? "🚪" : mejor.tipo === "parcela_puerta" ? "🏡" : mejor.tipo === "recurso" ? ITEMS[mejor.item].emoji : mejor.tipo === "juego_mesa" ? mejor.emoji : mejor.tipo === "secreto" ? "🔎" : mejor.tipo === "llave" ? "🗝️" : mejor.tipo === "salvaje" ? "⚔️" : mejor.tipo === "lab_maquina" ? "🧪" : mejor.tipo === "lab_arena" ? "⚔️" : mejor.tipo === "camara_cofre" ? "💰" : mejor.tipo === "comarca_mapa" ? "🗺️" : "💬";
+      av.textContent = (mejor.tipo === "puerta" ? `🚪 Entrar a ${mejor.nombre}` : mejor.tipo === "parcela_puerta" ? "🏡 Entrar a mi parcela" : mejor.tipo === "recurso" ? `${ITEMS[mejor.item].emoji} Recoger ${mejor.nombre.toLowerCase()}` : mejor.tipo === "juego_mesa" ? `${mejor.emoji} Jugar: ${mejor.nombre}` : mejor.tipo === "secreto" ? "🔎 Examinar algo que brilla" : mejor.tipo === "llave" ? "🗝️ Examinar la llave" : mejor.tipo === "salvaje" ? `⚔️ Retar a ${mejor.nombre} (Nv ${mejor.mon.nivel})` : mejor.tipo === "lab_maquina" ? "🧪 Usar la máquina de monstruos" : mejor.tipo === "portal_alt" ? "🌀 Entrar al portal de los mundos alternos" : mejor.tipo === "lab_arena" ? "⚔️ Entrar a la Arena de monstruos" : mejor.tipo === "camara_cofre" ? "💰 Abrir el cofre" : mejor.tipo === "comarca_mapa" ? "🗺️ Ver el mapa de la Comarca" : `💬 Hablar con ${mejor.nombre}`) + (tactil ? "" : " (E)"); av.classList.remove("oculto"); ba.classList.add("listo"); ba.textContent = mejor.tipo === "puerta" ? "🚪" : mejor.tipo === "parcela_puerta" ? "🏡" : mejor.tipo === "recurso" ? ITEMS[mejor.item].emoji : mejor.tipo === "juego_mesa" ? mejor.emoji : mejor.tipo === "secreto" ? "🔎" : mejor.tipo === "llave" ? "🗝️" : mejor.tipo === "salvaje" ? "⚔️" : mejor.tipo === "lab_maquina" ? "🧪" : mejor.tipo === "lab_arena" ? "⚔️" : mejor.tipo === "camara_cofre" ? "💰" : mejor.tipo === "comarca_mapa" ? "🗺️" : "💬";
     } else { av.classList.add("oculto"); ba.classList.remove("listo"); }
     for (const a of estado.avisos) a.t += dt; estado.avisos = estado.avisos.filter((a) => a.t < 1.3);
   }
@@ -2566,6 +2608,14 @@ export async function iniciarMundo(raiz, op) {
     ctx.font = "13px " + FUENTE_EMOJI; ctx.fillText("🏆", sx + 15 * Math.cos(t * 1.6), sy - 20 + 3 * Math.sin(t * 2.2));
     if (Math.hypot(n.x - estado.x, n.y - estado.y) < 100) etiqueta(n.nombre, sx, sy - 26, "#fecaca");
   }
+  function dibujarPortal(n, t) {
+    const sx = Math.round(n.x - camX), sy = Math.round(n.y - camY);
+    sombra(n.x, n.y + 2, 20, 6);
+    for (let i = 0; i < 4; i++) { const r = 26 - i * 5, a = t * (1.6 + i * 0.5) * (i % 2 ? -1 : 1); ctx.strokeStyle = ["#a78bfa", "#38bdf8", "#f472b6", "#fde047"][i]; ctx.lineWidth = 3; ctx.globalAlpha = 0.9; ctx.beginPath(); ctx.ellipse(sx, sy - 24, r * 0.72, r, a, 0, 5.2); ctx.stroke(); }
+    ctx.globalAlpha = 0.35; ctx.fillStyle = "#312e81"; ctx.beginPath(); ctx.ellipse(sx, sy - 24, 14, 20, 0, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
+    ctx.fillStyle = "#000"; ctx.font = "15px " + FUENTE_EMOJI; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.fillText("🎲", sx - 12 + Math.cos(t * 2) * 3, sy - 28 + Math.sin(t * 3) * 3); ctx.fillText("🍄", sx + 12 + Math.cos(t * 2 + 3) * 3, sy - 22 + Math.sin(t * 3 + 2) * 3);
+    if (Math.hypot(n.x - estado.x, n.y - estado.y) < 110) etiqueta(n.nombre, sx, sy - 58, "#c4b5fd");
+  }
   function dibujarCofre(n, t) {
     const sx = Math.round(n.x - camX), sy = Math.round(n.y - 28 - camY);
     ctx.globalAlpha = 1; ctx.fillStyle = "#000"; ctx.font = "26px " + FUENTE_EMOJI; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.fillText(LL && LL.abierta ? "📭" : "💰", sx, sy + Math.sin(t * 3) * 2);
@@ -2612,6 +2662,7 @@ export async function iniciarMundo(raiz, op) {
       if (n.tipo === "llave") { dibujarLlave(n, t); return; }
       if (n.tipo === "salvaje") { dibujarSalvaje(n, t); return; }
       if (n.tipo === "lab_maquina") { dibujarMaquina(n, t); return; }
+      if (n.tipo === "portal_alt") { dibujarPortal(n, t); return; }
       if (n.tipo === "lab_arena") { dibujarArena(n, t); return; }
       if (n.tipo === "camara_cofre") { dibujarCofre(n, t); return; }
       if (n.tipo === "comarca_mapa") { ctx.globalAlpha = 1; ctx.fillStyle = "#000"; ctx.font = "22px " + FUENTE_EMOJI; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.fillText(n.emoji, Math.round(n.x - camX), Math.round(n.y - 40 - camY) + Math.sin(t * 3 + n.x) * 2); if (Math.hypot(n.x - estado.x, n.y - estado.y) < 90) etiqueta(n.nombre, Math.round(n.x - camX), Math.round(n.y - 66 - camY), "#fde68a"); return; }
@@ -2661,6 +2712,7 @@ export async function iniciarMundo(raiz, op) {
   // ---- entrada: teclado, círculo táctil y botón de acción ----
   const tactil = "ontouchstart" in window || (navigator.maxTouchPoints || 0) > 0 || op.forzarTactil === true;
   function alTeclaAbajo(e) {
+    if (estado.altAbierto) return;
     snd.reanudar(); const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) e.preventDefault();
     if (estado.monAbierto) {
@@ -2717,11 +2769,11 @@ export async function iniciarMundo(raiz, op) {
   ultimo = performance.now(); rafId = requestAnimationFrame(cuadro);
 
   const api = {
-    estado, escenas, exterior, interiores, misiones, hechas, snd, chocaEn, interactuar, cambiarEscena, pasos, bosque: escenaDeZona.bosque, naturales, escenaDeZona, zonas: () => zonas, recalcularZonas, abrirMapa, cerrarMapa, viajarRapido, insignias, esperaHasta, poolDeZona, R, retosGanados, esperaReto, abrirRetador, iniciarReto, poolDeZonaReto, puedeRetar, abrirGuardian, iniciarDuelo, contestarDuelo, terminarDuelo, cerrarDuelo, RC, AC, hechosAc, MON, abrirEquipo, abrirSalvaje, iniciarMonDuelo, monDuelo: () => estado.monDuelo, LL, LLE, EV, abrirLlave, abrirPuertaSellada, abrirCofre, COM, abrirMapaComarca, cerrarComarca, abrirHeraldo, vistaHeraldo, iniciarBatalla, SEC, hallados, abrirSecreto, abrirMesa, abrirJuego, cerrarJuego, juego: () => juegoActual, inv, abrirRecurso, abrirMochila, cerrarMochila, fabricarItem, usarItem, recogidoHoy: () => recogidoHoy, PC, parcela, cartel: () => cartel, abrirConstruir, cerrarConstruir, tocarCelda,
+    estado, escenas, exterior, interiores, misiones, hechas, snd, chocaEn, interactuar, cambiarEscena, pasos, bosque: escenaDeZona.bosque, naturales, escenaDeZona, zonas: () => zonas, recalcularZonas, abrirMapa, cerrarMapa, viajarRapido, insignias, esperaHasta, poolDeZona, R, retosGanados, esperaReto, abrirRetador, iniciarReto, poolDeZonaReto, puedeRetar, abrirGuardian, iniciarDuelo, contestarDuelo, terminarDuelo, cerrarDuelo, RC, AC, hechosAc, MON, abrirEquipo, abrirSalvaje, iniciarMonDuelo, monDuelo: () => estado.monDuelo, LL, LLE, EV, ALT, abrirPortal, abrirAlt, alt: () => altActual, abrirLlave, abrirPuertaSellada, abrirCofre, COM, abrirMapaComarca, cerrarComarca, abrirHeraldo, vistaHeraldo, iniciarBatalla, SEC, hallados, abrirSecreto, abrirMesa, abrirJuego, cerrarJuego, juego: () => juegoActual, inv, abrirRecurso, abrirMochila, cerrarMochila, fabricarItem, usarItem, recogidoHoy: () => recogidoHoy, PC, parcela, cartel: () => cartel, abrirConstruir, cerrarConstruir, tocarCelda,
     destruir() {
       if (!vivo) return; // por si se llama dos veces
       vivo = false; estado.activo = false; cancelAnimationFrame(rafId); temporizadores.forEach(clearTimeout); temporizadores.clear();
-      window.removeEventListener("keydown", alTeclaAbajo); window.removeEventListener("keyup", alTeclaArriba); window.removeEventListener("blur", alPerderFoco); window.removeEventListener("resize", alRedimensionar);
+      try { if (altActual) altActual.cerrar(); } catch (err) { /* nada */ } window.removeEventListener("keydown", alTeclaAbajo); window.removeEventListener("keyup", alTeclaArriba); window.removeEventListener("blur", alPerderFoco); window.removeEventListener("resize", alRedimensionar);
       try { snd.destruir(); } catch (e) { /* ya cerrado */ } raiz.innerHTML = "";
     },
   };
