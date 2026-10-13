@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import * as api from "../lib/api";
 import { agruparPorNivel } from "../lib/gamification";
 import { EmojiPicker } from "../components/EmojiPicker";
+import { ImportarTrivia } from "../components/ImportarTrivia";
 
 const COLORES_CATEGORIA = ["#0EA5E9", "#22C55E", "#EC4899", "#F59E0B", "#8B5CF6", "#EF4444", "#14B8A6", "#6366F1"];
 
@@ -203,11 +204,16 @@ export function VistaTriviaAdmin({ grados }) {
   const [formAbierto, setFormAbierto] = useState(false);
   const [editando, setEditando] = useState(null);
   const [categoriaAbierta, setCategoriaAbierta] = useState(null);
+  const [masivoAbierto, setMasivoAbierto] = useState(false);
 
   const cargar = () => { setCargando(true); api.fetchTriviaCategorias().then((d) => { setCategorias(d); setCargando(false); }); };
   useEffect(() => { cargar(); api.fetchMaterias().then(setMaterias); }, []);
 
   const eliminar = async (c) => { if (!confirm(`¿Eliminar la categoría "${c.nombre}"? También se borran sus preguntas.`)) return; await api.eliminarTriviaCategoria(c.id); cargar(); };
+
+  if (masivoAbierto) {
+    return <ImportarTrivia onVolver={() => { setMasivoAbierto(false); cargar(); }} onTerminado={cargar} />;
+  }
 
   if (categoriaAbierta) {
     return <PreguntasDeCategoria categoria={categoriaAbierta} grados={grados} onVolver={() => { setCategoriaAbierta(null); cargar(); }} />;
@@ -221,7 +227,10 @@ export function VistaTriviaAdmin({ grados }) {
       {formAbierto ? (
         <CategoriaForm materias={materias} categoria={editando} onCancelar={() => { setFormAbierto(false); setEditando(null); }} onGuardada={() => { setFormAbierto(false); setEditando(null); cargar(); }} />
       ) : (
-        <button onClick={() => setFormAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white mb-3">+ Nueva categoría</button>
+        <div className="flex flex-wrap gap-2 mb-3">
+          <button onClick={() => setFormAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">+ Nueva categoría</button>
+          <button onClick={() => setMasivoAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-violet-200 text-violet-600" data-testid="btn-carga-masiva">📊 Carga masiva (Excel)</button>
+        </div>
       )}
 
       {cargando ? (
