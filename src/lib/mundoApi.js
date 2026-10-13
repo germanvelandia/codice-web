@@ -8,6 +8,7 @@ import { CONFIG_MONSTRUOS_DEFECTO, validarMonstruo, limpiarMonstruo, nivelDeXp, 
 import { CONFIG_LLAVES_DEFECTO, LLAVES, llaveDe, puedeConseguir, camaraDesbloqueada, validarLlavesConfig, llavesEfectivas } from "../game/llaves";
 import { resumirSeguimiento } from "../game/seguimiento";
 import { eventoVigente, elegirEvento, aplicarBono, aplicaA, validarEvento, limpiarEvento, normalizarEvento, preguntasJugables, jefeJugable, estadoEvento, textoHasta } from "../game/eventos";
+import { CONFIG_ALT_DEFECTO, configAlt, armarPoolAlt, estadoJuegoAlt, claveValida, validarPruebaAlt, limpiarPruebaAlt, normalizarPruebaAlt, clavesDeJuego, JUEGOS_ALT } from "../game/mundosAlt";
 import { ITEMS, RECETAS, MAX_POR_ITEM, PARCELA, esDecoracion, celdaValida, puedeFabricar, cantidadPorRecoleccion } from "../game/items";
 
 // Todo lo que el Mundo CÓDICE necesita de la base de datos: las misiones del mundo, cuáles
@@ -197,7 +198,7 @@ export const CONFIG_POSADA_DEFECTO = { posada_activa: 1, posada_costo: 15, posad
 export async function fetchConfigMundo() {
   const { data, error } = await supabase.from("mundo_config").select("*");
   if (error) throw error;
-  const cfg = { ...CONFIG_POSADA_DEFECTO, ...CONFIG_DUELO_DEFECTO, ...CONFIG_RETO_DEFECTO, ...CONFIG_RECOLECTA_DEFECTO, ...CONFIG_COMARCA_DEFECTO, ...CONFIG_LLAVES_DEFECTO, ...CONFIG_MONSTRUOS_DEFECTO };
+  const cfg = { ...CONFIG_POSADA_DEFECTO, ...CONFIG_DUELO_DEFECTO, ...CONFIG_RETO_DEFECTO, ...CONFIG_RECOLECTA_DEFECTO, ...CONFIG_COMARCA_DEFECTO, ...CONFIG_LLAVES_DEFECTO, ...CONFIG_MONSTRUOS_DEFECTO, ...CONFIG_ALT_DEFECTO };
   (data || []).forEach((f) => { if (f.clave in cfg && Number.isFinite(Number(f.valor))) cfg[f.clave] = Number(f.valor); });
   return cfg;
 }
@@ -1321,3 +1322,87 @@ export async function guardarEvento(campos, id = null) {
 }
 export async function alternarEvento(id, activo) { const { error } = await supabase.from("mundo_eventos").update({ activo }).eq("id", id); if (error) throw error; limpiarCacheEventos(); }
 export async function eliminarEvento(id) { const { error } = await supabase.from("mundo_eventos").delete().eq("id", id); if (error) throw error; limpiarCacheEventos(); }
+
+
+// =====================================================================================
+//  MUNDOS ALTERNOS · 🎲 la Oca y 🍄 las Plataformas
+//  Las preguntas salen del banco de trivia que elija la docente, de sus preguntas propias y de las misiones.
+//  El premio de cada prueba (tablero / nivel) se da UNA vez al día (hora de Colombia); si el premio falla, se deshace el registro.
+// =====================================================================================
+// Todo lo que necesita el juego de UN estudiante. Falla si falta el SQL 78.
+export async function fetchMundosAlt(estudianteId, { misiones = [], grado = "" } = {}) {
+  const cfg = configAlt(await fetchConfigMundo());
+  const hoy = diaColombia();
+  const { data: hechos, error } = await supabase.from("mundo_alt_hechos").select("juego, clave").eq("estudiante_id", estudianteId).eq("dia", hoy);
+  if (error) throw error;
+  const hechosHoy = (hechos || []).map((f) => `${f.juego}:${f.clave}`);
+  let propias = [];
+  try { const { data } = await supabase.from("mundo_alt_pruebas").select("*").eq("activa", true); propias = (data || []).map(normalizarPruebaAlt); } catch { propias = []; }
+  const bancoDe = async (id) => {
+    if (!(id > 0)) return [];
+    try { const { data } = await supabase.from("trivia_preguntas").select("pregunta, opciones, correcta").eq("categoria_id", id).eq("activa", true).limit(200); return data || []; } catch { return []; }
+  };
+  const juegos = {};
+  for (const j of Object.keys(JUEGOS_ALT)) {
+    const c = cfg[j], pool = armarPoolAlt({ juego: j, propias, banco: await bancoDe(c.banco), misiones, grado });
+    juegos[j] = { ...c, pool, estado: estadoJuegoAlt(j, c, pool, new Set(hechosHoy)), claves: clavesDeJuego(j).map((k) => ({ ...k, hoy: hechosHoy.includes(`${j}:${k.clave}`) })) };
+  }
+  return { activo: true, juegos, hechosHoy };
+}
+
+export async function registrarMundoAlt(estudianteId, { juego, clave, aciertos = 0, errores = 0, puntos = 0 } = {}, gradoId = null) {
+  if (!JUEGOS_ALT[juego] || !claveValida(juego, clave)) return { ok: false, mensaje: "Ese juego no existe." };
+  let c;
+  try { c = configAlt(await fetchConfigMundo())[juego]; } catch (e) { return { ok: false, mensaje: e.message }; }
+  if (!c.activo) return { ok: false, mensaje: "Este mundo está cerrado por ahora." };
+  const n = (v, max) => Math.min(max, Math.max(0, Math.floor(Number(v) || 0)));
+  const dia = diaColombia();
+  const { error } = await supabase.from("mundo_alt_hechos").insert({ estudiante_id: estudianteId, juego, clave, dia, aciertos: n(aciertos, 500), errores: n(errores, 500), puntos: n(puntos, 100000), xp: 0, oro: 0 });
+  if (error) {
+    if (error.code === "23505" || /duplicate|unique/i.test(error.message || "")) return { ok: true, yaEstaba: true };
+    return { ok: false, mensaje: error.message };
+  }
+  const b = await bonoEvento(estudianteId, c.xp, c.oro, gradoId);
+  const nombre = clavesDeJuego(juego).find((k) => k.clave === clave).nombre;
+  try {
+    let fila = null;
+    if (b.xp > 0 || b.oro > 0) {
+      const [, rpc] = await Promise.all([
+        supabase.from("historial_gamificacion").insert({ estudiante_id: estudianteId, etiqueta: `${JUEGOS_ALT[juego].emoji} ${JUEGOS_ALT[juego].nombre}: ${nombre}`, xp: b.xp, vida: 0, monedas: b.oro, categoria: "general" }),
+        supabase.rpc("ajustar_progreso", { p_estudiante_id: estudianteId, p_delta_xp: b.xp, p_delta_vida: 0, p_delta_monedas: b.oro }),
+      ]);
+      if (rpc.error) throw rpc.error;
+      fila = rpc.data?.[0];
+    }
+    try { await supabase.from("mundo_alt_hechos").update({ xp: b.xp, oro: b.oro }).eq("estudiante_id", estudianteId).eq("juego", juego).eq("clave", clave).eq("dia", dia); } catch { /* el detalle del premio es secundario */ }
+    return { ok: true, xp: fila?.xp, oro: fila?.monedas, premio: { xp: b.xp, oro: b.oro }, evento: b.evento, comarca: b.xp || b.oro ? await aportarAComarca(estudianteId, { xp: b.xp, oro: b.oro, motivo: `Mundo CÓDICE: ${JUEGOS_ALT[juego].nombre}` }) : null };
+  } catch (e) {
+    await supabase.from("mundo_alt_hechos").delete().eq("estudiante_id", estudianteId).eq("juego", juego).eq("clave", clave).eq("dia", dia);
+    return { ok: false, mensaje: (e && e.message) || "no se pudo entregar el premio" };
+  }
+}
+
+// ----- para el editor de la docente -----
+export async function fetchPruebasAlt() {
+  const { data, error } = await supabase.from("mundo_alt_pruebas").select("*").order("id", { ascending: false });
+  if (error) throw error;
+  return (data || []).map(normalizarPruebaAlt);
+}
+export async function guardarPruebaAlt(campos, id = null) {
+  const err = validarPruebaAlt(campos); if (err) throw new Error(err);
+  const limpio = limpiarPruebaAlt(campos);
+  if (id != null) { const { error } = await supabase.from("mundo_alt_pruebas").update(limpio).eq("id", id); if (error) throw error; }
+  else { const { data: u } = await supabase.auth.getUser(); const { error } = await supabase.from("mundo_alt_pruebas").insert({ ...limpio, docente_id: u?.user?.id || null }); if (error) throw error; }
+}
+export async function alternarPruebaAlt(id, activa) { const { error } = await supabase.from("mundo_alt_pruebas").update({ activa }).eq("id", id); if (error) throw error; }
+export async function eliminarPruebaAlt(id) { const { error } = await supabase.from("mundo_alt_pruebas").delete().eq("id", id); if (error) throw error; }
+// { oca: { hoy, total, estudiantes, aciertos, errores, porClave: {tablero: n} }, plat: {...} } con los últimos 30 días
+export async function fetchResumenAlt(dias = 30) {
+  const desde = diaColombia(Date.now() - dias * 86400000), hoy = diaColombia();
+  const { data, error } = await supabase.from("mundo_alt_hechos").select("estudiante_id, juego, clave, dia, aciertos, errores").gte("dia", desde);
+  if (error) throw error;
+  const r = {}; Object.keys(JUEGOS_ALT).forEach((j) => { r[j] = { hoy: 0, total: 0, estudiantes: new Set(), aciertos: 0, errores: 0, porClave: {} }; });
+  (data || []).forEach((f) => { const x = r[f.juego]; if (!x) return; x.total++; if (String(f.dia).slice(0, 10) === hoy) x.hoy++; x.estudiantes.add(f.estudiante_id); x.aciertos += f.aciertos || 0; x.errores += f.errores || 0; x.porClave[f.clave] = (x.porClave[f.clave] || 0) + 1; });
+  Object.values(r).forEach((x) => { x.estudiantes = x.estudiantes.size; });
+  return r;
+}
