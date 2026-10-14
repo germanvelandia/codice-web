@@ -3,6 +3,7 @@ import { supabase } from "./supabaseClient";
 import { gradoDeEstudiante, bonoEvento, aportarAComarca } from "./mundoApi";
 import { estadoModulos, resumenPorMateria, esCorrecta, errorActividad, errorModulo, limpiarActividad, ordenarModulos } from "./modulos";
 import { requeridos } from "./leccion";
+import { planNotas, errorNotaModulo, nombreColumnaNota, textoResumenNotas } from "./notasModulo";
 
 const lanzar = (error) => { if (error) { const e = new Error(error.message || "error"); e.code = error.code; throw e; } };
 const faltaTabla = (e) => /does not exist|relation|schema cache/i.test((e && e.message) || "");
@@ -28,13 +29,76 @@ export async function fetchModulosAdmin() {
   actividades.sort((a, b) => a.orden - b.orden || a.id - b.id);
   return { modulos: ordenarModulos(modulos), actividades, materias, cierres };
 }
-const camposModulo = (m, docente_id) => ({ materia_id: m.materia_id ? Number(m.materia_id) : null, grado_id: String(m.grado_id || ""), numero: Number(m.numero), nombre: String(m.nombre).trim(), descripcion: String(m.descripcion || "").trim().slice(0, 600), emoji: String(m.emoji || "📘").trim() || "📘", xp: Number(m.xp), oro: Number(m.oro), libre: !!m.libre, activo: m.activo !== false, ...(docente_id ? { docente_id } : {}) });
+const camposModulo = (m, docente_id) => ({ materia_id: m.materia_id ? Number(m.materia_id) : null, grado_id: String(m.grado_id || ""), numero: Number(m.numero), nombre: String(m.nombre).trim(), descripcion: String(m.descripcion || "").trim().slice(0, 600), emoji: String(m.emoji || "📘").trim() || "📘", xp: Number(m.xp), oro: Number(m.oro), libre: !!m.libre, activo: m.activo !== false, ...camposNota(m), ...(docente_id ? { docente_id } : {}) });
+// Los campos de nota solo se mandan si hacen falta (así nada se rompe si todavía no se corrió el SQL 82)
+const camposNota = (m) => (m.nota_activa === true || (m.id && "nota_activa" in m)
+  ? { nota_activa: !!m.nota_activa, nota_categoria_id: m.nota_activa && m.nota_categoria_id ? Number(m.nota_categoria_id) : null, nota_periodo: m.nota_activa ? String(m.nota_periodo ?? "") || null : null, nota_modo: m.nota_modo === "completo" ? "completo" : "proporcional", nota_nombre: String(m.nota_nombre || "").trim().slice(0, 120) || null, nota_auto: !!m.nota_activa && !!m.nota_auto }
+  : {});
+const errorSqlNota = (error) => { if (error && /nota_(activa|categoria|periodo|modo|nombre|auto)/i.test(error.message || "")) { const e = new Error("Falta ejecutar el archivo 82_modulos_nota.sql en Supabase para guardar notas desde los módulos."); throw e; } };
 export async function guardarModulo(m) {
   const e = errorModulo(m); if (e) throw new Error(e);
-  if (m.id) { const { error } = await supabase.from("modulos").update(camposModulo(m)).eq("id", m.id); lanzar(error); return m.id; }
+  if (m.id) { const { error } = await supabase.from("modulos").update(camposModulo(m)).eq("id", m.id); errorSqlNota(error); lanzar(error); return m.id; }
   const { data: u } = await supabase.auth.getUser();
-  const { data, error } = await supabase.from("modulos").insert(camposModulo(m, u?.user?.id || null)).select("id"); lanzar(error);
+  const { data, error } = await supabase.from("modulos").insert(camposModulo(m, u?.user?.id || null)).select("id"); errorSqlNota(error); lanzar(error);
   return data?.[0]?.id;
+}
+
+// ---------- notas en la Planilla ----------
+// Categorías y periodos de la materia (para el formulario del módulo)
+export async function fetchOpcionesNota(materiaId) {
+  const [c, cfg] = await Promise.all([supabase.from("notas_categorias").select("id,nombre,porcentaje").eq("materia_id", Number(materiaId)).order("id"), supabase.from("notas_config").select("*").eq("materia_id", Number(materiaId)).maybeSingle()]);
+  lanzar(c.error);
+  const config = cfg.data || { escala_min: 1, nota_maxima: 5, cantidad_periodos: 4 };
+  const n = Math.max(1, parseInt(config.cantidad_periodos, 10) || 4);
+  return { categorias: c.data || [], periodos: Array.from({ length: n }, (_, i) => String(i + 1)), config };
+}
+async function leerPaginado(tabla, cols, filtro) {
+  const todo = [];
+  for (let d = 0; ; d += 1000) {
+    let q = supabase.from(tabla).select(cols); if (filtro) q = filtro(q);
+    const { data, error } = await q.order("id").range(d, d + 999); lanzar(error);
+    todo.push(...(data || [])); if (!data || data.length < 1000) break;
+  }
+  return todo;
+}
+/**
+ * Escribe en la Planilla las notas del módulo (una columna por curso). Solo crea o sube notas, nunca baja una nota ya puesta.
+ * → { ok, mensaje, resumen } · con { simular: true } solo calcula
+ */
+export async function sincronizarNotasModulo(moduloId, { simular = false } = {}) {
+  const { data: m, error } = await supabase.from("modulos").select("*").eq("id", moduloId).maybeSingle(); lanzar(error);
+  if (!m) return { ok: false, mensaje: "El módulo ya no existe." };
+  if (!m.nota_activa) return { ok: false, mensaje: "Este módulo no está configurado para guardar nota." };
+  const falla = errorNotaModulo(m); if (falla) return { ok: false, mensaje: falla };
+  const [acts, avance, estudiantes, opciones] = await Promise.all([
+    leerPaginado("modulo_actividades", "id,activa", (q) => q.eq("modulo_id", m.id)), leerPaginado("modulo_avance", "estudiante_id,actividad_id", (q) => q.eq("modulo_id", m.id)),
+    leerPaginado("estudiantes", "id,nombre,grado_id,activo"), fetchOpcionesNota(m.materia_id),
+  ]);
+  if (!acts.some((a) => a.activa !== false)) return { ok: false, mensaje: "El módulo todavía no tiene actividades." };
+  const nombre = nombreColumnaNota(m), periodo = String(m.nota_periodo);
+  // notas que ya existen, por curso (cada curso tiene su propia columna)
+  const cursos = [...new Set(estudiantes.map((e) => String(e.grado_id)))], existentes = {}, columnas = {};
+  for (const g of cursos) {
+    const { data: col } = await supabase.from("notas_actividades").select("id").eq("materia_id", m.materia_id).eq("grado_id", g).eq("periodo", periodo).eq("nombre", nombre).maybeSingle();
+    if (col) { columnas[g] = col.id; const { data: vs } = await supabase.from("notas_valores").select("estudiante_id,valor").eq("actividad_id", col.id); (vs || []).forEach((v) => { existentes[v.estudiante_id] = v.valor; }); }
+  }
+  const plan = planNotas({ modulo: m, actividades: acts, estudiantes, avance, existentes, config: opciones.config });
+  if (simular || !plan.filas.length) return { ok: true, resumen: plan.resumen, mensaje: textoResumenNotas(plan.resumen) };
+  for (const g of [...new Set(plan.filas.map((f) => String(f.grado_id)))]) {
+    if (!columnas[g]) {
+      const { data, error: e1 } = await supabase.from("notas_actividades").insert({ nombre, categoria_id: m.nota_categoria_id, materia_id: m.materia_id, grado_id: g, periodo, es_automatica: false }).select("id"); lanzar(e1);
+      columnas[g] = data?.[0]?.id;
+    }
+    for (const f of plan.filas.filter((x) => String(x.grado_id) === g)) { const { error: e2 } = await supabase.from("notas_valores").upsert({ actividad_id: columnas[g], estudiante_id: f.estudiante_id, valor: f.nota }, { onConflict: "actividad_id,estudiante_id" }); lanzar(e2); }
+  }
+  return { ok: true, resumen: plan.resumen, mensaje: textoResumenNotas(plan.resumen) };
+}
+// Los módulos marcados como "automático": se ponen al día al abrir el panel de módulos
+export async function sincronizarNotasAutomaticas() {
+  let lista = []; try { const { data } = await supabase.from("modulos").select("id,nota_activa,nota_auto,activo").eq("nota_auto", true); lista = (data || []).filter((m) => m.nota_activa && m.activo !== false); } catch { return { modulos: 0, notas: 0, errores: 0 }; }
+  let notas = 0, errores = 0;
+  for (const m of lista) { try { const r = await sincronizarNotasModulo(m.id); if (r.ok && r.resumen) notas += r.resumen.crear + r.resumen.subir; else if (!r.ok) errores++; } catch { errores++; } }
+  return { modulos: lista.length, notas, errores };
 }
 export async function alternarModulo(id, activo) { const { error } = await supabase.from("modulos").update({ activo: !!activo }).eq("id", id); lanzar(error); }
 export async function eliminarModulo(id) { const { error } = await supabase.from("modulos").delete().eq("id", id); lanzar(error); }
