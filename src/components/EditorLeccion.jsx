@@ -1,6 +1,7 @@
 import React, { useRef, useState } from "react";
 import { TIPOS_BLOQUE, ESTILOS_DESTACADO, bloqueVacio, MAX_BLOQUES, normalizarBloque, errorBloque, avisoBloque, resumenLeccion } from "../lib/leccion";
 import { LeccionVista } from "./LeccionVista";
+import { subirImagenLeccion } from "../lib/imagenesLeccion";
 
 const input = "w-full text-sm rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none bg-white";
 const Campo = ({ etiqueta, children }) => <div className="mb-2"><label className="text-[11px] text-slate-500 block mb-1">{etiqueta}</label>{children}</div>;
@@ -21,6 +22,25 @@ function Lista({ items, vacio, max, min = 2, nuevo, render, etiquetaItem }) {
   );
 }
 
+// Botón para elegir una imagen del dispositivo (se reduce y se sube sola); entrega la dirección con onUrl
+function SubirImagen({ onUrl }) {
+  const [estado, setEstado] = useState("");   // "" | "subiendo" | "ok" | mensaje de error
+  const elegir = async (e) => {
+    const f = e.target.files && e.target.files[0]; e.target.value = ""; if (!f) return;
+    setEstado("subiendo");
+    try { onUrl(await subirImagenLeccion(f)); setEstado("ok"); } catch (er) { setEstado(er.message || "No se pudo subir la imagen."); }
+  };
+  return (
+    <div className="mb-2">
+      <label className={`inline-block text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-violet-300 text-violet-700 bg-white ${estado === "subiendo" ? "opacity-60" : "cursor-pointer"}`}>
+        {estado === "subiendo" ? "Subiendo…" : "📁 Subir una imagen desde mi dispositivo"}
+        <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" disabled={estado === "subiendo"} onChange={elegir} data-testid="subir-imagen" aria-label="Subir imagen" />
+      </label>
+      {estado === "ok" && <span className="text-[11px] text-emerald-600 ml-2" data-testid="imagen-subida">Imagen subida ✓</span>}
+      {estado && estado !== "ok" && estado !== "subiendo" && <p className="text-[11px] text-rose-600 mt-1" data-testid="error-subida">{estado}</p>}
+    </div>
+  );
+}
 const lineasDe = (v) => (Array.isArray(v) ? v.map((x) => (x && typeof x === "object" ? x.texto : x)).join("\n") : String(v ?? ""));
 // pregunta con 2 a 4 opciones (la usan la trivia y el laberinto)
 function CamposPregunta({ p, set, nombre }) {
@@ -38,7 +58,8 @@ function EditorDiagrama({ b, set }) {
   const clic = (e) => { if (ubicando == null) return; const r = e.currentTarget.getBoundingClientRect(); up(ubicando, { x: Math.round(Math.min(100, Math.max(0, ((e.clientX - r.left) / r.width) * 100))), y: Math.round(Math.min(100, Math.max(0, ((e.clientY - r.top) / r.height) * 100))) }); setUbicando(null); };
   return (<>
     <Txt v={b.titulo} set={(v) => set({ titulo: v })} etiqueta="Título (opcional)" max={120} />
-    <Txt v={b.url} set={(v) => { setRoto(false); set({ url: v }); }} etiqueta="Dirección de la imagen (https://…)" max={500} />
+    <SubirImagen onUrl={(u) => { setRoto(false); set({ url: u }); }} />
+    <Txt v={b.url} set={(v) => { setRoto(false); set({ url: v }); }} etiqueta="…o pega la dirección de la imagen (https://…)" max={500} />
     {b.url && !roto && <div className={`relative mb-2 ${ubicando != null ? "cursor-crosshair ring-2 ring-amber-400 rounded-lg" : ""}`} onClick={clic} data-testid="diag-lienzo">
       <img src={b.url} alt="" className="w-full rounded-lg block" draggable={false} onError={() => setRoto(true)} />
       {ets.map((x, i) => <span key={i} style={{ left: `${Number(x.x) || 0}%`, top: `${Number(x.y) || 0}%`, transform: "translate(-50%,-50%)" }} className="absolute w-6 h-6 rounded-full bg-violet-600 border-2 border-white text-white text-[10px] font-bold flex items-center justify-center pointer-events-none">{i + 1}</span>)}
@@ -66,7 +87,7 @@ function CamposBloque({ b, set }) {
     case "destacado": return (<>
       <Campo etiqueta="Tipo de recuadro"><select value={b.estilo} onChange={(e) => set({ estilo: e.target.value })} className={input} aria-label="Tipo de recuadro">{Object.entries(ESTILOS_DESTACADO).map(([k, v]) => <option key={k} value={k}>{v.emoji} {v.nombre}</option>)}</select></Campo>
       <Txt v={b.titulo} set={(v) => set({ titulo: v })} etiqueta="Título (opcional)" max={120} /><Txt v={b.contenido} set={(v) => set({ contenido: v })} etiqueta="Contenido" area={3} max={900} /><Txt v={b.fuente} set={(v) => set({ fuente: v })} etiqueta="Fuente (opcional, ej.: Mateo 5,3-12)" max={120} /></>);
-    case "imagen": return (<><Txt v={b.url} set={(v) => set({ url: v })} etiqueta="Dirección de la imagen (https://…)" max={500} /><Txt v={b.descripcion} set={(v) => set({ descripcion: v })} etiqueta="Descripción de la imagen" max={300} /><Txt v={b.pie} set={(v) => set({ pie: v })} etiqueta="Pie de foto (opcional)" max={300} /></>);
+    case "imagen": return (<><SubirImagen onUrl={(u) => set({ url: u })} /><Txt v={b.url} set={(v) => set({ url: v })} etiqueta="…o pega la dirección de la imagen (https://…)" max={500} />{b.url && <img src={b.url} alt="" className="w-full max-h-48 object-contain rounded-lg border border-slate-200 bg-white mb-2" data-testid="miniatura" />}<Txt v={b.descripcion} set={(v) => set({ descripcion: v })} etiqueta="Descripción de la imagen" max={300} /><Txt v={b.pie} set={(v) => set({ pie: v })} etiqueta="Pie de foto (opcional)" max={300} /></>);
     case "video": return (<><Txt v={b.url} set={(v) => set({ url: v })} etiqueta="Dirección del video (YouTube, Vimeo u otra)" max={500} /><Txt v={b.titulo} set={(v) => set({ titulo: v })} etiqueta="Título (opcional)" max={120} /></>);
     case "tarjetas": return (<><Txt v={b.titulo} set={(v) => set({ titulo: v })} etiqueta="Título (opcional)" max={120} />
       <Lista etiquetaItem="Tarjeta" items={{ value: b.tarjetas, set: (v) => set({ tarjetas: v }) }} max={12} nuevo={() => ({ frente: "", reverso: "" })} render={(t, up) => (<><Txt v={t.frente} set={(v) => up({ frente: v })} etiqueta="Por delante (término)" max={120} /><Txt v={t.reverso} set={(v) => up({ reverso: v })} etiqueta="Por detrás (significado)" max={300} area={2} /></>)} /></>);
