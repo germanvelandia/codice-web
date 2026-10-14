@@ -4,6 +4,7 @@
 //  El módulo se completa cuando todas sus actividades activas están hechas; el siguiente se desbloquea (salvo módulos "libres").
 // =====================================================================================
 import { misionVisiblePara } from "./gradosMundo";
+import { errorNotaModulo } from "./notasModulo";
 import { urlSegura, videoIncrustable, errorLeccion, normalizarLeccion, ESPECIFICACION_BLOQUES } from "./leccion";
 
 export const TIPOS_ACTIVIDAD = {
@@ -51,7 +52,7 @@ export const errorModulo = (m) => {
   if (!String(m.nombre || "").trim()) return "Ponle un nombre al módulo.";
   const n = Number(m.numero); if (!Number.isInteger(n) || n < 1 || n > 999) return "El número del módulo tiene que ser entero entre 1 y 999.";
   for (const [k, t] of [["xp", "El XP"], ["oro", "El oro"]]) { const v = Number(m[k]); if (m[k] === "" || !Number.isInteger(v) || v < 0 || v > 500) return `${t} tiene que ser un número entero entre 0 y 500.`; }
-  return "";
+  return errorNotaModulo(m);
 };
 
 // ¿Es correcta la respuesta? (idx = posición elegida)
