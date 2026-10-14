@@ -2,12 +2,14 @@ import React, { useEffect, useRef, useState } from "react";
 import * as api from "../lib/modulosApi";
 import { TIPOS_ACTIVIDAD, EMOJIS_MODULO, errorActividad, errorModulo, ordenarModulos } from "../lib/modulos";
 import { errorLeccion } from "../lib/leccion";
+import { MODOS_NOTA, notaDeModulo } from "../lib/notasModulo";
 import { CrearModuloIA, CrearLeccionIA } from "./ModulosIA";
 import { EditorLeccion } from "./EditorLeccion";
+import { ModuloPrevia } from "./ModulosEstudiante";
 import { nivelesDe, esNivel, claveNivel, nombreNivel, etiquetaPara } from "../lib/gradosMundo";
 
 const input = "w-full text-sm rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none bg-white";
-const moduloVacio = (materiaId, numero, curso) => ({ materia_id: materiaId || "", grado_id: curso || "", numero: String(numero), nombre: "", descripcion: "", emoji: "📘", xp: "30", oro: "10", libre: false, activo: true });
+const moduloVacio = (materiaId, numero, curso) => ({ materia_id: materiaId || "", grado_id: curso || "", numero: String(numero), nombre: "", descripcion: "", emoji: "📘", xp: "30", oro: "10", libre: false, activo: true, nota_activa: false, nota_categoria_id: "", nota_periodo: "", nota_modo: "proporcional", nota_nombre: "", nota_auto: false });
 const actividadVacia = () => ({ tipo: "lectura", titulo: "", contenido: "", opciones: ["", "", "", ""], correcta: 0, activa: true });
 
 // Panel de la docente: crea módulos de estudio por materia, con sus actividades. grados = [{ id }] (los cursos que existen)
@@ -21,19 +23,23 @@ export function ModulosAdmin({ grados = [] }) {
   const [conIA, setConIA] = useState(false);
   const [formA, setFormA] = useState(null);       // { moduloId, ...actividad }
   const [leccion, setLeccion] = useState(null);   // lección en el editor de bloques: { moduloId, id?, titulo, bloques }
+  const [previa, setPrevia] = useState(null);   // módulo que se está previsualizando
   const [leccionIA, setLeccionIA] = useState(null); // módulo al que se le agrega una lección con IA
   const [reflexiones, setReflexiones] = useState(null); // { actividad, filas } lo que escribieron los estudiantes
   const [guardando, setGuardando] = useState(false);
   const reloj = useRef(null);
   useEffect(() => () => clearTimeout(reloj.current), []);
-  const avisar = (t) => { setAviso(t); clearTimeout(reloj.current); reloj.current = setTimeout(() => setAviso(""), 2400); };
+  const [opcionesNota, setOpcionesNota] = useState(null);   // { categorias, periodos, config } de la materia del formulario
+  const avisar = (t, ms = 2400) => { setAviso(t); clearTimeout(reloj.current); reloj.current = setTimeout(() => setAviso(""), ms); };
   const cursos = [...new Set(grados.map((g) => String(g.id)))], niveles = nivelesDe(cursos);
 
   const cargar = async () => {
     try { setDatos(await api.fetchModulosAdmin()); }
     catch (e) { if (api.sinTablasModulos(e)) setFaltaSql(true); else setError(e.message || "No se pudieron cargar los módulos."); setDatos({ modulos: [], actividades: [], materias: [], cierres: {} }); }
   };
-  useEffect(() => { cargar(); }, []);
+  useEffect(() => { (async () => { await cargar(); try { const r = await api.sincronizarNotasAutomaticas(); if (r.notas > 0) avisar(`📒 Se actualizaron ${r.notas} ${r.notas === 1 ? "nota" : "notas"} en la planilla.`, 5000); } catch { /* sin notas automáticas */ } })(); }, []);
+  const materiaNota = formM && formM.nota_activa && formM.materia_id ? Number(formM.materia_id) : null;
+  useEffect(() => { let vivo = true; setOpcionesNota(null); if (materiaNota) api.fetchOpcionesNota(materiaNota).then((o) => vivo && setOpcionesNota(o)).catch(() => vivo && setOpcionesNota({ categorias: [], periodos: ["1", "2", "3", "4"], config: {}, error: true })); return () => { vivo = false; }; }, [materiaNota]);
   if (!datos) return <p className="text-sm text-slate-400">Cargando…</p>;
   if (faltaSql) return <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3">Todavía no se crearon las tablas de los módulos. Corre <b>79_modulos_estudio.sql</b> en el editor SQL de Supabase y vuelve a abrir esto.</div>;
 
@@ -84,6 +90,7 @@ export function ModulosAdmin({ grados = [] }) {
       </div>
     );
   }
+  if (previa) return <ModuloPrevia modulo={previa} actividades={datos.actividades.filter((a) => a.modulo_id === previa.id)} onVolver={() => setPrevia(null)} />;
   if (leccionIA) {
     const del = datos.actividades.filter((a) => a.modulo_id === leccionIA.id);
     return <CrearLeccionIA modulo={leccionIA} siguienteOrden={1 + Math.max(0, ...del.map((a) => a.orden || 0))} onCerrar={() => setLeccionIA(null)}
@@ -140,6 +147,29 @@ export function ModulosAdmin({ grados = [] }) {
         </div>
         <label className="flex items-center gap-2 text-sm text-slate-700 mb-1"><input type="checkbox" checked={formM.libre} onChange={(e) => setM("libre", e.target.checked)} /> Módulo libre (se puede abrir sin haber terminado el anterior)</label>
         <label className="flex items-center gap-2 text-sm text-slate-700 mb-4"><input type="checkbox" checked={formM.activo} onChange={(e) => setM("activo", e.target.checked)} /> Visible para los estudiantes</label>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 mb-4" data-testid="seccion-nota">
+          <label className="flex items-center gap-2 text-sm font-semibold text-slate-800"><input type="checkbox" checked={!!formM.nota_activa} onChange={(e) => setM("nota_activa", e.target.checked)} data-testid="nota-activa" /> 📒 Guardar el avance de este módulo como nota en la Planilla</label>
+          {formM.nota_activa && (!formM.materia_id
+            ? <p className="text-[11px] text-amber-700 mt-2">Primero elige la materia del módulo (arriba): la nota se guarda en la planilla de esa materia.</p>
+            : !opcionesNota ? <p className="text-[11px] text-slate-400 mt-2">Cargando las categorías de la planilla…</p>
+            : (
+              <div className="mt-2 space-y-2">
+                {!opcionesNota.categorias.length && <p className="text-[11px] text-amber-700">Esta materia todavía no tiene categorías en la Planilla. Crea una (por ejemplo «Talleres») en Planillas y vuelve aquí.</p>}
+                <div className="grid sm:grid-cols-2 gap-2">
+                  <div><label className="text-[11px] text-slate-500 block mb-1">Categoría de la planilla</label>
+                    <select value={formM.nota_categoria_id || ""} onChange={(e) => setM("nota_categoria_id", e.target.value)} className={input} aria-label="Categoría de la nota"><option value="">Elige…</option>{opcionesNota.categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}{c.porcentaje != null ? ` (${c.porcentaje}%)` : ""}</option>)}</select></div>
+                  <div><label className="text-[11px] text-slate-500 block mb-1">Periodo</label>
+                    <select value={formM.nota_periodo || ""} onChange={(e) => setM("nota_periodo", e.target.value)} className={input} aria-label="Periodo de la nota"><option value="">Elige…</option>{opcionesNota.periodos.map((p) => <option key={p} value={p}>Periodo {p}</option>)}</select></div>
+                </div>
+                <div><label className="text-[11px] text-slate-500 block mb-1">¿Cómo se calcula la nota?</label>
+                  <select value={formM.nota_modo || "proporcional"} onChange={(e) => setM("nota_modo", e.target.value)} className={input} aria-label="Modo de la nota">{Object.entries(MODOS_NOTA).map(([k, v]) => <option key={k} value={k}>{v.nombre}</option>)}</select>
+                  <p className="text-[11px] text-slate-500 mt-1">{(MODOS_NOTA[formM.nota_modo || "proporcional"] || {}).desc}</p></div>
+                <div><label className="text-[11px] text-slate-500 block mb-1">Nombre de la columna (opcional)</label>
+                  <input value={formM.nota_nombre || ""} maxLength={120} onChange={(e) => setM("nota_nombre", e.target.value)} className={input} aria-label="Nombre de la columna" placeholder={`Módulo ${formM.numero || "N"} — ${formM.nombre || "nombre del módulo"}`} /></div>
+                <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={!!formM.nota_auto} onChange={(e) => setM("nota_auto", e.target.checked)} data-testid="nota-auto" /> Actualizar las notas solas cada vez que abra este panel</label>
+                <p className="text-[11px] text-slate-500">Escala {opcionesNota.config.escala_min ?? 1}–{opcionesNota.config.nota_maxima ?? 5}: por ejemplo, con 4 actividades, si completa 2 saca {notaDeModulo({ total: 4, hechas: 2, escalaMin: opcionesNota.config.escala_min ?? 1, notaMax: opcionesNota.config.nota_maxima ?? 5 })}. Solo se crean o suben notas: nunca se baja una nota que ya pusiste. Se crea una columna por curso.</p>
+              </div>))}
+        </div>
         <div className="flex justify-end gap-2">
           <button onClick={() => { setFormM(null); setError(""); }} className="text-xs text-slate-500 px-3 py-1.5">Cancelar</button>
           <button disabled={guardando} onClick={guardarM} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60" data-testid="btn-guardar-modulo">{guardando ? "Guardando…" : "Guardar módulo"}</button>
@@ -177,8 +207,10 @@ export function ModulosAdmin({ grados = [] }) {
                   <div className="flex items-center gap-2 p-3">
                     <button onClick={() => setAbierto(abiertoAqui ? null : m.id)} className="flex-1 text-left" aria-label={`Abrir módulo ${m.numero}`}>
                       <div className="text-sm font-semibold text-slate-800">{m.emoji} Módulo {m.numero} · {m.nombre}{!m.activo && <span className="ml-2 text-[10px] bg-slate-200 text-slate-600 rounded px-1">oculto</span>}</div>
-                      <div className="text-[11px] text-slate-500">{acts.length} {acts.length === 1 ? "actividad" : "actividades"} · {m.xp} XP + {m.oro} oro · {etiquetaPara(m.grado_id)}{m.libre ? " · libre" : ""} · lo completaron {datos.cierres[m.id] || 0}</div>
+                      <div className="text-[11px] text-slate-500">{acts.length} {acts.length === 1 ? "actividad" : "actividades"} · {m.xp} XP + {m.oro} oro · {etiquetaPara(m.grado_id)}{m.libre ? " · libre" : ""} · lo completaron {datos.cierres[m.id] || 0}{m.nota_activa ? ` · 📒 va a la planilla (periodo ${m.nota_periodo})` : ""}</div>
                     </button>
+                    {m.nota_activa && <button onClick={() => accion(async () => { const r = await api.sincronizarNotasModulo(m.id); setAviso(""); avisar(r.ok ? `📒 ${r.mensaje}` : r.mensaje, 7000); })} className="text-xs font-semibold text-emerald-700 hover:underline" aria-label="Actualizar notas" data-testid={`notas-${m.id}`}>📒 Actualizar notas</button>}
+                    <button onClick={() => setPrevia(m)} className="text-xs font-semibold text-violet-600 hover:underline" aria-label="Vista previa del módulo" data-testid={`previa-${m.id}`}>👁 Vista previa</button>
                     <button onClick={() => { setError(""); setFormM({ ...m, materia_id: m.materia_id || "", numero: String(m.numero), xp: String(m.xp), oro: String(m.oro) }); }} className="text-xs text-slate-400 hover:text-violet-600" aria-label="Editar módulo">✏️</button>
                     <button onClick={() => accion(() => api.alternarModulo(m.id, !m.activo), m.activo ? "Módulo oculto" : "Módulo visible")} className="text-xs text-slate-400 hover:text-violet-600" aria-label="Mostrar u ocultar">{m.activo ? "👁" : "🚫"}</button>
                     <button onClick={() => { if (confirm(`¿Eliminar el módulo "${m.nombre}" con sus actividades y el avance de los estudiantes?`)) accion(() => api.eliminarModulo(m.id), "Módulo eliminado"); }} className="text-xs text-slate-400 hover:text-rose-500" aria-label="Eliminar módulo">🗑</button>
