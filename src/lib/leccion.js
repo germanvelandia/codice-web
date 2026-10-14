@@ -5,6 +5,7 @@
 //  Incluye: validación, el generador de crucigramas, el lector de la respuesta de una IA y las instrucciones que se le dan.
 // =====================================================================================
 import { soloLetras, parsearPalabras } from "../game/acertijos";
+import { clave, parsearHuecos, piezasAnagrama } from "./juegos";
 
 // ---------- enlaces ----------
 // Solo http/https: evita "javascript:" escrito por error o a propósito
@@ -37,6 +38,17 @@ export const TIPOS_BLOQUE = {
   sopa: { nombre: "Sopa de letras", desc: "Encontrar palabras escondidas", emoji: "🔤" },
   crucigrama: { nombre: "Crucigrama", desc: "Completar con las pistas", emoji: "🧩" },
   criptograma: { nombre: "Criptograma", desc: "Descifrar una frase secreta", emoji: "🔐" },
+  unir: { nombre: "Unir columnas", desc: "Relacionar cada elemento con su pareja", emoji: "🔗" },
+  clasificar: { nombre: "Clasificar en grupos", desc: "Arrastrar cada elemento a su categoría", emoji: "🗂️" },
+  memorama: { nombre: "Memorama", desc: "Voltear cartas y encontrar las parejas", emoji: "🧠" },
+  diagrama: { nombre: "Diagrama etiquetado", desc: "Colocar el nombre de cada parte en una imagen", emoji: "📍" },
+  completar: { nombre: "Completar los espacios", desc: "Texto con huecos para llenar", emoji: "✏️" },
+  anagrama: { nombre: "Ordenar letras o palabras", desc: "Anagrama de una palabra o de una oración", emoji: "🔀" },
+  linea: { nombre: "Línea de tiempo", desc: "Ordenar eventos o pasos en una línea", emoji: "⏳" },
+  jerarquia: { nombre: "Ordenar por jerarquía", desc: "Pirámide o lista por importancia o tamaño", emoji: "🔺" },
+  trivia: { nombre: "Trivia con tiempo", desc: "Preguntas contra reloj: más rápido, más puntos", emoji: "⏱️" },
+  ruleta: { nombre: "Ruleta", desc: "Gira y sale un tema o una pregunta", emoji: "🎡" },
+  laberinto: { nombre: "Laberinto de respuestas", desc: "Llegar a la respuesta correcta esquivando enemigos", emoji: "👾" },
 };
 export const ESTILOS_DESTACADO = { idea: { nombre: "Idea clave", emoji: "💡" }, cita: { nombre: "Cita bíblica", emoji: "📖" }, oracion: { nombre: "Oración", emoji: "🙏" } };
 export const MAX_BLOQUES = 60;
@@ -60,9 +72,21 @@ export function bloqueVacio(tipo) {
     case "sopa": return { id, tipo, titulo: "", palabras: [] };
     case "crucigrama": return { id, tipo, titulo: "", entradas: [{ palabra: "", pista: "" }, { palabra: "", pista: "" }, { palabra: "", pista: "" }, { palabra: "", pista: "" }] };
     case "criptograma": return { id, tipo, titulo: "", frase: "", pista: "" };
+    case "unir": return { id, tipo, titulo: "", pares: [{ izq: "", der: "" }, { izq: "", der: "" }, { izq: "", der: "" }] };
+    case "clasificar": return { id, tipo, titulo: "", categorias: [{ nombre: "", elementos: "" }, { nombre: "", elementos: "" }] };
+    case "memorama": return { id, tipo, titulo: "", parejas: [{ a: "", b: "" }, { a: "", b: "" }, { a: "", b: "" }] };
+    case "diagrama": return { id, tipo, titulo: "", url: "", etiquetas: [{ nombre: "", x: 30, y: 30 }, { nombre: "", x: 70, y: 70 }] };
+    case "completar": return { id, tipo, titulo: "", texto: "", modo: "banco", distractores: "" };
+    case "anagrama": return { id, tipo, titulo: "", modo: "letras", items: [{ texto: "", pista: "" }, { texto: "", pista: "" }] };
+    case "linea": return { id, tipo, titulo: "", inicio: "", fin: "", items: [{ texto: "", etiqueta: "" }, { texto: "", etiqueta: "" }, { texto: "", etiqueta: "" }] };
+    case "jerarquia": return { id, tipo, titulo: "", inicio: "", fin: "", items: [{ texto: "", etiqueta: "" }, { texto: "", etiqueta: "" }, { texto: "", etiqueta: "" }] };
+    case "trivia": return { id, tipo, titulo: "", segundos: 20, preguntas: [bloquePregunta(), bloquePregunta()] };
+    case "ruleta": return { id, tipo, titulo: "", items: "" };
+    case "laberinto": return { id, tipo, titulo: "", pregunta: "", opciones: ["", "", "", ""], correcta: 0, explicacion: "", enemigos: 1 };
     default: return null;
   }
 }
+const bloquePregunta = () => ({ pregunta: "", opciones: ["", "", "", ""], correcta: 0, explicacion: "" });
 
 // Convierte la "correcta" venga como venga (número desde 0, letra A–D, o el texto de la opción) en un índice sobre la lista ORIGINAL de opciones
 function indiceCorrecta(c, originales) {
@@ -73,6 +97,15 @@ function indiceCorrecta(c, originales) {
   const k = originales.findIndex((o) => String(o ?? "").trim().toLowerCase() === s.toLowerCase()); return k;
 }
 const lista = (v) => (Array.isArray(v) ? v : []);
+
+function normPregunta(b) {
+  const orig = lista(b?.opciones).slice(0, 4), k = indiceCorrecta(b?.correcta, orig), ops = []; let nueva = -1;
+  orig.forEach((o, j) => { const x = t(o, L.opcion); if (x) { if (j === k) nueva = ops.length; ops.push(x); } });
+  return { pregunta: t(b?.pregunta, L.pregunta), opciones: ops, correcta: nueva, explicacion: t(b?.explicacion, L.explicacion) };
+}
+// Lista que puede venir como arreglo o como texto (una por línea o separadas por ;)
+const lineas = (v, max, n) => (Array.isArray(v) ? v : String(v ?? "").split(/[\n;]+/)).map((x) => t(typeof x === "object" && x ? x.texto : x, max)).filter(Boolean).filter((x, i, a) => a.findIndex((y) => clave(y) === clave(x)) === i).slice(0, n);
+const num = (v, min, max, def) => { const x = Number(v); return Number.isFinite(x) ? Math.min(max, Math.max(min, x)) : def; };
 
 // Limpia un bloque (recorta textos, corrige formatos). Devuelve null si el tipo no existe.
 export function normalizarBloque(b, i = 0) {
@@ -88,11 +121,7 @@ export function normalizarBloque(b, i = 0) {
     case "tarjetas": return { ...base, titulo: t(b.titulo, L.titulo), tarjetas: lista(b.tarjetas).map((x) => ({ frente: t(x?.frente, 120), reverso: t(x?.reverso, L.corto) })).filter((x) => x.frente || x.reverso).slice(0, 12) };
     case "descubre": return { ...base, titulo: t(b.titulo, L.titulo), items: lista(b.items).map((x) => ({ titulo: t(x?.titulo, L.titulo), contenido: t(x?.contenido, 1500) })).filter((x) => x.titulo || x.contenido).slice(0, 10) };
     case "pasos": return { ...base, titulo: t(b.titulo, L.titulo), pasos: lista(b.pasos).map((x) => ({ titulo: t(x?.titulo, L.titulo), contenido: t(x?.contenido, 1000) })).filter((x) => x.titulo || x.contenido).slice(0, 10) };
-    case "pregunta": {
-      const orig = lista(b.opciones).slice(0, 4), k = indiceCorrecta(b.correcta, orig), ops = []; let nueva = -1;
-      orig.forEach((o, j) => { const x = t(o, L.opcion); if (x) { if (j === k) nueva = ops.length; ops.push(x); } });
-      return { ...base, pregunta: t(b.pregunta, L.pregunta), opciones: ops, correcta: nueva, explicacion: t(b.explicacion, L.explicacion) };
-    }
+    case "pregunta": return { ...base, ...normPregunta(b) };
     case "reflexion": return { ...base, consigna: t(b.consigna, L.corto * 2), ayuda: t(b.ayuda, L.corto) };
     case "enlace": return { ...base, texto: t(b.texto, 80), url: urlSegura(b.url), descripcion: t(b.descripcion, L.corto) };
     case "sopa": { const crudas = Array.isArray(b.palabras) ? b.palabras.join(",") : String(b.palabras ?? ""); return { ...base, titulo: t(b.titulo, L.titulo), palabras: parsearPalabras(crudas) }; }
@@ -102,6 +131,16 @@ export function normalizarBloque(b, i = 0) {
       return { ...base, titulo: t(b.titulo, L.titulo), entradas: entradas.slice(0, 12) };
     }
     case "criptograma": return { ...base, titulo: t(b.titulo, L.titulo), frase: t(b.frase, 160), pista: t(b.pista, 160) };
+    case "unir": return { ...base, titulo: t(b.titulo, L.titulo), pares: lista(b.pares).map((x) => ({ izq: t(x?.izq, 120), der: t(x?.der, 120) })).filter((x) => x.izq || x.der).slice(0, 8) };
+    case "clasificar": return { ...base, titulo: t(b.titulo, L.titulo), categorias: lista(b.categorias).map((x) => ({ nombre: t(x?.nombre, 60), elementos: lineas(x?.elementos, 80, 12) })).filter((x) => x.nombre || x.elementos.length).slice(0, 4) };
+    case "memorama": return { ...base, titulo: t(b.titulo, L.titulo), parejas: lista(b.parejas).map((x) => ({ a: t(x?.a, 60), b: t(x?.b, 60) })).filter((x) => x.a || x.b).slice(0, 8) };
+    case "diagrama": return { ...base, titulo: t(b.titulo, L.titulo), url: urlSegura(b.url), etiquetas: lista(b.etiquetas).map((x) => ({ nombre: t(x?.nombre, 40), x: Math.round(num(x?.x, 0, 100, 50)), y: Math.round(num(x?.y, 0, 100, 50)) })).filter((x) => x.nombre).slice(0, 10) };
+    case "completar": return { ...base, titulo: t(b.titulo, L.titulo), texto: t(b.texto, 1500), modo: b.modo === "escribir" ? "escribir" : "banco", distractores: lineas(Array.isArray(b.distractores) ? b.distractores : String(b.distractores ?? "").split(/[,;\n]+/), 40, 8) };
+    case "anagrama": { const modo = b.modo === "frase" ? "frase" : "letras"; return { ...base, titulo: t(b.titulo, L.titulo), modo, items: lista(b.items).map((x) => ({ texto: t(x?.texto, modo === "frase" ? 160 : 30), pista: t(x?.pista, 160) })).filter((x) => x.texto).slice(0, 8) }; }
+    case "linea": case "jerarquia": return { ...base, titulo: t(b.titulo, L.titulo), inicio: t(b.inicio, 40), fin: t(b.fin, 40), items: lista(b.items).map((x) => ({ texto: t(x?.texto, 150), etiqueta: t(x?.etiqueta, 30) })).filter((x) => x.texto || x.etiqueta).slice(0, 10) };
+    case "trivia": return { ...base, titulo: t(b.titulo, L.titulo), segundos: Math.round(num(b.segundos, 5, 60, 20)), preguntas: lista(b.preguntas).map(normPregunta).slice(0, 10) };
+    case "ruleta": return { ...base, titulo: t(b.titulo, L.titulo), items: lineas(b.items, 100, 12) };
+    case "laberinto": return { ...base, titulo: t(b.titulo, L.titulo), ...normPregunta(b), enemigos: Math.round(num(b.enemigos, 0, 3, 1)) };
     default: return null;
   }
 }
@@ -170,6 +209,14 @@ export function crearCrucigrama(entradas, { rand = Math.random, intentos = 30 } 
 
 // ---------- validación ----------
 const N = (b) => TIPOS_BLOQUE[b.tipo].nombre;
+function errorPregunta(b) {
+  if (!b.pregunta) return "Falta el enunciado de la pregunta.";
+  if (b.opciones.length < 2) return "La pregunta necesita al menos 2 opciones.";
+  if (new Set(b.opciones.map((o) => o.toLowerCase())).size !== b.opciones.length) return "La pregunta tiene opciones repetidas.";
+  if (!(b.correcta >= 0 && b.correcta < b.opciones.length)) return "No se sabe cuál es la opción correcta.";
+  return "";
+}
+const repetidos = (arr) => new Set(arr.map(clave)).size !== arr.length;
 // b ya normalizado → mensaje de error ("" si está bien)
 export function errorBloque(b) {
   switch (b.tipo) {
@@ -179,12 +226,7 @@ export function errorBloque(b) {
     case "tarjetas": return b.tarjetas.length < 2 ? "Las tarjetas necesitan al menos 2 (frente y reverso)." : b.tarjetas.some((x) => !x.frente || !x.reverso) ? "Cada tarjeta necesita frente y reverso." : "";
     case "descubre": return b.items.length < 2 ? "«Toca para descubrir» necesita al menos 2 secciones." : b.items.some((x) => !x.titulo || !x.contenido) ? "Cada sección necesita título y contenido." : "";
     case "pasos": return b.pasos.length < 2 ? "El paso a paso necesita al menos 2 pasos." : b.pasos.some((x) => !x.contenido && !x.titulo) ? "Hay pasos vacíos." : "";
-    case "pregunta":
-      if (!b.pregunta) return "Falta el enunciado de la pregunta.";
-      if (b.opciones.length < 2) return "La pregunta necesita al menos 2 opciones.";
-      if (new Set(b.opciones.map((o) => o.toLowerCase())).size !== b.opciones.length) return "La pregunta tiene opciones repetidas.";
-      if (!(b.correcta >= 0 && b.correcta < b.opciones.length)) return "No se sabe cuál es la opción correcta.";
-      return "";
+    case "pregunta": return errorPregunta(b);
     case "reflexion": return b.consigna ? "" : "Falta la consigna de la reflexión.";
     case "enlace": return !b.texto ? "Falta el texto del botón." : !b.url ? "El botón necesita una dirección web válida (http:// o https://)." : "";
     case "sopa": return b.palabras.length < 3 ? "La sopa de letras necesita al menos 3 palabras (de 3 a 14 letras)." : "";
@@ -195,6 +237,49 @@ export function errorBloque(b) {
       return c.imposible ? "Las palabras del crucigrama no se pueden cruzar entre sí: usa palabras que compartan letras." : "";
     }
     case "criptograma": { const l = [...new Set([...b.frase].map((c) => soloLetras(c)).filter(Boolean))]; return soloLetras(b.frase).length < 8 || l.length < 4 ? "La frase del criptograma es muy corta (mínimo 8 letras y 4 letras distintas)." : l.length > 26 ? "La frase tiene demasiadas letras distintas." : ""; }
+    case "unir":
+      if (b.pares.length < 2) return "«Unir columnas» necesita al menos 2 parejas.";
+      if (b.pares.some((x) => !x.izq || !x.der)) return "Cada pareja necesita los dos lados.";
+      return repetidos(b.pares.map((x) => x.izq)) || repetidos(b.pares.map((x) => x.der)) ? "Hay elementos repetidos en una columna: cada uno debe tener una sola pareja." : "";
+    case "clasificar": {
+      if (b.categorias.length < 2) return "Clasificar necesita al menos 2 categorías.";
+      if (b.categorias.some((c) => !c.nombre)) return "Cada categoría necesita un nombre.";
+      if (b.categorias.some((c) => !c.elementos.length)) return "Cada categoría necesita al menos 1 elemento.";
+      const todos = b.categorias.flatMap((c) => c.elementos);
+      if (todos.length < 3) return "Clasificar necesita al menos 3 elementos en total.";
+      if (todos.length > 16) return "Clasificar admite máximo 16 elementos en total.";
+      const dup = todos.find((x, i) => todos.findIndex((y) => clave(y) === clave(x)) !== i);
+      return dup ? `«${dup}» está en dos categorías: cada elemento debe pertenecer a una sola.` : "";
+    }
+    case "memorama":
+      if (b.parejas.length < 2) return "El memorama necesita al menos 2 parejas.";
+      if (b.parejas.some((x) => !x.a || !x.b)) return "Cada pareja del memorama necesita sus dos cartas.";
+      return repetidos(b.parejas.flatMap((x) => [x.a, x.b])) ? "Hay cartas repetidas en el memorama: cada carta debe ser distinta." : "";
+    case "diagrama":
+      if (!b.url) return "El diagrama necesita la dirección de la imagen (https://…).";
+      if (b.etiquetas.length < 2) return "El diagrama necesita al menos 2 puntos con su nombre.";
+      return repetidos(b.etiquetas.map((x) => x.nombre)) ? "Hay nombres repetidos en el diagrama." : "";
+    case "completar": {
+      const h = parsearHuecos(b.texto).huecos;
+      if (!b.texto) return "Escribe el texto con los espacios por completar.";
+      if (h < 1) return "Marca las palabras que faltan entre dobles corchetes, por ejemplo: Dios es [[amor]].";
+      return h > 12 ? "Máximo 12 espacios por texto." : "";
+    }
+    case "anagrama":
+      if (!b.items.length) return "Agrega al menos una palabra u oración.";
+      if (b.modo === "letras") return b.items.some((x) => /\s/.test(x.texto) || piezasAnagrama(x.texto, "letras").length < 3) ? "Cada palabra debe tener de 3 a 14 letras, sin espacios." : "";
+      return b.items.some((x) => piezasAnagrama(x.texto, "frase").length < 3 || piezasAnagrama(x.texto, "frase").length > 12) ? "Cada oración debe tener de 3 a 12 palabras." : "";
+    case "linea": case "jerarquia":
+      if (b.items.length < 3) return "Necesita al menos 3 elementos (escríbelos en el orden correcto).";
+      if (b.items.some((x) => !x.texto)) return "Cada elemento necesita su texto.";
+      return repetidos(b.items.map((x) => x.texto)) ? "Hay elementos repetidos." : "";
+    case "trivia": {
+      if (b.preguntas.length < 2) return "La trivia necesita al menos 2 preguntas.";
+      for (let i = 0; i < b.preguntas.length; i++) { const e = errorPregunta(b.preguntas[i]); if (e) return `Pregunta ${i + 1} de la trivia: ${e}`; }
+      return "";
+    }
+    case "ruleta": return b.items.length < 3 ? "La ruleta necesita al menos 3 opciones." : "";
+    case "laberinto": return errorPregunta(b);
     default: return "Bloque desconocido.";
   }
 }
@@ -202,6 +287,8 @@ export function errorBloque(b) {
 export function avisoBloque(b) {
   if (b.tipo === "imagen" && !b.url) return "Imagen sin dirección: agrega el enlace de la imagen o el bloque no se mostrará.";
   if (b.tipo === "video" && !b.url) return "Video sin dirección: agrega el enlace o el bloque no se mostrará.";
+  if (b.tipo === "diagrama" && b.etiquetas.some((x, i) => b.etiquetas.some((y, k) => k > i && Math.abs(x.x - y.x) < 6 && Math.abs(x.y - y.y) < 6))) return "Hay puntos del diagrama muy juntos: sepáralos un poco para que se puedan tocar.";
+  if (b.tipo === "trivia" && b.segundos < 8) return "Con menos de 8 segundos por pregunta casi nadie alcanza a leer.";
   if (b.tipo === "crucigrama") { const c = crearCrucigrama(b.entradas, { rand: crearRngLeccion(b.id) }); if (!c.imposible && c.sinColocar.length) return `Del crucigrama no se pudo colocar: ${c.sinColocar.join(", ")}.`; }
   return "";
 }
@@ -290,6 +377,17 @@ export const ESPECIFICACION_BLOQUES = `TIPOS DE BLOQUE (cada bloque lleva "tipo"
 11. {"tipo":"sopa","titulo":"(opcional)","palabras":["PAZ","RESPETO","JUSTICIA"]}  → de 5 a 10 palabras de 3 a 14 letras, sin espacios.
 12. {"tipo":"crucigrama","titulo":"(opcional)","entradas":[{"palabra":"RESPETO","pista":"Valor de tratar bien a los demás"}]}  → de 5 a 10 palabras de 3 a 14 letras, sin espacios ni tildes, que compartan letras entre sí para poder cruzarse.
 13. {"tipo":"criptograma","titulo":"(opcional)","frase":"Frase corta y clave de la lección","pista":"(opcional)"}  → la frase debe tener entre 8 y 100 letras.
+14. {"tipo":"unir","titulo":"(opcional)","pares":[{"izq":"Concepto","der":"Su definición o pareja"}]}  → de 3 a 6 parejas; ningún elemento repetido.
+15. {"tipo":"clasificar","titulo":"(opcional)","categorias":[{"nombre":"Categoría","elementos":["elemento 1","elemento 2"]}]}  → de 2 a 4 categorías, de 3 a 12 elementos en total; cada elemento va en una sola categoría.
+16. {"tipo":"memorama","titulo":"(opcional)","parejas":[{"a":"Término","b":"Su pareja"}]}  → de 3 a 6 parejas con textos cortos y distintos entre sí.
+17. {"tipo":"diagrama","titulo":"(opcional)","url":"","etiquetas":[{"nombre":"Parte 1","x":30,"y":40}]}  → deja "url" vacío (la docente pone la imagen y coloca los puntos); de 3 a 6 nombres de las partes.
+18. {"tipo":"completar","titulo":"(opcional)","texto":"Texto donde las palabras que faltan van entre dobles corchetes, por ejemplo: Dios es [[amor]] y nos pide [[servir|servicio]].","modo":"banco" | "escribir","distractores":["palabra de relleno"]}  → de 3 a 8 espacios; con "|" se aceptan respuestas alternativas; "distractores" solo se usa con modo "banco".
+19. {"tipo":"anagrama","titulo":"(opcional)","modo":"letras" | "frase","items":[{"texto":"RESPETO","pista":"(opcional)"}]}  → "letras": palabras de 3 a 14 letras sin espacios; "frase": oraciones de 3 a 12 palabras que el estudiante ordena. De 2 a 5 items.
+20. {"tipo":"linea","titulo":"(opcional)","inicio":"Más antiguo","fin":"Más reciente","items":[{"texto":"Evento o paso","etiqueta":"(opcional, p. ej. año)"}]}  → escribe los items YA en el orden correcto; de 4 a 8.
+21. {"tipo":"jerarquia","titulo":"(opcional)","inicio":"Más importante","fin":"Menos importante","items":[{"texto":"Elemento"}]}  → escribe los items YA en el orden correcto (de arriba hacia abajo); de 3 a 6.
+22. {"tipo":"trivia","titulo":"(opcional)","segundos":20,"preguntas":[{"pregunta":"...","opciones":["A","B","C","D"],"correcta":0,"explicacion":"(opcional)"}]}  → de 3 a 6 preguntas; "segundos" por pregunta (de 10 a 30).
+23. {"tipo":"ruleta","titulo":"(opcional)","items":["Tema o pregunta 1","Tema o pregunta 2","Tema o pregunta 3"]}  → de 4 a 10 textos cortos que se comentan en voz alta o por escrito.
+24. {"tipo":"laberinto","titulo":"(opcional)","pregunta":"...","opciones":["A","B","C"],"correcta":0,"explicacion":"(opcional)","enemigos":1}  → una pregunta; el estudiante recorre un laberinto hasta la respuesta correcta; de 2 a 4 opciones.
 `;
 
 export function instruccionesIA({ para = "" } = {}) {
@@ -303,7 +401,7 @@ Responde SOLO con un bloque de código JSON (sin explicaciones antes ni después
 ${ESPECIFICACION_BLOQUES}REGLAS
 - Empieza con un bloque "texto" o "destacado" que presente el tema, y termina con una "reflexion".
 - Alterna explicación e interacción: después de cada 2 o 3 bloques de contenido, pon una "pregunta" o una actividad (tarjetas, descubre, pasos).
-- Incluye de 2 a 4 "pregunta", al menos 1 "reflexion" y, si el tema lo permite, una sopa, un crucigrama o un criptograma.
+- Incluye de 2 a 4 "pregunta", al menos 1 "reflexion" y, si el tema lo permite, uno o dos juegos (sopa, crucigrama, criptograma, unir, clasificar, memorama, completar, línea, trivia…). No repitas el mismo tipo de juego más de dos veces.
 - Usa SOLO información del material; no inventes datos, fechas ni citas. Si el material trae una cita bíblica, úsala tal cual.
 - La lección debe tener entre 8 y 20 bloques.
 - Todo el JSON debe ser válido: comillas dobles rectas, sin comas sobrantes, sin comentarios.
