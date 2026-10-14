@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState } from "react";
 import { TIPOS_BLOQUE, ESTILOS_DESTACADO, parsearTexto, urlSegura, videoIncrustable, requeridos, crearCrucigrama, crearRngLeccion } from "../lib/leccion";
+import { Unir, Clasificar, Memorama, Diagrama, Completar, Anagrama, Ordenar, Trivia, Ruleta, Laberinto } from "./JuegosLeccion";
 import { crearSopa, palabraEnLinea, crearCripto, estadoCripto, soloLetras } from "../game/acertijos";
 
 const caja = "rounded-2xl border border-slate-200 bg-white p-4";
@@ -232,6 +233,16 @@ export function LeccionVista({ actividad, hecha = false, reflexiones = {}, onGua
       case "sopa": return <Sopa b={b} />;
       case "crucigrama": return <Crucigrama b={b} />;
       case "criptograma": return <Criptograma b={b} />;
+      case "unir": return <Unir b={b} />;
+      case "clasificar": return <Clasificar b={b} />;
+      case "memorama": return <Memorama b={b} />;
+      case "diagrama": return <Diagrama b={b} />;
+      case "completar": return <Completar b={b} />;
+      case "anagrama": return <Anagrama b={b} />;
+      case "linea": case "jerarquia": return <Ordenar b={b} />;
+      case "trivia": return <Trivia b={b} />;
+      case "ruleta": return <Ruleta b={b} />;
+      case "laberinto": return <Laberinto b={b} />;
       default: return null;
     }
   };
