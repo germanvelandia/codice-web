@@ -5,7 +5,7 @@ import { errorLeccion } from "../lib/leccion";
 import { MODOS_NOTA, notaDeModulo } from "../lib/notasModulo";
 import { CrearModuloIA, CrearLeccionIA } from "./ModulosIA";
 import { EditorLeccion } from "./EditorLeccion";
-import { ModuloPrevia } from "./ModulosEstudiante";
+import { ModuloPrevia } from "./Modulosestudiante";
 import { nivelesDe, esNivel, claveNivel, nombreNivel, etiquetaPara } from "../lib/gradosMundo";
 
 const input = "w-full text-sm rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none bg-white";
