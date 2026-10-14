@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { LeccionVista } from "./LeccionVista";
 import * as api from "../lib/modulosApi";
-import { TIPOS_ACTIVIDAD, urlSegura, videoIncrustable } from "../lib/modulos";
+import { TIPOS_ACTIVIDAD, urlSegura, videoIncrustable, esCorrecta } from "../lib/modulos";
 
 // Ruta de módulos de estudio para el portal del estudiante.
 // Props: estudianteId, gradoId (opcional), onVolver (opcional), onPremio({xp, oro}) (opcional: para refrescar la barra de XP del portal)
@@ -61,18 +61,34 @@ export function ModulosEstudiante({ estudianteId, gradoId = null, onVolver, onPr
   );
 }
 
-function Modulo({ estudianteId, gradoId, moduloId, onVolver, onCompleto }) {
-  const [d, setD] = useState(null);
+// Vista previa para la docente: el mismo módulo que ve el estudiante, pero sin guardar nada ni dar premios.
+export function ModuloPrevia({ modulo, actividades = [], onVolver }) {
+  return <Modulo previa={{ modulo, actividades }} moduloId={modulo.id} onVolver={onVolver} onCompleto={() => {}} />;
+}
+
+function Modulo({ estudianteId, gradoId, moduloId, onVolver, onCompleto, previa = null }) {
+  let [d, setD] = useState(null);
+  const [vistas, setVistas] = useState({});          // solo vista previa: actividades marcadas como hechas
   const [error, setError] = useState("");
   const [ocupado, setOcupado] = useState(false);
   const [fallo, setFallo] = useState({});            // actividadId → respuesta equivocada
   const [final, setFinal] = useState(null);
-  const cargar = async () => { try { setD(await api.fetchModuloEstudiante(estudianteId, moduloId, gradoId)); } catch (e) { setError(e.message || "No se pudo abrir el módulo."); setD({ noExiste: true }); } };
+  const cargar = async () => { if (previa) return; try { setD(await api.fetchModuloEstudiante(estudianteId, moduloId, gradoId)); } catch (e) { setError(e.message || "No se pudo abrir el módulo."); setD({ noExiste: true }); } };
   useEffect(() => { cargar(); }, [moduloId]);
+  if (previa) {
+    const lista = [...previa.actividades].filter((a) => a.activa !== false).sort((x, y) => (x.orden || 0) - (y.orden || 0)).map((a) => ({ ...a, hecha: !!vistas[a.id] }));
+    d = { modulo: previa.modulo, actividades: lista };
+  }
   if (!d) return <p className="text-sm text-slate-400 p-4">Abriendo el módulo…</p>;
   if (d.noExiste || d.bloqueado) return <div className="p-4"><button onClick={onVolver} className="text-sm text-violet-600 mb-3">← Volver</button><p className="text-sm text-slate-500">{error || (d.bloqueado ? "Primero termina el módulo anterior." : "Este módulo ya no está disponible.")}</p></div>;
 
   const hacer = async (a, respuesta = null) => {
+    if (previa) {
+      if (a.tipo === "pregunta" && !esCorrecta(a, respuesta)) { setFallo((f) => ({ ...f, [a.id]: respuesta })); return; }
+      setFallo((f) => { const n = { ...f }; delete n[a.id]; return n; });
+      setVistas((v) => ({ ...v, [a.id]: true }));
+      return;
+    }
     if (ocupado) return; setOcupado(true); setError("");
     const r = await api.completarActividad(estudianteId, a.id, { respuesta }, gradoId);
     if (!r.ok) setError(r.mensaje || "No se pudo guardar tu avance.");
@@ -84,7 +100,8 @@ function Modulo({ estudianteId, gradoId, moduloId, onVolver, onCompleto }) {
   const { modulo: m, actividades } = d, hechas = actividades.filter((a) => a.hecha).length;
   return (
     <div className="p-4 max-w-2xl mx-auto" data-testid="modulo-abierto">
-      <button onClick={onVolver} className="text-sm text-violet-600 mb-3">← Mis módulos</button>
+      <button onClick={onVolver} className="text-sm text-violet-600 mb-3" data-testid="salir-previa">{previa ? "← Volver al panel docente" : "← Mis módulos"}</button>
+      {previa && <div className="text-xs bg-amber-50 border border-amber-300 text-amber-800 rounded-lg px-3 py-2 mb-3" data-testid="banner-previa">👁 Vista previa: así lo ve el estudiante. No se guarda nada ni se da premio.{previa.modulo.activo === false ? " (Este módulo está oculto para los estudiantes.)" : ""}</div>}
       <h2 className="text-lg font-bold text-slate-800">{m.emoji} Módulo {m.numero} · {m.nombre}</h2>
       {m.descripcion && <p className="text-sm text-slate-500 mt-1">{m.descripcion}</p>}
       <div className="h-2 bg-slate-200 rounded-full mt-3 mb-1 overflow-hidden"><div className="h-full bg-violet-500 transition-all" style={{ width: `${actividades.length ? Math.round((hechas / actividades.length) * 100) : 0}%` }} /></div>
@@ -99,7 +116,7 @@ function Modulo({ estudianteId, gradoId, moduloId, onVolver, onCompleto }) {
         {actividades.map((a) => (
           <article key={a.id} className={`rounded-2xl border p-3 ${a.hecha ? "bg-emerald-50 border-emerald-200" : "bg-white border-slate-200"}`} data-testid={`act-${a.id}`} data-hecha={a.hecha ? "1" : "0"}>
             <div className="flex items-center gap-2 mb-2"><span>{a.hecha ? "✅" : TIPOS_ACTIVIDAD[a.tipo]?.emoji}</span><h4 className="text-sm font-semibold text-slate-800 flex-1">{a.titulo}</h4><span className="text-[10px] text-slate-400">{TIPOS_ACTIVIDAD[a.tipo]?.nombre}</span></div>
-            {a.tipo === "leccion" && <LeccionDeActividad a={a} estudianteId={estudianteId} onTerminar={() => hacer(a)} />}
+            {a.tipo === "leccion" && <LeccionDeActividad a={a} estudianteId={estudianteId} previa={!!previa} onTerminar={() => hacer(a)} />}
             {a.tipo === "lectura" && <p className="text-sm text-slate-700 whitespace-pre-wrap mb-2">{a.contenido}</p>}
             {a.tipo === "enlace" && urlSegura(a.contenido) && <a href={urlSegura(a.contenido)} target="_blank" rel="noopener noreferrer" className="text-sm text-violet-600 underline break-all block mb-2">🔗 Abrir el enlace</a>}
             {a.tipo === "video" && (videoIncrustable(a.contenido)
@@ -126,9 +143,9 @@ function Modulo({ estudianteId, gradoId, moduloId, onVolver, onCompleto }) {
 }
 
 // Carga lo que el estudiante ya escribió en las reflexiones y muestra la lección
-function LeccionDeActividad({ a, estudianteId, onTerminar }) {
-  const [refl, setRefl] = useState(null);
-  useEffect(() => { let vivo = true; api.fetchReflexiones(estudianteId, a.id).then((r) => vivo && setRefl(r)); return () => { vivo = false; }; }, [a.id, estudianteId]);
+function LeccionDeActividad({ a, estudianteId, onTerminar, previa = false }) {
+  const [refl, setRefl] = useState(previa ? {} : null);
+  useEffect(() => { if (previa) return; let vivo = true; api.fetchReflexiones(estudianteId, a.id).then((r) => vivo && setRefl(r)); return () => { vivo = false; }; }, [a.id, estudianteId]);
   if (!refl) return <p className="text-sm text-slate-400">Abriendo la lección…</p>;
-  return <LeccionVista actividad={a} hecha={a.hecha} reflexiones={refl} onGuardarReflexion={(bloqueId, texto) => api.guardarReflexion(estudianteId, a.id, bloqueId, texto)} onTerminar={onTerminar} />;
+  return <LeccionVista actividad={a} hecha={a.hecha} reflexiones={refl} onGuardarReflexion={previa ? async () => ({ ok: true }) : (bloqueId, texto) => api.guardarReflexion(estudianteId, a.id, bloqueId, texto)} onTerminar={onTerminar} />;
 }
