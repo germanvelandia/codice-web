@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { TIPOS_BLOQUE, ESTILOS_DESTACADO, bloqueVacio, MAX_BLOQUES, normalizarBloque, errorBloque, avisoBloque, resumenLeccion } from "../lib/leccion";
 import { LeccionVista } from "./LeccionVista";
 
@@ -19,6 +19,45 @@ function Lista({ items, vacio, max, min = 2, nuevo, render, etiquetaItem }) {
       {items.value.length < max && <button type="button" onClick={() => items.set([...items.value, nuevo()])} className="text-[11px] font-semibold text-violet-600" data-testid="agregar-elemento">+ Agregar {etiquetaItem.toLowerCase()}</button>}
     </div>
   );
+}
+
+const lineasDe = (v) => (Array.isArray(v) ? v.map((x) => (x && typeof x === "object" ? x.texto : x)).join("\n") : String(v ?? ""));
+// pregunta con 2 a 4 opciones (la usan la trivia y el laberinto)
+function CamposPregunta({ p, set, nombre }) {
+  return (<>
+    <Txt v={p.pregunta} set={(v) => set({ pregunta: v })} etiqueta="Pregunta" area={2} max={400} />
+    <p className="text-[11px] text-slate-500 mb-1">Marca la opción correcta (2 a 4 opciones):</p>
+    {[0, 1, 2, 3].map((i) => <div key={i} className="flex items-center gap-2 mb-1"><input type="radio" name={nombre} checked={Number(p.correcta) === i} onChange={() => set({ correcta: i })} aria-label={`Correcta ${i + 1}`} /><input value={p.opciones?.[i] ?? ""} maxLength={150} onChange={(e) => set({ opciones: [0, 1, 2, 3].map((k) => (k === i ? e.target.value : p.opciones?.[k] ?? "")) })} placeholder={`Opción ${i + 1}`} className={input} aria-label={`Opción ${i + 1}`} /></div>)}
+    <Txt v={p.explicacion} set={(v) => set({ explicacion: v })} etiqueta="Explicación (opcional)" area={2} max={600} /></>);
+}
+// diagrama: se ve la imagen y se toca donde va cada punto
+function EditorDiagrama({ b, set }) {
+  const [ubicando, setUbicando] = useState(null); const [roto, setRoto] = useState(false);
+  const ets = b.etiquetas || [];
+  const up = (i, patch) => set({ etiquetas: ets.map((x, k) => (k === i ? { ...x, ...patch } : x)) });
+  const clic = (e) => { if (ubicando == null) return; const r = e.currentTarget.getBoundingClientRect(); up(ubicando, { x: Math.round(Math.min(100, Math.max(0, ((e.clientX - r.left) / r.width) * 100))), y: Math.round(Math.min(100, Math.max(0, ((e.clientY - r.top) / r.height) * 100))) }); setUbicando(null); };
+  return (<>
+    <Txt v={b.titulo} set={(v) => set({ titulo: v })} etiqueta="Título (opcional)" max={120} />
+    <Txt v={b.url} set={(v) => { setRoto(false); set({ url: v }); }} etiqueta="Dirección de la imagen (https://…)" max={500} />
+    {b.url && !roto && <div className={`relative mb-2 ${ubicando != null ? "cursor-crosshair ring-2 ring-amber-400 rounded-lg" : ""}`} onClick={clic} data-testid="diag-lienzo">
+      <img src={b.url} alt="" className="w-full rounded-lg block" draggable={false} onError={() => setRoto(true)} />
+      {ets.map((x, i) => <span key={i} style={{ left: `${Number(x.x) || 0}%`, top: `${Number(x.y) || 0}%`, transform: "translate(-50%,-50%)" }} className="absolute w-6 h-6 rounded-full bg-violet-600 border-2 border-white text-white text-[10px] font-bold flex items-center justify-center pointer-events-none">{i + 1}</span>)}
+    </div>}
+    {roto && <p className="text-[11px] text-rose-600 mb-2">No se pudo cargar la imagen: revisa la dirección.</p>}
+    {ubicando != null && <p className="text-[11px] text-amber-700 mb-2">Toca en la imagen el lugar del punto {ubicando + 1}.</p>}
+    <Lista etiquetaItem="Punto" items={{ value: ets, set: (v) => set({ etiquetas: v }) }} max={10} nuevo={() => ({ nombre: "", x: 50, y: 50 })} render={(t, upd, i) => (<div className="flex items-center gap-2"><input value={t.nombre} maxLength={40} onChange={(e) => upd({ nombre: e.target.value })} placeholder="Nombre de la parte" className={input} aria-label="Nombre del punto" /><button type="button" onClick={() => setUbicando(ubicando === i ? null : i)} className="text-[11px] font-semibold text-violet-600 whitespace-nowrap" data-testid={`ubicar-${i}`}>📍 Ubicar</button></div>)} /></>);
+}
+// completar: se puede seleccionar una palabra del texto y convertirla en hueco
+function EditorCompletar({ b, set }) {
+  const ref = useRef(null);
+  const marcar = () => { const el = ref.current; if (!el) return; const a = el.selectionStart, z = el.selectionEnd; if (a === z) return; const t = b.texto || ""; set({ texto: t.slice(0, a) + "[[" + t.slice(a, z).trim() + "]]" + t.slice(z) }); };
+  return (<>
+    <Txt v={b.titulo} set={(v) => set({ titulo: v })} etiqueta="Título (opcional)" max={120} />
+    <Campo etiqueta="Texto (las palabras que faltan van entre [[dobles corchetes]])"><textarea ref={ref} rows={5} maxLength={1500} value={b.texto ?? ""} onChange={(e) => set({ texto: e.target.value })} className={input} aria-label="Texto con espacios" placeholder="Dios es [[amor]] y nos pide [[servir|servicio]] a los demás." /></Campo>
+    <button type="button" onClick={marcar} className="text-[11px] font-semibold text-violet-600 mb-2" data-testid="marcar-hueco">✂️ Convertir en espacio lo que tengo seleccionado</button>
+    <p className="text-[11px] text-slate-500 mb-2">Con «|» aceptas varias respuestas: [[servir|servicio]].</p>
+    <Campo etiqueta="¿Cómo responde el estudiante?"><select value={b.modo} onChange={(e) => set({ modo: e.target.value })} className={input} aria-label="Modo"><option value="banco">Elige de un banco de palabras</option><option value="escribir">Escribe la palabra</option></select></Campo>
+    {b.modo !== "escribir" && <Txt v={lineasDe(b.distractores).split("\n").join(", ")} set={(v) => set({ distractores: v })} etiqueta="Palabras de relleno que no van (separadas por comas, opcional)" max={300} />}</>);
 }
 
 function CamposBloque({ b, set }) {
@@ -47,11 +86,32 @@ function CamposBloque({ b, set }) {
       <p className="text-[11px] text-slate-500 mb-1">Escribe de 4 a 10 palabras (sin espacios) que compartan letras entre sí, cada una con su pista. El crucigrama se arma solo.</p>
       <Lista etiquetaItem="Palabra" min={3} items={{ value: b.entradas, set: (v) => set({ entradas: v }) }} max={12} nuevo={() => ({ palabra: "", pista: "" })} render={(t, up) => (<div className="grid grid-cols-[1fr_2fr] gap-2"><input value={t.palabra} maxLength={14} onChange={(e) => up({ palabra: e.target.value })} placeholder="PALABRA" className={input} aria-label="Palabra del crucigrama" /><input value={t.pista} maxLength={160} onChange={(e) => up({ pista: e.target.value })} placeholder="Pista" className={input} aria-label="Pista del crucigrama" /></div>)} /></>);
     case "criptograma": return (<><Txt v={b.titulo} set={(v) => set({ titulo: v })} etiqueta="Título (opcional)" max={120} /><Txt v={b.frase} set={(v) => set({ frase: v })} etiqueta="Frase secreta (8 a 100 letras)" area={2} max={160} ph="La paz comienza en ti" /><Txt v={b.pista} set={(v) => set({ pista: v })} etiqueta="Pista (opcional)" max={160} /></>);
+    case "unir": return (<><Txt v={b.titulo} set={(v) => set({ titulo: v })} etiqueta="Título (opcional)" max={120} />
+      <Lista etiquetaItem="Pareja" items={{ value: b.pares, set: (v) => set({ pares: v }) }} max={8} nuevo={() => ({ izq: "", der: "" })} render={(t, up) => (<div className="grid grid-cols-2 gap-2"><input value={t.izq} maxLength={120} onChange={(e) => up({ izq: e.target.value })} placeholder="Columna izquierda" className={input} aria-label="Izquierda" /><input value={t.der} maxLength={120} onChange={(e) => up({ der: e.target.value })} placeholder="Su pareja (derecha)" className={input} aria-label="Derecha" /></div>)} /></>);
+    case "clasificar": return (<><Txt v={b.titulo} set={(v) => set({ titulo: v })} etiqueta="Título (opcional)" max={120} />
+      <Lista etiquetaItem="Categoría" items={{ value: b.categorias, set: (v) => set({ categorias: v }) }} max={4} nuevo={() => ({ nombre: "", elementos: "" })} render={(t, up) => (<><Txt v={t.nombre} set={(v) => up({ nombre: v })} etiqueta="Nombre de la categoría" max={60} /><Txt v={lineasDe(t.elementos)} set={(v) => up({ elementos: v })} etiqueta="Elementos que pertenecen (uno por línea)" area={3} max={800} /></>)} /></>);
+    case "memorama": return (<><Txt v={b.titulo} set={(v) => set({ titulo: v })} etiqueta="Título (opcional)" max={120} />
+      <Lista etiquetaItem="Pareja" items={{ value: b.parejas, set: (v) => set({ parejas: v }) }} max={8} nuevo={() => ({ a: "", b: "" })} render={(t, up) => (<div className="grid grid-cols-2 gap-2"><input value={t.a} maxLength={60} onChange={(e) => up({ a: e.target.value })} placeholder="Carta 1" className={input} aria-label="Carta 1" /><input value={t.b} maxLength={60} onChange={(e) => up({ b: e.target.value })} placeholder="Carta 2 (su pareja)" className={input} aria-label="Carta 2" /></div>)} /></>);
+    case "diagrama": return <EditorDiagrama b={b} set={set} />;
+    case "completar": return <EditorCompletar b={b} set={set} />;
+    case "anagrama": return (<><Txt v={b.titulo} set={(v) => set({ titulo: v })} etiqueta="Título (opcional)" max={120} />
+      <Campo etiqueta="¿Qué se ordena?"><select value={b.modo} onChange={(e) => set({ modo: e.target.value })} className={input} aria-label="Modo del anagrama"><option value="letras">Las letras de una palabra</option><option value="frase">Las palabras de una oración</option></select></Campo>
+      <Lista etiquetaItem={b.modo === "frase" ? "Oración" : "Palabra"} min={1} items={{ value: b.items, set: (v) => set({ items: v }) }} max={8} nuevo={() => ({ texto: "", pista: "" })} render={(t, up) => (<div className="grid grid-cols-[1fr_1fr] gap-2"><input value={t.texto} maxLength={b.modo === "frase" ? 160 : 30} onChange={(e) => up({ texto: e.target.value })} placeholder={b.modo === "frase" ? "Amarás a tu prójimo" : "RESPETO"} className={input} aria-label="Texto a ordenar" /><input value={t.pista} maxLength={160} onChange={(e) => up({ pista: e.target.value })} placeholder="Pista (opcional)" className={input} aria-label="Pista" /></div>)} /></>);
+    case "linea": case "jerarquia": return (<><Txt v={b.titulo} set={(v) => set({ titulo: v })} etiqueta="Título (opcional)" max={120} />
+      <p className="text-[11px] text-slate-500 mb-1">Escribe los elementos YA en el orden correcto; al estudiante se le muestran desordenados.</p>
+      <div className="grid grid-cols-2 gap-2"><Txt v={b.inicio} set={(v) => set({ inicio: v })} etiqueta={b.tipo === "linea" ? "Rótulo del principio (ej.: Más antiguo)" : "Rótulo de arriba (ej.: Más importante)"} max={40} /><Txt v={b.fin} set={(v) => set({ fin: v })} etiqueta={b.tipo === "linea" ? "Rótulo del final (ej.: Más reciente)" : "Rótulo de abajo (ej.: Menos importante)"} max={40} /></div>
+      <Lista etiquetaItem="Elemento" min={3} items={{ value: b.items, set: (v) => set({ items: v }) }} max={10} nuevo={() => ({ texto: "", etiqueta: "" })} render={(t, up) => (<div className="grid grid-cols-[2fr_1fr] gap-2"><input value={t.texto} maxLength={150} onChange={(e) => up({ texto: e.target.value })} placeholder="Elemento" className={input} aria-label="Elemento" /><input value={t.etiqueta} maxLength={30} onChange={(e) => up({ etiqueta: e.target.value })} placeholder="Año/dato (opcional)" className={input} aria-label="Dato" /></div>)} /></>);
+    case "trivia": return (<><Txt v={b.titulo} set={(v) => set({ titulo: v })} etiqueta="Título (opcional)" max={120} />
+      <Campo etiqueta="Segundos por pregunta (5 a 60)"><input type="number" min="5" max="60" value={b.segundos} onChange={(e) => set({ segundos: e.target.value })} className={input} aria-label="Segundos por pregunta" /></Campo>
+      <Lista etiquetaItem="Pregunta" items={{ value: b.preguntas, set: (v) => set({ preguntas: v }) }} max={10} nuevo={() => ({ pregunta: "", opciones: ["", "", "", ""], correcta: 0, explicacion: "" })} render={(p, up, i) => <CamposPregunta p={p} set={up} nombre={`c-${b.id}-${i}`} />} /></>);
+    case "ruleta": return (<><Txt v={b.titulo} set={(v) => set({ titulo: v })} etiqueta="Título (opcional)" max={120} /><Txt v={lineasDe(b.items)} set={(v) => set({ items: v })} etiqueta="Temas o preguntas de la ruleta (uno por línea, de 3 a 12)" area={6} max={1500} ph={"¿Qué es la paz?\nUn gesto de respeto\nCuenta una experiencia"} /></>);
+    case "laberinto": return (<><Txt v={b.titulo} set={(v) => set({ titulo: v })} etiqueta="Título (opcional)" max={120} /><CamposPregunta p={b} set={set} nombre={`c-${b.id}`} />
+      <Campo etiqueta="Enemigos que persiguen"><select value={b.enemigos} onChange={(e) => set({ enemigos: Number(e.target.value) })} className={input} aria-label="Enemigos"><option value={0}>Ninguno (sin presión)</option><option value={1}>1 enemigo</option><option value={2}>2 enemigos</option><option value={3}>3 enemigos</option></select></Campo></>);
     default: return null;
   }
 }
 function resumenBloque(b) {
-  const x = { texto: b.contenido, destacado: b.contenido, imagen: b.descripcion || b.url, video: b.titulo || b.url, tarjetas: `${b.tarjetas?.length || 0} tarjetas`, descubre: `${b.items?.length || 0} secciones`, pasos: `${b.pasos?.length || 0} pasos`, pregunta: b.pregunta, reflexion: b.consigna, enlace: b.texto, sopa: Array.isArray(b.palabras) ? b.palabras.join(", ") : b.palabras, crucigrama: `${b.entradas?.length || 0} palabras`, criptograma: b.frase }[b.tipo];
+  const x = { texto: b.contenido, destacado: b.contenido, imagen: b.descripcion || b.url, video: b.titulo || b.url, tarjetas: `${b.tarjetas?.length || 0} tarjetas`, descubre: `${b.items?.length || 0} secciones`, pasos: `${b.pasos?.length || 0} pasos`, pregunta: b.pregunta, reflexion: b.consigna, enlace: b.texto, sopa: Array.isArray(b.palabras) ? b.palabras.join(", ") : b.palabras, crucigrama: `${b.entradas?.length || 0} palabras`, criptograma: b.frase, unir: `${b.pares?.length || 0} parejas`, clasificar: `${b.categorias?.length || 0} categorías`, memorama: `${b.parejas?.length || 0} parejas`, diagrama: `${b.etiquetas?.length || 0} puntos`, completar: b.texto, anagrama: `${b.items?.length || 0} ${b.modo === "frase" ? "oraciones" : "palabras"}`, linea: `${b.items?.length || 0} eventos`, jerarquia: `${b.items?.length || 0} elementos`, trivia: `${b.preguntas?.length || 0} preguntas · ${b.segundos || 20} s`, ruleta: `${lineasDe(b.items).split("\n").filter(Boolean).length} opciones`, laberinto: b.pregunta }[b.tipo];
   return String(x || "").replace(/\s+/g, " ").slice(0, 70);
 }
 
