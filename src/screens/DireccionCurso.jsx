@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import * as api from "../lib/api";
 import { htmlCitaciones, formatoCitacionCompleto, abrirDocumentoParaImprimir, FORMATO_CITACION_DEFAULT, useEstadoPersistente } from "../lib/api";
+import { htmlControlCurso } from "../lib/controlesPdf";
 import { ordenarPorApellido, ordenarPorNombre } from "../lib/gamification";
 import { NotasDireccionCurso } from "./NotasDireccionCurso";
 
@@ -1150,7 +1151,7 @@ export function VistaDireccionCurso({ grados, gradoActivo, esAdmin }) {
       {vista === "notas" && <NotasDireccionCurso gradoId={gradoId} />}
       {vista === "citaciones" && <CitacionesDireccionCurso gradoId={gradoId} institucion={institucion} esAdmin={esAdmin} />}
       {vista === "jornada" && <JornadasDireccionCurso gradoId={gradoId} institucion={institucion} />}
-      {vista === "controles" && <ControlesDireccionCurso gradoId={gradoId} />}
+      {vista === "controles" && <ControlesDireccionCurso gradoId={gradoId} institucion={institucion} />}
     </div>
   );
 }
@@ -1159,7 +1160,7 @@ export function VistaDireccionCurso({ grados, gradoActivo, esAdmin }) {
 // Lista de "controles" (pagos, permisos, lo que haga falta) y, dentro de
 // cada uno, el estado por estudiante — completado o no, monto pagado si
 // corresponde, y una observación libre.
-function ControlesDireccionCurso({ gradoId }) {
+function ControlesDireccionCurso({ gradoId, institucion }) {
   const [controles, setControles] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [formAbierto, setFormAbierto] = useState(false);
@@ -1212,7 +1213,7 @@ function ControlesDireccionCurso({ gradoId }) {
         </div>
       )}
 
-      {controlAbierto && <ControlEstudiantesModal control={controlAbierto} gradoId={gradoId} onClose={() => setControlAbierto(null)} />}
+      {controlAbierto && <ControlEstudiantesModal control={controlAbierto} gradoId={gradoId} institucion={institucion} onClose={() => setControlAbierto(null)} />}
     </div>
   );
 }
@@ -1278,7 +1279,7 @@ function NuevoControlForm({ gradoId, onCancelar, onCreado }) {
   );
 }
 
-function ControlEstudiantesModal({ control, gradoId, onClose }) {
+function ControlEstudiantesModal({ control, gradoId, institucion, onClose }) {
   const [estudiantes, setEstudiantes] = useState([]);
   const [estados, setEstados] = useState({});
   const [cargando, setCargando] = useState(true);
@@ -1340,6 +1341,7 @@ function ControlEstudiantesModal({ control, gradoId, onClose }) {
             <span className="text-xs bg-emerald-50 text-emerald-700 font-semibold px-2.5 py-1 rounded-full">{completados} / {estudiantes.length} completados</span>
             {esPago && <span className="text-xs bg-amber-50 text-amber-700 font-semibold px-2.5 py-1 rounded-full">💰 ${totalRecaudado.toLocaleString()} recaudados {control.monto_esperado ? `de $${(control.monto_esperado * estudiantes.length).toLocaleString()} esperados` : ""}</span>}
             <button onClick={exportar} className="text-xs font-semibold px-2.5 py-1 rounded-full border border-slate-200 text-slate-600 ml-auto">📥 Exportar (Excel)</button>
+            <button onClick={() => abrirDocumentoParaImprimir(htmlControlCurso({ control, gradoId, estudiantes, estados, institucion }))} className="text-xs font-semibold px-2.5 py-1 rounded-full border border-slate-200 text-slate-600">📄 Exportar (PDF)</button>
           </div>
         )}
 
