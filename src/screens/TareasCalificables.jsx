@@ -3,7 +3,7 @@ import * as api from "../lib/api";
 import { agruparPorNivel, nivelYCurso } from "../lib/gamification";
 import { periodosDe } from "../lib/calificaciones";
 import { EditorTexto, TextoEnriquecido } from "../components/RichText";
-import { calcularNotaRubrica, SelectorRubrica } from "../components/Rubrica";
+import { calcularNotaRubrica, SelectorRubrica, NivelesEditor } from "../components/Rubrica";
 
 function TareaForm({ tipo, materiaId, gradoId, periodo, categorias, tarea, onCancelar, onCreada }) {
   const [titulo, setTitulo] = useState(tarea?.titulo || "");
@@ -595,20 +595,7 @@ function RubricaTareaModal({ tarea, config, onClose, onGuardada }) {
                   className="flex-1 text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
                 <button onClick={() => quitarCriterio(i)} className="text-slate-300 hover:text-rose-500">🗑</button>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {c.niveles.map((n, j) => (
-                  <div key={j} className="bg-slate-50 rounded-lg p-2 relative" style={{ width: 110 }}>
-                    <button onClick={() => quitarNivel(i, j)} className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-rose-400 text-white text-[9px] flex items-center justify-center" title="Quitar este nivel">✕</button>
-                    <input value={n.nombre} onChange={(e) => actualizarNivel(i, j, "nombre", e.target.value)}
-                      className="w-full text-xs font-semibold rounded px-1 py-1 border border-slate-200 outline-none mb-1" />
-                    <input type="number" value={n.puntos} onChange={(e) => actualizarNivel(i, j, "puntos", e.target.value)}
-                      className="w-full text-xs rounded px-1 py-1 border border-slate-200 outline-none" placeholder="Puntos" />
-                  </div>
-                ))}
-                <button onClick={() => agregarNivel(i)} className="text-xs text-violet-500 border border-dashed border-violet-300 rounded-lg px-3" style={{ width: 110 }}>
-                  + Nivel
-                </button>
-              </div>
+              <NivelesEditor criterio={c} i={i} actualizarNivel={actualizarNivel} quitarNivel={quitarNivel} agregarNivel={agregarNivel} />
             </div>
           ))}
           <button onClick={agregarCriterio} className="text-xs text-violet-500">+ Agregar criterio</button>
