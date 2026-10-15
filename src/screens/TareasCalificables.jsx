@@ -3,7 +3,8 @@ import * as api from "../lib/api";
 import { agruparPorNivel, nivelYCurso } from "../lib/gamification";
 import { periodosDe } from "../lib/calificaciones";
 import { EditorTexto, TextoEnriquecido } from "../components/RichText";
-import { calcularNotaRubrica, SelectorRubrica, NivelesEditor } from "../components/Rubrica";
+import { calcularNotaRubrica, SelectorRubrica, NivelesEditor, RubricaGrid } from "../components/Rubrica";
+import { guardarResultadoRubricaDeTarea, leerResultadoRubricaDeTarea } from "../lib/rubricaApi";
 
 function TareaForm({ tipo, materiaId, gradoId, periodo, categorias, tarea, onCancelar, onCreada }) {
   const [titulo, setTitulo] = useState(tarea?.titulo || "");
@@ -86,6 +87,7 @@ function CalificarModal({ tarea, config, onClose, onCambio }) {
   const [guardandoCodice, setGuardandoCodice] = useState(false);
   const [rubricando, setRubricando] = useState(null); // estudianteId
   const [nivelesElegidos, setNivelesElegidos] = useState({}); // { criterioIdx: nivelIdx }
+  const [observacionesRubrica, setObservacionesRubrica] = useState({}); // { criterioIdx: texto }
   const [notaMasiva, setNotaMasiva] = useState("");
   const [comentarioMasivo, setComentarioMasivo] = useState("");
   const [aplicandoMasivo, setAplicandoMasivo] = useState(false);
@@ -145,15 +147,18 @@ function CalificarModal({ tarea, config, onClose, onCambio }) {
     setAplicandoMasivo(false);
   };
 
-  const abrirRubrica = (estudianteId, resultadoPrevio) => {
+  const abrirRubrica = async (estudianteId, resultadoPrevio) => {
     setRubricando(estudianteId);
     setNivelesElegidos(resultadoPrevio || {});
+    setObservacionesRubrica({});
+    try { const r = await leerResultadoRubricaDeTarea(tarea, estudianteId); if (r) { setNivelesElegidos(r.niveles || resultadoPrevio || {}); setObservacionesRubrica(r.observaciones || {}); } } catch (e) { /* sin detalle previo */ }
   };
 
   const guardarConRubrica = async (estudianteId) => {
     const { nota } = calcularNotaRubrica(tarea.rubrica, nivelesElegidos, config);
     try {
       await api.calificarTarea(tarea, estudianteId, nota, "", nivelesElegidos);
+      await guardarResultadoRubricaDeTarea(tarea, estudianteId, { rubrica: tarea.rubrica, niveles: nivelesElegidos, observaciones: observacionesRubrica, nota });
       setRubricando(null);
       cargar();
       onCambio();
@@ -366,8 +371,9 @@ function CalificarModal({ tarea, config, onClose, onCambio }) {
                     )}
                     {rubricando === e.estudiante_id && (
                       <div className="mt-2">
-                        <SelectorRubrica rubrica={tarea.rubrica} nivelesElegidos={nivelesElegidos} config={config}
-                          onElegir={(i, j) => setNivelesElegidos((prev) => ({ ...prev, [i]: j }))} />
+                        <RubricaGrid rubrica={tarea.rubrica} niveles={nivelesElegidos} observaciones={observacionesRubrica} config={config}
+                          onElegir={(i, j) => setNivelesElegidos((prev) => ({ ...prev, [i]: j }))}
+                          onObservacion={(i, t) => setObservacionesRubrica((prev) => ({ ...prev, [i]: t }))} />
                         <div className="flex justify-end gap-2 mt-2">
                           <button onClick={() => setRubricando(null)} className="text-[11px] text-slate-400">Cancelar</button>
                           <button onClick={() => guardarConRubrica(e.estudiante_id)} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-violet-500 text-white">Guardar nota</button>
