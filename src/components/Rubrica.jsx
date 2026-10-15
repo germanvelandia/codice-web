@@ -5,15 +5,20 @@ import React from "react";
 export function calcularNotaRubrica(rubrica, nivelesElegidos, config) {
   const escalaMin = config?.escala_min ?? 1;
   const escalaMax = config?.nota_maxima ?? 5;
-  let obtenidos = 0, maximos = 0;
+  // La nota va de escalaMin (todo en el nivel más bajo) a escalaMax (todo en el más alto).
+  // Un criterio sin nivel elegido cuenta como su nivel más bajo.
+  let obtenidos = 0, maximos = 0, minimos = 0;
   rubrica.forEach((c, i) => {
-    const maxCriterio = Math.max(...c.niveles.map((n) => n.puntos));
-    maximos += maxCriterio;
+    const pts = c.niveles.map((n) => Number(n.puntos) || 0);
+    const maxCriterio = Math.max(...pts), minCriterio = Math.min(...pts);
+    maximos += maxCriterio; minimos += minCriterio;
     const elegido = nivelesElegidos[i];
-    if (elegido !== undefined) obtenidos += c.niveles[elegido].puntos;
+    obtenidos += elegido !== undefined && c.niveles[elegido] ? Number(c.niveles[elegido].puntos) || 0 : minCriterio;
   });
-  const nota = maximos > 0 ? Math.round((escalaMin + (obtenidos / maximos) * (escalaMax - escalaMin)) * 10) / 10 : escalaMin;
-  return { obtenidos, maximos, nota, escalaMin, escalaMax };
+  const rango = maximos - minimos;
+  const nota = rango > 0 ? Math.round((escalaMin + ((obtenidos - minimos) / rango) * (escalaMax - escalaMin)) * 10) / 10 : escalaMin;
+  const completa = rubrica.length > 0 && rubrica.every((_, i) => nivelesElegidos[i] !== undefined);
+  return { obtenidos, maximos, minimos, nota, escalaMin, escalaMax, completa };
 }
 
 // Selector de rúbrica reutilizable — usado para calificar tanto desde La
