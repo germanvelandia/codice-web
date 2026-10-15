@@ -1185,21 +1185,41 @@ function RubricaActividadModal({ actividad, config, onClose, onGuardada }) {
 // columna — aparece pegado al input de esa celda.
 function CeldaConRubrica({ actividad, estudianteId, config, onGuardado, onCerrar }) {
   const [nivelesElegidos, setNivelesElegidos] = useState({});
-  const guardar = async () => {
+  const [guardada, setGuardada] = useState(null); // nota ya enviada a la Planilla
+  const [error, setError] = useState("");
+  // En cuanto se elige un nivel en TODOS los criterios, la nota (en la escala de la Planilla) se manda sola a la celda.
+  const elegir = async (i, j) => {
+    const nuevos = { ...nivelesElegidos, [i]: j };
+    setNivelesElegidos(nuevos);
+    const r = calcularNotaRubrica(actividad.rubrica, nuevos, config);
+    if (!r.completa) { setGuardada(null); return; }
+    try { setError(""); await onGuardado(r.nota); setGuardada(r.nota); }
+    catch (e) { setError("No se pudo guardar: " + e.message); }
+  };
+  const guardarIncompleta = async () => {
     const { nota } = calcularNotaRubrica(actividad.rubrica, nivelesElegidos, config);
-    await onGuardado(nota);
-    onCerrar();
+    try { await onGuardado(nota); onCerrar(); } catch (e) { setError("No se pudo guardar: " + e.message); }
   };
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.4)" }} onClick={onCerrar}>
-      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-4 w-full max-w-sm shadow-xl">
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-4 w-full max-w-sm max-h-[85vh] overflow-y-auto shadow-xl">
         <div className="flex justify-between items-center mb-2">
           <h4 className="text-sm font-bold text-slate-800">{actividad.nombre}</h4>
           <button onClick={onCerrar} className="text-slate-400">✕</button>
         </div>
-        <SelectorRubrica rubrica={actividad.rubrica} nivelesElegidos={nivelesElegidos} config={config}
-          onElegir={(i, j) => setNivelesElegidos((prev) => ({ ...prev, [i]: j }))} />
-        <button onClick={guardar} className="w-full text-sm font-semibold py-2 rounded-lg bg-violet-500 text-white mt-3">Guardar nota</button>
+        <SelectorRubrica rubrica={actividad.rubrica} nivelesElegidos={nivelesElegidos} config={config} onElegir={elegir} />
+        {error && <div className="text-xs text-rose-500 mt-2">{error}</div>}
+        {guardada !== null ? (
+          <>
+            <div className="text-xs font-semibold text-emerald-600 bg-emerald-50 rounded-lg px-3 py-2 mt-3">✔ Nota {guardada} guardada en la Planilla. Si cambias un nivel, se actualiza sola.</div>
+            <button onClick={onCerrar} className="w-full text-sm font-semibold py-2 rounded-lg bg-violet-500 text-white mt-2">Listo</button>
+          </>
+        ) : (
+          <>
+            <p className="text-[11px] text-slate-400 mt-2">Al elegir un nivel en cada criterio, la nota se guarda sola en la Planilla.</p>
+            <button onClick={guardarIncompleta} className="w-full text-xs font-semibold py-2 rounded-lg border border-slate-200 text-slate-600 mt-2">Guardar sin completar todos los criterios</button>
+          </>
+        )}
       </div>
     </div>
   );
