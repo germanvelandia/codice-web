@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 
 // Calcula la nota a partir de los puntos de la rúbrica, respetando la
 // escala REAL configurada en la Planilla (min/max) de esa materia.
@@ -71,6 +71,71 @@ export function SelectorRubrica({ rubrica, nivelesElegidos, onElegir, config }) 
       <div className="text-xs text-slate-500 pt-1 border-t border-slate-100">
         {obtenidos}/{maximos} pts → nota <b>{nota}</b> <span className="text-slate-400">(escala {escalaMin}–{escalaMax})</span>
       </div>
+    </div>
+  );
+}
+
+
+// ---------- Rúbrica en CUADRÍCULA: criterios en filas, niveles en columnas y una columna de observaciones ----------
+// Con onElegir es editable (docente); sin él es de solo lectura (estudiante).
+export function RubricaGrid({ rubrica, niveles = {}, observaciones = {}, onElegir, onObservacion, onObservacionBlur, config, nota: notaFija }) {
+  const editable = !!onElegir;
+  const nombres = [];
+  rubrica.forEach((c) => c.niveles.forEach((n) => { if (!nombres.includes(n.nombre)) nombres.push(n.nombre); }));
+  const r = calcularNotaRubrica(rubrica, niveles, config);
+  const nota = notaFija ?? r.nota;
+  return (
+    <div>
+      <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <table className="w-full text-[11px] border-collapse" style={{ minWidth: 120 + nombres.length * 130 + 170 }}>
+          <thead>
+            <tr className="bg-violet-50 text-slate-600">
+              <th className="text-left p-2 border-b border-slate-200 w-28">Criterio</th>
+              {nombres.map((nom) => <th key={nom} className="p-2 border-b border-l border-slate-200 text-center">{nom}</th>)}
+              <th className="p-2 border-b border-l border-slate-200 text-left w-44">Observaciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rubrica.map((c, i) => (
+              <tr key={i} className="align-top">
+                <th className="text-left p-2 border-b border-slate-200 bg-slate-50 font-semibold text-slate-700">{c.criterio}</th>
+                {nombres.map((nom) => {
+                  const j = c.niveles.findIndex((n) => n.nombre === nom);
+                  if (j < 0) return <td key={nom} className="border-b border-l border-slate-200 bg-slate-50" />;
+                  const n = c.niveles[j], elegido = niveles[i] === j;
+                  const contenido = (<><div className={`font-bold ${elegido ? "text-violet-700" : "text-slate-500"}`}>{n.puntos} pts{elegido ? " ✔" : ""}</div><div className="text-slate-500">{n.descripcion}</div></>);
+                  return (
+                    <td key={nom} className={`border-b border-l border-slate-200 p-0 ${elegido ? "bg-violet-100" : (!editable && niveles[i] !== undefined ? "opacity-40" : "")}`}>
+                      {editable
+                        ? <button type="button" onClick={() => onElegir(i, j)} className={`w-full h-full text-left p-2 hover:bg-violet-50 ${elegido ? "bg-violet-100 ring-2 ring-inset ring-violet-400" : ""}`}>{contenido}</button>
+                        : <div className="p-2">{contenido}</div>}
+                    </td>
+                  );
+                })}
+                <td className="border-b border-l border-slate-200 p-1.5">
+                  {editable
+                    ? <textarea value={observaciones[i] || ""} rows={3} onChange={(e) => onObservacion?.(i, e.target.value)} onBlur={() => onObservacionBlur?.()}
+                        placeholder="Observación para este criterio…" className="w-full text-[11px] rounded px-1.5 py-1 border border-slate-200 outline-none" />
+                    : (observaciones[i] ? <div className="text-violet-700 italic">📝 {observaciones[i]}</div> : <span className="text-slate-300">—</span>)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="text-xs text-slate-500 pt-2">{r.obtenidos}/{r.maximos} pts → nota <b>{nota}</b> <span className="text-slate-400">(escala {r.escalaMin}–{r.escalaMax})</span></div>
+    </div>
+  );
+}
+
+// Para el estudiante: botón que despliega SU rúbrica calificada (si la actividad se calificó con rúbrica)
+export function RubricaCalificadaAlumno({ resultado, config }) {
+  const [abierta, setAbierta] = useState(false);
+  if (!resultado?.rubrica?.length) return null;
+  return (
+    <div className="mt-1">
+      <button type="button" onClick={() => setAbierta((v) => !v)} className="text-[10px] font-semibold text-violet-600 underline">{abierta ? "Ocultar rúbrica" : "📊 Ver mi rúbrica"}</button>
+      {abierta && <div className="mt-1"><RubricaGrid rubrica={resultado.rubrica} niveles={resultado.niveles || {}} observaciones={resultado.observaciones || {}} nota={resultado.nota} config={config} /></div>}
     </div>
   );
 }
