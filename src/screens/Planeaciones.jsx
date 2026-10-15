@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import * as XLSX from "xlsx";
 import * as api from "../lib/api";
+import { NivelesEditor } from "../components/Rubrica";
 import { agruparPorNivel, nivelYCurso } from "../lib/gamification";
 import { periodosDe } from "../lib/calificaciones";
 import { EditorTexto, TextoEnriquecido } from "../components/RichText";
@@ -636,16 +637,7 @@ function RubricaModal({ tarea, onClose }) {
                     className="flex-1 text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
                   <button onClick={() => quitarCriterio(i)} className="text-slate-300 hover:text-rose-500">🗑</button>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {c.niveles.map((n, j) => (
-                    <div key={j} className="bg-slate-50 rounded-lg p-2">
-                      <input value={n.nombre} onChange={(e) => actualizarNivel(i, j, "nombre", e.target.value)}
-                        className="w-full text-xs font-semibold rounded px-1 py-1 border border-slate-200 outline-none mb-1" />
-                      <input type="number" value={n.puntos} onChange={(e) => actualizarNivel(i, j, "puntos", e.target.value)}
-                        className="w-full text-xs rounded px-1 py-1 border border-slate-200 outline-none" placeholder="Puntos" />
-                    </div>
-                  ))}
-                </div>
+                <NivelesEditor criterio={c} i={i} actualizarNivel={actualizarNivel} />
               </div>
             ))}
             <button onClick={agregarCriterio} className="text-xs text-violet-500">+ Agregar criterio</button>
