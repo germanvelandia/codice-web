@@ -1,26 +1,31 @@
 import React, { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
 import * as api from "../lib/api";
+import { abrirDocumentoParaImprimir } from "../lib/api";
+import { NivelesEditor } from "../components/Rubrica";
+import { analizarRubricasDeIA, rubricaATexto, htmlRubrica, puntosMaximos } from "../lib/rubricaTexto";
 
 const PROMPT_IA_RUBRICAS = `Actuá como un diseñador instruccional experto en evaluación educativa.
 Vas a crear una o más RÚBRICAS DE EVALUACIÓN para el tema que te indique,
 siguiendo EXACTAMENTE este formato de texto (es importante respetarlo tal
 cual, para poder importarlo después):
 
-R�BRICA: [nombre corto y claro de la rúbrica]
+RÚBRICA: [nombre corto y claro de la rúbrica]
 
 CRITERIO: [nombre del primer criterio a evaluar]
-- Alto (5 pts): [descripción breve de qué logra el estudiante en este nivel]
-- Medio (3 pts): [descripción breve]
-- Bajo (1 pts): [descripción breve]
+Alto (5 pts): [descripción completa de qué logra el estudiante en este nivel]
+Muy Bueno (4 pts): [descripción completa]
+Medio (3 pts): [descripción completa]
+Regular (2 pts): [descripción completa]
+Bajo (1 pts): [descripción completa]
 
 CRITERIO: [nombre del segundo criterio]
-- Alto (5 pts): [descripción]
-- Medio (3 pts): [descripción]
-- Bajo (1 pts): [descripción]
+Alto (5 pts): [descripción]
+(… los mismos niveles …)
 
 (repetí "CRITERIO:" con sus niveles para cada criterio que haga falta — entre
-3 y 5 criterios suele ser un buen número)
+3 y 6 criterios suele ser un buen número. Podés usar 3, 4 o 5 niveles, pero
+los mismos en todos los criterios.)
 
 Si te pido varias rúbricas en el mismo pedido, separá cada una repitiendo
 "RÚBRICA: [nombre]" de nuevo desde cero, con sus propios criterios.
@@ -34,31 +39,6 @@ Generá los puntos de cada nivel en la misma escala relativa (por ejemplo
 5/3/1) — yo los voy a ajustar después a la escala de notas de mi Planilla.
 No uses relleno genérico: cada descripción de nivel tiene que ser específica
 al criterio y al tema pedido.`;
-
-// Analiza el texto que la IA devolvió (siguiendo el formato de arriba) y lo
-// separa en rúbricas independientes, cada una con sus criterios y niveles.
-// Es un "mejor esfuerzo": si algo no calza exacto, esa rúbrica se ignora en
-// vez de romper el resto.
-function analizarRubricasDeIA(texto) {
-  const limpiarTexto = (s) => (s || "").replace(/\*\*/g, "").trim();
-  const bloquesRubrica = texto.split(/(?:^|\n)\s*#{0,3}\s*\*{0,2}RÚBRICA\s*:?/i).slice(1);
-
-  return bloquesRubrica.map((bloque) => {
-    const finNombre = bloque.search(/\n/);
-    const nombre = limpiarTexto(finNombre >= 0 ? bloque.slice(0, finNombre) : bloque);
-    const bloquesCriterio = bloque.split(/(?:^|\n)\s*#{0,3}\s*\*{0,2}CRITERIO\s*:?/i).slice(1);
-
-    const criterios = bloquesCriterio.map((cBloque) => {
-      const finCriterio = cBloque.search(/\n/);
-      const criterio = limpiarTexto(finCriterio >= 0 ? cBloque.slice(0, finCriterio) : cBloque);
-      const niveles = [...cBloque.matchAll(/[-*]\s*\*{0,2}([^:(*\n]+?)\*{0,2}\s*\(?\s*(\d+(?:\.\d+)?)\s*pts?\)?/gi)]
-        .map(([, nom, pts]) => ({ nombre: limpiarTexto(nom), puntos: parseFloat(pts) || 0 }));
-      return { criterio, niveles };
-    }).filter((c) => c.criterio && c.niveles.length > 0);
-
-    return { nombre, criterios };
-  }).filter((r) => r.nombre && r.criterios.length > 0);
-}
 
 function PromptIaRubricasModal({ onClose }) {
   const [copiado, setCopiado] = useState(false);
@@ -130,7 +110,7 @@ function RubricaCatalogoForm({ rubrica, onCancelar, onGuardado }) {
     : c));
   const agregarCriterio = () => setCriterios((prev) => [...prev, { criterio: "", niveles: NIVELES_INICIALES() }]);
   const quitarCriterio = (i) => setCriterios((prev) => prev.filter((_, idx) => idx !== i));
-  const agregarNivel = (i) => setCriterios((prev) => prev.map((c, idx) => idx === i ? { ...c, niveles: [...c.niveles, { nombre: "Nuevo nivel", puntos: 0 }] } : c));
+  const agregarNivel = (i) => setCriterios((prev) => prev.map((c, idx) => idx === i ? { ...c, niveles: [...c.niveles, { nombre: "Nuevo nivel", puntos: 0, descripcion: "" }] } : c));
   const quitarNivel = (i, j) => setCriterios((prev) => prev.map((c, idx) => {
     if (idx !== i) return c;
     if (c.niveles.length <= 1) { alert("Cada criterio necesita al menos un nivel."); return c; }
@@ -165,21 +145,8 @@ function RubricaCatalogoForm({ rubrica, onCancelar, onGuardado }) {
                 className="flex-1 text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
               <button onClick={() => quitarCriterio(i)} className="text-slate-300 hover:text-rose-500">🗑</button>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {c.niveles.map((n, j) => (
-                <div key={j} className="bg-slate-50 rounded-lg p-2 relative" style={{ width: 110 }}>
-                  <button onClick={() => quitarNivel(i, j)} className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-rose-400 text-white text-[9px] flex items-center justify-center" title="Quitar este nivel">✕</button>
-                  <input value={n.nombre} onChange={(e) => actualizarNivel(i, j, "nombre", e.target.value)}
-                    className="w-full text-xs font-semibold rounded px-1 py-1 border border-slate-200 outline-none mb-1" />
-                  <input type="number" value={n.puntos} onChange={(e) => actualizarNivel(i, j, "puntos", e.target.value)}
-                    className="w-full text-xs rounded px-1 py-1 border border-slate-200 outline-none" placeholder="Puntos" />
-                </div>
-              ))}
-              <button onClick={() => agregarNivel(i)} className="text-xs text-violet-500 border border-dashed border-violet-300 rounded-lg px-3" style={{ width: 110 }}>
-                + Nivel
-              </button>
+            <NivelesEditor criterio={c} i={i} actualizarNivel={actualizarNivel} quitarNivel={quitarNivel} agregarNivel={agregarNivel} />
             </div>
-          </div>
         ))}
         <button onClick={agregarCriterio} className="text-xs text-violet-500">+ Agregar criterio</button>
       </div>
@@ -220,7 +187,7 @@ export function VistaRubricas() {
     rubricas.forEach((r) => {
       r.criterios.forEach((c) => {
         c.niveles.forEach((n) => {
-          filas.push({ Rúbrica: r.nombre, Criterio: c.criterio, Nivel: n.nombre, Puntos: n.puntos });
+          filas.push({ Rúbrica: r.nombre, Criterio: c.criterio, Nivel: n.nombre, Puntos: n.puntos, Descripción: n.descripcion || "" });
         });
       });
     });
@@ -250,7 +217,7 @@ export function VistaRubricas() {
           if (!nombreR || !nombreC || !nombreN) return;
           porRubrica[nombreR] = porRubrica[nombreR] || {};
           porRubrica[nombreR][nombreC] = porRubrica[nombreR][nombreC] || [];
-          porRubrica[nombreR][nombreC].push({ nombre: nombreN, puntos });
+          porRubrica[nombreR][nombreC].push({ nombre: nombreN, puntos, descripcion: String(f["Descripción"] || f["Descripcion"] || "").trim() });
         });
         const nombresRubricas = Object.keys(porRubrica);
         if (nombresRubricas.length === 0) { alert("No encontré filas válidas — revisá que el Excel tenga las columnas Rúbrica, Criterio, Nivel y Puntos."); setImportandoExcel(false); return; }
@@ -316,10 +283,20 @@ export function VistaRubricas() {
               </div>
               <div className="space-y-1">
                 {r.criterios.map((c, i) => (
-                  <div key={i} className="text-xs text-slate-500">
-                    <b>{c.criterio}</b> — {c.niveles.map((n) => `${n.nombre} (${n.puntos})`).join(", ")}
-                  </div>
+                  <details key={i} className="text-xs text-slate-500">
+                    <summary className="cursor-pointer"><b>{c.criterio}</b> — {c.niveles.map((n) => `${n.nombre} (${n.puntos})`).join(", ")}</summary>
+                    <div className="mt-1 mb-2 space-y-1 pl-2 border-l-2 border-violet-100">
+                      {c.niveles.map((n, j) => (
+                        <div key={j}><b className="text-slate-600">{n.nombre} ({n.puntos} pts):</b> {n.descripcion || <i className="text-slate-300">sin descriptor</i>}</div>
+                      ))}
+                    </div>
+                  </details>
                 ))}
+              </div>
+              <div className="flex gap-2 mt-3 pt-2 border-t border-slate-100">
+                <span className="text-[11px] text-slate-400 mr-auto">Máx. {puntosMaximos(r.criterios)} pts</span>
+                <button onClick={() => abrirDocumentoParaImprimir(htmlRubrica({ nombre: r.nombre, criterios: r.criterios }))} className="text-[11px] font-semibold text-slate-500 hover:text-violet-600">📄 PDF</button>
+                <button onClick={() => { navigator.clipboard.writeText(rubricaATexto(r.nombre, r.criterios)); alert("Texto copiado."); }} className="text-[11px] font-semibold text-slate-500 hover:text-violet-600">📋 Copiar</button>
               </div>
             </div>
           ))}
