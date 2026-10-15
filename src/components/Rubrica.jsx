@@ -19,6 +19,30 @@ export function calcularNotaRubrica(rubrica, nivelesElegidos, config) {
 // Selector de rúbrica reutilizable — usado para calificar tanto desde La
 // Forja (individual o por reino) como directo desde la Planilla de
 // Calificaciones.
+// Editor de los niveles de UN criterio: nombre, puntos y descripción de cada nivel (en filas, no en tarjetitas).
+export function NivelesEditor({ criterio, i, actualizarNivel, quitarNivel, agregarNivel }) {
+  return (
+    <div className="space-y-2">
+      {criterio.niveles.map((n, j) => (
+        <div key={j} className="bg-slate-50 rounded-lg p-2">
+          <div className="flex items-center gap-2 mb-1">
+            <input value={n.nombre} onChange={(e) => actualizarNivel(i, j, "nombre", e.target.value)} placeholder="Nivel"
+              className="flex-1 min-w-0 text-xs font-semibold rounded px-2 py-1 border border-slate-200 outline-none" />
+            <input type="number" value={n.puntos} onChange={(e) => actualizarNivel(i, j, "puntos", e.target.value)} placeholder="Pts"
+              className="w-16 text-xs rounded px-2 py-1 border border-slate-200 outline-none" />
+            <span className="text-[10px] text-slate-400">pts</span>
+            {quitarNivel && <button onClick={() => quitarNivel(i, j)} className="text-slate-300 hover:text-rose-500 text-xs" title="Quitar este nivel">✕</button>}
+          </div>
+          <textarea value={n.descripcion || ""} onChange={(e) => actualizarNivel(i, j, "descripcion", e.target.value)} rows={2}
+            placeholder="¿Qué logra el estudiante en este nivel? (descriptor)"
+            className="w-full text-xs rounded px-2 py-1 border border-slate-200 outline-none bg-white" />
+        </div>
+      ))}
+      {agregarNivel && <button onClick={() => agregarNivel(i)} className="text-xs text-violet-500 border border-dashed border-violet-300 rounded-lg px-3 py-1">+ Nivel</button>}
+    </div>
+  );
+}
+
 export function SelectorRubrica({ rubrica, nivelesElegidos, onElegir, config }) {
   const { obtenidos, maximos, nota, escalaMin, escalaMax } = calcularNotaRubrica(rubrica, nivelesElegidos, config);
   return (
@@ -28,12 +52,15 @@ export function SelectorRubrica({ rubrica, nivelesElegidos, onElegir, config }) 
           <div className="text-[11px] font-semibold text-slate-600 mb-1">{c.criterio}</div>
           <div className="flex flex-wrap gap-1.5">
             {c.niveles.map((n, j) => (
-              <button key={j} onClick={() => onElegir(i, j)}
+              <button key={j} onClick={() => onElegir(i, j)} title={n.descripcion || ""}
                 className={`text-[11px] px-2 py-1 rounded-full border ${nivelesElegidos[i] === j ? "bg-violet-500 text-white border-violet-500" : "bg-white text-slate-600 border-slate-200"}`}>
                 {n.nombre} ({n.puntos})
               </button>
             ))}
           </div>
+          {c.niveles[nivelesElegidos[i]]?.descripcion && (
+            <div className="text-[11px] text-slate-500 mt-1 bg-violet-50 rounded-lg px-2 py-1">{c.niveles[nivelesElegidos[i]].descripcion}</div>
+          )}
         </div>
       ))}
       <div className="text-xs text-slate-500 pt-1 border-t border-slate-100">
