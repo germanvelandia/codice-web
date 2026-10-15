@@ -11,7 +11,8 @@ import { buscarEstudiantePorNombre, agruparPorNivel, nivelYCurso, initials } fro
 import { ActasModal } from "./Actas";
 import { InclusionBadge, FotoLightbox } from "./Estudiantes";
 import { EditorTexto, TextoEnriquecido, textoPlano } from "../components/RichText";
-import { calcularNotaRubrica, SelectorRubrica, NivelesEditor } from "../components/Rubrica";
+import { calcularNotaRubrica, SelectorRubrica, NivelesEditor, RubricaGrid } from "../components/Rubrica";
+import { guardarResultadoRubrica } from "../lib/rubricaApi";
 import { BookOpen, Edit, Archive, GraduationCap, Calendar, FileText, Award, BarChart, Settings, Users, TrendingDown, Plus } from "lucide-react";
 
 // Tarjeta compacta para elegir entre varias opciones (materia, curso,
@@ -1183,43 +1184,42 @@ function RubricaActividadModal({ actividad, config, onClose, onGuardada }) {
 
 // Selector emergente para calificar una celda puntual con la rúbrica de su
 // columna — aparece pegado al input de esa celda.
-function CeldaConRubrica({ actividad, estudianteId, config, onGuardado, onCerrar }) {
-  const [nivelesElegidos, setNivelesElegidos] = useState({});
-  const [guardada, setGuardada] = useState(null); // nota ya enviada a la Planilla
+function CeldaConRubrica({ actividad, estudianteId, estudianteNombre, config, previo, onGuardado, onCerrar }) {
+  const [niveles, setNiveles] = useState(previo?.niveles || {});
+  const [observaciones, setObservaciones] = useState(previo?.observaciones || {});
+  const [guardada, setGuardada] = useState(previo?.nota ?? null); // nota ya enviada a la Planilla
   const [error, setError] = useState("");
-  // En cuanto se elige un nivel en TODOS los criterios, la nota (en la escala de la Planilla) se manda sola a la celda.
-  const elegir = async (i, j) => {
-    const nuevos = { ...nivelesElegidos, [i]: j };
-    setNivelesElegidos(nuevos);
-    const r = calcularNotaRubrica(actividad.rubrica, nuevos, config);
-    if (!r.completa) { setGuardada(null); return; }
-    try { setError(""); await onGuardado(r.nota); setGuardada(r.nota); }
-    catch (e) { setError("No se pudo guardar: " + e.message); }
+  // Guarda la nota (escala de la Planilla) + el detalle de la rúbrica con sus observaciones.
+  // Sola, en cuanto hay un nivel elegido en TODOS los criterios (o al pulsar "Guardar" aunque falten).
+  const persistir = async (nv, ob, forzar) => {
+    const r = calcularNotaRubrica(actividad.rubrica, nv, config);
+    if (!r.completa && !forzar) return false;
+    try {
+      setError("");
+      await onGuardado(r.nota, { rubrica: actividad.rubrica, niveles: nv, observaciones: ob, nota: r.nota });
+      setGuardada(r.nota); return true;
+    } catch (e) { setError("No se pudo guardar: " + e.message); return false; }
   };
-  const guardarIncompleta = async () => {
-    const { nota } = calcularNotaRubrica(actividad.rubrica, nivelesElegidos, config);
-    try { await onGuardado(nota); onCerrar(); } catch (e) { setError("No se pudo guardar: " + e.message); }
-  };
+  const elegir = (i, j) => { const nv = { ...niveles, [i]: j }; setNiveles(nv); persistir(nv, observaciones, false); };
+  const escribirObs = (i, texto) => setObservaciones((prev) => ({ ...prev, [i]: texto }));
+  const guardarYCerrar = async () => { if (await persistir(niveles, observaciones, true)) onCerrar(); };
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.4)" }} onClick={onCerrar}>
-      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-4 w-full max-w-sm max-h-[85vh] overflow-y-auto shadow-xl">
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-4 w-full max-w-5xl max-h-[90vh] overflow-y-auto shadow-xl">
         <div className="flex justify-between items-center mb-2">
-          <h4 className="text-sm font-bold text-slate-800">{actividad.nombre}</h4>
+          <h4 className="text-sm font-bold text-slate-800">📊 {actividad.nombre}{estudianteNombre ? ` — ${estudianteNombre}` : ""}</h4>
           <button onClick={onCerrar} className="text-slate-400">✕</button>
         </div>
-        <SelectorRubrica rubrica={actividad.rubrica} nivelesElegidos={nivelesElegidos} config={config} onElegir={elegir} />
+        <RubricaGrid rubrica={actividad.rubrica} niveles={niveles} observaciones={observaciones} config={config}
+          onElegir={elegir} onObservacion={escribirObs} onObservacionBlur={() => { if (guardada !== null) persistir(niveles, observaciones, false); }} />
         {error && <div className="text-xs text-rose-500 mt-2">{error}</div>}
-        {guardada !== null ? (
-          <>
-            <div className="text-xs font-semibold text-emerald-600 bg-emerald-50 rounded-lg px-3 py-2 mt-3">✔ Nota {guardada} guardada en la Planilla. Si cambias un nivel, se actualiza sola.</div>
-            <button onClick={onCerrar} className="w-full text-sm font-semibold py-2 rounded-lg bg-violet-500 text-white mt-2">Listo</button>
-          </>
-        ) : (
-          <>
-            <p className="text-[11px] text-slate-400 mt-2">Al elegir un nivel en cada criterio, la nota se guarda sola en la Planilla.</p>
-            <button onClick={guardarIncompleta} className="w-full text-xs font-semibold py-2 rounded-lg border border-slate-200 text-slate-600 mt-2">Guardar sin completar todos los criterios</button>
-          </>
-        )}
+        {guardada !== null
+          ? <div className="text-xs font-semibold text-emerald-600 bg-emerald-50 rounded-lg px-3 py-2 mt-3">✔ Nota {guardada} guardada en la Planilla. El estudiante ya puede ver su rúbrica. Si cambias un nivel o una observación, se actualiza sola.</div>
+          : <p className="text-[11px] text-slate-400 mt-3">Elige un nivel en cada criterio y la nota se guarda sola en la Planilla. Las observaciones se guardan al salir de la casilla.</p>}
+        <div className="flex justify-end gap-2 mt-3">
+          <button onClick={onCerrar} className="text-xs text-slate-500 px-3 py-2">Cerrar</button>
+          <button onClick={guardarYCerrar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white">Guardar y cerrar</button>
+        </div>
       </div>
     </div>
   );
@@ -1250,6 +1250,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
   const [menuHerramientasAbierto, setMenuHerramientasAbierto] = useState(false);
   const [rubricaColumnaAbierta, setRubricaColumnaAbierta] = useState(null); // actividad
   const [celdaRubricaAbierta, setCeldaRubricaAbierta] = useState(null); // { actividad, estudianteId }
+  const [resultadosRubrica, setResultadosRubrica] = useState({}); // { actividadId: { estudianteId: resultado } }
 
   const cargar = async () => {
     setCargando(true);
@@ -1258,12 +1259,15 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
     const valoresRows = await api.fetchValores(acts.map((a) => a.id));
     const valMap = {};
     const obsMap = {};
+    const rubMap = {};
     valoresRows.forEach((v) => {
+      if (v.rubrica_resultado) { rubMap[v.actividad_id] = rubMap[v.actividad_id] || {}; rubMap[v.actividad_id][v.estudiante_id] = v.rubrica_resultado; }
       valMap[v.actividad_id] = valMap[v.actividad_id] || {}; valMap[v.actividad_id][v.estudiante_id] = v.valor;
       if (v.observacion) { obsMap[v.actividad_id] = obsMap[v.actividad_id] || {}; obsMap[v.actividad_id][v.estudiante_id] = v.observacion; }
     });
     setValores(valMap);
     setObservaciones(obsMap);
+    setResultadosRubrica(rubMap);
     const categoriasGam = [...new Set(acts.filter((a) => a.es_automatica).map((a) => a.gam_categoria))];
     if (categoriasGam.length > 0) {
       const xp = await api.fetchXpPorCategoria(estudiantes.map((s) => s.id), categoriasGam);
@@ -1591,7 +1595,14 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
       )}
       {celdaRubricaAbierta && (
         <CeldaConRubrica actividad={celdaRubricaAbierta.actividad} estudianteId={celdaRubricaAbierta.estudianteId} config={config}
-          onGuardado={(nota) => guardarValorManual(celdaRubricaAbierta.actividad.id, celdaRubricaAbierta.estudianteId, String(nota))}
+          estudianteNombre={(estudiantes.find((x) => x.id === celdaRubricaAbierta.estudianteId) || {}).nombre}
+          previo={resultadosRubrica[celdaRubricaAbierta.actividad.id]?.[celdaRubricaAbierta.estudianteId]}
+          onGuardado={async (nota, resultado) => {
+            const { actividad: act, estudianteId: eid } = celdaRubricaAbierta;
+            await guardarValorManual(act.id, eid, String(nota));
+            await guardarResultadoRubrica(act.id, eid, resultado);
+            setResultadosRubrica((prev) => ({ ...prev, [act.id]: { ...(prev[act.id] || {}), [eid]: resultado } }));
+          }}
           onCerrar={() => setCeldaRubricaAbierta(null)} />
       )}
     </div>
