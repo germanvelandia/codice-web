@@ -44,6 +44,7 @@ import { VistaBancoPreguntas } from "./screens/BancoPreguntas";
 import { VistaEvaluaciones } from "./screens/Evaluaciones";
 import { VistaProyectosForja } from "./screens/TareasCalificables";
 import { VistaRubricas } from "./screens/Rubricas";
+import { RubricaCalificadaAlumno } from "./components/Rubrica";
 import { VistaEntregasPorRevisar } from "./screens/EntregasPorRevisar";
 import { VistaTableroSemanal } from "./screens/TableroSemanal";
 import { VistaInicio, ContenidoLightbox } from "./screens/Inicio";
@@ -599,6 +600,7 @@ function MisNotas({ estudianteId }) {
                                 {a.observacion && (
                                   <div className="text-[10px] text-violet-600 italic bg-violet-50 rounded-lg px-2 py-1 mt-0.5">📝 {a.observacion}</div>
                                 )}
+                                <RubricaCalificadaAlumno resultado={a.rubrica_resultado} config={config} />
                               </div>
                             ))}
                           </div>
@@ -608,6 +610,16 @@ function MisNotas({ estudianteId }) {
                             {f.actividadesPeriodo.filter((a) => a.observacion).map((a) => (
                               <div key={a.id} className="text-[10px] text-violet-600 italic bg-violet-50 rounded-lg px-2 py-1">
                                 📝 <b>{a.notas_actividades?.nombre}:</b> {a.observacion}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {!f.enCurso && f.actividadesPeriodo.some((a) => a.rubrica_resultado) && (
+                          <div className="ml-2 mt-1 space-y-1">
+                            {f.actividadesPeriodo.filter((a) => a.rubrica_resultado).map((a) => (
+                              <div key={a.id} className="text-[11px] text-slate-500">
+                                <span className="font-semibold">{a.notas_actividades?.nombre}</span> · <span className="font-semibold">{a.valor}</span>
+                                <RubricaCalificadaAlumno resultado={a.rubrica_resultado} config={config} />
                               </div>
                             ))}
                           </div>
