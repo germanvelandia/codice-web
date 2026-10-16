@@ -14,6 +14,8 @@ import { EditorTexto, TextoEnriquecido, textoPlano } from "../components/RichTex
 import { calcularNotaRubrica, SelectorRubrica, NivelesEditor, RubricaGrid } from "../components/Rubrica";
 import { guardarResultadoRubrica } from "../lib/rubricaApi";
 import { vincularColumnas, desvincularColumna } from "../lib/vinculos";
+import { GruposMixtosModal } from "./GruposMixtos";
+import { esGrupoMixto, fetchGruposMixtos, fetchEstudiantesGrupo } from "../lib/gruposMixtos";
 import { AsistenciaNotaModal, AsistenciaMatrizModal } from "./AsistenciaPlanilla";
 import { BookOpen, Edit, Archive, GraduationCap, Calendar, FileText, Award, BarChart, Settings, Users, TrendingDown, Plus } from "lucide-react";
 
@@ -2100,6 +2102,11 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
   const [pasoAbierto, setPasoAbierto] = useState(null); // "materia" | "grado" | "periodo" | "categorias" | "vista" | null
   const [actividadModalAbierto, setActividadModalAbierto] = useState(false);
   const [refrescoPlanilla, setRefrescoPlanilla] = useState(0);
+  const [gruposMixtos, setGruposMixtos] = useState([]);
+  const [gruposAbierto, setGruposAbierto] = useState(false);
+  const [refrescoGrupo, setRefrescoGrupo] = useState(0);
+  const cargarGrupos = async () => { setGruposMixtos(await fetchGruposMixtos()); setRefrescoGrupo((n) => n + 1); };
+  useEffect(() => { cargarGrupos(); }, []);
 
   // Curso activo elegido en la barra superior — no pisa el salto puntual
   // que hace el buscador global de estudiantes (ver el efecto de abajo).
@@ -2128,7 +2135,7 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
   };
 
   useEffect(() => { cargarMaterias().then(() => setCargando(false)); }, []);
-  useEffect(() => { if (grados.length && (!gradoId || !grados.some((g) => g.id === gradoId))) setGradoId(grados[0].id); }, [grados]);
+  useEffect(() => { if (grados.length && (!gradoId || !(grados.some((g) => g.id === gradoId) || esGrupoMixto(gradoId)))) setGradoId(grados[0].id); }, [grados]);
 
   const cargarConfigYCategorias = async () => {
     if (!materiaActualId) return;
@@ -2159,8 +2166,8 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
 
   useEffect(() => {
     if (!gradoId) return;
-    api.fetchEstudiantesPorGrado(gradoId).then(setEstudiantes);
-  }, [gradoId]);
+    (esGrupoMixto(gradoId) ? fetchEstudiantesGrupo(gradoId) : api.fetchEstudiantesPorGrado(gradoId)).then(setEstudiantes).catch(() => setEstudiantes([]));
+  }, [gradoId, refrescoGrupo]);
 
   const guardarNotasFinalesActual = async () => {
     const notas = await api.calcularNotasFinalesPeriodo(materiaActualId, gradoId, periodo, estudiantes, categorias, config);
@@ -2192,7 +2199,7 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
         {materiaActualId && (
           <>
             <PasoMenu titulo="Grado y curso" Icono={GraduationCap} abierto={pasoAbierto === "grado"}
-              resumen={`Grado ${nivelYCurso(gradoId).nivel}° — Curso ${gradoId}`}
+              resumen={esGrupoMixto(gradoId) ? `👥 ${(gruposMixtos.find((g) => g.id === gradoId) || {}).nombre || "Grupo mixto"}` : `Grado ${nivelYCurso(gradoId).nivel}° — Curso ${gradoId}`}
               onAbrir={() => setPasoAbierto(pasoAbierto === "grado" ? null : "grado")} onCerrar={() => setPasoAbierto(null)}>
               <div className="flex flex-wrap gap-1.5">
                 {(() => {
@@ -2213,6 +2220,13 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
                     </>
                   );
                 })()}
+              </div>
+              <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-slate-100 items-center">
+                <span className="text-[11px] text-slate-400">Grupos mixtos:</span>
+                {gruposMixtos.map((g) => (
+                  <ChipCal key={g.id} activo={gradoId === g.id} onClick={() => { setGradoId(g.id); setPasoAbierto("periodo"); }}>👥 {g.nombre}</ChipCal>
+                ))}
+                <ChipCal onClick={() => setGruposAbierto(true)}>⚙️ Crear / gestionar</ChipCal>
               </div>
             </PasoMenu>
 
@@ -2306,6 +2320,10 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
               onGuardada={() => { setActividadModalAbierto(false); setRefrescoPlanilla((n) => n + 1); setSubVista("planilla"); }} />
           )}
         </>
+      )}
+      {gruposAbierto && (
+        <GruposMixtosModal grupos={gruposMixtos} onClose={() => setGruposAbierto(false)} onCambio={cargarGrupos}
+          onAbrir={(id) => { setGradoId(id); setSubVista("planilla"); setPasoAbierto("periodo"); }} />
       )}
     </div>
   );
