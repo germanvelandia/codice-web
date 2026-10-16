@@ -194,7 +194,7 @@ export function analizarGuiaTexto(texto) {
     const g = (k) => bl.find((b) => b.m === k);
     if (g("A")) r.fase_exploracion = textoAHtml(aTexto(g("A").lineas));
     if (g("C")) r.fase_transferencia = textoAHtml(aTexto(g("C").lineas));
-    r.actividades = [];
+    r.actividades_guia = [];
     if (g("B")) {
       const ab = partirEn(g("B").lineas, (l) => { const m = l.match(/^\s*#{0,3}\s*\*{0,2}\s*Actividad\s+(\d+)\s*[.:]\s*(.+?)\*{0,2}\s*$/i); return m ? m[2] : null; });
       const introB = aTexto(ab[0].lineas); if (introB) r.fase_aplicacion = textoAHtml(introB);
@@ -216,7 +216,7 @@ export function analizarGuiaTexto(texto) {
           const ie = b.lineas.findIndex((l) => /^\s*Evidencias?\s+que\s+debes\s+entregar\s*:/i.test(l));
           if (ie >= 0) act.evidencia = limpia(b.lineas.slice(ie).join(" ").replace(/^\s*Evidencias?\s+que\s+debes\s+entregar\s*:\s*/i, ""));
         }
-        r.actividades.push(act);
+        r.actividades_guia.push(act);
       });
     }
   }
@@ -317,7 +317,7 @@ export function htmlGuiaCuerpo(guia, { institucion = null, materia = "", lineas 
   const g = guia || {};
   const datos = Array.isArray(g.datos) ? g.datos.filter((d) => d.campo || d.valor) : [];
   const teoria = Array.isArray(g.teoria) ? g.teoria : [];
-  const actividades = Array.isArray(g.actividades) ? g.actividades : [];
+  const actividades = Array.isArray(g.actividades_guia) ? g.actividades_guia : [];
   const concept = Array.isArray(g.conceptos_clave) ? g.conceptos_clave.filter((c) => c.termino) : [];
   const rub = Array.isArray(g.rubrica_criterios) ? g.rubrica_criterios.filter((c) => c.criterio) : [];
   const preg = Array.isArray(g.preguntas_reflexion) ? g.preguntas_reflexion.filter((p) => p.texto) : [];
