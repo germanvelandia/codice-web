@@ -14,7 +14,7 @@ import { EditorTexto, TextoEnriquecido, textoPlano } from "../components/RichTex
 import { calcularNotaRubrica, SelectorRubrica, NivelesEditor, RubricaGrid } from "../components/Rubrica";
 import { guardarResultadoRubrica } from "../lib/rubricaApi";
 import { vincularColumnas, desvincularColumna } from "../lib/vinculos";
-import { GruposMixtosModal } from "./GruposMixtos";
+import { GruposMixtosModal, BannerGrupo } from "./GruposMixtos";
 import { esGrupoMixto, fetchGruposMixtos, fetchEstudiantesGrupo } from "../lib/gruposMixtos";
 import { AsistenciaNotaModal, AsistenciaMatrizModal } from "./AsistenciaPlanilla";
 import { BookOpen, Edit, Archive, GraduationCap, Calendar, FileText, Award, BarChart, Settings, Users, TrendingDown, Plus } from "lucide-react";
@@ -2104,6 +2104,7 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
   const [refrescoPlanilla, setRefrescoPlanilla] = useState(0);
   const [gruposMixtos, setGruposMixtos] = useState([]);
   const [gruposAbierto, setGruposAbierto] = useState(false);
+  const [grupoAEditar, setGrupoAEditar] = useState(null);
   const [refrescoGrupo, setRefrescoGrupo] = useState(0);
   const cargarGrupos = async () => { setGruposMixtos(await fetchGruposMixtos()); setRefrescoGrupo((n) => n + 1); };
   useEffect(() => { cargarGrupos(); }, []);
@@ -2294,6 +2295,10 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
         </div>
       ) : (
         <>
+          {esGrupoMixto(gradoId) && gruposMixtos.find((g) => g.id === gradoId) && (
+            <BannerGrupo key={gradoId + refrescoGrupo} grupo={gruposMixtos.find((g) => g.id === gradoId)} estudiantes={estudiantes}
+              onEditar={() => { setGrupoAEditar(gruposMixtos.find((g) => g.id === gradoId)); setGruposAbierto(true); }} />
+          )}
           {estudiantes.some((s) => s.piar || s.dua) && (
             <div className="bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 mb-4 text-sm text-violet-800">
               🧩 <b>Recordatorio de inclusión</b> — este grupo tiene estudiantes con proceso PIAR/DUA activo:{" "}
@@ -2322,7 +2327,7 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
         </>
       )}
       {gruposAbierto && (
-        <GruposMixtosModal grupos={gruposMixtos} onClose={() => setGruposAbierto(false)} onCambio={cargarGrupos}
+        <GruposMixtosModal grupos={gruposMixtos} inicial={grupoAEditar} onClose={() => { setGruposAbierto(false); setGrupoAEditar(null); }} onCambio={cargarGrupos}
           onAbrir={(id) => { setGradoId(id); setSubVista("planilla"); setPasoAbierto("periodo"); }} />
       )}
     </div>
