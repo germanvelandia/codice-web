@@ -572,7 +572,7 @@ function ImportarMoodleModal({ materiaId, gradoId, periodo, categorias, periodos
   );
 }
 
-function NotaMasivaModal({ actividades, estudiantesVisibles, reinoFiltro, valorDeActividad, onClose, onAplicado }) {
+function NotaMasivaModal({ actividades, estudiantesVisibles, reinoFiltro, valorDeActividad, resultadosRubrica = {}, onClose, onAplicado }) {
   const manuales = actividades.filter((a) => !a.es_automatica);
   const [actividadId, setActividadId] = useState(manuales[0]?.id || "");
   const [valor, setValor] = useState("");
@@ -591,6 +591,10 @@ function NotaMasivaModal({ actividades, estudiantesVisibles, reinoFiltro, valorD
   }
 
   const actividadElegida = actividades.find((a) => a.id === parseInt(actividadId, 10));
+  const tieneRubrica = !!(actividadElegida?.rubrica?.length);
+  // Quienes ya fueron calificados CON la rúbrica nunca se tocan: su detalle (niveles y observaciones) se conserva.
+  const conRubrica = (s) => !!resultadosRubrica[actividadElegida?.id]?.[s.id];
+  const nConRubrica = tieneRubrica ? estudiantesVisibles.filter(conRubrica).length : 0;
   const yaCalificados = actividadElegida ? estudiantesVisibles.filter((s) => {
     const v = valorDeActividad(actividadElegida, s.id);
     return v !== null && v !== undefined;
@@ -601,12 +605,12 @@ function NotaMasivaModal({ actividades, estudiantesVisibles, reinoFiltro, valorD
     if (isNaN(v)) { alert("Escribe una nota válida."); return; }
     setAplicando(true);
     try {
-      const destino = soloVacios
+      const destino = (soloVacios
         ? estudiantesVisibles.filter((s) => {
             const actual = valorDeActividad(actividadElegida, s.id);
             return actual === null || actual === undefined;
           })
-        : estudiantesVisibles;
+        : estudiantesVisibles).filter((s) => !(tieneRubrica && conRubrica(s)));
       for (const s of destino) { await api.setValor(actividadId, s.id, v); }
       onAplicado(actividadId, destino.map((s) => s.id), v);
       onClose();
@@ -644,6 +648,13 @@ function NotaMasivaModal({ actividades, estudiantesVisibles, reinoFiltro, valorD
             : `⚠️ Se aplicará a los ${estudiantesVisibles.length} estudiantes visibles, incluso reemplazando notas que ya tengan.`}
         </p>
 
+        {tieneRubrica && (
+          <p className="text-[11px] text-violet-700 bg-violet-50 rounded-lg p-2 mb-4">
+            📊 Esta actividad tiene <b>rúbrica</b>. La nota masiva solo pone el número (útil para quienes no entregaron); la rúbrica se conserva.
+            Cuando alguien entregue, abre su casilla 📊 y califícalo con la rúbrica: esa nota reemplaza la masiva.
+            {nConRubrica > 0 && <> Los <b>{nConRubrica}</b> ya calificados con rúbrica no se modifican.</>}
+          </p>
+        )}
         <div className="flex justify-end gap-2">
           <button onClick={onClose} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
           <button disabled={aplicando} onClick={aplicar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
@@ -1184,7 +1195,7 @@ function RubricaActividadModal({ actividad, config, onClose, onGuardada }) {
 
 // Selector emergente para calificar una celda puntual con la rúbrica de su
 // columna — aparece pegado al input de esa celda.
-function CeldaConRubrica({ actividad, estudianteId, estudianteNombre, config, previo, onGuardado, onCerrar }) {
+function CeldaConRubrica({ actividad, estudianteId, estudianteNombre, config, previo, notaSinRubrica, onGuardado, onCerrar }) {
   const [niveles, setNiveles] = useState(previo?.niveles || {});
   const [observaciones, setObservaciones] = useState(previo?.observaciones || {});
   const [guardada, setGuardada] = useState(previo?.nota ?? null); // nota ya enviada a la Planilla
@@ -1210,6 +1221,11 @@ function CeldaConRubrica({ actividad, estudianteId, estudianteNombre, config, pr
           <h4 className="text-sm font-bold text-slate-800">📊 {actividad.nombre}{estudianteNombre ? ` — ${estudianteNombre}` : ""}</h4>
           <button onClick={onCerrar} className="text-slate-400">✕</button>
         </div>
+        {!previo && notaSinRubrica !== null && notaSinRubrica !== undefined && guardada === null && (
+          <div className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 mb-2">
+            Este estudiante tiene una nota puesta sin rúbrica (<b>{notaSinRubrica}</b>, p. ej. masiva por no entrega). Si lo calificas aquí con la rúbrica, esa nota se reemplaza.
+          </div>
+        )}
         <RubricaGrid rubrica={actividad.rubrica} niveles={niveles} observaciones={observaciones} config={config}
           onElegir={elegir} onObservacion={escribirObs} onObservacionBlur={() => { if (guardada !== null) persistir(niveles, observaciones, false); }} />
         {error && <div className="text-xs text-rose-500 mt-2">{error}</div>}
@@ -1518,7 +1534,8 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
                             {a.rubrica?.length > 0 ? (
                               <button onClick={() => setCeldaRubricaAbierta({ actividad: a, estudianteId: s.id })}
                                 style={v !== null && v !== undefined ? { color: b.color, borderColor: b.color, background: `${b.color}11`, fontWeight: 700 } : {}}
-                                className="w-14 text-center text-xs rounded px-1 py-1 border border-slate-200">
+                                className={"w-14 text-center text-xs rounded px-1 py-1 border " + (v !== null && v !== undefined && !resultadosRubrica[a.id]?.[s.id] ? "border-dashed border-slate-400" : "border-slate-200")}
+                                title={v !== null && v !== undefined && !resultadosRubrica[a.id]?.[s.id] ? "Nota puesta sin rúbrica (masiva/manual). Clic para calificar con la rúbrica." : undefined}>
                                 {v ?? "📊"}
                               </button>
                             ) : (
@@ -1574,7 +1591,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
           onClose={() => setImportarMoodleAbierto(false)} onImportado={cargar} />
       )}
       {notaMasivaAbierta && (
-        <NotaMasivaModal actividades={actividades} estudiantesVisibles={estudiantesVisibles} reinoFiltro={reinoFiltro} valorDeActividad={valorDeActividad}
+        <NotaMasivaModal actividades={actividades} estudiantesVisibles={estudiantesVisibles} reinoFiltro={reinoFiltro} valorDeActividad={valorDeActividad} resultadosRubrica={resultadosRubrica}
           onClose={() => setNotaMasivaAbierta(false)} onAplicado={aplicarNotaMasiva} />
       )}
       {observacionMasivaAbierta && (
@@ -1597,6 +1614,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
         <CeldaConRubrica actividad={celdaRubricaAbierta.actividad} estudianteId={celdaRubricaAbierta.estudianteId} config={config}
           estudianteNombre={(estudiantes.find((x) => x.id === celdaRubricaAbierta.estudianteId) || {}).nombre}
           previo={resultadosRubrica[celdaRubricaAbierta.actividad.id]?.[celdaRubricaAbierta.estudianteId]}
+          notaSinRubrica={valores[celdaRubricaAbierta.actividad.id]?.[celdaRubricaAbierta.estudianteId]}
           onGuardado={async (nota, resultado) => {
             const { actividad: act, estudianteId: eid } = celdaRubricaAbierta;
             await guardarValorManual(act.id, eid, String(nota));
