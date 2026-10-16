@@ -30,7 +30,7 @@ export const AREAS = [
   { clave: "econom", nombre: "Economía y Política", emoji: "📊", color: "#047857" },
   { clave: "general", nombre: "General", emoji: "📌", color: "#475569" },
 ];
-const sinTildes = (s) => String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+const sinTildes = (s) => String(s ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 export function temaArea(nombre) {
   const n = sinTildes(nombre);
   if (!n.trim()) return AREAS.find((a) => a.clave === "general");
@@ -126,8 +126,17 @@ const aTexto = (ls) => trimLineas(ls).join("\n");
 const tablaDe = (ls) => trimLineas(ls).filter((l) => l.includes("\t")).map((l) => l.split("\t").map((c) => c.trim()));
 const sinTabla = (ls) => ls.filter((l) => !l.includes("\t"));
 
+// Tablas de markdown (| a | b |) → líneas con tabuladores; se descartan las filas separadoras (|---|---|)
+export function normalizarTablas(texto) {
+  return String(texto ?? "").replace(/\r/g, "").split("\n").map((l) => {
+    if (/^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(l) && l.includes("|")) return null;
+    if (/^\s*\|.*\|\s*$/.test(l)) return l.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim()).join("\t");
+    return l;
+  }).filter((l) => l !== null).join("\n");
+}
+
 export function analizarGuiaTexto(texto) {
-  const todas = String(texto ?? "").replace(/\r/g, "").split("\n");
+  const todas = normalizarTablas(texto).split("\n");
   const partes = partirEn(todas, (l) => { for (const [k, re] of RE_SECCIONES) if (re.test(l)) return k; return null; });
   const sec = {}; partes.forEach((p) => { if (p.m) sec[p.m] = p.lineas; });
   if (Object.keys(sec).length < 2) return null; // no tiene el formato esperado
