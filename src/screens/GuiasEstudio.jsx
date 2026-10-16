@@ -3,6 +3,7 @@ import * as api from "../lib/api";
 import { abrirDocumentoParaImprimir } from "../lib/api";
 import { EditorTexto, TextoEnriquecido } from "../components/RichText";
 import { TeoriaEditor, ActividadesEditor } from "../components/GuiaEditores";
+import { PROMPT_IA_GUIAS_NUEVO } from "../lib/guiaPrompt";
 import { analizarGuiaTexto, htmlGuiaImprimible, htmlGuiaCuerpo, CSS_GUIA } from "../lib/guiaDoc";
 
 // Analiza el texto que la IA devolvió (siguiendo la estructura del prompt
@@ -150,7 +151,19 @@ function PromptIaModal({ onClose }) {
   const [guardando, setGuardando] = useState(false);
   const [copiado, setCopiado] = useState(false);
 
-  useEffect(() => { api.fetchPromptIaGuias().then((t) => { setTexto(t); setCargando(false); }); }, []);
+  const [hayNuevo, setHayNuevo] = useState(false);
+  useEffect(() => {
+    api.fetchPromptIaGuias().then(async (t) => {
+      // Si todavía tiene el prompt de fábrica anterior (sin cambios tuyos), se actualiza solo al nuevo formato.
+      if (t === api.PROMPT_IA_GUIAS_DEFAULT) { try { await api.guardarPromptIaGuias(PROMPT_IA_GUIAS_NUEVO); } catch (e) { /* se muestra igual */ } setTexto(PROMPT_IA_GUIAS_NUEVO); }
+      else { setTexto(t); setHayNuevo(!t.includes("MODELO DE FORMATO")); }
+      setCargando(false);
+    });
+  }, []);
+  const usarNuevo = async () => {
+    if (!confirm("Esto reemplaza tu prompt personalizado por el nuevo (con el formato de la guía rediseñada). ¿Continuar?")) return;
+    await api.guardarPromptIaGuias(PROMPT_IA_GUIAS_NUEVO); setTexto(PROMPT_IA_GUIAS_NUEVO); setHayNuevo(false);
+  };
 
   const copiar = () => {
     navigator.clipboard.writeText(texto);
@@ -171,8 +184,8 @@ function PromptIaModal({ onClose }) {
 
   const restablecer = async () => {
     if (!confirm("¿Volver al prompt original de fábrica? Esto reemplaza cualquier ajuste que le hayas hecho.")) return;
-    setTexto(api.PROMPT_IA_GUIAS_DEFAULT);
-    await api.guardarPromptIaGuias(api.PROMPT_IA_GUIAS_DEFAULT);
+    setTexto(PROMPT_IA_GUIAS_NUEVO); setHayNuevo(false);
+    await api.guardarPromptIaGuias(PROMPT_IA_GUIAS_NUEVO);
   };
 
   return (
@@ -183,9 +196,15 @@ function PromptIaModal({ onClose }) {
           <button onClick={onClose} className="text-slate-400">✕</button>
         </div>
         <p className="text-xs text-slate-500 mb-3">
-          Copiá este texto y pegalo en Claude (u otra IA), completando los datos entre corchetes — te va a devolver una guía lista para pasar campo por campo al formulario de acá arriba.
+          Copiá este texto y pegalo en Claude (u otra IA), completando los datos entre corchetes — te devuelve la guía completa. Después usá "📋 Pegar desde IA" y todo se reparte solo (datos, temas por área, actividades con puntos y evidencia, recursos y autoevaluación) — sin volver a escribirlo.
         </p>
 
+        {hayNuevo && (
+          <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-2 mb-3">
+            Este es tu prompt personalizado. Hay uno <b>nuevo</b> que genera la guía con el formato rediseñado (temas por área, actividades con puntos y evidencia).{" "}
+            <button onClick={usarNuevo} className="font-semibold underline">🔄 Usar el prompt nuevo</button>
+          </div>
+        )}
         {cargando ? (
           <div className="text-sm text-slate-400">Cargando…</div>
         ) : editando ? (
