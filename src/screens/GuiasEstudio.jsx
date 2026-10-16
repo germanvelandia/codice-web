@@ -289,6 +289,7 @@ function GuiaForm({ materiaId, gradoId, periodo, guia, onCancelar, onGuardada })
   const [fechaEntrega, setFechaEntrega] = useState(guia?.fecha_entrega || "");
   const [publicada, setPublicada] = useState(guia?.publicada ?? true);
   const [guardando, setGuardando] = useState(false);
+  const [idGuardada, setIdGuardada] = useState(null);
 
   const vistaPrevia = () => {
     const borrador = { titulo: titulo || "Guía sin título", tiempo_estimado: tiempoEstimado, fecha_entrega: fechaEntrega, periodo, presentacion, rotulo, orientaciones, reflexion_intro: reflexionIntro,
@@ -318,8 +319,18 @@ function GuiaForm({ materiaId, gradoId, periodo, guia, onCancelar, onGuardada })
         fecha_entrega: fechaEntrega || null, publicada,
         materia_id: materiaId, grado_id: gradoId, periodo,
       };
-      if (guia?.id) await api.editarGuiaEstudio(guia.id, campos);
+      const idExistente = guia?.id || idGuardada;
+      if (idExistente) await api.editarGuiaEstudio(idExistente, campos);
       else await api.crearGuiaEstudio(campos);
+      // Comprobación: se vuelve a leer la guía y se verifica que las actividades y los temas hayan quedado guardados.
+      const filas = await api.fetchGuiasEstudio(materiaId, gradoId, periodo);
+      const fila = idExistente ? filas.find((f) => f.id === idExistente) : filas.find((f) => f.titulo === campos.titulo);
+      if (fila) setIdGuardada(fila.id);
+      const faltan = (campos.actividades.length > 0 && !(fila?.actividades || []).length) || (campos.teoria.length > 0 && !(fila?.teoria || []).length);
+      if (faltan) {
+        alert("La guía se guardó, pero la base de datos NO guardó las actividades / temas por área. Esto pasa cuando faltan las columnas nuevas o sus permisos: corre en Supabase el archivo 84_guias_estructuradas.sql y vuelve a pulsar Guardar (el formulario sigue abierto con tu trabajo).");
+        setGuardando(false); return;
+      }
       onGuardada();
     } catch (e) {
       const m = String(e?.message || e);
@@ -417,7 +428,7 @@ function GuiaForm({ materiaId, gradoId, periodo, guia, onCancelar, onGuardada })
         <button type="button" onClick={() => vistaPrevia()} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-violet-200 text-violet-600 mr-auto">👁️ Vista previa</button>
         <button onClick={onCancelar} className="text-xs text-slate-500 px-3 py-1.5">Cancelar</button>
         <button disabled={guardando} onClick={guardar} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
-          {guardando ? "Guardando…" : guia?.id ? "Guardar cambios" : "Crear guía"}
+          {guardando ? "Guardando…" : guia?.id || idGuardada ? "Guardar cambios" : "Crear guía"}
         </button>
       </div>
     </div>
@@ -579,11 +590,11 @@ export function VistaGuiasEstudio({ grados, gradoActivo, periodoActivo, materiaA
       {promptAbierto && <PromptIaModal onClose={() => setPromptAbierto(false)} />}
       {pegarAbierto && (
         <PegarDeIaModal onClose={() => setPegarAbierto(false)}
-          onAnalizado={(datos) => { setEditando(datos); setPegarAbierto(false); setFormAbierto(true); }} />
+          onAnalizado={(datos) => { setEditando({ ...datos, __k: Date.now() }); setPegarAbierto(false); setFormAbierto(true); }} />
       )}
 
       {formAbierto && (
-        <GuiaForm materiaId={materiaId} gradoId={gradoId} periodo={periodo} guia={editando}
+        <GuiaForm key={editando?.id ?? editando?.__k ?? "nueva"} materiaId={materiaId} gradoId={gradoId} periodo={periodo} guia={editando}
           onCancelar={() => { setFormAbierto(false); setEditando(null); }}
           onGuardada={() => { setFormAbierto(false); setEditando(null); cargar(); }} />
       )}
