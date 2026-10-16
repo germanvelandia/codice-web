@@ -322,7 +322,10 @@ function GuiaForm({ materiaId, gradoId, periodo, guia, onCancelar, onGuardada })
       else await api.crearGuiaEstudio(campos);
       onGuardada();
     } catch (e) {
-      alert("Error al guardar: " + e.message);
+      const m = String(e?.message || e);
+      if (/schema cache|column|does not exist|PGRST204/i.test(m)) {
+        alert("No se pudo guardar porque a la base de datos le faltan las columnas nuevas de la guía (actividades, teoría, datos…).\n\nEn Supabase → SQL Editor corre el archivo 84_guias_estructuradas.sql (incluye la última línea que actualiza la caché) y vuelve a guardar. Tu trabajo en este formulario sigue aquí, no lo cierres.\n\nDetalle: " + m);
+      } else alert("Error al guardar: " + m);
     }
     setGuardando(false);
   };
