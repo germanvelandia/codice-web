@@ -13,6 +13,7 @@ import { InclusionBadge, FotoLightbox } from "./Estudiantes";
 import { EditorTexto, TextoEnriquecido, textoPlano } from "../components/RichText";
 import { calcularNotaRubrica, SelectorRubrica, NivelesEditor, RubricaGrid } from "../components/Rubrica";
 import { guardarResultadoRubrica } from "../lib/rubricaApi";
+import { vincularColumnas, desvincularColumna } from "../lib/vinculos";
 import { BookOpen, Edit, Archive, GraduationCap, Calendar, FileText, Award, BarChart, Settings, Users, TrendingDown, Plus } from "lucide-react";
 
 // Tarjeta compacta para elegir entre varias opciones (materia, curso,
@@ -887,6 +888,7 @@ function CopiarColumnasModal({ materiaDestinoId, gradoId, periodos, categoriasDe
   const [copiando, setCopiando] = useState(false);
   const [alcance, setAlcance] = useState("todos"); // "todos" | "uno"
   const [estudianteId, setEstudianteId] = useState("");
+  const [vincular, setVincular] = useState(false); // mantener las notas amarradas entre origen y destino
 
   const materiasOrigenPosibles = materias.filter((m) => m.id !== materiaDestinoId);
 
@@ -927,12 +929,26 @@ function CopiarColumnasModal({ materiaDestinoId, gradoId, periodos, categoriasDe
     setCopiando(true);
     try {
       const mapaFinal = {};
-      idsSeleccionados.forEach((id) => {
-        mapaFinal[id] = destinoPorActividad[id] === "nueva"
-          ? { categoriaId: categoriaPorActividad[id] }
-          : { actividadDestinoId: destinoPorActividad[id] };
-      });
+      const vinculos = []; // [origenId, destinoId]
+      for (const id of idsSeleccionados) {
+        if (destinoPorActividad[id] === "nueva") {
+          if (vincular) {
+            // Para poder amarrarla, la columna nueva se crea aquí y la copia llena sus notas.
+            const act = actividadesOrigen.find((x) => x.id === id);
+            const nueva = await api.crearActividad({
+              nombre: act.nombre, categoria_id: categoriaPorActividad[id], materia_id: materiaDestinoId, grado_id: gradoId,
+              periodo: act.periodo, es_automatica: act.es_automatica, gam_categoria: act.gam_categoria || null,
+            });
+            mapaFinal[id] = { actividadDestinoId: nueva.id };
+            vinculos.push([id, nueva.id]);
+          } else mapaFinal[id] = { categoriaId: categoriaPorActividad[id] };
+        } else {
+          mapaFinal[id] = { actividadDestinoId: destinoPorActividad[id] };
+          if (vincular) vinculos.push([id, destinoPorActividad[id]]);
+        }
+      }
       const n = await api.copiarColumnasEspecificas(idsSeleccionados, materiaDestinoId, gradoId, mapaFinal, alcance === "uno" ? estudianteId : null);
+      for (const [o, d] of vinculos) await vincularColumnas(o, d);
       alert(alcance === "uno"
         ? `Se copió la nota de ${estudiantes.find((s) => s.id === estudianteId)?.nombre || "ese estudiante"} en ${n} columna(s).`
         : `Se copiaron ${n} columna(s) con sus notas.`);
@@ -1029,6 +1045,10 @@ function CopiarColumnasModal({ materiaDestinoId, gradoId, periodos, categoriasDe
           </div>
         )}
 
+        <label className="flex items-start gap-2 text-xs text-slate-600 mb-3 bg-violet-50 rounded-lg p-2">
+          <input type="checkbox" checked={vincular} onChange={(e) => setVincular(e.target.checked)} className="mt-0.5" />
+          <span>🔗 <b>Mantener las notas vinculadas</b>: si cambias una nota en una de las dos materias, cambia sola en la otra (en ambos sentidos). Se puede desvincular después desde el encabezado de la columna.</span>
+        </label>
         <div className="flex justify-end gap-2">
           <button onClick={onClose} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
           <button disabled={copiando || idsSeleccionados.length === 0} onClick={copiar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-40">
@@ -1494,6 +1514,10 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
                         <input type="checkbox" checked={seleccionadas.includes(a.id)} onChange={() => toggleSeleccion(a.id)} />
                       )}
                       {a.es_automatica && <span title="Automática">⚡</span>}
+                      {a.grupo_vinculo && !seleccionando && (
+                        <button title="Vinculada con otra materia: sus notas se replican solas. Clic para desvincular."
+                          onClick={async () => { if (confirm(`¿Desvincular "${a.nombre}"? Dejará de replicar sus notas con la otra materia (las notas actuales se conservan).`)) { await desvincularColumna(a.id); cargar(); } }}>🔗</button>
+                      )}
                       <span>{a.nombre}</span>
                       {a.fecha && <span className="text-[9px] text-slate-400 font-normal">({a.fecha.slice(5)})</span>}
                       {!seleccionando && (
