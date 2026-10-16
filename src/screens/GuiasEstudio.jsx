@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from "react";
 import * as api from "../lib/api";
+import { abrirDocumentoParaImprimir } from "../lib/api";
 import { EditorTexto, TextoEnriquecido } from "../components/RichText";
+import { TeoriaEditor, ActividadesEditor } from "../components/GuiaEditores";
+import { analizarGuiaTexto, htmlGuiaImprimible, htmlGuiaCuerpo, CSS_GUIA } from "../lib/guiaDoc";
 
 // Analiza el texto que la IA devolvió (siguiendo la estructura del prompt
 // de 6 secciones) e intenta separarlo en los campos del formulario. Es un
@@ -111,7 +114,7 @@ function PegarDeIaModal({ onClose, onAnalizado }) {
 
   const analizar = () => {
     if (!texto.trim()) { alert("Pegá acá el texto que te devolvió la IA."); return; }
-    const datos = analizarRespuestaIA(texto);
+    const datos = analizarGuiaTexto(texto) || analizarRespuestaIA(texto);
     const huboAlgo = Object.values(datos).some((v) => (Array.isArray(v) ? v.length > 0 : !!v));
     if (!huboAlgo) {
       if (!confirm("No pude reconocer ninguna sección con el formato esperado — ¿igual querés abrir el formulario vacío para completarlo a mano?")) return;
@@ -257,9 +260,25 @@ function GuiaForm({ materiaId, gradoId, periodo, guia, onCancelar, onGuardada })
     { texto: "¿Cuál fue el concepto o actividad más desafiante y qué estrategia utilicé para resolverlo?" },
     { texto: "¿Qué dudas o temas requieren una tutoría o profundización adicional?" },
   ]);
+  const [presentacion, setPresentacion] = useState(guia?.presentacion || "");
+  const [rotulo, setRotulo] = useState(guia?.rotulo || "");
+  const [datosId, setDatosId] = useState(Array.isArray(guia?.datos) ? guia.datos : []);
+  const [orientaciones, setOrientaciones] = useState(guia?.orientaciones || "");
+  const [teoria, setTeoria] = useState(Array.isArray(guia?.teoria) ? guia.teoria : []);
+  const [actividades, setActividades] = useState(Array.isArray(guia?.actividades) ? guia.actividades : []);
+  const [reflexionIntro, setReflexionIntro] = useState(guia?.reflexion_intro || "");
   const [fechaEntrega, setFechaEntrega] = useState(guia?.fecha_entrega || "");
   const [publicada, setPublicada] = useState(guia?.publicada ?? true);
   const [guardando, setGuardando] = useState(false);
+
+  const vistaPrevia = () => {
+    const borrador = { titulo: titulo || "Guía sin título", tiempo_estimado: tiempoEstimado, fecha_entrega: fechaEntrega, periodo, presentacion, rotulo, orientaciones, reflexion_intro: reflexionIntro,
+      datos: datosId, proposito_general: propositoGeneral, objetivo, criterios_evaluacion: criteriosEvaluacion, contenido, teoria, conceptos_clave: conceptosClave,
+      fase_exploracion: faseExploracion, fase_aplicacion: faseAplicacion, fase_transferencia: faseTransferencia, actividades,
+      lectura_principal: lecturaPrincipal, material_multimedia: materialMultimedia, herramientas_sugeridas: herramientasSugeridas,
+      rubrica_criterios: rubricaCriterios, preguntas_reflexion: preguntasReflexion };
+    abrirDocumentoParaImprimir(htmlGuiaImprimible(borrador, { autoImprimir: false }));
+  };
 
   const guardar = async () => {
     if (!titulo.trim()) { alert("Ponele un título a la guía."); return; }
@@ -273,6 +292,10 @@ function GuiaForm({ materiaId, gradoId, periodo, guia, onCancelar, onGuardada })
         lectura_principal: lecturaPrincipal || null, material_multimedia: materialMultimedia || null, herramientas_sugeridas: herramientasSugeridas || null,
         rubrica_criterios: rubricaCriterios.filter((c) => c.criterio?.trim()),
         preguntas_reflexion: preguntasReflexion.filter((p) => p.texto?.trim()),
+        presentacion: presentacion || null, rotulo: rotulo || null, orientaciones: orientaciones || null, reflexion_intro: reflexionIntro || null,
+        datos: datosId.filter((d) => d.campo?.trim() || d.valor?.trim()),
+        teoria: teoria.filter((t) => t.titulo?.trim() || t.area?.trim() || (t.contenido || "").replace(/<[^>]*>/g, "").trim()),
+        actividades: actividades.filter((a) => a.titulo?.trim() || a.area?.trim() || (a.puntos || []).length),
         fecha_entrega: fechaEntrega || null, publicada,
         materia_id: materiaId, grado_id: gradoId, periodo,
       };
@@ -292,11 +315,18 @@ function GuiaForm({ materiaId, gradoId, periodo, guia, onCancelar, onGuardada })
         <div className="text-[10px] font-bold text-violet-600 uppercase tracking-wide mb-1.5">1. Datos de identificación</div>
         <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título de la Unidad / Tema"
           className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-2 mb-2">
           <input value={tiempoEstimado} onChange={(e) => setTiempoEstimado(e.target.value)} placeholder="Tiempo estimado (ej: 3 horas)"
             className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
           <input type="date" value={fechaEntrega} onChange={(e) => setFechaEntrega(e.target.value)} className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
         </div>
+        <textarea value={presentacion} onChange={(e) => setPresentacion(e.target.value)} rows={2} placeholder="📣 Presentación (1-3 oraciones que salen en la portada)"
+          className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
+        <label className="text-xs text-slate-500 block mb-1">📋 Tabla de identificación (Institución, Asignatura, Grado, Docentes, Fecha…)</label>
+        <ListaEditable filas={datosId} onCambiar={setDatosId} placeholder="Agregar dato"
+          campos={[{ key: "campo", placeholder: "Campo (ej: Docentes)", ancho: "w-40" }, { key: "valor", placeholder: "Información" }]} />
+        <label className="text-xs text-slate-500 block mb-1">📝 Orientaciones para el estudiante</label>
+        <EditorTexto value={orientaciones} onChange={setOrientaciones} minHeight={60} placeholder="Una indicación por viñeta…" />
       </div>
 
       {/* 2. Metas de aprendizaje y competencias */}
@@ -314,10 +344,12 @@ function GuiaForm({ materiaId, gradoId, periodo, guia, onCancelar, onGuardada })
       {/* 3. Fundamentación teórica y conceptos clave */}
       <div>
         <div className="text-[10px] font-bold text-violet-600 uppercase tracking-wide mb-1.5">3. Fundamentación teórica y conceptos clave</div>
-        <div className="mb-2"><EditorTexto value={contenido} onChange={setContenido} minHeight={90} placeholder="Síntesis clara y estructurada del tema…" /></div>
-        <label className="text-xs text-slate-500 block mb-1">Conceptos clave</label>
+        <div className="mb-2"><EditorTexto value={contenido} onChange={setContenido} minHeight={70} placeholder="Introducción general (opcional)…" /></div>
+        <label className="text-xs text-slate-500 block mb-1">🧩 Temas por área (cada uno con su color y emoji; aquí van texto, ejemplos, fórmulas y tablas)</label>
+        <TeoriaEditor lista={teoria} onCambiar={setTeoria} />
+        <label className="text-xs text-slate-500 block mb-1">🔑 Conceptos clave</label>
         <ListaEditable filas={conceptosClave} onCambiar={setConceptosClave} placeholder="Agregar concepto"
-          campos={[{ key: "termino", placeholder: "Término", ancho: "w-32" }, { key: "definicion", placeholder: "Definición / aplicación" }]} />
+          campos={[{ key: "termino", placeholder: "Concepto", ancho: "w-28" }, { key: "definicion", placeholder: "Definición sintética" }, { key: "relacion", placeholder: "Relación con el tema (opcional)", ancho: "w-44" }]} />
       </div>
 
       {/* 4. Secuencia de actividades */}
@@ -325,8 +357,10 @@ function GuiaForm({ materiaId, gradoId, periodo, guia, onCancelar, onGuardada })
         <div className="text-[10px] font-bold text-violet-600 uppercase tracking-wide mb-1.5">4. Secuencia de actividades y práctica guiada</div>
         <label className="text-xs text-slate-500 block mb-1">Fase de exploración y comprensión</label>
         <div className="mb-2"><EditorTexto value={faseExploracion} onChange={setFaseExploracion} minHeight={50} placeholder="Pregunta de reflexión inicial o lectura dirigida…" /></div>
-        <label className="text-xs text-slate-500 block mb-1">Fase de aplicación y análisis</label>
-        <div className="mb-2"><EditorTexto value={faseAplicacion} onChange={setFaseAplicacion} minHeight={70} placeholder="Ejercicio práctico, caso, problema o cuadro comparativo…" /></div>
+        <label className="text-xs text-slate-500 block mb-1">Fase de aplicación y análisis — instrucción general</label>
+        <div className="mb-2"><EditorTexto value={faseAplicacion} onChange={setFaseAplicacion} minHeight={40} placeholder="Ej: Desarrolla las ocho actividades. Conserva la numeración…" /></div>
+        <label className="text-xs text-slate-500 block mb-1">🧪 Actividades (una tarjeta por actividad, con situación, puntos y evidencia)</label>
+        <ActividadesEditor lista={actividades} onCambiar={setActividades} />
         <label className="text-xs text-slate-500 block mb-1">Fase de transferencia / creación</label>
         <div className="mb-1"><EditorTexto value={faseTransferencia} onChange={setFaseTransferencia} minHeight={60} placeholder="Síntesis, propuesta, argumentación o producto final…" /></div>
       </div>
@@ -334,12 +368,12 @@ function GuiaForm({ materiaId, gradoId, periodo, guia, onCancelar, onGuardada })
       {/* 5. Recursos de apoyo */}
       <div>
         <div className="text-[10px] font-bold text-violet-600 uppercase tracking-wide mb-1.5">5. Recursos de apoyo y material complementario</div>
-        <input value={lecturaPrincipal} onChange={(e) => setLecturaPrincipal(e.target.value)} placeholder="Lectura principal (referencia, capítulo, páginas)"
-          className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
-        <input value={materialMultimedia} onChange={(e) => setMaterialMultimedia(e.target.value)} placeholder="Material multimedia / enlaces"
-          className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
-        <input value={herramientasSugeridas} onChange={(e) => setHerramientasSugeridas(e.target.value)} placeholder="Herramientas sugeridas (software, plataformas)"
-          className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
+        <label className="text-xs text-slate-500 block mb-1">📖 Lecturas principales (puedes insertar una tabla ▦: Área / Recurso / Utilidad)</label>
+        <div className="mb-2"><EditorTexto value={lecturaPrincipal} onChange={setLecturaPrincipal} minHeight={50} placeholder="Referencias, capítulos, páginas…" /></div>
+        <label className="text-xs text-slate-500 block mb-1">🎬 Material multimedia y enlaces</label>
+        <div className="mb-2"><EditorTexto value={materialMultimedia} onChange={setMaterialMultimedia} minHeight={50} placeholder="Videos, mapas, sitios web…" /></div>
+        <label className="text-xs text-slate-500 block mb-1">🧰 Herramientas sugeridas</label>
+        <EditorTexto value={herramientasSugeridas} onChange={setHerramientasSugeridas} minHeight={50} placeholder="Calculadora, atlas, diccionario…" />
       </div>
 
       {/* 6. Rúbrica de autoevaluación */}
@@ -358,6 +392,7 @@ function GuiaForm({ materiaId, gradoId, periodo, guia, onCancelar, onGuardada })
       </label>
 
       <div className="flex justify-end gap-2">
+        <button type="button" onClick={() => vistaPrevia()} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-violet-200 text-violet-600 mr-auto">👁️ Vista previa</button>
         <button onClick={onCancelar} className="text-xs text-slate-500 px-3 py-1.5">Cancelar</button>
         <button disabled={guardando} onClick={guardar} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
           {guardando ? "Guardando…" : guia?.id ? "Guardar cambios" : "Crear guía"}
@@ -367,73 +402,34 @@ function GuiaForm({ materiaId, gradoId, periodo, guia, onCancelar, onGuardada })
   );
 }
 
-function imprimirGuia(guia, institucion) {
-  const filaConcepto = (c) => `<tr><td style="border:1px solid #ccc; padding:6px; font-weight:bold; width:25%;">${c.termino}</td><td style="border:1px solid #ccc; padding:6px;">${c.definicion || ""}</td></tr>`;
-  const filaRubrica = (c) => `<tr><td style="border:1px solid #ccc; padding:6px;">${c.criterio}</td><td style="border:1px solid #ccc; padding:6px; text-align:center; width:70px;">☐</td><td style="border:1px solid #ccc; padding:6px; text-align:center; width:70px;">☐</td><td style="border:1px solid #ccc; padding:6px; text-align:center; width:70px;">☐</td></tr>`;
+// Imprime (o muestra la vista previa) con el documento de colores. opciones.lineas = renglones para responder tras cada punto.
+function imprimirGuia(guia, institucion, opciones = {}) {
+  abrirDocumentoParaImprimir(htmlGuiaImprimible(guia, { institucion, materia: opciones.materia || guia.materias?.nombre || "", lineas: opciones.lineas || 0, autoImprimir: opciones.autoImprimir !== false }));
+}
 
-  const ventana = window.open("", "_blank");
-  ventana.document.write(`
-    <html><head><title>${guia.titulo}</title></head>
-    <body style="font-family: Arial, sans-serif; padding: 30px; font-size: 13px; line-height: 1.5;">
-      <div style="display:flex; align-items:center; gap:12px; border-bottom:2px solid #000; padding-bottom:8px; margin-bottom:16px;">
-        ${institucion?.logo_url ? `<img src="${institucion.logo_url}" style="height:55px;" />` : ""}
-        <div style="flex:1; text-align:center;">
-          <div style="font-weight:bold; font-size:15px;">${institucion?.nombre || "INSTITUCIÓN EDUCATIVA"}</div>
-          <div style="font-weight:bold; margin-top:4px; font-size:13px;">GUÍA DE ESTUDIO PEDAGÓGICA</div>
+function ImprimirGuiaModal({ guia, institucion, materia, onCerrar }) {
+  const [lineas, setLineas] = useState(0);
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onCerrar}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl">
+        <h3 className="font-bold text-slate-800 mb-1">🖨️ Imprimir guía</h3>
+        <p className="text-xs text-slate-500 mb-3">{guia.titulo}</p>
+        <label className="text-xs text-slate-600 block mb-1">Renglones para responder después de cada punto</label>
+        <select value={lineas} onChange={(e) => setLineas(parseInt(e.target.value, 10))} className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white">
+          <option value={0}>Ninguno (el estudiante responde en el cuaderno)</option>
+          <option value={3}>3 renglones</option>
+          <option value={5}>5 renglones</option>
+          <option value={8}>8 renglones</option>
+        </select>
+        <p className="text-[11px] text-slate-400 mb-3">En el cuadro de impresión elige <b>Guardar como PDF</b> o tu impresora, y activa "Gráficos de fondo" para que salgan los colores.</p>
+        <div className="flex justify-end gap-2">
+          <button onClick={onCerrar} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
+          <button onClick={() => { imprimirGuia(guia, institucion, { materia, lineas, autoImprimir: false }); }} className="text-xs font-semibold px-3 py-2 rounded-lg border border-violet-200 text-violet-600">👁️ Vista previa</button>
+          <button onClick={() => { imprimirGuia(guia, institucion, { materia, lineas }); onCerrar(); }} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white">Imprimir</button>
         </div>
       </div>
-
-      <h2 style="margin-bottom:4px;">${guia.titulo}</h2>
-      <p style="color:#555; margin-top:0;">${guia.tiempo_estimado ? `⏱ ${guia.tiempo_estimado}` : ""}${guia.fecha_entrega ? ` · 📅 Entrega: ${guia.fecha_entrega}` : ""}</p>
-
-      ${guia.proposito_general || guia.objetivo || guia.criterios_evaluacion ? `
-        <h3 style="border-bottom:1px solid #ccc; padding-bottom:3px;">2. Metas de Aprendizaje y Competencias</h3>
-        ${guia.proposito_general ? `<p><b>Propósito General:</b> ${guia.proposito_general}</p>` : ""}
-        ${guia.objetivo ? `<p><b>Desempeño / Aprendizaje Esperado:</b></p><div>${guia.objetivo}</div>` : ""}
-        ${guia.criterios_evaluacion ? `<p><b>Criterios de Evaluación:</b></p><div>${guia.criterios_evaluacion}</div>` : ""}
-      ` : ""}
-
-      ${guia.contenido || (guia.conceptos_clave && guia.conceptos_clave.length > 0) ? `
-        <h3 style="border-bottom:1px solid #ccc; padding-bottom:3px;">3. Fundamentación Teórica y Conceptos Clave</h3>
-        ${guia.contenido ? `<div>${guia.contenido}</div>` : ""}
-        ${guia.conceptos_clave && guia.conceptos_clave.length > 0 ? `
-          <table style="border-collapse:collapse; width:100%; margin-top:8px;">
-            <tr><th style="border:1px solid #ccc; padding:6px; background:#f3f4f6;">Concepto Clave</th><th style="border:1px solid #ccc; padding:6px; background:#f3f4f6;">Definición / Aplicación</th></tr>
-            ${guia.conceptos_clave.map(filaConcepto).join("")}
-          </table>` : ""}
-      ` : ""}
-
-      ${guia.fase_exploracion || guia.fase_aplicacion || guia.fase_transferencia ? `
-        <h3 style="border-bottom:1px solid #ccc; padding-bottom:3px;">4. Secuencia de Actividades y Práctica Guiada</h3>
-        ${guia.fase_exploracion ? `<p><b>Fase de Exploración y Comprensión:</b></p><div>${guia.fase_exploracion}</div>` : ""}
-        ${guia.fase_aplicacion ? `<p><b>Fase de Aplicación y Análisis:</b></p><div>${guia.fase_aplicacion}</div>` : ""}
-        ${guia.fase_transferencia ? `<p><b>Fase de Transferencia / Creación:</b></p><div>${guia.fase_transferencia}</div>` : ""}
-      ` : ""}
-
-      ${guia.lectura_principal || guia.material_multimedia || guia.herramientas_sugeridas ? `
-        <h3 style="border-bottom:1px solid #ccc; padding-bottom:3px;">5. Recursos de Apoyo y Material Complementario</h3>
-        ${guia.lectura_principal ? `<p><b>Lectura Principal:</b> ${guia.lectura_principal}</p>` : ""}
-        ${guia.material_multimedia ? `<p><b>Material Multimedia / Enlaces:</b> ${guia.material_multimedia}</p>` : ""}
-        ${guia.herramientas_sugeridas ? `<p><b>Herramientas Sugeridas:</b> ${guia.herramientas_sugeridas}</p>` : ""}
-      ` : ""}
-
-      ${(guia.rubrica_criterios && guia.rubrica_criterios.length > 0) || (guia.preguntas_reflexion && guia.preguntas_reflexion.length > 0) ? `
-        <h3 style="border-bottom:1px solid #ccc; padding-bottom:3px;">6. Rúbrica de Autoevaluación y Metacognición</h3>
-        ${guia.rubrica_criterios && guia.rubrica_criterios.length > 0 ? `
-          <table style="border-collapse:collapse; width:100%; margin-bottom:12px;">
-            <tr><th style="border:1px solid #ccc; padding:6px; background:#f3f4f6;">Criterio de Desempeño</th><th style="border:1px solid #ccc; padding:6px; background:#f3f4f6;">Logrado</th><th style="border:1px solid #ccc; padding:6px; background:#f3f4f6;">En Proceso</th><th style="border:1px solid #ccc; padding:6px; background:#f3f4f6;">Por Mejorar</th></tr>
-            ${guia.rubrica_criterios.map(filaRubrica).join("")}
-          </table>` : ""}
-        ${guia.preguntas_reflexion && guia.preguntas_reflexion.length > 0 ? `
-          <p><b>Preguntas de Reflexión Final</b></p>
-          <ol>${guia.preguntas_reflexion.map((p) => `<li style="margin-bottom:10px;">${p.texto}<br/>_______________________________________________</li>`).join("")}</ol>
-        ` : ""}
-      ` : ""}
-
-      <script>window.print();</script>
-    </body></html>
-  `);
-  ventana.document.close();
+    </div>
+  );
 }
 
 // Duplica una guía completa (tal cual quedó armada) hacia uno o varios
@@ -506,6 +502,7 @@ export function VistaGuiasEstudio({ grados, gradoActivo, periodoActivo, materiaA
   const [editando, setEditando] = useState(null);
   const [promptAbierto, setPromptAbierto] = useState(false);
   const [duplicandoGuia, setDuplicandoGuia] = useState(null);
+  const [imprimiendo, setImprimiendo] = useState(null);
 
   useEffect(() => { if (gradoActivo) setGradoId(gradoActivo); }, [gradoActivo]);
   useEffect(() => { if (materiaActiva) setMateriaId(materiaActiva); }, [materiaActiva]);
@@ -588,7 +585,7 @@ export function VistaGuiasEstudio({ grados, gradoActivo, periodoActivo, materiaA
                   {g.proposito_general && <p className="text-xs text-slate-500 mt-1.5">{g.proposito_general}</p>}
                 </div>
                 <div className="flex gap-1.5 shrink-0">
-                  <button onClick={() => imprimirGuia(g, institucion)} className="text-xs text-slate-400 hover:text-violet-600">🖨️</button>
+                  <button onClick={() => setImprimiendo(g)} className="text-xs text-slate-400 hover:text-violet-600" title="Imprimir / vista previa">🖨️</button>
                   <button onClick={() => setDuplicandoGuia(g)} className="text-xs text-slate-400 hover:text-violet-600" title="Duplicar a otro curso">⧉</button>
                   <button onClick={() => { setEditando(g); setFormAbierto(true); }} className="text-xs text-slate-400 hover:text-violet-600">✏️</button>
                   <button onClick={() => eliminar(g.id)} className="text-xs text-slate-400 hover:text-rose-500">🗑</button>
@@ -598,6 +595,7 @@ export function VistaGuiasEstudio({ grados, gradoActivo, periodoActivo, materiaA
           ))}
         </div>
       )}
+      {imprimiendo && <ImprimirGuiaModal guia={imprimiendo} institucion={institucion} materia={materias.find((m) => m.id === materiaId)?.nombre || ""} onCerrar={() => setImprimiendo(null)} />}
       {duplicandoGuia && (
         <DuplicarGuiaModal guia={duplicandoGuia} gradoActual={gradoId} grados={grados}
           onCerrar={() => setDuplicandoGuia(null)}
@@ -662,7 +660,9 @@ export function GuiasEstudiante({ gradoId, estudianteId }) {
   const [guias, setGuias] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [abierta, setAbierta] = useState(null);
+  const [institucion, setInstitucion] = useState(null);
 
+  useEffect(() => { api.fetchInstitucion().then(setInstitucion).catch(() => {}); }, []);
   useEffect(() => {
     if (!gradoId) return;
     api.fetchGuiasEstudioParaGrado(gradoId).then((d) => { setGuias(d); setCargando(false); });
@@ -674,40 +674,13 @@ export function GuiasEstudiante({ gradoId, estudianteId }) {
     return (
       <div>
         <button onClick={() => setAbierta(null)} className="text-sm text-violet-500 mb-3">← Volver</button>
-        <h3 className="font-bold text-slate-800 mb-1">{abierta.titulo}</h3>
-        <p className="text-xs text-slate-400 mb-3">
-          {abierta.materias?.nombre}{abierta.tiempo_estimado ? ` · ⏱ ${abierta.tiempo_estimado}` : ""}{abierta.fecha_entrega ? ` · 📅 Entrega: ${abierta.fecha_entrega}` : ""}
-        </p>
-
-        {abierta.proposito_general && <p className="text-sm text-slate-600 italic mb-3">{abierta.proposito_general}</p>}
-
-        {abierta.objetivo && (<><h4 className="text-sm font-bold text-slate-700 mt-3">🎯 Aprendizaje esperado</h4><TextoEnriquecido html={abierta.objetivo} className="text-sm text-slate-600" /></>)}
-        {abierta.criterios_evaluacion && (<><h4 className="text-sm font-bold text-slate-700 mt-3">✔️ Criterios de evaluación</h4><TextoEnriquecido html={abierta.criterios_evaluacion} className="text-sm text-slate-600" /></>)}
-
-        {abierta.contenido && (<><h4 className="text-sm font-bold text-slate-700 mt-3">📚 Fundamentación teórica</h4><TextoEnriquecido html={abierta.contenido} className="text-sm text-slate-600" /></>)}
-        {abierta.conceptos_clave?.length > 0 && (
-          <div className="mt-2 space-y-1.5">
-            {abierta.conceptos_clave.map((c, i) => (
-              <div key={i} className="bg-slate-50 rounded-lg p-2">
-                <span className="text-xs font-bold text-violet-600">{c.termino}: </span>
-                <span className="text-xs text-slate-600">{c.definicion}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {abierta.fase_exploracion && (<><h4 className="text-sm font-bold text-slate-700 mt-3">🔍 Para empezar</h4><TextoEnriquecido html={abierta.fase_exploracion} className="text-sm text-slate-600" /></>)}
-        {abierta.fase_aplicacion && (<><h4 className="text-sm font-bold text-slate-700 mt-3">✏️ Manos a la obra</h4><TextoEnriquecido html={abierta.fase_aplicacion} className="text-sm text-slate-600" /></>)}
-        {abierta.fase_transferencia && (<><h4 className="text-sm font-bold text-slate-700 mt-3">🚀 Para ir más allá</h4><TextoEnriquecido html={abierta.fase_transferencia} className="text-sm text-slate-600" /></>)}
-
-        {(abierta.lectura_principal || abierta.material_multimedia || abierta.herramientas_sugeridas) && (
-          <>
-            <h4 className="text-sm font-bold text-slate-700 mt-3">📎 Recursos</h4>
-            {abierta.lectura_principal && <p className="text-xs text-slate-600 mt-1"><b>Lectura:</b> {abierta.lectura_principal}</p>}
-            {abierta.material_multimedia && <p className="text-xs text-slate-600 mt-1"><b>Multimedia:</b> {abierta.material_multimedia}</p>}
-            {abierta.herramientas_sugeridas && <p className="text-xs text-slate-600 mt-1"><b>Herramientas:</b> {abierta.herramientas_sugeridas}</p>}
-          </>
-        )}
+        <style>{CSS_GUIA}</style>
+        <div className="bg-white rounded-2xl border border-slate-200 p-3 sm:p-4 overflow-hidden">
+          <div dangerouslySetInnerHTML={{ __html: htmlGuiaCuerpo(abierta, { institucion, materia: abierta.materias?.nombre || "", indice: true }) }} />
+        </div>
+        <div className="flex justify-end mt-2">
+          <button onClick={() => imprimirGuia(abierta, institucion, { materia: abierta.materias?.nombre })} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🖨️ Imprimir / guardar PDF</button>
+        </div>
 
         {estudianteId && (abierta.rubrica_criterios?.length > 0 || abierta.preguntas_reflexion?.length > 0) && (
           <AutoevaluacionInteractiva guia={abierta} estudianteId={estudianteId} />
