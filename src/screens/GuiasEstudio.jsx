@@ -284,7 +284,7 @@ function GuiaForm({ materiaId, gradoId, periodo, guia, onCancelar, onGuardada })
   const [datosId, setDatosId] = useState(Array.isArray(guia?.datos) ? guia.datos : []);
   const [orientaciones, setOrientaciones] = useState(guia?.orientaciones || "");
   const [teoria, setTeoria] = useState(Array.isArray(guia?.teoria) ? guia.teoria : []);
-  const [actividades, setActividades] = useState(Array.isArray(guia?.actividades) ? guia.actividades : []);
+  const [actividades, setActividades] = useState(Array.isArray(guia?.actividades_guia) ? guia.actividades_guia : []);
   const [reflexionIntro, setReflexionIntro] = useState(guia?.reflexion_intro || "");
   const [fechaEntrega, setFechaEntrega] = useState(guia?.fecha_entrega || "");
   const [publicada, setPublicada] = useState(guia?.publicada ?? true);
@@ -294,7 +294,7 @@ function GuiaForm({ materiaId, gradoId, periodo, guia, onCancelar, onGuardada })
   const vistaPrevia = () => {
     const borrador = { titulo: titulo || "Guía sin título", tiempo_estimado: tiempoEstimado, fecha_entrega: fechaEntrega, periodo, presentacion, rotulo, orientaciones, reflexion_intro: reflexionIntro,
       datos: datosId, proposito_general: propositoGeneral, objetivo, criterios_evaluacion: criteriosEvaluacion, contenido, teoria, conceptos_clave: conceptosClave,
-      fase_exploracion: faseExploracion, fase_aplicacion: faseAplicacion, fase_transferencia: faseTransferencia, actividades,
+      fase_exploracion: faseExploracion, fase_aplicacion: faseAplicacion, fase_transferencia: faseTransferencia, actividades_guia: actividades,
       lectura_principal: lecturaPrincipal, material_multimedia: materialMultimedia, herramientas_sugeridas: herramientasSugeridas,
       rubrica_criterios: rubricaCriterios, preguntas_reflexion: preguntasReflexion };
     abrirDocumentoParaImprimir(htmlGuiaImprimible(borrador, { autoImprimir: false }));
@@ -315,7 +315,7 @@ function GuiaForm({ materiaId, gradoId, periodo, guia, onCancelar, onGuardada })
         presentacion: presentacion || null, rotulo: rotulo || null, orientaciones: orientaciones || null, reflexion_intro: reflexionIntro || null,
         datos: datosId.filter((d) => d.campo?.trim() || d.valor?.trim()),
         teoria: teoria.filter((t) => t.titulo?.trim() || t.area?.trim() || (t.contenido || "").replace(/<[^>]*>/g, "").trim()),
-        actividades: actividades.filter((a) => a.titulo?.trim() || a.area?.trim() || (a.puntos || []).length),
+        actividades_guia: actividades.filter((a) => a.titulo?.trim() || a.area?.trim() || (a.puntos || []).length),
         fecha_entrega: fechaEntrega || null, publicada,
         materia_id: materiaId, grado_id: gradoId, periodo,
       };
@@ -326,7 +326,7 @@ function GuiaForm({ materiaId, gradoId, periodo, guia, onCancelar, onGuardada })
       const filas = await api.fetchGuiasEstudio(materiaId, gradoId, periodo);
       const fila = idExistente ? filas.find((f) => f.id === idExistente) : filas.find((f) => f.titulo === campos.titulo);
       if (fila) setIdGuardada(fila.id);
-      const faltan = (campos.actividades.length > 0 && !(fila?.actividades || []).length) || (campos.teoria.length > 0 && !(fila?.teoria || []).length);
+      const faltan = (campos.actividades_guia.length > 0 && !(Array.isArray(fila?.actividades_guia) && fila.actividades_guia.length > 0)) || (campos.teoria.length > 0 && !(Array.isArray(fila?.teoria) && fila.teoria.length > 0));
       if (faltan) {
         alert("La guía se guardó, pero la base de datos NO guardó las actividades / temas por área. Esto pasa cuando faltan las columnas nuevas o sus permisos: corre en Supabase el archivo 84_guias_estructuradas.sql y vuelve a pulsar Guardar (el formulario sigue abierto con tu trabajo).");
         setGuardando(false); return;
@@ -335,7 +335,7 @@ function GuiaForm({ materiaId, gradoId, periodo, guia, onCancelar, onGuardada })
     } catch (e) {
       const m = String(e?.message || e);
       if (/schema cache|column|does not exist|PGRST204/i.test(m)) {
-        alert("No se pudo guardar porque a la base de datos le faltan las columnas nuevas de la guía (actividades, teoría, datos…).\n\nEn Supabase → SQL Editor corre el archivo 84_guias_estructuradas.sql (incluye la última línea que actualiza la caché) y vuelve a guardar. Tu trabajo en este formulario sigue aquí, no lo cierres.\n\nDetalle: " + m);
+        alert("No se pudo guardar porque a la base de datos le faltan las columnas nuevas de la guía (actividades_guia, teoría, datos…).\n\nEn Supabase → SQL Editor corre el archivo 84_guias_estructuradas.sql (incluye la última línea que actualiza la caché) y vuelve a guardar. Tu trabajo en este formulario sigue aquí, no lo cierres.\n\nDetalle: " + m);
       } else alert("Error al guardar: " + m);
     }
     setGuardando(false);
