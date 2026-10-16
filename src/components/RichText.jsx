@@ -22,6 +22,18 @@ export function EditorTexto({ value, onChange, minHeight = 130, placeholder = ""
     onChange(editorRef.current.innerHTML);
   };
 
+  const seleccion = () => String(window.getSelection?.()?.toString() || "").replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]));
+  const insertar = (html) => { editorRef.current.focus(); document.execCommand("insertHTML", false, html); onChange(editorRef.current.innerHTML); };
+  const insertarTabla = () => {
+    const r = window.prompt("¿Cuántas filas y columnas? (ej: 4x3 → 4 filas, 3 columnas; la primera fila es el encabezado)", "3x3");
+    const m = String(r || "").match(/^\s*(\d{1,2})\s*[x×,]\s*(\d{1,2})\s*$/i);
+    if (!m) return;
+    const f = Math.min(30, +m[1]), c = Math.min(8, +m[2]);
+    const celda = (tag, txt) => `<${tag} style="border:1px solid #cbd5e1;padding:5px 8px;${tag === "th" ? "background:#f1f5f9;font-weight:700;text-align:left" : ""}">${txt}</${tag}>`;
+    const fila = (tag, i) => `<tr>${Array.from({ length: c }, (_, j) => celda(tag, tag === "th" ? `Columna ${j + 1}` : "<br>")).join("")}</tr>`;
+    insertar(`<table style="border-collapse:collapse;width:100%;margin:6px 0"><tbody>${fila("th", 0)}${Array.from({ length: f - 1 }, (_, i) => fila("td", i)).join("")}</tbody></table><p><br></p>`);
+  };
+
   const BotonBarra = ({ onClick, children, title, className = "" }) => (
     <button type="button" title={title} onMouseDown={(e) => e.preventDefault()} onClick={onClick}
       className={`w-7 h-7 shrink-0 rounded hover:bg-slate-200 text-slate-600 flex items-center justify-center text-xs ${className}`}>
@@ -54,6 +66,11 @@ export function EditorTexto({ value, onChange, minHeight = 130, placeholder = ""
         <BotonBarra title="Alinear a la derecha" onClick={() => ejecutar("justifyRight")}>➡</BotonBarra>
         <span className="w-px h-5 bg-slate-300 mx-1" />
         <BotonBarra title="Lista con viñetas" onClick={() => ejecutar("insertUnorderedList")}>•≡</BotonBarra>
+        <BotonBarra title="Lista numerada" onClick={() => ejecutar("insertOrderedList")}>1.</BotonBarra>
+        <span className="w-px h-5 bg-slate-300 mx-1" />
+        <BotonBarra title="Subtítulo" onClick={() => insertar(`<h4 style="font-weight:700;font-size:14px;margin:8px 0 3px">${seleccion() || "Subtítulo"}</h4><p><br></p>`)}>H</BotonBarra>
+        <BotonBarra title="Tabla (filas × columnas)" onClick={insertarTabla}>▦</BotonBarra>
+        <BotonBarra title="Cuadro destacado" onClick={() => insertar(`<div style="border-left:5px solid #7c3aed;background:#f5f3ff;padding:8px 12px;border-radius:8px;margin:6px 0">${seleccion() || "Texto destacado"}</div><p><br></p>`)}>💡</BotonBarra>
         <BotonBarra title="Quitar formato" onClick={() => ejecutar("removeFormat")}>✕</BotonBarra>
       </div>
       <div ref={editorRef} contentEditable suppressContentEditableWarning
@@ -83,4 +100,4 @@ export function TextoEnriquecido({ html, className = "" }) {
     <div className={`leading-relaxed ${className}`} style={{ wordBreak: "break-word", whiteSpace: pareceHtml ? "normal" : "pre-line" }}
       dangerouslySetInnerHTML={{ __html: html }} />
   );
-} 
+}
