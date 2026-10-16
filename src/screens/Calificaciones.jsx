@@ -14,6 +14,7 @@ import { EditorTexto, TextoEnriquecido, textoPlano } from "../components/RichTex
 import { calcularNotaRubrica, SelectorRubrica, NivelesEditor, RubricaGrid } from "../components/Rubrica";
 import { guardarResultadoRubrica } from "../lib/rubricaApi";
 import { vincularColumnas, desvincularColumna } from "../lib/vinculos";
+import { AsistenciaNotaModal, AsistenciaMatrizModal } from "./AsistenciaPlanilla";
 import { BookOpen, Edit, Archive, GraduationCap, Calendar, FileText, Award, BarChart, Settings, Users, TrendingDown, Plus } from "lucide-react";
 
 // Tarjeta compacta para elegir entre varias opciones (materia, curso,
@@ -1285,6 +1286,8 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
   const [copiarPlanillaAbierto, setCopiarPlanillaAbierto] = useState(false);
   const [menuHerramientasAbierto, setMenuHerramientasAbierto] = useState(false);
   const [rubricaColumnaAbierta, setRubricaColumnaAbierta] = useState(null); // actividad
+  const [asistNotaAbierta, setAsistNotaAbierta] = useState(null); // { actividad? }
+  const [asistMatrizAbierta, setAsistMatrizAbierta] = useState(false);
   const [celdaRubricaAbierta, setCeldaRubricaAbierta] = useState(null); // { actividad, estudianteId }
   const [resultadosRubrica, setResultadosRubrica] = useState({}); // { actividadId: { estudianteId: resultado } }
 
@@ -1478,6 +1481,9 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
             <div className="relative">
               <ChipCal onClick={() => setMenuHerramientasAbierto((v) => !v)}>⋯ Más acciones</ChipCal>
               <MenuTarjetas abierto={menuHerramientasAbierto} onCerrar={() => setMenuHerramientasAbierto(false)} alinear="left" opciones={[
+                { emoji: "🗓️", label: "Ver asistencia por fechas (retardos y faltas)", onClick: () => setAsistMatrizAbierta(true) },
+                { emoji: "📋", label: "Nota actitudinal desde la asistencia", onClick: () => setAsistNotaAbierta({}) },
+                { separador: true },
                 { Icono: Archive, label: "Copiar columnas de otra materia", onClick: () => setCopiarColumnasAbierto(true) },
                 { Icono: FileText, label: "Copiar planilla a otro curso", onClick: () => setCopiarPlanillaAbierto(true) },
                 { Icono: Archive, label: "Importar de Moodle/Excel", onClick: () => setImportarMoodleAbierto(true) },
@@ -1524,6 +1530,9 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
                         <>
                           {!a.es_automatica && (
                             <button onClick={() => setRubricaColumnaAbierta(a)} className={a.rubrica?.length > 0 ? "text-violet-500" : "text-slate-400"} title="Calificar esta columna con rúbrica">📊</button>
+                          )}
+                          {!a.es_automatica && (
+                            <button onClick={() => setAsistNotaAbierta({ actividad: a })} className={a.config_auto?.asistencia ? "text-emerald-500" : "text-slate-300"} title="Poner esta columna con la nota de asistencia">📋</button>
                           )}
                           <button onClick={() => { setActividadEditar(a); setModalAbierto(true); }} className="text-slate-400">✎</button>
                           <button onClick={() => eliminarAct(a.id)} className="text-slate-400">✕</button>
@@ -1621,6 +1630,15 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
       {observacionMasivaAbierta && (
         <ObservacionMasivaModal actividades={actividades} estudiantesVisibles={estudiantesVisibles} valorDeActividad={valorDeActividad}
           onClose={() => setObservacionMasivaAbierta(false)} onAplicado={aplicarObservacionMasiva} />
+      )}
+      {asistMatrizAbierta && (
+        <AsistenciaMatrizModal materiaId={materiaId} gradoId={gradoId} materias={materias} estudiantes={estudiantes}
+          nombreCurso={"Curso " + ((grados.find((g) => g.id === gradoId) || {}).nombre || gradoId)} onClose={() => setAsistMatrizAbierta(false)} />
+      )}
+      {asistNotaAbierta && (
+        <AsistenciaNotaModal materiaId={materiaId} gradoId={gradoId} periodo={periodo} categorias={categorias} actividades={actividades}
+          estudiantes={estudiantes} config={config} actividadInicial={asistNotaAbierta.actividad}
+          onClose={() => setAsistNotaAbierta(null)} onAplicado={cargar} />
       )}
       {copiarColumnasAbierto && (
         <CopiarColumnasModal materiaDestinoId={materiaId} gradoId={gradoId} periodos={periodosDe(config)} categoriasDestino={categorias} materias={materias} estudiantes={estudiantes}
