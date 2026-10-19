@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
 import * as api from "../lib/api";
+import { fetchReporteAccesos } from "../lib/accesos";
 import { nextLevel } from "../lib/gamification";
 import { bandaDesempeno } from "../lib/calificaciones";
 import { ActasModal } from "./Actas";
@@ -34,7 +35,7 @@ export function VistaReportes({ grados, gradoActivo }) {
   useEffect(() => {
     if (!gradoId || vistaActiva !== "accesos") return;
     setCargandoAccesos(true);
-    api.fetchReporteAccesos(gradoId).then((d) => { setAccesos(d); setCargandoAccesos(false); });
+    fetchReporteAccesos(gradoId).then((d) => { setAccesos(d); setCargandoAccesos(false); });
   }, [gradoId, vistaActiva]);
 
   const exportarAccesosExcel = () => {
