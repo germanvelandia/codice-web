@@ -30,12 +30,33 @@ export const LEVELS = [
   { name: "Leyenda", min: 2200 },
 ];
 
+// Prestigio: pasado el último nivel, cada PRESTIGIO_PASO de XP extra da una estrella
+// (Leyenda ★, Leyenda ★★…). Así la experiencia que sobrepasa el nivel máximo no se pierde.
+export const PRESTIGIO_PASO = 600;
+export function estrellasPrestigio(xp, listaNiveles) {
+  const niveles = listaNiveles && listaNiveles.length > 0 ? listaNiveles : LEVELS;
+  const ultimo = niveles[niveles.length - 1];
+  return Math.max(0, Math.floor(((xp || 0) - ultimo.min) / PRESTIGIO_PASO));
+}
+export const textoEstrellas = (n) => (n <= 0 ? "" : n <= 5 ? " " + "★".repeat(n) : ` ★×${n}`);
+
 export function nextLevel(xp, listaNiveles) {
   const niveles = listaNiveles && listaNiveles.length > 0 ? listaNiveles : LEVELS;
   let level = niveles[0];
   let next = niveles[1];
   for (let i = 0; i < niveles.length; i++) {
     if (xp >= niveles[i].min) { level = niveles[i]; next = niveles[i + 1] || null; }
+  }
+  if (!next) {
+    // Nivel máximo alcanzado → rangos de prestigio con estrellas.
+    const n = estrellasPrestigio(xp, niveles);
+    const base = level.min + n * PRESTIGIO_PASO;
+    const sig = base + PRESTIGIO_PASO;
+    return {
+      level: { ...level, name: level.name + textoEstrellas(n), min: base, prestigio: n },
+      next: { name: level.name + textoEstrellas(n + 1), min: sig },
+      pct: Math.min(100, Math.round(((xp - base) / PRESTIGIO_PASO) * 100)),
+    };
   }
   const pct = next ? Math.min(100, Math.round(((xp - level.min) / (next.min - level.min)) * 100)) : 100;
   return { level, next, pct };
