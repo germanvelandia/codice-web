@@ -1,6 +1,8 @@
 import React, { useEffect, useState, Suspense, lazy } from "react";
 import { supabase } from "./lib/supabaseClient";
 import * as api from "./lib/api";
+import { cerrarSesionEstudiante } from "./lib/sesionEstudiante";
+import { registrarAccesoUnaVez } from "./lib/accesos";
 import { useEstadoPersistente, fijarUsuarioPersistencia } from "./lib/api";
 import { nextLevel, nivelYCurso } from "./lib/gamification";
 import { bandaDesempeno, notaFinalPonderada } from "./lib/calificaciones";
@@ -2403,7 +2405,7 @@ function PortalEstudiante() {
         const info = await api.fetchEstudiantePorCodigo(codigo);
         setEstudianteInfo(info);
         if (info) {
-          api.registrarAcceso(info.id);
+          registrarAccesoUnaVez(info.id);
           api.verificarYOtorgarLogros(info.id).then((nuevos) => { if (nuevos.length > 0) { sonidoLogro(); setNuevosLogros(nuevos); } });
           api.fetchEquipadosEstudiante(info.id).then(setEquipados);
           api.fetchAvatarConfigsMultiples([info.id]).then((mapa) => setAvatarConfig(mapa[info.id] || null));
@@ -2426,6 +2428,7 @@ function PortalEstudiante() {
 
   const cerrarSesion = () => {
     if (!confirm("¿Cerrar sesión? Vas a tener que ingresar tu código de nuevo la próxima vez.")) return;
+    cerrarSesionEstudiante();
     localStorage.removeItem("codice_estudiante_codigo");
     setCodigo("");
     setDatos(null);
