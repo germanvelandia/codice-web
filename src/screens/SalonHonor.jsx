@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import * as api from "../lib/api";
 import { agruparPorNivel, nivelYCurso } from "../lib/gamification";
+import { PanelPrestigio } from "./Prestigio";
 
 export function VistaSalonHonor({ grados }) {
   const [datos, setDatos] = useState(null);
@@ -14,8 +15,9 @@ export function VistaSalonHonor({ grados }) {
       <div className="flex gap-1 rounded-full bg-slate-100 p-1 mb-4 w-fit">
         <button onClick={() => setTab("individual")} className={`text-xs font-semibold px-3 py-1.5 rounded-full ${tab === "individual" ? "bg-white shadow-sm" : "text-slate-500"}`}>🏆 Individual</button>
         <button onClick={() => setTab("reinos")} className={`text-xs font-semibold px-3 py-1.5 rounded-full ${tab === "reinos" ? "bg-white shadow-sm" : "text-slate-500"}`}>🏰 Por Reinos</button>
+        <button onClick={() => setTab("prestigio")} className={`text-xs font-semibold px-3 py-1.5 rounded-full ${tab === "prestigio" ? "bg-white shadow-sm" : "text-slate-500"}`}>🌟 Prestigio</button>
       </div>
-      {tab === "reinos" ? <RankingReinosPanel grados={grados} /> : <SalonHonorIndividual datos={datos} cargando={cargando} />}
+      {tab === "reinos" ? <RankingReinosPanel grados={grados} /> : tab === "prestigio" ? <PanelPrestigio /> : <SalonHonorIndividual datos={datos} cargando={cargando} />}
     </div>
   );
 }
