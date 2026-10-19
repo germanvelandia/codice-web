@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
+import { loginEstudiante } from "./sesionEstudiante";
 import { GRADOS_BASE, ordenarPorApellido, buscarEstudiantePorNombre } from "./gamification";
 import { notaAutomatica, notaFinalPonderada, CONFIG_DEFAULT } from "./calificaciones";
 import { NIVELACION_COMPROMISOS_DEFAULT, FALTAS_MANUAL } from "./actasTemplates";
@@ -272,9 +273,7 @@ export async function consultarPortalEstudiante(codigo) {
 
 // Usado por el flujo de evaluaciones para saber el id/grado del estudiante a partir de su código
 export async function fetchEstudiantePorCodigo(codigo) {
-  const { data, error } = await supabase.from("estudiantes").select("id, nombre, grado_id, reino_actual, reino_original, foto_url").eq("codigo_acceso", codigo.trim().toUpperCase()).maybeSingle();
-  if (error) throw error;
-  return data;
+  return loginEstudiante(codigo);
 }
 
 /* ---------------- Roles de clase ---------------- */
