@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
 import { loginEstudiante } from "./sesionEstudiante";
+import { aplicarPenalizacion } from "./tareasLimites";
+import { calcularBono, aplicarBono } from "./bono";
 import { GRADOS_BASE, ordenarPorApellido, buscarEstudiantePorNombre } from "./gamification";
 import { notaAutomatica, notaFinalPonderada, CONFIG_DEFAULT } from "./calificaciones";
 import { NIVELACION_COMPROMISOS_DEFAULT, FALTAS_MANUAL } from "./actasTemplates";
@@ -1974,8 +1976,12 @@ export async function fetchEntregasDeTarea(tareaId) {
 // Califica la entrega de un estudiante Y manda esa nota directo a la Planilla
 // de Calificaciones (crea o reutiliza la columna/actividad correspondiente).
 export async function calificarTarea(tarea, estudianteId, nota, comentario, rubricaResultado) {
+  // Si la entrega tiene días de retraso y la tarea penaliza, la nota que queda es la penalizada;
+  // la que puso el docente se guarda aparte (nota_original) para poder recalcular.
+  const { data: previa } = await supabase.from("tarea_entregas").select("dias_retraso").eq("tarea_id", tarea.id).eq("estudiante_id", estudianteId).maybeSingle();
+  const notaEfectiva = aplicarPenalizacion(nota, previa?.dias_retraso, tarea);
   const { error: e1 } = await supabase.from("tarea_entregas").upsert(
-    { tarea_id: tarea.id, estudiante_id: estudianteId, estado: "calificado", nota, comentario: comentario || null, rubrica_resultado: rubricaResultado || null, fecha_calificacion: new Date().toISOString() },
+    { tarea_id: tarea.id, estudiante_id: estudianteId, estado: "calificado", nota: notaEfectiva, nota_original: nota, comentario: comentario || null, rubrica_resultado: rubricaResultado || null, fecha_calificacion: new Date().toISOString() },
     { onConflict: "tarea_id,estudiante_id" }
   );
   if (e1) throw e1;
@@ -1989,8 +1995,21 @@ export async function calificarTarea(tarea, estudianteId, nota, comentario, rubr
         grado_id: tarea.grado_id, periodo: tarea.periodo, es_automatica: false,
       });
     }
-    await setValor(actividad.id, estudianteId, nota);
+    await setValor(actividad.id, estudianteId, notaEfectiva);
   }
+}
+
+// Registra los días de retraso de una entrega ya existente y, si ya estaba calificada,
+// recalcula la nota (penalizada) a partir de la nota original y la reenvía a la planilla.
+export async function fijarRetrasoEntrega(tarea, estudianteId, dias) {
+  const d = Math.max(0, parseInt(dias, 10) || 0);
+  const { data: e, error: e0 } = await supabase.from("tarea_entregas").select("nota, nota_original, comentario, rubrica_resultado").eq("tarea_id", tarea.id).eq("estudiante_id", estudianteId).maybeSingle();
+  if (e0) throw e0;
+  if (!e) throw new Error("Este estudiante todavía no tiene registro en la tarea.");
+  const { error } = await supabase.from("tarea_entregas").update({ dias_retraso: d }).eq("tarea_id", tarea.id).eq("estudiante_id", estudianteId);
+  if (error) throw error;
+  const base = e.nota_original ?? e.nota;
+  if (base !== null && base !== undefined) await calificarTarea(tarea, estudianteId, base, e.comentario, e.rubrica_resultado);
 }
 
 // Lado estudiante
@@ -4922,6 +4941,34 @@ export async function setNivelacion(materiaId, estudianteId, periodo, estado, no
   if (error) throw error;
 }
 
+/* ---------------- Bono de participación ---------------- */
+export async function fetchBono(materiaId, periodo) {
+  const { data, error } = await supabase.from("bonos_participacion").select("*").eq("materia_id", materiaId).eq("periodo", String(periodo)).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function guardarBono(materiaId, periodo, cfg) {
+  const { error } = await supabase.from("bonos_participacion").upsert(
+    { materia_id: materiaId, periodo: String(periodo), bono_max: cfg.bono_max, xp_meta: cfg.xp_meta, gam_categoria: cfg.gam_categoria || "todas", desde: cfg.desde || null, activo: cfg.activo !== false },
+    { onConflict: "materia_id,periodo" }
+  );
+  if (error) throw error;
+}
+
+// Configuración del bono + bono de cada estudiante ({ cfg, bonos: { estudianteId: puntos } }).
+// Si el bono no está configurado (o la tabla todavía no existe), devuelve sin bonos y nada cambia.
+export async function fetchBonosPlanilla(materiaId, periodo, estudiantes) {
+  let cfg = null;
+  try { cfg = await fetchBono(materiaId, periodo); } catch (e) { return { cfg: null, bonos: {} }; }
+  if (!cfg || cfg.activo === false || !(estudiantes || []).length) return { cfg, bonos: {} };
+  const { data, error } = await supabase.rpc("bono_xp", { p_estudiantes: estudiantes.map((s) => s.id), p_categoria: cfg.gam_categoria || "todas", p_desde: cfg.desde || null });
+  if (error) return { cfg, bonos: {} };
+  const bonos = {};
+  (data || []).forEach((r) => { bonos[r.estudiante_id] = calcularBono(cfg, Number(r.xp)); });
+  return { cfg, bonos };
+}
+
 export async function calcularNotasFinalesPeriodo(materiaId, gradoId, periodo, estudiantes, categorias, config) {
   const acts = await fetchActividades(materiaId, gradoId, periodo);
   const valoresRows = await fetchValores(acts.map((a) => a.id));
@@ -4943,6 +4990,13 @@ export async function calcularNotasFinalesPeriodo(materiaId, gradoId, periodo, e
       porCategoria[a.categoria_id].push(v);
     });
     resultado[s.id] = notaFinalPonderada(porCategoria, categorias);
+  }
+  // Bono de participación (si está configurado para esta materia y periodo)
+  const { cfg: bonoCfg, bonos } = await fetchBonosPlanilla(materiaId, periodo, estudiantes);
+  if (bonoCfg) {
+    for (const s of estudiantes) {
+      if (resultado[s.id] !== null && resultado[s.id] !== undefined) resultado[s.id] = aplicarBono(resultado[s.id], bonos[s.id] || 0, config?.nota_maxima);
+    }
   }
   return resultado;
 }
