@@ -17,6 +17,8 @@ import { vincularColumnas, desvincularColumna } from "../lib/vinculos";
 import { GruposMixtosModal, BannerGrupo } from "./GruposMixtos";
 import { esGrupoMixto, fetchGruposMixtos, fetchEstudiantesGrupo } from "../lib/gruposMixtos";
 import { AsistenciaNotaModal, AsistenciaMatrizModal } from "./AsistenciaPlanilla";
+import { BonoParticipacionModal } from "./BonoParticipacion";
+import { aplicarBono } from "../lib/bono";
 import { BookOpen, Edit, Archive, GraduationCap, Calendar, FileText, Award, BarChart, Settings, Users, TrendingDown, Plus } from "lucide-react";
 
 // Tarjeta compacta para elegir entre varias opciones (materia, curso,
@@ -1290,6 +1292,9 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
   const [rubricaColumnaAbierta, setRubricaColumnaAbierta] = useState(null); // actividad
   const [asistNotaAbierta, setAsistNotaAbierta] = useState(null); // { actividad? }
   const [asistMatrizAbierta, setAsistMatrizAbierta] = useState(false);
+  const [bonoAbierto, setBonoAbierto] = useState(false);
+  const [bonoCfg, setBonoCfg] = useState(null);
+  const [bonosMapa, setBonosMapa] = useState({});
   const [celdaRubricaAbierta, setCeldaRubricaAbierta] = useState(null); // { actividad, estudianteId }
   const [resultadosRubrica, setResultadosRubrica] = useState({}); // { actividadId: { estudianteId: resultado } }
 
@@ -1318,6 +1323,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
     }
     const finales = await api.fetchNotasFinales(materiaId);
     setFinalesGuardados(finales.filter((f) => f.periodo === periodo));
+    try { const b = await api.fetchBonosPlanilla(materiaId, periodo, estudiantes); setBonoCfg(b.cfg); setBonosMapa(b.bonos); } catch (e) { setBonoCfg(null); setBonosMapa({}); }
     setCargando(false);
   };
   useEffect(() => { cargar(); }, [materiaId, gradoId, periodo, estudiantes.length]);
@@ -1371,7 +1377,8 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
       porCategoria[a.categoria_id] = porCategoria[a.categoria_id] || [];
       porCategoria[a.categoria_id].push(v);
     });
-    return notaFinalPonderada(porCategoria, categorias);
+    const base = notaFinalPonderada(porCategoria, categorias);
+    return aplicarBono(base, bonosMapa[estudianteId] || 0, config.nota_maxima);
   };
 
   const notaFinal = (estudianteId) => {
@@ -1485,6 +1492,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
               <MenuTarjetas abierto={menuHerramientasAbierto} onCerrar={() => setMenuHerramientasAbierto(false)} alinear="left" opciones={[
                 { emoji: "🗓️", label: "Ver asistencia por fechas (retardos y faltas)", onClick: () => setAsistMatrizAbierta(true) },
                 { emoji: "📋", label: "Nota actitudinal desde la asistencia", onClick: () => setAsistNotaAbierta({}) },
+                { emoji: "⭐", label: "Bono de participación (con tope)", onClick: () => setBonoAbierto(true) },
                 { separador: true },
                 { Icono: Archive, label: "Copiar columnas de otra materia", onClick: () => setCopiarColumnasAbierto(true) },
                 { Icono: FileText, label: "Copiar planilla a otro curso", onClick: () => setCopiarPlanillaAbierto(true) },
@@ -1599,6 +1607,9 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
                           onClick={() => { setEditandoFinal(s.id); setValorFinalTemp(final !== null && final !== undefined ? String(final) : ""); }}
                           title={esManual(s.id) ? "Nota fijada manualmente — clic para editar" : "Clic para fijar manualmente"}>
                           <span>{final ?? "—"}</span>
+                          {!esManual(s.id) && final != null && (bonosMapa[s.id] || 0) > 0 && (
+                            <span className="text-[9px] text-violet-500 font-semibold" title="Incluye bono de participación">+{bonosMapa[s.id]}</span>
+                          )}
                           {esManual(s.id) ? (
                             <span className="text-violet-400 text-[10px]" title="Valor manual (no calculado)">✎</span>
                           ) : (
@@ -1632,6 +1643,10 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
       {observacionMasivaAbierta && (
         <ObservacionMasivaModal actividades={actividades} estudiantesVisibles={estudiantesVisibles} valorDeActividad={valorDeActividad}
           onClose={() => setObservacionMasivaAbierta(false)} onAplicado={aplicarObservacionMasiva} />
+      )}
+      {bonoAbierto && (
+        <BonoParticipacionModal materiaId={materiaId} periodo={periodo} cfg={bonoCfg} estudiantes={estudiantes} bonos={bonosMapa} config={config}
+          onClose={() => setBonoAbierto(false)} onGuardado={() => { setBonoAbierto(false); cargar(); }} />
       )}
       {asistMatrizAbierta && (
         <AsistenciaMatrizModal materiaId={materiaId} gradoId={gradoId} materias={materias} estudiantes={estudiantes}
