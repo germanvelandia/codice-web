@@ -46,6 +46,7 @@ import { ModulosEstudiante } from "./components/Modulosestudiante";
 import { VistaConsignasCodice } from "./screens/ConsignasCodice";
 import { VistaTriviaAdmin } from "./screens/TriviaAdmin";
 import { VistaQuizVivoDocente, QuizVivoEstudiante } from "./screens/QuizVivo";
+import { VistaEncuestasDocente, VistaInformeImpacto, EncuestaEstudiante } from "./screens/EncuestaInforme";
 import { VistaBancoPreguntas } from "./screens/BancoPreguntas";
 import { VistaEvaluaciones } from "./screens/Evaluaciones";
 import { VistaProyectosForja } from "./screens/TareasCalificables";
@@ -1211,6 +1212,7 @@ const MENU_CODICE_GRUPOS = [
   },
   {
     key: "cuenta", label: "Mi cuenta", icono: "👤", items: [
+      { key: "encuesta", label: "Encuesta", icono: "📝" },
       { key: "perfil", label: "Perfil", icono: "👤" },
     ],
   },
@@ -1223,7 +1225,7 @@ const MENU_CODICE = MENU_CODICE_GRUPOS.flatMap((g) => g.items);
 // siendo la misma (la key de MENU_CODICE).
 const ICONO_MAPA = {
   album: "🏯", biblioteca: "📚", codice: "📖", forja: "⚒️", guias: "🗺️", modulos: "🧭",
-  inicio: "🏰", mundo: "🌍", misiones: "⚔️", notas: "📜", personaje: "🧙", historial: "📖", perfil: "🛡️", preguntados: "🎡", quizvivo: "⚡",
+  inicio: "🏰", mundo: "🌍", misiones: "⚔️", notas: "📜", personaje: "🧙", historial: "📖", perfil: "🛡️", preguntados: "🎡", quizvivo: "⚡", encuesta: "📝",
   proyectos: "🏹", ranking: "👑", recompensas: "💎", salonhonor: "🏆",
 };
 
@@ -2577,6 +2579,10 @@ function PortalEstudiante() {
             <MarcoSeccion zonaLabel="Diversión — Preguntados" icono="🎡"><PreguntadosEstudiante estudianteId={estudianteInfo.id} /></MarcoSeccion>
           )}
 
+          {vista === "encuesta" && estudianteInfo && (
+            <MarcoSeccion zonaLabel="Mi cuenta — Encuesta" icono="📝"><EncuestaEstudiante /></MarcoSeccion>
+          )}
+
           {vista === "quizvivo" && estudianteInfo && (
             <MarcoSeccion zonaLabel="Diversión — Quiz en vivo" icono="⚡"><QuizVivoEstudiante estudianteId={estudianteInfo.id} /></MarcoSeccion>
           )}
@@ -2750,6 +2756,8 @@ const MENU_PANEL_GRUPOS = [
       { key: "herr_gamext", label: "Desafíos/Misiones/Cosméticos", icono: "🕹️" },
       { key: "herr_bingo", label: "Bingo de Repaso", icono: "🎯" },
       { key: "herr_quizvivo", label: "Quiz en vivo", icono: "⚡" },
+      { key: "herr_encuestas", label: "Encuesta de satisfacción", icono: "📝" },
+      { key: "herr_informe", label: "Informe de impacto", icono: "📊" },
     ],
   },
   {
@@ -2806,7 +2814,7 @@ const NOMBRES_HERRAMIENTAS = {
   gamext: "Desafíos / Misiones / Cosméticos", consignas: "Consignas del Códice", trivia: "Preguntados",
   bancopreguntas: "Banco de Preguntas", temporizador: "Temporizador", dado: "Dado", cronometro: "Cronómetro",
   semaforo: "Semáforo", sorteoorden: "Sorteo de Orden / Parejas", grupos: "Generador de Grupos",
-  marcador: "Marcador de Puntos", selectorestudiante: "Selector de Estudiante", bingo: "Bingo de Repaso", quizvivo: "Quiz en vivo",
+  marcador: "Marcador de Puntos", selectorestudiante: "Selector de Estudiante", bingo: "Bingo de Repaso", quizvivo: "Quiz en vivo", encuestas: "Encuesta de satisfacción", informe: "Informe de impacto",
   formasexamen: "Formas de Examen (A/B/C/D)",
 };
 
@@ -3152,6 +3160,8 @@ function Panel({ session }) {
             {subTabHerramientas === "consignas" && <VistaConsignasCodice grados={grados} />}
             {subTabHerramientas === "trivia" && <VistaTriviaAdmin grados={grados} />}
             {subTabHerramientas === "quizvivo" && <VistaQuizVivoDocente />}
+            {subTabHerramientas === "encuestas" && <VistaEncuestasDocente grados={grados} />}
+            {subTabHerramientas === "informe" && <VistaInformeImpacto grados={grados} />}
             {subTabHerramientas === "bancopreguntas" && <VistaBancoPreguntas grados={grados} />}
             {subTabHerramientas === "temporizador" && <VistaTemporizador />}
             {subTabHerramientas === "dado" && <DadoTool />}
