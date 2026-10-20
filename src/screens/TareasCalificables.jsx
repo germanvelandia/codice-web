@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import * as api from "../lib/api";
 import { agruparPorNivel, nivelYCurso } from "../lib/gamification";
 import { periodosDe } from "../lib/calificaciones";
+import { bajoMinima, estadoFecha, textoPenalizacion } from "../lib/tareasLimites";
 import { EditorTexto, TextoEnriquecido } from "../components/RichText";
 import { calcularNotaRubrica, SelectorRubrica, NivelesEditor, RubricaGrid } from "../components/Rubrica";
 import { guardarResultadoRubricaDeTarea, leerResultadoRubricaDeTarea } from "../lib/rubricaApi";
@@ -13,6 +14,10 @@ function TareaForm({ tipo, materiaId, gradoId, periodo, categorias, tarea, onCan
   const [fechaEntrega, setFechaEntrega] = useState(tarea?.fecha_entrega || "");
   const [categoriaId, setCategoriaId] = useState(tarea?.categoria_id || categorias[0]?.id || "");
   const [recompensaMonedas, setRecompensaMonedas] = useState(tarea?.recompensa_monedas ?? 0);
+  const [notaMinima, setNotaMinima] = useState(tarea?.nota_minima ?? "");
+  const [fechaLimite, setFechaLimite] = useState(tarea?.fecha_limite || "");
+  const [penalizacionDia, setPenalizacionDia] = useState(tarea?.penalizacion_dia ?? "");
+  const [penalizacionTope, setPenalizacionTope] = useState(tarea?.penalizacion_tope ?? "");
   const [guardando, setGuardando] = useState(false);
 
   const guardar = async () => {
@@ -22,7 +27,9 @@ function TareaForm({ tipo, materiaId, gradoId, periodo, categorias, tarea, onCan
     if (urlLimpia && !/^https?:\/\//i.test(urlLimpia)) urlLimpia = "https://" + urlLimpia;
     setGuardando(true);
     try {
-      const campos = { titulo: titulo.trim(), descripcion: descripcion.trim() || null, url: urlLimpia || null, fecha_entrega: fechaEntrega || null, categoria_id: categoriaId, recompensa_monedas: parseInt(recompensaMonedas, 10) || 0 };
+      const campos = { titulo: titulo.trim(), descripcion: descripcion.trim() || null, url: urlLimpia || null, fecha_entrega: fechaEntrega || null, categoria_id: categoriaId, recompensa_monedas: parseInt(recompensaMonedas, 10) || 0,
+        nota_minima: parseFloat(String(notaMinima).replace(",", ".")) || null, fecha_limite: fechaLimite || null,
+        penalizacion_dia: parseFloat(String(penalizacionDia).replace(",", ".")) || null, penalizacion_tope: parseFloat(String(penalizacionTope).replace(",", ".")) || null };
       if (tarea) {
         await api.editarTareaCalificable(tarea.id, campos);
       } else {
@@ -58,6 +65,31 @@ function TareaForm({ tipo, materiaId, gradoId, periodo, categorias, tarea, onCan
             {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
           </select>
         </div>
+      </div>
+      <div className="bg-white rounded-xl border border-slate-200 p-3 mb-3">
+        <div className="text-xs font-semibold text-slate-600 mb-2">⏰ Exigencia y plazos (opcional)</div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-[11px] text-slate-500 block mb-1">Nota mínima para darla por lograda</label>
+            <input type="text" inputMode="decimal" value={notaMinima} onChange={(e) => setNotaMinima(e.target.value)} placeholder="Ej: 3.5"
+              className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
+          </div>
+          <div>
+            <label className="text-[11px] text-slate-500 block mb-1">Fecha límite</label>
+            <input type="date" value={fechaLimite} onChange={(e) => setFechaLimite(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
+          </div>
+          <div>
+            <label className="text-[11px] text-slate-500 block mb-1">Resta por cada día de retraso</label>
+            <input type="text" inputMode="decimal" value={penalizacionDia} onChange={(e) => setPenalizacionDia(e.target.value)} placeholder="Ej: 0.3"
+              className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
+          </div>
+          <div>
+            <label className="text-[11px] text-slate-500 block mb-1">Máximo que se puede restar</label>
+            <input type="text" inputMode="decimal" value={penalizacionTope} onChange={(e) => setPenalizacionTope(e.target.value)} placeholder="Ej: 1.5"
+              className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
+          </div>
+        </div>
+        <p className="text-[10px] text-slate-400 mt-1.5">Al calificar, marcas los días de retraso de cada estudiante y la nota se ajusta sola (la nota que pusiste queda guardada).</p>
       </div>
       <label className="text-xs text-slate-500 block mb-1">🪙 Recompensa en monedas al entregar (opcional)</label>
       <input type="number" min="0" value={recompensaMonedas} onChange={(e) => setRecompensaMonedas(e.target.value)}
@@ -136,7 +168,7 @@ function CalificarModal({ tarea, config, onClose, onCambio }) {
     try {
       const grupo = gruposPorNota[notaMasiva] || [];
       for (const e of grupo) {
-        await api.calificarTarea(tarea, e.estudiante_id, e.nota, comentarioMasivo.trim());
+        await api.calificarTarea(tarea, e.estudiante_id, e.nota_original ?? e.nota, comentarioMasivo.trim());
       }
       setComentarioMasivo("");
       cargar();
@@ -338,6 +370,25 @@ function CalificarModal({ tarea, config, onClose, onCambio }) {
                             className="text-xs px-2 py-1 rounded-full" style={{ background: e.nota !== null ? "#DCFCE7" : "#F1F5F9", color: e.nota !== null ? "#15803D" : "#64748B" }}>
                             {e.nota !== null ? `Nota: ${e.nota}` : "Sin calificar"}
                           </button>
+                        )}
+                        {e.nota !== null && e.nota_original != null && Number(e.nota_original) !== Number(e.nota) && (
+                          <span className="text-[10px] text-slate-400" title="Nota antes de la penalización">(de {e.nota_original})</span>
+                        )}
+                        {e.nota !== null && bajoMinima(e.nota, tarea) && (
+                          <span className="text-[10px] font-semibold text-rose-600 bg-rose-50 px-2 py-1 rounded-full">⚠ Por recuperar (mín. {tarea.nota_minima})</span>
+                        )}
+                        {(tarea.penalizacion_dia > 0 || tarea.fecha_limite) && (
+                          <label className="flex items-center gap-1 text-[10px] text-slate-500" title="Días de retraso en la entrega">
+                            ⏰
+                            <input type="number" min="0" defaultValue={e.dias_retraso || 0} key={`${e.estudiante_id}-${e.dias_retraso || 0}`}
+                              onBlur={async (ev) => {
+                                if ((parseInt(ev.target.value, 10) || 0) === (e.dias_retraso || 0)) return;
+                                try { await api.fijarRetrasoEntrega(tarea, e.estudiante_id, ev.target.value); cargar(); onCambio(); }
+                                catch (err) { alert("No se pudo guardar el retraso: " + err.message); }
+                              }}
+                              className="w-10 text-[11px] text-center rounded px-1 py-0.5 border border-slate-200 outline-none" />
+                            d
+                          </label>
                         )}
                         {tarea.recompensa_monedas > 0 && e.nota !== null && (
                           e.monedas_entregadas ? (
@@ -656,6 +707,16 @@ function TareaCard({ tarea, categorias, materias, grados, config, onCambio }) {
           <h4 className="font-bold text-slate-800">{tarea.titulo}</h4>
           {tarea.descripcion && <TextoEnriquecido html={tarea.descripcion} className="text-xs text-slate-500 mt-1" />}
           {tarea.fecha_entrega && <p className="text-[11px] text-slate-400 mt-1">Entrega: {tarea.fecha_entrega}</p>}
+          {(tarea.nota_minima > 0 || tarea.fecha_limite || tarea.penalizacion_dia > 0) && (
+            <div className="flex flex-wrap gap-1 mt-1">
+              {tarea.nota_minima > 0 && <span className="text-[10px] font-semibold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-full">🎯 Mínima {tarea.nota_minima}</span>}
+              {tarea.fecha_limite && (() => { const est = estadoFecha(tarea); return (
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${est.tipo === "vencida" ? "text-rose-700 bg-rose-50" : "text-slate-600 bg-slate-100"}`}>
+                  ⏳ Límite {tarea.fecha_limite}{est.tipo === "vencida" ? ` · venció hace ${est.dias} d` : ""}
+                </span>); })()}
+              {tarea.penalizacion_dia > 0 && <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">{textoPenalizacion(tarea)}</span>}
+            </div>
+          )}
           {tarea.url && <a href={tarea.url} target="_blank" rel="noreferrer" className="text-[11px] text-violet-500 mt-1 block truncate">🔗 {tarea.url}</a>}
           {tarea.recompensa_monedas > 0 && <span className="inline-block text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full mt-1">🪙 {tarea.recompensa_monedas} al entregar</span>}
           {tarea.rubrica?.length > 0 && <span className="inline-block text-[10px] font-semibold text-violet-700 bg-violet-50 px-2 py-0.5 rounded-full mt-1 ml-1">📊 Con rúbrica</span>}
