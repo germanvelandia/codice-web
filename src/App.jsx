@@ -3,6 +3,8 @@ import { supabase } from "./lib/supabaseClient";
 import * as api from "./lib/api";
 import { cerrarSesionEstudiante } from "./lib/sesionEstudiante";
 import ProyeccionNota from "./screens/ProyeccionNota";
+import BonoEnCurso from "./screens/BonoEnCurso";
+import { bajoMinima, estadoFecha, textoPenalizacion } from "./lib/tareasLimites";
 import { registrarAccesoUnaVez } from "./lib/accesos";
 import { useEstadoPersistente, fijarUsuarioPersistencia } from "./lib/api";
 import { nextLevel, nivelYCurso } from "./lib/gamification";
@@ -43,6 +45,7 @@ import { ModulosAdmin } from "./components/ModulosAdmin";
 import { ModulosEstudiante } from "./components/Modulosestudiante";
 import { VistaConsignasCodice } from "./screens/ConsignasCodice";
 import { VistaTriviaAdmin } from "./screens/TriviaAdmin";
+import { VistaQuizVivoDocente, QuizVivoEstudiante } from "./screens/QuizVivo";
 import { VistaBancoPreguntas } from "./screens/BancoPreguntas";
 import { VistaEvaluaciones } from "./screens/Evaluaciones";
 import { VistaProyectosForja } from "./screens/TareasCalificables";
@@ -609,6 +612,9 @@ function MisNotas({ estudianteId }) {
                           </div>
                         )}
                         {f.enCurso && f.actividadesPeriodo.length > 0 && (
+                          <BonoEnCurso materiaId={f.actividadesPeriodo[0].notas_actividades?.materia_id} periodo={f.periodo} estudianteId={estudianteId} nota={f.nota} />
+                        )}
+                        {f.enCurso && f.actividadesPeriodo.length > 0 && (
                           <ProyeccionNota materiaId={f.actividadesPeriodo[0].notas_actividades?.materia_id} actividades={f.actividadesPeriodo} />
                         )}
                         {!f.enCurso && f.actividadesPeriodo.some((a) => a.observacion) && (
@@ -1048,6 +1054,32 @@ function TareaCalificableEstudiante({ tarea, estudianteId, icono = "📄" }) {
         )}
       </div>
       {tarea.fecha_entrega && <div className="text-[11px] text-slate-400 mt-2">📅 Entrega: {tarea.fecha_entrega}</div>}
+      {(() => {
+        const est = estadoFecha(tarea);
+        const hayExigencia = tarea.nota_minima > 0 || tarea.fecha_limite || tarea.penalizacion_dia > 0;
+        if (!hayExigencia) return null;
+        return (
+          <div className="mt-2 space-y-1">
+            {tarea.fecha_limite && !calificado && (
+              <div className={`text-[11px] font-semibold rounded-lg px-2 py-1 ${est.tipo === "vencida" ? "bg-rose-50 text-rose-600" : est.tipo === "hoy" ? "bg-amber-50 text-amber-700" : "bg-slate-50 text-slate-500"}`}>
+                {est.tipo === "faltan" && `⏳ Tienes ${est.dias} día${est.dias === 1 ? "" : "s"} para entregar (límite ${tarea.fecha_limite})`}
+                {est.tipo === "hoy" && "⏳ Hoy es el último día para entregar"}
+                {est.tipo === "vencida" && `⚠️ El plazo venció hace ${est.dias} día${est.dias === 1 ? "" : "s"}${tarea.penalizacion_dia > 0 ? ` — cada día de retraso resta ${tarea.penalizacion_dia}` : ""}`}
+              </div>
+            )}
+            {tarea.penalizacion_dia > 0 && <div className="text-[10px] text-slate-400">Retraso: {textoPenalizacion(tarea)}</div>}
+            {tarea.nota_minima > 0 && !calificado && <div className="text-[11px] text-sky-600">🎯 Para darla por lograda necesitas al menos {tarea.nota_minima}</div>}
+            {calificado && tarea.nota_minima > 0 && (
+              bajoMinima(entrega.nota, tarea)
+                ? <div className="text-[11px] font-semibold text-rose-600 bg-rose-50 rounded-lg px-2 py-1">🔁 Por recuperar: la mínima era {tarea.nota_minima}. Habla con tu docente para mejorarla.</div>
+                : <div className="text-[11px] font-semibold text-emerald-600">✅ Lograda (mínima {tarea.nota_minima})</div>
+            )}
+            {calificado && entrega.dias_retraso > 0 && entrega.nota_original != null && Number(entrega.nota_original) !== Number(entrega.nota) && (
+              <div className="text-[10px] text-slate-400">Nota {entrega.nota_original} − penalización por {entrega.dias_retraso} día{entrega.dias_retraso === 1 ? "" : "s"} de retraso</div>
+            )}
+          </div>
+        );
+      })()}
       {tarea.url && (
         <a href={tarea.url} target="_blank" rel="noreferrer" className="inline-block text-xs font-semibold text-white bg-violet-500 px-3 py-1.5 rounded-lg mt-2">
           🔗 Abrir enlace
@@ -1172,6 +1204,7 @@ const MENU_CODICE_GRUPOS = [
   {
     key: "diversion", label: "Diversión", icono: "🎡", items: [
       { key: "preguntados", label: "Preguntados", icono: "🎡" },
+      { key: "quizvivo", label: "Quiz en vivo", icono: "⚡" },
       { key: "personaje", label: "Personaje", icono: "🎨" },
       { key: "mundo", label: "Mundo", icono: "🌍" },
     ],
@@ -1190,7 +1223,7 @@ const MENU_CODICE = MENU_CODICE_GRUPOS.flatMap((g) => g.items);
 // siendo la misma (la key de MENU_CODICE).
 const ICONO_MAPA = {
   album: "🏯", biblioteca: "📚", codice: "📖", forja: "⚒️", guias: "🗺️", modulos: "🧭",
-  inicio: "🏰", mundo: "🌍", misiones: "⚔️", notas: "📜", personaje: "🧙", historial: "📖", perfil: "🛡️", preguntados: "🎡",
+  inicio: "🏰", mundo: "🌍", misiones: "⚔️", notas: "📜", personaje: "🧙", historial: "📖", perfil: "🛡️", preguntados: "🎡", quizvivo: "⚡",
   proyectos: "🏹", ranking: "👑", recompensas: "💎", salonhonor: "🏆",
 };
 
@@ -2544,6 +2577,10 @@ function PortalEstudiante() {
             <MarcoSeccion zonaLabel="Diversión — Preguntados" icono="🎡"><PreguntadosEstudiante estudianteId={estudianteInfo.id} /></MarcoSeccion>
           )}
 
+          {vista === "quizvivo" && estudianteInfo && (
+            <MarcoSeccion zonaLabel="Diversión — Quiz en vivo" icono="⚡"><QuizVivoEstudiante estudianteId={estudianteInfo.id} /></MarcoSeccion>
+          )}
+
           {vista === "album" && estudianteInfo && (
             <MarcoSeccion zonaLabel="Comunidad — Álbum" icono="🏆"><AlbumEstudiante estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} /></MarcoSeccion>
           )}
@@ -2712,6 +2749,7 @@ const MENU_PANEL_GRUPOS = [
       { key: "herr_diplomas", label: "Diplomas", icono: "🏅" },
       { key: "herr_gamext", label: "Desafíos/Misiones/Cosméticos", icono: "🕹️" },
       { key: "herr_bingo", label: "Bingo de Repaso", icono: "🎯" },
+      { key: "herr_quizvivo", label: "Quiz en vivo", icono: "⚡" },
     ],
   },
   {
@@ -2768,7 +2806,7 @@ const NOMBRES_HERRAMIENTAS = {
   gamext: "Desafíos / Misiones / Cosméticos", consignas: "Consignas del Códice", trivia: "Preguntados",
   bancopreguntas: "Banco de Preguntas", temporizador: "Temporizador", dado: "Dado", cronometro: "Cronómetro",
   semaforo: "Semáforo", sorteoorden: "Sorteo de Orden / Parejas", grupos: "Generador de Grupos",
-  marcador: "Marcador de Puntos", selectorestudiante: "Selector de Estudiante", bingo: "Bingo de Repaso",
+  marcador: "Marcador de Puntos", selectorestudiante: "Selector de Estudiante", bingo: "Bingo de Repaso", quizvivo: "Quiz en vivo",
   formasexamen: "Formas de Examen (A/B/C/D)",
 };
 
@@ -3113,6 +3151,7 @@ function Panel({ session }) {
             {subTabHerramientas === "gamext" && <VistaGamificacionExtra grados={grados} />}
             {subTabHerramientas === "consignas" && <VistaConsignasCodice grados={grados} />}
             {subTabHerramientas === "trivia" && <VistaTriviaAdmin grados={grados} />}
+            {subTabHerramientas === "quizvivo" && <VistaQuizVivoDocente />}
             {subTabHerramientas === "bancopreguntas" && <VistaBancoPreguntas grados={grados} />}
             {subTabHerramientas === "temporizador" && <VistaTemporizador />}
             {subTabHerramientas === "dado" && <DadoTool />}
