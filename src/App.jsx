@@ -2,6 +2,7 @@ import React, { useEffect, useState, Suspense, lazy } from "react";
 import { supabase } from "./lib/supabaseClient";
 import * as api from "./lib/api";
 import { cerrarSesionEstudiante } from "./lib/sesionEstudiante";
+import ProyeccionNota from "./screens/ProyeccionNota";
 import { registrarAccesoUnaVez } from "./lib/accesos";
 import { useEstadoPersistente, fijarUsuarioPersistencia } from "./lib/api";
 import { nextLevel, nivelYCurso } from "./lib/gamification";
@@ -606,6 +607,9 @@ function MisNotas({ estudianteId }) {
                               </div>
                             ))}
                           </div>
+                        )}
+                        {f.enCurso && f.actividadesPeriodo.length > 0 && (
+                          <ProyeccionNota materiaId={f.actividadesPeriodo[0].notas_actividades?.materia_id} actividades={f.actividadesPeriodo} />
                         )}
                         {!f.enCurso && f.actividadesPeriodo.some((a) => a.observacion) && (
                           <div className="ml-2 mt-1 space-y-0.5">
