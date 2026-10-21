@@ -46,6 +46,7 @@ import { ModulosEstudiante } from "./components/Modulosestudiante";
 import { VistaConsignasCodice } from "./screens/ConsignasCodice";
 import { VistaTriviaAdmin } from "./screens/TriviaAdmin";
 import { VistaQuizVivoDocente, QuizVivoEstudiante } from "./screens/QuizVivo";
+import { VistaRankingGanancias } from "./screens/RankingGanancias";
 import { VistaRevisionTrivia } from "./screens/RevisionTrivia";
 import { VistaRecompensasDocente } from "./screens/RecompensasDocente";
 import { VistaObraDocente } from "./screens/ObraDocente";
@@ -2763,6 +2764,7 @@ const MENU_PANEL_GRUPOS = [
       { key: "herr_gamext", label: "Desafíos/Misiones/Cosméticos", icono: "🕹️" },
       { key: "herr_bingo", label: "Bingo de Repaso", icono: "🎯" },
       { key: "herr_quizvivo", label: "Quiz en vivo", icono: "⚡" },
+      { key: "herr_rankingganancias", label: "Ranking de ganancias (XP/oro)", icono: "🏅" },
       { key: "herr_revisiontrivia", label: "Revisión de Preguntados (autoclic)", icono: "🛡️" },
       { key: "herr_recompensas", label: "Recompensas de estudiantes", icono: "🎁" },
       { key: "herr_obras", label: "Gran Obra del curso", icono: "🏗️" },
@@ -2824,7 +2826,7 @@ const NOMBRES_HERRAMIENTAS = {
   gamext: "Desafíos / Misiones / Cosméticos", consignas: "Consignas del Códice", trivia: "Preguntados",
   bancopreguntas: "Banco de Preguntas", temporizador: "Temporizador", dado: "Dado", cronometro: "Cronómetro",
   semaforo: "Semáforo", sorteoorden: "Sorteo de Orden / Parejas", grupos: "Generador de Grupos",
-  marcador: "Marcador de Puntos", selectorestudiante: "Selector de Estudiante", bingo: "Bingo de Repaso", quizvivo: "Quiz en vivo", revisiontrivia: "Revisión de Preguntados (autoclic)", recompensas: "Recompensas de estudiantes", obras: "Gran Obra del curso", encuestas: "Encuesta de satisfacción", informe: "Informe de impacto",
+  marcador: "Marcador de Puntos", selectorestudiante: "Selector de Estudiante", bingo: "Bingo de Repaso", quizvivo: "Quiz en vivo", rankingganancias: "Ranking de ganancias (XP/oro)", revisiontrivia: "Revisión de Preguntados (autoclic)", recompensas: "Recompensas de estudiantes", obras: "Gran Obra del curso", encuestas: "Encuesta de satisfacción", informe: "Informe de impacto",
   formasexamen: "Formas de Examen (A/B/C/D)",
 };
 
@@ -3170,6 +3172,7 @@ function Panel({ session }) {
             {subTabHerramientas === "consignas" && <VistaConsignasCodice grados={grados} />}
             {subTabHerramientas === "trivia" && <VistaTriviaAdmin grados={grados} />}
             {subTabHerramientas === "quizvivo" && <VistaQuizVivoDocente />}
+            {subTabHerramientas === "rankingganancias" && <VistaRankingGanancias grados={grados} />}
             {subTabHerramientas === "revisiontrivia" && <VistaRevisionTrivia grados={grados} />}
             {subTabHerramientas === "recompensas" && <VistaRecompensasDocente grados={grados} />}
             {subTabHerramientas === "obras" && <VistaObraDocente grados={grados} />}
