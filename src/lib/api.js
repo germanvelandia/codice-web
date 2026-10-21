@@ -3354,21 +3354,28 @@ export async function fetchPreguntaTriviaAleatoria(categoriaId, estudianteId) {
 // la corona de esa categoría (3 aciertos seguidos, sin haber fallado antes en la racha actual).
 export async function responderTrivia(estudianteId, pregunta, opcionElegida) {
   const acierto = opcionElegida === pregunta.correcta;
-  // Antiautoclic: la base de datos cuenta una sola vez la misma pregunta por estudiante cada 60 s
-  const reg = await supabase.rpc("trivia_registrar", { p_estudiante: estudianteId, p_pregunta: pregunta.id, p_categoria: pregunta.categoria_id, p_acierto: acierto });
-  if (!reg.error) {
-    if (reg.data === false) return { acierto, corona: false, repetida: true };
+  // Antiautoclic + tope diario de 100 XP: lo decide la base de datos (SQL 104; el 101 sirve de respaldo)
+  let daXp = true, limite = false;
+  const rr = await supabase.rpc("trivia_responder", { p_estudiante: estudianteId, p_pregunta: pregunta.id, p_categoria: pregunta.categoria_id, p_acierto: acierto });
+  if (!rr.error && rr.data) {
+    if (rr.data.contada === false) return { acierto, corona: false, repetida: true };
+    daXp = rr.data.da_xp !== false;
+    limite = acierto && !daXp;
   } else {
-    // si el SQL 101 aún no está corrido: método anterior, con revisión básica de repetidas
-    const { data: rec } = await supabase.from("trivia_respuestas").select("id").eq("estudiante_id", estudianteId).eq("pregunta_id", pregunta.id).gt("creado_en", new Date(Date.now() - 60000).toISOString()).limit(1);
-    if (rec && rec.length) return { acierto, corona: false, repetida: true };
-    await supabase.from("trivia_respuestas").insert({ estudiante_id: estudianteId, pregunta_id: pregunta.id, categoria_id: pregunta.categoria_id, acierto });
+    const reg = await supabase.rpc("trivia_registrar", { p_estudiante: estudianteId, p_pregunta: pregunta.id, p_categoria: pregunta.categoria_id, p_acierto: acierto });
+    if (!reg.error) {
+      if (reg.data === false) return { acierto, corona: false, repetida: true };
+    } else {
+      // sin SQL 101/104: método anterior, con revisión básica de repetidas
+      const { data: rec } = await supabase.from("trivia_respuestas").select("id").eq("estudiante_id", estudianteId).eq("pregunta_id", pregunta.id).gt("creado_en", new Date(Date.now() - 60000).toISOString()).limit(1);
+      if (rec && rec.length) return { acierto, corona: false, repetida: true };
+      await supabase.from("trivia_respuestas").insert({ estudiante_id: estudianteId, pregunta_id: pregunta.id, categoria_id: pregunta.categoria_id, acierto });
+    }
   }
 
   let corona = false;
   if (acierto) {
-    await ajustarXp(estudianteId, 5);
-    await ajustarMonedas(estudianteId, 2);
+    if (daXp) { await ajustarXp(estudianteId, 5); await ajustarMonedas(estudianteId, 2); }
 
     // Racha actual: últimas respuestas en esta categoría, contadas desde la más reciente hasta el primer fallo
     const { data: ultimas } = await supabase.from("trivia_respuestas").select("acierto").eq("estudiante_id", estudianteId).eq("categoria_id", pregunta.categoria_id).order("creado_en", { ascending: false }).limit(3);
@@ -3382,7 +3389,7 @@ export async function responderTrivia(estudianteId, pregunta, opcionElegida) {
       }
     }
   }
-  return { acierto, corona };
+  return { acierto, corona, limite };
 }
 
 export async function fetchCoronasEstudiante(estudianteId) {
