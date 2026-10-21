@@ -10,17 +10,19 @@ const mensajePorDefecto = (xp, mon) =>
   `⚠️ ADVERTENCIA: se detectó uso de autoclic en Preguntados (clics repetidos sobre la misma respuesta para sumar puntos). Se descontaron ${xp} XP${mon ? ` y ${mon} monedas` : ""} obtenidos de forma indebida. Si se repite habrá sanciones. Juega limpio: ¡así se gana de verdad!`;
 
 async function respuestasDe(ids) {
-  const filas = [], PAG = 1000;
-  for (let i = 0; i < ids.length; i += 40) {
-    const trozo = ids.slice(i, i + 40);
+  const PAG = 1000, trozos = [];
+  for (let i = 0; i < ids.length; i += 10) trozos.push(ids.slice(i, i + 10));
+  const porTrozo = await Promise.all(trozos.map(async (trozo) => {
+    const filas = [];
     for (let d = 0; ; d += PAG) {
       const { data, error } = await supabase.from("trivia_respuestas").select("id, estudiante_id, pregunta_id, acierto, creado_en").in("estudiante_id", trozo).order("id").range(d, d + PAG - 1);
       if (error) throw error;
       filas.push(...(data || []));
       if (!data || data.length < PAG) break;
     }
-  }
-  return filas;
+    return filas;
+  }));
+  return porTrozo.flat();
 }
 
 // Para cada estudiante: filas "de más" (repetidas de la misma pregunta dentro de la ventana)
@@ -44,6 +46,20 @@ function analizar(estudiantes, filas) {
   return res.sort((a, b) => b.xp - a.xp);
 }
 
+// Con el SQL 102 la base ya devuelve solo las respuestas repetidas
+function resumir(estudiantes, repetidas) {
+  const porEst = new Map();
+  repetidas.forEach((r) => { const k = String(r.estudiante_id); (porEst.get(k) || porEst.set(k, []).get(k)).push(r); });
+  const res = [];
+  for (const e of estudiantes) {
+    const l = porEst.get(String(e.id));
+    if (!l || !l.length) continue;
+    const ac = l.filter((r) => r.acierto).length;
+    res.push({ id: e.id, nombre: e.nombre, repetidas: l.length, aciertosDeMas: ac, xp: ac * XP_ACIERTO, monedas: ac * MONEDAS_ACIERTO, ids: l.map((r) => r.id), ultima: l[l.length - 1].creado_en });
+  }
+  return res.sort((a, b) => b.xp - a.xp);
+}
+
 export function VistaRevisionTrivia({ grados = [] }) {
   const [gradoId, setGradoId] = useState(grados[0]?.id ?? "");
   const [casos, setCasos] = useState(null);
@@ -58,9 +74,14 @@ export function VistaRevisionTrivia({ grados = [] }) {
   const buscar = async () => {
     setTrabajando(true); setError(""); setHecho("");
     try {
-      const ests = await api.fetchEstudiantesPorGrado(gradoId);
-      const filas = await respuestasDe(ests.map((e) => e.id));
-      const c = analizar(ests, filas);
+      const er = await supabase.from("estudiantes").select("id, nombre").eq("grado_id", gradoId).eq("activo", true);
+      if (er.error) throw er.error;
+      const ests = er.data || [];
+      const ids = ests.map((e) => e.id);
+      let c;
+      const rpc = ids.length ? await supabase.rpc("trivia_autoclic", { p_estudiantes: ids }) : { data: [] };
+      if (!rpc.error) c = resumir(ests, rpc.data || []);   // rápido (SQL 102)
+      else c = analizar(ests, await respuestasDe(ids));    // respaldo, más lento
       setCasos(c); setSel(Object.fromEntries(c.map((x) => [x.id, true])));
     } catch (e) { setError(e.message || "No se pudo analizar."); }
     setTrabajando(false);
