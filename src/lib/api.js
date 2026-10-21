@@ -4726,9 +4726,19 @@ export async function copiarColumnasEspecificas(actividadesOrigenIds, materiaDes
 
 export async function fetchValores(actividadIds) {
   if (actividadIds.length === 0) return [];
-  const { data, error } = await supabase.from("notas_valores").select("*").in("actividad_id", actividadIds);
-  if (error) throw error;
-  return data || [];
+  // La API devuelve máx. 1000 filas por consulta: en cursos grandes (40 estudiantes x 25 notas)
+  // se cortaba en silencio. Se pide por páginas, en paralelo por tandas de actividades.
+  const POR_TANDA = 8, PAGINA = 1000, filas = [];
+  for (let i = 0; i < actividadIds.length; i += POR_TANDA) {
+    const ids = actividadIds.slice(i, i + POR_TANDA);
+    for (let desde = 0; ; desde += PAGINA) {
+      const { data, error } = await supabase.from("notas_valores").select("*").in("actividad_id", ids).order("actividad_id").order("estudiante_id").range(desde, desde + PAGINA - 1);
+      if (error) throw error;
+      filas.push(...(data || []));
+      if (!data || data.length < PAGINA) break;
+    }
+  }
+  return filas;
 }
 
 export async function setValor(actividadId, estudianteId, valor) {
@@ -4813,17 +4823,22 @@ export async function fetchHistorialGamificacion(estudianteId) {
 
 export async function fetchXpPorCategoria(estudianteIds, categorias) {
   if (estudianteIds.length === 0 || categorias.length === 0) return {};
-  const { data, error } = await supabase
-    .from("historial_gamificacion")
-    .select("estudiante_id, categoria, xp")
-    .in("estudiante_id", estudianteIds)
-    .in("categoria", categorias);
-  if (error) throw error;
   const mapa = {};
-  (data || []).forEach((r) => {
-    mapa[r.estudiante_id] = mapa[r.estudiante_id] || {};
-    mapa[r.estudiante_id][r.categoria] = (mapa[r.estudiante_id][r.categoria] || 0) + r.xp;
-  });
+  // 1) Suma en la base de datos (rápido; requiere el SQL 100)
+  const rpc = await supabase.rpc("xp_por_categoria", { p_estudiantes: estudianteIds, p_categorias: categorias });
+  if (!rpc.error) {
+    (rpc.data || []).forEach((r) => { mapa[r.estudiante_id] = mapa[r.estudiante_id] || {}; mapa[r.estudiante_id][r.categoria] = Number(r.xp) || 0; });
+    return mapa;
+  }
+  // 2) Respaldo: traer por páginas (antes se cortaba en 1000 filas)
+  const PAGINA = 1000;
+  for (let desde = 0; ; desde += PAGINA) {
+    const { data, error } = await supabase.from("historial_gamificacion").select("estudiante_id, categoria, xp")
+      .in("estudiante_id", estudianteIds).in("categoria", categorias).order("id").range(desde, desde + PAGINA - 1);
+    if (error) throw error;
+    (data || []).forEach((r) => { mapa[r.estudiante_id] = mapa[r.estudiante_id] || {}; mapa[r.estudiante_id][r.categoria] = (mapa[r.estudiante_id][r.categoria] || 0) + r.xp; });
+    if (!data || data.length < PAGINA) break;
+  }
   return mapa;
 }
 
