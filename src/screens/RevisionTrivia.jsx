@@ -118,7 +118,7 @@ export function VistaRevisionTrivia({ grados = [] }) {
       if (!rpc.error) c = resumir(ests, rpc.data || []);   // rápido (SQL 102)
       else if (todos) throw new Error("Para rastrear todos los cursos a la vez hace falta correr el SQL 102 en Supabase.");
       else c = analizar(ests, await respuestasDe(ids));    // respaldo, más lento
-      const gr = await supabase.from("grados").select("id, nombre");
+      const gr = await supabase.from("grados").select("*");
       const nomGrado = new Map((gr.data || grados).map((g) => [String(g.id), g.nombre || g.id]));
       const infoDe = new Map(ests.map((e) => [String(e.id), (nomGrado.get(String(e.grado_id)) || "Sin curso") + (e.activo === false ? " (inactivo)" : "")]));
       c.forEach((x) => { x.curso = infoDe.get(String(x.id)) || ""; });
