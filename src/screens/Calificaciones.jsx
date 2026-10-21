@@ -1315,15 +1315,15 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
     setObservaciones(obsMap);
     setResultadosRubrica(rubMap);
     const categoriasGam = [...new Set(acts.filter((a) => a.es_automatica).map((a) => a.gam_categoria))];
-    if (categoriasGam.length > 0) {
-      const xp = await api.fetchXpPorCategoria(estudiantes.map((s) => s.id), categoriasGam);
-      setXpMapa(xp);
-    } else {
-      setXpMapa({});
-    }
-    const finales = await api.fetchNotasFinales(materiaId);
+    // lo que no depende de lo demás se pide a la vez (antes era uno tras otro)
+    const [xp, finales, bono] = await Promise.all([
+      categoriasGam.length > 0 ? api.fetchXpPorCategoria(estudiantes.map((s) => s.id), categoriasGam).catch(() => ({})) : Promise.resolve({}),
+      api.fetchNotasFinales(materiaId),
+      api.fetchBonosPlanilla(materiaId, periodo, estudiantes).catch(() => null),
+    ]);
+    setXpMapa(xp);
     setFinalesGuardados(finales.filter((f) => f.periodo === periodo));
-    try { const b = await api.fetchBonosPlanilla(materiaId, periodo, estudiantes); setBonoCfg(b.cfg); setBonosMapa(b.bonos); } catch (e) { setBonoCfg(null); setBonosMapa({}); }
+    if (bono) { setBonoCfg(bono.cfg); setBonosMapa(bono.bonos); } else { setBonoCfg(null); setBonosMapa({}); }
     setCargando(false);
   };
   useEffect(() => { cargar(); }, [materiaId, gradoId, periodo, estudiantes.length]);
