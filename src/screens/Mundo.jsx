@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, Suspense, lazy } from "react";
 import * as api from "../lib/api";
 import * as mundoApi from "../lib/mundoApi";
+import * as obraApi from "../lib/mundoObras";
 import { nivelPersonaje } from "../lib/mejorasPersonaje";
 import { useNivelesPersonaje } from "../lib/configNiveles";
 import { estadoZonas, misionesDisponibles, ZONAS } from "../game/zonas";
@@ -31,6 +32,12 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
     // Mundos alternos (Oca y Plataformas): sin el SQL 78 (o sin modo real) no hay portal.
     let alt = { activo: false };
     if (hayTablas) { try { alt = await mundoApi.fetchMundosAlt(idEst, { misiones: mis.value, grado: estudianteInfo.grado_id }); } catch { alt = { activo: false }; } }
+    // La Gran Obra del curso y el canal para verse en vivo (si no se corrió el SQL 99 o no hay sesión, simplemente no hay).
+    let obra = { activo: false }, canal = null;
+    if (hayTablas) {
+      try { const est = await obraApi.fetchObraEstado(); obra = { activo: true, estado: est }; } catch { obra = { activo: false }; }
+      try { canal = await obraApi.fetchCanalMundo(); } catch { canal = null; }
+    }
     setInfo({
       personaje: pers.status === "fulfilled" ? pers.value : null,
       mejoras: mej.status === "fulfilled" ? mej.value.filter((f) => f.mejora) : [],
@@ -61,7 +68,7 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
       monstruos: mon.status === "fulfilled" && hayTablas ? mon.value : { activo: false },
       // Sin el SQL 77 (o sin modo real) no hay eventos temporales.
       eventos: evt.status === "fulfilled" && hayTablas ? evt.value : { activo: false, evento: null },
-      alt,
+      alt, obra, canal,
     });
     setCargando(false);
   };
@@ -74,13 +81,26 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
   // ---- el juego (a pantalla completa) ----
   useEffect(() => {
     if (!jugando || !info) return undefined;
-    let cancelado = false, mundo = null;
+    let cancelado = false, mundo = null, pres = null;
     const overflowPrevio = document.body.style.overflow; document.body.style.overflow = "hidden";
     (async () => {
       try {
         const [{ iniciarMundo }, { SPRITES_MUNDO }] = await Promise.all([import("../game/mundo"), import("../game/spritesMundo")]);
         if (cancelado || !raizRef.current) return;
+        let obraInfo = info.obra; // estado fresco justo al entrar (la docente pudo abrir la votación hace un momento)
+        if (obraInfo && obraInfo.activo) { try { obraInfo = { activo: true, estado: await obraApi.fetchObraEstado() }; } catch { /* se usa el que ya teníamos */ } }
+        if (cancelado) return;
+        const obraCfg = obraInfo && obraInfo.activo ? {
+          activo: true, estado: obraInfo.estado,
+          alRefrescar: () => obraApi.fetchObraEstado(),
+          alVotar: (o) => obraApi.votarObra(o), alRol: (rol) => obraApi.elegirRolObra(rol),
+          alAportar: (item, n) => obraApi.aportarObra(item, n), alColocar: (x, y, item) => obraApi.colocarObra(x, y, item),
+          alRetoPregunta: () => obraApi.retoPreguntaObra(), alRetoResponder: (id, i) => obraApi.retoResponderObra(id, i),
+          avisar: () => { if (pres) pres.avisarObra(); },
+        } : { activo: false };
+        if (info.canal && info.personaje) pres = obraApi.crearPresencia({ canal: info.canal, yo: { id: idEst, nombre: primerNombre(estudianteInfo.nombre), clave: `${info.personaje.rolKey}_${info.personaje.genero}` }, alObra: () => { if (obraCfg.alCambioRemoto) obraCfg.alCambioRemoto(); } });
         mundo = await iniciarMundo(raizRef.current, {
+          obra: obraCfg, presencia: pres,
           sprites: SPRITES_MUNDO, modoPrueba: info.modoPrueba, misiones: info.misiones, hechas: info.hechas,
           jugador: {
             id: idEst, nombre: primerNombre(estudianteInfo.nombre), clave: `${info.personaje.rolKey}_${info.personaje.genero}`, xp: datos?.xp ?? 0, oro: datos?.monedas ?? 0, vida: typeof datos?.vida === "number" ? datos.vida : null,
@@ -107,7 +127,7 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
         if (cancelado) mundo.destruir();
       } catch (e) { if (!cancelado) { setErrorJuego((e && e.message) || "No se pudo abrir el mundo."); setJugando(false); } }
     })();
-    return () => { cancelado = true; document.body.style.overflow = overflowPrevio; if (mundo) mundo.destruir(); };
+    return () => { cancelado = true; document.body.style.overflow = overflowPrevio; if (mundo) mundo.destruir(); if (pres) pres.destruir(); };
   }, [jugando]);
 
   const salioDelJuego = useRef(false);
