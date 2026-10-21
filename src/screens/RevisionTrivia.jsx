@@ -60,6 +60,32 @@ function resumir(estudiantes, repetidas) {
   return res.sort((a, b) => b.xp - a.xp);
 }
 
+function ConfigTope() {
+  const [tope, setTope] = useState(null);
+  const [msg, setMsg] = useState("");
+  useEffect(() => { supabase.from("trivia_config").select("tope_xp_dia").eq("id", 1).maybeSingle().then(({ data, error }) => { if (error) setMsg("Falta correr el SQL 104 en Supabase."); else setTope(data ? data.tope_xp_dia : 100); }); }, []);
+  const guardar = async () => {
+    const v = Math.max(0, Math.floor(Number(tope) || 0));
+    const { error } = await supabase.from("trivia_config").upsert({ id: 1, tope_xp_dia: v });
+    setTope(v); setMsg(error ? "No se pudo guardar: " + error.message : v === 0 ? "Guardado: sin tope diario." : `Guardado: máximo ${v} XP al día en Preguntados.`);
+  };
+  if (tope === null && !msg) return null;
+  return (
+    <div className="bg-amber-50 rounded-2xl p-3 mb-4">
+      <div className="text-sm font-bold text-amber-800 mb-1">⚙️ Tope diario de XP en Preguntados</div>
+      <p className="text-[11px] text-amber-700 mb-2">Máximo de XP que cada estudiante puede ganar al día en Preguntados (cada acierto da {XP_ACIERTO} XP). Pasado el tope siguen jugando, pero ya no suma. Pon 0 para quitar el tope.</p>
+      {tope !== null && (
+        <div className="flex items-center gap-2">
+          <input type="number" min="0" step="5" value={tope} onChange={(e) => setTope(e.target.value)} className="w-24 text-sm rounded-lg px-2 py-1.5 border border-amber-200 bg-white outline-none" />
+          <span className="text-xs text-amber-700">XP por día</span>
+          <button onClick={guardar} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-500 text-white">Guardar</button>
+        </div>
+      )}
+      {msg && <p className="text-[11px] text-amber-800 mt-1">{msg}</p>}
+    </div>
+  );
+}
+
 export function VistaRevisionTrivia({ grados = [] }) {
   const [gradoId, setGradoId] = useState(grados[0]?.id ?? "");
   const [casos, setCasos] = useState(null);
@@ -76,9 +102,12 @@ export function VistaRevisionTrivia({ grados = [] }) {
     setTrabajando(true); setError(""); setHecho(""); setModoTodos(todos);
     try {
       let ests = [];
-      const gradosIds = todos ? grados.map((g) => g.id) : [gradoId];
+      // En el rastreo total se incluyen TODOS los estudiantes: también los inactivos,
+      // los de cursos ocultos y los que no tienen curso (por eso pueden no verse en la plataforma).
       for (let d = 0; ; d += 1000) {
-        const er = await supabase.from("estudiantes").select("id, nombre, grado_id").in("grado_id", gradosIds).eq("activo", true).order("id").range(d, d + 999);
+        let q = supabase.from("estudiantes").select("id, nombre, grado_id, activo").order("id").range(d, d + 999);
+        if (!todos) q = q.eq("grado_id", gradoId).eq("activo", true);
+        const er = await q;
         if (er.error) throw er.error;
         ests.push(...(er.data || []));
         if (!er.data || er.data.length < 1000) break;
@@ -89,9 +118,10 @@ export function VistaRevisionTrivia({ grados = [] }) {
       if (!rpc.error) c = resumir(ests, rpc.data || []);   // rápido (SQL 102)
       else if (todos) throw new Error("Para rastrear todos los cursos a la vez hace falta correr el SQL 102 en Supabase.");
       else c = analizar(ests, await respuestasDe(ids));    // respaldo, más lento
-      const nomGrado = new Map(grados.map((g) => [String(g.id), g.nombre || g.id]));
-      const gradoDe = new Map(ests.map((e) => [String(e.id), nomGrado.get(String(e.grado_id)) || ""]));
-      c.forEach((x) => { x.curso = gradoDe.get(String(x.id)) || ""; });
+      const gr = await supabase.from("grados").select("id, nombre");
+      const nomGrado = new Map((gr.data || grados).map((g) => [String(g.id), g.nombre || g.id]));
+      const infoDe = new Map(ests.map((e) => [String(e.id), (nomGrado.get(String(e.grado_id)) || "Sin curso") + (e.activo === false ? " (inactivo)" : "")]));
+      c.forEach((x) => { x.curso = infoDe.get(String(x.id)) || ""; });
       setResumenTotal({ revisados: ests.length });
       setCasos(c); setSel(Object.fromEntries(c.map((x) => [x.id, true])));
     } catch (e) { setError(e.message || "No se pudo analizar."); }
@@ -129,6 +159,7 @@ export function VistaRevisionTrivia({ grados = [] }) {
 
   return (
     <div>
+      <ConfigTope />
       <h3 className="font-bold text-slate-800 mb-1">🛡️ Revisión de Preguntados (autoclic)</h3>
       <p className="text-xs text-slate-400 mb-3">Busca estudiantes que respondieron la <b>misma pregunta varias veces en menos de 60 segundos</b> (clics repetidos). Cada acierto repetido sumó +{XP_ACIERTO} XP y +{MONEDAS_ACIERTO} monedas de más. Aquí se los descuentas y les dejas una advertencia que verán en su historial.</p>
       <div className="flex flex-wrap gap-2 items-center mb-3">
@@ -148,7 +179,7 @@ export function VistaRevisionTrivia({ grados = [] }) {
             const por = {}; casos.forEach((c) => { const p = (por[c.curso] = por[c.curso] || { n: 0, xp: 0 }); p.n++; p.xp += c.xp; });
             return (
               <div className="bg-slate-50 rounded-xl p-3">
-                <div className="text-xs font-semibold text-slate-600 mb-1">Rastreo de {resumenTotal?.revisados ?? "?"} estudiantes: <b className="text-rose-600">{casos.length}</b> con autoclic · {casos.reduce((a, c) => a + c.xp, 0)} XP de más en total</div>
+                <div className="text-xs font-semibold text-slate-600 mb-1">Rastreo de {resumenTotal?.revisados ?? "?"} estudiantes (incluye inactivos y sin curso): <b className="text-rose-600">{casos.length}</b> con autoclic · {casos.reduce((a, c) => a + c.xp, 0)} XP de más en total</div>
                 <div className="flex flex-wrap gap-1.5">{Object.entries(por).sort((a, b) => b[1].n - a[1].n).map(([k, v]) => <span key={k} className="text-[11px] bg-white border border-slate-200 rounded-full px-2 py-0.5">{k}: <b>{v.n}</b> · {v.xp} XP</span>)}</div>
               </div>
             );
@@ -168,7 +199,7 @@ export function VistaRevisionTrivia({ grados = [] }) {
             <p className="text-[11px] text-slate-400">Si lo dejas vacío se usa el mensaje de arriba, con las cifras de cada estudiante.</p>
           </div>
           <button onClick={aplicar} disabled={trabajando || !marcados.length} className="w-full text-sm font-semibold py-2.5 rounded-xl bg-rose-500 text-white disabled:opacity-50">
-            {trabajando ? "Aplicando…" : `Descontar −${totXp} XP y −${totMon} monedas a ${marcados.length} estudiante(s) y advertir`}
+            {trabajando ? "Aplicando…" : `Descontar de una vez −${totXp} XP y −${totMon} monedas a ${marcados.length} estudiante(s) y advertir`}
           </button>
           <p className="text-[11px] text-slate-400">Se borran también las respuestas repetidas, así que no se descuenta dos veces. </p>
         </div>
