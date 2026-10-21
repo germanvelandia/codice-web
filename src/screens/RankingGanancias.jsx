@@ -26,7 +26,7 @@ export function VistaRankingGanancias({ grados = [] }) {
         ests.push(...(r.data || []));
         if (!r.data || r.data.length < 1000) break;
       }
-      const gr = await supabase.from("grados").select("id, nombre");
+      const gr = await supabase.from("grados").select("*");
       const nom = new Map((gr.data || grados).map((g) => [String(g.id), g.nombre || g.id]));
       const info = new Map(ests.map((e) => [String(e.id), e]));
       const rp = await supabase.rpc("ranking_ganancias", { p_estudiantes: ests.map((e) => e.id) });
