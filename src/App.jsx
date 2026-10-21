@@ -46,6 +46,7 @@ import { ModulosEstudiante } from "./components/Modulosestudiante";
 import { VistaConsignasCodice } from "./screens/ConsignasCodice";
 import { VistaTriviaAdmin } from "./screens/TriviaAdmin";
 import { VistaQuizVivoDocente, QuizVivoEstudiante } from "./screens/QuizVivo";
+import { VistaObraDocente } from "./screens/ObraDocente";
 import { VistaEncuestasDocente, VistaInformeImpacto, EncuestaEstudiante } from "./screens/EncuestaInforme";
 import { VistaBancoPreguntas } from "./screens/BancoPreguntas";
 import { VistaEvaluaciones } from "./screens/Evaluaciones";
@@ -2756,6 +2757,7 @@ const MENU_PANEL_GRUPOS = [
       { key: "herr_gamext", label: "Desafíos/Misiones/Cosméticos", icono: "🕹️" },
       { key: "herr_bingo", label: "Bingo de Repaso", icono: "🎯" },
       { key: "herr_quizvivo", label: "Quiz en vivo", icono: "⚡" },
+      { key: "herr_obras", label: "Gran Obra del curso", icono: "🏗️" },
       { key: "herr_encuestas", label: "Encuesta de satisfacción", icono: "📝" },
       { key: "herr_informe", label: "Informe de impacto", icono: "📊" },
     ],
@@ -2814,7 +2816,7 @@ const NOMBRES_HERRAMIENTAS = {
   gamext: "Desafíos / Misiones / Cosméticos", consignas: "Consignas del Códice", trivia: "Preguntados",
   bancopreguntas: "Banco de Preguntas", temporizador: "Temporizador", dado: "Dado", cronometro: "Cronómetro",
   semaforo: "Semáforo", sorteoorden: "Sorteo de Orden / Parejas", grupos: "Generador de Grupos",
-  marcador: "Marcador de Puntos", selectorestudiante: "Selector de Estudiante", bingo: "Bingo de Repaso", quizvivo: "Quiz en vivo", encuestas: "Encuesta de satisfacción", informe: "Informe de impacto",
+  marcador: "Marcador de Puntos", selectorestudiante: "Selector de Estudiante", bingo: "Bingo de Repaso", quizvivo: "Quiz en vivo", obras: "Gran Obra del curso", encuestas: "Encuesta de satisfacción", informe: "Informe de impacto",
   formasexamen: "Formas de Examen (A/B/C/D)",
 };
 
@@ -3160,6 +3162,7 @@ function Panel({ session }) {
             {subTabHerramientas === "consignas" && <VistaConsignasCodice grados={grados} />}
             {subTabHerramientas === "trivia" && <VistaTriviaAdmin grados={grados} />}
             {subTabHerramientas === "quizvivo" && <VistaQuizVivoDocente />}
+            {subTabHerramientas === "obras" && <VistaObraDocente grados={grados} />}
             {subTabHerramientas === "encuestas" && <VistaEncuestasDocente grados={grados} />}
             {subTabHerramientas === "informe" && <VistaInformeImpacto grados={grados} />}
             {subTabHerramientas === "bancopreguntas" && <VistaBancoPreguntas grados={grados} />}
