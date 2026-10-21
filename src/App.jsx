@@ -1911,7 +1911,9 @@ function PreguntadosEstudiante({ estudianteId }) {
                   {respondida.corona ? (
                     <p className="text-sm font-bold text-amber-500">👑 ¡Corona de {categoriaElegida.nombre}! +15 monedas extra</p>
                   ) : respondida.acierto ? (
-                    <p className="text-sm font-semibold text-emerald-600">¡Correcto! +5 XP, +2 monedas</p>
+                    respondida.limite
+                      ? <p className="text-sm font-semibold text-amber-600">¡Correcto! 🎯 Ya llegaste al tope de hoy en Preguntados (100 XP). Sigue practicando: mañana vuelve a sumar.</p>
+                      : <p className="text-sm font-semibold text-emerald-600">¡Correcto! +5 XP, +2 monedas</p>
                   ) : (
                     <p className="text-sm font-semibold text-rose-500">Fallaste — se corta la racha en esta categoría</p>
                   )}
