@@ -69,23 +69,35 @@ export function VistaRevisionTrivia({ grados = [] }) {
   const [error, setError] = useState("");
   const [hecho, setHecho] = useState("");
   useEffect(() => { if (!gradoId && grados[0]) setGradoId(grados[0].id); }, [grados]);
-  useEffect(() => { setCasos(null); setHecho(""); setError(""); }, [gradoId]);
+  useEffect(() => { setCasos(null); setHecho(""); setError(""); setModoTodos(false); }, [gradoId]);
 
-  const buscar = async () => {
-    setTrabajando(true); setError(""); setHecho("");
+  const [modoTodos, setModoTodos] = useState(false);
+  const buscar = async (todos = false) => {
+    setTrabajando(true); setError(""); setHecho(""); setModoTodos(todos);
     try {
-      const er = await supabase.from("estudiantes").select("id, nombre").eq("grado_id", gradoId).eq("activo", true);
-      if (er.error) throw er.error;
-      const ests = er.data || [];
+      let ests = [];
+      const gradosIds = todos ? grados.map((g) => g.id) : [gradoId];
+      for (let d = 0; ; d += 1000) {
+        const er = await supabase.from("estudiantes").select("id, nombre, grado_id").in("grado_id", gradosIds).eq("activo", true).order("id").range(d, d + 999);
+        if (er.error) throw er.error;
+        ests.push(...(er.data || []));
+        if (!er.data || er.data.length < 1000) break;
+      }
       const ids = ests.map((e) => e.id);
       let c;
       const rpc = ids.length ? await supabase.rpc("trivia_autoclic", { p_estudiantes: ids }) : { data: [] };
       if (!rpc.error) c = resumir(ests, rpc.data || []);   // rápido (SQL 102)
+      else if (todos) throw new Error("Para rastrear todos los cursos a la vez hace falta correr el SQL 102 en Supabase.");
       else c = analizar(ests, await respuestasDe(ids));    // respaldo, más lento
+      const nomGrado = new Map(grados.map((g) => [String(g.id), g.nombre || g.id]));
+      const gradoDe = new Map(ests.map((e) => [String(e.id), nomGrado.get(String(e.grado_id)) || ""]));
+      c.forEach((x) => { x.curso = gradoDe.get(String(x.id)) || ""; });
+      setResumenTotal({ revisados: ests.length });
       setCasos(c); setSel(Object.fromEntries(c.map((x) => [x.id, true])));
     } catch (e) { setError(e.message || "No se pudo analizar."); }
     setTrabajando(false);
   };
+  const [resumenTotal, setResumenTotal] = useState(null);
 
   const marcados = (casos || []).filter((c) => sel[c.id]);
   const aplicar = async () => {
@@ -105,13 +117,13 @@ export function VistaRevisionTrivia({ grados = [] }) {
     }
     setTrabajando(false);
     setHecho(`Listo: ${marcados.length - fallos.length} estudiante(s) corregido(s).${fallos.length ? " Con error: " + fallos.join("; ") : ""}`);
-    await buscar();
+    await buscar(modoTodos);
   };
   const csv = () => {
     const g = grados.find((x) => String(x.id) === String(gradoId));
-    const rows = ["Estudiante;Respuestas repetidas;Aciertos de más;XP a descontar;Monedas a descontar"];
-    (casos || []).forEach((c) => rows.push([c.nombre, c.repetidas, c.aciertosDeMas, c.xp, c.monedas].join(";")));
-    descargarArchivo(`autoclic_${String(g?.nombre || gradoId).replace(/\W+/g, "_")}.csv`, "﻿" + rows.join("\r\n"));
+    const rows = ["Curso;Estudiante;Respuestas repetidas;Aciertos de más;XP a descontar;Monedas a descontar"];
+    (casos || []).forEach((c) => rows.push([c.curso || "", c.nombre, c.repetidas, c.aciertosDeMas, c.xp, c.monedas].join(";")));
+    descargarArchivo(`autoclic_${modoTodos ? "todos_los_cursos" : String(g?.nombre || gradoId).replace(/\W+/g, "_")}.csv`, "﻿" + rows.join("\r\n"));
   };
   const totXp = marcados.reduce((a, c) => a + c.xp, 0), totMon = marcados.reduce((a, c) => a + c.monedas, 0);
 
@@ -123,7 +135,8 @@ export function VistaRevisionTrivia({ grados = [] }) {
         <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-sm rounded-lg px-3 py-2 border border-slate-200 bg-white outline-none">
           {grados.map((g) => <option key={g.id} value={g.id}>{g.nombre || g.id}</option>)}
         </select>
-        <button onClick={buscar} disabled={trabajando || !gradoId} className="text-sm font-semibold px-4 py-2 rounded-xl bg-violet-500 text-white disabled:opacity-50">{trabajando && !casos ? "Analizando…" : "🔍 Analizar este curso"}</button>
+        <button onClick={() => buscar(false)} disabled={trabajando || !gradoId} className="text-sm font-semibold px-4 py-2 rounded-xl bg-violet-500 text-white disabled:opacity-50">{trabajando && !modoTodos ? "Analizando…" : "🔍 Analizar este curso"}</button>
+        <button onClick={() => buscar(true)} disabled={trabajando || !grados.length} className="text-sm font-semibold px-4 py-2 rounded-xl bg-slate-700 text-white disabled:opacity-50">{trabajando && modoTodos ? "Rastreando…" : "🕵️ Rastrear TODOS los cursos"}</button>
         {casos && casos.length > 0 && <button onClick={csv} className="text-xs font-semibold text-emerald-600">⬇ CSV</button>}
       </div>
       {error && <div className="text-xs text-rose-600 bg-rose-50 rounded-lg p-2 mb-2">{error}</div>}
@@ -131,11 +144,20 @@ export function VistaRevisionTrivia({ grados = [] }) {
       {casos && casos.length === 0 && <p className="text-sm text-slate-500 bg-slate-50 rounded-xl p-3">✅ No se encontraron respuestas repetidas en este curso.</p>}
       {casos && casos.length > 0 && (
         <div className="space-y-3">
+          {modoTodos && (() => {
+            const por = {}; casos.forEach((c) => { const p = (por[c.curso] = por[c.curso] || { n: 0, xp: 0 }); p.n++; p.xp += c.xp; });
+            return (
+              <div className="bg-slate-50 rounded-xl p-3">
+                <div className="text-xs font-semibold text-slate-600 mb-1">Rastreo de {resumenTotal?.revisados ?? "?"} estudiantes: <b className="text-rose-600">{casos.length}</b> con autoclic · {casos.reduce((a, c) => a + c.xp, 0)} XP de más en total</div>
+                <div className="flex flex-wrap gap-1.5">{Object.entries(por).sort((a, b) => b[1].n - a[1].n).map(([k, v]) => <span key={k} className="text-[11px] bg-white border border-slate-200 rounded-full px-2 py-0.5">{k}: <b>{v.n}</b> · {v.xp} XP</span>)}</div>
+              </div>
+            );
+          })()}
           <div className="space-y-1">
             {casos.map((c) => (
               <label key={c.id} className={`flex items-center gap-2 rounded-xl border px-3 py-2 cursor-pointer ${sel[c.id] ? "border-rose-300 bg-rose-50" : "border-slate-200 bg-white"}`}>
                 <input type="checkbox" checked={!!sel[c.id]} onChange={(e) => setSel((s) => ({ ...s, [c.id]: e.target.checked }))} />
-                <span className="text-sm text-slate-700 flex-1 truncate">{c.nombre}</span>
+                <span className="text-sm text-slate-700 flex-1 truncate">{c.nombre}{modoTodos && c.curso ? <span className="text-slate-400"> · {c.curso}</span> : null}</span>
                 <span className="text-xs text-slate-500 shrink-0">{c.repetidas} repetidas · {c.aciertosDeMas} aciertos de más → <b className="text-rose-600">−{c.xp} XP · −{c.monedas} 🪙</b></span>
               </label>
             ))}
@@ -148,7 +170,7 @@ export function VistaRevisionTrivia({ grados = [] }) {
           <button onClick={aplicar} disabled={trabajando || !marcados.length} className="w-full text-sm font-semibold py-2.5 rounded-xl bg-rose-500 text-white disabled:opacity-50">
             {trabajando ? "Aplicando…" : `Descontar −${totXp} XP y −${totMon} monedas a ${marcados.length} estudiante(s) y advertir`}
           </button>
-          <p className="text-[11px] text-slate-400">Se borran también las respuestas repetidas, así que no se descuenta dos veces. Revisa un curso a la vez.</p>
+          <p className="text-[11px] text-slate-400">Se borran también las respuestas repetidas, así que no se descuenta dos veces. </p>
         </div>
       )}
     </div>
