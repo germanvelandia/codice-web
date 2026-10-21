@@ -1358,6 +1358,17 @@ export async function iniciarMundo(raiz, op) {
   };
   const teclas = new Set(), joy = { x: 0, y: 0 };
 
+  // ---- estrellas: se guardan por estudiante (no reaparecen al volver a entrar) ----
+  const claveEst = "codice_estrellas_" + ((op.jugador && op.jugador.id) || "anon");
+  const escenasEst = [exterior, ...naturales];
+  try {
+    const gu = JSON.parse(localStorage.getItem(claveEst) || "{}");
+    escenasEst.forEach((e) => (gu[e.id] || []).forEach((i) => { if (e.estrellas[i] && !e.estrellas[i].tomada) { e.estrellas[i].tomada = true; estado.est++; } }));
+  } catch (e) { /* sin almacenamiento: funciona igual, solo no se recuerda */ }
+  function guardarEstrellas() {
+    try { const gu = {}; escenasEst.forEach((e) => { const t = []; e.estrellas.forEach((s, i) => { if (s.tomada) t.push(i); }); if (t.length) gu[e.id] = t; }); localStorage.setItem(claveEst, JSON.stringify(gu)); } catch (e) { /* ignorar */ }
+  }
+
   // ---- HUD ----
   const pendientesEn = (lugar) => misiones.filter((m) => (interiores[m.lugar] ? m.lugar : "plaza") === lugar && !hechas.has(m.id)).length;
   function toast(texto, ms = 2800) { const t = q(".m-toast"); t.textContent = texto; t.classList.remove("oculto"); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.add("oculto"), ms); temporizadores.add(toast.h); }
@@ -2552,7 +2563,7 @@ export async function iniciarMundo(raiz, op) {
     const ox = estado.x - { east: 22, "south-east": 16, south: 0, "south-west": -16, west: -22, "north-west": -16, north: 0, "north-east": 16 }[estado.dir], oy = estado.y - { east: 0, "south-east": 12, south: 22, "south-west": 12, west: 0, "north-west": -12, north: -22, "north-east": -12 }[estado.dir] + 6;
     estado.comp.x += (ox - estado.comp.x) * Math.min(1, dt * 5); estado.comp.y += (oy - estado.comp.y) * Math.min(1, dt * 5);
     // estrellas
-    for (const s of esc.estrellas) if (!s.tomada && Math.hypot(s.x - estado.x, s.y - 6 - estado.y) < 16) { s.tomada = true; estado.est++; actualizarHud(); aviso("⭐", "#fde68a"); snd.estrella(); }
+    for (const s of esc.estrellas) if (!s.tomada && Math.hypot(s.x - estado.x, s.y - 6 - estado.y) < 16) { s.tomada = true; estado.est++; guardarEstrellas(); actualizarHud(); aviso("⭐", "#fde68a"); snd.estrella(); }
     // salida de los edificios (caminar hacia la puerta)
     if (!estado.cambiando) { const sal = esc.salidas.find((s) => estado.x > s.x && estado.x < s.x + s.w && estado.y > s.y && estado.y < s.y + s.h && (!s.activa || s.activa())); if (sal) (sal.accion || salirDeEdificio)(); }
     // personajes
