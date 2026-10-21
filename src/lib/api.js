@@ -3355,12 +3355,12 @@ export async function fetchPreguntaTriviaAleatoria(categoriaId, estudianteId) {
 export async function responderTrivia(estudianteId, pregunta, opcionElegida) {
   const acierto = opcionElegida === pregunta.correcta;
   // Antiautoclic + tope diario de 100 XP: lo decide la base de datos (SQL 104; el 101 sirve de respaldo)
-  let daXp = true, limite = false;
+  let daXp = true, limite = false, topeDia = null;
   const rr = await supabase.rpc("trivia_responder", { p_estudiante: estudianteId, p_pregunta: pregunta.id, p_categoria: pregunta.categoria_id, p_acierto: acierto });
   if (!rr.error && rr.data) {
     if (rr.data.contada === false) return { acierto, corona: false, repetida: true };
     daXp = rr.data.da_xp !== false;
-    limite = acierto && !daXp;
+    limite = acierto && !daXp; topeDia = rr.data.tope;
   } else {
     const reg = await supabase.rpc("trivia_registrar", { p_estudiante: estudianteId, p_pregunta: pregunta.id, p_categoria: pregunta.categoria_id, p_acierto: acierto });
     if (!reg.error) {
@@ -3389,7 +3389,7 @@ export async function responderTrivia(estudianteId, pregunta, opcionElegida) {
       }
     }
   }
-  return { acierto, corona, limite };
+  return { acierto, corona, limite, tope: topeDia };
 }
 
 export async function fetchCoronasEstudiante(estudianteId) {
