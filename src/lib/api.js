@@ -345,6 +345,14 @@ export async function crearActa(estudianteId, campos) {
     ...campos,
   });
   if (error) throw error;
+  // Constancia en el Historial y puntos por conducta (solo actas convivenciales / académicas).
+  if (campos.tipo === "Convivencial" || campos.tipo === "Académico") {
+    const tf = String(campos.tipo_falta || "").toLowerCase();
+    const clave = campos.tipo === "Académico" ? "acta_academica"
+      : /grav[ií]sim/.test(tf) ? "convivencia_gravisima" : /grave/.test(tf) ? "convivencia_grave" : /leve/.test(tf) ? "convivencia_leve" : "convivencia_otra";
+    const quien = campos.tipo === "Académico" ? "Observador académico" : `Observador: falta ${campos.tipo_falta || "convivencial"}`;
+    await aplicarConducta(estudianteId, clave, `${quien} (${campos.fecha || new Date().toISOString().slice(0, 10)})`, campos.tipo === "Académico" ? "academico" : "convivencial");
+  }
 }
 
 // Crea la MISMA acta (mismo contenido) para varios estudiantes de una
@@ -3156,6 +3164,9 @@ export async function crearAnotacion(estudianteId, campos) {
   const { data: userData } = await supabase.auth.getUser();
   const { error } = await supabase.from("anotaciones_estudiantes").insert({ estudiante_id: estudianteId, docente_id: userData?.user?.id, ...campos });
   if (error) throw error;
+  // Constancia en el Historial (solo el hecho y la fecha; el texto de la anotación sigue privado).
+  const cat = campos.categoria === "convivencial" ? "convivencial" : "academico";
+  await aplicarConducta(estudianteId, "anotacion_" + cat, `Registro ${cat === "convivencial" ? "convivencial" : "académico"} del docente (${campos.fecha || new Date().toISOString().slice(0, 10)})`, cat);
 }
 
 export async function editarAnotacion(id, campos) {
@@ -4836,7 +4847,44 @@ export async function registrarHistorialGamificacionMasivo(estudianteIds, campos
 export async function fetchHistorialGamificacion(estudianteId) {
   const { data, error } = await supabase.from("historial_gamificacion").select("*").eq("estudiante_id", estudianteId).order("ts", { ascending: false });
   if (error) throw error;
-  return data || [];
+  const lista = [...(data || [])];
+  const etiquetas = new Set(lista.map((h) => h.etiqueta));
+  // Lo que sigue es complementario: si alguna tabla no se puede leer, se omite sin romper el Historial.
+  const intentar = async (f) => { try { return await f(); } catch (_) { return []; } };
+
+  // Sanciones y avisos (p. ej. descuentos por mal uso de Preguntados).
+  const puntos = await intentar(async () => {
+    const r = await supabase.from("historial_puntos").select("*").eq("estudiante_id", estudianteId);
+    return r.data || [];
+  });
+  puntos.forEach((p) => {
+    lista.push({ id: "p" + p.id, estudiante_id: estudianteId, etiqueta: p.motivo || "Ajuste de puntos", categoria: "general",
+      xp: p.tipo === "xp" ? p.delta : 0, vida: p.tipo === "vida" ? p.delta : 0, monedas: p.tipo === "monedas" ? p.delta : 0, ts: p.creado_en });
+  });
+
+  // Retardos y faltas de asistencia anteriores a este registro automático.
+  const asis = await intentar(async () => {
+    const r = await supabase.from("asistencia").select("fecha, codigo, xp_aplicado, vida_aplicada").eq("estudiante_id", estudianteId).in("codigo", ["R", "FI", "FJ"]);
+    return r.data || [];
+  });
+  asis.forEach((a, k) => {
+    const etiqueta = `Asistencia: ${LABEL_CODIGO_ASISTENCIA[a.codigo] || a.codigo} (${a.fecha})`;
+    if (etiquetas.has(etiqueta)) return;
+    lista.push({ id: "a" + k + a.fecha, estudiante_id: estudianteId, etiqueta, categoria: "asistencia", xp: a.xp_aplicado || 0, vida: a.vida_aplicada || 0, monedas: 0, ts: a.fecha + "T12:00:00" });
+  });
+
+  // Actas del observador (convivenciales y académicas) anteriores a este registro automático.
+  const actas = await intentar(async () => {
+    const r = await supabase.from("actas").select("tipo, tipo_falta, fecha").eq("estudiante_id", estudianteId).in("tipo", ["Convivencial", "Académico"]);
+    return r.data || [];
+  });
+  actas.forEach((a, k) => {
+    const etiqueta = `${a.tipo === "Académico" ? "Observador académico" : `Observador: falta ${a.tipo_falta || "convivencial"}`} (${a.fecha})`;
+    if (etiquetas.has(etiqueta)) return;
+    lista.push({ id: "c" + k + a.fecha, estudiante_id: estudianteId, etiqueta, categoria: a.tipo === "Académico" ? "academico" : "convivencial", xp: 0, vida: 0, monedas: 0, ts: a.fecha + "T12:00:00" });
+  });
+
+  return lista.sort((x, y) => new Date(y.ts) - new Date(x.ts));
 }
 
 export async function fetchXpPorCategoria(estudianteIds, categorias) {
@@ -5273,18 +5321,53 @@ export async function fetchEstudiantesConFaltaInjustificada(estudianteIds, fecha
   return new Set(Object.values(mapa).filter((a) => a.codigo === "FI").map((a) => a.estudiante_id));
 }
 
-// Cache simple en memoria del catálogo de asistencia, para no consultarlo en
-// cada marca de asistencia (se recarga en cada sesión/recarga de página).
-let _catalogoAsistenciaCache = null;
+/* ==================== ⚖️ Puntos por conducta ====================
+   Tabla "conducta_puntos" (clave, xp, vida): lo que quita (o da) cada retardo, inasistencia,
+   anotación o acta convivencial. Para las claves de asistencia, si todavía no hay una fila, se usa
+   el catálogo viejo "acciones_gamificacion" (tab asistencia), así nada de lo configurado antes se pierde. */
+export const CLAVES_CONDUCTA = [
+  { clave: "asistencia_R", grupo: "Asistencia", label: "Retardo (llegada tarde)" },
+  { clave: "asistencia_FI", grupo: "Asistencia", label: "Falta injustificada" },
+  { clave: "asistencia_FJ", grupo: "Asistencia", label: "Falta justificada" },
+  { clave: "anotacion_academico", grupo: "Anotaciones", label: "Anotación académica" },
+  { clave: "anotacion_convivencial", grupo: "Anotaciones", label: "Anotación convivencial" },
+  { clave: "convivencia_leve", grupo: "Observador (actas convivenciales)", label: "Falta leve" },
+  { clave: "convivencia_grave", grupo: "Observador (actas convivenciales)", label: "Falta grave" },
+  { clave: "convivencia_gravisima", grupo: "Observador (actas convivenciales)", label: "Falta gravísima" },
+  { clave: "convivencia_otra", grupo: "Observador (actas convivenciales)", label: "Otra falta convivencial" },
+  { clave: "acta_academica", grupo: "Observador (actas convivenciales)", label: "Acta académica" },
+];
+let _conductaCache = null;
+export async function fetchConductaPuntos(forzar = false) {
+  if (!forzar && _conductaCache && Date.now() - _conductaCache.t < 30000) return _conductaCache.datos;
+  const [c, a] = await Promise.all([
+    supabase.from("conducta_puntos").select("*"),
+    supabase.from("acciones_gamificacion").select("*").eq("tab", "asistencia").eq("activo", true),
+  ]);
+  const datos = {};
+  (a.data || []).forEach((f) => { if (f.codigo_asistencia) datos["asistencia_" + f.codigo_asistencia] = { xp: f.xp || 0, vida: f.vida || 0 }; });
+  (c.data || []).forEach((f) => { datos[f.clave] = { xp: f.xp || 0, vida: f.vida || 0 }; });
+  _conductaCache = { t: Date.now(), datos };
+  return datos;
+}
+export async function guardarConductaPuntos(clave, xp, vida) {
+  const { error } = await supabase.from("conducta_puntos").upsert({ clave, xp: Number(xp) || 0, vida: Number(vida) || 0 }, { onConflict: "clave" });
+  if (error) throw error;
+  _conductaCache = null;
+}
+async function aplicarConducta(estudianteId, clave, etiqueta, categoria) {
+  try {
+    const cfg = (await fetchConductaPuntos())[clave] || { xp: 0, vida: 0 };
+    if (cfg.xp) await ajustarXp(estudianteId, cfg.xp);
+    if (cfg.vida) await ajustarVida(estudianteId, cfg.vida);
+    await registrarHistorialGamificacion(estudianteId, { etiqueta, xp: cfg.xp || 0, vida: cfg.vida || 0, categoria: categoria || "general" });
+  } catch (_) { /* el registro principal ya quedó guardado; el historial es complementario */ }
+}
 const LABEL_CODIGO_ASISTENCIA = { P: "Presente", R: "Retardo", FI: "Falta injustificada", FJ: "Falta justificada" };
 
 async function efectoDeCodigoAsistencia(codigo) {
-  if (!_catalogoAsistenciaCache) {
-    const { data } = await supabase.from("acciones_gamificacion").select("*").eq("tab", "asistencia").eq("activo", true);
-    _catalogoAsistenciaCache = data || [];
-  }
-  const fila = _catalogoAsistenciaCache.find((a) => a.codigo_asistencia === codigo);
-  return fila ? { xp: fila.xp, vida: fila.vida } : { xp: 0, vida: 0 };
+  const cfg = (await fetchConductaPuntos())["asistencia_" + codigo];
+  return cfg ? { xp: cfg.xp, vida: cfg.vida } : { xp: 0, vida: 0 };
 }
 
 export async function marcarAsistencia(estudianteId, fecha, codigo, observacion, materiaId = null) {
@@ -5340,7 +5423,7 @@ export async function marcarAsistencia(estudianteId, fecha, codigo, observacion,
 
   if (efecto.xp) await ajustarXp(estudianteId, efecto.xp);
   if (efecto.vida) await ajustarVida(estudianteId, efecto.vida);
-  if (efecto.xp || efecto.vida) {
+  if (efecto.xp || efecto.vida || codigo !== "P") {
     await registrarHistorialGamificacion(estudianteId, {
       etiqueta: `Asistencia: ${LABEL_CODIGO_ASISTENCIA[codigo] || codigo} (${fecha})`,
       xp: efecto.xp || 0, vida: efecto.vida || 0, categoria: "asistencia",
