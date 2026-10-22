@@ -4999,6 +4999,27 @@ export async function guardarRecuperacion(materiaId, estudianteId, periodo, { no
   return { estado, nota: aprobo ? Number(minima) : notaOriginal };
 }
 
+// Cambia solo el ESTADO de la recuperación (Sin marcar / Pendiente / En proceso / Superado),
+// igual que el selector de Planillas. "Superado" fija la nota del periodo en la mínima (tope);
+// al quitar "Superado" se restituye la nota original; "Sin marcar" borra el registro.
+export async function cambiarEstadoRecuperacion(materiaId, estudianteId, periodo, { estado, estadoPrevio, notaOriginal, minima }) {
+  if (!estado) {
+    await setNivelacion(materiaId, estudianteId, periodo, null);
+  } else {
+    const { error } = await supabase.from("nivelacion").upsert(
+      { materia_id: materiaId, estudiante_id: estudianteId, periodo, estado, nota_original: notaOriginal ?? null },
+      { onConflict: "materia_id,estudiante_id,periodo" }
+    );
+    if (error) throw error;
+  }
+  if (estado === "superado") {
+    await guardarNotaFinal(materiaId, estudianteId, periodo, Number(minima));
+  } else if (estadoPrevio === "superado" && notaOriginal !== null && notaOriginal !== undefined) {
+    await guardarNotaFinal(materiaId, estudianteId, periodo, Number(notaOriginal));
+  }
+  try { await sincronizarEstadoActaNivelacion(estudianteId, materiaId, periodo, estado); } catch (_) { /* el acta es opcional */ }
+}
+
 /* ---------------- Bono de participación ---------------- */
 export async function fetchBono(materiaId, periodo) {
   const { data, error } = await supabase.from("bonos_participacion").select("*").eq("materia_id", materiaId).eq("periodo", String(periodo)).maybeSingle();
