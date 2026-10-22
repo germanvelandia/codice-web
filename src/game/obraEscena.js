@@ -295,7 +295,7 @@ export function montarObra(env) {
     if (dentro) {
       const angosta = cv.getBoundingClientRect().width < 700;
       S.min = !!(angosta && S.obra && S.obra.estado === "construccion" && S.obra.mi_rol === "constructor"); // en el celular, el constructor necesita ver el suelo
-      sincronizarPiezas(); render(); refrescar(); S.timer = setInterval(() => refrescar(true), 6000);
+      sincronizarPiezas(); render(); refrescar(); S.timer = setInterval(() => { if (!document.hidden) refrescar(true); }, 10000);
       if (S.min) toast("Toca ▴ arriba para abrir el panel de la obra", 3200);
     }
     else { el.classList.add("oculto"); el.innerHTML = ""; }
