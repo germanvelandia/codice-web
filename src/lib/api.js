@@ -4974,6 +4974,31 @@ export async function setNivelacion(materiaId, estudianteId, periodo, estado, no
   if (error) throw error;
 }
 
+/* ==================== ♻️ Recuperaciones ====================
+   Registra la nota de recuperación de un estudiante en un periodo perdido.
+   - Si la nota de recuperación alcanza la mínima aprobatoria: queda "superado" y la nota
+     del periodo pasa a ser la mínima (tope). La nota original se conserva.
+   - Si no la alcanza: queda "en_proceso" y la nota del periodo no cambia.
+   - Si se borra la nota de recuperación: se restituye la nota original. */
+export async function guardarRecuperacion(materiaId, estudianteId, periodo, { notaRecuperacion, notaOriginal, minima }) {
+  const sinNota = notaRecuperacion === null || notaRecuperacion === undefined || notaRecuperacion === "";
+  const nota = sinNota ? null : Number(notaRecuperacion);
+  const aprobo = nota !== null && nota >= Number(minima);
+  const estado = nota === null ? "pendiente" : (aprobo ? "superado" : "en_proceso");
+  const { error } = await supabase.from("nivelacion").upsert(
+    { materia_id: materiaId, estudiante_id: estudianteId, periodo, estado, nota_original: notaOriginal ?? null, nota_recuperacion: nota },
+    { onConflict: "materia_id,estudiante_id,periodo" }
+  );
+  if (error) throw error;
+  if (aprobo) {
+    await guardarNotaFinal(materiaId, estudianteId, periodo, Number(minima));
+  } else if (notaOriginal !== null && notaOriginal !== undefined) {
+    await guardarNotaFinal(materiaId, estudianteId, periodo, Number(notaOriginal));
+  }
+  try { await sincronizarEstadoActaNivelacion(estudianteId, materiaId, periodo, estado); } catch (_) { /* el acta es opcional */ }
+  return { estado, nota: aprobo ? Number(minima) : notaOriginal };
+}
+
 /* ---------------- Bono de participación ---------------- */
 export async function fetchBono(materiaId, periodo) {
   const { data, error } = await supabase.from("bonos_participacion").select("*").eq("materia_id", materiaId).eq("periodo", String(periodo)).maybeSingle();
