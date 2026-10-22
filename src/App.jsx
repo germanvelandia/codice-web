@@ -49,6 +49,7 @@ import { VistaQuizVivoDocente, QuizVivoEstudiante } from "./screens/QuizVivo";
 import { VistaRankingGanancias } from "./screens/RankingGanancias";
 import { VistaRevisionTrivia } from "./screens/RevisionTrivia";
 import { VistaRecuperaciones } from "./screens/Recuperaciones";
+import { VistaPuntosConducta } from "./screens/PuntosConducta";
 import { VistaRecompensasDocente } from "./screens/RecompensasDocente";
 import { VistaObraDocente } from "./screens/ObraDocente";
 import { VistaEncuestasDocente, VistaInformeImpacto, EncuestaEstudiante } from "./screens/EncuestaInforme";
@@ -1722,6 +1723,7 @@ const CATEGORIA_INFO_ESTUDIANTE = {
   academico: { label: "Académico", color: "#3B82F6", emoji: "📘" },
   convivencial: { label: "Convivencial", color: "#F59E0B", emoji: "🤝" },
   general: { label: "General", color: "#2F55A4", emoji: "⚡" },
+  asistencia: { label: "Asistencia", color: "#0E9F8E", emoji: "📋" },
   respeto: { label: "Respeto", color: "#22C55E", emoji: "🌱" },
   responsabilidad: { label: "Responsabilidad", color: "#22C55E", emoji: "✅" },
   confiabilidad: { label: "Confiabilidad", color: "#22C55E", emoji: "🤲" },
@@ -2758,6 +2760,7 @@ const MENU_PANEL_GRUPOS = [
   {
     key: "gamificacion", label: "Gamificación", icono: "🎮", items: [
       { key: "comarca", label: "Comarca de Oakhaven", icono: "🏛️" },
+      { key: "puntosconducta", label: "Puntos por conducta", icono: "⚖️" },
       { key: "herr_ruleta", label: "Ruleta", icono: "🎡" },
       { key: "herr_ruletamonedas", label: "Ruleta de Monedas", icono: "🪙" },
       { key: "herr_banco", label: "Banco", icono: "🏦" },
@@ -3260,6 +3263,7 @@ function Panel({ session }) {
         {tab === "roles" && <VistaRoles />}
         {tab === "calificaciones" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Planillas" icono="🎓"><VistaCalificaciones grados={grados} destinoBusqueda={destinoBusqueda} gradoActivo={gradoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
         {tab === "recuperaciones" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Recuperaciones" icono="🎓"><VistaRecuperaciones grados={grados} gradoActivo={gradoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
+        {tab === "puntosconducta" && <MarcoSeccion zonaLabel="Gamificación — Puntos por conducta" icono="🎮"><VistaPuntosConducta /></MarcoSeccion>}
         {tab === "reportes" && grados.length > 0 && <VistaReportes grados={grados} gradoActivo={gradoActivo} />}
         {tab === "horario" && grados.length > 0 && <VistaHorario grados={grados} />}
         {tab === "planeaciones" && grados.length > 0 && <MarcoSeccion zonaLabel="Planeación — Planeaciones" icono="🗺️"><VistaPlaneaciones grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
