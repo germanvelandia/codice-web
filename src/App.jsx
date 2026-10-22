@@ -48,6 +48,7 @@ import { VistaTriviaAdmin } from "./screens/TriviaAdmin";
 import { VistaQuizVivoDocente, QuizVivoEstudiante } from "./screens/QuizVivo";
 import { VistaRankingGanancias } from "./screens/RankingGanancias";
 import { VistaRevisionTrivia } from "./screens/RevisionTrivia";
+import { VistaRecuperaciones } from "./screens/Recuperaciones";
 import { VistaRecompensasDocente } from "./screens/RecompensasDocente";
 import { VistaObraDocente } from "./screens/ObraDocente";
 import { VistaEncuestasDocente, VistaInformeImpacto, EncuestaEstudiante } from "./screens/EncuestaInforme";
@@ -2727,6 +2728,7 @@ const MENU_PANEL_GRUPOS = [
       { key: "estudiantes", label: "Estudiantes", icono: "🏰" },
       { key: "asistencia", label: "Asistencia", icono: "📋" },
       { key: "calificaciones", label: "Planillas", icono: "📖" },
+      { key: "recuperaciones", label: "Recuperaciones", icono: "♻️" },
       { key: "evaluaciones", label: "Misiones", icono: "⚔️" },
       { key: "proyectosforja", label: "La Forja", icono: "🔨" },
     ],
@@ -3257,6 +3259,7 @@ function Panel({ session }) {
         )}
         {tab === "roles" && <VistaRoles />}
         {tab === "calificaciones" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Planillas" icono="🎓"><VistaCalificaciones grados={grados} destinoBusqueda={destinoBusqueda} gradoActivo={gradoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
+        {tab === "recuperaciones" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Recuperaciones" icono="🎓"><VistaRecuperaciones grados={grados} gradoActivo={gradoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
         {tab === "reportes" && grados.length > 0 && <VistaReportes grados={grados} gradoActivo={gradoActivo} />}
         {tab === "horario" && grados.length > 0 && <VistaHorario grados={grados} />}
         {tab === "planeaciones" && grados.length > 0 && <MarcoSeccion zonaLabel="Planeación — Planeaciones" icono="🗺️"><VistaPlaneaciones grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
