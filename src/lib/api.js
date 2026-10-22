@@ -141,6 +141,10 @@ export async function buscarEstudiantesGlobal(query) {
   return data || [];
 }
 
+// Las fotos migradas a Storage viven en foto_storage_url (foto_url queda vacía
+// tras limpiar el base64). Las pantallas leen foto_url, así que se unifica aquí.
+const conFoto = (lista) => (lista || []).map((e) => (e && e.foto_storage_url ? { ...e, foto_url: e.foto_storage_url } : e));
+
 export async function fetchEstudiantesPorGrado(gradoId) {
   const { data, error } = await supabase
     .from("estudiantes")
@@ -148,7 +152,7 @@ export async function fetchEstudiantesPorGrado(gradoId) {
     .eq("grado_id", gradoId)
     .eq("activo", true);
   if (error) throw error;
-  return ordenarPorApellido(data || []);
+  return ordenarPorApellido(conFoto(data));
 }
 
 export async function fetchTodosEstudiantes() {
@@ -157,7 +161,7 @@ export async function fetchTodosEstudiantes() {
     .select("*, progreso(*)")
     .eq("activo", true);
   if (error) throw error;
-  return ordenarPorApellido(data || []);
+  return ordenarPorApellido(conFoto(data));
 }
 
 export async function crearEstudiante({ nombre, grado_id, reino_original }) {
@@ -708,7 +712,7 @@ export async function fetchEstudiantesEnInclusion() {
   const { data, error } = await supabase.from("estudiantes").select("*")
     .eq("activo", true).or("piar.eq.true,dua.eq.true").order("nombre");
   if (error) throw error;
-  return data || [];
+  return conFoto(data);
 }
 
 export async function fetchSeguimientosInclusion(estudianteId) {
