@@ -13,7 +13,9 @@ export function HistorialPuntosEstudiante({ estudianteId }) {
   // "Bueno" si suma algo positivo en algún aspecto; "malo" si resta algo,
   // sin contar como malo un simple gasto de monedas en la tienda.
   const esBueno = (h) => (h.xp || 0) > 0 || (h.vida || 0) > 0 || (h.monedas || 0) > 0;
-  const esMalo = (h) => (h.xp || 0) < 0 || (h.vida || 0) < 0;
+  // También cuentan como "para mejorar" los avisos y registros de conducta aunque no resten puntos.
+  const esAviso = (h) => /^(Asistencia: (Retardo|Falta)|Observador: falta|Registro convivencial|⚠️)/.test(h.etiqueta || "");
+  const esMalo = (h) => (h.xp || 0) < 0 || (h.vida || 0) < 0 || esAviso(h);
 
   const visibles = historial.filter((h) => {
     if (filtro === "buenos") return esBueno(h) && !esMalo(h);
