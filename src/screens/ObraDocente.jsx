@@ -120,7 +120,7 @@ function PanelObra({ obra, gradoId, onCambio }) {
 
   const cargarDet = () => ob.fetchDetalleObra(obra.id).then(setDet).catch(() => {});
   useEffect(() => { fetchEstudiantesPorGrado(gradoId).then(setEstudiantes).catch(() => setEstudiantes([])); }, [gradoId]);
-  useEffect(() => { cargarDet(); const id = setInterval(() => { cargarDet(); onCambio(); }, 8000); return () => clearInterval(id); }, [obra.id]);
+  useEffect(() => { cargarDet(); const id = setInterval(() => { if (!document.hidden) { cargarDet(); onCambio(); } }, 20000); return () => clearInterval(id); }, [obra.id]);
 
   const accion = async (fn) => { setTrabajando(true); try { await fn(); await onCambio(); await cargarDet(); } catch (e) { alert(ob.mensajeObra(e)); } setTrabajando(false); };
   const [txtEstado, clsEstado] = ESTADO[obra.estado];
