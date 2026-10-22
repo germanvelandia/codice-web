@@ -2901,6 +2901,51 @@ function TarjetaMenuLateral({ icono, label, activo, onClick, fondo, color }) {
   );
 }
 
+// Menú en tarjetas para la página de Inicio: cada grupo con sus secciones.
+const COLORES_GRUPO = {
+  academico: "#2F55A4", convivencial: "#0E9F8E", planeacion: "#B8892B",
+  gamificacion: "#7C3AED", administracion: "#475569", herramientas_grupo: "#E0552E",
+};
+function TarjetasMenuInicio({ grupos, onIrA }) {
+  const [busqueda, setBusqueda] = useState("");
+  const q = busqueda.trim().toLowerCase();
+  const visibles = grupos
+    .filter((g) => g.key !== "inicio_grupo")
+    .map((g) => ({ ...g, items: q ? g.items.filter((it) => it.label.toLowerCase().includes(q)) : g.items }))
+    .filter((g) => g.items.length > 0);
+  return (
+    <div className="mb-4">
+      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+        <div className="font-extrabold text-slate-800 text-base">🧭 ¿A dónde vamos hoy?</div>
+        <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="🔎 Buscar sección…"
+          className="text-sm rounded-full px-3.5 py-1.5 border border-slate-200 bg-white outline-none focus:border-[#2F55A4] w-full sm:w-64" />
+      </div>
+      {visibles.length === 0 && <p className="text-sm text-slate-400">No hay secciones con ese nombre.</p>}
+      {visibles.map((g) => {
+        const color = COLORES_GRUPO[g.key] || "#2F55A4";
+        return (
+          <div key={g.key} className="mb-4">
+            <div className="flex items-center gap-2 mb-2 px-0.5">
+              <span className="w-1.5 h-4 rounded-full" style={{ background: color }} />
+              <span className="text-[11px] font-extrabold uppercase tracking-wide text-slate-500">{g.icono} {g.label}</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5">
+              {g.items.map((it) => (
+                <button key={it.key} onClick={() => onIrA(it.key)}
+                  className="group text-left bg-white rounded-2xl border border-slate-200 p-3 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
+                  style={{ borderTop: `3px solid ${color}` }}>
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg mb-2" style={{ background: color + "1A" }}>{it.icono}</div>
+                  <div className="text-[13px] font-bold leading-tight text-slate-800 group-hover:text-[#17264D]">{it.label}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function SidebarTarjetas({ activo, onCambiar, email, institucion, onAdmin, onInstitucion, onSalir, onBuscarEstudiante, esAdmin, esAdminEfectivo, previsualizandoDocente, onCambiarPrevisualizacion, grupos, menuAbierto, onCerrarMenu }) {
   const [nombreDocente, setNombreDocente] = useState("");
   const [editandoNombre, setEditandoNombre] = useState(false);
@@ -3009,21 +3054,29 @@ function SidebarTarjetas({ activo, onCambiar, email, institucion, onAdmin, onIns
 
   return (
     <>
-      {/* Escritorio: fija, siempre visible */}
-      <div className="hidden md:block w-[210px] shrink-0 sticky top-0 h-screen">{contenido}</div>
 
       {/* Móvil: barra angosta con hamburguesa + cajón deslizante */}
-      <div className="md:hidden w-full sticky top-0 z-30 flex items-center justify-between px-4 py-2.5" style={{ background: "#17264D" }}>
-        <button onClick={() => elegir("inicio")} className="flex items-center gap-2">
-          <span className="text-lg">🧭</span>
-          <span className="text-white text-sm font-bold tracking-[0.12em]">CÓDICE</span>
-        </button>
-        <button onClick={() => onCerrarMenu?.(true)} className="text-white text-xl">☰</button>
+      <div className="w-full sticky top-0 z-30 flex items-center justify-between gap-3 px-4 py-2.5" style={{ background: "#17264D" }}>
+        <div className="flex items-center gap-3 min-w-0">
+          <button onClick={() => onCerrarMenu?.(true)} className="text-white text-xl shrink-0" title="Menú">☰</button>
+          <button onClick={() => elegir("inicio")} className="flex items-center gap-2 shrink-0">
+            <span className="text-lg">🧭</span>
+            <span className="text-white text-sm font-bold tracking-[0.12em]">CÓDICE</span>
+          </button>
+          {activo !== "inicio" && (
+            <span className="text-[#E8EEF8] text-xs font-semibold truncate pl-3 border-l border-white/20">
+              {(grupos.flatMap((g) => g.items).find((it) => it.key === activo) || {}).icono} {(grupos.flatMap((g) => g.items).find((it) => it.key === activo) || {}).label}
+            </span>
+          )}
+        </div>
+        {activo !== "inicio" && (
+          <button onClick={() => elegir("inicio")} className="text-[11px] font-bold px-3 py-1.5 rounded-full shrink-0" style={{ background: "#E8EEF8", color: "#17264D" }}>🏠 Inicio</button>
+        )}
       </div>
       {menuAbierto && (
         <>
-          <div className="md:hidden fixed inset-0 z-40 bg-black/40" onClick={() => onCerrarMenu?.()} />
-          <div className="md:hidden fixed left-0 top-0 bottom-0 z-50 w-[260px] shadow-xl">{contenido}</div>
+          <div className="fixed inset-0 z-40 bg-black/40" onClick={() => onCerrarMenu?.()} />
+          <div className="fixed left-0 top-0 bottom-0 z-50 w-[280px] shadow-xl">{contenido}</div>
         </>
       )}
     </>
@@ -3114,7 +3167,7 @@ function Panel({ session }) {
   };
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row" style={{ background: "#FBFBFD" }}>
+    <div className="min-h-screen flex flex-col" style={{ background: "#FBFBFD" }}>
       <SidebarTarjetas activo={claveActivaMenu} onCambiar={irA} email={session.user.email} institucion={institucion}
         onAdmin={() => setAdministracionAbierta(true)} onInstitucion={() => setInstitucionAbierta(true)}
         onSalir={() => supabase.auth.signOut()} onBuscarEstudiante={irACalificacionesDesdeBusqueda}
@@ -3125,7 +3178,7 @@ function Panel({ session }) {
       {administracionAbierta && <AdministracionModal onClose={() => setAdministracionAbierta(false)} />}
 
       <div className="flex-1 min-w-0 p-5 md:p-10">
-        {tab === "inicio" && <VistaInicio onIrA={irA} />}
+        {tab === "inicio" && <VistaInicio onIrA={irA} contenidoMedio={<TarjetasMenuInicio grupos={menuPanelVisible} onIrA={irA} />} />}
         {tab === "entregasrevisar" && <MarcoSeccion zonaLabel="Académico — Entregas por revisar" icono="🎓"><VistaEntregasPorRevisar onIrAGrado={irAGradoDesdeRevisar} /></MarcoSeccion>}
         {tab === "estudiantes" && (
           <MarcoSeccion zonaLabel="Académico — Estudiantes" icono="🎓">
