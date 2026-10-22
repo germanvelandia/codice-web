@@ -2921,27 +2921,34 @@ function TarjetasMenuInicio({ grupos, onIrA }) {
           className="text-sm rounded-full px-3.5 py-1.5 border border-slate-200 bg-white outline-none focus:border-[#2F55A4] w-full sm:w-64" />
       </div>
       {visibles.length === 0 && <p className="text-sm text-slate-400">No hay secciones con ese nombre.</p>}
-      {visibles.map((g) => {
-        const color = COLORES_GRUPO[g.key] || "#2F55A4";
-        return (
-          <div key={g.key} className="mb-4">
-            <div className="flex items-center gap-2 mb-2 px-0.5">
-              <span className="w-1.5 h-4 rounded-full" style={{ background: color }} />
-              <span className="text-[11px] font-extrabold uppercase tracking-wide text-slate-500">{g.icono} {g.label}</span>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
+        {visibles.map((g) => {
+          const color = COLORES_GRUPO[g.key] || "#2F55A4";
+          return (
+            <div key={g.key} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="flex items-center gap-2.5 px-4 py-3" style={{ background: `linear-gradient(135deg, ${color}, ${color}CC)` }}>
+                <span className="text-2xl">{g.icono}</span>
+                <div className="min-w-0">
+                  <div className="text-white font-extrabold text-sm leading-tight">{g.label}</div>
+                  <div className="text-white/70 text-[10px]">{g.items.length} {g.items.length === 1 ? "sección" : "secciones"}</div>
+                </div>
+              </div>
+              <div className={`p-2.5 grid gap-1.5 ${g.items.length > 6 ? "grid-cols-2" : "grid-cols-1"}`}>
+                {g.items.map((it) => (
+                  <button key={it.key} onClick={() => onIrA(it.key)}
+                    className="flex items-center gap-2 text-left rounded-xl px-2.5 py-2 hover:shadow-sm transition-all"
+                    style={{ background: color + "12" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = color + "26"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = color + "12"; }}>
+                    <span className="text-base shrink-0">{it.icono}</span>
+                    <span className="text-[12px] font-bold leading-tight text-slate-700">{it.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5">
-              {g.items.map((it) => (
-                <button key={it.key} onClick={() => onIrA(it.key)}
-                  className="group text-left bg-white rounded-2xl border border-slate-200 p-3 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
-                  style={{ borderTop: `3px solid ${color}` }}>
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg mb-2" style={{ background: color + "1A" }}>{it.icono}</div>
-                  <div className="text-[13px] font-bold leading-tight text-slate-800 group-hover:text-[#17264D]">{it.label}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
