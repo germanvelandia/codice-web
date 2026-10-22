@@ -153,7 +153,7 @@ function PanelSala({ salaId, onSalir }) {
   const cerrandoRef = useRef(false);
 
   const refrescar = () => qv.fetchPanelSala(salaId).then((p) => { setPanel(p); setError(""); }).catch((e) => setError(e.message));
-  useEffect(() => { refrescar(); const id = setInterval(refrescar, 2000); return () => clearInterval(id); }, [salaId]);
+  useEffect(() => { refrescar(); const id = setInterval(() => { if (!document.hidden) refrescar(); }, 4000); return () => clearInterval(id); }, [salaId]);
   useEffect(() => { const id = setInterval(() => setTick((t) => t + 1), 500); return () => clearInterval(id); }, []);
 
   const accion = async (a) => {
@@ -295,7 +295,7 @@ export function QuizVivoEstudiante() {
       setEst(d); setRecibidoEn(Date.now()); setError("");
     }).catch((e) => { if (vivo) setError(e.message); });
     pedir();
-    const id = setInterval(pedir, 1500);
+    const id = setInterval(() => { if (!document.hidden) pedir(); }, 3000);
     const t = setInterval(() => setTick((x) => x + 1), 250);
     return () => { vivo = false; clearInterval(id); clearInterval(t); };
   }, [unido, codigo]);
