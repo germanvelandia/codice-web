@@ -53,10 +53,8 @@ function FormNueva({ gradoId, onListo, inicial, onCancelar }) {
   const [tipo, setTipo] = useState(inicial?.tipo || "ambas");
   const [modo, setModo] = useState(inicial?.modo_co || "azar");
   const [cantidad, setCantidad] = useState(inicial?.cantidad || 3);
-  const [fuente, setFuente] = useState("texto");
-  const [texto, setTexto] = useState((inicial ? inicial.criterios : co.CRITERIOS_DEFECTO).map((c) => c.criterio).join("\n"));
+  const [rubrica, setRubrica] = useState(() => JSON.parse(JSON.stringify(inicial ? inicial.criterios : co.CRITERIOS_DEFECTO)));
   const [catalogo, setCatalogo] = useState([]);
-  const [rubId, setRubId] = useState("");
   const aLocal = (iso) => { if (!iso) return ""; const d = new Date(iso); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
   const [cierra, setCierra] = useState(aLocal(inicial?.cierra));
   const [visib, setVisib] = useState(inicial?.visibilidad || "docente");
@@ -67,7 +65,8 @@ function FormNueva({ gradoId, onListo, inicial, onCancelar }) {
   useEffect(() => { api.fetchRubricasCatalogo().then(setCatalogo).catch(() => {}); if (inicial) co.fetchRespuestasCoev(inicial.id).then((d) => setConRespuestas(d.respuestas.length > 0)).catch(() => {}); }, []);
 
   const guardar = async () => {
-    const criterios = ed && conRespuestas ? inicial.criterios : fuente === "rubrica" ? (catalogo.find((r) => String(r.id) === String(rubId))?.criterios || []) : co.criteriosDesdeTexto(texto);
+    const criterios = ed && conRespuestas ? inicial.criterios : rubrica.map((c) => ({ criterio: c.criterio.trim(), niveles: c.niveles.map((n) => ({ nombre: n.nombre.trim(), puntos: Number(n.puntos) || 0 })) }));
+    if (criterios.some((c) => !c.criterio || c.niveles.length < 2 || c.niveles.some((n) => !n.nombre))) return setError("Cada criterio necesita nombre y al menos 2 niveles con nombre.");
     if (!titulo.trim()) return setError("Ponle un título.");
     if (!criterios.length) return setError("Agrega al menos un criterio.");
     setGuardando(true); setError("");
@@ -99,13 +98,31 @@ function FormNueva({ gradoId, onListo, inicial, onCancelar }) {
         </div>
       )}
       <div className={`space-y-2 ${ed && conRespuestas ? "opacity-40 pointer-events-none" : ""}`}>
-      <div className="flex gap-3 text-xs">
-        <label><input type="radio" checked={fuente === "texto"} onChange={() => setFuente("texto")} /> Mis criterios</label>
-        <label><input type="radio" checked={fuente === "rubrica"} onChange={() => setFuente("rubrica")} /> Rúbrica del catálogo</label>
-      </div>
-      {fuente === "texto"
-        ? <textarea rows={4} value={texto} onChange={(e) => setTexto(e.target.value)} className={inp} placeholder="Un criterio por línea (niveles Alto 5 / Medio 3 / Bajo 1)" />
-        : <select value={rubId} onChange={(e) => setRubId(e.target.value)} className={inp}><option value="">Elegir rúbrica…</option>{catalogo.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}</select>}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-slate-700">Rúbrica de calificación</span>
+          <select value="" onChange={(e) => { const r = catalogo.find((x) => String(x.id) === e.target.value); if (r) setRubrica(JSON.parse(JSON.stringify(r.criterios))); }} className="text-xs rounded-lg px-2 py-1 border border-slate-200 bg-white ml-auto">
+            <option value="">Cargar desde mi catálogo…</option>{catalogo.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
+          </select>
+        </div>
+        {rubrica.map((c, i) => (
+          <div key={i} className="bg-white rounded-lg border border-violet-100 p-2 space-y-1">
+            <div className="flex gap-1">
+              <input value={c.criterio} onChange={(e) => setRubrica((p) => p.map((x, k) => k === i ? { ...x, criterio: e.target.value } : x))} placeholder="Criterio" className="flex-1 text-sm rounded px-2 py-1 border border-slate-200" />
+              <button onClick={() => setRubrica((p) => p.filter((_, k) => k !== i))} className="text-slate-400 hover:text-rose-500 px-1" title="Quitar criterio">🗑</button>
+            </div>
+            {c.niveles.map((n, j2) => (
+              <div key={j2} className="flex gap-1 items-center pl-3">
+                <input value={n.nombre} onChange={(e) => setRubrica((p) => p.map((x, k) => k === i ? { ...x, niveles: x.niveles.map((y, m) => m === j2 ? { ...y, nombre: e.target.value } : y) } : x))} placeholder="Nivel" className="flex-1 text-xs rounded px-2 py-1 border border-slate-200" />
+                <input type="number" step="0.5" value={n.puntos} onChange={(e) => setRubrica((p) => p.map((x, k) => k === i ? { ...x, niveles: x.niveles.map((y, m) => m === j2 ? { ...y, puntos: e.target.value } : y) } : x))} className="w-16 text-xs rounded px-2 py-1 border border-slate-200" />
+                <span className="text-[10px] text-slate-400">pts</span>
+                <button onClick={() => setRubrica((p) => p.map((x, k) => k === i ? { ...x, niveles: x.niveles.filter((_, m) => m !== j2) } : x))} className="text-slate-300 hover:text-rose-500 text-xs">✕</button>
+              </div>
+            ))}
+            <button onClick={() => setRubrica((p) => p.map((x, k) => k === i ? { ...x, niveles: [...x.niveles, { nombre: "", puntos: 0 }] } : x))} className="text-[11px] text-violet-600 pl-3">+ nivel</button>
+          </div>
+        ))}
+        <button onClick={() => setRubrica((p) => [...p, { criterio: "", niveles: [{ nombre: "Alto", puntos: 5 }, { nombre: "Medio", puntos: 3 }, { nombre: "Bajo", puntos: 1 }] }])} className="text-xs px-2 py-1 rounded-lg border border-violet-200 text-violet-700 bg-white">+ Agregar criterio</button>
+        <p className="text-[11px] text-slate-500">La nota se calcula como en tus rúbricas: puntos obtenidos / máximo posible, llevados a la escala de abajo.</p>
       </div>
       <div className="grid grid-cols-2 gap-2 text-xs text-slate-600">
         <label>Escala de {" "}<input type="number" step="0.1" value={escMin} onChange={(e) => setEscMin(e.target.value)} className="w-14 rounded px-1 border border-slate-200" /> a <input type="number" step="0.1" value={escMax} onChange={(e) => setEscMax(e.target.value)} className="w-14 rounded px-1 border border-slate-200" /></label>
