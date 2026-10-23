@@ -20,7 +20,7 @@ export function VistaCoevaluacion({ grados = [], gradoActivo }) {
     <div className="max-w-3xl mx-auto space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-sm rounded-lg px-2 py-2 border border-slate-200 bg-white">
-          {grados.map((g) => <option key={g.id} value={g.id}>{g.nombre}</option>)}
+          {grados.map((g) => <option key={g.id} value={g.id}>{g.nombre || g.id}</option>)}
         </select>
         <button onClick={() => setCreando(!creando)} className="text-sm px-3 py-2 rounded-lg bg-violet-600 text-white">{creando ? "Cancelar" : "➕ Nueva evaluación"}</button>
       </div>
