@@ -3367,12 +3367,34 @@ export async function fetchPreguntaTriviaAleatoria(categoriaId, estudianteId) {
 
 // Registra la respuesta, aplica XP/monedas, y calcula si corresponde otorgar
 // la corona de esa categoría (3 aciertos seguidos, sin haber fallado antes en la racha actual).
+/* ==================== 🔒 Bloqueo de Preguntados (SQL 109) ==================== */
+export async function fetchTriviaBloqueos() {
+  const { data, error } = await supabase.from("trivia_bloqueos").select("*");
+  if (error) throw error;
+  return data || [];
+}
+export async function guardarTriviaBloqueo({ grado_id, bloqueado, desde, hasta, mensaje }) {
+  const { error } = await supabase.from("trivia_bloqueos").upsert(
+    { grado_id: String(grado_id), bloqueado: !!bloqueado, desde: desde || null, hasta: hasta || null, mensaje: mensaje || null, actualizado_en: new Date().toISOString() },
+    { onConflict: "grado_id" });
+  if (error) throw error;
+}
+// Para el estudiante: si falla (SQL 109 sin correr) se deja jugar como siempre.
+export async function fetchTriviaBloqueoEstudiante(estudianteId) {
+  try {
+    const { data, error } = await supabase.rpc("trivia_bloqueado_para", { p_estudiante: estudianteId });
+    if (error || !data) return { bloqueado: false };
+    return data;
+  } catch (_) { return { bloqueado: false }; }
+}
+
 export async function responderTrivia(estudianteId, pregunta, opcionElegida) {
   const acierto = opcionElegida === pregunta.correcta;
   // Antiautoclic + tope diario de 100 XP: lo decide la base de datos (SQL 104; el 101 sirve de respaldo)
   let daXp = true, limite = false, topeDia = null;
   const rr = await supabase.rpc("trivia_responder", { p_estudiante: estudianteId, p_pregunta: pregunta.id, p_categoria: pregunta.categoria_id, p_acierto: acierto });
   if (!rr.error && rr.data) {
+    if (rr.data.bloqueado) return { acierto: false, corona: false, bloqueado: true, mensaje: rr.data.mensaje };
     if (rr.data.contada === false) return { acierto, corona: false, repetida: true };
     daXp = rr.data.da_xp !== false;
     limite = acierto && !daXp; topeDia = rr.data.tope;
