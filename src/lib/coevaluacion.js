@@ -1,0 +1,72 @@
+import { supabase } from "./supabaseClient";
+
+const CRITERIOS_DEFECTO = [
+  { criterio: "Participa y aporta en clase", niveles: [{ nombre: "Siempre", puntos: 5 }, { nombre: "A veces", puntos: 3 }, { nombre: "Casi nunca", puntos: 1 }] },
+  { criterio: "Respeta a los demás y escucha", niveles: [{ nombre: "Siempre", puntos: 5 }, { nombre: "A veces", puntos: 3 }, { nombre: "Casi nunca", puntos: 1 }] },
+  { criterio: "Cumple con sus compromisos", niveles: [{ nombre: "Siempre", puntos: 5 }, { nombre: "A veces", puntos: 3 }, { nombre: "Casi nunca", puntos: 1 }] },
+];
+export { CRITERIOS_DEFECTO };
+
+// Convierte líneas de texto ("Criterio") en criterios con niveles estándar
+export function criteriosDesdeTexto(txt) {
+  return String(txt || "").split("\n").map((l) => l.trim()).filter(Boolean).map((c) => ({
+    criterio: c, niveles: [{ nombre: "Alto", puntos: 5 }, { nombre: "Medio", puntos: 3 }, { nombre: "Bajo", puntos: 1 }],
+  }));
+}
+
+// ---------- Docente ----------
+export async function fetchCoevaluaciones(gradoId) {
+  let q = supabase.from("coev_evaluaciones").select("*").order("creado_en", { ascending: false });
+  if (gradoId) q = q.eq("grado_id", gradoId);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+export async function crearCoevaluacion(campos) {
+  const { data, error } = await supabase.from("coev_evaluaciones").insert(campos).select().single();
+  if (error) throw error;
+  if (campos.tipo !== "auto") { const r = await supabase.rpc("coev_generar", { p_eval: data.id }); if (r.error) throw r.error; }
+  return data;
+}
+export async function actualizarCoevaluacion(id, campos) {
+  const { error } = await supabase.from("coev_evaluaciones").update(campos).eq("id", id);
+  if (error) throw error;
+}
+export async function eliminarCoevaluacion(id) {
+  const { error } = await supabase.from("coev_evaluaciones").delete().eq("id", id);
+  if (error) throw error;
+}
+export async function fetchRespuestasCoev(id) {
+  const [r, a] = await Promise.all([
+    supabase.from("coev_respuestas").select("evaluador_id,evaluado_id,nota,comentario").eq("eval_id", id),
+    supabase.from("coev_asignaciones").select("evaluador_id,evaluado_id").eq("eval_id", id),
+  ]);
+  if (r.error) throw r.error;
+  if (a.error) throw a.error;
+  return { respuestas: r.data || [], asignaciones: a.data || [] };
+}
+
+// ---------- Estudiante ----------
+export async function fetchMisCoevaluaciones() {
+  const { data, error } = await supabase.rpc("coev_mis_evaluaciones");
+  if (error) throw error;
+  return data || [];
+}
+export async function enviarCoev(evalId, evaluadoId, niveles, comentario) {
+  const { data, error } = await supabase.rpc("coev_enviar", { p_eval: evalId, p_evaluado: evaluadoId, p_niveles: niveles, p_comentario: comentario || null });
+  if (error) throw error;
+  return data;
+}
+export async function fetchMiResultadoCoev(evalId) {
+  const { data, error } = await supabase.rpc("coev_mi_resultado", { p_eval: evalId });
+  if (error) throw error;
+  return data;
+}
+export function mensajeCoev(e) {
+  const m = String(e?.message || e || "");
+  if (m.includes("evaluacion_cerrada")) return "Esta evaluación ya está cerrada.";
+  if (m.includes("no_asignado")) return "Ese compañero no está en tu lista.";
+  if (m.includes("sesion_invalida")) return "Vuelve a entrar con tu código.";
+  if (m.includes("coev_")) return "Falta correr el script 110 en Supabase.";
+  return m || "No se pudo completar.";
+}
