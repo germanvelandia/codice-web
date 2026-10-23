@@ -52,6 +52,7 @@ import { VistaRecuperaciones } from "./screens/Recuperaciones";
 import { VistaPuntosConducta } from "./screens/PuntosConducta";
 import { VistaRecompensasDocente } from "./screens/RecompensasDocente";
 import { VistaObraDocente } from "./screens/ObraDocente";
+import { VistaCoevaluacion, CoevaluacionEstudiante } from "./screens/Coevaluacion";
 import { VistaEncuestasDocente, VistaInformeImpacto, EncuestaEstudiante } from "./screens/EncuestaInforme";
 import { VistaBancoPreguntas } from "./screens/BancoPreguntas";
 import { VistaEvaluaciones } from "./screens/Evaluaciones";
@@ -1218,6 +1219,7 @@ const MENU_CODICE_GRUPOS = [
   },
   {
     key: "cuenta", label: "Mi cuenta", icono: "👤", items: [
+      { key: "coevaluacion", label: "Evaluarnos", icono: "🪞" },
       { key: "encuesta", label: "Encuesta", icono: "📝" },
       { key: "perfil", label: "Perfil", icono: "👤" },
     ],
@@ -1231,7 +1233,7 @@ const MENU_CODICE = MENU_CODICE_GRUPOS.flatMap((g) => g.items);
 // siendo la misma (la key de MENU_CODICE).
 const ICONO_MAPA = {
   album: "🏯", biblioteca: "📚", codice: "📖", forja: "⚒️", guias: "🗺️", modulos: "🧭",
-  inicio: "🏰", mundo: "🌍", misiones: "⚔️", notas: "📜", personaje: "🧙", historial: "📖", perfil: "🛡️", preguntados: "🎡", quizvivo: "⚡", encuesta: "📝",
+  inicio: "🏰", mundo: "🌍", misiones: "⚔️", notas: "📜", personaje: "🧙", historial: "📖", perfil: "🛡️", preguntados: "🎡", quizvivo: "⚡", encuesta: "📝", coevaluacion: "🪞",
   proyectos: "🏹", ranking: "👑", recompensas: "💎", salonhonor: "🏆",
 };
 
@@ -2609,6 +2611,10 @@ function PortalEstudiante() {
             <MarcoSeccion zonaLabel="Mi cuenta — Encuesta" icono="📝"><EncuestaEstudiante /></MarcoSeccion>
           )}
 
+          {vista === "coevaluacion" && estudianteInfo && (
+            <MarcoSeccion zonaLabel="Mi cuenta — Evaluarnos" icono="🪞"><CoevaluacionEstudiante /></MarcoSeccion>
+          )}
+
           {vista === "quizvivo" && estudianteInfo && (
             <MarcoSeccion zonaLabel="Diversión — Quiz en vivo" icono="⚡"><QuizVivoEstudiante estudianteId={estudianteInfo.id} /></MarcoSeccion>
           )}
@@ -2744,6 +2750,7 @@ const MENU_PANEL_GRUPOS = [
       { key: "asistencia", label: "Asistencia", icono: "📋" },
       { key: "calificaciones", label: "Planillas", icono: "📖" },
       { key: "recuperaciones", label: "Recuperaciones", icono: "♻️" },
+      { key: "coevaluacion", label: "Auto y coevaluación", icono: "🪞" },
       { key: "evaluaciones", label: "Misiones", icono: "⚔️" },
       { key: "proyectosforja", label: "La Forja", icono: "🔨" },
     ],
@@ -3275,6 +3282,7 @@ function Panel({ session }) {
         )}
         {tab === "roles" && <VistaRoles />}
         {tab === "calificaciones" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Planillas" icono="🎓"><VistaCalificaciones grados={grados} destinoBusqueda={destinoBusqueda} gradoActivo={gradoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
+        {tab === "coevaluacion" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Auto y coevaluación" icono="🪞"><VistaCoevaluacion grados={grados} gradoActivo={gradoActivo} /></MarcoSeccion>}
         {tab === "recuperaciones" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Recuperaciones" icono="🎓"><VistaRecuperaciones grados={grados} gradoActivo={gradoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
         {tab === "puntosconducta" && <MarcoSeccion zonaLabel="Gamificación — Puntos por conducta" icono="🎮"><VistaPuntosConducta /></MarcoSeccion>}
         {tab === "reportes" && grados.length > 0 && <VistaReportes grados={grados} gradoActivo={gradoActivo} />}
