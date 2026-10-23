@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import * as api from "../lib/api";
 import { descargarArchivo } from "../lib/informeImpacto";
+import { BloqueoPreguntados } from "./BloqueoPreguntados";
 
 const VENTANA_MS = 60000;   // dos respuestas a la MISMA pregunta con menos de 60 s = autoclic
 const XP_ACIERTO = 5, MONEDAS_ACIERTO = 2; // lo que Preguntados daba por cada acierto
@@ -159,6 +160,7 @@ export function VistaRevisionTrivia({ grados = [] }) {
 
   return (
     <div>
+      <BloqueoPreguntados grados={grados} />
       <ConfigTope />
       <h3 className="font-bold text-slate-800 mb-1">🛡️ Revisión de Preguntados (autoclic)</h3>
       <p className="text-xs text-slate-400 mb-3">Busca estudiantes que respondieron la <b>misma pregunta varias veces en menos de 60 segundos</b> (clics repetidos). Cada acierto repetido sumó +{XP_ACIERTO} XP y +{MONEDAS_ACIERTO} monedas de más. Aquí se los descuentas y les dejas una advertencia que verán en su historial.</p>
