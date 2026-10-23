@@ -1784,9 +1784,10 @@ function PreguntadosEstudiante({ estudianteId }) {
   const [respondida, setRespondida] = useState(null); // { opcion, acierto, corona }
   const [cargandoPregunta, setCargandoPregunta] = useState(false);
 
+  const [bloqueo, setBloqueo] = useState(null); // { bloqueado, mensaje, hasta }
   const cargar = () => {
-    Promise.all([api.fetchTriviaCategorias(), api.fetchCoronasEstudiante(estudianteId)]).then(([cats, cor]) => {
-      setCategorias(cats); setCoronas(cor); setCargando(false);
+    Promise.all([api.fetchTriviaCategorias(), api.fetchCoronasEstudiante(estudianteId), api.fetchTriviaBloqueoEstudiante(estudianteId)]).then(([cats, cor, blq]) => {
+      setCategorias(cats); setCoronas(cor); setBloqueo(blq); setCargando(false);
     });
   };
   useEffect(() => { cargar(); }, [estudianteId]);
@@ -1823,6 +1824,7 @@ function PreguntadosEstudiante({ estudianteId }) {
     bloqueoRespuesta.current = true;
     let r;
     try { r = await api.responderTrivia(estudianteId, pregunta, opcionIdx); } catch (e) { bloqueoRespuesta.current = false; return; }
+    if (r.bloqueado) { setBloqueo({ bloqueado: true, mensaje: r.mensaje }); return; }
     setRespondida({ opcion: opcionIdx, ...r });
     if (r.corona) { sonidoLogro(); setCoronas((prev) => [...prev, pregunta.categoria_id]); }
     else if (r.acierto) sonidoAcierto();
@@ -1830,6 +1832,17 @@ function PreguntadosEstudiante({ estudianteId }) {
   };
 
   if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
+
+  if (bloqueo?.bloqueado) {
+    return (
+      <div className="text-center py-10">
+        <div className="text-4xl mb-2">🔒</div>
+        <p className="text-sm font-bold text-slate-700 mb-1">Preguntados está cerrado por ahora</p>
+        <p className="text-sm text-slate-500 max-w-sm mx-auto">{bloqueo.mensaje || "Tu docente lo abrirá de nuevo."}</p>
+        {bloqueo.hasta && <p className="text-xs text-slate-400 mt-2">Se abre de nuevo: {new Date(bloqueo.hasta).toLocaleString("es-CO", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}</p>}
+      </div>
+    );
+  }
 
   if (categorias.length === 0) {
     return (
