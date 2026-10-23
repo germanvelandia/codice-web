@@ -1,9 +1,10 @@
 import { supabase } from "./supabaseClient";
 
+const nv = (a, b, c) => [{ nombre: "Superior", puntos: 5, descripcion: a }, { nombre: "Básico", puntos: 3, descripcion: b }, { nombre: "Bajo", puntos: 1, descripcion: c }];
 const CRITERIOS_DEFECTO = [
-  { criterio: "Participa y aporta en clase", niveles: [{ nombre: "Siempre", puntos: 5 }, { nombre: "A veces", puntos: 3 }, { nombre: "Casi nunca", puntos: 1 }] },
-  { criterio: "Respeta a los demás y escucha", niveles: [{ nombre: "Siempre", puntos: 5 }, { nombre: "A veces", puntos: 3 }, { nombre: "Casi nunca", puntos: 1 }] },
-  { criterio: "Cumple con sus compromisos", niveles: [{ nombre: "Siempre", puntos: 5 }, { nombre: "A veces", puntos: 3 }, { nombre: "Casi nunca", puntos: 1 }] },
+  { criterio: "Participación", descripcion: "Aporta ideas y se involucra en las actividades.", niveles: nv("Participa con frecuencia y sus aportes enriquecen la clase.", "Participa algunas veces cuando se le invita.", "Casi no participa.") },
+  { criterio: "Respeto y escucha", descripcion: "Escucha y trata bien a sus compañeros y al docente.", niveles: nv("Siempre escucha con atención y respeta las opiniones distintas.", "Escucha, pero a veces interrumpe o se distrae.", "Con frecuencia interrumpe o no respeta a los demás.") },
+  { criterio: "Cumplimiento", descripcion: "Entrega lo acordado y asume su parte del trabajo.", niveles: nv("Cumple siempre y a tiempo con sus compromisos.", "Cumple parcialmente o con retraso.", "Rara vez cumple.") },
 ];
 export { CRITERIOS_DEFECTO };
 
