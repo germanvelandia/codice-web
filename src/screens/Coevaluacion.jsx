@@ -1,7 +1,44 @@
 import React, { useEffect, useMemo, useState } from "react";
 import * as api from "../lib/api";
 import * as co from "../lib/coevaluacion";
-import { SelectorRubrica } from "../components/Rubrica";
+import { calcularNotaRubrica } from "../components/Rubrica";
+const nivelVacio = () => ({ nombre: "", puntos: 0, descripcion: "" });
+function normalizar(r) {
+  const base = JSON.parse(JSON.stringify(r || []));
+  const m = Math.max(3, ...base.map((c) => c.niveles.length));
+  return base.map((c) => ({ descripcion: "", ...c, niveles: [...c.niveles.map((n) => ({ descripcion: "", ...n })), ...Array.from({ length: m - c.niveles.length }, nivelVacio)] }));
+}
+
+// Tabla de rúbrica para que el estudiante elija un nivel por criterio
+function TablaRubricaElegir({ rubrica, elegidos, onElegir, config }) {
+  const { obtenidos, maximos, nota, escalaMin, escalaMax } = calcularNotaRubrica(rubrica, elegidos, config);
+  return (
+    <div className="space-y-1">
+      <div className="overflow-x-auto rounded-lg border border-violet-100 bg-white">
+        <table className="w-full text-[11px] border-collapse" style={{ minWidth: 120 + 120 * Math.max(...rubrica.map((c) => c.niveles.length)) }}>
+          <thead><tr className="bg-violet-50 text-slate-600"><th className="text-left p-2 w-36">Criterio</th><th className="p-2 text-left" colSpan={99}>Toca el nivel que te describe</th></tr></thead>
+          <tbody>
+            {rubrica.map((c, i) => (
+              <tr key={i} className="border-t border-violet-100 align-top">
+                <td className="p-2"><div className="font-semibold text-slate-700">{c.criterio}</div>{c.descripcion && <div className="text-slate-500 mt-0.5">{c.descripcion}</div>}</td>
+                {c.niveles.map((n, k) => (
+                  <td key={k} className="p-1">
+                    <button onClick={() => onElegir(i, k)} className={`w-full h-full text-left rounded-lg border p-1.5 ${elegidos[i] === k ? "bg-violet-500 text-white border-violet-500" : "bg-white border-slate-200 text-slate-600"}`}>
+                      <div className="font-semibold">{n.nombre} <span className="opacity-70">({n.puntos})</span></div>
+                      {n.descripcion && <div className="mt-0.5 leading-snug">{n.descripcion}</div>}
+                    </button>
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="text-xs text-slate-500">{obtenidos}/{maximos} pts → nota <b>{nota}</b> <span className="text-slate-400">(escala {escalaMin}–{escalaMax})</span></div>
+    </div>
+  );
+}
+
 
 const TIPOS = { auto: "Solo autoevaluación", co: "Solo coevaluación", ambas: "Auto + coevaluación" };
 const MODOS = { azar: "Compañeros al azar", todos: "Todo el curso", grupo: "Mi grupo (reino)" };
@@ -53,7 +90,7 @@ function FormNueva({ gradoId, onListo, inicial, onCancelar }) {
   const [tipo, setTipo] = useState(inicial?.tipo || "ambas");
   const [modo, setModo] = useState(inicial?.modo_co || "azar");
   const [cantidad, setCantidad] = useState(inicial?.cantidad || 3);
-  const [rubrica, setRubrica] = useState(() => JSON.parse(JSON.stringify(inicial ? inicial.criterios : co.CRITERIOS_DEFECTO)));
+  const [rubrica, setRubrica] = useState(() => normalizar(inicial ? inicial.criterios : co.CRITERIOS_DEFECTO));
   const [catalogo, setCatalogo] = useState([]);
   const aLocal = (iso) => { if (!iso) return ""; const d = new Date(iso); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
   const [cierra, setCierra] = useState(aLocal(inicial?.cierra));
@@ -65,8 +102,8 @@ function FormNueva({ gradoId, onListo, inicial, onCancelar }) {
   useEffect(() => { api.fetchRubricasCatalogo().then(setCatalogo).catch(() => {}); if (inicial) co.fetchRespuestasCoev(inicial.id).then((d) => setConRespuestas(d.respuestas.length > 0)).catch(() => {}); }, []);
 
   const guardar = async () => {
-    const criterios = ed && conRespuestas ? inicial.criterios : rubrica.map((c) => ({ criterio: c.criterio.trim(), niveles: c.niveles.map((n) => ({ nombre: n.nombre.trim(), puntos: Number(n.puntos) || 0 })) }));
-    if (criterios.some((c) => !c.criterio || c.niveles.length < 2 || c.niveles.some((n) => !n.nombre))) return setError("Cada criterio necesita nombre y al menos 2 niveles con nombre.");
+    const criterios = ed && conRespuestas ? inicial.criterios : rubrica.map((c) => ({ criterio: c.criterio.trim(), descripcion: (c.descripcion || "").trim(), niveles: c.niveles.filter((n) => n.nombre.trim()).map((n) => ({ nombre: n.nombre.trim(), puntos: Number(n.puntos) || 0, descripcion: (n.descripcion || "").trim() })) }));
+    if (criterios.length === 0 || criterios.some((c) => !c.criterio || c.niveles.length < 2)) return setError("Cada criterio necesita nombre y al menos 2 niveles con nombre.");
     if (!titulo.trim()) return setError("Ponle un título.");
     if (!criterios.length) return setError("Agrega al menos un criterio.");
     setGuardando(true); setError("");
@@ -100,28 +137,44 @@ function FormNueva({ gradoId, onListo, inicial, onCancelar }) {
       <div className={`space-y-2 ${ed && conRespuestas ? "opacity-40 pointer-events-none" : ""}`}>
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-semibold text-slate-700">Rúbrica de calificación</span>
-          <select value="" onChange={(e) => { const r = catalogo.find((x) => String(x.id) === e.target.value); if (r) setRubrica(JSON.parse(JSON.stringify(r.criterios))); }} className="text-xs rounded-lg px-2 py-1 border border-slate-200 bg-white ml-auto">
+          <select value="" onChange={(e) => { const r = catalogo.find((x) => String(x.id) === e.target.value); if (r) setRubrica(normalizar(r.criterios)); }} className="text-xs rounded-lg px-2 py-1 border border-slate-200 bg-white ml-auto">
             <option value="">Cargar desde mi catálogo…</option>{catalogo.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
           </select>
         </div>
-        {rubrica.map((c, i) => (
-          <div key={i} className="bg-white rounded-lg border border-violet-100 p-2 space-y-1">
-            <div className="flex gap-1">
-              <input value={c.criterio} onChange={(e) => setRubrica((p) => p.map((x, k) => k === i ? { ...x, criterio: e.target.value } : x))} placeholder="Criterio" className="flex-1 text-sm rounded px-2 py-1 border border-slate-200" />
-              <button onClick={() => setRubrica((p) => p.filter((_, k) => k !== i))} className="text-slate-400 hover:text-rose-500 px-1" title="Quitar criterio">🗑</button>
-            </div>
-            {c.niveles.map((n, j2) => (
-              <div key={j2} className="flex gap-1 items-center pl-3">
-                <input value={n.nombre} onChange={(e) => setRubrica((p) => p.map((x, k) => k === i ? { ...x, niveles: x.niveles.map((y, m) => m === j2 ? { ...y, nombre: e.target.value } : y) } : x))} placeholder="Nivel" className="flex-1 text-xs rounded px-2 py-1 border border-slate-200" />
-                <input type="number" step="0.5" value={n.puntos} onChange={(e) => setRubrica((p) => p.map((x, k) => k === i ? { ...x, niveles: x.niveles.map((y, m) => m === j2 ? { ...y, puntos: e.target.value } : y) } : x))} className="w-16 text-xs rounded px-2 py-1 border border-slate-200" />
-                <span className="text-[10px] text-slate-400">pts</span>
-                <button onClick={() => setRubrica((p) => p.map((x, k) => k === i ? { ...x, niveles: x.niveles.filter((_, m) => m !== j2) } : x))} className="text-slate-300 hover:text-rose-500 text-xs">✕</button>
-              </div>
-            ))}
-            <button onClick={() => setRubrica((p) => p.map((x, k) => k === i ? { ...x, niveles: [...x.niveles, { nombre: "", puntos: 0 }] } : x))} className="text-[11px] text-violet-600 pl-3">+ nivel</button>
-          </div>
-        ))}
-        <button onClick={() => setRubrica((p) => [...p, { criterio: "", niveles: [{ nombre: "Alto", puntos: 5 }, { nombre: "Medio", puntos: 3 }, { nombre: "Bajo", puntos: 1 }] }])} className="text-xs px-2 py-1 rounded-lg border border-violet-200 text-violet-700 bg-white">+ Agregar criterio</button>
+        <div className="overflow-x-auto rounded-lg border border-violet-100 bg-white">
+          <table className="border-collapse text-xs" style={{ minWidth: 200 + 170 * (rubrica[0]?.niveles.length || 3) }}>
+            <thead><tr className="bg-violet-50 text-slate-600">
+              <th className="p-2 text-left w-48">Criterio y descripción</th>
+              {(rubrica[0]?.niveles || []).map((_, k) => <th key={k} className="p-2 text-left">Nivel {k + 1}</th>)}
+              <th className="p-1"></th>
+            </tr></thead>
+            <tbody>
+              {rubrica.map((c, i) => (
+                <tr key={i} className="border-t border-violet-100 align-top">
+                  <td className="p-1.5 space-y-1">
+                    <input value={c.criterio} onChange={(e) => setRubrica((p) => p.map((x, q) => q === i ? { ...x, criterio: e.target.value } : x))} placeholder="Criterio" className="w-full text-sm font-semibold rounded px-2 py-1 border border-slate-200" />
+                    <textarea rows={3} value={c.descripcion} onChange={(e) => setRubrica((p) => p.map((x, q) => q === i ? { ...x, descripcion: e.target.value } : x))} placeholder="Descripción del criterio" className="w-full text-[11px] rounded px-2 py-1 border border-slate-200" />
+                  </td>
+                  {c.niveles.map((n, k) => (
+                    <td key={k} className="p-1.5 space-y-1">
+                      <div className="flex gap-1">
+                        <input value={n.nombre} onChange={(e) => setRubrica((p) => p.map((x, q) => q === i ? { ...x, niveles: x.niveles.map((y, m) => m === k ? { ...y, nombre: e.target.value } : y) } : x))} placeholder="Nivel" className="flex-1 min-w-0 text-xs rounded px-2 py-1 border border-slate-200" />
+                        <input type="number" step="0.5" value={n.puntos} onChange={(e) => setRubrica((p) => p.map((x, q) => q === i ? { ...x, niveles: x.niveles.map((y, m) => m === k ? { ...y, puntos: e.target.value } : y) } : x))} className="w-14 text-xs rounded px-1 py-1 border border-slate-200" title="Puntos" />
+                      </div>
+                      <textarea rows={3} value={n.descripcion} onChange={(e) => setRubrica((p) => p.map((x, q) => q === i ? { ...x, niveles: x.niveles.map((y, m) => m === k ? { ...y, descripcion: e.target.value } : y) } : x))} placeholder="Descripción de este nivel" className="w-full text-[11px] rounded px-2 py-1 border border-slate-200" />
+                    </td>
+                  ))}
+                  <td className="p-1"><button onClick={() => setRubrica((p) => p.filter((_, q) => q !== i))} className="text-slate-400 hover:text-rose-500" title="Quitar criterio">🗑</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={() => setRubrica((p) => [...p, { criterio: "", descripcion: "", niveles: (p[0]?.niveles || [nivelVacio(), nivelVacio(), nivelVacio()]).map((n) => ({ ...nivelVacio(), nombre: n.nombre, puntos: n.puntos })) }])} className="text-xs px-2 py-1 rounded-lg border border-violet-200 text-violet-700 bg-white">+ Criterio (fila)</button>
+          <button onClick={() => setRubrica((p) => p.map((c) => ({ ...c, niveles: [...c.niveles, nivelVacio()] })))} className="text-xs px-2 py-1 rounded-lg border border-violet-200 text-violet-700 bg-white">+ Nivel (columna)</button>
+          <button onClick={() => setRubrica((p) => p.map((c) => ({ ...c, niveles: c.niveles.slice(0, -1) })))} className="text-xs px-2 py-1 rounded-lg border border-slate-200 text-slate-500 bg-white">− Quitar última columna</button>
+        </div>
         <p className="text-[11px] text-slate-500">La nota se calcula como en tus rúbricas: puntos obtenidos / máximo posible, llevados a la escala de abajo.</p>
       </div>
       <div className="grid grid-cols-2 gap-2 text-xs text-slate-600">
@@ -265,7 +318,7 @@ function Formulario({ ev, objetivo, onListo }) {
   };
   return (
     <div className="mt-1 space-y-2">
-      <SelectorRubrica rubrica={ev.criterios} nivelesElegidos={niveles} config={config} onElegir={(i, j) => setNiveles((p) => { const n = [...p]; n[i] = j; return n; })} />
+      <TablaRubricaElegir rubrica={ev.criterios} elegidos={niveles} config={config} onElegir={(i, k) => setNiveles((p) => { const n = [...p]; n[i] = k; return n; })} />
       <textarea value={coment} onChange={(e) => setComent(e.target.value)} maxLength={500} rows={2} placeholder={objetivo.esYo ? "¿Qué puedo mejorar? (opcional)" : "Un comentario amable y útil (opcional, anónimo)"} className="w-full text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
       {error && <div className="text-xs text-rose-600">{error}</div>}
       <button disabled={!completo || enviando} onClick={enviar} className="text-sm px-3 py-2 rounded-lg bg-violet-600 text-white disabled:opacity-40">{enviando ? "Enviando…" : (previo?.niveles ? "Guardar cambios" : "Enviar")}</button>
