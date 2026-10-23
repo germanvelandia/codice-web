@@ -12,6 +12,7 @@ export function VistaCoevaluacion({ grados = [], gradoActivo }) {
   const [lista, setLista] = useState([]);
   const [creando, setCreando] = useState(false);
   const [abierta, setAbierta] = useState(null);
+  const [editando, setEditando] = useState(null);
   const [error, setError] = useState("");
   const cargar = () => co.fetchCoevaluaciones(gradoId).then(setLista).catch((e) => setError(co.mensajeCoev(e)));
   useEffect(() => { if (gradoId) cargar(); }, [gradoId]);
@@ -22,10 +23,11 @@ export function VistaCoevaluacion({ grados = [], gradoActivo }) {
         <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-sm rounded-lg px-2 py-2 border border-slate-200 bg-white">
           {grados.map((g) => <option key={g.id} value={g.id}>{g.nombre || g.id}</option>)}
         </select>
-        <button onClick={() => setCreando(!creando)} className="text-sm px-3 py-2 rounded-lg bg-violet-600 text-white">{creando ? "Cancelar" : "➕ Nueva evaluación"}</button>
+        <button onClick={() => { setEditando(null); setCreando(!creando); }} className="text-sm px-3 py-2 rounded-lg bg-violet-600 text-white">{creando ? "Cancelar" : "➕ Nueva evaluación"}</button>
       </div>
       {error && <div className="text-xs text-rose-600 bg-rose-50 rounded-lg p-2">{error}</div>}
       {creando && <FormNueva gradoId={gradoId} onListo={() => { setCreando(false); cargar(); }} />}
+      {editando && <FormNueva key={editando.id} gradoId={gradoId} inicial={editando} onListo={() => { setEditando(null); cargar(); }} onCancelar={() => setEditando(null)} />}
       {lista.length === 0 && !creando && <p className="text-xs text-slate-400">Aún no hay autoevaluaciones ni coevaluaciones en este curso.</p>}
       {lista.map((ev) => (
         <div key={ev.id} className="bg-white border border-slate-200 rounded-xl p-3">
@@ -33,6 +35,7 @@ export function VistaCoevaluacion({ grados = [], gradoActivo }) {
             <button onClick={() => setAbierta(abierta === ev.id ? null : ev.id)} className="font-semibold text-sm text-left flex-1">{ev.titulo}</button>
             <span className="text-[11px] text-slate-500">{TIPOS[ev.tipo]}{ev.tipo !== "auto" ? ` · ${MODOS[ev.modo_co]}${ev.modo_co === "azar" ? ` (${ev.cantidad})` : ""}` : ""}</span>
             <label className="text-[11px] flex items-center gap-1"><input type="checkbox" checked={ev.activa} onChange={async (e) => { await co.actualizarCoevaluacion(ev.id, { activa: e.target.checked }); cargar(); }} />Activa</label>
+            <button onClick={() => { setCreando(false); setEditando(ev); }} className="text-slate-400 hover:text-violet-600" title="Editar">✏️</button>
             <button onClick={async () => { if (!confirm("¿Borrar esta evaluación y sus respuestas?")) return; await co.eliminarCoevaluacion(ev.id); cargar(); }} className="text-slate-400 hover:text-rose-500">🗑</button>
           </div>
           {abierta === ev.id && <Resultados ev={ev} onCambio={cargar} />}
@@ -42,30 +45,37 @@ export function VistaCoevaluacion({ grados = [], gradoActivo }) {
   );
 }
 
-function FormNueva({ gradoId, onListo }) {
-  const [titulo, setTitulo] = useState("");
-  const [periodo, setPeriodo] = useState("");
-  const [tipo, setTipo] = useState("ambas");
-  const [modo, setModo] = useState("azar");
-  const [cantidad, setCantidad] = useState(3);
+function FormNueva({ gradoId, onListo, inicial, onCancelar }) {
+  const ed = !!inicial;
+  const [conRespuestas, setConRespuestas] = useState(false);
+  const [titulo, setTitulo] = useState(inicial?.titulo || "");
+  const [periodo, setPeriodo] = useState(inicial?.periodo || "");
+  const [tipo, setTipo] = useState(inicial?.tipo || "ambas");
+  const [modo, setModo] = useState(inicial?.modo_co || "azar");
+  const [cantidad, setCantidad] = useState(inicial?.cantidad || 3);
   const [fuente, setFuente] = useState("texto");
-  const [texto, setTexto] = useState(co.CRITERIOS_DEFECTO.map((c) => c.criterio).join("\n"));
+  const [texto, setTexto] = useState((inicial ? inicial.criterios : co.CRITERIOS_DEFECTO).map((c) => c.criterio).join("\n"));
   const [catalogo, setCatalogo] = useState([]);
   const [rubId, setRubId] = useState("");
-  const [cierra, setCierra] = useState("");
-  const [visib, setVisib] = useState("docente");
-  const [escMin, setEscMin] = useState(1);
-  const [escMax, setEscMax] = useState(5);
+  const aLocal = (iso) => { if (!iso) return ""; const d = new Date(iso); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
+  const [cierra, setCierra] = useState(aLocal(inicial?.cierra));
+  const [visib, setVisib] = useState(inicial?.visibilidad || "docente");
+  const [escMin, setEscMin] = useState(inicial?.escala_min ?? 1);
+  const [escMax, setEscMax] = useState(inicial?.escala_max ?? 5);
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
-  useEffect(() => { api.fetchRubricasCatalogo().then(setCatalogo).catch(() => {}); }, []);
+  useEffect(() => { api.fetchRubricasCatalogo().then(setCatalogo).catch(() => {}); if (inicial) co.fetchRespuestasCoev(inicial.id).then((d) => setConRespuestas(d.respuestas.length > 0)).catch(() => {}); }, []);
 
   const guardar = async () => {
-    const criterios = fuente === "rubrica" ? (catalogo.find((r) => String(r.id) === String(rubId))?.criterios || []) : co.criteriosDesdeTexto(texto);
+    const criterios = ed && conRespuestas ? inicial.criterios : fuente === "rubrica" ? (catalogo.find((r) => String(r.id) === String(rubId))?.criterios || []) : co.criteriosDesdeTexto(texto);
     if (!titulo.trim()) return setError("Ponle un título.");
     if (!criterios.length) return setError("Agrega al menos un criterio.");
     setGuardando(true); setError("");
     try {
+      if (ed) {
+        await co.actualizarCoevaluacion(inicial.id, { titulo: titulo.trim(), periodo: periodo || null, criterios, escala_min: Number(escMin), escala_max: Number(escMax), visibilidad: visib, cierra: cierra ? new Date(cierra).toISOString() : null });
+        return onListo();
+      }
       await co.crearCoevaluacion({
         grado_id: gradoId, titulo: titulo.trim(), periodo: periodo || null, tipo, modo_co: modo, cantidad: Number(cantidad) || 3,
         criterios, escala_min: Number(escMin), escala_max: Number(escMax), visibilidad: visib,
@@ -79,15 +89,16 @@ function FormNueva({ gradoId, onListo }) {
     <div className="bg-violet-50 border border-violet-100 rounded-xl p-3 space-y-2">
       <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título (ej. Trabajo en equipo – P3)" className={inp} />
       <div className="grid grid-cols-2 gap-2">
-        <select value={tipo} onChange={(e) => setTipo(e.target.value)} className={inp}>{Object.entries(TIPOS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+        <select value={tipo} disabled={ed} onChange={(e) => setTipo(e.target.value)} className={inp}>{Object.entries(TIPOS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
         <input value={periodo} onChange={(e) => setPeriodo(e.target.value)} placeholder="Periodo (opcional)" className={inp} />
       </div>
       {tipo !== "auto" && (
         <div className="grid grid-cols-2 gap-2">
-          <select value={modo} onChange={(e) => setModo(e.target.value)} className={inp}>{Object.entries(MODOS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
-          {modo === "azar" && <label className="text-xs text-slate-600 flex items-center gap-2">Cuántos evalúa cada uno <input type="number" min={1} max={40} value={cantidad} onChange={(e) => setCantidad(e.target.value)} className="w-16 rounded-lg px-2 py-1 border border-slate-200" /></label>}
+          <select value={modo} disabled={ed} onChange={(e) => setModo(e.target.value)} className={inp}>{Object.entries(MODOS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+          {modo === "azar" && <label className="text-xs text-slate-600 flex items-center gap-2">Cuántos evalúa cada uno <input type="number" min={1} max={40} disabled={ed} value={cantidad} onChange={(e) => setCantidad(e.target.value)} className="w-16 rounded-lg px-2 py-1 border border-slate-200" /></label>}
         </div>
       )}
+      <div className={`space-y-2 ${ed && conRespuestas ? "opacity-40 pointer-events-none" : ""}`}>
       <div className="flex gap-3 text-xs">
         <label><input type="radio" checked={fuente === "texto"} onChange={() => setFuente("texto")} /> Mis criterios</label>
         <label><input type="radio" checked={fuente === "rubrica"} onChange={() => setFuente("rubrica")} /> Rúbrica del catálogo</label>
@@ -95,6 +106,7 @@ function FormNueva({ gradoId, onListo }) {
       {fuente === "texto"
         ? <textarea rows={4} value={texto} onChange={(e) => setTexto(e.target.value)} className={inp} placeholder="Un criterio por línea (niveles Alto 5 / Medio 3 / Bajo 1)" />
         : <select value={rubId} onChange={(e) => setRubId(e.target.value)} className={inp}><option value="">Elegir rúbrica…</option>{catalogo.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}</select>}
+      </div>
       <div className="grid grid-cols-2 gap-2 text-xs text-slate-600">
         <label>Escala de {" "}<input type="number" step="0.1" value={escMin} onChange={(e) => setEscMin(e.target.value)} className="w-14 rounded px-1 border border-slate-200" /> a <input type="number" step="0.1" value={escMax} onChange={(e) => setEscMax(e.target.value)} className="w-14 rounded px-1 border border-slate-200" /></label>
         <label>Cierra <input type="datetime-local" value={cierra} onChange={(e) => setCierra(e.target.value)} className="rounded px-1 border border-slate-200" /></label>
@@ -105,8 +117,12 @@ function FormNueva({ gradoId, onListo }) {
           <option value="promedio">Privacidad: los estudiantes verán su promedio y comentarios, sin nombres (cuando yo publique)</option>
         </select>
       )}
+      {ed && <p className="text-[11px] text-slate-500">Tipo, modo y cantidad no se cambian una vez creada (ya hay compañeros asignados).{conRespuestas ? " Los criterios quedan bloqueados porque ya hay respuestas; para cambiarlos crea una evaluación nueva." : ""}</p>}
       {error && <div className="text-xs text-rose-600">{error}</div>}
-      <button disabled={guardando} onClick={guardar} className="text-sm px-3 py-2 rounded-lg bg-violet-600 text-white disabled:opacity-50">{guardando ? "Creando…" : "Crear y asignar"}</button>
+      <div className="flex gap-2">
+        <button disabled={guardando} onClick={guardar} className="text-sm px-3 py-2 rounded-lg bg-violet-600 text-white disabled:opacity-50">{guardando ? "Guardando…" : ed ? "Guardar cambios" : "Crear y asignar"}</button>
+        {ed && <button onClick={onCancelar} className="text-sm px-3 py-2 rounded-lg border border-slate-200 bg-white">Cancelar</button>}
+      </div>
     </div>
   );
 }
@@ -218,8 +234,9 @@ function TarjetaEval({ ev, onCambio }) {
 }
 
 function Formulario({ ev, objetivo, onListo }) {
-  const [niveles, setNiveles] = useState([]);
-  const [coment, setComent] = useState("");
+  const previo = objetivo.esYo ? ev.auto : objetivo;
+  const [niveles, setNiveles] = useState(Array.isArray(previo?.niveles) ? previo.niveles : []);
+  const [coment, setComent] = useState(previo?.comentario || "");
   const [error, setError] = useState("");
   const [enviando, setEnviando] = useState(false);
   const config = { escala_min: Number(ev.escala_min), nota_maxima: Number(ev.escala_max) };
@@ -234,7 +251,7 @@ function Formulario({ ev, objetivo, onListo }) {
       <SelectorRubrica rubrica={ev.criterios} nivelesElegidos={niveles} config={config} onElegir={(i, j) => setNiveles((p) => { const n = [...p]; n[i] = j; return n; })} />
       <textarea value={coment} onChange={(e) => setComent(e.target.value)} maxLength={500} rows={2} placeholder={objetivo.esYo ? "¿Qué puedo mejorar? (opcional)" : "Un comentario amable y útil (opcional, anónimo)"} className="w-full text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
       {error && <div className="text-xs text-rose-600">{error}</div>}
-      <button disabled={!completo || enviando} onClick={enviar} className="text-sm px-3 py-2 rounded-lg bg-violet-600 text-white disabled:opacity-40">{enviando ? "Enviando…" : "Enviar"}</button>
+      <button disabled={!completo || enviando} onClick={enviar} className="text-sm px-3 py-2 rounded-lg bg-violet-600 text-white disabled:opacity-40">{enviando ? "Enviando…" : (previo?.niveles ? "Guardar cambios" : "Enviar")}</button>
     </div>
   );
 }
