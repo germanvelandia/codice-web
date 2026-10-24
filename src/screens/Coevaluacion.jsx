@@ -15,6 +15,7 @@ export function VistaCoevaluacion({ grados = [], gradoActivo }) {
   const [creando, setCreando] = useState(false);
   const [abierta, setAbierta] = useState(null);
   const [editando, setEditando] = useState(null);
+  const [duplicando, setDuplicando] = useState(null);
   const [error, setError] = useState("");
   const cargar = () => co.fetchCoevaluaciones(gradoId).then(setLista).catch((e) => setError(co.mensajeCoev(e)));
   useEffect(() => { if (gradoId) cargar(); }, [gradoId]);
@@ -37,12 +38,46 @@ export function VistaCoevaluacion({ grados = [], gradoActivo }) {
             <button onClick={() => setAbierta(abierta === ev.id ? null : ev.id)} className="font-semibold text-sm text-left flex-1">{ev.titulo}</button>
             <span className="text-[11px] text-slate-500">{TIPOS[ev.tipo]}{ev.tipo !== "auto" ? ` · ${MODOS[ev.modo_co]}${ev.modo_co === "azar" ? ` (${ev.cantidad})` : ""}` : ""}</span>
             <label className="text-[11px] flex items-center gap-1"><input type="checkbox" checked={ev.activa} onChange={async (e) => { await co.actualizarCoevaluacion(ev.id, { activa: e.target.checked }); cargar(); }} />Activa</label>
-            <button onClick={() => { setCreando(false); setEditando(ev); }} className="text-slate-400 hover:text-violet-600" title="Editar">✏️</button>
+            <button onClick={() => { setCreando(false); setEditando(null); setDuplicando(duplicando?.id === ev.id ? null : ev); }} className="text-slate-400 hover:text-violet-600" title="Duplicar a otros cursos">📑</button>
+            <button onClick={() => { setCreando(false); setDuplicando(null); setEditando(ev); }} className="text-slate-400 hover:text-violet-600" title="Editar">✏️</button>
             <button onClick={async () => { if (!confirm("¿Borrar esta evaluación y sus respuestas?")) return; await co.eliminarCoevaluacion(ev.id); cargar(); }} className="text-slate-400 hover:text-rose-500">🗑</button>
           </div>
+          {duplicando?.id === ev.id && <DuplicarEval ev={ev} grados={grados} onListo={() => { setDuplicando(null); cargar(); }} onCancelar={() => setDuplicando(null)} />}
           {abierta === ev.id && <Resultados ev={ev} onCambio={cargar} />}
         </div>
       ))}
+    </div>
+  );
+}
+
+
+function DuplicarEval({ ev, grados, onListo, onCancelar }) {
+  const [elegidos, setElegidos] = useState([]);
+  const [sufijo, setSufijo] = useState(true);
+  const [msg, setMsg] = useState(""); const [trabajando, setTrabajando] = useState(false);
+  const otros = grados.filter((g) => String(g.id) !== String(ev.grado_id));
+  const alternar = (id) => setElegidos((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
+  const duplicar = async () => {
+    setTrabajando(true); setMsg("");
+    try { const n = await co.duplicarCoevaluacion(ev, elegidos, { sufijoCurso: sufijo }); setMsg(`✔ Se creó en ${n} curso(s).`); setTimeout(onListo, 900); }
+    catch (e) { setMsg(co.mensajeCoev(e)); }
+    setTrabajando(false);
+  };
+  return (
+    <div className="mt-2 rounded-xl border border-violet-200 bg-violet-50 p-3 space-y-2">
+      <div className="text-sm font-semibold text-violet-800">📑 Duplicar «{ev.titulo}» a otros cursos</div>
+      <p className="text-[11px] text-slate-500">Se copian la rúbrica, la escala, el tipo, el modo de coevaluación y la fecha de cierre. Cada curso tendrá sus propias respuestas y sus compañeros asignados.</p>
+      <div className="flex flex-wrap gap-2">
+        {otros.map((g) => <label key={g.id} className={`text-sm px-3 py-1 rounded-full border cursor-pointer ${elegidos.includes(g.id) ? "bg-violet-600 text-white border-violet-600" : "bg-white border-slate-200 text-slate-600"}`}><input type="checkbox" className="hidden" checked={elegidos.includes(g.id)} onChange={() => alternar(g.id)} />{g.nombre || g.id}</label>)}
+        {otros.length > 0 && <button onClick={() => setElegidos(elegidos.length === otros.length ? [] : otros.map((g) => g.id))} className="text-xs text-violet-600 underline">{elegidos.length === otros.length ? "Quitar todos" : "Todos"}</button>}
+        {otros.length === 0 && <span className="text-xs text-slate-400">No hay otros cursos disponibles.</span>}
+      </div>
+      <label className="text-xs text-slate-600 flex items-center gap-1"><input type="checkbox" checked={sufijo} onChange={(e) => setSufijo(e.target.checked)} /> Agregar el curso al título (ej. «{ev.titulo} (802)»)</label>
+      {msg && <div className={`text-xs ${msg.startsWith("✔") ? "text-emerald-700" : "text-rose-600"}`}>{msg}</div>}
+      <div className="flex gap-2">
+        <button disabled={!elegidos.length || trabajando} onClick={duplicar} className="text-sm px-3 py-2 rounded-lg bg-violet-600 text-white disabled:opacity-40">{trabajando ? "Duplicando…" : `Duplicar a ${elegidos.length} curso(s)`}</button>
+        <button onClick={onCancelar} className="text-sm px-3 py-2 rounded-lg border border-slate-200 bg-white">Cancelar</button>
+      </div>
     </div>
   );
 }
