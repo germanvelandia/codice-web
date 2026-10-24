@@ -42,6 +42,12 @@ export async function duplicarCoevaluacion(ev, gradoIds, { sufijoCurso = true } 
   return n;
 }
 
+export async function reasignarCoevaluacion(id, borrarRespuestas = false) {
+  const { data, error } = await supabase.rpc("coev_reasignar", { p_eval: id, p_borrar_respuestas: borrarRespuestas });
+  if (error) throw error;
+  return data;
+}
+
 export async function actualizarCoevaluacion(id, campos) {
   const { error } = await supabase.from("coev_evaluaciones").update(campos).eq("id", id);
   if (error) throw error;
