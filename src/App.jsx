@@ -52,6 +52,8 @@ import { VistaRecuperaciones } from "./screens/Recuperaciones";
 import { VistaPuntosConducta } from "./screens/PuntosConducta";
 import { VistaRecompensasDocente } from "./screens/RecompensasDocente";
 import { VistaObraDocente } from "./screens/ObraDocente";
+import { VistaMundoNota } from "./screens/MundoNota";
+import { registrarIngresoMundo } from "./lib/mundoNotaApi";
 import { VistaTableroMundial, TableroMundialEstudiante } from "./screens/TableroMundial";
 import { VistaCoevaluacion, CoevaluacionEstudiante } from "./screens/Coevaluacion";
 import { VistaEncuestasDocente, VistaInformeImpacto, EncuestaEstudiante } from "./screens/EncuestaInforme";
@@ -2451,6 +2453,8 @@ function PortalEstudiante() {
   const [vista, setVista] = useState("inicio");
   const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
   const irAEstudiante = (key) => { setVista(key); };
+  // Cada día que el estudiante entra al Mundo queda registrado (una sola llamada por día en este navegador)
+  useEffect(() => { if (vista === "mundo" && estudianteInfo?.id) registrarIngresoMundo(); }, [vista, estudianteInfo?.id]);
   const [nuevosLogros, setNuevosLogros] = useState([]);
   const [equipados, setEquipados] = useState({ marco: null, titulo: null });
   const [avatarConfig, setAvatarConfig] = useState(null);
@@ -2788,6 +2792,7 @@ const MENU_PANEL_GRUPOS = [
       { key: "comarca", label: "Comarca de Oakhaven", icono: "🏛️" },
       { key: "puntosconducta", label: "Puntos por conducta", icono: "⚖️" },
       { key: "tablero", label: "Tablero Mundial", icono: "🌍" },
+      { key: "mundonota", label: "Mundo → nota", icono: "🧮" },
       { key: "herr_ruleta", label: "Ruleta", icono: "🎡" },
       { key: "herr_ruletamonedas", label: "Ruleta de Monedas", icono: "🪙" },
       { key: "herr_banco", label: "Banco", icono: "🏦" },
@@ -3291,6 +3296,7 @@ function Panel({ session }) {
         {tab === "calificaciones" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Planillas" icono="🎓"><VistaCalificaciones grados={grados} destinoBusqueda={destinoBusqueda} gradoActivo={gradoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
         {tab === "coevaluacion" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Auto y coevaluación" icono="🪞"><VistaCoevaluacion grados={grados} gradoActivo={gradoActivo} /></MarcoSeccion>}
         {tab === "recuperaciones" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Recuperaciones" icono="🎓"><VistaRecuperaciones grados={grados} gradoActivo={gradoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
+        {tab === "mundonota" && grados.length > 0 && <MarcoSeccion zonaLabel="Gamificación — Mundo → nota" icono="🧮"><VistaMundoNota grados={grados} gradoActivo={gradoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
         {tab === "tablero" && grados.length > 0 && <MarcoSeccion zonaLabel="Gamificación — Tablero Mundial" icono="🌍"><VistaTableroMundial grados={grados} gradoActivo={gradoActivo} /></MarcoSeccion>}
         {tab === "puntosconducta" && <MarcoSeccion zonaLabel="Gamificación — Puntos por conducta" icono="🎮"><VistaPuntosConducta /></MarcoSeccion>}
         {tab === "reportes" && grados.length > 0 && <VistaReportes grados={grados} gradoActivo={gradoActivo} />}
