@@ -29,6 +29,19 @@ export async function crearCoevaluacion(campos) {
   if (campos.tipo !== "auto") { const r = await supabase.rpc("coev_generar", { p_eval: data.id }); if (r.error) throw r.error; }
   return data;
 }
+// Copia una evaluación a otros cursos (misma rúbrica, escala, tipo y fechas). Devuelve cuántas creó.
+export async function duplicarCoevaluacion(ev, gradoIds, { sufijoCurso = true } = {}) {
+  let n = 0;
+  for (const g of gradoIds) {
+    await crearCoevaluacion({
+      grado_id: g, titulo: sufijoCurso ? `${ev.titulo} (${g})` : ev.titulo, periodo: ev.periodo, tipo: ev.tipo, modo_co: ev.modo_co, cantidad: ev.cantidad,
+      criterios: ev.criterios, escala_min: ev.escala_min, escala_max: ev.escala_max, visibilidad: ev.visibilidad, abre: ev.abre, cierra: ev.cierra, materia_id: ev.materia_id || null,
+    });
+    n++;
+  }
+  return n;
+}
+
 export async function actualizarCoevaluacion(id, campos) {
   const { error } = await supabase.from("coev_evaluaciones").update(campos).eq("id", id);
   if (error) throw error;
