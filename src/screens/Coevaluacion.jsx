@@ -147,6 +147,95 @@ function FormNueva({ gradoId, onListo, inicial, onCancelar }) {
   );
 }
 
+
+// ---------- Pasar los resultados a una columna de la Planilla de calificaciones ----------
+function PasarAPlanilla({ ev, filas }) {
+  const [abierto, setAbierto] = useState(false);
+  const [materias, setMaterias] = useState([]);
+  const [materiaId, setMateriaId] = useState("");
+  const [cats, setCats] = useState([]);
+  const [categoriaId, setCategoriaId] = useState("");
+  const [periodo, setPeriodo] = useState(ev.periodo || "1");
+  const [columnas, setColumnas] = useState([]);
+  const [destino, setDestino] = useState("nueva");
+  const [nombre, setNombre] = useState(ev.titulo);
+  const [fuente, setFuente] = useState(ev.tipo === "auto" ? "auto" : ev.tipo === "co" ? "co" : "mixta");
+  const [pesoAuto, setPesoAuto] = useState(30);
+  const [rellenar, setRellenar] = useState(false);
+  const [config, setConfig] = useState(null);
+  const [msg, setMsg] = useState(""); const [trabajando, setTrabajando] = useState(false);
+  useEffect(() => { if (abierto && !materias.length) api.fetchMisMaterias().then((m) => { setMaterias(m); if (m[0]) setMateriaId(m[0].id); }).catch((e) => setMsg(e.message)); }, [abierto]);
+  useEffect(() => {
+    if (!materiaId) return;
+    Promise.all([api.fetchCategorias(materiaId), api.fetchNotasConfig(materiaId)]).then(([c, cfg]) => { setCats(c); setCategoriaId(c[0]?.id || ""); setConfig(cfg); if (!ev.periodo && cfg?.periodo_actual) setPeriodo(String(cfg.periodo_actual)); }).catch((e) => setMsg(e.message));
+  }, [materiaId]);
+  useEffect(() => { if (materiaId) api.fetchActividades(materiaId, ev.grado_id, periodo).then(setColumnas).catch(() => setColumnas([])); }, [materiaId, periodo]);
+
+  const escalaMin = Number(config?.escala_min ?? ev.escala_min ?? 1), escalaMax = Number(config?.nota_maxima ?? ev.escala_max ?? 5);
+  // Las notas de la evaluación están en su propia escala; se llevan a la escala de la materia
+  const aEscala = (n) => (n === null || n === undefined ? null : Math.round((escalaMin + ((Number(n) - Number(ev.escala_min)) / ((Number(ev.escala_max) - Number(ev.escala_min)) || 1)) * (escalaMax - escalaMin)) * 10) / 10);
+  const notaDe = (f) => {
+    let v = null;
+    if (fuente === "auto") v = f.auto;
+    else if (fuente === "co") v = f.prom;
+    else if (f.auto !== null && f.prom !== null) v = (f.auto * pesoAuto + f.prom * (100 - pesoAuto)) / 100;
+    else v = f.prom ?? f.auto;
+    const e = aEscala(v);
+    return e === null ? (rellenar ? escalaMin : null) : e;
+  };
+  const vista = filas.map((f) => ({ f, nota: notaDe(f) }));
+  const conNota = vista.filter((x) => x.nota !== null).length;
+
+  const aplicar = async () => {
+    if (!materiaId || (destino === "nueva" && (!categoriaId || !nombre.trim())) || (destino !== "nueva" && !destino)) return setMsg("Completa materia, categoría y columna.");
+    if (!confirm(`Se escribirán ${conNota} notas en la Planilla${destino !== "nueva" ? " (reemplazan las de esa columna)" : ""}. ¿Continuar?`)) return;
+    setTrabajando(true); setMsg("");
+    try {
+      let actId = destino;
+      if (destino === "nueva") {
+        const act = await api.crearActividad({ nombre: nombre.trim(), categoria_id: categoriaId, materia_id: materiaId, grado_id: ev.grado_id, periodo, es_automatica: false });
+        actId = act.id;
+      }
+      for (const x of vista) { if (x.nota !== null) await api.setValor(actId, x.f.e.id, x.nota); }
+      setMsg(`✔ ${conNota} notas pasadas a la Planilla (periodo ${periodo}). Ya puedes verlas y ajustarlas allí.`);
+      api.fetchActividades(materiaId, ev.grado_id, periodo).then(setColumnas).catch(() => {});
+    } catch (er) { setMsg(er.message || String(er)); }
+    setTrabajando(false);
+  };
+  const sel = "text-sm rounded-lg px-2 py-1.5 border border-slate-200 bg-white";
+  if (!abierto) return <button onClick={() => setAbierto(true)} className="text-sm px-3 py-2 rounded-lg border border-violet-300 text-violet-700 bg-white">📖 Pasar a la planilla de calificaciones</button>;
+  return (
+    <div className="rounded-xl border border-violet-200 bg-violet-50 p-3 space-y-2">
+      <div className="flex items-center"><div className="font-semibold text-sm text-violet-800">📖 Pasar a la Planilla</div><button onClick={() => setAbierto(false)} className="ml-auto text-slate-400">✕</button></div>
+      <div className="flex flex-wrap gap-2 items-center">
+        <select className={sel} value={materiaId} onChange={(e) => setMateriaId(e.target.value)}>{materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select>
+        <label className="text-xs text-slate-600">Periodo <input value={periodo} onChange={(e) => setPeriodo(e.target.value)} className="w-12 rounded px-1 py-1 border border-slate-200" /></label>
+        <select className={sel} value={destino} onChange={(e) => setDestino(e.target.value)}><option value="nueva">➕ Crear columna nueva</option>{columnas.map((c) => <option key={c.id} value={c.id}>Usar «{c.nombre}»</option>)}</select>
+      </div>
+      {destino === "nueva" && (
+        <div className="flex flex-wrap gap-2 items-center">
+          <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre de la columna" className={sel + " flex-1 min-w-[10rem]"} />
+          <select className={sel} value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)}>{cats.map((c) => <option key={c.id} value={c.id}>{c.nombre} ({c.porcentaje}%)</option>)}</select>
+        </div>
+      )}
+      <div className="flex flex-wrap gap-3 text-xs text-slate-600 items-center">
+        {ev.tipo !== "co" && <label><input type="radio" checked={fuente === "auto"} onChange={() => setFuente("auto")} /> Solo autoevaluación</label>}
+        {ev.tipo !== "auto" && <label><input type="radio" checked={fuente === "co"} onChange={() => setFuente("co")} /> Solo promedio de coevaluación</label>}
+        {ev.tipo === "ambas" && <label><input type="radio" checked={fuente === "mixta"} onChange={() => setFuente("mixta")} /> Combinar</label>}
+        {fuente === "mixta" && <span>Auto <input type="number" min="0" max="100" value={pesoAuto} onChange={(e) => setPesoAuto(Math.max(0, Math.min(100, Number(e.target.value) || 0)))} className="w-14 rounded px-1 border border-slate-200" />% · Co {100 - pesoAuto}%</span>}
+        <label><input type="checkbox" checked={rellenar} onChange={(e) => setRellenar(e.target.checked)} /> Poner la nota mínima ({escalaMin}) a quien no participó</label>
+      </div>
+      <div className="max-h-48 overflow-y-auto rounded-lg bg-white border border-slate-200">
+        <table className="w-full text-xs"><thead><tr className="text-left text-slate-500"><th className="p-1">Estudiante</th><th className="p-1">Auto</th><th className="p-1">Co</th><th className="p-1">Nota a la planilla</th></tr></thead>
+          <tbody>{vista.map(({ f, nota }) => <tr key={f.e.id} className="border-t border-slate-100"><td className="p-1">{f.e.nombre}</td><td className="p-1">{f.auto ?? "—"}</td><td className="p-1">{f.prom ?? "—"}</td><td className="p-1 font-semibold">{nota ?? "—"}</td></tr>)}</tbody></table>
+      </div>
+      {msg && <div className={`text-xs ${msg.startsWith("✔") ? "text-emerald-700" : "text-rose-600"}`}>{msg}</div>}
+      <button disabled={trabajando || conNota === 0} onClick={aplicar} className="text-sm px-3 py-2 rounded-lg bg-violet-600 text-white disabled:opacity-50">{trabajando ? "Pasando…" : `Pasar ${conNota} notas a la Planilla`}</button>
+      <p className="text-[11px] text-slate-500">Tú decides qué parte cuenta. La nota se escribe en una columna de la Planilla, donde puedes corregirla estudiante por estudiante.</p>
+    </div>
+  );
+}
+
 function Resultados({ ev, onCambio }) {
   const [est, setEst] = useState([]);
   const [datos, setDatos] = useState(null);
@@ -194,6 +283,7 @@ function Resultados({ ev, onCambio }) {
             </tr>))}</tbody>
         </table>
       </div>
+      <PasarAPlanilla ev={ev} filas={filas} />
       <p className="text-[11px] text-slate-400">Los datos son para tu criterio: tú decides la nota. Pasa el cursor sobre una fila para ver los comentarios recibidos (sin autor).</p>
     </div>
   );
