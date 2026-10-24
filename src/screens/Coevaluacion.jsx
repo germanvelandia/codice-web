@@ -114,7 +114,9 @@ function FormNueva({ gradoId, onListo, inicial, onCancelar }) {
     setGuardando(true); setError("");
     try {
       if (ed) {
-        await co.actualizarCoevaluacion(inicial.id, { titulo: titulo.trim(), periodo: periodo || null, criterios, escala_min: Number(escMin), escala_max: Number(escMax), visibilidad: visib, cierra: cierra ? new Date(cierra).toISOString() : null });
+        const cambioAsig = modo !== inicial.modo_co || (Number(cantidad) || 3) !== inicial.cantidad;
+        await co.actualizarCoevaluacion(inicial.id, { titulo: titulo.trim(), periodo: periodo || null, criterios, escala_min: Number(escMin), escala_max: Number(escMax), visibilidad: visib, cierra: cierra ? new Date(cierra).toISOString() : null, modo_co: modo, cantidad: Number(cantidad) || 3 });
+        if (cambioAsig && inicial.tipo !== "auto") await co.reasignarCoevaluacion(inicial.id, false);
         return onListo();
       }
       await co.crearCoevaluacion({
@@ -135,8 +137,8 @@ function FormNueva({ gradoId, onListo, inicial, onCancelar }) {
       </div>
       {tipo !== "auto" && (
         <div className="grid grid-cols-2 gap-2">
-          <select value={modo} disabled={ed} onChange={(e) => setModo(e.target.value)} className={inp}>{Object.entries(MODOS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
-          {modo === "azar" && <label className="text-xs text-slate-600 flex items-center gap-2">Cuántos evalúa cada uno <input type="number" min={1} max={40} disabled={ed} value={cantidad} onChange={(e) => setCantidad(e.target.value)} className="w-16 rounded-lg px-2 py-1 border border-slate-200" /></label>}
+          <select value={modo} onChange={(e) => setModo(e.target.value)} className={inp}>{Object.entries(MODOS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+          {(modo === "azar" || modo === "grupo") && <label className="text-xs text-slate-600 flex items-center gap-2">Cuántos compañeros evalúa cada uno <input type="number" min={1} max={40} value={cantidad} onChange={(e) => setCantidad(e.target.value)} className="w-16 rounded-lg px-2 py-1 border border-slate-200" /></label>}
         </div>
       )}
       <div className={`space-y-2 ${ed && conRespuestas ? "opacity-40 pointer-events-none" : ""}`}>
@@ -172,7 +174,7 @@ function FormNueva({ gradoId, onListo, inicial, onCancelar }) {
           <option value="promedio">Privacidad: los estudiantes verán su promedio y comentarios, sin nombres (cuando yo publique)</option>
         </select>
       )}
-      {ed && <p className="text-[11px] text-slate-500">Tipo, modo y cantidad no se cambian una vez creada (ya hay compañeros asignados).{conRespuestas ? " Los criterios quedan bloqueados porque ya hay respuestas; para cambiarlos crea una evaluación nueva." : ""}</p>}
+      {ed && <p className="text-[11px] text-slate-500">El tipo no se cambia una vez creada. Si cambias el modo o la cantidad de compañeros, se reasignan los pares que aún no tienen respuesta (los ya evaluados se conservan).{conRespuestas ? " Los criterios quedan bloqueados porque ya hay respuestas; para cambiarlos crea una evaluación nueva." : ""}</p>}
       {error && <div className="text-xs text-rose-600">{error}</div>}
       <div className="flex gap-2">
         <button disabled={guardando} onClick={guardar} className="text-sm px-3 py-2 rounded-lg bg-violet-600 text-white disabled:opacity-50">{guardando ? "Guardando…" : ed ? "Guardar cambios" : "Crear y asignar"}</button>
@@ -305,7 +307,9 @@ function Resultados({ ev, onCambio }) {
         {ev.visibilidad === "promedio" && ev.tipo !== "auto" && (
           <label className="flex items-center gap-1"><input type="checkbox" checked={ev.resultados_visibles} onChange={async (e) => { await co.actualizarCoevaluacion(ev.id, { resultados_visibles: e.target.checked }); onCambio(); }} /> Publicar a estudiantes (promedio y comentarios sin nombres)</label>
         )}
-        <button onClick={csv} className="ml-auto px-2 py-1 rounded border border-slate-200">⬇ CSV</button>
+        {ev.tipo !== "auto" && <button onClick={async () => { const borrar = confirm("¿Reasignar compañeros?\n\nAceptar = conserva las coevaluaciones ya enviadas y reasigna lo pendiente.\nSi quieres empezar de cero y borrar todas las coevaluaciones, cancela y usa «Reasignar y borrar»."); if (!borrar) return; try { await co.reasignarCoevaluacion(ev.id, false); const d = await co.fetchRespuestasCoev(ev.id); setDatos(d); } catch (e) { alert(co.mensajeCoev(e)); } }} className="ml-auto px-2 py-1 rounded border border-slate-200">🔀 Reasignar compañeros</button>}
+        {ev.tipo !== "auto" && <button onClick={async () => { if (!confirm("Esto BORRA todas las coevaluaciones enviadas (las autoevaluaciones se conservan) y vuelve a asignar compañeros desde cero. ¿Continuar?")) return; try { await co.reasignarCoevaluacion(ev.id, true); const d = await co.fetchRespuestasCoev(ev.id); setDatos(d); } catch (e) { alert(co.mensajeCoev(e)); } }} className="px-2 py-1 rounded border border-rose-200 text-rose-600">Reasignar y borrar</button>}
+        <button onClick={csv} className="px-2 py-1 rounded border border-slate-200">⬇ CSV</button>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
