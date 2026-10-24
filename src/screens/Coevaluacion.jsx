@@ -20,7 +20,7 @@ export function VistaCoevaluacion({ grados = [], gradoActivo }) {
   useEffect(() => { if (gradoId) cargar(); }, [gradoId]);
 
   return (
-    <div className="max-w-3xl mx-auto space-y-3">
+    <div className="w-full max-w-6xl mx-auto space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-sm rounded-lg px-2 py-2 border border-slate-200 bg-white">
           {grados.map((g) => <option key={g.id} value={g.id}>{g.nombre || g.id}</option>)}
@@ -207,7 +207,7 @@ export function CoevaluacionEstudiante() {
   useEffect(() => { cargar(); }, []);
   if (lista === null) return <div className="text-sm text-slate-400 text-center py-8">Cargando…</div>;
   return (
-    <div className="max-w-md mx-auto space-y-3">
+    <div className="w-full max-w-6xl mx-auto space-y-3">
       {error && <div className="text-xs text-rose-600 bg-rose-50 rounded-lg p-2">{error}</div>}
       {lista.length === 0 && <div className="text-center py-10"><div className="text-4xl mb-2">🪞</div><p className="text-sm text-slate-500">No tienes evaluaciones pendientes.</p></div>}
       {lista.map((ev) => <TarjetaEval key={ev.id} ev={ev} onCambio={cargar} />)}
