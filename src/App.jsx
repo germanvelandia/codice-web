@@ -53,7 +53,6 @@ import { VistaPuntosConducta } from "./screens/PuntosConducta";
 import { VistaRecompensasDocente } from "./screens/RecompensasDocente";
 import { VistaObraDocente } from "./screens/ObraDocente";
 import { VistaTableroMundial, TableroMundialEstudiante } from "./screens/TableroMundial";
-import { VistaMontana } from "./screens/Montana";
 import { VistaCoevaluacion, CoevaluacionEstudiante } from "./screens/Coevaluacion";
 import { VistaEncuestasDocente, VistaInformeImpacto, EncuestaEstudiante } from "./screens/EncuestaInforme";
 import { VistaBancoPreguntas } from "./screens/BancoPreguntas";
@@ -2758,7 +2757,6 @@ const MENU_PANEL_GRUPOS = [
       { key: "calificaciones", label: "Planillas", icono: "📖" },
       { key: "recuperaciones", label: "Recuperaciones", icono: "♻️" },
       { key: "coevaluacion", label: "Auto y coevaluación", icono: "🪞" },
-      { key: "montana", label: "La montaña", icono: "⛰️" },
       { key: "evaluaciones", label: "Misiones", icono: "⚔️" },
       { key: "proyectosforja", label: "La Forja", icono: "🔨" },
     ],
@@ -3291,7 +3289,6 @@ function Panel({ session }) {
         )}
         {tab === "roles" && <VistaRoles />}
         {tab === "calificaciones" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Planillas" icono="🎓"><VistaCalificaciones grados={grados} destinoBusqueda={destinoBusqueda} gradoActivo={gradoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
-        {tab === "montana" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — La montaña" icono="⛰️"><VistaMontana grados={grados} gradoActivo={gradoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
         {tab === "coevaluacion" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Auto y coevaluación" icono="🪞"><VistaCoevaluacion grados={grados} gradoActivo={gradoActivo} /></MarcoSeccion>}
         {tab === "recuperaciones" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Recuperaciones" icono="🎓"><VistaRecuperaciones grados={grados} gradoActivo={gradoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
         {tab === "tablero" && grados.length > 0 && <MarcoSeccion zonaLabel="Gamificación — Tablero Mundial" icono="🌍"><VistaTableroMundial grados={grados} gradoActivo={gradoActivo} /></MarcoSeccion>}
