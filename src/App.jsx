@@ -53,6 +53,7 @@ import { VistaPuntosConducta } from "./screens/PuntosConducta";
 import { VistaRecompensasDocente } from "./screens/RecompensasDocente";
 import { VistaObraDocente } from "./screens/ObraDocente";
 import { VistaMundoNota } from "./screens/MundoNota";
+import { VistaGoogleCalendar } from "./screens/GoogleCalendar";
 import { registrarIngresoMundo } from "./lib/mundoNotaApi";
 import { VistaTableroMundial, TableroMundialEstudiante } from "./screens/TableroMundial";
 import { VistaCoevaluacion, CoevaluacionEstudiante } from "./screens/Coevaluacion";
@@ -2761,6 +2762,7 @@ const MENU_PANEL_GRUPOS = [
       { key: "calificaciones", label: "Planillas", icono: "📖" },
       { key: "recuperaciones", label: "Recuperaciones", icono: "♻️" },
       { key: "coevaluacion", label: "Auto y coevaluación", icono: "🪞" },
+      { key: "gcal", label: "Google Calendar", icono: "📆" },
       { key: "evaluaciones", label: "Misiones", icono: "⚔️" },
       { key: "proyectosforja", label: "La Forja", icono: "🔨" },
     ],
@@ -3296,6 +3298,7 @@ function Panel({ session }) {
         {tab === "calificaciones" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Planillas" icono="🎓"><VistaCalificaciones grados={grados} destinoBusqueda={destinoBusqueda} gradoActivo={gradoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
         {tab === "coevaluacion" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Auto y coevaluación" icono="🪞"><VistaCoevaluacion grados={grados} gradoActivo={gradoActivo} /></MarcoSeccion>}
         {tab === "recuperaciones" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Recuperaciones" icono="🎓"><VistaRecuperaciones grados={grados} gradoActivo={gradoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
+        {tab === "gcal" && <MarcoSeccion zonaLabel="Académico — Google Calendar" icono="📆"><VistaGoogleCalendar /></MarcoSeccion>}
         {tab === "mundonota" && grados.length > 0 && <MarcoSeccion zonaLabel="Gamificación — Mundo → nota" icono="🧮"><VistaMundoNota grados={grados} gradoActivo={gradoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
         {tab === "tablero" && grados.length > 0 && <MarcoSeccion zonaLabel="Gamificación — Tablero Mundial" icono="🌍"><VistaTableroMundial grados={grados} gradoActivo={gradoActivo} /></MarcoSeccion>}
         {tab === "puntosconducta" && <MarcoSeccion zonaLabel="Gamificación — Puntos por conducta" icono="🎮"><VistaPuntosConducta /></MarcoSeccion>}
