@@ -20,6 +20,7 @@ import { VistaAnuncios } from "./screens/Anuncios";
 import { VistaLogros } from "./screens/Logros";
 import { VistaSalonHonor } from "./screens/SalonHonor";
 import { VistaDiplomas } from "./screens/Diplomas";
+import { VistaRankingDiplomas, DiplomasEstudiante } from "./screens/RankingDiplomas";
 import { VistaPersonaje, PersonajePreview } from "./screens/Personaje";
 import { InsigniaNivel, CapaEstrellasBanner } from "./components/NivelPersonaje";
 import { nivelPersonaje } from "./lib/mejorasPersonaje";
@@ -1225,6 +1226,7 @@ const MENU_CODICE_GRUPOS = [
   {
     key: "cuenta", label: "Mi cuenta", icono: "👤", items: [
       { key: "coevaluacion", label: "Evaluarnos", icono: "🪞" },
+      { key: "misdiplomas", label: "Mis diplomas", icono: "🎖️" },
       { key: "encuesta", label: "Encuesta", icono: "📝" },
       { key: "perfil", label: "Perfil", icono: "👤" },
     ],
@@ -1238,7 +1240,7 @@ const MENU_CODICE = MENU_CODICE_GRUPOS.flatMap((g) => g.items);
 // siendo la misma (la key de MENU_CODICE).
 const ICONO_MAPA = {
   album: "🏯", biblioteca: "📚", codice: "📖", forja: "⚒️", guias: "🗺️", modulos: "🧭",
-  inicio: "🏰", mundo: "🌍", misiones: "⚔️", notas: "📜", personaje: "🧙", historial: "📖", perfil: "🛡️", preguntados: "🎡", quizvivo: "⚡", encuesta: "📝", coevaluacion: "🪞", tablero: "🧭",
+  inicio: "🏰", mundo: "🌍", misiones: "⚔️", notas: "📜", personaje: "🧙", historial: "📖", perfil: "🛡️", preguntados: "🎡", quizvivo: "⚡", encuesta: "📝", coevaluacion: "🪞", misdiplomas: "🎖️", tablero: "🧭",
   proyectos: "🏹", ranking: "👑", recompensas: "💎", salonhonor: "🏆",
 };
 
@@ -2622,6 +2624,10 @@ function PortalEstudiante() {
             <MarcoSeccion zonaLabel="Diversión — Tablero Mundial" icono="🧭"><TableroMundialEstudiante /></MarcoSeccion>
           )}
 
+          {vista === "misdiplomas" && estudianteInfo && (
+            <MarcoSeccion zonaLabel="Mi cuenta — Mis diplomas" icono="🎖️"><DiplomasEstudiante nombre={estudianteInfo.nombre} /></MarcoSeccion>
+          )}
+
           {vista === "coevaluacion" && estudianteInfo && (
             <MarcoSeccion zonaLabel="Mi cuenta — Evaluarnos" icono="🪞"><CoevaluacionEstudiante /></MarcoSeccion>
           )}
@@ -2802,6 +2808,7 @@ const MENU_PANEL_GRUPOS = [
       { key: "herr_logros", label: "Logros", icono: "🏆" },
       { key: "herr_salonhonor", label: "Salón de Honor", icono: "🥇" },
       { key: "herr_diplomas", label: "Diplomas", icono: "🏅" },
+      { key: "herr_rankdiplomas", label: "Ranking → diplomas", icono: "🏆" },
       { key: "herr_gamext", label: "Desafíos/Misiones/Cosméticos", icono: "🕹️" },
       { key: "herr_bingo", label: "Bingo de Repaso", icono: "🎯" },
       { key: "herr_quizvivo", label: "Quiz en vivo", icono: "⚡" },
@@ -2863,7 +2870,7 @@ function MarcoSeccion({ zonaLabel, icono, children }) {
 
 const NOMBRES_HERRAMIENTAS = {
   ruleta: "Ruleta", ruletamonedas: "Ruleta de Monedas", accionesmasivas: "Acciones Masivas", banco: "Banco",
-  album: "Álbum", anuncios: "Anuncios", logros: "Logros", salonhonor: "Salón de Honor", diplomas: "Diplomas",
+  album: "Álbum", anuncios: "Anuncios", logros: "Logros", salonhonor: "Salón de Honor", diplomas: "Diplomas", rankdiplomas: "Ranking → diplomas",
   gamext: "Desafíos / Misiones / Cosméticos", consignas: "Consignas del Códice", trivia: "Preguntados",
   bancopreguntas: "Banco de Preguntas", temporizador: "Temporizador", dado: "Dado", cronometro: "Cronómetro",
   semaforo: "Semáforo", sorteoorden: "Sorteo de Orden / Parejas", grupos: "Generador de Grupos",
@@ -3269,6 +3276,7 @@ function Panel({ session }) {
             {subTabHerramientas === "logros" && <VistaLogros />}
             {subTabHerramientas === "salonhonor" && <VistaSalonHonor grados={grados} />}
             {subTabHerramientas === "diplomas" && <VistaDiplomas grados={grados} gradoActivo={gradoActivo} />}
+            {subTabHerramientas === "rankdiplomas" && <VistaRankingDiplomas grados={grados} gradoActivo={gradoActivo} />}
             {subTabHerramientas === "gamext" && <VistaGamificacionExtra grados={grados} />}
             {subTabHerramientas === "consignas" && <VistaConsignasCodice grados={grados} />}
             {subTabHerramientas === "trivia" && <VistaTriviaAdmin grados={grados} />}
