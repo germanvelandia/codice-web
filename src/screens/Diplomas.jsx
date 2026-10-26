@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import * as api from "../lib/api";
 import { ordenarPorApellido } from "../lib/gamification";
 
-const TIPOS_DIPLOMA = [
+export const TIPOS_DIPLOMA = [
   { key: "excelencia", badge: "Excelencia Académica", titulo: "DIPLOMA DE FELICITACIÓN", subtitulo: "MENCIÓN DE HONOR ACADÉMICA", motivo: "Por su destacado desempeño académico y compromiso constante con su proceso de aprendizaje durante el periodo." },
   { key: "mejor_promedio", badge: "Máxima Excelencia Académica", titulo: "DIPLOMA AL MEJOR PROMEDIO", subtitulo: "PRIMER PUESTO DEL CURSO", motivo: "Por haber obtenido el mejor promedio académico del curso durante el periodo, destacándose por su constante dedicación, esfuerzo y responsabilidad." },
   { key: "convivencia", badge: "Mérito Convivencial", titulo: "DIPLOMA AL MÉRITO CONVIVENCIAL", subtitulo: "EJEMPLO DE SANA CONVIVENCIA", motivo: "Por su ejemplar comportamiento, respeto y aporte a la sana convivencia dentro de la comunidad educativa." },
@@ -14,7 +14,7 @@ const TIPOS_DIPLOMA = [
 
 // Cada asignatura trae sus propios 3 "pilares" (esquinas decorativas) y un
 // patrón de fondo distinto — así el diploma se ve acorde a la materia.
-const ASIGNATURAS = {
+export const ASIGNATURAS = {
   etica_religion: {
     label: "Ética y Religión",
     pilares: [
@@ -107,7 +107,7 @@ function patronFondo(fondoSvg) {
   return `data:image/svg+xml,${svg.replace(/#/g, "%23").replace(/"/g, "'")}`;
 }
 
-function htmlDiploma({ institucion, estudianteNombre, gradoId, tituloDiploma, subtitulo, badge, motivo, puntajes, fecha, docenteNombre, docenteRol, asignatura }) {
+export function htmlDiploma({ institucion, estudianteNombre, gradoId, tituloDiploma, subtitulo, badge, motivo, puntajes, fecha, docenteNombre, docenteRol, asignatura }) {
   const asig = asignatura || ASIGNATURAS.general;
   const [p1, p2, p3] = asig.pilares;
 
