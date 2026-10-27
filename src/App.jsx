@@ -2770,7 +2770,7 @@ const MENU_PANEL_GRUPOS = [
       { key: "recuperaciones", label: "Recuperaciones", icono: "♻️" },
       { key: "coevaluacion", label: "Auto y coevaluación", icono: "🪞" },
       { key: "gcal", label: "Google Calendar", icono: "📆" },
-      { key: "evaluaciones", label: "Misiones", icono: "⚔️" },
+      { key: "evaluaciones", label: "Evaluaciones", icono: "📝" },
       { key: "proyectosforja", label: "La Forja", icono: "🔨" },
     ],
   },
@@ -3334,7 +3334,7 @@ function Panel({ session }) {
         {tab === "guiasestudio" && <MarcoSeccion zonaLabel="Planeación — Guías de Estudio" icono="🗺️"><VistaGuiasEstudio grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
         {tab === "modulosestudio" && grados.length > 0 && <MarcoSeccion zonaLabel="Planeación — Módulos de Estudio" icono="🗺️"><ModulosAdmin grados={grados} /></MarcoSeccion>}
         {tab === "actividadesprogramadas" && <MarcoSeccion zonaLabel="Planeación — Actividades Programadas" icono="🗺️"><VistaActividadesProgramadas grados={grados} /></MarcoSeccion>}
-        {tab === "evaluaciones" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Misiones" icono="🎓"><VistaEvaluaciones grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
+        {tab === "evaluaciones" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Evaluaciones" icono="🎓"><VistaEvaluaciones grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
         {tab === "proyectosforja" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — La Forja" icono="🎓"><VistaProyectosForja grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
       </div>
     </div>
