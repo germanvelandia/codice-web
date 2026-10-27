@@ -133,6 +133,7 @@ function PreguntasEditor({ evaluacionId, materiaId, gradoId }) {
   const [temas, setTemas] = useState([]);
   const [temaElegido, setTemaElegido] = useState("");
   const [cantidad, setCantidad] = useState(10);
+  const [periodoElegido, setPeriodoElegido] = useState("");
   const [cargandoAleatorio, setCargandoAleatorio] = useState(false);
   const { nivel } = nivelYCurso(gradoId || "");
 
@@ -146,7 +147,7 @@ function PreguntasEditor({ evaluacionId, materiaId, gradoId }) {
   const traerAleatorias = async () => {
     setCargandoAleatorio(true);
     try {
-      const r = await api.agregarPreguntasAleatoriasDesdeBanco(evaluacionId, materiaId, temaElegido || null, nivel || null, parseInt(cantidad, 10) || 10, preguntas.length);
+      const r = await api.agregarPreguntasAleatoriasDesdeBanco(evaluacionId, materiaId, temaElegido || null, nivel || null, parseInt(cantidad, 10) || 10, preguntas.length, periodoElegido || null);
       if (r.disponibles === 0) alert(`No hay preguntas en el banco para esta materia${nivel ? `, grado ${nivel}°` : ""}${temaElegido ? ` y tema "${temaElegido}"` : ""}.`);
       else alert(`Se agregaron ${r.agregadas} pregunta(s) al azar (de ${r.disponibles} disponibles en el banco).`);
       setAleatorioAbierto(false);
@@ -202,6 +203,9 @@ function PreguntasEditor({ evaluacionId, materiaId, gradoId }) {
             <select value={temaElegido} onChange={(e) => setTemaElegido(e.target.value)} className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
               <option value="">Todos los temas de la materia</option>
               {temas.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <select value={periodoElegido} onChange={(e) => setPeriodoElegido(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
+              <option value="">Todo periodo</option><option value="T1">Trimestre 1</option><option value="T2">Trimestre 2</option><option value="T3">Trimestre 3</option><option value="REC">Recuperación</option>
             </select>
             <input type="number" min="1" value={cantidad} onChange={(e) => setCantidad(e.target.value)} className="w-16 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
           </div>
