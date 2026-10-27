@@ -1158,7 +1158,7 @@ export async function iniciarIntentoConAleatorias(evaluacion, estudianteId) {
   const hoy = new Date().toISOString().slice(0, 10);
   const conFalta = await fetchEstudiantesConFaltaInjustificada([estudianteId], hoy, evaluacion.materia_id || null);
   if (conFalta.has(estudianteId)) {
-    throw new Error("Tenés una falta injustificada registrada hoy en esta materia — no podés presentar esta evaluación hoy. Hablá con tu docente.");
+    throw new Error("Tienes una falta injustificada registrada hoy en esta materia: no puedes presentar esta evaluación hoy. Habla con tu docente.");
   }
 
   const intentoId = await iniciarIntento(evaluacion.id, estudianteId);
@@ -1294,6 +1294,34 @@ export async function iniciarIntento(evaluacionId, estudianteId) {
 export async function entregarIntento(intentoId, respuestas) {
   const { error } = await supabase.rpc("entregar_intento_evaluacion", { p_intento_id: intentoId, p_respuestas: respuestas });
   if (error) throw error;
+}
+
+// Anota que el estudiante salió de la pantalla durante la evaluación (y si por eso se cerró).
+// Si todavía no se corrió el script 115, falla en silencio para no estorbar la evaluación.
+export async function registrarSalidaIntento(intentoId, cerrar = false) {
+  const { error } = await supabase.rpc("registrar_salida_intento", { p_intento_id: intentoId, p_cerrar: !!cerrar });
+  if (error) throw error;
+}
+
+// Datos para el mapa de calor: preguntas, estudiantes del curso y el mejor intento de cada uno.
+export async function fetchMapaCalor(evaluacion) {
+  const [preguntas, intentos, estudiantes] = await Promise.all([
+    fetchPreguntasDocente(evaluacion.id),
+    supabase.from("evaluacion_intentos").select("*").eq("evaluacion_id", evaluacion.id).neq("estado", "en_progreso").then((r) => { if (r.error) throw r.error; return r.data || []; }),
+    fetchEstudiantesPorGrado(evaluacion.grado_id),
+  ]);
+  const mejor = {};
+  intentos.forEach((i) => {
+    const k = String(i.estudiante_id); const p = Number(i.puntaje_obtenido) || 0; const a = mejor[k];
+    if (!a || p > (Number(a.puntaje_obtenido) || 0) || (p === (Number(a.puntaje_obtenido) || 0) && i.numero_intento > a.numero_intento)) mejor[k] = i;
+  });
+  const ids = Object.values(mejor).map((i) => i.id);
+  let respuestas = [];
+  for (let k = 0; k < ids.length; k += 100) {
+    const { data, error } = await supabase.from("evaluacion_respuestas").select("*").in("intento_id", ids.slice(k, k + 100));
+    if (error) throw error; respuestas = respuestas.concat(data || []);
+  }
+  return { preguntas, estudiantes, mejor, respuestas };
 }
 
 // Borra un intento (y sus respuestas) para que el estudiante pueda volver a
