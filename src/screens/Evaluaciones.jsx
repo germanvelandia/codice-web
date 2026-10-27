@@ -1,695 +1,331 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import * as api from "../lib/api";
-import { agruparPorNivel, nivelYCurso } from "../lib/gamification";
-import { periodosDe } from "../lib/calificaciones";
-import { EditorTexto, TextoEnriquecido } from "../components/RichText";
+import { TextoEnriquecido } from "../components/RichText";
 
-const TIPOS_PREGUNTA = [
-  { key: "opcion_multiple", label: "Opción múltiple" },
-  { key: "verdadero_falso", label: "Verdadero / Falso" },
-  { key: "respuesta_corta", label: "Respuesta corta (manual)" },
+const COLORES_OPCION = [
+  { bg: "#e11d48", borde: "#9f1239" }, { bg: "#2563eb", borde: "#1e40af" },
+  { bg: "#d97706", borde: "#b45309" }, { bg: "#059669", borde: "#065f46" },
 ];
+const formatearTiempo = (seg) => `${Math.floor(seg / 60)}:${String(seg % 60).padStart(2, "0")}`;
+const BTN = { background: "linear-gradient(to right, #2F55A4, #17264D)" };
+const PANEL = { background: "rgba(23,38,77,0.75)", border: "1px solid rgba(47,85,164,0.3)" };
 
-function NuevaPreguntaForm({ evaluacionId, orden, pregunta, materiaId, gradoId, onCreada, onCancelar }) {
-  const [tipo, setTipo] = useState(pregunta?.tipo || "opcion_multiple");
-  const [enunciado, setEnunciado] = useState(pregunta?.enunciado || "");
-  const [puntos, setPuntos] = useState(pregunta?.puntos || 1);
-  const [opciones, setOpciones] = useState(pregunta?.tipo === "opcion_multiple" ? (pregunta.opciones || []).map((o) => o.texto) : ["", ""]);
-  const [correcta, setCorrecta] = useState(pregunta?.tipo === "opcion_multiple" ? Math.max(0, (pregunta.opciones || []).findIndex((o) => o.correcta)) : 0);
-  const [vfCorrecta, setVfCorrecta] = useState(
-    pregunta?.tipo === "verdadero_falso" ? ((pregunta.opciones || []).find((o) => o.correcta)?.texto || "Verdadero") : "Verdadero"
-  );
-  const [guardarEnBanco, setGuardarEnBanco] = useState(false);
-  const [temaBanco, setTemaBanco] = useState("");
-  const [retroalimentacion, setRetroalimentacion] = useState(pregunta?.retroalimentacion || "");
-  const [guardando, setGuardando] = useState(false);
-
-  const guardar = async () => {
-    if (!enunciado.trim()) { alert("Escribe el enunciado de la pregunta."); return; }
-    let opcionesFinal = [];
-    if (tipo === "opcion_multiple") {
-      const limpias = opciones.map((o) => o.trim()).filter(Boolean);
-      if (limpias.length < 2) { alert("Agrega al menos 2 opciones."); return; }
-      opcionesFinal = limpias.map((texto, i) => ({ texto, correcta: i === correcta }));
-    } else if (tipo === "verdadero_falso") {
-      opcionesFinal = [
-        { texto: "Verdadero", correcta: vfCorrecta === "Verdadero" },
-        { texto: "Falso", correcta: vfCorrecta === "Falso" },
-      ];
-    }
-    setGuardando(true);
-    try {
-      const campos = { tipo, enunciado: enunciado.trim(), puntos: parseFloat(puntos) || 1, opciones: opcionesFinal, retroalimentacion: retroalimentacion.trim() || null };
-      if (pregunta) {
-        await api.editarPregunta(pregunta.id, campos);
-      } else {
-        const { nivel } = nivelYCurso(gradoId || "");
-        await api.crearPreguntaConBanco({ evaluacion_id: evaluacionId, orden, ...campos }, guardarEnBanco, materiaId, temaBanco, nivel);
-      }
-      onCreada();
-    } catch (e) {
-      alert("Error al guardar: " + e.message);
-    }
-    setGuardando(false);
-  };
-
-  return (
-    <div className="bg-violet-50 rounded-xl p-3 mb-2">
-      <div className="flex gap-1 mb-2">
-        {TIPOS_PREGUNTA.map((t) => (
-          <button key={t.key} onClick={() => setTipo(t.key)} className={`text-xs px-2.5 py-1 rounded-full ${tipo === t.key ? "bg-violet-500 text-white" : "bg-white text-slate-600"}`}>{t.label}</button>
-        ))}
-      </div>
-      <div className="flex gap-2 mb-2">
-        <input value={enunciado} onChange={(e) => setEnunciado(e.target.value)} placeholder="Enunciado de la pregunta"
-          className="flex-1 text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
-        <input type="number" step="0.5" value={puntos} onChange={(e) => setPuntos(e.target.value)} placeholder="Pts" className="w-16 text-sm rounded-lg px-2 py-2 border border-slate-200 outline-none bg-white" />
-      </div>
-
-      {tipo === "opcion_multiple" && (
-        <div className="space-y-1.5 mb-2">
-          {opciones.map((op, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <input type="radio" checked={correcta === i} onChange={() => setCorrecta(i)} title="Marcar como correcta" />
-              <input value={op} onChange={(e) => setOpciones((prev) => prev.map((o, idx) => idx === i ? e.target.value : o))}
-                placeholder={`Opción ${i + 1}`} className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
-              {opciones.length > 2 && (
-                <button onClick={() => { setOpciones((prev) => prev.filter((_, idx) => idx !== i)); if (correcta >= opciones.length - 1) setCorrecta(0); }} className="text-slate-300 hover:text-rose-500 text-xs">✕</button>
-              )}
-            </div>
-          ))}
-          <button onClick={() => setOpciones((prev) => [...prev, ""])} className="text-[11px] text-violet-500">+ Agregar opción</button>
-        </div>
-      )}
-
-      {tipo === "verdadero_falso" && (
-        <div className="flex gap-3 mb-2">
-          <label className="flex items-center gap-1.5 text-xs"><input type="radio" checked={vfCorrecta === "Verdadero"} onChange={() => setVfCorrecta("Verdadero")} /> Verdadero</label>
-          <label className="flex items-center gap-1.5 text-xs"><input type="radio" checked={vfCorrecta === "Falso"} onChange={() => setVfCorrecta("Falso")} /> Falso</label>
-        </div>
-      )}
-
-      {tipo === "respuesta_corta" && (
-        <p className="text-[11px] text-slate-500 mb-2">Esta pregunta no se autocalifica — vos revisás y asignás el puntaje manualmente en los resultados.</p>
-      )}
-
-      {tipo !== "respuesta_corta" && (
-        <div className="mb-2">
-          <label className="text-[11px] text-slate-500 block mb-1">Retroalimentación (opcional — explicación de por qué es esa la respuesta)</label>
-          <textarea value={retroalimentacion} onChange={(e) => setRetroalimentacion(e.target.value)} rows={2} placeholder="Ej: La respuesta es B porque…"
-            className="w-full text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
-        </div>
-      )}
-
-      {!pregunta && materiaId && tipo !== "respuesta_corta" && (
-        <div className="mb-2">
-          <label className="flex items-center gap-2 text-[11px] text-slate-600">
-            <input type="checkbox" checked={guardarEnBanco} onChange={(e) => setGuardarEnBanco(e.target.checked)} />
-            También guardar esta pregunta en el banco de preguntas (para reusarla en otras evaluaciones)
-          </label>
-          {guardarEnBanco && (
-            <input value={temaBanco} onChange={(e) => setTemaBanco(e.target.value)} placeholder="Tema en el banco (opcional, ej: Álgebra)"
-              className="w-full text-xs rounded-lg px-2 py-1.5 mt-1.5 border border-slate-200 outline-none bg-white" />
-          )}
-        </div>
-      )}
-
-      <div className="flex justify-end gap-2">
-        {onCancelar && <button onClick={onCancelar} className="text-xs text-slate-500 px-2 py-1.5">Cancelar</button>}
-        <button disabled={guardando} onClick={guardar} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
-          {guardando ? "Guardando…" : pregunta ? "Guardar cambios" : "Agregar pregunta"}
-        </button>
-      </div>
-    </div>
-  );
+/* ---------------- fechas y estados ---------------- */
+const hoyBogota = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
+const limiteCierre = (e) => (e.fecha_cierre ? new Date(`${e.fecha_cierre}T${e.hora_cierre ? String(e.hora_cierre).slice(0, 5) : "23:59"}:${e.hora_cierre ? "00" : "59"}-05:00`) : null);
+function fechaCorta(f) { return f ? new Date(`${f}T12:00:00-05:00`).toLocaleDateString("es-CO", { weekday: "short", day: "numeric", month: "short", timeZone: "America/Bogota" }) : null; }
+export function estadoVentana(e) {
+  const hoy = hoyBogota();
+  if (e.fecha_apertura && e.fecha_apertura > hoy) return "proxima";
+  const lim = limiteCierre(e);
+  if (lim && new Date() > lim) return "cerrada";
+  return "abierta";
+}
+// Color según el desempeño (porcentaje del puntaje)
+function colorNota(p) {
+  if (p >= 90) return { bg: "#059669", txt: "Superior", borde: "#22C55E" };
+  if (p >= 80) return { bg: "#2563eb", txt: "Alto", borde: "#3B82F6" };
+  if (p >= 60) return { bg: "#d97706", txt: "Básico", borde: "#F59E0B" };
+  return { bg: "#e11d48", txt: "Por mejorar", borde: "#F43F5E" };
 }
 
-function PreguntasEditor({ evaluacionId, materiaId, gradoId }) {
+/* ---------------- Pantalla de la evaluación (con vigilancia) ---------------- */
+function TomarEvaluacion({ evaluacion, estudianteId, onCerrar }) {
+  const vigilar = !!evaluacion.vigilar_pantalla;
+  const maxSalidas = Math.max(0, Number(evaluacion.max_salidas) || 0);
+  const [intentoId, setIntentoId] = useState(null);
   const [preguntas, setPreguntas] = useState([]);
-  const [formAbierto, setFormAbierto] = useState(false);
-  const [editando, setEditando] = useState(null);
-  const [aleatorioAbierto, setAleatorioAbierto] = useState(false);
-  const [temas, setTemas] = useState([]);
-  const [temaElegido, setTemaElegido] = useState("");
-  const [cantidad, setCantidad] = useState(10);
-  const [cargandoAleatorio, setCargandoAleatorio] = useState(false);
-  const { nivel } = nivelYCurso(gradoId || "");
-
-  const cargar = () => api.fetchPreguntasDocente(evaluacionId).then(setPreguntas);
-  useEffect(() => { cargar(); }, [evaluacionId]);
-  useEffect(() => { if (materiaId) api.fetchTemasBanco(materiaId, nivel || null).then(setTemas); }, [materiaId, nivel]);
-
-  const quitar = async (id) => { if (!confirm("¿Eliminar esta pregunta?")) return; await api.eliminarPregunta(id); cargar(); };
-  const totalPuntos = preguntas.reduce((a, p) => a + Number(p.puntos), 0);
-
-  const traerAleatorias = async () => {
-    setCargandoAleatorio(true);
-    try {
-      const r = await api.agregarPreguntasAleatoriasDesdeBanco(evaluacionId, materiaId, temaElegido || null, nivel || null, parseInt(cantidad, 10) || 10, preguntas.length);
-      if (r.disponibles === 0) alert(`No hay preguntas en el banco para esta materia${nivel ? `, grado ${nivel}°` : ""}${temaElegido ? ` y tema "${temaElegido}"` : ""}.`);
-      else alert(`Se agregaron ${r.agregadas} pregunta(s) al azar (de ${r.disponibles} disponibles en el banco).`);
-      setAleatorioAbierto(false);
-      cargar();
-    } catch (e) {
-      alert("Error: " + e.message);
-    }
-    setCargandoAleatorio(false);
-  };
-
-  return (
-    <div className="mt-2">
-      <div className="text-xs font-semibold text-slate-500 mb-2">Preguntas ({preguntas.length}) · {totalPuntos} pts en total</div>
-      {preguntas.length > 0 && (
-        <div className="space-y-1.5 mb-2">
-          {preguntas.map((p, i) => (
-            editando?.id === p.id ? (
-              <NuevaPreguntaForm key={p.id} evaluacionId={evaluacionId} pregunta={p}
-                onCancelar={() => setEditando(null)} onCreada={() => { setEditando(null); cargar(); }} />
-            ) : (
-              <div key={p.id} className="bg-white border border-slate-200 rounded-lg p-2.5">
-                <div className="flex justify-between items-start">
-                  <div className="text-xs text-slate-700">
-                    <b>{i + 1}.</b> {p.enunciado} <span className="text-slate-400">({p.puntos} pts · {TIPOS_PREGUNTA.find((t) => t.key === p.tipo)?.label})</span>
-                  </div>
-                  <div className="flex gap-1.5 shrink-0 ml-2">
-                    <button onClick={() => setEditando(p)} className="text-slate-300 hover:text-violet-600 text-xs">✏️</button>
-                    <button onClick={() => quitar(p.id)} className="text-slate-300 hover:text-rose-500 text-xs">✕</button>
-                  </div>
-                </div>
-                {p.tipo !== "respuesta_corta" && (
-                  <div className="mt-1 flex flex-wrap gap-1.5">
-                    {(p.opciones || []).map((o, j) => (
-                      <span key={j} className={`text-[10px] px-2 py-0.5 rounded-full ${o.correcta ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
-                        {o.correcta ? "✓ " : ""}{o.texto}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {p.retroalimentacion && <p className="text-[11px] text-slate-400 mt-1.5 italic">💡 {p.retroalimentacion}</p>}
-              </div>
-            )
-          ))}
-        </div>
-      )}
-
-      {aleatorioAbierto && (
-        <div className="bg-amber-50 rounded-xl p-3 mb-2">
-          <p className="text-[11px] text-amber-700 mb-2">
-            Elige N preguntas al azar del banco de esta materia{nivel ? `, solo del grado ${nivel}°` : ""} y las agrega tal cual (podés editarlas después).
-          </p>
-          <div className="flex gap-2 mb-2">
-            <select value={temaElegido} onChange={(e) => setTemaElegido(e.target.value)} className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
-              <option value="">Todos los temas de la materia</option>
-              {temas.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-            <input type="number" min="1" value={cantidad} onChange={(e) => setCantidad(e.target.value)} className="w-16 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
-          </div>
-          <div className="flex justify-end gap-2">
-            <button onClick={() => setAleatorioAbierto(false)} className="text-xs text-slate-500 px-2 py-1">Cancelar</button>
-            <button disabled={cargandoAleatorio} onClick={traerAleatorias} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-500 text-white disabled:opacity-60">
-              {cargandoAleatorio ? "Agregando…" : "Agregar al azar"}
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="flex gap-3">
-        {formAbierto ? null : <button onClick={() => setFormAbierto(true)} className="text-[11px] text-violet-500">+ Agregar pregunta</button>}
-        {materiaId && !aleatorioAbierto && <button onClick={() => setAleatorioAbierto(true)} className="text-[11px] text-amber-600">🗂️ N preguntas al azar del banco</button>}
-      </div>
-      {formAbierto && (
-        <div className="mt-2">
-          <NuevaPreguntaForm evaluacionId={evaluacionId} orden={preguntas.length} materiaId={materiaId} gradoId={gradoId} onCreada={() => { setFormAbierto(false); cargar(); }} onCancelar={() => setFormAbierto(false)} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ResultadosEvaluacion({ evaluacion, onCerrar }) {
-  const [intentos, setIntentos] = useState([]);
+  const [respuestas, setRespuestas] = useState({});
   const [cargando, setCargando] = useState(true);
-  const [intentoAbierto, setIntentoAbierto] = useState(null);
-  const [respuestas, setRespuestas] = useState([]);
+  const [enviando, setEnviando] = useState(false);
+  const [enviado, setEnviado] = useState(false);
+  const [cerradoPorSalida, setCerradoPorSalida] = useState(false);
+  const [errorInicio, setErrorInicio] = useState("");
+  const [empezado, setEmpezado] = useState(false);
+  const [indice, setIndice] = useState(0);
+  const [segundosRestantes, setSegundosRestantes] = useState(null);
+  const [respuestaCortaTemp, setRespuestaCortaTemp] = useState("");
+  const [entiendo, setEntiendo] = useState(false);
+  const [confirmando, setConfirmando] = useState(false);
+  const [aviso, setAviso] = useState(null); // {n, max}
+  const ref = useRef({ intentoId: null, preguntas: [], respuestas: {}, terminado: false, salidas: 0, ultima: 0, fs: false });
+  ref.current.intentoId = intentoId; ref.current.preguntas = preguntas; ref.current.respuestas = respuestas;
 
-  const cargar = () => {
-    setCargando(true);
-    api.fetchIntentosDeEvaluacion(evaluacion.id).then((data) => { setIntentos(data); setCargando(false); });
-  };
-  useEffect(() => { cargar(); }, [evaluacion.id]);
+  useEffect(() => {
+    (async () => {
+      try {
+        const { intentoId: id, preguntas: p } = await api.iniciarIntentoConAleatorias(evaluacion, estudianteId);
+        setIntentoId(id); setPreguntas(p);
+        if (evaluacion.tiempo_limite_minutos) setSegundosRestantes(evaluacion.tiempo_limite_minutos * 60);
+      } catch (e) { setErrorInicio(e.message); }
+      setCargando(false);
+    })();
+  }, []);
 
-  const abrirIntento = async (intento) => {
-    setIntentoAbierto(intento);
-    const r = await api.fetchRespuestasDeIntento(intento.id);
-    setRespuestas(r);
-  };
+  const responder = (preguntaId, valor) => setRespuestas((prev) => ({ ...prev, [preguntaId]: valor }));
 
-  const calificarCorta = async (respuestaId, puntosMax) => {
-    const valor = prompt(`¿Cuántos puntos (de máximo ${puntosMax})?`);
-    if (valor === null) return;
-    const puntos = Math.min(parseFloat(valor) || 0, puntosMax);
-    await api.calificarRespuesta(respuestaId, puntos, puntos > 0);
-    await api.recalcularPuntajeIntento(intentoAbierto.id);
-    const r = await api.fetchRespuestasDeIntento(intentoAbierto.id);
-    setRespuestas(r);
-    cargar();
+  const entregarYa = async () => {
+    const r = ref.current;
+    const payload = r.preguntas.map((p) => ({ pregunta_id: p.id, respuesta: r.respuestas[p.id] || "" }));
+    await api.entregarIntento(r.intentoId, payload);
   };
-
-  const publicar = async (intentoId) => {
-    const intento = intentos.find((i) => i.id === intentoId);
-    await api.publicarResultado(intentoId, true, evaluacion, intento);
-    cargar();
-  };
-  const publicarTodos = async () => {
-    if (!confirm("¿Publicar el resultado de todos los estudiantes que ya están calificados?")) return;
-    await api.publicarTodosLosResultados(evaluacion.id, evaluacion);
-    cargar();
+  const salirDePantallaCompleta = () => { try { if (document.fullscreenElement) document.exitFullscreen(); } catch {} };
+  const enviar = async () => {
+    if (ref.current.terminado) return;
+    ref.current.terminado = true; setEnviando(true);
+    try { await entregarYa(); setEnviado(true); salirDePantallaCompleta(); }
+    catch (e) { ref.current.terminado = false; alert("Error al entregar: " + e.message); }
+    setEnviando(false);
   };
 
-  const reiniciar = async (intento) => {
-    if (!confirm(`¿Reiniciar el intento ${intento.numero_intento} de ${intento.estudiante_nombre}? Se borra por completo (respuestas y calificación) y va a poder volver a presentar la evaluación. No se puede deshacer.`)) return;
-    await api.eliminarIntento(intento.id);
-    cargar();
+  // Tiempo total: al llegar a cero entrega lo respondido
+  useEffect(() => {
+    if (!empezado || segundosRestantes === null || enviado || enviando || cerradoPorSalida) return;
+    if (segundosRestantes <= 0) { enviar(); return; }
+    const id = setTimeout(() => setSegundosRestantes((s) => s - 1), 1000);
+    return () => clearTimeout(id);
+  }, [empezado, segundosRestantes, enviado, enviando, cerradoPorSalida]);
+
+  /* ---- Vigilancia: salir de la pantalla ---- */
+  const cerrarPorSalida = async () => {
+    const r = ref.current; if (r.terminado) return;
+    r.terminado = true; setEnviando(true);
+    try { await api.registrarSalidaIntento(r.intentoId, true); } catch {}
+    try { await entregarYa(); } catch {}
+    setCerradoPorSalida(true); setEnviando(false); salirDePantallaCompleta();
   };
+  const contarSalida = () => {
+    const r = ref.current; if (r.terminado) return;
+    const t = Date.now(); if (t - r.ultima < 1500) return; r.ultima = t; // un solo conteo por salida
+    r.salidas += 1;
+    if (r.salidas <= maxSalidas) { api.registrarSalidaIntento(r.intentoId, false).catch(() => {}); setAviso({ n: r.salidas, max: maxSalidas }); }
+    else cerrarPorSalida();
+  };
+  useEffect(() => {
+    if (!vigilar || !empezado || enviado || cerradoPorSalida) return;
+    const alOcultar = () => { if (document.hidden) contarSalida(); };
+    const alPerderFoco = () => setTimeout(() => { if (!document.hasFocus() && !ref.current.terminado) contarSalida(); }, 400);
+    const alCambiarFs = () => { if (ref.current.fs && !document.fullscreenElement) contarSalida(); };
+    const antesDeIrse = (e) => { e.preventDefault(); e.returnValue = ""; };
+    document.addEventListener("visibilitychange", alOcultar);
+    window.addEventListener("blur", alPerderFoco);
+    document.addEventListener("fullscreenchange", alCambiarFs);
+    window.addEventListener("beforeunload", antesDeIrse);
+    return () => {
+      document.removeEventListener("visibilitychange", alOcultar); window.removeEventListener("blur", alPerderFoco);
+      document.removeEventListener("fullscreenchange", alCambiarFs); window.removeEventListener("beforeunload", antesDeIrse);
+    };
+  }, [vigilar, empezado, enviado, cerradoPorSalida, maxSalidas]);
+
+  const pedirPantallaCompleta = async () => {
+    try { const el = document.documentElement; if (el.requestFullscreen) { await el.requestFullscreen(); ref.current.fs = true; } } catch { ref.current.fs = false; }
+  };
+  const empezar = async () => { if (vigilar) await pedirPantallaCompleta(); setEmpezado(true); setIndice(0); };
+  const continuarTrasAviso = async () => { setAviso(null); if (vigilar && ref.current.fs && !document.fullscreenElement) await pedirPantallaCompleta(); };
+
+  const preguntaActual = preguntas[indice];
+  const esUltima = indice === preguntas.length - 1;
+  const siguiente = () => {
+    if (preguntaActual?.tipo === "respuesta_corta") responder(preguntaActual.id, respuestaCortaTemp);
+    ref.current.respuestas = { ...ref.current.respuestas, ...(preguntaActual?.tipo === "respuesta_corta" ? { [preguntaActual.id]: respuestaCortaTemp } : {}) };
+    setRespuestaCortaTemp("");
+    if (esUltima) setConfirmando(true); else setIndice((i) => i + 1);
+  };
+  const elegirOpcion = (texto) => {
+    responder(preguntaActual.id, texto); ref.current.respuestas = { ...ref.current.respuestas, [preguntaActual.id]: texto };
+    setTimeout(() => { if (esUltima) enviar(); else setIndice((i) => i + 1); }, 220);
+  };
+
+  const bloquear = vigilar && empezado && !enviado ? { onCopy: (e) => e.preventDefault(), onCut: (e) => e.preventDefault(), onPaste: (e) => e.preventDefault(), onContextMenu: (e) => e.preventDefault() } : {};
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onCerrar}>
-      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-xl">
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="font-bold text-slate-800">Resultados — {evaluacion.titulo}</h3>
-          <button onClick={onCerrar} className="text-slate-400">✕</button>
-        </div>
-
-        {!intentoAbierto ? (
-          <>
-            <div className="flex justify-end mb-2">
-              <button onClick={publicarTodos} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">📤 Publicar todos los calificados</button>
-            </div>
-            {cargando ? (
-              <div className="text-sm text-slate-400">Cargando…</div>
-            ) : intentos.length === 0 ? (
-              <div className="text-sm text-slate-400">Todavía nadie ha presentado esta evaluación.</div>
-            ) : (
-              <div className="space-y-1.5">
-                {intentos.map((i) => (
-                  <div key={i.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
-                    <button onClick={() => abrirIntento(i)} className="text-xs text-left hover:text-violet-600">
-                      <span className="font-semibold">{i.estudiante_nombre}</span>
-                      <span className="text-slate-400"> · Intento {i.numero_intento} · {i.estado}{i.puntaje_obtenido !== null ? ` · ${i.puntaje_obtenido}/${i.puntaje_maximo} pts` : ""}</span>
-                    </button>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {i.estado !== "en_progreso" && (
-                        i.visible_para_estudiante ? (
-                          <span className="text-[10px] text-emerald-600">✔ Publicado</span>
-                        ) : (
-                          <button onClick={() => publicar(i.id)} className="text-[11px] text-violet-500">Publicar</button>
-                        )
-                      )}
-                      <button onClick={() => reiniciar(i)} title="Borrar este intento para que pueda volver a presentar" className="text-[11px] text-rose-500">🔄 Reiniciar</button>
-                    </div>
-                  </div>
-                ))}
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4 overflow-y-auto" style={{ background: "linear-gradient(135deg, #0f0c29, #302b63, #24243e)", userSelect: vigilar && empezado ? "none" : "auto" }} {...bloquear}>
+      <div className="w-full max-w-lg my-auto" style={{ fontFamily: "'Poppins', -apple-system, sans-serif" }}>
+        {cargando ? (
+          <div className="rounded-3xl p-8 text-center text-white" style={PANEL}>Cargando…</div>
+        ) : errorInicio ? (
+          <div className="rounded-3xl p-6 text-center" style={PANEL}>
+            <p className="text-sm text-rose-300 mb-4">{errorInicio}</p>
+            <button onClick={onCerrar} className="w-full py-3 rounded-xl font-bold text-white" style={BTN}>Cerrar</button>
+          </div>
+        ) : cerradoPorSalida ? (
+          <div className="rounded-3xl p-8 text-center" style={{ background: "rgba(76,5,25,0.85)", border: "1px solid rgba(244,63,94,0.5)" }}>
+            <div className="text-5xl mb-3">🚫</div>
+            <div className="text-2xl font-extrabold text-white mb-2">Evaluación cerrada</div>
+            <p className="text-sm text-rose-100 mb-6">Saliste de la pantalla de la evaluación. Se entregó lo que alcanzaste a responder y tu docente fue informado.</p>
+            <button onClick={onCerrar} className="w-full py-3 rounded-xl font-bold text-white" style={BTN}>Cerrar</button>
+          </div>
+        ) : enviado ? (
+          <div className="rounded-3xl p-8 text-center" style={PANEL}>
+            <div className="text-5xl mb-3">✅</div>
+            <div className="text-2xl font-extrabold text-white mb-2">¡Entregado!</div>
+            <p className="text-sm text-slate-300 mb-6">Tu docente va a revisar y publicar tu nota pronto.</p>
+            <button onClick={onCerrar} className="w-full py-3 rounded-xl font-bold text-white" style={BTN}>Cerrar</button>
+          </div>
+        ) : !empezado ? (
+          <div className="rounded-3xl p-7 text-center" style={PANEL}>
+            <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-lg text-white mb-4" style={{ background: "#28478a" }}>Evaluación</span>
+            <h1 className="text-2xl font-extrabold mb-3" style={{ background: "linear-gradient(to right, #c084fc, #f472b6, #fde047)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>{evaluacion.titulo}</h1>
+            {evaluacion.descripcion && (
+              <div className="text-sm mb-4 text-left texto-oscuro-forzado">
+                <style>{`.texto-oscuro-forzado, .texto-oscuro-forzado * { color: #e2e8f0 !important; }`}</style>
+                <TextoEnriquecido html={evaluacion.descripcion} />
               </div>
             )}
-          </>
+            {evaluacion.indicaciones && evaluacion.indicaciones.length > 0 && (
+              <div className="text-left mb-4 rounded-2xl p-4" style={{ background: "rgba(15,25,50,0.6)", border: "1px solid rgba(47,85,164,0.3)" }}>
+                <div className="text-[11px] font-bold uppercase tracking-wide mb-2" style={{ color: "#d8b4fe" }}>Indicaciones</div>
+                <ul className="space-y-1.5">{evaluacion.indicaciones.map((ind, i) => <li key={i} className="flex items-start gap-2 text-xs text-slate-300"><span className="text-violet-400 shrink-0">✓</span><span>{ind}</span></li>)}</ul>
+              </div>
+            )}
+            {vigilar && (
+              <div className="text-left mb-4 rounded-2xl p-4" style={{ background: "rgba(120,53,15,0.35)", border: "1px solid rgba(251,191,36,0.6)" }}>
+                <div className="text-[12px] font-extrabold mb-1.5" style={{ color: "#fcd34d" }}>⚠️ Evaluación con pantalla vigilada</div>
+                <ul className="text-xs space-y-1 text-amber-100">
+                  <li>• Se abrirá en <b>pantalla completa</b>.</li>
+                  <li>• <b>No puedes cambiar de pestaña, de aplicación ni minimizar</b> mientras presentas.</li>
+                  <li>• {maxSalidas === 0 ? <>Si sales, <b>la evaluación se cierra al instante</b> y se entrega lo que lleves.</> : <>Tienes <b>{maxSalidas} advertencia{maxSalidas > 1 ? "s" : ""}</b>; a la siguiente salida la evaluación se cierra y se entrega lo que lleves.</>}</li>
+                  <li>• Copiar y pegar están desactivados. Tu docente verá cuántas veces saliste.</li>
+                </ul>
+                <label className="flex items-center gap-2 text-xs text-amber-50 mt-3 cursor-pointer"><input type="checkbox" checked={entiendo} onChange={(e) => setEntiendo(e.target.checked)} /> Entiendo y acepto estas reglas</label>
+              </div>
+            )}
+            {evaluacion.tiempo_limite_minutos && <p className="text-xs font-semibold mb-5" style={{ color: "#f472b6" }}>⏱ Tienes {evaluacion.tiempo_limite_minutos} minutos en total desde que empieces.</p>}
+            <button disabled={vigilar && !entiendo} onClick={empezar} className="w-full py-4 rounded-xl font-extrabold text-white text-lg disabled:opacity-40" style={BTN}>¡Comenzar! 🚀</button>
+            <button onClick={onCerrar} className="w-full text-xs text-slate-400 mt-3">Cancelar (no se guarda nada)</button>
+          </div>
         ) : (
           <div>
-            <button onClick={() => setIntentoAbierto(null)} className="text-xs text-violet-500 mb-2">← Volver a la lista</button>
-            <div className="text-sm font-semibold text-slate-800 mb-2">{intentoAbierto.estudiante_nombre} — {intentoAbierto.puntaje_obtenido ?? "—"}/{intentoAbierto.puntaje_maximo ?? "—"} pts</div>
-            <div className="space-y-2">
-              {respuestas.map((r) => (
-                <div key={r.id} className="border border-slate-200 rounded-lg p-2.5">
-                  <div className="text-xs font-semibold text-slate-700">{r.evaluacion_preguntas?.enunciado}</div>
-                  <div className="text-xs text-slate-600 mt-1">Respondió: <b>{r.respuesta || "(sin responder)"}</b></div>
-                  {r.evaluacion_preguntas?.tipo === "respuesta_corta" ? (
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[11px] text-slate-400">{r.puntos_obtenidos !== null ? `Calificado: ${r.puntos_obtenidos} pts` : "Sin calificar"}</span>
-                      <button onClick={() => calificarCorta(r.id, r.evaluacion_preguntas.puntos)} className="text-[11px] text-violet-500">Calificar</button>
-                    </div>
-                  ) : (
-                    <span className={`text-[11px] ${r.correcta ? "text-emerald-600" : "text-rose-500"}`}>{r.correcta ? "✔ Correcta" : "✕ Incorrecta"} ({r.puntos_obtenidos} pts)</span>
-                  )}
-                </div>
-              ))}
+            <div className="flex justify-between items-center mb-4 rounded-2xl px-5 py-3" style={{ background: "rgba(23,38,77,0.6)", border: "1px solid rgba(47,85,164,0.3)" }}>
+              <span className="text-[11px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-lg text-white" style={{ background: "#28478a" }}>Pregunta {indice + 1}/{preguntas.length}</span>
+              {vigilar && <span className="text-[10px] font-semibold text-amber-300">🔒 pantalla vigilada</span>}
+              {segundosRestantes !== null && <span className="text-lg font-extrabold" style={{ color: segundosRestantes <= 30 ? "#fb7185" : "#f472b6" }}>{formatearTiempo(segundosRestantes)}</span>}
             </div>
+            <div className="rounded-3xl p-7 mb-5 text-center min-h-[110px] flex items-center justify-center" style={{ background: "rgba(23,38,77,0.85)", border: "1px solid rgba(47,85,164,0.4)" }}>
+              <span className="text-white text-base font-bold whitespace-pre-line">{preguntaActual.enunciado}</span>
+            </div>
+            {preguntaActual.tipo === "respuesta_corta" ? (
+              <div>
+                <textarea value={respuestaCortaTemp} onChange={(e) => setRespuestaCortaTemp(e.target.value)} rows={4} placeholder="Escribe tu respuesta…"
+                  className="w-full text-sm rounded-2xl px-4 py-3 mb-3 outline-none text-white" style={{ background: "rgba(15,25,50,0.9)", border: "1px solid #28478a", userSelect: "text" }} />
+                <button onClick={siguiente} className="w-full py-3.5 rounded-xl font-bold text-white" style={BTN}>{esUltima ? "Finalizar evaluación" : "Siguiente →"}</button>
+              </div>
+            ) : (
+              <div className="grid gap-3" style={{ gridTemplateColumns: (preguntaActual.opciones || []).length > 2 ? "1fr 1fr" : "1fr" }}>
+                {(preguntaActual.opciones || []).map((o, j) => {
+                  const color = COLORES_OPCION[j % COLORES_OPCION.length]; const marcada = respuestas[preguntaActual.id] === o.texto;
+                  return (
+                    <button key={j} onClick={() => elegirOpcion(o.texto)} className="flex items-center gap-3 p-5 rounded-2xl font-bold text-white text-left"
+                      style={{ background: color.bg, borderBottom: `5px solid ${color.borde}`, outline: marcada ? "3px solid white" : "none" }}>
+                      <span className="w-8 h-8 rounded-lg flex items-center justify-center text-xs shrink-0" style={{ background: "rgba(0,0,0,0.2)" }}>{String.fromCharCode(65 + j)}</span>
+                      <span>{o.texto}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>
-    </div>
-  );
-}
 
-function NuevaEvaluacionForm({ materiaId, gradoId, periodo, categorias, evaluacion, onCancelar, onCreada }) {
-  const [titulo, setTitulo] = useState(evaluacion?.titulo || "");
-  const [descripcion, setDescripcion] = useState(evaluacion?.descripcion || "");
-  const [indicaciones, setIndicaciones] = useState(evaluacion?.indicaciones?.length ? evaluacion.indicaciones : [""]);
-  const [fechaApertura, setFechaApertura] = useState(evaluacion?.fecha_apertura || "");
-  const [fechaCierre, setFechaCierre] = useState(evaluacion?.fecha_cierre || "");
-  const [horaCierre, setHoraCierre] = useState(evaluacion?.hora_cierre || "");
-  const [intentos, setIntentos] = useState(evaluacion?.intentos_permitidos ? String(evaluacion.intentos_permitidos) : evaluacion ? "ilimitado" : "1");
-  const [tiempoLimite, setTiempoLimite] = useState(evaluacion?.tiempo_limite_minutos ? String(evaluacion.tiempo_limite_minutos) : "");
-  const [categoriaId, setCategoriaId] = useState(evaluacion?.categoria_id ? String(evaluacion.categoria_id) : "");
-  const [aleatoriasActivo, setAleatoriasActivo] = useState(!!evaluacion?.preguntas_aleatorias_cantidad);
-  const [aleatoriasCantidad, setAleatoriasCantidad] = useState(evaluacion?.preguntas_aleatorias_cantidad || 10);
-  const [guardando, setGuardando] = useState(false);
-
-  const cambiarIndicacion = (i, valor) => setIndicaciones((prev) => prev.map((x, idx) => idx === i ? valor : x));
-  const agregarIndicacion = () => setIndicaciones((prev) => [...prev, ""]);
-  const quitarIndicacion = (i) => setIndicaciones((prev) => prev.filter((_, idx) => idx !== i));
-
-  const guardar = async () => {
-    if (!titulo.trim()) { alert("Escribe un título."); return; }
-    setGuardando(true);
-    try {
-      const campos = {
-        titulo: titulo.trim(), descripcion: descripcion.trim() || null,
-        indicaciones: indicaciones.map((i) => i.trim()).filter(Boolean),
-        fecha_apertura: fechaApertura || null, fecha_cierre: fechaCierre || null, hora_cierre: fechaCierre ? (horaCierre || null) : null,
-        intentos_permitidos: intentos === "ilimitado" ? null : parseInt(intentos, 10),
-        tiempo_limite_minutos: tiempoLimite ? parseInt(tiempoLimite, 10) : null,
-        categoria_id: categoriaId ? parseInt(categoriaId, 10) : null,
-        preguntas_aleatorias_cantidad: aleatoriasActivo ? (parseInt(aleatoriasCantidad, 10) || null) : null,
-      };
-      if (evaluacion) {
-        await api.editarEvaluacion(evaluacion.id, campos);
-        onCreada(null);
-      } else {
-        const nueva = await api.crearEvaluacion({ materia_id: materiaId, grado_id: gradoId, periodo, ...campos });
-        onCreada(nueva);
-      }
-    } catch (e) {
-      alert("Error al guardar: " + e.message);
-    }
-    setGuardando(false);
-  };
-
-  return (
-    <div className="bg-violet-50 rounded-2xl p-4 mb-3">
-      <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título de la evaluación"
-        className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
-      <label className="text-xs text-slate-500 block mb-1">Propósito / introducción (opcional)</label>
-      <div className="mb-2">
-        <EditorTexto value={descripcion} onChange={setDescripcion} minHeight={100} placeholder="Ej: Esta prueba busca identificar tus conocimientos previos sobre…" />
-      </div>
-
-      <label className="text-xs text-slate-500 block mb-1">Indicaciones (una por línea — se muestran como lista al estudiante)</label>
-      <div className="space-y-1.5 mb-2">
-        {indicaciones.map((ind, i) => (
-          <div key={i} className="flex items-center gap-1.5">
-            <span className="text-xs text-slate-400 shrink-0">•</span>
-            <input value={ind} onChange={(e) => cambiarIndicacion(i, e.target.value)} placeholder="Ej: Selecciona una sola respuesta por pregunta"
-              className="flex-1 text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white" />
-            {indicaciones.length > 1 && <button onClick={() => quitarIndicacion(i)} className="text-slate-300 hover:text-rose-500 text-xs shrink-0">✕</button>}
+      {confirmando && !enviado && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.7)" }}>
+          <div className="rounded-3xl p-6 w-full max-w-sm text-center" style={{ background: "#17264D", border: "1px solid rgba(47,85,164,0.6)" }}>
+            <div className="text-lg font-extrabold text-white mb-2">¿Entregar la evaluación?</div>
+            <p className="text-xs text-slate-300 mb-4">No vas a poder cambiar tus respuestas después.</p>
+            <div className="flex gap-2">
+              <button onClick={() => setConfirmando(false)} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-slate-200" style={{ background: "rgba(255,255,255,0.1)" }}>Revisar</button>
+              <button onClick={() => { setConfirmando(false); enviar(); }} className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white" style={BTN}>Entregar</button>
+            </div>
           </div>
-        ))}
-        <button onClick={agregarIndicacion} className="text-[11px] text-violet-500">+ Agregar indicación</button>
-      </div>
-
-      <label className="text-xs text-slate-500 block mb-1">Categoría en Calificaciones (opcional — si la elegís, la nota se manda sola a la Planilla al publicar)</label>
-      <select value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white">
-        <option value="">— No enviar a Calificaciones —</option>
-        {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-      </select>
-      <div className="grid grid-cols-2 gap-2 mb-2">
-        <div>
-          <label className="text-xs text-slate-500 block mb-1">Abre</label>
-          <input type="date" value={fechaApertura} onChange={(e) => setFechaApertura(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
-        </div>
-        <div>
-          <label className="text-xs text-slate-500 block mb-1">Cierra</label>
-          <input type="date" value={fechaCierre} onChange={(e) => setFechaCierre(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
-          {fechaCierre && (
-            <input type="time" value={horaCierre} onChange={(e) => setHoraCierre(e.target.value)} placeholder="Hora (opcional, si no cierra a las 23:59)"
-              title="Hora exacta de cierre — si lo dejás vacío, cierra a las 23:59 de ese día"
-              className="w-full text-sm rounded-lg px-3 py-2 mt-1.5 border border-slate-200 outline-none bg-white" />
-          )}
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-2 mb-3">
-        <div>
-          <label className="text-xs text-slate-500 block mb-1">Intentos permitidos</label>
-          <select value={intentos} onChange={(e) => setIntentos(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white">
-            <option value="1">1 (único intento)</option>
-            <option value="2">2</option>
-            <option value="3">3</option>
-            <option value="ilimitado">Ilimitados</option>
-          </select>
-        </div>
-        <div>
-          <label className="text-xs text-slate-500 block mb-1">Tiempo límite (min, opcional)</label>
-          <input type="number" value={tiempoLimite} onChange={(e) => setTiempoLimite(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
-        </div>
-      </div>
-      <label className="flex items-center gap-2 text-xs text-slate-600 mb-2 bg-amber-50 rounded-lg p-2.5">
-        <input type="checkbox" checked={aleatoriasActivo} onChange={(e) => setAleatoriasActivo(e.target.checked)} />
-        Preguntas aleatorias por estudiante (cada uno recibe un subconjunto al azar, en vez de todos las mismas)
-      </label>
-      {aleatoriasActivo && (
-        <div className="mb-2">
-          <label className="text-xs text-slate-500 block mb-1">¿Cuántas preguntas debe responder cada estudiante?</label>
-          <input type="number" min="1" value={aleatoriasCantidad} onChange={(e) => setAleatoriasCantidad(e.target.value)}
-            className="w-24 text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white" />
-          <p className="text-[11px] text-slate-400 mt-1">Cargá más preguntas de las que necesita cada uno (ej: 20 preguntas totales para que cada estudiante responda 10 al azar).</p>
         </div>
       )}
-      <div className="flex justify-end gap-2">
-        <button onClick={onCancelar} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
-        <button disabled={guardando} onClick={guardar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">
-          {guardando ? "Guardando…" : evaluacion ? "Guardar cambios" : "Crear evaluación"}
-        </button>
-      </div>
+      {aviso && !cerradoPorSalida && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(76,5,25,0.92)" }}>
+          <div className="rounded-3xl p-7 w-full max-w-sm text-center" style={{ background: "#450a0a", border: "2px solid #f43f5e" }}>
+            <div className="text-5xl mb-2">⚠️</div>
+            <div className="text-xl font-extrabold text-white mb-2">¡Saliste de la pantalla!</div>
+            <p className="text-sm text-rose-100 mb-2">Esta es tu advertencia {aviso.n} de {aviso.max}.</p>
+            <p className="text-sm font-bold text-amber-300 mb-5">Si vuelves a salir, la evaluación se cierra y se entrega lo que lleves.</p>
+            <button onClick={continuarTrasAviso} className="w-full py-3 rounded-xl font-bold text-white" style={{ background: "#e11d48" }}>Entendido, continuar</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function CopiarEvaluacionModal({ evaluacion, materias, grados, onClose, onCopiada }) {
-  const [materiaDestinoId, setMateriaDestinoId] = useState(evaluacion.materia_id);
-  const [gradoDestinoId, setGradoDestinoId] = useState("");
-  const [periodoDestino, setPeriodoDestino] = useState("");
-  const [config, setConfig] = useState({ cantidad_periodos: 4, sistema_periodos: "bimestre" });
-  const [copiando, setCopiando] = useState(false);
+/* ---------------- Tarjeta de cada evaluación ---------------- */
+function TarjetaEvaluacionEstudiante({ evaluacion, estudianteId }) {
+  const [intentos, setIntentos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [tomando, setTomando] = useState(false);
+  const cargar = () => api.fetchMisIntentos(evaluacion.id, estudianteId).then((d) => { setIntentos(d); setCargando(false); });
+  useEffect(() => { cargar(); }, [evaluacion.id]);
+  if (cargando) return null;
 
-  const niveles = agruparPorNivel(grados);
-  const { nivel: nivelActual } = nivelYCurso(gradoDestinoId || grados[0]?.id || "");
-  const cursosDelNivel = niveles.find((n) => n.nivel === nivelActual)?.cursos || [];
+  const ventana = estadoVentana(evaluacion);
+  const usados = intentos.length, maxIntentos = evaluacion.intentos_permitidos;
+  const puedeIntentar = ventana === "abierta" && (maxIntentos === null || maxIntentos === undefined || usados < maxIntentos);
+  const publicado = intentos.filter((i) => i.visible_para_estudiante).sort((a, b) => b.numero_intento - a.numero_intento)[0];
+  const hayPendiente = !publicado && intentos.some((i) => i.estado !== "en_progreso");
+  const pct = publicado && Number(publicado.puntaje_maximo) > 0 ? Math.round((Number(publicado.puntaje_obtenido) / Number(publicado.puntaje_maximo)) * 100) : null;
+  const cn = pct !== null ? colorNota(pct) : null;
 
-  useEffect(() => { if (grados.length && !gradoDestinoId) setGradoDestinoId(grados[0].id); }, [grados]);
-  useEffect(() => { if (materiaDestinoId) api.fetchNotasConfig(materiaDestinoId).then(setConfig); }, [materiaDestinoId]);
-  const listaPeriodos = periodosDe(config);
-  useEffect(() => { if (!listaPeriodos.includes(periodoDestino)) setPeriodoDestino(listaPeriodos[0] || "1"); }, [materiaDestinoId, config]);
-
-  const copiar = async () => {
-    setCopiando(true);
-    try {
-      await api.copiarEvaluacion(evaluacion.id, materiaDestinoId, gradoDestinoId, periodoDestino);
-      alert(`"${evaluacion.titulo}" se copió como borrador — recordá revisar las fechas y publicarla cuando esté lista.`);
-      onCopiada();
-      onClose();
-    } catch (e) {
-      alert("Error al copiar: " + e.message);
-    }
-    setCopiando(false);
-  };
+  let borde, chip;
+  if (publicado) { borde = cn.borde; chip = { bg: cn.bg, txt: `${publicado.puntaje_obtenido}/${publicado.puntaje_maximo}` }; }
+  else if (hayPendiente) { borde = "#F59E0B"; chip = { bg: "#d97706", txt: "⏳ En revisión" }; }
+  else if (ventana === "proxima") { borde = "#38BDF8"; chip = { bg: "#0284c7", txt: "🗓️ Próxima" }; }
+  else if (ventana === "cerrada") { borde = "#94A3B8"; chip = { bg: usados === 0 ? "#e11d48" : "#64748b", txt: usados === 0 ? "No presentada" : "Cerrada" }; }
+  else { borde = "#22C55E"; chip = { bg: "#059669", txt: "🟢 Abierta" }; }
+  const lim = limiteCierre(evaluacion);
+  const horaTxt = lim && evaluacion.hora_cierre ? `, ${lim.toLocaleTimeString("es-CO", { hour: "numeric", minute: "2-digit", timeZone: "America/Bogota" })}` : "";
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl">
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="font-bold text-slate-800">📋 Copiar evaluación</h3>
-          <button onClick={onClose} className="text-slate-400">✕</button>
-        </div>
-        <p className="text-xs text-slate-500 mb-3">
-          Copia "{evaluacion.titulo}" con todas sus preguntas a otro curso — siempre como borrador, sin fechas, para que la revises antes de publicar.
-        </p>
-
-        <label className="text-xs text-slate-500 block mb-1">Materia destino</label>
-        <select value={materiaDestinoId} onChange={(e) => setMateriaDestinoId(parseInt(e.target.value, 10))} className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none">
-          {materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
-        </select>
-
-        <div className="grid grid-cols-2 gap-2 mb-2">
-          <div>
-            <label className="text-xs text-slate-500 block mb-1">Grado</label>
-            <select value={nivelActual} onChange={(e) => {
-              const n = niveles.find((x) => x.nivel === e.target.value);
-              if (n?.cursos[0]) setGradoDestinoId(n.cursos[0].id);
-            }} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none">
-              {niveles.map((n) => <option key={n.nivel} value={n.nivel}>Grado {n.nivel}°</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="text-xs text-slate-500 block mb-1">Curso</label>
-            <select value={gradoDestinoId} onChange={(e) => setGradoDestinoId(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none">
-              {cursosDelNivel.map((g) => <option key={g.id} value={g.id}>Curso {g.id}</option>)}
-            </select>
-          </div>
-        </div>
-
-        <label className="text-xs text-slate-500 block mb-1">Periodo destino</label>
-        <select value={periodoDestino} onChange={(e) => setPeriodoDestino(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 mb-4 border border-slate-200 outline-none">
-          {listaPeriodos.map((p) => <option key={p} value={p}>Periodo {p}</option>)}
-        </select>
-
-        <button disabled={copiando} onClick={copiar} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-60">
-          {copiando ? "Copiando…" : "Copiar evaluación"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function EvaluacionCard({ evaluacion, materias, grados, categorias, onCambio }) {
-  const [expandida, setExpandida] = useState(false);
-  const [resultadosAbiertos, setResultadosAbiertos] = useState(false);
-  const [copiando, setCopiando] = useState(false);
-  const [editando, setEditando] = useState(false);
-
-  const publicar = async () => {
-    await api.editarEvaluacion(evaluacion.id, { estado: "publicada" });
-    onCambio();
-  };
-  const despublicar = async () => {
-    await api.editarEvaluacion(evaluacion.id, { estado: "borrador" });
-    onCambio();
-  };
-  const eliminar = async () => {
-    if (!confirm(`¿Eliminar "${evaluacion.titulo}" y todos los intentos/respuestas asociados? No se puede deshacer.`)) return;
-    await api.eliminarEvaluacion(evaluacion.id);
-    onCambio();
-  };
-
-  if (editando) {
-    return (
-      <NuevaEvaluacionForm evaluacion={evaluacion} categorias={categorias}
-        onCancelar={() => setEditando(false)} onCreada={() => { setEditando(false); onCambio(); }} />
-    );
-  }
-
-  return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-3">
-      <div className="flex justify-between items-start gap-2">
-        <div>
-          <div className="flex items-center gap-2">
-            <h4 className="font-bold text-slate-800">{evaluacion.titulo}</h4>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full ${evaluacion.estado === "publicada" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
-              {evaluacion.estado === "publicada" ? "Publicada" : "Borrador"}
-            </span>
-          </div>
+    <div className="bg-white rounded-xl p-3.5 shadow-sm" style={{ borderLeft: `4px solid ${borde}`, opacity: ventana === "cerrada" && !publicado ? 0.85 : 1 }}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-sm font-bold text-slate-800">📝 {evaluacion.titulo}</div>
           {evaluacion.descripcion && <TextoEnriquecido html={evaluacion.descripcion} className="text-xs text-slate-500 mt-1" />}
-          <p className="text-[11px] text-slate-400 mt-1">
-            {evaluacion.fecha_apertura || evaluacion.fecha_cierre ? `${evaluacion.fecha_apertura || "…"} → ${evaluacion.fecha_cierre || "…"} · ` : ""}
-            {evaluacion.intentos_permitidos ? `${evaluacion.intentos_permitidos} intento(s)` : "Intentos ilimitados"}
-            {evaluacion.tiempo_limite_minutos ? ` · ${evaluacion.tiempo_limite_minutos} min` : ""}
-            {evaluacion.preguntas_aleatorias_cantidad ? ` · 🎲 ${evaluacion.preguntas_aleatorias_cantidad} al azar por estudiante` : ""}
-          </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {evaluacion.estado === "borrador" ? (
-            <button onClick={publicar} className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-violet-500 text-white">Publicar</button>
-          ) : (
-            <button onClick={despublicar} className="text-[11px] px-2.5 py-1 rounded-full border border-slate-200 text-slate-500">Volver a borrador</button>
-          )}
-          <button onClick={() => setEditando(true)} className="text-xs text-slate-400 hover:text-violet-600" title="Editar">✏️</button>
-          <button onClick={() => setResultadosAbiertos(true)} className="text-xs text-slate-400 hover:text-violet-600">📊</button>
-          <button onClick={() => setCopiando(true)} className="text-xs text-slate-400 hover:text-violet-600" title="Copiar a otro curso">📋</button>
-          <button onClick={eliminar} className="text-xs text-slate-400 hover:text-rose-500">🗑</button>
-          <button onClick={() => setExpandida((v) => !v)} className="text-xs text-violet-500">{expandida ? "▲" : "▼"}</button>
-        </div>
+        <span className="text-[11px] font-bold text-white px-2.5 py-1 rounded-full shrink-0 whitespace-nowrap" style={{ background: chip.bg }}>{chip.txt}</span>
       </div>
-
-      {expandida && <PreguntasEditor evaluacionId={evaluacion.id} materiaId={evaluacion.materia_id} gradoId={evaluacion.grado_id} />}
-      {resultadosAbiertos && <ResultadosEvaluacion evaluacion={evaluacion} onCerrar={() => setResultadosAbiertos(false)} />}
-      {copiando && <CopiarEvaluacionModal evaluacion={evaluacion} materias={materias} grados={grados} onClose={() => setCopiando(false)} onCopiada={onCambio} />}
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-2 text-[11px]">
+        <span className="text-sky-700">🟢 Abre: {evaluacion.fecha_apertura ? fechaCorta(evaluacion.fecha_apertura) : "ya abierta"}</span>
+        <span className="text-rose-600">🔴 Cierra: {evaluacion.fecha_cierre ? `${fechaCorta(evaluacion.fecha_cierre)}${horaTxt}` : "sin fecha"}</span>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px] text-slate-400">
+        <span>{maxIntentos ? `${usados}/${maxIntentos} intentos` : `${usados} intento(s)`}</span>
+        {evaluacion.tiempo_limite_minutos && <span>· ⏱ {evaluacion.tiempo_limite_minutos} min</span>}
+        {evaluacion.vigilar_pantalla && <span className="text-amber-600">· 🔒 pantalla vigilada</span>}
+      </div>
+      {publicado && (
+        <div className="mt-2 rounded-lg px-3 py-2 text-xs font-semibold flex items-center justify-between" style={{ background: `${cn.bg}15`, color: cn.bg }}>
+          <span>Nota de la evaluación: {publicado.puntaje_obtenido} / {publicado.puntaje_maximo} pts</span>
+          <span>{pct}% · {cn.txt}</span>
+        </div>
+      )}
+      {puedeIntentar && (
+        <button onClick={() => setTomando(true)} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 text-white mt-2.5">{usados > 0 ? "Presentar de nuevo" : "Presentar"}</button>
+      )}
+      {ventana === "proxima" && <div className="text-[11px] text-sky-700 mt-2">Se habilita el {fechaCorta(evaluacion.fecha_apertura)}.</div>}
+      {tomando && <TomarEvaluacion evaluacion={evaluacion} estudianteId={estudianteId} onCerrar={() => { setTomando(false); cargar(); }} />}
     </div>
   );
 }
 
-export function VistaEvaluaciones({ grados, gradoActivo, periodoActivo, materiaActiva }) {
-  const [materias, setMaterias] = useState([]);
-  const [materiaId, setMateriaId] = useState(materiaActiva || "");
-  const [gradoId, setGradoId] = useState(gradoActivo || "");
-  const [periodo, setPeriodo] = useState("1");
-  const [config, setConfig] = useState({ cantidad_periodos: 4, sistema_periodos: "bimestre" });
-  const [categorias, setCategorias] = useState([]);
-
-  useEffect(() => { if (gradoActivo) setGradoId(gradoActivo); }, [gradoActivo]);
-  useEffect(() => { if (materiaActiva) setMateriaId(materiaActiva); }, [materiaActiva]);
-  useEffect(() => { if (periodoActivo) setPeriodo(periodoActivo); }, [periodoActivo]);
+/* ---------------- Lista (no desaparece al cerrar) ---------------- */
+export function EvaluacionesEstudiante({ estudianteId, gradoId }) {
   const [evaluaciones, setEvaluaciones] = useState([]);
   const [cargando, setCargando] = useState(true);
-  const [error, setError] = useState(null);
-  const [formAbierto, setFormAbierto] = useState(false);
-
-  useEffect(() => {
-    api.fetchMaterias().then((data) => { setMaterias(data); if (data[0]) setMateriaId(data[0].id); });
-  }, []);
-  useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
-  useEffect(() => {
-    if (!materiaId) return;
-    api.fetchNotasConfig(materiaId).then(setConfig);
-    api.fetchCategorias(materiaId).then(setCategorias);
-  }, [materiaId]);
-
-  const listaPeriodos = periodosDe(config);
-  useEffect(() => { if (!listaPeriodos.includes(periodo)) setPeriodo(listaPeriodos[0] || "1"); }, [materiaId, config]);
-
-  const cargar = () => {
-    if (!materiaId || !gradoId) return;
-    setCargando(true);
-    setError(null);
-    api.fetchEvaluaciones(materiaId, gradoId, periodo)
-      .then((data) => { setEvaluaciones(data); setCargando(false); })
-      .catch((e) => { setError(e.message); setCargando(false); });
-  };
-  useEffect(() => { cargar(); }, [materiaId, gradoId, periodo]);
-
-  const niveles = agruparPorNivel(grados);
-  const { nivel: nivelActual } = nivelYCurso(gradoId || (grados[0]?.id || ""));
-  const cursosDelNivel = niveles.find((n) => n.nivel === nivelActual)?.cursos || [];
-
+  useEffect(() => { api.fetchEvaluacionesDisponibles(gradoId).then((d) => { setEvaluaciones(d || []); setCargando(false); }).catch(() => setCargando(false)); }, [gradoId]);
+  if (cargando || evaluaciones.length === 0) return null;
+  const orden = { abierta: 0, proxima: 1, cerrada: 2 };
+  const lista = [...evaluaciones].sort((a, b) => orden[estadoVentana(a)] - orden[estadoVentana(b)] || String(b.fecha_cierre || "").localeCompare(String(a.fecha_cierre || "")));
   return (
-    <div>
-      <div className="flex flex-wrap gap-2 mb-4 items-center">
-        <select value={materiaId} onChange={(e) => setMateriaId(parseInt(e.target.value, 10))} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
-          {materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
-        </select>
-        <select value={nivelActual} onChange={(e) => {
-          const n = niveles.find((x) => x.nivel === e.target.value);
-          if (n?.cursos[0]) setGradoId(n.cursos[0].id);
-        }} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
-          {niveles.map((n) => <option key={n.nivel} value={n.nivel}>Grado {n.nivel}°</option>)}
-        </select>
-        <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
-          {cursosDelNivel.map((g) => <option key={g.id} value={g.id}>Curso {g.id}</option>)}
-        </select>
-        <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
-          {listaPeriodos.map((p) => <option key={p} value={p}>Periodo {p}</option>)}
-        </select>
-        <button onClick={() => setFormAbierto((v) => !v)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white ml-auto">
-          {formAbierto ? "Cerrar" : "+ Nueva evaluación"}
-        </button>
-      </div>
-
-      <p className="text-[11px] text-slate-400 mb-3">
-        El estudiante nunca ve su nota apenas termina — queda "entregado, pendiente de revisión" hasta que vos la publiques desde 📊 Resultados.
-      </p>
-
-      {formAbierto && (
-        <NuevaEvaluacionForm materiaId={materiaId} gradoId={gradoId} periodo={periodo} categorias={categorias}
-          onCancelar={() => setFormAbierto(false)} onCreada={() => { setFormAbierto(false); cargar(); }} />
-      )}
-
-      {cargando ? (
-        <div className="text-sm text-slate-400">Cargando…</div>
-      ) : error ? (
-        <div className="text-sm text-rose-500 bg-rose-50 rounded-xl p-3">Error al cargar: {error}</div>
-      ) : evaluaciones.length === 0 ? (
-        <div className="text-sm text-slate-400 bg-white rounded-2xl p-6 text-center border border-dashed border-slate-200">
-          Todavía no hay evaluaciones para este periodo. Creá la primera con "+ Nueva evaluación".
-        </div>
-      ) : (
-        evaluaciones.map((e) => <EvaluacionCard key={e.id} evaluacion={e} materias={materias} grados={grados} categorias={categorias} onCambio={cargar} />)
-      )}
+    <div className="mt-4 pt-4 border-t border-slate-100">
+      <div className="text-xs font-semibold text-slate-600 mb-2">📝 Evaluaciones</div>
+      <div className="space-y-2">{lista.map((e) => <TarjetaEvaluacionEstudiante key={e.id} evaluacion={e} estudianteId={estudianteId} />)}</div>
     </div>
   );
 }
