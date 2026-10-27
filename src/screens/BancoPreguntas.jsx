@@ -3,21 +3,67 @@ import * as XLSX from "xlsx";
 import * as api from "../lib/api";
 import { agruparPorNivel } from "../lib/gamification";
 
-function ImportarExcelModal({ materiaId, niveles, nivelInicial = "", onClose, onImportado }) {
+/* ---------- Matriz maestra tipo ICFES (Excel) ---------- */
+export const COLUMNAS_MATRIZ = [
+  "ID plataforma", "Grado", "Asignatura", "Tema", "Aprendizaje esperado", "Competencia", "Afirmación", "Evidencia",
+  "Contexto", "Pregunta", "Opción A", "Opción B", "Opción C", "Opción D", "Respuesta correcta", "Justificación",
+  "Exigencia cognitiva", "Desempeño asociado", "Criterio de valoración", "Dificultad",
+];
+const norm = (s) => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+// Busca una columna por varios nombres posibles (ignora tildes y mayúsculas, y lo que venga entre paréntesis)
+function leer(fila, ...alias) {
+  for (const k of Object.keys(fila)) {
+    const nk = norm(k).replace(/\(.*\)/, "").trim();
+    if (alias.some((a) => nk === a || nk.startsWith(a))) return String(fila[k] ?? "").trim();
+  }
+  return "";
+}
+const normalizarGrado = (g) => { const d = String(g || "").replace(/[^0-9]/g, ""); return d.length >= 3 ? d.slice(0, -2) : d; };
+const normalizarDesempeno = (v) => { const n = norm(v); return n.startsWith("sup") ? "superior" : n.startsWith("alt") ? "alto" : n.startsWith("bas") ? "basico" : n.startsWith("baj") ? "bajo" : ""; };
+const normalizarDificultad = (v) => { const n = norm(v); return n.startsWith("fac") ? "facil" : n.startsWith("med") ? "media" : n.startsWith("dif") ? "dificil" : ""; };
+export const DESEMPENO = { bajo: { l: "Bajo", c: "#ef4444" }, basico: { l: "Básico", c: "#f59e0b" }, alto: { l: "Alto", c: "#2563eb" }, superior: { l: "Superior", c: "#059669" } };
+
+function filaDePregunta(p, materiaNombre) {
+  const op = (i) => p.opciones?.[i]?.texto || "";
+  const c = (p.opciones || []).findIndex((o) => o.correcta);
+  return {
+    "ID plataforma": p.id, "Grado": p.nivel || "", "Asignatura": materiaNombre || "", "Tema": p.tema || "", "Aprendizaje esperado": p.aprendizaje || "",
+    "Competencia": p.competencia || "", "Afirmación": p.afirmacion || "", "Evidencia": p.evidencia || "", "Contexto": p.contexto || "", "Pregunta": p.enunciado || "",
+    "Opción A": op(0), "Opción B": op(1), "Opción C": op(2), "Opción D": op(3), "Respuesta correcta": c >= 0 ? "ABCD"[c] : "", "Justificación": p.retroalimentacion || "",
+    "Exigencia cognitiva": p.exigencia || "", "Desempeño asociado": DESEMPENO[p.desempeno]?.l || "", "Criterio de valoración": p.criterio || "", "Dificultad": ({ facil: "Fácil", media: "Media", dificil: "Difícil" })[p.dificultad] || "",
+  };
+}
+function escribirExcel(filas, nombreArchivo, conInstrucciones, soloEjemplos = false) {
+  const anchos = COLUMNAS_MATRIZ.map((c) => ({ wch: ["Contexto", "Pregunta", "Justificación", "Criterio de valoración", "Afirmación", "Evidencia", "Aprendizaje esperado"].includes(c) ? 38 : c === "ID plataforma" ? 12 : 18 }));
+  const libro = XLSX.utils.book_new();
+  // En la plantilla, «Matriz» va vacía (solo encabezados) y los ejemplos en otra hoja, para no importarlos por error
+  const hoja = soloEjemplos ? XLSX.utils.aoa_to_sheet([COLUMNAS_MATRIZ]) : XLSX.utils.json_to_sheet(filas, { header: COLUMNAS_MATRIZ });
+  hoja["!cols"] = anchos;
+  XLSX.utils.book_append_sheet(libro, hoja, "Matriz");
+  if (soloEjemplos) { const h2 = XLSX.utils.json_to_sheet(filas, { header: COLUMNAS_MATRIZ }); h2["!cols"] = anchos; XLSX.utils.book_append_sheet(libro, h2, "Ejemplos"); }
+  if (conInstrucciones) {
+    const ins = [["Matriz maestra de preguntas tipo ICFES"], [""], ["• Llena la hoja «Matriz»: una fila por pregunta (mira la hoja «Ejemplos»)."], ["• «ID plataforma»: déjala VACÍA para preguntas nuevas. Si exportaste el banco y conservas el número, esa pregunta se ACTUALIZA en vez de duplicarse."], ["• Obligatorias: Pregunta, al menos dos opciones y Respuesta correcta (A, B, C o D)."], ["• Asignatura: escribe el nombre como lo tienes en la plataforma (ej. Ética, Religión, Filosofía). Grado: 6, 7, 8, 9, 10 u 11."], ["• Exigencia cognitiva: Recordar, Comprender, Aplicar, Analizar, Evaluar o Crear."], ["• Desempeño asociado: Básico, Alto o Superior. Dificultad: Fácil, Media o Difícil (opcional)."]];
+    XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet(ins), "Instrucciones");
+  }
+  XLSX.writeFile(libro, nombreArchivo);
+}
+export function exportarMatriz(preguntas, materias, nombreArchivo = "matriz_preguntas.xlsx") {
+  const nom = (id) => materias.find((m) => String(m.id) === String(id))?.nombre || "";
+  escribirExcel(preguntas.map((p) => filaDePregunta(p, nom(p.materia_id))), nombreArchivo, false);
+}
+
+function ImportarExcelModal({ materiaId, materias, niveles, nivelInicial = "", onClose, onImportado }) {
   const [nivelPorDefecto, setNivelPorDefecto] = useState(nivelInicial || "");
   const [procesando, setProcesando] = useState(false);
   const [resultado, setResultado] = useState(null);
 
   const descargarPlantilla = () => {
-    const filas = [
-      ["Grado (opcional, si no lo pones se usa el elegido abajo)", "Tema", "Enunciado", "Opción A", "Opción B", "Opción C", "Opción D", "Correcta (A/B/C/D)", "Dificultad (facil/media/dificil)", "Retroalimentación (opcional)"],
-      ["8", "Álgebra", "¿Cuál es el resultado de 2x + 3 = 7?", "x=1", "x=2", "x=3", "x=4", "B", "facil", "Se despeja x restando 3 y dividiendo entre 2: (7-3)/2 = 2"],
-    ];
-    const hoja = XLSX.utils.aoa_to_sheet(filas);
-    hoja["!cols"] = filas[0].map(() => ({ wch: 22 }));
-    const libro = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(libro, hoja, "Preguntas");
-    XLSX.writeFile(libro, "plantilla_banco_preguntas.xlsx");
+    const ej = (m, g, t, ap, comp, af, ev, ctx, preg, o, c, j, ex, des, cri) => ({ "ID plataforma": "", "Grado": g, "Asignatura": m, "Tema": t, "Aprendizaje esperado": ap, "Competencia": comp, "Afirmación": af, "Evidencia": ev, "Contexto": ctx, "Pregunta": preg, "Opción A": o[0], "Opción B": o[1], "Opción C": o[2], "Opción D": o[3], "Respuesta correcta": c, "Justificación": j, "Exigencia cognitiva": ex, "Desempeño asociado": des, "Criterio de valoración": cri, "Dificultad": "Media" });
+    escribirExcel([
+      ej(materias.find((m) => /etic/i.test(norm(m.nombre)))?.nombre || "Ética", "8", "Dilemas éticos", "Analiza situaciones donde chocan dos valores y sustenta una decisión.", "Argumentación", "Evalúa argumentos éticos frente a un dilema.", "Identifica el valor que defiende cada postura.", "Camila ve que un compañero copia en un examen. Si lo dice, él puede perder el año; si calla, ella se siente cómplice.", "¿Qué decisión es más coherente con el valor de la honestidad?", ["Callar para no perjudicarlo", "Hablar con él y animarlo a corregirse", "Copiar también", "Contarlo a todo el curso"], "B", "La honestidad se vive diciendo la verdad con respeto y cuidando a la otra persona.", "Analizar", "Alto", "Acierta si elige la opción que une verdad y cuidado del otro."),
+      ej(materias.find((m) => /relig/i.test(norm(m.nombre)))?.nombre || "Religión", "7", "Diálogo interreligioso", "Reconoce puntos de encuentro entre tradiciones religiosas.", "Multiperspectivismo", "Compara perspectivas religiosas sobre la dignidad humana.", "Reconoce valores compartidos entre religiones.", "En un barrio conviven familias católicas, musulmanas y sin religión.", "¿Cuál es un valor compartido por casi todas las tradiciones?", ["La venganza", "El respeto a la vida", "La indiferencia", "La competencia"], "B", "El respeto a la vida y la dignidad aparece en casi todas las tradiciones.", "Comprender", "Básico", "Reconoce un valor común entre tradiciones."),
+      ej(materias.find((m) => /filos/i.test(norm(m.nombre)))?.nombre || "Filosofía", "10", "Del mito al logos", "Explica el paso del pensamiento mítico al racional.", "Pensamiento sistémico", "Relaciona el origen de la filosofía con su contexto histórico.", "Distingue explicación mítica de explicación racional.", "Los primeros filósofos griegos buscaron el arjé, el principio de todas las cosas.", "¿Qué caracteriza al logos frente al mito?", ["Explica con relatos de dioses", "Busca razones que se puedan discutir", "Rechaza toda pregunta", "Solo repite tradiciones"], "B", "El logos ofrece razones sometidas a discusión; el mito, relatos tradicionales.", "Comprender", "Superior", "Distingue y explica la diferencia con un ejemplo propio."),
+    ], "plantilla_matriz_icfes.xlsx", true, true);
   };
 
   const procesarArchivo = (file) => {
@@ -26,29 +72,35 @@ function ImportarExcelModal({ materiaId, niveles, nivelInicial = "", onClose, on
     reader.onload = async (e) => {
       try {
         const wb = XLSX.read(e.target.result, { type: "binary" });
-        const hoja = wb.Sheets[wb.SheetNames[0]];
-        const filas = XLSX.utils.sheet_to_json(hoja, { defval: "" });
+        const nombreHoja = wb.SheetNames.find((n) => norm(n) === "matriz") || wb.SheetNames[0];
+        // La matriz trae una fila de grupos arriba: se busca la fila de encabezados (la que tiene «Pregunta»)
+        const aoa = XLSX.utils.sheet_to_json(wb.Sheets[nombreHoja], { header: 1, defval: "" });
+        const hi = Math.max(0, aoa.findIndex((r) => r.some((c) => ["pregunta", "enunciado"].includes(norm(c)))));
+        const cab = aoa[hi] || [];
+        const filas = aoa.slice(hi + 1).map((r) => { const o = {}; cab.forEach((h, i) => { if (String(h).trim()) o[h] = r[i] ?? ""; }); return o; });
         const normalizadas = filas.map((f) => ({
-          nivel: (f["Grado (opcional, si no lo pones se usa el elegido abajo)"] || f["Grado"] || "").toString().trim(),
-          tema: (f["Tema"] || "").toString().trim(),
-          enunciado: (f["Enunciado"] || "").toString().trim(),
-          opcionA: (f["Opción A"] || f["Opcion A"] || "").toString().trim(),
-          opcionB: (f["Opción B"] || f["Opcion B"] || "").toString().trim(),
-          opcionC: (f["Opción C"] || f["Opcion C"] || "").toString().trim(),
-          opcionD: (f["Opción D"] || f["Opcion D"] || "").toString().trim(),
-          correcta: (f["Correcta (A/B/C/D)"] || f["Correcta"] || "").toString().trim().toUpperCase(),
-          dificultad: (f["Dificultad (facil/media/dificil)"] || f["Dificultad"] || "").toString().trim().toLowerCase() || null,
-          retroalimentacion: (f["Retroalimentación (opcional)"] || f["Retroalimentacion"] || "").toString().trim() || null,
+          id: leer(f, "id plataforma", "id"),
+          nivel: normalizarGrado(leer(f, "grado")),
+          asignatura: leer(f, "asignatura", "materia"),
+          tema: leer(f, "tema"),
+          aprendizaje: leer(f, "aprendizaje"),
+          competencia: leer(f, "competencia"),
+          afirmacion: leer(f, "afirmacion"),
+          evidencia: leer(f, "evidencia"),
+          contexto: leer(f, "contexto"),
+          enunciado: leer(f, "pregunta", "enunciado"),
+          opcionA: leer(f, "opcion a"), opcionB: leer(f, "opcion b"), opcionC: leer(f, "opcion c"), opcionD: leer(f, "opcion d"),
+          correcta: leer(f, "respuesta correcta", "correcta").toUpperCase().slice(0, 1),
+          retroalimentacion: leer(f, "justificacion", "retroalimentacion") || null,
+          exigencia: leer(f, "exigencia"),
+          desempeno: normalizarDesempeno(leer(f, "desempeno")),
+          criterio: leer(f, "criterio"),
+          dificultad: normalizarDificultad(leer(f, "dificultad")) || null,
         })).filter((f) => f.enunciado);
-
-        if (normalizadas.length === 0) { alert("No se encontraron filas con enunciado. Revisa que uses la plantilla."); setProcesando(false); return; }
-
-        const r = await api.importarPreguntasBanco(materiaId, normalizadas, nivelPorDefecto || null);
-        setResultado(r);
-        onImportado();
-      } catch (err) {
-        alert("No se pudo leer el archivo: " + err.message);
-      }
+        if (normalizadas.length === 0) { alert("No se encontraron filas con «Pregunta». Revisa que uses la plantilla."); setProcesando(false); return; }
+        const r = await api.importarPreguntasBanco(materiaId, normalizadas, nivelPorDefecto || null, materias);
+        setResultado(r); onImportado();
+      } catch (err) { alert("No se pudo leer el archivo: " + err.message); }
       setProcesando(false);
     };
     reader.readAsBinaryString(file);
@@ -58,18 +110,17 @@ function ImportarExcelModal({ materiaId, niveles, nivelInicial = "", onClose, on
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={procesando ? undefined : onClose}>
       <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-md shadow-xl">
         <div className="flex justify-between items-center mb-3">
-          <h3 className="font-bold text-slate-800">📥 Importar preguntas desde Excel</h3>
+          <h3 className="font-bold text-slate-800">📥 Importar matriz de preguntas (Excel)</h3>
           {!procesando && <button onClick={onClose} className="text-slate-400">✕</button>}
         </div>
-
         {resultado ? (
           <div>
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 mb-3">
               <p className="text-sm font-semibold text-emerald-700">✔ Listo</p>
-              <p className="text-xs text-emerald-600 mt-1">Se cargaron {resultado.cargadas} de {resultado.total} pregunta(s).</p>
+              <p className="text-xs text-emerald-600 mt-1">{resultado.nuevas} nueva(s) · {resultado.actualizadas} actualizada(s) · {resultado.errores.length} con problema (de {resultado.total}).</p>
             </div>
             {resultado.errores.length > 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 text-[11px] text-amber-700 max-h-32 overflow-y-auto mb-3">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 text-[11px] text-amber-700 max-h-40 overflow-y-auto mb-3">
                 <p className="font-semibold mb-1">No se pudieron cargar:</p>
                 <ul className="list-disc list-inside">{resultado.errores.map((e, i) => <li key={i}>{e}</li>)}</ul>
               </div>
@@ -79,18 +130,17 @@ function ImportarExcelModal({ materiaId, niveles, nivelInicial = "", onClose, on
         ) : (
           <>
             <p className="text-xs text-slate-500 mb-3">
-              Descarga la plantilla, completa una fila por pregunta (tema, enunciado, las 4 opciones y cuál es la correcta) y súbela.
-              Si todas las preguntas del archivo son del mismo grado, elígelo aquí abajo — así no hace falta ponerlo fila por fila.
+              Descarga la plantilla, llena una fila por pregunta (grado, asignatura, tema, competencia, afirmación, evidencia, contexto, pregunta, opciones, respuesta, justificación, exigencia, desempeño y criterio) y súbela.
+              La columna «Asignatura» ubica cada pregunta en su materia{materiaId ? "; si la dejas vacía se usa la materia en la que estás" : ""}.
+              Si exportaste el banco y dejas el «ID plataforma», esas preguntas se actualizan en vez de duplicarse.
             </p>
-            <label className="text-xs text-slate-500 block mb-1">Grado por defecto (opcional)</label>
+            <label className="text-xs text-slate-500 block mb-1">Grado por defecto (si la fila no trae Grado)</label>
             <select value={nivelPorDefecto} onChange={(e) => setNivelPorDefecto(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 mb-3 border border-slate-200 outline-none">
               <option value="">Sin grado específico</option>
               {niveles.map((n) => <option key={n.nivel} value={n.nivel}>Grado {n.nivel}°</option>)}
             </select>
-            <button onClick={descargarPlantilla} className="w-full text-sm font-semibold py-2.5 rounded-lg border border-violet-200 text-violet-600 mb-3">
-              📄 Descargar plantilla
-            </button>
-            <label className="text-xs text-slate-500 block mb-1">Subir la plantilla completada</label>
+            <button onClick={descargarPlantilla} className="w-full text-sm font-semibold py-2.5 rounded-lg border border-violet-200 text-violet-600 mb-3">📄 Descargar plantilla (con ejemplos)</button>
+            <label className="text-xs text-slate-500 block mb-1">Subir la matriz completada</label>
             <input type="file" accept=".xlsx,.xls" onChange={(e) => e.target.files[0] && procesarArchivo(e.target.files[0])} disabled={procesando} className="text-sm" />
             {procesando && <p className="text-xs text-violet-500 mt-2">Procesando…</p>}
           </>
@@ -108,7 +158,10 @@ function PreguntaBancoForm({ materiaId, niveles, pregunta, nivelInicial = "", te
   const [correcta, setCorrecta] = useState(pregunta ? pregunta.opciones.findIndex((o) => o.correcta) : 0);
   const [dificultad, setDificultad] = useState(pregunta?.dificultad || "");
   const [retroalimentacion, setRetroalimentacion] = useState(pregunta?.retroalimentacion || "");
+  const [m, setM] = useState({ aprendizaje: pregunta?.aprendizaje || "", competencia: pregunta?.competencia || "", afirmacion: pregunta?.afirmacion || "", evidencia: pregunta?.evidencia || "", contexto: pregunta?.contexto || "", exigencia: pregunta?.exigencia || "", desempeno: pregunta?.desempeno || "", criterio: pregunta?.criterio || "" });
+  const [matrizAbierta, setMatrizAbierta] = useState(!!(pregunta && (pregunta.competencia || pregunta.afirmacion || pregunta.evidencia || pregunta.contexto || pregunta.exigencia || pregunta.desempeno || pregunta.criterio)));
   const [guardando, setGuardando] = useState(false);
+  const cm = (k, v) => setM((p) => ({ ...p, [k]: v }));
 
   const cambiarOpcion = (i, v) => setOpciones((prev) => prev.map((o, idx) => idx === i ? v : o));
 
@@ -121,6 +174,8 @@ function PreguntaBancoForm({ materiaId, niveles, pregunta, nivelInicial = "", te
         nivel: nivel || null, tema: tema.trim() || null, enunciado: enunciado.trim(), dificultad: dificultad || null,
         opciones: opciones.map((texto, i) => ({ texto: texto.trim(), correcta: i === correcta })).filter((o) => o.texto),
         materia_id: materiaId, retroalimentacion: retroalimentacion.trim() || null,
+        aprendizaje: m.aprendizaje.trim() || null, competencia: m.competencia.trim() || null, afirmacion: m.afirmacion.trim() || null, evidencia: m.evidencia.trim() || null,
+        contexto: m.contexto.trim() || null, exigencia: m.exigencia || null, desempeno: m.desempeno || null, criterio: m.criterio.trim() || null,
       };
       if (pregunta) await api.editarPreguntaBanco(pregunta.id, campos);
       else await api.crearPreguntaBanco(campos);
@@ -146,7 +201,26 @@ function PreguntaBancoForm({ materiaId, niveles, pregunta, nivelInicial = "", te
           <option value="dificil">Difícil</option>
         </select>
       </div>
-      <textarea value={enunciado} onChange={(e) => setEnunciado(e.target.value)} rows={2} placeholder="Enunciado de la pregunta…"
+      <button type="button" onClick={() => setMatrizAbierta((v) => !v)} className="text-xs font-semibold text-violet-600 mb-2">{matrizAbierta ? "▼" : "▶"} Matriz ICFES (competencia, afirmación, evidencia, desempeño…)</button>
+      {matrizAbierta && (
+        <div className="bg-white rounded-lg border border-violet-100 p-2.5 mb-2 space-y-1.5">
+          <input value={m.aprendizaje} onChange={(e) => cm("aprendizaje", e.target.value)} placeholder="Aprendizaje esperado" className="w-full text-xs rounded-lg px-3 py-1.5 border border-slate-200 outline-none" />
+          <input value={m.competencia} onChange={(e) => cm("competencia", e.target.value)} placeholder="Competencia (ej: Argumentación)" className="w-full text-xs rounded-lg px-3 py-1.5 border border-slate-200 outline-none" />
+          <input value={m.afirmacion} onChange={(e) => cm("afirmacion", e.target.value)} placeholder="Afirmación (lo que el estudiante demuestra)" className="w-full text-xs rounded-lg px-3 py-1.5 border border-slate-200 outline-none" />
+          <input value={m.evidencia} onChange={(e) => cm("evidencia", e.target.value)} placeholder="Evidencia (lo observable que lo prueba)" className="w-full text-xs rounded-lg px-3 py-1.5 border border-slate-200 outline-none" />
+          <textarea value={m.contexto} onChange={(e) => cm("contexto", e.target.value)} rows={3} placeholder="Contexto: texto, situación o caso que precede la pregunta" className="w-full text-xs rounded-lg px-3 py-1.5 border border-slate-200 outline-none" />
+          <div className="grid grid-cols-2 gap-1.5">
+            <select value={m.exigencia} onChange={(e) => cm("exigencia", e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
+              <option value="">Exigencia cognitiva</option>{["Recordar", "Comprender", "Aplicar", "Analizar", "Evaluar", "Crear"].map((x) => <option key={x} value={x}>{x}</option>)}
+            </select>
+            <select value={m.desempeno} onChange={(e) => cm("desempeno", e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white">
+              <option value="">Desempeño asociado</option><option value="basico">Básico</option><option value="alto">Alto</option><option value="superior">Superior</option>
+            </select>
+          </div>
+          <input value={m.criterio} onChange={(e) => cm("criterio", e.target.value)} placeholder="Criterio de valoración" className="w-full text-xs rounded-lg px-3 py-1.5 border border-slate-200 outline-none" />
+        </div>
+      )}
+      <textarea value={enunciado} onChange={(e) => setEnunciado(e.target.value)} rows={2} placeholder="Pregunta (enunciado)…"
         className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
       {opciones.map((o, i) => (
         <div key={i} className="flex items-center gap-2 mb-1.5">
@@ -155,7 +229,7 @@ function PreguntaBancoForm({ materiaId, niveles, pregunta, nivelInicial = "", te
             className="flex-1 text-sm rounded-lg px-3 py-1.5 border border-slate-200 outline-none bg-white" />
         </div>
       ))}
-      <label className="text-xs text-slate-500 block mb-1 mt-1">Retroalimentación (opcional — explicación de por qué es esa la respuesta)</label>
+      <label className="text-xs text-slate-500 block mb-1 mt-1">Justificación de la respuesta correcta (retroalimentación)</label>
       <textarea value={retroalimentacion} onChange={(e) => setRetroalimentacion(e.target.value)} rows={2} placeholder="Ej: La respuesta es B porque…"
         className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white" />
       <div className="flex justify-end gap-2 mt-2">
@@ -326,6 +400,7 @@ export function VistaBancoPreguntas({ grados = [] }) {
   const [renombrar, setRenombrar] = useState(null);
   const [busqueda, setBusqueda] = useState("");
   const [filtroDif, setFiltroDif] = useState("");
+  const [filtroDes, setFiltroDes] = useState("");
   const niveles = agruparPorNivel(grados);
 
   const cargarIndice = async () => {
@@ -361,7 +436,7 @@ export function VistaBancoPreguntas({ grados = [] }) {
     setCargandoLista(true);
     api.fetchBancoPreguntas(ruta.materiaId, null, ruta.nivel ? ruta.nivel : null).then((d) => { setPreguntas(d); setCargandoLista(false); }).catch(() => setCargandoLista(false));
   };
-  useEffect(() => { cargarLista(); setSeleccionadas([]); setBusqueda(""); setFiltroDif(""); }, [ruta.materiaId, ruta.nivel, ruta.temaKey, ruta.soloLista]);
+  useEffect(() => { cargarLista(); setSeleccionadas([]); setBusqueda(""); setFiltroDif(""); setFiltroDes(""); }, [ruta.materiaId, ruta.nivel, ruta.temaKey, ruta.soloLista]);
   const refrescar = () => { cargarIndice(); cargarLista(); };
 
   const visibles = useMemo(() => {
@@ -369,10 +444,20 @@ export function VistaBancoPreguntas({ grados = [] }) {
     if (ruta.nivel === "") l = l.filter((p) => !p.nivel);
     if (ruta.temaKey !== null) l = l.filter((p) => (p.tema && p.tema.trim() ? sinTildes(p.tema) : "") === ruta.temaKey);
     if (filtroDif) l = l.filter((p) => (p.dificultad || "") === filtroDif);
+    if (filtroDes) l = l.filter((p) => (p.desempeno || "") === filtroDes);
     if (busqueda.trim()) { const q = sinTildes(busqueda); l = l.filter((p) => sinTildes(p.enunciado).includes(q) || sinTildes(p.tema).includes(q)); }
     return l;
-  }, [preguntas, ruta, filtroDif, busqueda]);
+  }, [preguntas, ruta, filtroDif, filtroDes, busqueda]);
 
+  const exportar = async () => {
+    try {
+      let lista = await api.fetchBancoPreguntas(ruta.materiaId || null, null, ruta.nivel ? ruta.nivel : null);
+      if (ruta.nivel === "") lista = lista.filter((p) => !p.nivel);
+      if (ruta.temaKey !== null) lista = lista.filter((p) => (p.tema && p.tema.trim() ? sinTildes(p.tema) : "") === ruta.temaKey);
+      if (lista.length === 0) { alert("No hay preguntas para exportar en esta vista."); return; }
+      exportarMatriz(lista, materias, `banco_${materia ? sinTildes(materia.nombre).replace(/ /g, "_") : "todo"}.xlsx`);
+    } catch (e) { alert("No se pudo exportar: " + e.message); }
+  };
   const eliminar = async (p) => { if (!confirm("¿Eliminar esta pregunta del banco?")) return; await api.eliminarPreguntaBanco(p.id); refrescar(); };
   const toggleSeleccion = (id) => setSeleccionadas((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
   const eliminarSeleccionadas = async () => {
@@ -412,10 +497,9 @@ export function VistaBancoPreguntas({ grados = [] }) {
           </React.Fragment>
         ))}
         <div className="flex-1" />
-        {nivel >= 1 && <>
-          <button onClick={() => setImportarAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-violet-200 text-violet-600">📥 Importar Excel</button>
-          <button onClick={() => { setEditando(null); setFormAbierto((v) => !v); }} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">{formAbierto ? "Cerrar" : "+ Nueva pregunta"}</button>
-        </>}
+        <button onClick={exportar} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">📤 Exportar Excel</button>
+        <button onClick={() => setImportarAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-violet-200 text-violet-600">📥 Importar Excel</button>
+        {nivel >= 1 && <button onClick={() => { setEditando(null); setFormAbierto((v) => !v); }} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">{formAbierto ? "Cerrar" : "+ Nueva pregunta"}</button>}
       </div>
 
       {formAbierto && nivel >= 1 && (
@@ -474,6 +558,9 @@ export function VistaBancoPreguntas({ grados = [] }) {
             <select value={filtroDif} onChange={(e) => setFiltroDif(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
               <option value="">Toda dificultad</option><option value="facil">Fácil</option><option value="media">Media</option><option value="dificil">Difícil</option>
             </select>
+            <select value={filtroDes} onChange={(e) => setFiltroDes(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
+              <option value="">Todo desempeño</option><option value="basico">Básico</option><option value="alto">Alto</option><option value="superior">Superior</option>
+            </select>
             <button onClick={() => { setSeleccionando((v) => !v); setSeleccionadas([]); }} className={`text-xs font-semibold px-3 py-2 rounded-full border ${seleccionando ? "bg-slate-700 text-white border-slate-700" : "border-slate-200 text-slate-600"}`}>{seleccionando ? "✕ Cancelar selección" : "☑️ Seleccionar"}</button>
           </div>
           {seleccionando && visibles.length > 0 && (
@@ -501,6 +588,10 @@ export function VistaBancoPreguntas({ grados = [] }) {
                           {p.nivel && <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 mr-1.5">Grado {p.nivel}°</span>}
                           {p.tema && <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-50 text-violet-600 mr-1.5">{p.tema}</span>}
                           {p.dificultad && <span className="text-[10px] px-2 py-0.5 rounded-full text-white" style={{ background: DIF[p.dificultad]?.c || "#94a3b8" }}>{DIF[p.dificultad]?.l || p.dificultad}</span>}
+                          {p.competencia && <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 mr-1.5">{p.competencia}</span>}
+                          {p.exigencia && <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 mr-1.5">🧠 {p.exigencia}</span>}
+                          {p.desempeno && DESEMPENO[p.desempeno] && <span className="text-[10px] px-2 py-0.5 rounded-full text-white" style={{ background: DESEMPENO[p.desempeno].c }}>{DESEMPENO[p.desempeno].l}</span>}
+                          {p.contexto && <p className="text-xs text-slate-500 mt-1.5 bg-slate-50 rounded-lg px-2.5 py-1.5 whitespace-pre-line">📄 {p.contexto}</p>}
                           <p className="text-sm text-slate-700 mt-1">{p.enunciado}</p>
                         </div>
                       </div>
@@ -515,6 +606,16 @@ export function VistaBancoPreguntas({ grados = [] }) {
                       {p.opciones.map((o, i) => <span key={i} className={`text-[10px] px-2 py-0.5 rounded-full ${o.correcta ? "bg-emerald-100 text-emerald-700 font-semibold" : "bg-slate-100 text-slate-500"}`}>{o.correcta ? "✓ " : ""}{o.texto}</span>)}
                     </div>
                     {p.retroalimentacion && <p className="text-[11px] text-slate-400 mt-2 italic">💡 {p.retroalimentacion}</p>}
+                    {(p.aprendizaje || p.afirmacion || p.evidencia || p.criterio) && (
+                      <details className="mt-1.5"><summary className="text-[10px] text-violet-500 cursor-pointer">Ver matriz</summary>
+                        <div className="text-[11px] text-slate-500 mt-1 space-y-0.5">
+                          {p.aprendizaje && <div><b>Aprendizaje esperado:</b> {p.aprendizaje}</div>}
+                          {p.afirmacion && <div><b>Afirmación:</b> {p.afirmacion}</div>}
+                          {p.evidencia && <div><b>Evidencia:</b> {p.evidencia}</div>}
+                          {p.criterio && <div><b>Criterio de valoración:</b> {p.criterio}</div>}
+                        </div>
+                      </details>
+                    )}
                   </div>
                 ))}
               </div>
@@ -523,7 +624,7 @@ export function VistaBancoPreguntas({ grados = [] }) {
         </>
       )}
 
-      {importarAbierto && <ImportarExcelModal materiaId={ruta.materiaId} niveles={niveles} nivelInicial={ruta.nivel || ""} onClose={() => setImportarAbierto(false)} onImportado={refrescar} />}
+      {importarAbierto && <ImportarExcelModal materiaId={ruta.materiaId} materias={materias} niveles={niveles} nivelInicial={ruta.nivel || ""} onClose={() => setImportarAbierto(false)} onImportado={refrescar} />}
       {trasladarAbierto && (
         <TrasladarPreguntasModal ids={seleccionadas} materias={materias} niveles={niveles} onClose={() => setTrasladarAbierto(false)}
           onTrasladado={() => { setTrasladarAbierto(false); setSeleccionadas([]); setSeleccionando(false); refrescar(); }} />
