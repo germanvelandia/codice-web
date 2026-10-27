@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import * as api from "../lib/api";
 import { agruparPorNivel, nivelYCurso } from "../lib/gamification";
 import { periodosDe } from "../lib/calificaciones";
@@ -125,11 +125,98 @@ function NuevaPreguntaForm({ evaluacionId, orden, pregunta, materiaId, gradoId, 
   );
 }
 
+// Escoger preguntas del banco a mano (con filtros) y agregarlas a la evaluación
+function EscogerDelBanco({ evaluacionId, materiaId, nivelInicial, ordenInicial, onClose, onAgregadas }) {
+  const [materias, setMaterias] = useState([]);
+  const [mat, setMat] = useState(materiaId || "");
+  const [lista, setLista] = useState([]);
+  const [cargando, setCargando] = useState(false);
+  const [nivel, setNivel] = useState(nivelInicial || "");
+  const [tema, setTema] = useState("");
+  const [periodo, setPeriodo] = useState("");
+  const [q, setQ] = useState("");
+  const [sel, setSel] = useState([]);
+  const [guardando, setGuardando] = useState(false);
+  const PER = { T1: "Trimestre 1", T2: "Trimestre 2", T3: "Trimestre 3", REC: "Recuperación" };
+  const sinT = (x) => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+  useEffect(() => { api.fetchMisMaterias().then((m) => { setMaterias(m || []); if (!mat && m?.length) setMat(m[0].id); }); }, []);
+  useEffect(() => {
+    if (!mat) return;
+    setCargando(true); setSel([]);
+    api.fetchBancoPreguntas(mat, null, null).then((d) => { setLista(d); setCargando(false); }).catch(() => setCargando(false));
+  }, [mat]);
+
+  const niveles = useMemo(() => Array.from(new Set(lista.map((p) => String(p.nivel || "").trim()).filter(Boolean))).sort((a, b) => a - b), [lista]);
+  const temas = useMemo(() => Array.from(new Set(lista.filter((p) => !nivel || String(p.nivel || "").trim() === nivel).map((p) => (p.tema || "").trim()).filter(Boolean))).sort(), [lista, nivel]);
+  const visibles = useMemo(() => lista.filter((p) =>
+    (!nivel || String(p.nivel || "").trim() === nivel) && (!tema || (p.tema || "").trim() === tema) && (!periodo || p.periodo === periodo) &&
+    (!q.trim() || sinT(p.enunciado).includes(sinT(q)))), [lista, nivel, tema, periodo, q]);
+
+  const toggle = (id) => setSel((a) => a.includes(id) ? a.filter((x) => x !== id) : [...a, id]);
+  const agregar = async () => {
+    setGuardando(true);
+    try {
+      let orden = ordenInicial;
+      for (const p of lista.filter((x) => sel.includes(x.id))) {
+        await api.crearPregunta({ evaluacion_id: evaluacionId, orden: orden++, tipo: "opcion_multiple", enunciado: p.contexto ? `${p.contexto}\n\n${p.enunciado}` : p.enunciado, puntos: 1, opciones: p.opciones, retroalimentacion: p.retroalimentacion || null });
+      }
+      onAgregadas(sel.length);
+    } catch (e) { alert("Error: " + e.message); }
+    setGuardando(false);
+  };
+  const cls = "text-xs rounded-lg px-2 py-1.5 border border-slate-200 outline-none bg-white";
+  return (
+    <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center p-0 sm:p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-xl">
+        <div className="p-4 border-b border-slate-100">
+          <h3 className="font-bold text-slate-800 mb-2">📚 Escoger preguntas del banco</h3>
+          <div className="flex flex-wrap gap-2">
+            <select value={mat} onChange={(e) => { setMat(e.target.value ? parseInt(e.target.value, 10) : ""); setNivel(""); setTema(""); }} className={cls}>
+              {!mat && <option value="">Asignatura…</option>}{materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+            </select>
+            <select value={nivel} onChange={(e) => { setNivel(e.target.value); setTema(""); }} className={cls}><option value="">Todos los grados</option>{niveles.map((n) => <option key={n} value={n}>Grado {n}°</option>)}</select>
+            <select value={tema} onChange={(e) => setTema(e.target.value)} className={cls}><option value="">Todos los temas</option>{temas.map((t) => <option key={t} value={t}>{t}</option>)}</select>
+            <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className={cls}><option value="">Todo periodo</option>{Object.entries(PER).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 Buscar…" className={cls + " flex-1 min-w-[8rem]"} />
+          </div>
+          <div className="flex items-center gap-3 mt-2 text-xs">
+            <span className="text-slate-500">{visibles.length} pregunta(s) · {sel.length} elegida(s)</span>
+            <button onClick={() => setSel(Array.from(new Set([...sel, ...visibles.map((p) => p.id)])))} className="text-violet-500">Elegir todas las visibles</button>
+            <button onClick={() => setSel([])} className="text-slate-400">Ninguna</button>
+          </div>
+        </div>
+        <div className="p-3 overflow-y-auto flex-1 space-y-1.5">
+          {cargando ? <p className="text-sm text-slate-400 text-center py-6">Cargando…</p> : visibles.length === 0 ? <p className="text-sm text-slate-400 text-center py-6">No hay preguntas con ese filtro.</p> :
+            visibles.map((p) => (
+              <label key={p.id} className={`flex items-start gap-2 rounded-lg border p-2 cursor-pointer ${sel.includes(p.id) ? "border-violet-400 bg-violet-50/50" : "border-slate-200"}`}>
+                <input type="checkbox" checked={sel.includes(p.id)} onChange={() => toggle(p.id)} className="mt-1 shrink-0" />
+                <div className="min-w-0">
+                  <div className="mb-0.5">
+                    {p.nivel && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 mr-1">Grado {String(p.nivel).trim()}°</span>}
+                    {p.periodo && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 mr-1">{PER[p.periodo]}</span>}
+                    {p.tema && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-600">{p.tema}</span>}
+                  </div>
+                  <p className="text-xs text-slate-700">{p.enunciado}</p>
+                </div>
+              </label>
+            ))}
+        </div>
+        <div className="p-3 border-t border-slate-100 flex justify-end gap-2">
+          <button onClick={onClose} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
+          <button disabled={sel.length === 0 || guardando} onClick={agregar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-40">{guardando ? "Agregando…" : `Agregar ${sel.length} a la evaluación`}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PreguntasEditor({ evaluacionId, materiaId, gradoId }) {
   const [preguntas, setPreguntas] = useState([]);
   const [formAbierto, setFormAbierto] = useState(false);
   const [editando, setEditando] = useState(null);
   const [aleatorioAbierto, setAleatorioAbierto] = useState(false);
+  const [escogerAbierto, setEscogerAbierto] = useState(false);
   const [temas, setTemas] = useState([]);
   const [temaElegido, setTemaElegido] = useState("");
   const [cantidad, setCantidad] = useState(10);
@@ -220,8 +307,10 @@ function PreguntasEditor({ evaluacionId, materiaId, gradoId }) {
 
       <div className="flex gap-3">
         {formAbierto ? null : <button onClick={() => setFormAbierto(true)} className="text-[11px] text-violet-500">+ Agregar pregunta</button>}
+        <button onClick={() => setEscogerAbierto(true)} className="text-[11px] font-semibold text-violet-600">📚 Escoger preguntas del banco</button>
         {materiaId && !aleatorioAbierto && <button onClick={() => setAleatorioAbierto(true)} className="text-[11px] text-amber-600">🗂️ N preguntas al azar del banco</button>}
       </div>
+      {escogerAbierto && <EscogerDelBanco evaluacionId={evaluacionId} materiaId={materiaId} nivelInicial={nivel || ""} ordenInicial={preguntas.length} onClose={() => setEscogerAbierto(false)} onAgregadas={(n) => { setEscogerAbierto(false); cargar(); alert(`Se agregaron ${n} pregunta(s) a la evaluación.`); }} />}
       {formAbierto && (
         <div className="mt-2">
           <NuevaPreguntaForm evaluacionId={evaluacionId} orden={preguntas.length} materiaId={materiaId} gradoId={gradoId} onCreada={() => { setFormAbierto(false); cargar(); }} onCancelar={() => setFormAbierto(false)} />
