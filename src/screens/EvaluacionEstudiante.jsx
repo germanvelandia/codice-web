@@ -30,6 +30,20 @@ function colorNota(p) {
 }
 
 /* ---------------- Pantalla de la evaluación (con vigilancia) ---------------- */
+// Mezcla el orden de las opciones de opción múltiple (distinto por intento, estable si se recarga).
+// Las respuestas se guardan por texto, así que el orden visual no afecta la calificación.
+function mezclarOpciones(preguntas, semilla) {
+  const hash = (str) => { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+  return preguntas.map((p) => {
+    if (p.tipo !== "opcion_multiple" || !Array.isArray(p.opciones) || p.opciones.length < 2) return p;
+    let s = hash(`${semilla}-${p.id}`) || 1;
+    const rnd = () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; };
+    const o = [...p.opciones];
+    for (let i = o.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [o[i], o[j]] = [o[j], o[i]]; }
+    return { ...p, opciones: o };
+  });
+}
+
 function TomarEvaluacion({ evaluacion, estudianteId, onCerrar }) {
   const vigilar = !!evaluacion.vigilar_pantalla;
   const maxSalidas = Math.max(0, Number(evaluacion.max_salidas) || 0);
@@ -55,7 +69,7 @@ function TomarEvaluacion({ evaluacion, estudianteId, onCerrar }) {
     (async () => {
       try {
         const { intentoId: id, preguntas: p } = await api.iniciarIntentoConAleatorias(evaluacion, estudianteId);
-        setIntentoId(id); setPreguntas(p);
+        setIntentoId(id); setPreguntas(mezclarOpciones(p, id));
         if (evaluacion.tiempo_limite_minutos) setSegundosRestantes(evaluacion.tiempo_limite_minutos * 60);
       } catch (e) { setErrorInicio(e.message); }
       setCargando(false);
