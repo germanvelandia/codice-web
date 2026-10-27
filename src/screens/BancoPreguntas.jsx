@@ -7,8 +7,9 @@ import { agruparPorNivel } from "../lib/gamification";
 export const COLUMNAS_MATRIZ = [
   "ID plataforma", "Grado", "Asignatura", "Tema", "Aprendizaje esperado", "Competencia", "Afirmación", "Evidencia",
   "Contexto", "Pregunta", "Opción A", "Opción B", "Opción C", "Opción D", "Respuesta correcta", "Justificación",
-  "Exigencia cognitiva", "Desempeño asociado", "Criterio de valoración", "Dificultad",
+  "Exigencia cognitiva", "Desempeño asociado", "Criterio de valoración", "Dificultad", "Periodo",
 ];
+export const PERIODOS = { T1: { l: "Trimestre 1", c: "#0ea5e9" }, T2: { l: "Trimestre 2", c: "#8b5cf6" }, T3: { l: "Trimestre 3", c: "#ec4899" }, REC: { l: "Recuperación", c: "#f97316" } };
 const norm = (s) => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 // Busca una columna por varios nombres posibles (ignora tildes y mayúsculas, y lo que venga entre paréntesis)
 function leer(fila, ...alias) {
@@ -20,6 +21,7 @@ function leer(fila, ...alias) {
 }
 const normalizarGrado = (g) => { const d = String(g || "").replace(/[^0-9]/g, ""); return d.length >= 3 ? d.slice(0, -2) : d; };
 const normalizarDesempeno = (v) => { const n = norm(v); return n.startsWith("sup") ? "superior" : n.startsWith("alt") ? "alto" : n.startsWith("bas") ? "basico" : n.startsWith("baj") ? "bajo" : ""; };
+const normalizarPeriodo = (v) => { const n = norm(v); if (!n) return ""; if (n.startsWith("rec")) return "REC"; const d = n.replace(/[^0-9]/g, ""); return d === "1" ? "T1" : d === "2" ? "T2" : d === "3" ? "T3" : ""; };
 const normalizarDificultad = (v) => { const n = norm(v); return n.startsWith("fac") ? "facil" : n.startsWith("med") ? "media" : n.startsWith("dif") ? "dificil" : ""; };
 export const DESEMPENO = { bajo: { l: "Bajo", c: "#ef4444" }, basico: { l: "Básico", c: "#f59e0b" }, alto: { l: "Alto", c: "#2563eb" }, superior: { l: "Superior", c: "#059669" } };
 
@@ -30,7 +32,7 @@ function filaDePregunta(p, materiaNombre) {
     "ID plataforma": p.id, "Grado": p.nivel || "", "Asignatura": materiaNombre || "", "Tema": p.tema || "", "Aprendizaje esperado": p.aprendizaje || "",
     "Competencia": p.competencia || "", "Afirmación": p.afirmacion || "", "Evidencia": p.evidencia || "", "Contexto": p.contexto || "", "Pregunta": p.enunciado || "",
     "Opción A": op(0), "Opción B": op(1), "Opción C": op(2), "Opción D": op(3), "Respuesta correcta": c >= 0 ? "ABCD"[c] : "", "Justificación": p.retroalimentacion || "",
-    "Exigencia cognitiva": p.exigencia || "", "Desempeño asociado": DESEMPENO[p.desempeno]?.l || "", "Criterio de valoración": p.criterio || "", "Dificultad": ({ facil: "Fácil", media: "Media", dificil: "Difícil" })[p.dificultad] || "",
+    "Exigencia cognitiva": p.exigencia || "", "Desempeño asociado": DESEMPENO[p.desempeno]?.l || "", "Criterio de valoración": p.criterio || "", "Dificultad": ({ facil: "Fácil", media: "Media", dificil: "Difícil" })[p.dificultad] || "", "Periodo": PERIODOS[p.periodo]?.l || "",
   };
 }
 function escribirExcel(filas, nombreArchivo, conInstrucciones, soloEjemplos = false) {
@@ -96,6 +98,7 @@ function ImportarExcelModal({ materiaId, materias, niveles, nivelInicial = "", o
           desempeno: normalizarDesempeno(leer(f, "desempeno")),
           criterio: leer(f, "criterio"),
           dificultad: normalizarDificultad(leer(f, "dificultad")) || null,
+          periodo: normalizarPeriodo(leer(f, "periodo", "trimestre")) || null,
         })).filter((f) => f.enunciado);
         if (normalizadas.length === 0) { alert("No se encontraron filas con «Pregunta». Revisa que uses la plantilla."); setProcesando(false); return; }
         const r = await api.importarPreguntasBanco(materiaId, normalizadas, nivelPorDefecto || null, materias);
@@ -157,6 +160,7 @@ function PreguntaBancoForm({ materiaId, niveles, pregunta, nivelInicial = "", te
   const [opciones, setOpciones] = useState(pregunta?.opciones?.map((o) => o.texto) || ["", "", "", ""]);
   const [correcta, setCorrecta] = useState(pregunta ? pregunta.opciones.findIndex((o) => o.correcta) : 0);
   const [dificultad, setDificultad] = useState(pregunta?.dificultad || "");
+  const [periodo, setPeriodo] = useState(pregunta?.periodo || "");
   const [retroalimentacion, setRetroalimentacion] = useState(pregunta?.retroalimentacion || "");
   const [m, setM] = useState({ aprendizaje: pregunta?.aprendizaje || "", competencia: pregunta?.competencia || "", afirmacion: pregunta?.afirmacion || "", evidencia: pregunta?.evidencia || "", contexto: pregunta?.contexto || "", exigencia: pregunta?.exigencia || "", desempeno: pregunta?.desempeno || "", criterio: pregunta?.criterio || "" });
   const [matrizAbierta, setMatrizAbierta] = useState(!!(pregunta && (pregunta.competencia || pregunta.afirmacion || pregunta.evidencia || pregunta.contexto || pregunta.exigencia || pregunta.desempeno || pregunta.criterio)));
@@ -171,7 +175,7 @@ function PreguntaBancoForm({ materiaId, niveles, pregunta, nivelInicial = "", te
     setGuardando(true);
     try {
       const campos = {
-        nivel: nivel || null, tema: tema.trim() || null, enunciado: enunciado.trim(), dificultad: dificultad || null,
+        nivel: nivel || null, tema: tema.trim() || null, enunciado: enunciado.trim(), dificultad: dificultad || null, periodo: periodo || null,
         opciones: opciones.map((texto, i) => ({ texto: texto.trim(), correcta: i === correcta })).filter((o) => o.texto),
         materia_id: materiaId, retroalimentacion: retroalimentacion.trim() || null,
         aprendizaje: m.aprendizaje.trim() || null, competencia: m.competencia.trim() || null, afirmacion: m.afirmacion.trim() || null, evidencia: m.evidencia.trim() || null,
@@ -188,7 +192,10 @@ function PreguntaBancoForm({ materiaId, niveles, pregunta, nivelInicial = "", te
 
   return (
     <div className="bg-violet-50 rounded-xl p-3 mb-3">
-      <div className="grid grid-cols-3 gap-2 mb-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
+        <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white">
+          <option value="">Periodo: todos</option>{Object.entries(PERIODOS).map(([k, v]) => <option key={k} value={k}>{v.l}</option>)}
+        </select>
         <select value={nivel} onChange={(e) => setNivel(e.target.value)} className="text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white">
           <option value="">Sin grado</option>
           {niveles.map((n) => <option key={n.nivel} value={n.nivel}>Grado {n.nivel}°</option>)}
@@ -249,16 +256,19 @@ function TrasladarPreguntasModal({ ids, materias, niveles, onClose, onTrasladado
   const [nivelDestino, setNivelDestino] = useState("");
   const [cambiarTema, setCambiarTema] = useState(false);
   const [temaDestino, setTemaDestino] = useState("");
+  const [cambiarPeriodo, setCambiarPeriodo] = useState(false);
+  const [periodoDestino, setPeriodoDestino] = useState("");
   const [guardando, setGuardando] = useState(false);
 
   const trasladar = async () => {
-    if (!cambiarMateria && !cambiarNivel && !cambiarTema) { alert("Elige al menos un campo para cambiar."); return; }
+    if (!cambiarMateria && !cambiarNivel && !cambiarTema && !cambiarPeriodo) { alert("Elige al menos un campo para cambiar."); return; }
     setGuardando(true);
     try {
       const cambios = {};
       if (cambiarMateria) cambios.materia_id = parseInt(materiaDestino, 10);
       if (cambiarNivel) cambios.nivel = nivelDestino || null;
       if (cambiarTema) cambios.tema = temaDestino.trim() || null;
+      if (cambiarPeriodo) cambios.periodo = periodoDestino || null;
       await api.trasladarPreguntasBanco(ids, cambios);
       onTrasladado();
     } catch (e) {
@@ -301,6 +311,15 @@ function TrasladarPreguntasModal({ ids, materias, niveles, onClose, onTrasladado
         {cambiarTema && (
           <input value={temaDestino} onChange={(e) => setTemaDestino(e.target.value)} placeholder="Nuevo tema"
             className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none" />
+        )}
+
+        <label className="flex items-center gap-2 text-xs text-slate-600 mb-1 mt-2">
+          <input type="checkbox" checked={cambiarPeriodo} onChange={(e) => setCambiarPeriodo(e.target.checked)} /> Cambiar periodo (trimestre / recuperación)
+        </label>
+        {cambiarPeriodo && (
+          <select value={periodoDestino} onChange={(e) => setPeriodoDestino(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 mb-2 border border-slate-200 outline-none bg-white">
+            <option value="">Sin periodo (todos)</option>{Object.entries(PERIODOS).map(([k, v]) => <option key={k} value={k}>{v.l}</option>)}
+          </select>
         )}
 
         <div className="flex justify-end gap-2 mt-3">
@@ -435,6 +454,7 @@ export function VistaBancoPreguntas({ grados = [] }) {
   const [renombrarGrado, setRenombrarGrado] = useState(null);
   const [busqueda, setBusqueda] = useState("");
   const [filtroDif, setFiltroDif] = useState("");
+  const [filtroPer, setFiltroPer] = useState("");
   const [filtroDes, setFiltroDes] = useState("");
   const niveles = agruparPorNivel(grados);
 
@@ -471,7 +491,7 @@ export function VistaBancoPreguntas({ grados = [] }) {
     setCargandoLista(true);
     api.fetchBancoPreguntas(ruta.materiaId, null, null).then((d) => { setPreguntas(d); setCargandoLista(false); }).catch(() => setCargandoLista(false));
   };
-  useEffect(() => { cargarLista(); setSeleccionadas([]); setBusqueda(""); setFiltroDif(""); setFiltroDes(""); }, [ruta.materiaId, ruta.nivel, ruta.temaKey, ruta.soloLista]);
+  useEffect(() => { cargarLista(); setSeleccionadas([]); setBusqueda(""); setFiltroDif(""); setFiltroDes(""); setFiltroPer(""); }, [ruta.materiaId, ruta.nivel, ruta.temaKey, ruta.soloLista]);
   const refrescar = () => { cargarIndice(); cargarLista(); };
 
   const visibles = useMemo(() => {
@@ -480,9 +500,10 @@ export function VistaBancoPreguntas({ grados = [] }) {
     if (ruta.temaKey !== null) l = l.filter((p) => (p.tema && p.tema.trim() ? sinTildes(p.tema) : "") === ruta.temaKey);
     if (filtroDif) l = l.filter((p) => (p.dificultad || "") === filtroDif);
     if (filtroDes) l = l.filter((p) => (p.desempeno || "") === filtroDes);
+    if (filtroPer) l = l.filter((p) => (p.periodo || "") === (filtroPer === "none" ? "" : filtroPer));
     if (busqueda.trim()) { const q = sinTildes(busqueda); l = l.filter((p) => sinTildes(p.enunciado).includes(q) || sinTildes(p.tema).includes(q)); }
     return l;
-  }, [preguntas, ruta, filtroDif, filtroDes, busqueda]);
+  }, [preguntas, ruta, filtroDif, filtroDes, filtroPer, busqueda]);
 
   const exportar = async () => {
     try {
@@ -593,6 +614,9 @@ export function VistaBancoPreguntas({ grados = [] }) {
             <select value={filtroDif} onChange={(e) => setFiltroDif(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
               <option value="">Toda dificultad</option><option value="facil">Fácil</option><option value="media">Media</option><option value="dificil">Difícil</option>
             </select>
+            <select value={filtroPer} onChange={(e) => setFiltroPer(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
+              <option value="">Todo periodo</option>{Object.entries(PERIODOS).map(([k, v]) => <option key={k} value={k}>{v.l}</option>)}<option value="none">Sin periodo</option>
+            </select>
             <select value={filtroDes} onChange={(e) => setFiltroDes(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
               <option value="">Todo desempeño</option><option value="basico">Básico</option><option value="alto">Alto</option><option value="superior">Superior</option>
             </select>
@@ -621,6 +645,7 @@ export function VistaBancoPreguntas({ grados = [] }) {
                         {seleccionando && <input type="checkbox" checked={seleccionadas.includes(p.id)} onChange={() => toggleSeleccion(p.id)} className="mt-1 shrink-0" />}
                         <div>
                           {p.nivel && <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 mr-1.5">Grado {p.nivel}°</span>}
+                          {p.periodo && PERIODOS[p.periodo] && <span className="text-[10px] px-2 py-0.5 rounded-full text-white mr-1.5" style={{ background: PERIODOS[p.periodo].c }}>{PERIODOS[p.periodo].l}</span>}
                           {p.tema && <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-50 text-violet-600 mr-1.5">{p.tema}</span>}
                           {p.dificultad && <span className="text-[10px] px-2 py-0.5 rounded-full text-white" style={{ background: DIF[p.dificultad]?.c || "#94a3b8" }}>{DIF[p.dificultad]?.l || p.dificultad}</span>}
                           {p.competencia && <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 mr-1.5">{p.competencia}</span>}
