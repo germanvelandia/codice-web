@@ -942,6 +942,7 @@ const MENU_CODICE_GRUPOS = [
     key: "estudio", label: "Estudio", icono: "🎓", items: [
       { key: "codice", label: "Códice", icono: "📖" },
       { key: "notas", label: "Notas", icono: "📝" },
+      { key: "evaluaciones", label: "Evaluaciones", icono: "📝" },
       { key: "misiones", label: "Misiones", icono: "⚔️" },
       { key: "forja", label: "Forja", icono: "🔨" },
       { key: "guias", label: "Guías", icono: "📘" },
@@ -986,7 +987,7 @@ const MENU_CODICE = MENU_CODICE_GRUPOS.flatMap((g) => g.items);
 // siendo la misma (la key de MENU_CODICE).
 const ICONO_MAPA = {
   album: "🏯", biblioteca: "📚", codice: "📖", forja: "⚒️", guias: "🗺️", modulos: "🧭",
-  inicio: "🏰", mundo: "🌍", misiones: "⚔️", notas: "📜", personaje: "🧙", historial: "📖", perfil: "🛡️", preguntados: "🎡", quizvivo: "⚡", encuesta: "📝", coevaluacion: "🪞", misdiplomas: "🎖️", tablero: "🧭",
+  inicio: "🏰", mundo: "🌍", misiones: "⚔️", evaluaciones: "📝", notas: "📜", personaje: "🧙", historial: "📖", perfil: "🛡️", preguntados: "🎡", quizvivo: "⚡", encuesta: "📝", coevaluacion: "🪞", misdiplomas: "🎖️", tablero: "🧭",
   proyectos: "🏹", ranking: "👑", recompensas: "💎", salonhonor: "🏆",
 };
 
@@ -2307,6 +2308,11 @@ function PortalEstudiante() {
             <MarcoSeccion zonaLabel="Estudio — Misiones" icono="🎓">
               <div className="mb-4"><MapaTerritoriosEstudiante estudianteId={estudianteInfo.id} nombre={datos.nombre} xp={datos.xp} /></div>
               <MicroMisionesEstudiante estudianteId={estudianteInfo.id} onCambio={() => consultar()} />
+            </MarcoSeccion>
+          )}
+
+          {vista === "evaluaciones" && estudianteInfo && (
+            <MarcoSeccion zonaLabel="Estudio — Evaluaciones" icono="🎓">
               <EvaluacionesEstudiante estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />
             </MarcoSeccion>
           )}
