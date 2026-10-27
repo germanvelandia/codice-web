@@ -3491,7 +3491,7 @@ export async function fetchIndiceBanco() {
   const { data: userData } = await supabase.auth.getUser();
   const todo = [];
   for (let d = 0; ; d += 1000) {
-    const { data, error } = await supabase.from("banco_preguntas").select("id, materia_id, nivel, tema, dificultad").eq("docente_id", userData?.user?.id || null).order("id").range(d, d + 999);
+    const { data, error } = await supabase.from("banco_preguntas").select("id, materia_id, nivel, tema, dificultad, periodo").eq("docente_id", userData?.user?.id || null).order("id").range(d, d + 999);
     if (error) throw error;
     todo.push(...(data || []));
     if (!data || data.length < 1000) break;
@@ -3546,6 +3546,7 @@ export async function trasladarPreguntasBanco(ids, cambios) {
   if (cambios.materia_id !== undefined) set.materia_id = cambios.materia_id;
   if (cambios.nivel !== undefined) set.nivel = cambios.nivel;
   if (cambios.tema !== undefined) set.tema = cambios.tema;
+  if (cambios.periodo !== undefined) set.periodo = cambios.periodo;
   const { error } = await supabase.from("banco_preguntas").update(set).in("id", ids);
   if (error) throw error;
 }
@@ -3580,6 +3581,7 @@ export async function importarPreguntasBanco(materiaIdPorDefecto, filas, nivel, 
         dificultad: f.dificultad || null, retroalimentacion: f.retroalimentacion || null,
         aprendizaje: f.aprendizaje || null, competencia: f.competencia || null, afirmacion: f.afirmacion || null, evidencia: f.evidencia || null,
         contexto: f.contexto || null, exigencia: f.exigencia || null, desempeno: f.desempeno || null, criterio: f.criterio || null,
+        periodo: f.periodo || null,
       };
       const id = parseInt(f.id, 10);
       if (id) {
@@ -3595,8 +3597,9 @@ export async function importarPreguntasBanco(materiaIdPorDefecto, filas, nivel, 
 
 // Elige N preguntas al azar del banco (con el filtro de materia/tema que se
 // pida) y las crea como preguntas reales de la evaluación indicada.
-export async function agregarPreguntasAleatoriasDesdeBanco(evaluacionId, materiaId, tema, nivel, cantidad, ordenInicial) {
-  const disponibles = await fetchBancoPreguntas(materiaId, tema || null, nivel || null);
+export async function agregarPreguntasAleatoriasDesdeBanco(evaluacionId, materiaId, tema, nivel, cantidad, ordenInicial, periodo) {
+  let disponibles = await fetchBancoPreguntas(materiaId, tema || null, nivel || null);
+  if (periodo) disponibles = disponibles.filter((p) => p.periodo === periodo);
   if (disponibles.length === 0) return { agregadas: 0, disponibles: 0 };
   const mezcladas = [...disponibles].sort(() => Math.random() - 0.5);
   const elegidas = mezcladas.slice(0, cantidad);
