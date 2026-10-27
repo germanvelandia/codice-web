@@ -324,6 +324,7 @@ const PALETA = [
 ];
 const ICONOS_MATERIA = [[/etica|valor/, "⚖️"], [/relig/, "🕊️"], [/filos/, "🦉"], [/mate/, "📐"], [/cienc|biol|quim|fisi/, "🔬"], [/lengu|liter|casted/, "📖"], [/social|histor/, "🌍"], [/ingl/, "🔤"], [/arte|art/, "🎨"], [/tecno|inform/, "💻"]];
 const iconoMateria = (n, i) => ICONOS_MATERIA.find(([r]) => r.test(sinTildes(n)))?.[1] || PALETA[i % PALETA.length].icono;
+const clavePeq = (n) => (n === null || n === undefined ? "" : String(n).trim());
 const DIF = { facil: { l: "Fácil", c: "#22c55e" }, media: { l: "Media", c: "#f59e0b" }, dificil: { l: "Difícil", c: "#ef4444" } };
 
 function BarraDificultad({ items }) {
@@ -354,7 +355,7 @@ function Tarjeta({ icono, titulo, sub, total, extra, color, onClick, onEditar, d
         {sub && <div className="text-[11px] text-slate-400 mt-0.5">{sub}</div>}
         {extra && <div className="mt-2">{extra}</div>}
       </button>
-      {onEditar && <button onClick={onEditar} title="Renombrar o unir" className="absolute bottom-1.5 right-1.5 text-[11px] text-slate-400 hover:text-violet-600 opacity-0 group-hover:opacity-100 bg-white border border-slate-200 rounded-full w-6 h-6">✏️</button>}
+      {onEditar && <button onClick={onEditar} title="Renombrar o unir" className="absolute bottom-1.5 right-1.5 text-[11px] text-slate-400 hover:text-violet-600 sm:opacity-0 sm:group-hover:opacity-100 bg-white border border-slate-200 rounded-full w-6 h-6">✏️</button>}
     </div>
   );
 }
@@ -385,6 +386,39 @@ function RenombrarTemaModal({ grupo, onClose, onHecho }) {
   );
 }
 
+// Cambia (o asigna) el grado de todas las preguntas de una tarjeta de grado
+function RenombrarGradoModal({ grupo, etiqueta, niveles, onClose, onHecho }) {
+  const actual = clavePeq(grupo.nivel);
+  const [elegido, setElegido] = useState(niveles.some((n) => n.nivel === actual) ? actual : actual ? "otro" : "");
+  const [otro, setOtro] = useState(actual);
+  const [guardando, setGuardando] = useState(false);
+  const valor = elegido === "otro" ? otro.trim() : elegido;
+  const guardar = async () => {
+    setGuardando(true);
+    try { await api.trasladarPreguntasBanco(grupo.items.map((p) => p.id), { nivel: valor || null }); onHecho(valor); }
+    catch (e) { alert("No se pudo guardar: " + e.message); }
+    setGuardando(false);
+  };
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl">
+        <h3 className="font-bold text-slate-800 mb-1">✏️ Modificar grado</h3>
+        <p className="text-xs text-slate-500 mb-3">Cambia el grado de las {grupo.items.length} preguntas de la tarjeta «{etiqueta}». Si ya existe una tarjeta con el grado que elijas, se unen.</p>
+        <select value={elegido} onChange={(e) => setElegido(e.target.value)} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none mb-2">
+          <option value="">Sin grado específico</option>
+          {niveles.map((n) => <option key={n.nivel} value={n.nivel}>Grado {n.nivel}°</option>)}
+          <option value="otro">Otro (escribir)…</option>
+        </select>
+        {elegido === "otro" && <input value={otro} onChange={(e) => setOtro(e.target.value)} placeholder="Ej: 8, 9, 10" className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none" autoFocus />}
+        <div className="flex justify-end gap-2 mt-3">
+          <button onClick={onClose} className="text-xs text-slate-500 px-3 py-2">Cancelar</button>
+          <button disabled={guardando} onClick={guardar} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-60">{guardando ? "Guardando…" : "Guardar"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function VistaBancoPreguntas({ grados = [] }) {
   const [materias, setMaterias] = useState([]);
   const [indice, setIndice] = useState(null); // todas las preguntas, solo campos de ubicación
@@ -398,6 +432,7 @@ export function VistaBancoPreguntas({ grados = [] }) {
   const [seleccionadas, setSeleccionadas] = useState([]);
   const [trasladarAbierto, setTrasladarAbierto] = useState(false);
   const [renombrar, setRenombrar] = useState(null);
+  const [renombrarGrado, setRenombrarGrado] = useState(null);
   const [busqueda, setBusqueda] = useState("");
   const [filtroDif, setFiltroDif] = useState("");
   const [filtroDes, setFiltroDes] = useState("");
@@ -414,7 +449,7 @@ export function VistaBancoPreguntas({ grados = [] }) {
 
   const materia = materias.find((m) => String(m.id) === String(ruta.materiaId));
   const enMateria = useMemo(() => (indice || []).filter((p) => String(p.materia_id) === String(ruta.materiaId)), [indice, ruta.materiaId]);
-  const enNivel = useMemo(() => ruta.nivel === null ? enMateria : enMateria.filter((p) => String(p.nivel || "") === ruta.nivel), [enMateria, ruta.nivel]);
+  const enNivel = useMemo(() => ruta.nivel === null ? enMateria : enMateria.filter((p) => clavePeq(p.nivel) === ruta.nivel), [enMateria, ruta.nivel]);
 
   const gruposTema = useMemo(() => {
     const mapa = {};
@@ -434,14 +469,14 @@ export function VistaBancoPreguntas({ grados = [] }) {
   const cargarLista = () => {
     if (!enLista || !ruta.materiaId) return;
     setCargandoLista(true);
-    api.fetchBancoPreguntas(ruta.materiaId, null, ruta.nivel ? ruta.nivel : null).then((d) => { setPreguntas(d); setCargandoLista(false); }).catch(() => setCargandoLista(false));
+    api.fetchBancoPreguntas(ruta.materiaId, null, null).then((d) => { setPreguntas(d); setCargandoLista(false); }).catch(() => setCargandoLista(false));
   };
   useEffect(() => { cargarLista(); setSeleccionadas([]); setBusqueda(""); setFiltroDif(""); setFiltroDes(""); }, [ruta.materiaId, ruta.nivel, ruta.temaKey, ruta.soloLista]);
   const refrescar = () => { cargarIndice(); cargarLista(); };
 
   const visibles = useMemo(() => {
     let l = preguntas;
-    if (ruta.nivel === "") l = l.filter((p) => !p.nivel);
+    if (ruta.nivel !== null) l = l.filter((p) => clavePeq(p.nivel) === ruta.nivel);
     if (ruta.temaKey !== null) l = l.filter((p) => (p.tema && p.tema.trim() ? sinTildes(p.tema) : "") === ruta.temaKey);
     if (filtroDif) l = l.filter((p) => (p.dificultad || "") === filtroDif);
     if (filtroDes) l = l.filter((p) => (p.desempeno || "") === filtroDes);
@@ -451,8 +486,8 @@ export function VistaBancoPreguntas({ grados = [] }) {
 
   const exportar = async () => {
     try {
-      let lista = await api.fetchBancoPreguntas(ruta.materiaId || null, null, ruta.nivel ? ruta.nivel : null);
-      if (ruta.nivel === "") lista = lista.filter((p) => !p.nivel);
+      let lista = await api.fetchBancoPreguntas(ruta.materiaId || null, null, null);
+      if (ruta.nivel !== null) lista = lista.filter((p) => clavePeq(p.nivel) === ruta.nivel);
       if (ruta.temaKey !== null) lista = lista.filter((p) => (p.tema && p.tema.trim() ? sinTildes(p.tema) : "") === ruta.temaKey);
       if (lista.length === 0) { alert("No hay preguntas para exportar en esta vista."); return; }
       exportarMatriz(lista, materias, `banco_${materia ? sinTildes(materia.nombre).replace(/ /g, "_") : "todo"}.xlsx`);
@@ -469,11 +504,11 @@ export function VistaBancoPreguntas({ grados = [] }) {
   const irNivel = (n) => setRuta((r) => ({ ...r, nivel: n, temaKey: null, soloLista: false }));
   const irTema = (k) => setRuta((r) => ({ ...r, temaKey: k, soloLista: false }));
   const nivelesDe = (items) => {
-    const m = {}; items.forEach((p) => { const k = p.nivel ? String(p.nivel) : ""; (m[k] = m[k] || []).push(p); });
+    const m = {}; items.forEach((p) => { const k = clavePeq(p.nivel); (m[k] = m[k] || []).push(p); });
     return Object.entries(m).sort((a, b) => (a[0] === "" ? 1 : b[0] === "" ? -1 : parseInt(a[0], 10) - parseInt(b[0], 10)));
   };
   const temaActual = ruta.temaKey !== null ? gruposTema.find((g) => g.key === ruta.temaKey) : null;
-  const etiquetaNivel = (n) => (n === "" ? "Sin grado" : `Grado ${n}°`);
+  const etiquetaNivel = (n) => (n === "" ? "Sin grado" : /^\d+$/.test(n) ? `Grado ${n}°` : `Grado ${n}`);
 
   if (indice === null) return <div className="text-sm text-slate-400">Cargando banco…</div>;
   if (materias.length === 0) return <p className="text-sm text-slate-400">Primero crea al menos una materia (en Calificaciones) para poder armar el banco de preguntas.</p>;
@@ -530,7 +565,7 @@ export function VistaBancoPreguntas({ grados = [] }) {
             {nivelesDe(enMateria).map(([n, items], i) => (
               <Tarjeta key={n || "sin"} icono={n ? "🎓" : "📥"} titulo={etiquetaNivel(n)} total={items.length} color={PALETA[(parseInt(n, 10) || 0) % PALETA.length]} destacada={!n}
                 sub={`${new Set(items.map((p) => (p.tema && p.tema.trim() ? sinTildes(p.tema) : null)).filter(Boolean)).size} tema(s)${!n ? " · por clasificar" : ""}`}
-                onClick={() => irNivel(n)} extra={<BarraDificultad items={items} />} />
+                onClick={() => irNivel(n)} onEditar={() => setRenombrarGrado({ nivel: n, items })} extra={<BarraDificultad items={items} />} />
             ))}
             <Tarjeta icono="📋" titulo="Ver todas" total={enMateria.length} sub="Lista completa con buscador" onClick={() => setRuta((r) => ({ ...r, nivel: null, temaKey: null, soloLista: true }))} />
           </div>
@@ -629,6 +664,7 @@ export function VistaBancoPreguntas({ grados = [] }) {
         <TrasladarPreguntasModal ids={seleccionadas} materias={materias} niveles={niveles} onClose={() => setTrasladarAbierto(false)}
           onTrasladado={() => { setTrasladarAbierto(false); setSeleccionadas([]); setSeleccionando(false); refrescar(); }} />
       )}
+      {renombrarGrado && <RenombrarGradoModal grupo={renombrarGrado} etiqueta={etiquetaNivel(renombrarGrado.nivel)} niveles={niveles} onClose={() => setRenombrarGrado(null)} onHecho={(nuevo) => { setRenombrarGrado(null); if (ruta.nivel === renombrarGrado.nivel && ruta.nivel !== null) irNivel(nuevo); refrescar(); }} />}
       {renombrar && <RenombrarTemaModal grupo={renombrar} onClose={() => setRenombrar(null)} onHecho={() => { setRenombrar(null); refrescar(); }} />}
     </div>
   );
