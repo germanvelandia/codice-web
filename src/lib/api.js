@@ -3552,25 +3552,45 @@ export async function trasladarPreguntasBanco(ids, cambios) {
 
 // Importación masiva desde Excel — filas ya parseadas en JS, cada una con
 // { enunciado, opcionA..D, correcta (A/B/C/D), tema }.
-export async function importarPreguntasBanco(materiaId, filas, nivel) {
-  let cargadas = 0;
-  const errores = [];
+export async function importarPreguntasBanco(materiaIdPorDefecto, filas, nivel, materias = []) {
+  const { data: userData } = await supabase.auth.getUser();
+  const yo = userData?.user?.id || null;
+  const n = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+  const materiaPorNombre = (nombre) => {
+    const k = n(nombre); if (!k) return null;
+    return materias.find((m) => n(m.nombre) === k) || materias.find((m) => n(m.nombre).includes(k) || k.includes(n(m.nombre))) || null;
+  };
+  let nuevas = 0, actualizadas = 0; const errores = [];
   for (const f of filas) {
+    const etiqueta = `"${String(f.enunciado || "").slice(0, 40)}..."`;
     try {
       const opciones = [
-        { texto: f.opcionA, correcta: f.correcta === "A" },
-        { texto: f.opcionB, correcta: f.correcta === "B" },
-        { texto: f.opcionC, correcta: f.correcta === "C" },
-        { texto: f.opcionD, correcta: f.correcta === "D" },
-      ].filter((o) => o.texto && o.texto.trim());
-      if (opciones.length < 2 || !opciones.some((o) => o.correcta)) { errores.push(`"${f.enunciado?.slice(0, 40)}...": faltan opciones o respuesta correcta`); continue; }
-      await crearPreguntaBanco({ materia_id: materiaId, nivel: f.nivel || nivel || null, tema: f.tema || null, enunciado: f.enunciado, opciones, dificultad: f.dificultad || null, retroalimentacion: f.retroalimentacion || null });
-      cargadas++;
-    } catch (e) {
-      errores.push(`"${f.enunciado?.slice(0, 40)}...": ${e.message}`);
-    }
+        { texto: f.opcionA, correcta: f.correcta === "A" }, { texto: f.opcionB, correcta: f.correcta === "B" },
+        { texto: f.opcionC, correcta: f.correcta === "C" }, { texto: f.opcionD, correcta: f.correcta === "D" },
+      ].filter((o) => o.texto && String(o.texto).trim());
+      if (opciones.length < 2 || !opciones.some((o) => o.correcta)) { errores.push(`${etiqueta}: faltan opciones o respuesta correcta`); continue; }
+      let materiaId = materiaIdPorDefecto || null;
+      if (f.asignatura) {
+        const m = materiaPorNombre(f.asignatura);
+        if (m) materiaId = m.id; else if (!materiaIdPorDefecto) { errores.push(`${etiqueta}: la asignatura «${f.asignatura}» no existe en la plataforma`); continue; }
+      }
+      if (!materiaId) { errores.push(`${etiqueta}: falta la asignatura`); continue; }
+      const campos = {
+        materia_id: materiaId, nivel: f.nivel || nivel || null, tema: f.tema || null, enunciado: f.enunciado, opciones,
+        dificultad: f.dificultad || null, retroalimentacion: f.retroalimentacion || null,
+        aprendizaje: f.aprendizaje || null, competencia: f.competencia || null, afirmacion: f.afirmacion || null, evidencia: f.evidencia || null,
+        contexto: f.contexto || null, exigencia: f.exigencia || null, desempeno: f.desempeno || null, criterio: f.criterio || null,
+      };
+      const id = parseInt(f.id, 10);
+      if (id) {
+        const { data, error } = await supabase.from("banco_preguntas").update(campos).eq("id", id).eq("docente_id", yo).select("id");
+        if (error) throw error;
+        if (data && data.length) { actualizadas++; continue; }
+      }
+      await crearPreguntaBanco(campos); nuevas++;
+    } catch (e) { errores.push(`${etiqueta}: ${e.message}`); }
   }
-  return { cargadas, total: filas.length, errores };
+  return { nuevas, actualizadas, cargadas: nuevas + actualizadas, total: filas.length, errores };
 }
 
 // Elige N preguntas al azar del banco (con el filtro de materia/tema que se
@@ -3582,7 +3602,7 @@ export async function agregarPreguntasAleatoriasDesdeBanco(evaluacionId, materia
   const elegidas = mezcladas.slice(0, cantidad);
   let orden = ordenInicial;
   for (const p of elegidas) {
-    await crearPregunta({ evaluacion_id: evaluacionId, orden: orden++, tipo: "opcion_multiple", enunciado: p.enunciado, puntos: 1, opciones: p.opciones, retroalimentacion: p.retroalimentacion || null });
+    await crearPregunta({ evaluacion_id: evaluacionId, orden: orden++, tipo: "opcion_multiple", enunciado: p.contexto ? `${p.contexto}\n\n${p.enunciado}` : p.enunciado, puntos: 1, opciones: p.opciones, retroalimentacion: p.retroalimentacion || null });
   }
   return { agregadas: elegidas.length, disponibles: disponibles.length };
 }
