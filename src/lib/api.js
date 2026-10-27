@@ -3486,6 +3486,19 @@ export async function fetchBancoPreguntas(materiaId, tema, nivel) {
   return data || [];
 }
 
+// Índice liviano de todo el banco del docente (solo campos de ubicación) para armar las tarjetas.
+export async function fetchIndiceBanco() {
+  const { data: userData } = await supabase.auth.getUser();
+  const todo = [];
+  for (let d = 0; ; d += 1000) {
+    const { data, error } = await supabase.from("banco_preguntas").select("id, materia_id, nivel, tema, dificultad").eq("docente_id", userData?.user?.id || null).order("id").range(d, d + 999);
+    if (error) throw error;
+    todo.push(...(data || []));
+    if (!data || data.length < 1000) break;
+  }
+  return todo;
+}
+
 export async function fetchNivelesBanco(materiaId) {
   const { data: userData } = await supabase.auth.getUser();
   let query = supabase.from("banco_preguntas").select("nivel").eq("docente_id", userData?.user?.id || null);
