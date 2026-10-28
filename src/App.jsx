@@ -2516,23 +2516,45 @@ const MENU_PANEL_GRUPOS = [
   {
     key: "inicio_grupo", label: "Inicio", icono: "🏠", items: [
       { key: "inicio", label: "Inicio", icono: "🏠" },
+      { key: "entregasrevisar", label: "Entregas por revisar", icono: "📝" },
     ],
   },
   {
-    key: "academico", label: "Académico", icono: "🎓", items: [
-      { key: "entregasrevisar", label: "Entregas por revisar", icono: "📝" },
+    key: "miclase", label: "Mi clase", icono: "🎓", items: [
       { key: "estudiantes", label: "Estudiantes", icono: "🏰" },
       { key: "asistencia", label: "Asistencia", icono: "📋" },
       { key: "calificaciones", label: "Planillas", icono: "📖" },
-      { key: "recuperaciones", label: "Recuperaciones", icono: "♻️" },
-      { key: "coevaluacion", label: "Auto y coevaluación", icono: "🪞" },
-      { key: "gcal", label: "Google Calendar", icono: "📆" },
       { key: "evaluaciones", label: "Evaluaciones", icono: "📝" },
+      { key: "recuperaciones", label: "Recuperaciones", icono: "♻️" },
       { key: "proyectosforja", label: "La Forja", icono: "🔨" },
+      { key: "coevaluacion", label: "Auto y coevaluación", icono: "🪞" },
     ],
   },
   {
-    key: "convivencial", label: "Convivencial", icono: "🤝", items: [
+    key: "planeacion", label: "Planear", icono: "🗺️", items: [
+      { key: "planeaciones", label: "Planeaciones", icono: "📝" },
+      { key: "tablerosemanal", label: "Tablero Semanal", icono: "🗓️" },
+      { key: "horario", label: "Agenda", icono: "🗓️" },
+      { key: "gcal", label: "Google Calendar", icono: "📆" },
+      { key: "actividadesprogramadas", label: "Actividades Programadas", icono: "🎮" },
+      { key: "rubricas", label: "Rúbricas", icono: "🎯" },
+      { key: "guiasestudio", label: "Guías de Estudio", icono: "📘" },
+      { key: "modulosestudio", label: "Módulos de Estudio", icono: "🧭" },
+      { key: "biblioteca", label: "Biblioteca", icono: "📚" },
+    ],
+  },
+  {
+    key: "evaluar", label: "Evaluar y preguntas", icono: "🗂️", items: [
+      { key: "herr_bancopreguntas", label: "Banco de Preguntas", icono: "🗂️" },
+      { key: "herr_formasexamen", label: "Formas de Examen (A/B/C/D)", icono: "📝" },
+      { key: "herr_consignas", label: "Consignas del Códice", icono: "📜" },
+      { key: "herr_trivia", label: "Preguntados", icono: "🎡" },
+      { key: "herr_revisiontrivia", label: "Revisión de Preguntados (autoclic)", icono: "🛡️" },
+      { key: "herr_quizvivo", label: "Quiz en vivo", icono: "⚡" },
+    ],
+  },
+  {
+    key: "convivencial", label: "Convivencia e inclusión", icono: "🤝", items: [
       { key: "anotaciones", label: "Anotaciones", icono: "🗒️" },
       { key: "inclusion", label: "Inclusión", icono: "🧩" },
       { key: "bajasvida", label: "Bajas de Vida", icono: "📉" },
@@ -2540,69 +2562,55 @@ const MENU_PANEL_GRUPOS = [
     ],
   },
   {
-    key: "planeacion", label: "Planeación", icono: "🗺️", items: [
-      { key: "planeaciones", label: "Planeaciones", icono: "📝" },
-      { key: "tablerosemanal", label: "Tablero Semanal", icono: "🗓️" },
-      { key: "rubricas", label: "Rúbricas", icono: "🎯" },
-      { key: "guiasestudio", label: "Guías de Estudio", icono: "📘" },
-      { key: "modulosestudio", label: "Módulos de Estudio", icono: "🧭" },
-      { key: "biblioteca", label: "Biblioteca", icono: "📚" },
-      { key: "actividadesprogramadas", label: "Actividades Programadas", icono: "🎮" },
-      { key: "herr_bancopreguntas", label: "Banco de Preguntas", icono: "🗂️" },
-      { key: "herr_consignas", label: "Consignas del Códice", icono: "📜" },
-      { key: "herr_formasexamen", label: "Formas de Examen (A/B/C/D)", icono: "📝" },
+    key: "gamificacion", label: "Gamificación", icono: "🎮", items: [
+      { key: "comarca", label: "Comarca de Oakhaven", icono: "🏛️" },
+      { key: "tablero", label: "Tablero Mundial", icono: "🌍" },
+      { key: "puntosconducta", label: "Puntos por conducta", icono: "⚖️" },
+      { key: "mundonota", label: "Mundo → nota", icono: "🧮" },
+      { key: "vidanota", label: "Vida → nota de comportamiento", icono: "🩸" },
+      { key: "herr_accionesmasivas", label: "Acciones Masivas", icono: "🎯" },
+      { key: "herr_recompensas", label: "Recompensas de estudiantes", icono: "🎁" },
+      { key: "herr_obras", label: "Gran Obra del curso", icono: "🏗️" },
+      { key: "herr_gamext", label: "Desafíos/Misiones/Cosméticos", icono: "🕹️" },
+      { key: "niveles", label: "Niveles", icono: "🏅" },
+      { key: "objetos", label: "Objetos", icono: "🎒" },
+      { key: "roles", label: "Roles", icono: "🎭" },
     ],
   },
   {
-    key: "gamificacion", label: "Gamificación", icono: "🎮", items: [
-      { key: "comarca", label: "Comarca de Oakhaven", icono: "🏛️" },
-      { key: "puntosconducta", label: "Puntos por conducta", icono: "⚖️" },
-      { key: "tablero", label: "Tablero Mundial", icono: "🌍" },
-      { key: "mundonota", label: "Mundo → nota", icono: "🧮" },
-      { key: "vidanota", label: "Vida → nota de comportamiento", icono: "🩸" },
-      { key: "herr_ruleta", label: "Ruleta", icono: "🎡" },
-      { key: "herr_ruletamonedas", label: "Ruleta de Monedas", icono: "🪙" },
-      { key: "herr_banco", label: "Banco", icono: "🏦" },
-      { key: "herr_album", label: "Álbum", icono: "🖼️" },
+    key: "reconocimientos", label: "Reconocimientos", icono: "🏆", items: [
       { key: "herr_logros", label: "Logros", icono: "🏆" },
       { key: "herr_salonhonor", label: "Salón de Honor", icono: "🥇" },
       { key: "herr_diplomas", label: "Diplomas", icono: "🏅" },
       { key: "herr_rankdiplomas", label: "Ranking → diplomas", icono: "🏆" },
-      { key: "herr_avatares", label: "Sala de avatares", icono: "🎭" },
-      { key: "herr_gamext", label: "Desafíos/Misiones/Cosméticos", icono: "🕹️" },
-      { key: "herr_bingo", label: "Bingo de Repaso", icono: "🎯" },
-      { key: "herr_quizvivo", label: "Quiz en vivo", icono: "⚡" },
       { key: "herr_rankingganancias", label: "Ranking de ganancias (XP/oro)", icono: "🏅" },
-      { key: "herr_revisiontrivia", label: "Revisión de Preguntados (autoclic)", icono: "🛡️" },
-      { key: "herr_recompensas", label: "Recompensas de estudiantes", icono: "🎁" },
-      { key: "herr_obras", label: "Gran Obra del curso", icono: "🏗️" },
-      { key: "herr_encuestas", label: "Encuesta de satisfacción", icono: "📝" },
-      { key: "herr_informe", label: "Informe de impacto", icono: "📊" },
+      { key: "herr_album", label: "Álbum", icono: "🖼️" },
+      { key: "herr_avatares", label: "Sala de avatares", icono: "🎭" },
+      { key: "herr_banco", label: "Banco", icono: "🏦" },
+      { key: "herr_ruletamonedas", label: "Ruleta de Monedas", icono: "🪙" },
     ],
   },
   {
-    key: "administracion", label: "Administración", icono: "⚙️", items: [
-      { key: "corregirnombres", label: "Corregir Nombres", icono: "🪪" },
-      { key: "niveles", label: "Niveles", icono: "🏅" },
-      { key: "objetos", label: "Objetos", icono: "🎒" },
-      { key: "horario", label: "Agenda", icono: "🗓️" },
-      { key: "roles", label: "Roles", icono: "🎭" },
-      { key: "reportes", label: "Reportes", icono: "📊" },
-    ],
-  },
-  {
-    key: "herramientas_grupo", label: "Herramientas", icono: "🛠️", items: [
-      { key: "herr_accionesmasivas", label: "Acciones Masivas", icono: "🎯" },
-      { key: "herr_anuncios", label: "Anuncios", icono: "📣" },
-      { key: "herr_trivia", label: "Preguntados", icono: "🎡" },
-      { key: "herr_temporizador", label: "Temporizador", icono: "⏱️" },
+    key: "herramientas_grupo", label: "En el aula", icono: "🎲", items: [
+      { key: "herr_ruleta", label: "Ruleta", icono: "🎡" },
       { key: "herr_dado", label: "Dado", icono: "🎲" },
       { key: "herr_cronometro", label: "Cronómetro", icono: "⏲️" },
+      { key: "herr_temporizador", label: "Temporizador", icono: "⏱️" },
       { key: "herr_semaforo", label: "Semáforo", icono: "🚦" },
       { key: "herr_sorteoorden", label: "Sorteo de Orden/Parejas", icono: "🔀" },
       { key: "herr_grupos", label: "Generador de Grupos", icono: "👥" },
       { key: "herr_marcador", label: "Marcador de Puntos", icono: "🔢" },
       { key: "herr_selectorestudiante", label: "Selector de Estudiante", icono: "🎯" },
+      { key: "herr_bingo", label: "Bingo de Repaso", icono: "🎯" },
+      { key: "herr_anuncios", label: "Anuncios", icono: "📣" },
+    ],
+  },
+  {
+    key: "informes", label: "Informes y ajustes", icono: "📊", items: [
+      { key: "reportes", label: "Reportes", icono: "📊" },
+      { key: "herr_informe", label: "Informe de impacto", icono: "📊" },
+      { key: "herr_encuestas", label: "Encuesta de satisfacción", icono: "📝" },
+      { key: "corregirnombres", label: "Corregir Nombres", icono: "🪪" },
     ],
   },
 ];
@@ -2695,24 +2703,34 @@ function FondoArcadeDocente() {
 // Tarjeta de un ítem del menú lateral — mismo lenguaje visual que las
 // tarjetas del resto de la app (círculo de color + texto), apiladas
 // verticalmente contra el fondo oscuro del menú.
-function TarjetaMenuLateral({ icono, label, activo, onClick, fondo, color }) {
+function TarjetaMenuLateral({ icono, label, activo, onClick, fondo, color, sub, esFavorito, onAlternarFavorito }) {
   return (
-    <button onClick={onClick}
-      className={`w-full flex items-center gap-2.5 rounded-xl px-2.5 py-2 mb-1.5 text-left transition-all ${activo ? "bg-white" : "hover:bg-white/10"}`}>
-      <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm" style={{ background: activo ? (fondo || "#E8EEF8") : "rgba(255,255,255,0.12)" }}>
-        {icono}
-      </div>
-      <span className={`text-sm font-bold leading-tight ${activo ? "text-[#17264D]" : "text-[#E8EEF8]"}`}>{label}</span>
-    </button>
+    <div className={`group relative w-full flex items-center rounded-xl mb-1.5 transition-all ${activo ? "bg-white" : "hover:bg-white/10"}`}>
+      <button onClick={onClick} className="flex-1 min-w-0 flex items-center gap-2.5 px-2.5 py-2 text-left">
+        <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm" style={{ background: activo ? (fondo || "#E8EEF8") : "rgba(255,255,255,0.12)" }}>
+          {icono}
+        </div>
+        <span className="min-w-0">
+          <span className={`block text-sm font-bold leading-tight ${activo ? "text-[#17264D]" : "text-[#E8EEF8]"}`}>{label}</span>
+          {sub && <span className={`block text-[10px] ${activo ? "text-slate-400" : "text-white/40"}`}>{sub}</span>}
+        </span>
+      </button>
+      {onAlternarFavorito && (
+        <button onClick={(e) => { e.stopPropagation(); onAlternarFavorito(); }} title={esFavorito ? "Quitar de favoritos" : "Agregar a favoritos"}
+          className={`shrink-0 pr-2.5 text-sm ${esFavorito ? "text-amber-400" : "text-white/30 sm:opacity-0 sm:group-hover:opacity-100 hover:text-amber-300"} ${activo && !esFavorito ? "!text-slate-300" : ""}`}>
+          {esFavorito ? "★" : "☆"}
+        </button>
+      )}
+    </div>
   );
 }
 
 // Menú en tarjetas para la página de Inicio: cada grupo con sus secciones.
 const COLORES_GRUPO = {
-  academico: "#2F55A4", convivencial: "#0E9F8E", planeacion: "#B8892B",
-  gamificacion: "#7C3AED", administracion: "#475569", herramientas_grupo: "#E0552E",
+  miclase: "#2F55A4", convivencial: "#0E9F8E", planeacion: "#B8892B", evaluar: "#0EA5E9",
+  gamificacion: "#7C3AED", reconocimientos: "#D97706", herramientas_grupo: "#E0552E", informes: "#475569",
 };
-function TarjetasMenuInicio({ grupos, onIrA }) {
+function TarjetasMenuInicio({ grupos, onIrA, favoritos = [] }) {
   const [busqueda, setBusqueda] = useState("");
   const q = busqueda.trim().toLowerCase();
   const visibles = grupos
@@ -2726,6 +2744,18 @@ function TarjetasMenuInicio({ grupos, onIrA }) {
         <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="🔎 Buscar sección…"
           className="text-sm rounded-full px-3.5 py-1.5 border border-slate-200 bg-white outline-none focus:border-[#2F55A4] w-full sm:w-64" />
       </div>
+      {!q && favoritos.length > 0 && (
+        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50/60 p-3">
+          <div className="text-xs font-extrabold text-amber-700 mb-2">⭐ Mis favoritos</div>
+          <div className="flex flex-wrap gap-2">
+            {favoritos.map((k) => grupos.flatMap((g) => g.items).find((it) => it.key === k)).filter(Boolean).map((it) => (
+              <button key={it.key} onClick={() => onIrA(it.key)} className="flex items-center gap-1.5 text-[12px] font-bold text-slate-700 bg-white border border-amber-200 rounded-full px-3 py-1.5 hover:shadow-sm">
+                <span>{it.icono}</span>{it.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {visibles.length === 0 && <p className="text-sm text-slate-400">No hay secciones con ese nombre.</p>}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
         {visibles.map((g) => {
@@ -2759,10 +2789,11 @@ function TarjetasMenuInicio({ grupos, onIrA }) {
   );
 }
 
-function SidebarTarjetas({ activo, onCambiar, email, institucion, onAdmin, onInstitucion, onSalir, onBuscarEstudiante, esAdmin, esAdminEfectivo, previsualizandoDocente, onCambiarPrevisualizacion, grupos, menuAbierto, onCerrarMenu }) {
+function SidebarTarjetas({ activo, onCambiar, email, institucion, onAdmin, onInstitucion, onSalir, onBuscarEstudiante, esAdmin, esAdminEfectivo, previsualizandoDocente, onCambiarPrevisualizacion, grupos, favoritos = [], onAlternarFavorito, menuAbierto, onCerrarMenu }) {
   const [nombreDocente, setNombreDocente] = useState("");
   const [editandoNombre, setEditandoNombre] = useState(false);
   const [nombreTemp, setNombreTemp] = useState("");
+  const [buscarMenu, setBuscarMenu] = useState("");
   // Grupos desplegados — por defecto, solo el que contiene la sección
   // activa; los demás quedan colapsados hasta que se les haga clic.
   const [gruposAbiertos, setGruposAbiertos] = useState(() => {
@@ -2816,6 +2847,29 @@ function SidebarTarjetas({ activo, onCambiar, email, institucion, onAdmin, onIns
 
       <div className="flex-1 overflow-y-auto px-3 pb-3">
         <TarjetaMenuLateral icono="🏠" label="Inicio" activo={activo === "inicio"} onClick={() => elegir("inicio")} fondo="#E8EEF8" />
+        <TarjetaMenuLateral icono="📝" label="Entregas por revisar" activo={activo === "entregasrevisar"} onClick={() => elegir("entregasrevisar")} />
+
+        <input value={buscarMenu} onChange={(e) => setBuscarMenu(e.target.value)} placeholder="🔎 Buscar opción…"
+          className="w-full text-xs rounded-full px-3 py-1.5 mt-1 mb-1 bg-white/10 text-white placeholder-white/40 outline-none border border-white/10 focus:border-white/30" />
+
+        {buscarMenu.trim() ? (
+          (() => {
+            const norm = (t) => String(t).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+            const q = norm(buscarMenu.trim());
+            const res = grupos.flatMap((g) => g.items.map((it) => ({ ...it, grupo: g.label }))).filter((it) => it.key !== "inicio" && it.key !== "entregasrevisar" && (norm(it.label).includes(q) || norm(it.grupo).includes(q)));
+            return res.length === 0 ? <p className="text-[11px] text-white/50 px-2 py-2">Nada con ese nombre.</p> : res.map((it) => (
+              <TarjetaMenuLateral key={it.key} icono={it.icono} label={it.label} sub={it.grupo} activo={activo === it.key} onClick={() => { setBuscarMenu(""); elegir(it.key); }} />
+            ));
+          })()
+        ) : (<>
+        {favoritos.length > 0 && (
+          <div className="mt-2">
+            <div className="px-2.5 py-1 mb-1 text-[9px] font-bold uppercase tracking-wide" style={{ color: "#F5C451" }}>⭐ Favoritos</div>
+            {favoritos.map((k) => grupos.flatMap((g) => g.items).find((it) => it.key === k)).filter(Boolean).map((it) => (
+              <TarjetaMenuLateral key={it.key} icono={it.icono} label={it.label} activo={activo === it.key} onClick={() => elegir(it.key)} esFavorito onAlternarFavorito={() => onAlternarFavorito?.(it.key)} />
+            ))}
+          </div>
+        )}
 
         {grupos.filter((g) => g.key !== "inicio_grupo").map((grupo) => {
           const abierto = gruposAbiertos.has(grupo.key);
@@ -2826,11 +2880,13 @@ function SidebarTarjetas({ activo, onCambiar, email, institucion, onAdmin, onIns
                 <span className="text-[8px]" style={{ color: "#829aca" }}>{abierto ? "▾" : "▸"}</span>
               </button>
               {abierto && grupo.items.map((it) => (
-                <TarjetaMenuLateral key={it.key} icono={it.icono} label={it.label} activo={activo === it.key} onClick={() => elegir(it.key)} />
+                <TarjetaMenuLateral key={it.key} icono={it.icono} label={it.label} activo={activo === it.key} onClick={() => elegir(it.key)}
+                  esFavorito={favoritos.includes(it.key)} onAlternarFavorito={() => onAlternarFavorito?.(it.key)} />
               ))}
             </div>
           );
         })}
+        </>)}
       </div>
 
       <div className="p-3 pt-2 border-t border-white/10">
@@ -2955,7 +3011,19 @@ function Panel({ session }) {
   // en general sin distinguir cuál).
   const claveActivaMenu = tab === "herramientas" ? `herr_${subTabHerramientas}` : tab;
 
-  const menuPanelVisible = esAdminEfectivo ? MENU_PANEL_GRUPOS : MENU_PANEL_GRUPOS.filter((g) => g.key !== "administracion");
+  // Los docentes que no son admin no ven las opciones de administración, y los grupos que quedan vacíos se ocultan.
+  const menuPanelVisible = esAdminEfectivo ? MENU_PANEL_GRUPOS : MENU_PANEL_GRUPOS
+    .map((g) => ({ ...g, items: g.items.filter((it) => !CLAVES_SOLO_ADMIN.includes(it.key)) }))
+    .filter((g) => g.items.length > 0);
+
+  // Favoritos del docente (se recuerdan en este navegador, también al volver otro día)
+  const claveFav = `codice_fav_${session.user.id}`;
+  const [favoritos, setFavoritos] = useState(() => { try { const v = JSON.parse(localStorage.getItem(claveFav) || "[]"); return Array.isArray(v) ? v : []; } catch { return []; } });
+  const alternarFavorito = (key) => setFavoritos((prev) => {
+    const nuevo = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key];
+    try { localStorage.setItem(claveFav, JSON.stringify(nuevo)); } catch { /* sin almacenamiento: no pasa nada */ }
+    return nuevo;
+  });
 
   // Si la sección recordada ya no existe (o cambiaste de rol), se vuelve a Inicio.
   // El chequeo de administrador espera a saber quién sos: antes de eso "esAdmin"
@@ -2985,13 +3053,13 @@ function Panel({ session }) {
         onAdmin={() => setAdministracionAbierta(true)} onInstitucion={() => setInstitucionAbierta(true)}
         onSalir={() => supabase.auth.signOut()} onBuscarEstudiante={irACalificacionesDesdeBusqueda}
         esAdmin={esAdmin} esAdminEfectivo={esAdminEfectivo} previsualizandoDocente={previsualizandoDocente} onCambiarPrevisualizacion={setPrevisualizandoDocente}
-        grupos={menuPanelVisible} menuAbierto={menuMovilAbierto} onCerrarMenu={(abrir) => setMenuMovilAbierto(!!abrir)} />
+        grupos={menuPanelVisible} favoritos={favoritos} onAlternarFavorito={alternarFavorito} menuAbierto={menuMovilAbierto} onCerrarMenu={(abrir) => setMenuMovilAbierto(!!abrir)} />
 
       {institucionAbierta && <InstitucionModal onClose={() => { setInstitucionAbierta(false); cargarInstitucion(); }} />}
       {administracionAbierta && <AdministracionModal onClose={() => setAdministracionAbierta(false)} />}
 
       <div className="flex-1 min-w-0 p-5 md:p-10">
-        {tab === "inicio" && <VistaInicio onIrA={irA} contenidoMedio={<TarjetasMenuInicio grupos={menuPanelVisible} onIrA={irA} />} />}
+        {tab === "inicio" && <VistaInicio onIrA={irA} contenidoMedio={<TarjetasMenuInicio grupos={menuPanelVisible} onIrA={irA} favoritos={favoritos} />} />}
         {tab === "entregasrevisar" && <MarcoSeccion zonaLabel="Académico — Entregas por revisar" icono="🎓"><VistaEntregasPorRevisar onIrAGrado={irAGradoDesdeRevisar} /></MarcoSeccion>}
         {tab === "estudiantes" && (
           <MarcoSeccion zonaLabel="Académico — Estudiantes" icono="🎓">
