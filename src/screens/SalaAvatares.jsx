@@ -27,19 +27,21 @@ function partesDe(a) {
   const partes = String(a.descripcion || "").split(/Poder c[ií]vico:\s*/i);
   return { nombre: nombre || a.nombre_el, funcion: resto.join(" · "), hace: (partes[0] || "").trim(), poder: (partes[1] || "").trim() };
 }
+const nomAvatar = (a) => String(a.nombre_el || "").replace(/^El\s+/i, "");
 const esc = (t) => String(t || "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 function imprimirTabla(lista) {
   const filas = lista.map((a) => { const p = partesDe(a); return `<tr>
     <td class="av">${a.imagen_el ? `<img src="${new URL(a.imagen_el, location.origin).href}">` : ""}${a.imagen_la ? `<img src="${new URL(a.imagen_la, location.origin).href}">` : ""}</td>
+    <td class="n">${esc(nomAvatar(a))}<br><span class="f">${esc(a.nombre_la || "")}</span></td><td class="eq">=</td>
     <td><b>${esc(p.nombre)}</b><br><span class="f">${esc(p.funcion)}</span></td><td class="k">${esc(fraseDe(p.nombre))}</td><td>${esc(p.hace)}</td><td>${esc(p.poder)}</td></tr>`; }).join("");
   const w = window.open("", "_blank");
   if (!w) { alert("El navegador bloqueó la ventana. Permite las ventanas emergentes para imprimir."); return; }
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Roles del gremio</title><style>
     @page{size:landscape;margin:12mm} body{font-family:Georgia,serif;color:#17264D} h1{font-size:20px;margin:0 0 4px} p{font-size:11px;margin:0 0 10px;color:#555}
     table{border-collapse:collapse;width:100%;font-size:10.5px} th{background:#17264D;color:#fff;padding:6px;text-align:left} td{border:1px solid #cdd3e0;padding:6px;vertical-align:top}
-    td.av{width:110px;white-space:nowrap} td.av img{height:92px;margin-right:3px;border-radius:5px} .f{color:#B8892B;font-size:10px} .k{font-weight:bold;color:#2F55A4} tr{page-break-inside:avoid}
-  </style></head><body><h1>Roles del gremio — ¿quién hace qué?</h1><p>Cada rol tiene un avatar, una función y un poder cívico. Léelo antes de repartir los roles en tu gremio.</p>
-  <table><thead><tr><th>Avatar</th><th>Rol</th><th>Se resume en</th><th>Qué hace en el aula</th><th>Poder cívico</th></tr></thead><tbody>${filas}</tbody></table>
+    td.n{font-weight:bold;font-size:12px;width:90px} td.eq{font-size:18px;color:#B8892B;text-align:center;width:24px} td.av{width:110px;white-space:nowrap} td.av img{height:92px;margin-right:3px;border-radius:5px} .f{color:#B8892B;font-size:10px} .k{font-weight:bold;color:#2F55A4} tr{page-break-inside:avoid}
+  </style></head><body><h1>Roles del gremio — ¿quién hace qué?</h1><p>El nombre del avatar (el personaje de la carta) y el rol del gremio son cosas distintas: cada avatar corresponde a un rol. Aquí está la equivalencia.</p>
+  <table><thead><tr><th>Avatar</th><th>Nombre del avatar</th><th></th><th>Rol en el gremio</th><th>Se resume en</th><th>Qué hace en el aula</th><th>Poder cívico</th></tr></thead><tbody>${filas}</tbody></table>
   <script>window.onload=()=>setTimeout(()=>window.print(),500)</script></body></html>`);
   w.document.close();
 }
@@ -48,19 +50,26 @@ function TablaRoles({ lista }) {
   return (
     <div>
       <div className="flex items-center justify-between gap-2 mb-2">
-        <p className="text-xs text-slate-500">Para no confundir los roles: cada fila es un rol con su avatar, lo que hace y su poder cívico.</p>
+        <p className="text-xs text-slate-500">El <b>avatar</b> es el personaje de la carta; el <b>rol</b> es lo que haces en tu gremio. Cada avatar corresponde a un rol:</p>
         <button onClick={() => imprimirTabla(lista)} className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🖨️ Imprimir</button>
+      </div>
+      <div className="flex flex-wrap gap-2 mb-3">
+        {lista.map((a) => { const p = partesDe(a); return (
+          <div key={a.id} className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white pl-3 pr-3.5 py-1.5 text-xs">
+            <span className="font-bold text-[#17264D]">{nomAvatar(a)}</span><span className="text-[#B8892B] font-extrabold">=</span><span className="font-bold text-[#2F55A4]">{p.nombre}</span>
+          </div>); })}
       </div>
       <div className="overflow-x-auto rounded-xl border border-slate-200">
         <table className="w-full text-xs min-w-[760px]">
           <thead><tr className="text-left text-white" style={{ background: "#17264D" }}>
-            <th className="p-2 w-28">Avatar</th><th className="p-2 w-44">Rol</th><th className="p-2 w-40">Se resume en</th><th className="p-2">Qué hace en el aula</th><th className="p-2">Poder cívico</th>
+            <th className="p-2 w-28">Avatar</th><th className="p-2 w-32">Nombre del avatar</th><th className="p-2 w-44">Rol en el gremio</th><th className="p-2 w-40">Se resume en</th><th className="p-2">Qué hace en el aula</th><th className="p-2">Poder cívico</th>
           </tr></thead>
           <tbody>
             {lista.map((a, i) => { const p = partesDe(a); return (
               <tr key={a.id} className={i % 2 ? "bg-slate-50" : "bg-white"}>
                 <td className="p-2 align-top"><div className="flex gap-1">{[a.imagen_el, a.imagen_la].filter(Boolean).map((u) => <img key={u} src={u} alt="" loading="lazy" className="h-20 w-auto rounded" />)}</div></td>
-                <td className="p-2 align-top"><div className="font-extrabold text-[#17264D]">{p.nombre}</div><div className="text-[10px] font-semibold text-[#B8892B]">{p.funcion}</div></td>
+                <td className="p-2 align-top"><div className="font-extrabold text-[#17264D]">{nomAvatar(a)}</div><div className="text-[10px] text-slate-400">{a.nombre_la}</div></td>
+                <td className="p-2 align-top"><div className="font-extrabold text-[#2F55A4]">= {p.nombre}</div><div className="text-[10px] font-semibold text-[#B8892B]">{p.funcion}</div></td>
                 <td className="p-2 align-top font-bold text-[#2F55A4]">{fraseDe(p.nombre)}</td>
                 <td className="p-2 align-top text-slate-700">{p.hace}</td>
                 <td className="p-2 align-top text-slate-700">{p.poder || <span className="text-slate-300">—</span>}</td>
@@ -264,8 +273,8 @@ export function SalaAvatares({ esDocente = false }) {
             <div key={a.id} className={`rounded-2xl border p-3 ${seleccionando && sel.includes(a.id) ? "border-violet-400" : "border-slate-200"} ${!a.visible ? "opacity-60" : ""}`} style={{ background: "#fbf8ef" }}>
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-2">
                 {seleccionando && puedeEditar && <input type="checkbox" checked={sel.includes(a.id)} onChange={() => toggleSel(a.id)} />}
-                <span className="font-extrabold text-[#17264D]">{String(a.nombre_el || "").replace(/^El /, "")}</span>
-                {a.rol && <span className="text-[11px] font-semibold text-[#B8892B]">{a.rol}</span>}
+                <span className="font-extrabold text-[#17264D]">{nomAvatar(a)}</span>
+                {a.rol && <span className="text-[11px] font-semibold text-[#B8892B]">= Rol: {a.rol}</span>}
                 {esDocente && !a.visible && <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">Oculto</span>}
                 <div className="flex-1" />
                 {puedeEditar && !seleccionando && (
