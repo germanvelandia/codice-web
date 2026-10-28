@@ -174,6 +174,7 @@ export function SalaAvatares({ esDocente = false }) {
   const [cargando, setCargando] = useState(true);
   const [sinTabla, setSinTabla] = useState(false);
   const [vista, setVista] = useState("cartas");
+  const [filtro, setFiltro] = useState("todos");
   const [abierto, setAbierto] = useState(null);
   const [editando, setEditando] = useState(null); // objeto avatar, o {} para nuevo
   const [seleccionando, setSeleccionando] = useState(false);
@@ -189,7 +190,7 @@ export function SalaAvatares({ esDocente = false }) {
 
   const visibles = useMemo(() => (esDocente ? avatares : avatares.filter((a) => a.visible)), [avatares, esDocente]);
   const roles = useMemo(() => Array.from(new Set(avatares.map((a) => a.rol).filter(Boolean))), [avatares]);
-  const lista = visibles;
+  const lista = filtro === "todos" ? visibles : visibles.filter((a) => String(a.id) === filtro);
   const puedeEditar = esDocente && !sinTabla;
 
   const toggleSel = (id) => setSel((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
@@ -252,6 +253,15 @@ export function SalaAvatares({ esDocente = false }) {
           <button disabled={!sel.length || trabajando} onClick={() => cambiarVisible(sel, true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-emerald-500 text-white disabled:opacity-40">👁 Mostrar</button>
           <button disabled={!sel.length || trabajando} onClick={() => cambiarVisible(sel, false)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-500 text-white disabled:opacity-40">🙈 Ocultar</button>
           <button disabled={!sel.length || trabajando} onClick={() => eliminar(sel)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-rose-500 text-white disabled:opacity-40">🗑 Eliminar</button>
+        </div>
+      )}
+
+      {visibles.length > 1 && (
+        <div className="flex flex-wrap gap-1.5 mb-4">
+          {[{ key: "todos", label: "Todos" }, ...visibles.map((a) => ({ key: String(a.id), label: tituloRol(a) }))].map((f) => (
+            <button key={f.key} onClick={() => setFiltro(f.key)}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${filtro === f.key ? "bg-[#2F55A4] text-white border-[#2F55A4]" : "bg-white text-slate-600 border-slate-200"}`}>{f.label}</button>
+          ))}
         </div>
       )}
 
