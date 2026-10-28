@@ -24,11 +24,14 @@ const ordenar = (a) => [...a].sort((x, y) => (x.orden - y.orden) || (x.id - y.id
 
 async function fetchLibros(materiaId, gradoId, periodo) {
   const uid = await uidActual();
-  let q = supabase.from("libros_estudio").select("*, libro_capitulos(id)").eq("docente_id", uid).eq("materia_id", materiaId).eq("grado_id", gradoId);
+  let q = supabase.from("libros_estudio").select("*, libro_capitulos(id)").eq("docente_id", uid).eq("grado_id", gradoId);
+  if (materiaId && materiaId !== "todas") q = q.eq("materia_id", materiaId);
   if (periodo) q = q.eq("periodo", periodo);
   const { data, error } = await q.order("creado_en", { ascending: false });
   if (error) throw error;
-  return data || [];
+  const lista = data || [];
+  const nombres = await nombresMaterias(lista.map((l) => l.materia_id));
+  return lista.map((l) => ({ ...l, materias: { nombre: nombres[String(l.materia_id)] || "" } }));
 }
 async function nombresMaterias(ids) {
   const u = [...new Set((ids || []).filter((x) => x != null))]; const out = {};
@@ -501,7 +504,7 @@ function DuplicarModal({ libro, grados, materias, onClose, onHecho }) {
 
 export function VistaGuiasEstudio({ grados, gradoActivo, periodoActivo, materiaActiva }) {
   const [materias, setMaterias] = useState([]);
-  const [materiaId, setMateriaId] = useState(materiaActiva || "");
+  const [materiaId, setMateriaId] = useState(materiaActiva || "todas");
   const [gradoId, setGradoId] = useState(gradoActivo || grados[0]?.id || "");
   const [periodo, setPeriodo] = useState("1");
   const [libros, setLibros] = useState([]);
@@ -515,7 +518,7 @@ export function VistaGuiasEstudio({ grados, gradoActivo, periodoActivo, materiaA
   useEffect(() => { if (gradoActivo) setGradoId(gradoActivo); }, [gradoActivo]);
   useEffect(() => { if (materiaActiva) setMateriaId(materiaActiva); }, [materiaActiva]);
   useEffect(() => { if (periodoActivo) setPeriodo(String(periodoActivo)); }, [periodoActivo]);
-  useEffect(() => { api.fetchMaterias().then((d) => { setMaterias(d); setMateriaId((m) => m || d[0]?.id || ""); }); api.fetchInstitucion().then(setInstitucion).catch(() => {}); }, []);
+  useEffect(() => { api.fetchMaterias().then((d) => { setMaterias(d); setMateriaId((m) => m || "todas"); }); api.fetchInstitucion().then(setInstitucion).catch(() => {}); }, []);
   useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
 
   const cargar = () => { if (!materiaId || !gradoId) return; setCargando(true); setError(""); fetchLibros(materiaId, gradoId, periodo).then((d) => { setLibros(d); setCargando(false); }).catch((e) => { setError(e.message || "Error"); setCargando(false); }); };
@@ -523,7 +526,9 @@ export function VistaGuiasEstudio({ grados, gradoActivo, periodoActivo, materiaA
 
   if (editando) return <EditorLibro libroId={editando} institucion={institucion} onVolver={() => setEditando(null)} />;
 
+  const materiaParaCrear = () => { if (materiaId && materiaId !== "todas") return materiaId; alert("Elige primero una materia en el selector para crear el libro."); return null; };
   const nuevo = async () => {
+    if (!materiaParaCrear()) return;
     const t = prompt("Título del nuevo libro:"); if (!t || !t.trim()) return;
     try { const l = await crearLibro({ materia_id: materiaId, grado_id: gradoId, periodo, titulo: t.trim(), publicada: false }); await crearCapitulo({ libro_id: l.id, orden: 1, titulo: "Capítulo 1" }); setEditando(l.id); }
     catch (e) { alert("No se pudo crear: " + e.message); }
@@ -535,11 +540,11 @@ export function VistaGuiasEstudio({ grados, gradoActivo, periodoActivo, materiaA
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2 mb-2">
-        <select value={materiaId} onChange={(e) => setMateriaId(e.target.value)} className={cls}>{materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select>
+        <select value={materiaId} onChange={(e) => setMateriaId(e.target.value)} className={cls}><option value="todas">Todas las materias</option>{materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select>
         <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className={cls}>{grados.map((g) => <option key={g.id} value={g.id}>{g.nombre || g.id}</option>)}</select>
         <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className={cls}>{[1, 2, 3, 4].map((p) => <option key={p} value={String(p)}>Periodo {p}</option>)}</select>
         <div className="flex-1" />
-        <button onClick={() => setIaAbierta(true)} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-100 text-violet-700">🤖 Crear con IA</button>
+        <button onClick={() => { if (materiaParaCrear()) setIaAbierta(true); }} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-100 text-violet-700">🤖 Crear con IA</button>
         <button onClick={nuevo} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white">➕ Nuevo libro</button>
       </div>
       <p className="text-xs text-slate-500 mb-3">Cada libro tiene capítulos, y cada capítulo tiene tres partes: 📖 Libro (lectura), 📝 Guía (trabajo del estudiante) y 🎒 Material para la clase.</p>
@@ -551,6 +556,7 @@ export function VistaGuiasEstudio({ grados, gradoActivo, periodoActivo, materiaA
           {libros.map((l) => (
             <div key={l.id} className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
               <button onClick={() => setEditando(l.id)} className="block w-full text-left px-3 py-3 text-white" style={{ background: "linear-gradient(135deg,#17264D,#2F55A4)" }}>
+                {l.materias?.nombre && <div className="text-[10px] font-bold uppercase tracking-wide opacity-70">{l.materias.nombre} · Periodo {l.periodo}</div>}
                 <div className="text-base font-extrabold leading-tight">📘 {l.titulo}</div>
                 <div className="text-[11px] opacity-75 mt-0.5">{l.libro_capitulos?.length || 0} capítulo(s){l.tiempo_estimado ? ` · ⏱ ${l.tiempo_estimado}` : ""}{l.fecha_entrega ? ` · 📅 ${l.fecha_entrega}` : ""}</div></button>
               <div className="flex items-center gap-1.5 p-2.5">
