@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import * as api from "../lib/api";
 import { nivelYCurso } from "../lib/gamification";
+import { IAModal } from "./LibroIA";
 import {
   GRUPOS_BLOQUE, TIPOS, nuevoContenido, EditorBloque, VistaBloque, htmlBloque, resumenBloque, esAutocorregible, evaluarPregunta, esc,
 } from "./BloquesLibro";
@@ -29,14 +30,23 @@ async function fetchLibros(materiaId, gradoId, periodo) {
   if (error) throw error;
   return data || [];
 }
+async function nombresMaterias(ids) {
+  const u = [...new Set((ids || []).filter((x) => x != null))]; const out = {};
+  if (!u.length) return out;
+  try { const { data } = await supabase.from("materias").select("id,nombre").in("id", u); (data || []).forEach((m) => { out[String(m.id)] = m.nombre; }); } catch { /* sin nombre */ }
+  return out;
+}
 async function fetchLibrosParaGrado(gradoId) {
-  const { data, error } = await supabase.from("libros_estudio").select("*, materias(nombre), libro_capitulos(id)").eq("grado_id", gradoId).eq("publicada", true).order("creado_en", { ascending: false });
+  const { data, error } = await supabase.from("libros_estudio").select("*, libro_capitulos(id)").eq("grado_id", gradoId).eq("publicada", true).order("creado_en", { ascending: false });
   if (error) throw error;
-  return data || [];
+  const lista = data || [];
+  const nombres = await nombresMaterias(lista.map((l) => l.materia_id));
+  return lista.map((l) => ({ ...l, materias: { nombre: nombres[String(l.materia_id)] || "" } }));
 }
 async function fetchLibroCompleto(id) {
-  const { data: libro, error } = await supabase.from("libros_estudio").select("*, materias(nombre)").eq("id", id).single();
+  const { data: libro, error } = await supabase.from("libros_estudio").select("*").eq("id", id).single();
   if (error) throw error;
+  libro.materias = { nombre: (await nombresMaterias([libro.materia_id]))[String(libro.materia_id)] || "" };
   const { data: caps, error: e2 } = await supabase.from("libro_capitulos").select("*").eq("libro_id", id);
   if (e2) throw e2;
   const ids = (caps || []).map((c) => c.id);
@@ -67,6 +77,17 @@ async function duplicarLibro(origenId, destino) {
     if (filas.length) ok(await supabase.from("libro_bloques").insert(filas));
   }
   return nuevo;
+}
+
+// Convierte la estructura leída de la IA en capítulos y elementos reales del libro
+async function importarEstructuraIA(libroId, ia, ordenCapInicial = 0) {
+  let ordenCap = ordenCapInicial;
+  for (const c of ia.capitulos) {
+    const cap = await crearCapitulo({ libro_id: libroId, orden: ++ordenCap, titulo: c.titulo, resumen: c.resumen || null });
+    const filas = [];
+    for (const parte of ["libro", "guia", "clase"]) c.partes[parte].forEach((b, i) => filas.push({ capitulo_id: cap.id, parte, orden: i + 1, tipo: b.tipo, contenido: b.contenido }));
+    if (filas.length) ok(await supabase.from("libro_bloques").insert(filas));
+  }
 }
 
 async function fetchProgreso(libroId, estudianteId) {
@@ -321,6 +342,7 @@ function EditorLibro({ libroId, onVolver, institucion }) {
   const [nuevosIds, setNuevosIds] = useState([]);
   const [meta, setMeta] = useState({});
   const [progresoAbierto, setProgresoAbierto] = useState(false);
+  const [iaAbierta, setIaAbierta] = useState(false);
 
   const cargar = async () => { const d = await fetchLibroCompleto(libroId); setDatos(d); setMeta({ titulo: d.libro.titulo, descripcion: d.libro.descripcion || "", tiempo_estimado: d.libro.tiempo_estimado || "", fecha_entrega: d.libro.fecha_entrega || "" }); };
   useEffect(() => { cargar().catch((e) => alert("No se pudo abrir el libro: " + e.message)); }, [libroId]);
@@ -360,6 +382,7 @@ function EditorLibro({ libroId, onVolver, institucion }) {
     <div>
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <button onClick={onVolver} className="text-sm text-violet-500">← Mis libros</button><div className="flex-1" />
+        <button onClick={() => setIaAbierta(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 text-violet-700">🤖 Agregar con IA</button>
         <button onClick={() => setVistaPrevia(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">👁 Vista del estudiante</button>
         <button onClick={() => setImprimiendo(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🖨️ Imprimir</button>
         <button onClick={() => setProgresoAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">📊 Progreso</button>
@@ -400,6 +423,8 @@ function EditorLibro({ libroId, onVolver, institucion }) {
       {bancoAbierto && <BancoModal materiaId={libro.materia_id} gradoId={libro.grado_id} onClose={() => setBancoAbierto(false)} onAgregar={agregarDelBanco} />}
       {imprimiendo && <ImprimirModal onClose={() => setImprimiendo(false)} onImprimir={(partes) => { setImprimiendo(false); imprimirLibro(datos, institucion, partes); }} />}
       {progresoAbierto && <ProgresoModal datos={datos} onClose={() => setProgresoAbierto(false)} />}
+      {iaAbierta && <IAModal destinoLibro={libro} contexto={{ institucion: institucion?.nombre, materia: libro.materias?.nombre, grado: libro.grado_id, periodo: libro.periodo }} onClose={() => setIaAbierta(false)}
+        onImportar={async (ia) => { await importarEstructuraIA(libro.id, ia, capitulos[capitulos.length - 1]?.orden || 0); setIaAbierta(false); await refrescar(); setCapIdx(capitulos.length); }} />}
     </div>
   );
 }
@@ -484,6 +509,7 @@ export function VistaGuiasEstudio({ grados, gradoActivo, periodoActivo, materiaA
   const [error, setError] = useState("");
   const [editando, setEditando] = useState(null);
   const [duplicando, setDuplicando] = useState(null);
+  const [iaAbierta, setIaAbierta] = useState(false);
   const [institucion, setInstitucion] = useState(null);
 
   useEffect(() => { if (gradoActivo) setGradoId(gradoActivo); }, [gradoActivo]);
@@ -513,6 +539,7 @@ export function VistaGuiasEstudio({ grados, gradoActivo, periodoActivo, materiaA
         <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className={cls}>{grados.map((g) => <option key={g.id} value={g.id}>{g.nombre || g.id}</option>)}</select>
         <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className={cls}>{[1, 2, 3, 4].map((p) => <option key={p} value={String(p)}>Periodo {p}</option>)}</select>
         <div className="flex-1" />
+        <button onClick={() => setIaAbierta(true)} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-100 text-violet-700">🤖 Crear con IA</button>
         <button onClick={nuevo} className="text-sm font-semibold px-4 py-2 rounded-lg bg-violet-500 text-white">➕ Nuevo libro</button>
       </div>
       <p className="text-xs text-slate-500 mb-3">Cada libro tiene capítulos, y cada capítulo tiene tres partes: 📖 Libro (lectura), 📝 Guía (trabajo del estudiante) y 🎒 Material para la clase.</p>
@@ -535,6 +562,11 @@ export function VistaGuiasEstudio({ grados, gradoActivo, periodoActivo, materiaA
               </div>
             </div>))}
         </div>)}
+      {iaAbierta && <IAModal contexto={{ institucion: institucion?.nombre, materia: materias.find((m) => String(m.id) === String(materiaId))?.nombre, grado: grados.find((g) => String(g.id) === String(gradoId))?.nombre || gradoId, periodo }} onClose={() => setIaAbierta(false)}
+        onImportar={async (ia) => {
+          const l = await crearLibro({ materia_id: materiaId, grado_id: gradoId, periodo, titulo: ia.titulo || "Libro generado con IA", descripcion: ia.descripcion || null, tiempo_estimado: ia.tiempo_estimado || null, publicada: false });
+          await importarEstructuraIA(l.id, ia, 0); setIaAbierta(false); setEditando(l.id);
+        }} />}
       {duplicando && <DuplicarModal libro={duplicando} grados={grados} materias={materias} onClose={() => setDuplicando(null)} onHecho={() => { setDuplicando(null); cargar(); }} />}
     </div>
   );
