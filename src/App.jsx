@@ -22,6 +22,7 @@ import { VistaSalonHonor } from "./screens/SalonHonor";
 import { VistaDiplomas } from "./screens/Diplomas";
 import { VistaRankingDiplomas, DiplomasEstudiante } from "./screens/RankingDiplomas";
 import { VistaPersonaje, PersonajePreview } from "./screens/Personaje";
+import { SalaAvatares } from "./screens/SalaAvatares";
 import { InsigniaNivel, CapaEstrellasBanner } from "./components/NivelPersonaje";
 import { nivelPersonaje } from "./lib/mejorasPersonaje";
 import { HistorialPuntosEstudiante } from "./screens/HistorialPuntos";
@@ -966,6 +967,7 @@ const MENU_CODICE_GRUPOS = [
       { key: "preguntados", label: "Preguntados", icono: "🎡" },
       { key: "quizvivo", label: "Quiz en vivo", icono: "⚡" },
       { key: "personaje", label: "Personaje", icono: "🎨" },
+      { key: "salaavatares", label: "Sala de avatares", icono: "🎭" },
       { key: "mundo", label: "Mundo", icono: "🌍" },
       { key: "tablero", label: "Tablero Mundial", icono: "🧭" },
     ],
@@ -987,7 +989,7 @@ const MENU_CODICE = MENU_CODICE_GRUPOS.flatMap((g) => g.items);
 // siendo la misma (la key de MENU_CODICE).
 const ICONO_MAPA = {
   album: "🏯", biblioteca: "📚", codice: "📖", forja: "⚒️", guias: "🗺️", modulos: "🧭",
-  inicio: "🏰", mundo: "🌍", misiones: "⚔️", evaluaciones: "📝", notas: "📜", personaje: "🧙", historial: "📖", perfil: "🛡️", preguntados: "🎡", quizvivo: "⚡", encuesta: "📝", coevaluacion: "🪞", misdiplomas: "🎖️", tablero: "🧭",
+  inicio: "🏰", mundo: "🌍", misiones: "⚔️", evaluaciones: "📝", notas: "📜", personaje: "🧙", salaavatares: "🎭", historial: "📖", perfil: "🛡️", preguntados: "🎡", quizvivo: "⚡", encuesta: "📝", coevaluacion: "🪞", misdiplomas: "🎖️", tablero: "🧭",
   proyectos: "🏹", ranking: "👑", recompensas: "💎", salonhonor: "🏆",
 };
 
@@ -2349,6 +2351,10 @@ function PortalEstudiante() {
             <MarcoSeccion zonaLabel="Diversión — Personaje" icono="🎡"><VistaPersonaje estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} /></MarcoSeccion>
           )}
 
+          {vista === "salaavatares" && (
+            <MarcoSeccion zonaLabel="Diversión — Sala de avatares" icono="🎭"><SalaAvatares /></MarcoSeccion>
+          )}
+
           {vista === "mundo" && estudianteInfo && (
             <MarcoSeccion zonaLabel="Diversión — Mundo" icono="🎡"><Suspense fallback={<p className="text-sm text-slate-400">Cargando…</p>}><VistaMundo estudianteInfo={estudianteInfo} datos={datos} onProgreso={() => consultar()} onIrAPersonaje={() => setVista("personaje")} /></Suspense></MarcoSeccion>
           )}
@@ -2562,6 +2568,7 @@ const MENU_PANEL_GRUPOS = [
       { key: "herr_salonhonor", label: "Salón de Honor", icono: "🥇" },
       { key: "herr_diplomas", label: "Diplomas", icono: "🏅" },
       { key: "herr_rankdiplomas", label: "Ranking → diplomas", icono: "🏆" },
+      { key: "herr_avatares", label: "Sala de avatares", icono: "🎭" },
       { key: "herr_gamext", label: "Desafíos/Misiones/Cosméticos", icono: "🕹️" },
       { key: "herr_bingo", label: "Bingo de Repaso", icono: "🎯" },
       { key: "herr_quizvivo", label: "Quiz en vivo", icono: "⚡" },
@@ -2623,7 +2630,7 @@ function MarcoSeccion({ zonaLabel, icono, children }) {
 
 const NOMBRES_HERRAMIENTAS = {
   ruleta: "Ruleta", ruletamonedas: "Ruleta de Monedas", accionesmasivas: "Acciones Masivas", banco: "Banco",
-  album: "Álbum", anuncios: "Anuncios", logros: "Logros", salonhonor: "Salón de Honor", diplomas: "Diplomas", rankdiplomas: "Ranking → diplomas",
+  album: "Álbum", anuncios: "Anuncios", logros: "Logros", salonhonor: "Salón de Honor", diplomas: "Diplomas", rankdiplomas: "Ranking → diplomas", avatares: "Sala de avatares",
   gamext: "Desafíos / Misiones / Cosméticos", consignas: "Consignas del Códice", trivia: "Preguntados",
   bancopreguntas: "Banco de Preguntas", temporizador: "Temporizador", dado: "Dado", cronometro: "Cronómetro",
   semaforo: "Semáforo", sorteoorden: "Sorteo de Orden / Parejas", grupos: "Generador de Grupos",
@@ -3029,6 +3036,7 @@ function Panel({ session }) {
             {subTabHerramientas === "logros" && <VistaLogros />}
             {subTabHerramientas === "salonhonor" && <VistaSalonHonor grados={grados} />}
             {subTabHerramientas === "diplomas" && <VistaDiplomas grados={grados} gradoActivo={gradoActivo} />}
+            {subTabHerramientas === "avatares" && <SalaAvatares />}
             {subTabHerramientas === "rankdiplomas" && <VistaRankingDiplomas grados={grados} gradoActivo={gradoActivo} />}
             {subTabHerramientas === "gamext" && <VistaGamificacionExtra grados={grados} />}
             {subTabHerramientas === "consignas" && <VistaConsignasCodice grados={grados} />}
