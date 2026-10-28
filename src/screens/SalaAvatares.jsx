@@ -12,6 +12,66 @@ const RESPALDO = [
 ];
 const BUCKET = "sala-avatares";
 
+// Frase corta para recordar cada rol (se busca por el comienzo del nombre del rol)
+const FRASES = [
+  ["maestro", "Dirige al gremio y reparte las tareas"], ["consejero", "Cuida el tiempo y la calidad del trabajo"],
+  ["defensor", "Cuida el respeto y la convivencia"], ["guardi", "Diseña el símbolo y cuida los materiales"],
+  ["heraldo", "Habla por el gremio ante otros gremios"], ["peregrino", "Investiga y pregunta el porqué"],
+  ["cronista", "Escribe y guarda los acuerdos"],
+];
+const norm = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+const fraseDe = (rolNombre) => (FRASES.find(([k]) => norm(rolNombre).startsWith(k)) || [])[1] || "";
+// "Rol · Función" → { nombre, funcion }; descripción → { hace, poder }
+function partesDe(a) {
+  const [nombre, ...resto] = String(a.rol || "").split(" · ");
+  const partes = String(a.descripcion || "").split(/Poder c[ií]vico:\s*/i);
+  return { nombre: nombre || a.nombre_el, funcion: resto.join(" · "), hace: (partes[0] || "").trim(), poder: (partes[1] || "").trim() };
+}
+const esc = (t) => String(t || "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+function imprimirTabla(lista) {
+  const filas = lista.map((a) => { const p = partesDe(a); return `<tr>
+    <td class="av">${a.imagen_el ? `<img src="${new URL(a.imagen_el, location.origin).href}">` : ""}${a.imagen_la ? `<img src="${new URL(a.imagen_la, location.origin).href}">` : ""}</td>
+    <td><b>${esc(p.nombre)}</b><br><span class="f">${esc(p.funcion)}</span></td><td class="k">${esc(fraseDe(p.nombre))}</td><td>${esc(p.hace)}</td><td>${esc(p.poder)}</td></tr>`; }).join("");
+  const w = window.open("", "_blank");
+  if (!w) { alert("El navegador bloqueó la ventana. Permite las ventanas emergentes para imprimir."); return; }
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Roles del gremio</title><style>
+    @page{size:landscape;margin:12mm} body{font-family:Georgia,serif;color:#17264D} h1{font-size:20px;margin:0 0 4px} p{font-size:11px;margin:0 0 10px;color:#555}
+    table{border-collapse:collapse;width:100%;font-size:10.5px} th{background:#17264D;color:#fff;padding:6px;text-align:left} td{border:1px solid #cdd3e0;padding:6px;vertical-align:top}
+    td.av{width:110px;white-space:nowrap} td.av img{height:92px;margin-right:3px;border-radius:5px} .f{color:#B8892B;font-size:10px} .k{font-weight:bold;color:#2F55A4} tr{page-break-inside:avoid}
+  </style></head><body><h1>Roles del gremio — ¿quién hace qué?</h1><p>Cada rol tiene un avatar, una función y un poder cívico. Léelo antes de repartir los roles en tu gremio.</p>
+  <table><thead><tr><th>Avatar</th><th>Rol</th><th>Se resume en</th><th>Qué hace en el aula</th><th>Poder cívico</th></tr></thead><tbody>${filas}</tbody></table>
+  <script>window.onload=()=>setTimeout(()=>window.print(),500)</script></body></html>`);
+  w.document.close();
+}
+
+function TablaRoles({ lista }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <p className="text-xs text-slate-500">Para no confundir los roles: cada fila es un rol con su avatar, lo que hace y su poder cívico.</p>
+        <button onClick={() => imprimirTabla(lista)} className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🖨️ Imprimir</button>
+      </div>
+      <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <table className="w-full text-xs min-w-[760px]">
+          <thead><tr className="text-left text-white" style={{ background: "#17264D" }}>
+            <th className="p-2 w-28">Avatar</th><th className="p-2 w-44">Rol</th><th className="p-2 w-40">Se resume en</th><th className="p-2">Qué hace en el aula</th><th className="p-2">Poder cívico</th>
+          </tr></thead>
+          <tbody>
+            {lista.map((a, i) => { const p = partesDe(a); return (
+              <tr key={a.id} className={i % 2 ? "bg-slate-50" : "bg-white"}>
+                <td className="p-2 align-top"><div className="flex gap-1">{[a.imagen_el, a.imagen_la].filter(Boolean).map((u) => <img key={u} src={u} alt="" loading="lazy" className="h-20 w-auto rounded" />)}</div></td>
+                <td className="p-2 align-top"><div className="font-extrabold text-[#17264D]">{p.nombre}</div><div className="text-[10px] font-semibold text-[#B8892B]">{p.funcion}</div></td>
+                <td className="p-2 align-top font-bold text-[#2F55A4]">{fraseDe(p.nombre)}</td>
+                <td className="p-2 align-top text-slate-700">{p.hace}</td>
+                <td className="p-2 align-top text-slate-700">{p.poder || <span className="text-slate-300">—</span>}</td>
+              </tr>); })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // Reduce la imagen (máx. 700 px de alto) y la convierte a webp antes de subirla
 function reducirImagen(archivo) {
   return new Promise((resolve, reject) => {
@@ -104,6 +164,7 @@ export function SalaAvatares({ esDocente = false }) {
   const [cargando, setCargando] = useState(true);
   const [sinTabla, setSinTabla] = useState(false);
   const [filtro, setFiltro] = useState("todos");
+  const [vista, setVista] = useState("cartas");
   const [abierto, setAbierto] = useState(null);
   const [editando, setEditando] = useState(null); // objeto avatar, o {} para nuevo
   const [seleccionando, setSeleccionando] = useState(false);
@@ -164,6 +225,12 @@ export function SalaAvatares({ esDocente = false }) {
           </div>
         )}
       </div>
+      <div className="flex gap-1.5 mb-3">
+        {[["cartas", "🎴 Cartas"], ["tabla", "📋 Tabla comparativa de roles"]].map(([k, l]) => (
+          <button key={k} onClick={() => setVista(k)} className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${vista === k ? "bg-[#17264D] text-white border-[#17264D]" : "bg-white text-slate-600 border-slate-200"}`}>{l}</button>
+        ))}
+      </div>
+      {vista === "tabla" ? (cargando ? <p className="text-sm text-slate-400">Cargando…</p> : <TablaRoles lista={visibles} />) : (<>
       <p className="text-xs text-slate-500 mb-3">Conoce a los personajes del Códice. Cada uno tiene su versión masculina y femenina, y un rol dentro del equipo. Toca una carta para verla en grande.</p>
 
       {esDocente && sinTabla && <p className="text-xs bg-amber-50 text-amber-700 rounded-lg p-2.5 mb-3">Para poder agregar, modificar o eliminar avatares falta correr el script <b>118_sala_avatares.sql</b> en Supabase. Mientras tanto se muestran los 6 avatares iniciales.</p>}
@@ -223,6 +290,8 @@ export function SalaAvatares({ esDocente = false }) {
           ))}
         </div>
       )}
+
+      </>)}
 
       {abierto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(10,16,35,0.85)" }} onClick={() => setAbierto(null)}>
