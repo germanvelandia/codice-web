@@ -907,7 +907,11 @@ function CopiarPlanillaOtroCursoModal({ materiaId, gradoId, grados, periodo, per
   );
 }
 
-function CopiarColumnasModal({ materiaDestinoId, gradoId, periodos, categoriasDestino, materias, estudiantes, onClose, onCopiado }) {
+function CopiarColumnasModal({ materiaDestinoId, gradoId, grados = [], periodos, categoriasDestino, materias, estudiantes, onClose, onCopiado }) {
+  // De qué planilla traer las notas: esta misma (otra materia), otro curso o un grupo mixto.
+  const [gradoOrigen, setGradoOrigen] = useState(gradoId);
+  const [gruposOrigen, setGruposOrigen] = useState([]);
+  useEffect(() => { fetchGruposMixtos().then((g) => setGruposOrigen(g || [])).catch(() => {}); }, []);
   const [materiaOrigenId, setMateriaOrigenId] = useState("");
   const [periodoOrigen, setPeriodoOrigen] = useState(periodos[0] || "1");
   const [actividadesOrigen, setActividadesOrigen] = useState([]);
@@ -921,13 +925,13 @@ function CopiarColumnasModal({ materiaDestinoId, gradoId, periodos, categoriasDe
   const [estudianteId, setEstudianteId] = useState("");
   const [vincular, setVincular] = useState(false); // mantener las notas amarradas entre origen y destino
 
-  const materiasOrigenPosibles = materias.filter((m) => m.id !== materiaDestinoId);
+  const materiasOrigenPosibles = materias.filter((m) => m.id !== materiaDestinoId || String(gradoOrigen) !== String(gradoId));
 
   const cargarActividades = async (matId, per) => {
     if (!matId) { setActividadesOrigen([]); return; }
     setCargando(true);
     const [acts, actsDestino] = await Promise.all([
-      api.fetchActividades(parseInt(matId, 10), gradoId, per),
+      api.fetchActividades(parseInt(matId, 10), gradoOrigen, per),
       api.fetchActividades(materiaDestinoId, gradoId, per),
     ]);
     setActividadesOrigen(acts);
@@ -947,7 +951,7 @@ function CopiarColumnasModal({ materiaDestinoId, gradoId, periodos, categoriasDe
     setCargando(false);
   };
 
-  useEffect(() => { cargarActividades(materiaOrigenId, periodoOrigen); }, [materiaOrigenId, periodoOrigen]);
+  useEffect(() => { cargarActividades(materiaOrigenId, periodoOrigen); }, [materiaOrigenId, periodoOrigen, gradoOrigen]);
   useEffect(() => { if (estudiantes.length && !estudianteId) setEstudianteId(estudiantes[0].id); }, [estudiantes]);
 
   const toggle = (id) => setSeleccionadas((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -978,7 +982,26 @@ function CopiarColumnasModal({ materiaDestinoId, gradoId, periodos, categoriasDe
           if (vincular) vinculos.push([id, destinoPorActividad[id]]);
         }
       }
-      const n = await api.copiarColumnasEspecificas(idsSeleccionados, materiaDestinoId, gradoId, mapaFinal, alcance === "uno" ? estudianteId : null);
+      // Copia local: solo pasan las notas de los estudiantes de ESTA planilla (útil al traer de un grupo mixto o de otro curso).
+      const permitidos = new Set(estudiantes.map((x) => x.id));
+      const valoresOrigen = await api.fetchValores(idsSeleccionados);
+      let n = 0;
+      for (const id of idsSeleccionados) {
+        const act = actividadesOrigen.find((x) => x.id === id);
+        const destino = mapaFinal[id] || {};
+        let destinoId = destino.actividadDestinoId || null;
+        if (!destinoId) {
+          const nueva = await api.crearActividad({
+            nombre: act.nombre, categoria_id: destino.categoriaId, materia_id: materiaDestinoId, grado_id: gradoId,
+            periodo: act.periodo, es_automatica: act.es_automatica, gam_categoria: act.gam_categoria || null,
+          });
+          destinoId = nueva.id;
+        }
+        for (const v of valoresOrigen.filter((x) => x.actividad_id === id && permitidos.has(x.estudiante_id) && (alcance !== "uno" || x.estudiante_id === estudianteId))) {
+          await api.setValor(destinoId, v.estudiante_id, v.valor);
+        }
+        n++;
+      }
       for (const [o, d] of vinculos) await vincularColumnas(o, d);
       alert(alcance === "uno"
         ? `Se copió la nota de ${estudiantes.find((s) => s.id === estudianteId)?.nombre || "ese estudiante"} en ${n} columna(s).`
@@ -1021,6 +1044,15 @@ function CopiarColumnasModal({ materiaDestinoId, gradoId, periodos, categoriasDe
           )}
         </div>
 
+        <div className="mb-3">
+          <label className="text-xs text-slate-500 block mb-1">Traer desde (curso o grupo mixto)</label>
+          <select value={gradoOrigen} onChange={(e) => { setGradoOrigen(e.target.value); setMateriaOrigenId(""); }} className="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none">
+            <option value={gradoId}>Esta misma planilla (otra materia)</option>
+            {gruposOrigen.filter((g) => g.id !== gradoId).map((g) => <option key={g.id} value={g.id}>👥 Grupo mixto: {g.nombre}</option>)}
+            {grados.filter((g) => String(g.id) !== String(gradoId)).map((g) => <option key={g.id} value={g.id}>Curso {g.nombre || g.id}</option>)}
+          </select>
+          {String(gradoOrigen) !== String(gradoId) && <p className="text-[11px] text-violet-700 mt-1">Solo se copian las notas de los estudiantes que están en esta planilla; los demás se ignoran.</p>}
+        </div>
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
             <label className="text-xs text-slate-500 block mb-1">Materia origen</label>
@@ -1688,7 +1720,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
           onClose={() => setAsistNotaAbierta(null)} onAplicado={cargar} />
       )}
       {copiarColumnasAbierto && (
-        <CopiarColumnasModal materiaDestinoId={materiaId} gradoId={gradoId} periodos={periodosDe(config)} categoriasDestino={categorias} materias={materias} estudiantes={estudiantes}
+        <CopiarColumnasModal materiaDestinoId={materiaId} gradoId={gradoId} grados={grados} periodos={periodosDe(config)} categoriasDestino={categorias} materias={materias} estudiantes={estudiantes}
           onClose={() => setCopiarColumnasAbierto(false)} onCopiado={cargar} />
       )}
       {copiarPlanillaAbierto && (
