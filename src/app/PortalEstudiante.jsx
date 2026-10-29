@@ -19,6 +19,7 @@ import { DiplomasEstudiante } from "../screens/RankingDiplomas";
 import { CoevaluacionEstudiante } from "../screens/Coevaluacion";
 import { QuizVivoEstudiante } from "../screens/QuizVivo";
 import { SidebarTarjetasEstudiante } from "./MenuEstudiante";
+import { InicioEstudiante } from "./InicioEstudiante";
 import { AlbumEstudiante, BancoEstudiante, CosmeticosEstudiante, DesafioReinoEstudiante, LogrosEstudiante, MiComarcaEstudiante, MicroMisionesEstudiante, PreguntadosEstudiante, RankingEstudiante, SalonHonorEstudiante, TarjetaPersonajeEstudiante } from "./EstudianteJuego";
 import { AnunciosEstudiante, BibliotecaEstudiante, CodiceEstudiante, ValorSemanaEstudiante } from "./EstudianteComunidad";
 import { AvisoRendimiento, ForjaEstudiante, HistorialEstudiante, MisNotas, ProyectosEstudiante } from "./EstudianteAcademico";
@@ -121,6 +122,8 @@ export function PortalEstudiante() {
                 datos={datos} estudianteInfo={estudianteInfo} avatarConfig={avatarConfig}
                 equipados={equipados} miRol={miRol} level={level} next={next} pct={pct} personajeElegido={personajeElegido} mejoras={mejoras}
               />
+
+              {estudianteInfo && <InicioEstudiante onIrA={irAEstudiante} estudianteId={estudianteInfo.id} gradoId={estudianteInfo.grado_id} />}
 
               <ValorSemanaEstudiante />
               {estudianteInfo && <DesafioReinoEstudiante gradoId={estudianteInfo.grado_id} miReino={estudianteInfo.reino_actual || estudianteInfo.reino_original || "Sin grupo"} />}
