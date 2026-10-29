@@ -45,6 +45,7 @@ export const MENU_PANEL_GRUPOS = [
   },
   {
     key: "convivencial", label: "Convivencia e inclusión", icono: "🤝", items: [
+      { key: "riesgo", label: "Estudiantes en riesgo", icono: "🚨" },
       { key: "anotaciones", label: "Anotaciones", icono: "🗒️" },
       { key: "inclusion", label: "Inclusión", icono: "🧩" },
       { key: "bajasvida", label: "Bajas de Vida", icono: "📉" },
