@@ -1,3 +1,4 @@
+import { descargarPdfAlbum } from "../lib/albumPdf";
 import React, { useEffect, useRef, useState } from "react";
 import * as api from "../lib/albumColeccionApi";
 import { SlotLamina, RAREZA, ESTILOS_ALBUM } from "./AlbumLibro";
@@ -191,6 +192,7 @@ function EditorAlbum({ album, onVolver, onCambioAlbum }) {
         </div>
         <div className="flex gap-2">
           <button onClick={verAvance} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-300 text-slate-600">📊 Avance</button>
+          <button onClick={() => descargarPdfAlbum({ album, modo: "docente", paginas: est.paginas.map((p) => ({ ...p, laminas: est.laminas.filter((l) => l.pagina_id === p.id) })) })} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-300 text-slate-600" title="Abre el cuadro de impresión: elige «Guardar como PDF»">📄 Descargar PDF</button>
           <button onClick={() => setEditandoAlbum(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-violet-300 text-violet-700">⚙️ Configurar</button>
         </div>
       </div>
