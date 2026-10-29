@@ -16,21 +16,22 @@ const esc = (t) => String(t ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").
 const fmtNota = (n) => (n === null || n === undefined || Number.isNaN(Number(n)) ? "" : (Math.round(Number(n) * 10) / 10).toFixed(1));
 const fmtFecha = (iso) => { const [y, m, d] = String(iso).slice(0, 10).split("-"); return `${d}/${m}/${y}`; };
 const fmtCorta = (iso) => { const [, m, d] = String(iso).slice(0, 10).split("-"); return `${d}/${m}`; };
-const porNombre = (a, b) => String(a.nombre || "").localeCompare(String(b.nombre || ""), "es");
+const porNombre = (a, b) => String(a.nombre || "").localeCompare(String(b.nombre || ""), "es", { sensitivity: "base" });
 
 // Apellidos primero: usa el apellido guardado si existe; si no, asume que las dos últimas
 // palabras son los apellidos (con 2 palabras: Nombre Apellido). Es la misma regla de la plataforma.
 function apellidosYNombres(e) {
   const nombre = String(e?.nombre || "").trim();
   const ap = String(e?.apellidos || "").trim();
+  const M = (x) => x.toLocaleUpperCase("es"); // apellidos siempre en MAYÚSCULAS
   if (ap) {
     const sinAp = nombre.toLowerCase().endsWith(ap.toLowerCase()) ? nombre.slice(0, nombre.length - ap.length).trim() : nombre;
-    return `${ap} ${sinAp}`.trim();
+    return `${M(ap)} ${sinAp}`.trim();
   }
   const p = nombre.split(/\s+/).filter(Boolean);
   if (p.length <= 1) return nombre;
-  if (p.length === 2) return `${p[1]} ${p[0]}`;
-  return `${p.slice(-2).join(" ")} ${p.slice(0, -2).join(" ")}`;
+  if (p.length === 2) return `${M(p[1])} ${p[0]}`;
+  return `${M(p.slice(-2).join(" "))} ${p.slice(0, -2).join(" ")}`;
 }
 const ordenar = (lista, orden) => (orden === "apellido"
   ? lista.map((e) => ({ ...e, nombre: apellidosYNombres(e) })).sort(porNombre)
