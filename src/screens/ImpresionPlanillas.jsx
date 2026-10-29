@@ -18,6 +18,24 @@ const fmtFecha = (iso) => { const [y, m, d] = String(iso).slice(0, 10).split("-"
 const fmtCorta = (iso) => { const [, m, d] = String(iso).slice(0, 10).split("-"); return `${d}/${m}`; };
 const porNombre = (a, b) => String(a.nombre || "").localeCompare(String(b.nombre || ""), "es");
 
+// Apellidos primero: usa el apellido guardado si existe; si no, asume que las dos últimas
+// palabras son los apellidos (con 2 palabras: Nombre Apellido). Es la misma regla de la plataforma.
+function apellidosYNombres(e) {
+  const nombre = String(e?.nombre || "").trim();
+  const ap = String(e?.apellidos || "").trim();
+  if (ap) {
+    const sinAp = nombre.toLowerCase().endsWith(ap.toLowerCase()) ? nombre.slice(0, nombre.length - ap.length).trim() : nombre;
+    return `${ap} ${sinAp}`.trim();
+  }
+  const p = nombre.split(/\s+/).filter(Boolean);
+  if (p.length <= 1) return nombre;
+  if (p.length === 2) return `${p[1]} ${p[0]}`;
+  return `${p.slice(-2).join(" ")} ${p.slice(0, -2).join(" ")}`;
+}
+const ordenar = (lista, orden) => (orden === "apellido"
+  ? lista.map((e) => ({ ...e, nombre: apellidosYNombres(e) })).sort(porNombre)
+  : [...lista].sort(porNombre));
+
 const INFORMES = [
   { key: "planilla", emoji: "📖", titulo: "Planilla del periodo", desc: "Todas las columnas de notas por categoría, nota final y desempeño.", horizontal: true, usa: ["periodo"] },
   { key: "consolidado", emoji: "📚", titulo: "Consolidado por periodos", desc: "Nota final de cada periodo y definitiva del año.", horizontal: false, usa: [] },
@@ -56,8 +74,9 @@ th{background:#f1f5f9;font-weight:700}
 td.n,th.n{width:24px}
 td.nom,th.nom{text-align:left;white-space:nowrap}
 th.cat{color:#fff;font-size:${denso ? 7 : 8}px;text-transform:uppercase;letter-spacing:.03em}
-th.vert{height:96px;padding:2px;font-weight:600}
-th.vert div{writing-mode:vertical-rl;transform:rotate(180deg);margin:0 auto;max-height:92px;overflow:hidden;font-size:${denso ? 7 : 8}px;line-height:1.1}
+th.vert{height:var(--hv,120px);padding:3px 1px;font-weight:700;vertical-align:bottom;min-width:${denso ? 20 : 24}px}
+th.vert div{writing-mode:vertical-rl;transform:rotate(180deg);margin:0 auto;max-height:calc(var(--hv,120px) - 8px);font-size:${denso ? 8.5 : 9.5}px;line-height:1.2;letter-spacing:.01em;white-space:normal;word-break:normal;overflow-wrap:anywhere}
+th.horiz{font-size:${denso ? 8.5 : 9.5}px;line-height:1.2;padding:4px 3px;min-width:34px}
 td.fin{font-weight:700;background:#f8fafc}
 td.bajo{color:#B91C1C;font-weight:700}
 tfoot td{background:#f1f5f9;font-weight:700}
@@ -119,7 +138,11 @@ function htmlPlanilla(ctx, d) {
   const vertical = todas.length > 7;
   const COLORES = ["#2F55A4", "#7C3AED", "#0E9F6E", "#D97706", "#DC2626", "#0891B2", "#BE185D", "#475569"];
   const cab1 = `<tr><th class="n" rowspan="2">N°</th><th class="nom" rowspan="2">Estudiante</th>${grupos.map((g, i) => `<th class="cat" colspan="${g.items.length}" style="background:${COLORES[i % COLORES.length]}">${esc(g.c.nombre)}${g.c.porcentaje != null ? ` · ${esc(g.c.porcentaje)}%` : ""}</th>`).join("")}<th rowspan="2">Nota<br>final</th><th rowspan="2">Desempeño</th></tr>`;
-  const cab2 = `<tr>${todas.map((a) => vertical ? `<th class="vert"><div>${esc(a.nombre)}</div></th>` : `<th>${esc(a.nombre)}</th>`).join("")}</tr>`;
+  // Altura del encabezado según el nombre más largo (para que se lea completo, sin amontonarse)
+  const corto = (t) => { const x = String(t || "").trim(); return x.length > 48 ? x.slice(0, 47) + "…" : x; };
+  const maxLen = Math.max(...todas.map((a) => corto(a.nombre).length));
+  const hv = Math.max(80, Math.min(190, 30 + maxLen * 4.6));
+  const cab2 = `<tr${vertical ? ` style="--hv:${Math.round(hv)}px"` : ""}>${todas.map((a) => vertical ? `<th class="vert" title="${esc(a.nombre)}"><div>${esc(corto(a.nombre))}</div></th>` : `<th class="horiz">${esc(a.nombre)}</th>`).join("")}</tr>`;
   const sumas = todas.map(() => ({ s: 0, n: 0 }));
   let sf = 0, nf = 0;
   const filas = estudiantes.map((e, i) => {
@@ -225,6 +248,7 @@ export function VistaImpresion({ grados = [], gradoActivo, materiaActiva }) {
   const [hasta, setHasta] = useState(hoy());
   const [columnas, setColumnas] = useState(15);
   const [firmasOn, setFirmasOn] = useState(true);
+  const [orden, setOrden] = useState("apellido"); // "apellido" | "nombre"
   const [html, setHtml] = useState("");
   const [msg, setMsg] = useState("");
   const [trabajando, setTrabajando] = useState(false);
@@ -234,7 +258,7 @@ export function VistaImpresion({ grados = [], gradoActivo, materiaActiva }) {
   useEffect(() => { api.fetchMisMaterias().then((m) => { setMaterias(m); setMateriaId((x) => x || (m.find((q) => String(q.id) === String(materiaActiva))?.id ?? m[0]?.id ?? "")); }).catch((e) => setMsg(e.message)); }, []);
   useEffect(() => { if (materiaActiva) setMateriaId(materiaActiva); }, [materiaActiva]);
   useEffect(() => { if (materiaId) api.fetchNotasConfig(materiaId).then((c) => { setConfig(c); setPeriodo(String(c.periodo_actual || "1")); }).catch(() => {}); }, [materiaId]);
-  useEffect(() => { setHtml(""); }, [gradoId, materiaId, periodo, informe, papel, desde, hasta, columnas, firmasOn]);
+  useEffect(() => { setHtml(""); }, [gradoId, materiaId, periodo, informe, papel, desde, hasta, columnas, firmasOn, orden]);
 
   const def = INFORMES.find((i) => i.key === informe);
   const materia = materias.find((m) => String(m.id) === String(materiaId));
@@ -250,7 +274,7 @@ export function VistaImpresion({ grados = [], gradoActivo, materiaActiva }) {
         api.fetchInstitucion().catch(() => null), api.fetchMiPerfil().catch(() => null),
         api.fetchEstudiantesPorGrado(gradoId), materiaId ? api.fetchCategorias(materiaId) : Promise.resolve([]),
       ]);
-      const estudiantes = [...estRaw].sort(porNombre);
+      const estudiantes = ordenar(estRaw, orden);
       const ctx = { materiaId, gradoId, estudiantes, categorias: cats, config };
       let r;
       if (informe === "planilla") r = htmlPlanilla(ctx, await datosPeriodo({ ...ctx, periodo }));
@@ -300,6 +324,7 @@ export function VistaImpresion({ grados = [], gradoActivo, materiaActiva }) {
             <label className="text-xs text-slate-600">Hasta <input type="date" className={sel} value={hasta} onChange={(e) => setHasta(e.target.value)} /></label></>}
           {mostrar("columnas") && <label className="text-xs text-slate-600">Columnas vacías <input type="number" min="1" max="40" className={sel + " w-20"} value={columnas} onChange={(e) => setColumnas(e.target.value)} /></label>}
           <label className="text-xs text-slate-600">Papel <select className={sel} value={papel} onChange={(e) => setPapel(e.target.value)}><option value="carta">Carta</option><option value="oficio">Oficio</option><option value="a4">A4</option></select></label>
+          <label className="text-xs text-slate-600">Ordenar por <select className={sel} value={orden} onChange={(e) => setOrden(e.target.value)}><option value="apellido">Apellidos (Apellidos Nombres)</option><option value="nombre">Nombres (Nombres Apellidos)</option></select></label>
           <label className="text-xs text-slate-600 flex items-center gap-1"><input type="checkbox" checked={firmasOn} onChange={(e) => setFirmasOn(e.target.checked)} /> Líneas de firma</label>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
