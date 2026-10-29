@@ -19,6 +19,32 @@ import { esGrupoMixto, fetchGruposMixtos, fetchEstudiantesGrupo } from "../lib/g
 import { AsistenciaNotaModal, AsistenciaMatrizModal } from "./AsistenciaPlanilla";
 import { BonoParticipacionModal } from "./BonoParticipacion";
 import { aplicarBono } from "../lib/bono";
+
+// Grupos mixtos: estudiantes agrupados por grado y, dentro de cada grado, por APELLIDOS (en mayúsculas).
+const _sinTildes = (x) => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+function _apellidosYNombres(e) {
+  const nombre = String(e?.nombre || "").trim(), ap = String(e?.apellidos || "").trim();
+  const M = (x) => x.toLocaleUpperCase("es");
+  if (ap) {
+    const apT = ap.split(/\s+/).map(_sinTildes), t = nombre.split(/\s+/).filter(Boolean), k = apT.length;
+    let sinAp = t;
+    if (t.length > k && t.slice(-k).map(_sinTildes).join(" ") === apT.join(" ")) sinAp = t.slice(0, -k);
+    else if (t.length > k && t.slice(0, k).map(_sinTildes).join(" ") === apT.join(" ")) sinAp = t.slice(k);
+    else { const r = t.filter((w) => !apT.includes(_sinTildes(w))); if (r.length && r.length < t.length) sinAp = r; }
+    return `${M(ap)} ${sinAp.join(" ")}`.trim();
+  }
+  const p = nombre.split(/\s+/).filter(Boolean);
+  if (p.length <= 1) return nombre;
+  if (p.length === 2) return `${M(p[1])} ${p[0]}`;
+  return `${M(p.slice(-2).join(" "))} ${p.slice(0, -2).join(" ")}`;
+}
+const _gradoClave = (g) => { const n = parseInt(String(g ?? ""), 10); return [Number.isNaN(n) ? 9999 : n, String(g ?? "")]; };
+function ordenarGrupoMixto(lista) {
+  return (lista || []).map((e) => ({ ...e, nombre: _apellidosYNombres(e) })).sort((a, b) => {
+    const [na, sa] = _gradoClave(a.grado_id), [nb, sb] = _gradoClave(b.grado_id);
+    return na - nb || sa.localeCompare(sb, "es", { numeric: true }) || String(a.nombre).localeCompare(String(b.nombre), "es", { sensitivity: "base" });
+  });
+}
 import { BookOpen, Edit, Archive, GraduationCap, Calendar, FileText, Award, BarChart, Settings, Users, TrendingDown, Plus } from "lucide-react";
 
 // Tarjeta compacta para elegir entre varias opciones (materia, curso,
@@ -1555,15 +1581,18 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
               </tr>
             </thead>
             <tbody>
-              {estudiantesVisibles.map((s) => {
+              {estudiantesVisibles.map((s, idx) => {
                 const final = notaFinal(s.id);
+                const nuevoGrado = esGrupoMixto(gradoId) && s.grado_id != null && (idx === 0 || estudiantesVisibles[idx - 1].grado_id !== s.grado_id);
                 const banda = bandaDesempeno(final, config);
                 const destacado = estudianteDestacadoId && s.id === estudianteDestacadoId;
                 return (
-                  <tr key={s.id} ref={destacado ? (el) => el?.scrollIntoView({ behavior: "smooth", block: "center" }) : null}
+                  <React.Fragment key={s.id}>
+                  {nuevoGrado && <tr><td colSpan={200} className="text-left px-3 py-1 text-[11px] font-extrabold tracking-wide uppercase" style={{ background: "#EDE9FE", color: "#5B21B6" }}>Grado {s.grado_id}</td></tr>}
+                  <tr ref={destacado ? (el) => el?.scrollIntoView({ behavior: "smooth", block: "center" }) : null}
                     className={destacado ? "bg-amber-100" : "odd:bg-white even:bg-slate-50"}
                     style={destacado ? { boxShadow: "inset 0 0 0 2px #F59E0B" } : undefined}>
-                    <td className="sticky left-0 bg-inherit text-left px-3 py-2 font-medium text-slate-700 min-w-[220px]"><MiniAvatarCal estudiante={s} />{s.nombre} <InclusionBadge estudiante={s} size="text-xs" /></td>
+                    <td className="sticky left-0 bg-inherit text-left px-3 py-2 font-medium text-slate-700 min-w-[220px]"><MiniAvatarCal estudiante={s} />{esGrupoMixto(gradoId) && s.grado_id != null ? <span className="text-[10px] font-bold rounded px-1 mr-1.5" style={{ background: "#EDE9FE", color: "#5B21B6" }}>{s.grado_id}</span> : null}{s.nombre} <InclusionBadge estudiante={s} size="text-xs" /></td>
                     {actividadesOrdenadas.map((a) => {
                       const v = valorDeActividad(a, s.id);
                       const b = bandaDesempeno(v, config);
@@ -1622,6 +1651,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
                       )}
                     </td>
                   </tr>
+                  </React.Fragment>
                 );
               })}
             </tbody>
@@ -1926,7 +1956,7 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
                 const bandaProm = bandaDesempeno(prom, config);
                 return (
                   <tr key={s.id} className="odd:bg-white even:bg-slate-50">
-                    <td className="text-left px-3 py-2 font-medium text-slate-700 min-w-[220px]"><MiniAvatarCal estudiante={s} />{s.nombre} <InclusionBadge estudiante={s} size="text-xs" /></td>
+                    <td className="text-left px-3 py-2 font-medium text-slate-700 min-w-[220px]"><MiniAvatarCal estudiante={s} />{esGrupoMixto(gradoId) && s.grado_id != null ? <span className="text-[10px] font-bold rounded px-1 mr-1.5" style={{ background: "#EDE9FE", color: "#5B21B6" }}>{s.grado_id}</span> : null}{s.nombre} <InclusionBadge estudiante={s} size="text-xs" /></td>
                     {periodos.map((p) => {
                       const n = notaGuardada(s.id, p);
                       const b = bandaDesempeno(n, config);
@@ -2182,7 +2212,7 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
 
   useEffect(() => {
     if (!gradoId) return;
-    (esGrupoMixto(gradoId) ? fetchEstudiantesGrupo(gradoId) : api.fetchEstudiantesPorGrado(gradoId)).then(setEstudiantes).catch(() => setEstudiantes([]));
+    (esGrupoMixto(gradoId) ? fetchEstudiantesGrupo(gradoId).then(ordenarGrupoMixto) : api.fetchEstudiantesPorGrado(gradoId)).then(setEstudiantes).catch(() => setEstudiantes([]));
   }, [gradoId, refrescoGrupo]);
 
   const guardarNotasFinalesActual = async () => {
