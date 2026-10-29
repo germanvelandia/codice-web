@@ -97,6 +97,83 @@ export function AvisoRendimiento({ estudianteId }) {
   );
 }
 
+// Tarjeta de resumen con todas las materias: promedio general, la más fuerte y la que necesita atención.
+export function ResumenGeneral({ materias, config }) {
+  const con = materias.filter((m) => m.actual && m.actual.nota != null).map((m) => ({ nombre: m.nombre, nota: Number(m.actual.nota) }));
+  if (con.length === 0) return null;
+  const prom = Math.round((con.reduce((a, m) => a + m.nota, 0) / con.length) * 10) / 10;
+  const b = bandaDesempeno(prom, config) || { color: "#94A3B8", label: "" };
+  const orden = [...con].sort((x, y) => y.nota - x.nota);
+  const mejor = orden[0];
+  const peor = orden[orden.length - 1];
+  const enRiesgo = con.filter((m) => m.nota < config.nota_minima).length;
+  return (
+    <div className="rounded-2xl p-3 mb-3 grid gap-2 sm:grid-cols-3" style={{ background: `${b.color}12`, border: `1px solid ${b.color}40` }}>
+      <div>
+        <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Promedio del periodo actual</div>
+        <div className="text-2xl font-extrabold leading-tight" style={{ color: b.color }}>{prom} <span className="text-xs font-bold">{b.label}</span></div>
+        <div className="text-[10px] text-slate-500">{con.length} {con.length === 1 ? "materia" : "materias"}{enRiesgo > 0 ? ` · ${enRiesgo} por debajo de ${config.nota_minima}` : " · todas en nivel básico o superior"}</div>
+      </div>
+      <div>
+        <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">💪 Tu materia más fuerte</div>
+        <div className="text-sm font-bold text-slate-800 leading-snug">{mejor.nombre}</div>
+        <div className="text-xs font-extrabold" style={{ color: (bandaDesempeno(mejor.nota, config) || b).color }}>{mejor.nota}</div>
+      </div>
+      <div>
+        <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">🎯 Para reforzar</div>
+        {con.length > 1 && peor.nombre !== mejor.nombre ? (
+          <>
+            <div className="text-sm font-bold text-slate-800 leading-snug">{peor.nombre}</div>
+            <div className="text-xs font-extrabold" style={{ color: (bandaDesempeno(peor.nota, config) || b).color }}>{peor.nota}</div>
+          </>
+        ) : <div className="text-xs text-slate-500">Cuando tengas más materias con nota, aquí verás cuál reforzar.</div>}
+      </div>
+    </div>
+  );
+}
+
+// Mini gráfica con la evolución de las notas de las actividades del periodo, en orden.
+export function EvolucionPeriodo({ actividades, config }) {
+  const pts = [...actividades]
+    .filter((a) => !isNaN(Number(a.valor)))
+    .sort((x, y) => (x.actividad_id ?? x.id) - (y.actividad_id ?? y.id));
+  if (pts.length < 2) return null;
+  const W = 300, H = 90, pad = 12;
+  const min = config.escala_min, max = config.nota_maxima;
+  const x = (i) => pad + (i * (W - 2 * pad)) / (pts.length - 1);
+  const y = (v) => H - pad - ((Number(v) - min) / (max - min)) * (H - 2 * pad);
+  const linea = pts.map((a, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(a.valor).toFixed(1)}`).join(" ");
+  const vals = pts.map((a) => Number(a.valor));
+  const prom = vals.reduce((a, v) => a + v, 0) / vals.length;
+  const ultima = vals[vals.length - 1];
+  const dif = Math.round((ultima - prom) * 10) / 10;
+  const mensaje = dif > 0.2 ? `📈 Tu última nota (${ultima}) está por encima de tu promedio. ¡Vas mejorando!`
+    : dif < -0.2 ? `📉 Tu última nota (${ultima}) quedó por debajo de tu promedio. Tú puedes recuperarte en la próxima.`
+    : `➡️ Vas estable: tu última nota (${ultima}) es parecida a tu promedio.`;
+  return (
+    <div className="mt-2 rounded-xl bg-white border border-slate-200 p-2.5">
+      <div className="text-[11px] font-extrabold text-slate-600 mb-1">📊 Cómo vas en este periodo</div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 110 }} role="img" aria-label="Evolución de tus notas">
+        <line x1={pad} x2={W - pad} y1={y(config.nota_minima)} y2={y(config.nota_minima)} stroke="#CBD5E1" strokeDasharray="4 3" />
+        <text x={W - pad} y={y(config.nota_minima) - 3} fontSize="8" fill="#94A3B8" textAnchor="end">{config.nota_minima}</text>
+        <path d={linea} fill="none" stroke="#94A3B8" strokeWidth="1.5" />
+        {pts.map((a, i) => {
+          const b = bandaDesempeno(a.valor, config) || { color: "#94A3B8" };
+          return (
+            <g key={a.id}>
+              <circle cx={x(i)} cy={y(a.valor)} r="5" fill={b.color} stroke="#fff" strokeWidth="1.5">
+                <title>{`${a.notas_actividades?.nombre || "Actividad"}: ${a.valor}`}</title>
+              </circle>
+              <text x={x(i)} y={y(a.valor) - 8} fontSize="8" fontWeight="700" fill={b.color} textAnchor="middle">{a.valor}</text>
+            </g>
+          );
+        })}
+      </svg>
+      <div className="text-[11px] text-slate-600">{mensaje}</div>
+    </div>
+  );
+}
+
 const COLORES_CATEGORIA = ["#2F55A4", "#7C3AED", "#0F766E", "#B45309", "#BE185D", "#0369A1", "#4D7C0F"];
 
 // Actividades del periodo actual agrupadas por categoría: cada categoría con su color,
@@ -210,38 +287,49 @@ export function MisNotas({ estudianteId }) {
   }
   const config = { escala_min: 1, nota_minima: 3.5, nota_maxima: 5 };
 
+  const resumenMaterias = Object.entries(materias).map(([nombreMateria, m]) => {
+    const periodos = [...new Set([...Object.keys(m.finales), ...Object.keys(m.actividadesPorPeriodo)])].sort();
+    // Periodo actual: el que el docente tiene activo; si no se pudo leer, el más reciente con actividades.
+    const conActividades = Object.keys(m.actividadesPorPeriodo).sort();
+    const periodoActual = String(periodoActualDe[m.materiaId] ?? conActividades[conActividades.length - 1] ?? periodos[periodos.length - 1]);
+
+    const filas = periodos.map((periodo) => {
+      const actividadesPeriodo = m.actividadesPorPeriodo[periodo] || [];
+      const esActual = String(periodo) === periodoActual;
+      if (Object.prototype.hasOwnProperty.call(m.finales, periodo)) {
+        return { periodo, nota: m.finales[periodo], enCurso: false, actividadesPeriodo, esActual };
+      }
+      // Sin nota final guardada todavía: se calcula en vivo con lo que hay cargado
+      const porCategoria = {};
+      const categoriasVistas = {};
+      actividadesPeriodo.forEach((a) => {
+        const cat = a.notas_actividades?.notas_categorias;
+        const catId = a.notas_actividades?.categoria_id;
+        if (!catId) return;
+        categoriasVistas[catId] = { id: catId, porcentaje: cat?.porcentaje || 0 };
+        porCategoria[catId] = porCategoria[catId] || [];
+        porCategoria[catId].push(a.valor);
+      });
+      const notaViva = notaFinalPonderada(porCategoria, Object.values(categoriasVistas));
+      return { periodo, nota: notaViva, enCurso: true, actividadesPeriodo, esActual };
+    });
+
+    // Cambio frente al periodo anterior (solo si ese periodo ya tiene resultado)
+    filas.forEach((f, k) => {
+      const ant = k > 0 ? filas[k - 1].nota : null;
+      f.delta = f.esActual && ant != null && f.nota != null ? Math.round((f.nota - ant) * 10) / 10 : null;
+    });
+    return { nombre: nombreMateria, filas, actual: filas.find((f) => f.esActual) || null };
+  });
+
   return (
     <div className="mt-4 pt-4 border-t border-slate-100">
       <div className="text-xs font-semibold text-slate-600 mb-2">📚 Mis notas</div>
+      <ResumenGeneral materias={resumenMaterias} config={config} />
       <div className="space-y-2">
         {Object.entries(materias).map(([nombreMateria, m]) => {
           const abierta = materiaAbierta === nombreMateria;
-          const periodos = [...new Set([...Object.keys(m.finales), ...Object.keys(m.actividadesPorPeriodo)])].sort();
-          // Periodo actual: el que el docente tiene activo; si no se pudo leer, el más reciente con actividades.
-          const conActividades = Object.keys(m.actividadesPorPeriodo).sort();
-          const periodoActual = String(periodoActualDe[m.materiaId] ?? conActividades[conActividades.length - 1] ?? periodos[periodos.length - 1]);
-
-          const filas = periodos.map((periodo) => {
-            const actividadesPeriodo = m.actividadesPorPeriodo[periodo] || [];
-            const esActual = String(periodo) === periodoActual;
-            if (Object.prototype.hasOwnProperty.call(m.finales, periodo)) {
-              return { periodo, nota: m.finales[periodo], enCurso: false, actividadesPeriodo, esActual };
-            }
-            // Sin nota final guardada todavía: se calcula en vivo con lo que hay cargado
-            const porCategoria = {};
-            const categoriasVistas = {};
-            actividadesPeriodo.forEach((a) => {
-              const cat = a.notas_actividades?.notas_categorias;
-              const catId = a.notas_actividades?.categoria_id;
-              if (!catId) return;
-              categoriasVistas[catId] = { id: catId, porcentaje: cat?.porcentaje || 0 };
-              porCategoria[catId] = porCategoria[catId] || [];
-              porCategoria[catId].push(a.valor);
-            });
-            const notaViva = notaFinalPonderada(porCategoria, Object.values(categoriasVistas));
-            return { periodo, nota: notaViva, enCurso: true, actividadesPeriodo, esActual };
-          });
-
+          const { filas } = resumenMaterias.find((r) => r.nombre === nombreMateria);
           return (
             <div key={nombreMateria} className="bg-slate-50 rounded-xl p-3">
               <button onClick={() => setMateriaAbierta(abierta ? null : nombreMateria)} className="w-full text-left">
@@ -268,9 +356,17 @@ export function MisNotas({ estudianteId }) {
                           Periodo {f.periodo} — <span style={{ color: b.color }}>{f.nota ?? "—"} ({b.label})</span>
                           {f.enCurso && <span className="text-amber-600 font-normal"> · En curso (provisional, puede cambiar)</span>}
                           {!f.enCurso && !f.esActual && <span className="text-slate-400 font-normal"> · Resultado final</span>}
+                          {f.delta != null && f.delta !== 0 && (
+                            <span className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: f.delta > 0 ? "#05966922" : "#DC262622", color: f.delta > 0 ? "#059669" : "#DC2626" }}>
+                              {f.delta > 0 ? "▲ +" : "▼ "}{f.delta} frente al periodo anterior
+                            </span>
+                          )}
                         </div>
                         {f.esActual && f.actividadesPeriodo.length > 0 && (
-                          <ActividadesPorCategoria actividades={f.actividadesPeriodo} config={config} />
+                          <>
+                            <EvolucionPeriodo actividades={f.actividadesPeriodo} config={config} />
+                            <ActividadesPorCategoria actividades={f.actividadesPeriodo} config={config} />
+                          </>
                         )}
                         {f.esActual && f.actividadesPeriodo.length > 0 && (
                           <BonoEnCurso materiaId={f.actividadesPeriodo[0].notas_actividades?.materia_id} periodo={f.periodo} estudianteId={estudianteId} nota={f.nota} />
