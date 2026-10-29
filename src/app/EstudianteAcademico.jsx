@@ -103,10 +103,17 @@ export function MisNotas({ estudianteId }) {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
   const [materiaAbierta, setMateriaAbierta] = useState(null);
+  const [periodoActualDe, setPeriodoActualDe] = useState({}); // materia_id -> periodo que el docente mantiene activo
 
   useEffect(() => {
     Promise.all([api.fetchNotasEstudiante(estudianteId), api.fetchComentariosDesempeno()])
-      .then(([d, c]) => { setDatos(d); setComentarios(c); setCargando(false); })
+      .then(async ([d, c]) => {
+        setDatos(d); setComentarios(c); setCargando(false);
+        // periodo "actual" de cada materia, según la configuración del docente
+        const ids = [...new Set([...d.finales.map((f) => f.materia_id), ...d.valores.map((v) => v.notas_actividades?.materia_id)].filter((x) => x != null))];
+        const pares = await Promise.all(ids.map((id) => api.fetchNotasConfig(id).then((cfg) => [id, cfg?.periodo_actual]).catch(() => [id, null])));
+        setPeriodoActualDe(Object.fromEntries(pares.filter(([, p]) => p != null && p !== "")));
+      })
       .catch((e) => { setError(e.message); setCargando(false); });
   }, [estudianteId]);
 
@@ -121,6 +128,7 @@ export function MisNotas({ estudianteId }) {
   datos.finales.forEach((f) => {
     const nombre = f.materias?.nombre || `Materia ${f.materia_id}`;
     materias[nombre] = materias[nombre] || { finales: {}, actividadesPorPeriodo: {} };
+    materias[nombre].materiaId = f.materia_id;
     materias[nombre].finales[f.periodo] = f.nota;
   });
   datos.valores.forEach((v) => {
@@ -128,6 +136,7 @@ export function MisNotas({ estudianteId }) {
     if (!act) return;
     const nombre = act.materias?.nombre || `Materia ${act.materia_id}`;
     materias[nombre] = materias[nombre] || { finales: {}, actividadesPorPeriodo: {} };
+    materias[nombre].materiaId = act.materia_id;
     materias[nombre].actividadesPorPeriodo[act.periodo] = materias[nombre].actividadesPorPeriodo[act.periodo] || [];
     materias[nombre].actividadesPorPeriodo[act.periodo].push(v);
   });
@@ -144,11 +153,15 @@ export function MisNotas({ estudianteId }) {
         {Object.entries(materias).map(([nombreMateria, m]) => {
           const abierta = materiaAbierta === nombreMateria;
           const periodos = [...new Set([...Object.keys(m.finales), ...Object.keys(m.actividadesPorPeriodo)])].sort();
+          // Periodo actual: el que el docente tiene activo; si no se pudo leer, el más reciente con actividades.
+          const conActividades = Object.keys(m.actividadesPorPeriodo).sort();
+          const periodoActual = String(periodoActualDe[m.materiaId] ?? conActividades[conActividades.length - 1] ?? periodos[periodos.length - 1]);
 
           const filas = periodos.map((periodo) => {
             const actividadesPeriodo = m.actividadesPorPeriodo[periodo] || [];
+            const esActual = String(periodo) === periodoActual;
             if (Object.prototype.hasOwnProperty.call(m.finales, periodo)) {
-              return { periodo, nota: m.finales[periodo], enCurso: false, actividadesPeriodo };
+              return { periodo, nota: m.finales[periodo], enCurso: false, actividadesPeriodo, esActual };
             }
             // Sin nota final guardada todavía: se calcula en vivo con lo que hay cargado
             const porCategoria = {};
@@ -162,7 +175,7 @@ export function MisNotas({ estudianteId }) {
               porCategoria[catId].push(a.valor);
             });
             const notaViva = notaFinalPonderada(porCategoria, Object.values(categoriasVistas));
-            return { periodo, nota: notaViva, enCurso: true, actividadesPeriodo };
+            return { periodo, nota: notaViva, enCurso: true, actividadesPeriodo, esActual };
           });
 
           return (
@@ -190,8 +203,9 @@ export function MisNotas({ estudianteId }) {
                         <div className="text-xs font-semibold text-slate-600">
                           Periodo {f.periodo} — <span style={{ color: b.color }}>{f.nota ?? "—"} ({b.label})</span>
                           {f.enCurso && <span className="text-amber-600 font-normal"> · En curso (provisional, puede cambiar)</span>}
+                          {!f.enCurso && !f.esActual && <span className="text-slate-400 font-normal"> · Resultado final</span>}
                         </div>
-                        {f.actividadesPeriodo.length > 0 && (
+                        {f.esActual && f.actividadesPeriodo.length > 0 && (
                           <div className="ml-2 mt-1 space-y-0.5">
                             {f.actividadesPeriodo.map((a) => (
                               <div key={a.id}>
@@ -207,10 +221,10 @@ export function MisNotas({ estudianteId }) {
                             ))}
                           </div>
                         )}
-                        {f.enCurso && f.actividadesPeriodo.length > 0 && (
+                        {f.esActual && f.actividadesPeriodo.length > 0 && (
                           <BonoEnCurso materiaId={f.actividadesPeriodo[0].notas_actividades?.materia_id} periodo={f.periodo} estudianteId={estudianteId} nota={f.nota} />
                         )}
-                        {f.enCurso && f.actividadesPeriodo.length > 0 && (
+                        {f.esActual && f.actividadesPeriodo.length > 0 && (
                           <ProyeccionNota materiaId={f.actividadesPeriodo[0].notas_actividades?.materia_id} actividades={f.actividadesPeriodo} />
                         )}
                         {!f.enCurso && f.nota !== null && comentarios[b.key] && (
