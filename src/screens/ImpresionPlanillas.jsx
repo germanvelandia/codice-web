@@ -27,6 +27,15 @@ const INFORMES = [
   { key: "blanco", emoji: "📝", titulo: "Lista del curso en blanco", desc: "Lista con columnas vacías para anotar a mano.", horizontal: true, usa: ["columnas"] },
 ];
 const PAPEL = { carta: "letter", oficio: "legal", a4: "A4" };
+const PASTEL = { bajo: ["#FEE2E2", "#B91C1C"], "básico": ["#FEF3C7", "#B45309"], basico: ["#FEF3C7", "#B45309"], alto: ["#DBEAFE", "#1D4ED8"], superior: ["#DCFCE7", "#15803D"] };
+const estiloNota = (v, config) => { if (v === null || v === undefined || Number.isNaN(Number(v))) return ""; const c = PASTEL[bandaDesempeno(v, config).key]; return c ? ` style="background:${c[0]};color:${c[1]}"` : ""; };
+const celdaNota = (v, config, extra = "") => `<td${extra ? ` class="${extra}"` : ""}${estiloNota(v, config)}>${fmtNota(v)}</td>`;
+const celdaBanda = (v, config) => (v === null || v === undefined ? "<td></td>" : `<td${estiloNota(v, config)}><b>${esc(bandaDesempeno(v, config).label)}</b></td>`);
+const leyendaBandas = (config) => {
+  const min = Number(config.nota_minima), max = Number(config.nota_maxima), r = max - min, f = (x) => (Math.round(x * 10) / 10).toFixed(1);
+  const it = [["bajo", "Bajo", `menos de ${f(min)}`], ["basico", "Básico", `${f(min)} a ${f(min + r * 0.35 - 0.05)}`], ["alto", "Alto", `${f(min + r * 0.35)} a ${f(min + r * 0.7 - 0.05)}`], ["superior", "Superior", `${f(min + r * 0.7)} a ${f(max)}`]];
+  return `<div class="leyenda">Desempeño: ${it.map(([k, n, rg]) => `<span style="background:${PASTEL[k][0]};color:${PASTEL[k][1]};padding:1px 6px;border-radius:3px;font-weight:700">${n} (${rg})</span>`).join(" ")}</div>`;
+};
 const COD = { P: ["#DCFCE7", "#15803D"], R: ["#FEF3C7", "#B45309"], FI: ["#FEE2E2", "#B91C1C"], FJ: ["#DBEAFE", "#1D4ED8"] };
 
 const CSS = (papel, horizontal, denso) => `
@@ -117,15 +126,14 @@ function htmlPlanilla(ctx, d) {
     const celdas = todas.map((a, j) => {
       const v = d.valorDe(a, e.id);
       if (v !== null && v !== undefined) { sumas[j].s += Number(v); sumas[j].n++; }
-      return `<td class="${v !== null && v !== undefined && Number(v) < config.nota_minima ? "bajo" : ""}">${fmtNota(v)}</td>`;
+      return celdaNota(v, config);
     }).join("");
     const f = d.finalDe(e.id);
     if (f !== null && f !== undefined) { sf += Number(f); nf++; }
-    const b = bandaDesempeno(f, config);
-    return `<tr><td class="n">${i + 1}</td><td class="nom">${esc(e.nombre)}</td>${celdas}<td class="fin ${f !== null && f !== undefined && Number(f) < config.nota_minima ? "bajo" : ""}">${fmtNota(f)}</td><td>${f === null || f === undefined ? "" : esc(b.label)}</td></tr>`;
+    return `<tr><td class="n">${i + 1}</td><td class="nom">${esc(e.nombre)}</td>${celdas}${celdaNota(f, config, "fin")}${celdaBanda(f, config)}</tr>`;
   }).join("");
   const prom = `<tfoot><tr><td colspan="2" class="nom">Promedio del curso</td>${sumas.map((x) => `<td>${x.n ? fmtNota(x.s / x.n) : ""}</td>`).join("")}<td>${nf ? fmtNota(sf / nf) : ""}</td><td></td></tr></tfoot>`;
-  return { cuerpo: `<table><thead>${cab1}${cab2}</thead><tbody>${filas}</tbody>${prom}</table><div class="leyenda">Nota mínima aprobatoria: ${esc(config.nota_minima)} · Escala: ${esc(config.escala_min)} a ${esc(config.nota_maxima)}. Las notas por debajo del mínimo se marcan en rojo.</div>`, denso: todas.length > 12 };
+  return { cuerpo: `<table><thead>${cab1}${cab2}</thead><tbody>${filas}</tbody>${prom}</table><div class="leyenda">Nota mínima aprobatoria: ${esc(config.nota_minima)} · Escala: ${esc(config.escala_min)} a ${esc(config.nota_maxima)}.</div>${leyendaBandas(config)}`, denso: todas.length > 12 };
 }
 
 async function htmlConsolidado(ctx) {
@@ -147,21 +155,20 @@ async function htmlConsolidado(ctx) {
     const vs = tiene.map((p) => nota(p, e.id));
     const con = vs.filter((v) => v !== null);
     const def = con.length ? con.reduce((a, b) => a + b, 0) / con.length : null;
-    const b = bandaDesempeno(def, config);
-    return `<tr><td class="n">${i + 1}</td><td class="nom">${esc(e.nombre)}</td>${vs.map((v) => `<td class="${v !== null && v < config.nota_minima ? "bajo" : ""}">${fmtNota(v)}</td>`).join("")}<td class="fin ${def !== null && def < config.nota_minima ? "bajo" : ""}">${fmtNota(def)}</td><td>${def === null ? "" : esc(b.label)}</td></tr>`;
+    return `<tr><td class="n">${i + 1}</td><td class="nom">${esc(e.nombre)}</td>${vs.map((v) => celdaNota(v, config)).join("")}${celdaNota(def, config, "fin")}${celdaBanda(def, config)}</tr>`;
   }).join("");
-  return { cuerpo: `<table><thead><tr><th class="n">N°</th><th class="nom">Estudiante</th>${tiene.map((p) => `<th>Periodo ${esc(p)}</th>`).join("")}<th>Definitiva</th><th>Desempeño</th></tr></thead><tbody>${filas}</tbody></table><div class="leyenda">La definitiva es el promedio de los periodos con nota. Nota mínima aprobatoria: ${esc(config.nota_minima)}.</div>`, denso: false };
+  return { cuerpo: `<table><thead><tr><th class="n">N°</th><th class="nom">Estudiante</th>${tiene.map((p) => `<th>Periodo ${esc(p)}</th>`).join("")}<th>Definitiva</th><th>Desempeño</th></tr></thead><tbody>${filas}</tbody></table><div class="leyenda">La definitiva es el promedio de los periodos con nota. Nota mínima aprobatoria: ${esc(config.nota_minima)}.</div>${leyendaBandas(config)}`, denso: false };
 }
 
 function htmlDesempeno(ctx, d) {
   const { estudiantes, config } = ctx;
   const orden = ["Superior", "Alto", "Básico", "Bajo", "Sin nota"];
-  const col = { Superior: "#16A34A", Alto: "#2563EB", "Básico": "#D97706", Bajo: "#DC2626", "Sin nota": "#64748B" };
+  const col = { Superior: "#22C55E", Alto: "#3B82F6", "Básico": "#F59E0B", Bajo: "#EF4444", "Sin nota": "#64748B" };
   const g = {}; orden.forEach((k) => { g[k] = []; });
   estudiantes.forEach((e) => { const f = d.finalDe(e.id); const b = bandaDesempeno(f, config); const k = f === null || f === undefined ? "Sin nota" : b.label; (g[k] = g[k] || []).push({ e, f }); });
   const resumen = `<table style="width:auto;margin-bottom:8px"><tr>${orden.map((k) => `<th style="background:${col[k]};color:#fff">${k}</th>`).join("")}</tr><tr>${orden.map((k) => `<td><b>${g[k].length}</b></td>`).join("")}</tr></table>`;
-  const bloques = orden.filter((k) => g[k].length).map((k) => `<div class="grupo"><h3 style="background:${col[k]}">${k} (${g[k].length})</h3><table><tbody>${g[k].map(({ e, f }, i) => `<tr><td class="n">${i + 1}</td><td class="nom">${esc(e.nombre)}</td><td style="width:60px">${fmtNota(f)}</td></tr>`).join("")}</tbody></table></div>`).join("");
-  return { cuerpo: resumen + bloques, denso: false };
+  const bloques = orden.filter((k) => g[k].length).map((k) => `<div class="grupo"><h3 style="background:${col[k]}">${k} (${g[k].length})</h3><table><tbody>${g[k].map(({ e, f }, i) => `<tr><td class="n">${i + 1}</td><td class="nom">${esc(e.nombre)}</td>${celdaNota(f, config)}</tr>`).join("")}</tbody></table></div>`).join("");
+  return { cuerpo: resumen + bloques + leyendaBandas(config), denso: false };
 }
 
 async function htmlAsistencia(ctx, { desde, hasta, materiaId }) {
