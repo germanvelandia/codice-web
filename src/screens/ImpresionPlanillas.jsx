@@ -25,8 +25,14 @@ function apellidosYNombres(e) {
   const ap = String(e?.apellidos || "").trim();
   const M = (x) => x.toLocaleUpperCase("es"); // apellidos siempre en MAYÚSCULAS
   if (ap) {
-    const sinAp = nombre.toLowerCase().endsWith(ap.toLowerCase()) ? nombre.slice(0, nombre.length - ap.length).trim() : nombre;
-    return `${M(ap)} ${sinAp}`.trim();
+    // Quita del nombre los apellidos, esté donde esté (al final, al inicio o suelto), sin tildes ni mayúsculas.
+    const N = (x) => x.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const apT = ap.split(/\s+/).map(N), t = nombre.split(/\s+/).filter(Boolean), k = apT.length;
+    let sinAp = t;
+    if (t.length > k && t.slice(-k).map(N).join(" ") === apT.join(" ")) sinAp = t.slice(0, -k);
+    else if (t.length > k && t.slice(0, k).map(N).join(" ") === apT.join(" ")) sinAp = t.slice(k);
+    else { const r = t.filter((w) => !apT.includes(N(w))); if (r.length && r.length < t.length) sinAp = r; }
+    return `${M(ap)} ${sinAp.join(" ")}`.trim();
   }
   const p = nombre.split(/\s+/).filter(Boolean);
   if (p.length <= 1) return nombre;
