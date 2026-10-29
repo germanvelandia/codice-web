@@ -61,11 +61,11 @@ const CSS = (papel, horizontal, denso) => `
 @page{size:${PAPEL[papel] || "letter"} ${horizontal ? "landscape" : "portrait"};margin:10mm 10mm 12mm}
 *{box-sizing:border-box}
 body{margin:0;font-family:Arial,Helvetica,sans-serif;color:#0f172a;font-size:${denso ? 8 : 10}px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-.enc{display:flex;align-items:center;gap:10px;border-bottom:2px solid #17264D;padding-bottom:6px;margin-bottom:6px}
+.enc{display:flex;align-items:center;justify-content:center;text-align:center;gap:12px;border-bottom:2px solid #17264D;padding-bottom:6px;margin-bottom:6px}
 .enc img{height:44px;width:auto}
 .enc .ins{font-size:13px;font-weight:700;color:#17264D}
 .enc .tit{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#475569}
-.meta{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:10px;margin:0 0 8px;color:#334155}
+.meta{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 18px;font-size:10px;margin:0 0 8px;color:#334155}
 .meta b{color:#0f172a}
 table{border-collapse:collapse;width:100%}
 th,td{border:1px solid #94a3b8;padding:${denso ? "2px 3px" : "3px 5px"};text-align:center;vertical-align:middle}
@@ -250,6 +250,8 @@ export function VistaImpresion({ grados = [], gradoActivo, materiaActiva }) {
   const [columnas, setColumnas] = useState(15);
   const [firmasOn, setFirmasOn] = useState(true);
   const [orden, setOrden] = useState("apellido"); // "apellido" | "nombre"
+  const [docenteNombre, setDocenteNombre] = useState(() => { try { return localStorage.getItem("codice_print_docente") || ""; } catch { return ""; } });
+  const [recordarNombre, setRecordarNombre] = useState(true);
   const [html, setHtml] = useState("");
   const [msg, setMsg] = useState("");
   const [trabajando, setTrabajando] = useState(false);
@@ -259,7 +261,12 @@ export function VistaImpresion({ grados = [], gradoActivo, materiaActiva }) {
   useEffect(() => { api.fetchMisMaterias().then((m) => { setMaterias(m); setMateriaId((x) => x || (m.find((q) => String(q.id) === String(materiaActiva))?.id ?? m[0]?.id ?? "")); }).catch((e) => setMsg(e.message)); }, []);
   useEffect(() => { if (materiaActiva) setMateriaId(materiaActiva); }, [materiaActiva]);
   useEffect(() => { if (materiaId) api.fetchNotasConfig(materiaId).then((c) => { setConfig(c); setPeriodo(String(c.periodo_actual || "1")); }).catch(() => {}); }, [materiaId]);
-  useEffect(() => { setHtml(""); }, [gradoId, materiaId, periodo, informe, papel, desde, hasta, columnas, firmasOn, orden]);
+  useEffect(() => { // si aún no escribiste tu nombre, usa el de tu perfil (nunca el correo)
+    if (docenteNombre) return;
+    api.fetchMiPerfil().then((p) => { if (p?.nombre && !/@/.test(p.nombre)) setDocenteNombre(p.nombre); }).catch(() => {});
+    // eslint-disable-next-line
+  }, []);
+  useEffect(() => { setHtml(""); }, [docenteNombre, gradoId, materiaId, periodo, informe, papel, desde, hasta, columnas, firmasOn, orden]);
 
   const def = INFORMES.find((i) => i.key === informe);
   const materia = materias.find((m) => String(m.id) === String(materiaId));
@@ -284,15 +291,20 @@ export function VistaImpresion({ grados = [], gradoActivo, materiaActiva }) {
       else if (informe === "asistencia") r = await htmlAsistencia(ctx, { desde, hasta, materiaId });
       else if (informe === "resumen") r = await htmlResumen(ctx, { desde, hasta, materiaId });
       else r = htmlBlanco(ctx, columnas);
+      const nombreDoc = docenteNombre.trim() || (perfil?.nombre && !/@/.test(perfil.nombre) ? perfil.nombre : "");
+      if (docenteNombre.trim()) {
+        try { localStorage.setItem("codice_print_docente", docenteNombre.trim()); } catch { /* sin almacenamiento */ }
+        if (recordarNombre && docenteNombre.trim() !== (perfil?.nombre || "")) { try { await api.guardarMiNombre(docenteNombre.trim()); } catch { /* no bloquea la impresión */ } }
+      }
       const meta = [
         ["Curso", grado?.nombre || gradoId],
         ["Materia", informe === "blanco" ? "" : (materia?.nombre || "")],
-        ["Docente", perfil?.nombre || ""],
+        ["Docente", nombreDoc],
         ["Periodo", def.usa.includes("periodo") ? `Periodo ${periodo}` : ""],
         ["Fechas", def.usa.includes("fechas") ? `${fmtFecha(desde)} al ${fmtFecha(hasta)}` : ""],
         ["Estudiantes", String(estudiantes.length)],
       ];
-      setHtml(documento({ titulo: def.titulo, subtitulo: def.titulo, ins, meta, cuerpo: r.cuerpo, pie: firmasOn ? firmas(perfil?.nombre) : "", papel, horizontal: def.horizontal, denso: r.denso }));
+      setHtml(documento({ titulo: def.titulo, subtitulo: def.titulo, ins, meta, cuerpo: r.cuerpo, pie: firmasOn ? firmas(nombreDoc) : "", papel, horizontal: def.horizontal, denso: r.denso }));
     } catch (e) { setMsg(e.message || String(e)); }
     setTrabajando(false);
   };
@@ -326,6 +338,8 @@ export function VistaImpresion({ grados = [], gradoActivo, materiaActiva }) {
           {mostrar("columnas") && <label className="text-xs text-slate-600">Columnas vacías <input type="number" min="1" max="40" className={sel + " w-20"} value={columnas} onChange={(e) => setColumnas(e.target.value)} /></label>}
           <label className="text-xs text-slate-600">Papel <select className={sel} value={papel} onChange={(e) => setPapel(e.target.value)}><option value="carta">Carta</option><option value="oficio">Oficio</option><option value="a4">A4</option></select></label>
           <label className="text-xs text-slate-600">Ordenar por <select className={sel} value={orden} onChange={(e) => setOrden(e.target.value)}><option value="apellido">Apellidos (Apellidos Nombres)</option><option value="nombre">Nombres (Nombres Apellidos)</option></select></label>
+          <label className="text-xs text-slate-600">Docente <input className={sel + " w-56"} value={docenteNombre} onChange={(e) => setDocenteNombre(e.target.value)} placeholder="Tu nombre completo" /></label>
+          <label className="text-xs text-slate-600 flex items-center gap-1" title="Guarda este nombre en tu perfil"><input type="checkbox" checked={recordarNombre} onChange={(e) => setRecordarNombre(e.target.checked)} /> Recordar</label>
           <label className="text-xs text-slate-600 flex items-center gap-1"><input type="checkbox" checked={firmasOn} onChange={(e) => setFirmasOn(e.target.checked)} /> Líneas de firma</label>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
