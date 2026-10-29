@@ -191,7 +191,7 @@ export function MisNotas({ estudianteId }) {
                           Periodo {f.periodo} — <span style={{ color: b.color }}>{f.nota ?? "—"} ({b.label})</span>
                           {f.enCurso && <span className="text-amber-600 font-normal"> · En curso (provisional, puede cambiar)</span>}
                         </div>
-                        {f.enCurso && f.actividadesPeriodo.length > 0 && (
+                        {f.actividadesPeriodo.length > 0 && (
                           <div className="ml-2 mt-1 space-y-0.5">
                             {f.actividadesPeriodo.map((a) => (
                               <div key={a.id}>
@@ -212,25 +212,6 @@ export function MisNotas({ estudianteId }) {
                         )}
                         {f.enCurso && f.actividadesPeriodo.length > 0 && (
                           <ProyeccionNota materiaId={f.actividadesPeriodo[0].notas_actividades?.materia_id} actividades={f.actividadesPeriodo} />
-                        )}
-                        {!f.enCurso && f.actividadesPeriodo.some((a) => a.observacion) && (
-                          <div className="ml-2 mt-1 space-y-0.5">
-                            {f.actividadesPeriodo.filter((a) => a.observacion).map((a) => (
-                              <div key={a.id} className="text-[10px] text-violet-600 italic bg-violet-50 rounded-lg px-2 py-1">
-                                📝 <b>{a.notas_actividades?.nombre}:</b> {a.observacion}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        {!f.enCurso && f.actividadesPeriodo.some((a) => a.rubrica_resultado) && (
-                          <div className="ml-2 mt-1 space-y-1">
-                            {f.actividadesPeriodo.filter((a) => a.rubrica_resultado).map((a) => (
-                              <div key={a.id} className="text-[11px] text-slate-500">
-                                <span className="font-semibold">{a.notas_actividades?.nombre}</span> · <span className="font-semibold">{a.valor}</span>
-                                <RubricaCalificadaAlumno resultado={a.rubrica_resultado} config={config} />
-                              </div>
-                            ))}
-                          </div>
                         )}
                         {!f.enCurso && f.nota !== null && comentarios[b.key] && (
                           <div className="text-[11px] text-slate-500 italic mt-1 bg-white rounded-lg p-2">{comentarios[b.key]}</div>
