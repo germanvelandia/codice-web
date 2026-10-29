@@ -2,6 +2,7 @@
 // con equipos propios y textos sobre el trabajo.
 import React, { useEffect, useMemo, useState } from "react";
 import * as gm from "../lib/gruposMixtos";
+import * as api from "../lib/api";
 import { EditorTexto, TextoEnriquecido, textoPlano } from "../components/RichText";
 
 export function GruposMixtosModal({ grupos, inicial, onClose, onCambio, onAbrir }) {
@@ -19,6 +20,26 @@ export function GruposMixtosModal({ grupos, inicial, onClose, onCambio, onAbrir 
   const [busqueda, setBusqueda] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [cuenta, setCuenta] = useState({});
+  // Traer estudiantes desde un control de Dirección de Curso (ej.: salida pedagógica: los que fueron / los que no).
+  const [ctrlGrado, setCtrlGrado] = useState("");
+  const [controles, setControles] = useState([]);
+  const [ctrlId, setCtrlId] = useState("");
+  const [ctrlMsg, setCtrlMsg] = useState("");
+  useEffect(() => {
+    setControles([]); setCtrlId(""); setCtrlMsg("");
+    if (ctrlGrado) api.fetchControlesCurso(ctrlGrado).then((c) => { setControles(c); setCtrlId(c[0]?.id ?? ""); }).catch(() => setControles([]));
+  }, [ctrlGrado]);
+  const traerDeControl = async (queCompletaron) => {
+    try {
+      const control = controles.find((c) => String(c.id) === String(ctrlId));
+      if (!control) return;
+      const est = await api.fetchEstudiantesPorGrado(ctrlGrado);
+      const filas = await api.fetchEstadoControl(control.id, est);
+      const ids = filas.filter((f) => !!f.completado === queCompletaron).map((f) => f.estudiante_id);
+      setSel((p) => new Set([...p, ...ids]));
+      setCtrlMsg(`Se agregaron ${ids.length} estudiante(s) de ${ctrlGrado} (${queCompletaron ? "los que SÍ" : "los que NO"} cumplieron «${control.nombre}»).`);
+    } catch (e) { setCtrlMsg("No se pudo traer: " + e.message); }
+  };
 
   useEffect(() => { gm.fetchEstudiantesParaElegir().then(setTodos).catch((e) => alert("No se pudieron cargar los estudiantes: " + e.message)); }, []);
   useEffect(() => {
@@ -127,6 +148,22 @@ export function GruposMixtosModal({ grupos, inicial, onClose, onCambio, onAbrir 
             {pestana === "estudiantes" && (<>
               <div className="flex flex-wrap gap-1 mb-2">
                 {grados.map((g) => <button key={g} onClick={() => setFiltroGrado(g)} className={`text-[11px] px-2 py-1 rounded-full ${filtroGrado === g ? "bg-violet-500 text-white" : "bg-slate-100 text-slate-600"}`}>{g}</button>)}
+              </div>
+              <div className="rounded-xl border border-violet-200 bg-violet-50 p-2 mb-2">
+                <div className="text-[11px] font-bold text-violet-800 mb-1">📋 Traer desde un control de Dirección de Curso</div>
+                <div className="text-[10px] text-violet-700 mb-1.5">Ej.: en «Salida pedagógica» marca quién fue (Completado). Aquí puedes armar un grupo con <b>los que fueron</b> y otro con <b>los que no fueron</b> (los que hacen el trabajo en el colegio).</div>
+                <div className="flex flex-wrap gap-1.5 items-center">
+                  <select value={ctrlGrado} onChange={(e) => setCtrlGrado(e.target.value)} className="text-xs rounded-lg px-2 py-1 border border-slate-200 bg-white">
+                    <option value="">Curso…</option>
+                    {grados.filter((g) => g !== "Todos").map((g) => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                  <select value={ctrlId} onChange={(e) => setCtrlId(e.target.value)} disabled={!controles.length} className="text-xs rounded-lg px-2 py-1 border border-slate-200 bg-white max-w-[200px]">
+                    {controles.length === 0 ? <option value="">{ctrlGrado ? "Sin controles" : "—"}</option> : controles.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                  </select>
+                  <button disabled={!ctrlId} onClick={() => traerDeControl(true)} className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-600 text-white disabled:opacity-40">＋ Los que SÍ</button>
+                  <button disabled={!ctrlId} onClick={() => traerDeControl(false)} className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-amber-600 text-white disabled:opacity-40">＋ Los que NO</button>
+                </div>
+                {ctrlMsg && <div className="text-[11px] text-violet-800 mt-1.5">{ctrlMsg}</div>}
               </div>
               <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar estudiante…" className="w-full text-xs rounded-lg px-3 py-1.5 mb-2 border border-slate-200 outline-none" />
               <div className="flex justify-between text-[11px] text-slate-500 mb-1">
