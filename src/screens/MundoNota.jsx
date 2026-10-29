@@ -5,7 +5,7 @@ import { CONFIG_DEFAULT, periodosDe } from "../lib/calificaciones";
 
 const hoy = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
 const haceDias = (n) => new Date(Date.now() - n * 86400000).toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
-const IND = { dias: "Días que entró al Mundo", actividades: "Actividades hechas en el Mundo", xp: "XP ganado en el Mundo" };
+const IND = { plataforma: "Días que ingresó a la plataforma (constancia)", mundo: "Días que ingresó al Mundo", misiones: "Misiones desarrolladas en el Mundo", dias: "Días con actividad en el Mundo (suma de ingresos y trabajo)", actividades: "Actividades hechas en el Mundo (misiones, acertijos, retos…)", xp: "XP ganado en el Mundo" };
 
 export function VistaMundoNota({ grados = [], gradoActivo, materiaActiva }) {
   const [tab, setTab] = useState("calcular");
@@ -26,11 +26,12 @@ function Calcular({ grados, gradoActivo, materiaActiva, onCreadaAuto }) {
   const [desde, setDesde] = useState(haceDias(60));
   const [hasta, setHasta] = useState(hoy());
   const [modo, setModo] = useState("meta");
-  const [ind, setInd] = useState({ dias: { on: true, peso: 30, meta: 10 }, actividades: { on: true, peso: 50, meta: 8 }, xp: { on: true, peso: 20, meta: 100 } });
-  const [rIndicador, setRIndicador] = useState("actividades");
+  const [ind, setInd] = useState({ plataforma: { on: true, peso: 25, meta: 12 }, mundo: { on: true, peso: 25, meta: 10 }, misiones: { on: true, peso: 50, meta: 8 }, dias: { on: false, peso: 30, meta: 10 }, actividades: { on: false, peso: 50, meta: 8 }, xp: { on: false, peso: 20, meta: 100 } });
+  const [rIndicador, setRIndicador] = useState("misiones");
   const [tramos, setTramos] = useState([{ desde: 0, nota: 2 }, { desde: 4, nota: 3.5 }, { desde: 8, nota: 5 }]);
   const [bonoMax, setBonoMax] = useState(0.5);
   const [sinPart, setSinPart] = useState("omitir");
+  const [notaBase, setNotaBase] = useState("3");
   const [materias, setMaterias] = useState([]);
   const [materiaId, setMateriaId] = useState(materiaActiva || "");
   const [config, setConfig] = useState(CONFIG_DEFAULT);
@@ -39,7 +40,7 @@ function Calcular({ grados, gradoActivo, materiaActiva, onCreadaAuto }) {
   const [periodo, setPeriodo] = useState("1");
   const [columnas, setColumnas] = useState([]);
   const [destino, setDestino] = useState("nueva");
-  const [nombre, setNombre] = useState("Participación en el Mundo");
+  const [nombre, setNombre] = useState("Nota de gestión");
   const [estudiantes, setEstudiantes] = useState([]);
   const [filas, setFilas] = useState(null);
   const [msg, setMsg] = useState(""); const [trabajando, setTrabajando] = useState(false);
@@ -56,8 +57,8 @@ function Calcular({ grados, gradoActivo, materiaActiva, onCreadaAuto }) {
   const params = useMemo(() => {
     const pesos = {}, metas = {};
     Object.entries(ind).forEach(([k, v]) => { if (v.on) { pesos[k] = Number(v.peso) || 0; metas[k] = Number(v.meta) || 0; } });
-    return { modo, escala_min: emin, escala_max: emax, sin_participacion: sinPart, pesos, metas, rangos: { indicador: rIndicador, tramos: tramos.map((t) => ({ desde: Number(t.desde) || 0, nota: Number(t.nota) || 0 })) }, bono_max: Number(bonoMax) || 0 };
-  }, [modo, ind, rIndicador, tramos, bonoMax, sinPart, emin, emax]);
+    return { modo, escala_min: Math.min(Number(notaBase) || emin, emax), escala_max: emax, sin_participacion: sinPart, pesos, metas, rangos: { indicador: rIndicador, tramos: tramos.map((t) => ({ desde: Number(t.desde) || 0, nota: Number(t.nota) || 0 })) }, bono_max: Number(bonoMax) || 0 };
+  }, [modo, ind, rIndicador, tramos, bonoMax, sinPart, notaBase, emin, emax]);
   const nom = (id) => estudiantes.find((e) => String(e.id) === String(id))?.nombre || id;
 
   const calcular = async () => {
@@ -128,7 +129,7 @@ function Calcular({ grados, gradoActivo, materiaActiva, onCreadaAuto }) {
           <label className="text-xs text-slate-600">Desde <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className={sel} /></label>
           <label className="text-xs text-slate-600">Hasta <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className={sel} /></label>
         </div>
-        <p className="text-[11px] text-slate-400">Los días cuentan los ingresos registrados desde ahora y también los días en que hubo alguna actividad en el Mundo, así que el pasado también suma.</p>
+        <p className="text-[11px] text-slate-400">«Plataforma» cuenta los días en que el estudiante entró a CÓDICE con su código; «Mundo», los días en que entró al Mundo (se registra desde que se activó); «Misiones», las misiones del Mundo que desarrolló. Las tres se combinan con el peso y la meta que elijas abajo.</p>
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
@@ -136,9 +137,14 @@ function Calcular({ grados, gradoActivo, materiaActiva, onCreadaAuto }) {
         <div className="flex flex-wrap gap-3 text-sm">
           {[["meta", "Meta → nota proporcional"], ["rangos", "Por rangos"], ["bono", "Bono que suma"]].map(([k, l]) => <label key={k}><input type="radio" checked={modo === k} onChange={() => setModo(k)} /> {l}</label>)}
         </div>
+        {modo === "meta" && (
+          <label className="text-xs text-slate-600 flex flex-wrap items-center gap-2 rounded-lg bg-violet-50 border border-violet-100 px-2 py-1.5">
+            Nota mínima de quien participó <input type="number" step="0.1" min={emin} max={emax} value={notaBase} onChange={(e) => setNotaBase(e.target.value)} className={num} />
+            <span className="text-[11px] text-slate-500">Quien participó nunca baja de aquí y sube hasta {emax} según su avance; quien no participó queda sin nota y <b>no afecta su promedio</b>.</span></label>
+        )}
         {modo !== "rangos" && (
           <div className="space-y-1">
-            <p className="text-[11px] text-slate-500">{modo === "meta" ? `Cada indicador llega a su meta = 100 %. La nota va de ${emin} a ${emax} según el avance combinado (los pesos son la importancia de cada uno).` : `El bono va de 0 hasta el máximo según el avance combinado. Se suma a una columna que ya tenga notas.`}</p>
+            <p className="text-[11px] text-slate-500">{modo === "meta" ? `Cada indicador llega a su meta = 100 %. La nota va de ${Math.min(Number(notaBase) || emin, emax)} a ${emax} según el avance combinado (los pesos son la importancia de cada uno).` : `El bono va de 0 hasta el máximo según el avance combinado. Se suma a una columna que ya tenga notas.`}</p>
             {Object.entries(IND).map(([k, l]) => (
               <div key={k} className="flex flex-wrap items-center gap-2 text-sm">
                 <label className="w-64"><input type="checkbox" checked={ind[k].on} onChange={(e) => setInd({ ...ind, [k]: { ...ind[k], on: e.target.checked } })} /> {l}</label>
@@ -187,8 +193,8 @@ function Calcular({ grados, gradoActivo, materiaActiva, onCreadaAuto }) {
 
       {filas && (
         <div className="rounded-xl border border-slate-200 bg-white overflow-x-auto">
-          <table className="w-full text-xs"><thead><tr className="text-left text-slate-500 bg-slate-50"><th className="p-2">Estudiante</th><th className="p-2">Días</th><th className="p-2">Actividades</th><th className="p-2">XP</th><th className="p-2">Avance</th><th className="p-2">{modo === "bono" ? "Bono" : "Nota"}</th></tr></thead>
-            <tbody>{filas.map((f) => <tr key={f.estudiante_id} className="border-t border-slate-100"><td className="p-2">{f.nombre}</td><td className="p-2">{f.dias}</td><td className="p-2">{f.actividades}</td><td className="p-2">{Math.round(f.xp)}</td><td className="p-2">{Math.round(f.progreso * 100)}%</td><td className="p-2 font-semibold">{f.valor ?? "—"}</td></tr>)}</tbody></table>
+          <table className="w-full text-xs"><thead><tr className="text-left text-slate-500 bg-slate-50"><th className="p-2">Estudiante</th><th className="p-2">Plataforma (días)</th><th className="p-2">Mundo (días)</th><th className="p-2">Misiones</th><th className="p-2">XP</th><th className="p-2">Avance</th><th className="p-2">{modo === "bono" ? "Bono" : "Nota"}</th></tr></thead>
+            <tbody>{filas.map((f) => <tr key={f.estudiante_id} className="border-t border-slate-100"><td className="p-2">{f.nombre}</td><td className="p-2">{f.dias_plataforma ?? "—"}</td><td className="p-2">{f.dias_mundo ?? "—"}</td><td className="p-2">{f.misiones ?? "—"}</td><td className="p-2">{Math.round(f.xp)}</td><td className="p-2">{Math.round(f.progreso * 100)}%</td><td className="p-2 font-semibold">{f.valor ?? "—"}</td></tr>)}</tbody></table>
         </div>
       )}
     </div>
