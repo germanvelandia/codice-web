@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import * as api from "../lib/api";
 import { CONFIG_DEFAULT, periodosDe, bandaDesempeno, notaAutomatica, notaFinalPonderada } from "../lib/calificaciones";
 import { aplicarBono } from "../lib/bono";
+import { esGrupoMixto, fetchGruposMixtos, fetchEstudiantesGrupo, fetchDetalleGrupo } from "../lib/gruposMixtos";
 
 /* ============================================================================
    🖨️ Impresión de planillas e informes
@@ -43,7 +44,16 @@ const ordenar = (lista, orden) => (orden === "apellido"
   ? lista.map((e) => ({ ...e, nombre: apellidosYNombres(e) })).sort(porNombre)
   : [...lista].sort(porNombre));
 
+// Grupos mixtos: por grado y, dentro de cada grado, por APELLIDOS; el curso va junto al nombre.
+const claveGrado = (g) => { const n = parseInt(String(g ?? ""), 10); return Number.isNaN(n) ? 9999 : n; };
+const ordenarMixto = (lista) => lista
+  .map((e) => ({ ...e, _nom: apellidosYNombres(e), nombre: `${apellidosYNombres(e)}${e.grado_id != null ? ` (${e.grado_id})` : ""}` }))
+  .sort((a, b) => claveGrado(a.grado_id) - claveGrado(b.grado_id) || String(a.grado_id).localeCompare(String(b.grado_id), "es", { numeric: true }) || a._nom.localeCompare(b._nom, "es", { sensitivity: "base" }));
+const quitarHtml = (h) => String(h || "").replace(/<\s*br\s*\/?>/gi, "\n").replace(/<\/(p|div|li|h\d)>/gi, "\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").trim();
+
 const INFORMES = [
+  { key: "gruposnotas", emoji: "🧮", titulo: "Notas de grupos mixtos (varios grupos)", desc: "Las planillas de uno o varios grupos mixtos en un solo documento, por grado y apellidos. Ideal para salidas pedagógicas: los que fueron y los que hicieron el trabajo en el colegio.", horizontal: true, usa: ["periodo", "grupos"] },
+  { key: "grupo", emoji: "👥", titulo: "Grupo mixto: integrantes y equipos", desc: "Lista del grupo por grado y apellidos, con los equipos y el trabajo de cada uno. Elige un grupo mixto en «Curso».", horizontal: false, usa: [] },
   { key: "estudiante", emoji: "🧾", titulo: "Informe individual del estudiante", desc: "Una hoja completa: periodos, recuperaciones, notas actuales por categoría, observaciones y asistencia.", horizontal: false, usa: ["estudiante"] },
   { key: "planilla", emoji: "📖", titulo: "Planilla del periodo", desc: "Todas las columnas de notas por categoría, nota final y desempeño.", horizontal: true, usa: ["periodo"] },
   { key: "consolidado", emoji: "📚", titulo: "Consolidado por periodos", desc: "Nota final de cada periodo y definitiva del año.", horizontal: false, usa: [] },
@@ -86,6 +96,7 @@ th.vert{height:var(--hv,120px);padding:3px 1px;font-weight:700;vertical-align:bo
 th.vert div{writing-mode:vertical-rl;transform:rotate(180deg);margin:0 auto;max-height:calc(var(--hv,120px) - 8px);font-size:${denso ? 8.5 : 9.5}px;line-height:1.2;letter-spacing:.01em;white-space:normal;word-break:normal;overflow-wrap:anywhere}
 th.horiz{font-size:${denso ? 8.5 : 9.5}px;line-height:1.2;padding:4px 3px;min-width:34px}
 td.fin{font-weight:700;background:#f8fafc}
+.secg{page-break-after:always;break-after:page}.secg:last-child{page-break-after:auto;break-after:auto}.gt{margin:0 0 6px;font-size:13px;color:#17264D;border-bottom:2px solid #17264D;padding-bottom:3px}
 .mat{margin:0 0 14px}.mat h3{margin:0 0 5px;font-size:12px;padding:4px 8px;color:#fff;background:#17264D;border-radius:3px}
 .mat h4{margin:8px 0 3px;font-size:10.5px;color:#17264D}
 td.izq,th.izq{text-align:left}.obs{font-size:9px;color:#475569;text-align:left}
@@ -363,6 +374,42 @@ export async function htmlEstudiante(ctx, { estudiante: e, materias, opts, curso
   return { cuerpo: encabezado + bloques.join("") + asistencia + observador + (conNota.length ? leyendaBandas(configBase) : ""), denso: false };
 }
 
+
+async function htmlGruposNotas(ctx, { ids, grupos, periodo, materiaId }) {
+  const partes = [];
+  for (const id of ids) {
+    const g = grupos.find((x) => x.id === id);
+    const est = ordenarMixto(await fetchEstudiantesGrupo(id));
+    const d = await datosPeriodo({ materiaId, gradoId: id, periodo, estudiantes: est, categorias: ctx.categorias, config: ctx.config });
+    const cuerpo = d.acts.length && est.length ? htmlPlanilla({ ...ctx, gradoId: id, estudiantes: est }, d).cuerpo
+      : tablaVacia(est.length ? "Este grupo todavía no tiene actividades en este periodo." : "Este grupo no tiene estudiantes.");
+    partes.push(`<div class="secg"><h3 class="gt">👥 ${esc(g?.nombre || "Grupo mixto")} · ${est.length} estudiante(s)${g?.descripcion ? ` · ${esc(quitarHtml(g.descripcion))}` : ""}</h3>${cuerpo}</div>`);
+  }
+  return { cuerpo: partes.join(""), denso: true };
+}
+
+async function htmlGrupo(ctx, { grupoId, grupoNombre }) {
+  const { estudiantes } = ctx;
+  let det = { miembros: [], equipos: [] };
+  try { det = await fetchDetalleGrupo(grupoId); } catch { /* sin equipos */ }
+  const equipoDe = {}; (det.miembros || []).forEach((m) => { if (m.equipo) equipoDe[m.estudiante_id] = m.equipo; });
+  let ult = null, n = 0;
+  const filas = estudiantes.map((e) => {
+    const cab = e.grado_id !== ult ? `<tr><td colspan="4" class="izq" style="background:#eef2ff;font-weight:700;color:#17264D">Grado ${esc(e.grado_id ?? "—")}</td></tr>` : "";
+    ult = e.grado_id; n += 1;
+    return `${cab}<tr><td class="n">${n}</td><td class="nom">${esc(e._nom || e.nombre)}</td><td>${esc(e.grado_id ?? "")}</td><td>${esc(equipoDe[e.id] || "")}</td></tr>`;
+  }).join("");
+  const equipos = (det.equipos || []).map((q) => {
+    const ints = estudiantes.filter((e) => equipoDe[e.id] === q.nombre).map((e) => `${esc(e._nom || e.nombre)} (${esc(e.grado_id ?? "")})`);
+    const trabajo = quitarHtml(q.trabajo);
+    return `<div class="mat"><h3>🧩 ${esc(q.nombre)} · ${ints.length} integrante(s)</h3><div class="cuadro">${ints.join(" · ") || "Sin integrantes"}</div>${trabajo ? `<div class="cuadro" style="white-space:pre-wrap"><b>Trabajo:</b> ${esc(trabajo)}</div>` : ""}</div>`;
+  }).join("");
+  const porGrado = {}; estudiantes.forEach((e) => { porGrado[e.grado_id] = (porGrado[e.grado_id] || 0) + 1; });
+  const resumen = Object.entries(porGrado).map(([g, c]) => `<span class="chip" style="background:#EEF2FF;color:#17264D">${esc(g)}: ${c}</span>`).join(" ");
+  return { cuerpo: `<div class="est"><div class="nm">👥 ${esc(grupoNombre)}</div><div>${resumen}</div></div>
+    <table><thead><tr><th class="n">N°</th><th class="nom">Estudiante (apellidos y nombres)</th><th>Grado</th><th>Equipo</th></tr></thead><tbody>${filas}</tbody></table>${equipos ? `<h4 style="margin:12px 0 4px">Equipos y trabajo</h4>${equipos}` : ""}`, denso: estudiantes.length > 40 };
+}
+
 /* ---------- pantalla ---------- */
 export function VistaImpresion({ grados = [], gradoActivo, materiaActiva }) {
   const [gradoId, setGradoId] = useState(gradoActivo || grados[0]?.id || "");
@@ -380,6 +427,10 @@ export function VistaImpresion({ grados = [], gradoActivo, materiaActiva }) {
   const [docenteNombre, setDocenteNombre] = useState(() => { try { return localStorage.getItem("codice_print_docente") || ""; } catch { return ""; } });
   const [recordarNombre, setRecordarNombre] = useState(true);
   const [listaEst, setListaEst] = useState([]);
+  const [grupos, setGrupos] = useState([]);
+  const [selGrupos, setSelGrupos] = useState([]);
+  useEffect(() => { fetchGruposMixtos().then((g) => { setGrupos(g || []); setSelGrupos((g || []).map((x) => x.id)); }).catch(() => {}); }, []);
+  const cargarEst = (id) => (esGrupoMixto(id) ? fetchEstudiantesGrupo(id).then(ordenarMixto) : api.fetchEstudiantesPorGrado(id).then((l) => ordenar(l, orden)));
   const [estId, setEstId] = useState("");
   const [opts, setOpts] = useState({ actividades: true, observaciones: true, asistencia: true, observador: false });
   const [html, setHtml] = useState("");
@@ -393,33 +444,43 @@ export function VistaImpresion({ grados = [], gradoActivo, materiaActiva }) {
   useEffect(() => { if (materiaId) api.fetchNotasConfig(materiaId).then((c) => { setConfig(c); setPeriodo(String(c.periodo_actual || "1")); }).catch(() => {}); }, [materiaId]);
   useEffect(() => { // lista de estudiantes del curso (para el informe individual)
     if (!gradoId) return;
-    api.fetchEstudiantesPorGrado(gradoId).then((l) => { const o = ordenar(l, orden); setListaEst(o); setEstId((x) => (o.some((e) => String(e.id) === String(x)) ? x : (o[0]?.id ?? ""))); }).catch(() => {});
+    cargarEst(gradoId).then((o) => { setListaEst(o); setEstId((x) => (o.some((e) => String(e.id) === String(x)) ? x : (o[0]?.id ?? ""))); }).catch(() => {});
   }, [gradoId, orden]);
   useEffect(() => { // si aún no escribiste tu nombre, usa el de tu perfil (nunca el correo)
     if (docenteNombre) return;
     api.fetchMiPerfil().then((p) => { if (p?.nombre && !/@/.test(p.nombre)) setDocenteNombre(p.nombre); }).catch(() => {});
     // eslint-disable-next-line
   }, []);
-  useEffect(() => { setHtml(""); }, [estId, opts, docenteNombre, gradoId, materiaId, periodo, informe, papel, desde, hasta, columnas, firmasOn, orden]);
+  useEffect(() => { setHtml(""); }, [selGrupos, estId, opts, docenteNombre, gradoId, materiaId, periodo, informe, papel, desde, hasta, columnas, firmasOn, orden]);
 
   const def = INFORMES.find((i) => i.key === informe);
   const materia = materias.find((m) => String(m.id) === String(materiaId));
   const grado = grados.find((g) => String(g.id) === String(gradoId));
+  const nombreGrado = esGrupoMixto(gradoId) ? `Grupo mixto: ${(grupos.find((g) => g.id === gradoId) || {}).nombre || ""}` : (grado?.nombre || gradoId);
 
   const generar = async () => {
     setMsg(""); setTrabajando(true); setHtml("");
     try {
       if (!gradoId) throw new Error("Elige un curso.");
-      const necesitaMateria = informe !== "blanco" && informe !== "estudiante";
+      const necesitaMateria = informe !== "blanco" && informe !== "estudiante" && informe !== "grupo";
+      if (informe === "gruposnotas" && !materiaId) throw new Error("Elige una materia.");
       if (necesitaMateria && !materiaId) throw new Error("Elige una materia.");
       const [ins, perfil, estRaw, cats] = await Promise.all([
         api.fetchInstitucion().catch(() => null), api.fetchMiPerfil().catch(() => null),
-        api.fetchEstudiantesPorGrado(gradoId), materiaId ? api.fetchCategorias(materiaId) : Promise.resolve([]),
+        esGrupoMixto(gradoId) ? fetchEstudiantesGrupo(gradoId) : api.fetchEstudiantesPorGrado(gradoId), materiaId ? api.fetchCategorias(materiaId) : Promise.resolve([]),
       ]);
-      const estudiantes = ordenar(estRaw, orden);
+      const estudiantes = esGrupoMixto(gradoId) ? ordenarMixto(estRaw) : ordenar(estRaw, orden);
       const ctx = { materiaId, gradoId, estudiantes, categorias: cats, config };
       let r;
-      if (informe === "planilla") r = htmlPlanilla(ctx, await datosPeriodo({ ...ctx, periodo }));
+      if (informe === "gruposnotas") {
+        if (!selGrupos.length) throw new Error("Marca al menos un grupo mixto.");
+        r = await htmlGruposNotas(ctx, { ids: selGrupos, grupos, periodo, materiaId });
+      }
+      else if (informe === "grupo") {
+        if (!esGrupoMixto(gradoId)) throw new Error("Este informe es para grupos mixtos: elige uno en «Curso» (aparecen con 👥).");
+        r = await htmlGrupo(ctx, { grupoId: gradoId, grupoNombre: nombreGrado });
+      }
+      else if (informe === "planilla") r = htmlPlanilla(ctx, await datosPeriodo({ ...ctx, periodo }));
       else if (informe === "desempeno") r = htmlDesempeno(ctx, await datosPeriodo({ ...ctx, periodo }));
       else if (informe === "consolidado") r = await htmlConsolidado(ctx);
       else if (informe === "asistencia") r = await htmlAsistencia(ctx, { desde, hasta, materiaId });
@@ -427,7 +488,7 @@ export function VistaImpresion({ grados = [], gradoActivo, materiaActiva }) {
       else if (informe === "estudiante") {
         const est = estudiantes.find((x) => String(x.id) === String(estId));
         if (!est) throw new Error("Elige un estudiante.");
-        r = await htmlEstudiante(ctx, { estudiante: est, materias, opts, curso: grado?.nombre || gradoId });
+        r = await htmlEstudiante(ctx, { estudiante: est, materias, opts, curso: nombreGrado });
       }
       else r = htmlBlanco(ctx, columnas);
       const nombreDoc = docenteNombre.trim() || (perfil?.nombre && !/@/.test(perfil.nombre) ? perfil.nombre : "");
@@ -436,7 +497,7 @@ export function VistaImpresion({ grados = [], gradoActivo, materiaActiva }) {
         if (recordarNombre && docenteNombre.trim() !== (perfil?.nombre || "")) { try { await api.guardarMiNombre(docenteNombre.trim()); } catch { /* no bloquea la impresión */ } }
       }
       const meta = [
-        ["Curso", grado?.nombre || gradoId],
+        ["Curso", informe === "gruposnotas" ? "Grupos mixtos" : nombreGrado],
         ["Materia", informe === "blanco" ? "" : (materia?.nombre || "")],
         ["Docente", nombreDoc],
         ["Periodo", def.usa.includes("periodo") ? `Periodo ${periodo}` : ""],
@@ -469,8 +530,13 @@ export function VistaImpresion({ grados = [], gradoActivo, materiaActiva }) {
       <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
         <div className="text-sm font-semibold text-slate-700">2. Datos del documento</div>
         <div className="flex flex-wrap items-center gap-2">
-          <select className={sel} value={gradoId} onChange={(e) => setGradoId(e.target.value)}>{grados.map((g) => <option key={g.id} value={g.id}>{g.nombre || g.id}</option>)}</select>
-          {informe !== "blanco" && informe !== "estudiante" && <select className={sel} value={materiaId} onChange={(e) => setMateriaId(e.target.value)}>{materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select>}
+          {informe !== "gruposnotas" && <select className={sel} value={gradoId} onChange={(e) => setGradoId(e.target.value)}>{grados.map((g) => <option key={g.id} value={g.id}>{g.nombre || g.id}</option>)}{grupos.length > 0 && <optgroup label="Grupos mixtos">{grupos.map((g) => <option key={g.id} value={g.id}>👥 {g.nombre}</option>)}</optgroup>}</select>}
+          {informe !== "blanco" && informe !== "estudiante" && informe !== "grupo" && <select className={sel} value={materiaId} onChange={(e) => setMateriaId(e.target.value)}>{materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select>}
+          {mostrar("grupos") && <div className="basis-full flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+            <span className="font-semibold">Grupos:</span>
+            {grupos.length === 0 && <span className="text-slate-400">Aún no tienes grupos mixtos.</span>}
+            {grupos.map((g) => (<label key={g.id} className="flex items-center gap-1"><input type="checkbox" checked={selGrupos.includes(g.id)} onChange={(e) => setSelGrupos((l) => (e.target.checked ? [...l, g.id] : l.filter((x) => x !== g.id)))} /> 👥 {g.nombre}</label>))}
+          </div>}
           {mostrar("estudiante") && <select className={sel + " w-64"} value={estId} onChange={(e) => setEstId(e.target.value)}>{listaEst.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}</select>}
           {mostrar("estudiante") && <div className="basis-full flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
             <span className="font-semibold">Incluir:</span>
