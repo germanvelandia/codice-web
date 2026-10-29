@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabaseClient";
 import { InstitucionModal } from "../screens/Institucion";
 import { AdministracionModal } from "../screens/Administracion";
 import { VistaInicio } from "../screens/Inicio";
+import { VistaEstudiantesRiesgo } from "../screens/EstudiantesRiesgo";
 import { VistaEntregasPorRevisar } from "../screens/EntregasPorRevisar";
 import { VistaEstudiantes, VistaGrados, VistaReinos } from "../screens/Estudiantes";
 import { VistaAsistencia } from "../screens/Asistencia";
@@ -259,6 +260,7 @@ export function Panel({ session }) {
             <VistaComarcaOakhaven grados={grados} gradoActivo={gradoActivo} />
           </MarcoSeccion>
         )}
+        {tab === "riesgo" && grados.length > 0 && <MarcoSeccion zonaLabel="Convivencial — Estudiantes en riesgo" icono="🚨"><VistaEstudiantesRiesgo grados={grados} gradoActivo={gradoActivo} onIrA={irA} /></MarcoSeccion>}
         {tab === "anotaciones" && <MarcoSeccion zonaLabel="Convivencial — Anotaciones" icono="🤝"><VistaAnotaciones /></MarcoSeccion>}
         {tab === "inclusion" && <MarcoSeccion zonaLabel="Convivencial — Inclusión" icono="🤝"><VistaInclusionGeneral /></MarcoSeccion>}
         {tab === "bajasvida" && <MarcoSeccion zonaLabel="Convivencial — Bajas de Vida" icono="🤝"><VistaBajasVida /></MarcoSeccion>}
