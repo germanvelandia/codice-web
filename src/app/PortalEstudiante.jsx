@@ -20,6 +20,7 @@ import { CoevaluacionEstudiante } from "../screens/Coevaluacion";
 import { QuizVivoEstudiante } from "../screens/QuizVivo";
 import { SidebarTarjetasEstudiante } from "./MenuEstudiante";
 import { InicioEstudiante } from "./InicioEstudiante";
+import { AlbumesEstudiante } from "../screens/AlbumesEstudiante";
 import { AlbumEstudiante, BancoEstudiante, CosmeticosEstudiante, DesafioReinoEstudiante, LogrosEstudiante, MiComarcaEstudiante, MicroMisionesEstudiante, PreguntadosEstudiante, RankingEstudiante, SalonHonorEstudiante, TarjetaPersonajeEstudiante } from "./EstudianteJuego";
 import { AnunciosEstudiante, BibliotecaEstudiante, CodiceEstudiante, ValorSemanaEstudiante } from "./EstudianteComunidad";
 import { AvisoRendimiento, ForjaEstudiante, HistorialEstudiante, MisNotas, ProyectosEstudiante } from "./EstudianteAcademico";
@@ -35,6 +36,7 @@ export function PortalEstudiante() {
   const [error, setError] = useState("");
   const [vista, setVista] = useState("inicio");
   const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
+  const [tabAlbum, setTabAlbum] = useState("laminas");
   const irAEstudiante = (key) => { setVista(key); };
   // Cada día que el estudiante entra al Mundo queda registrado (una sola llamada por día en este navegador)
   useEffect(() => { if (vista === "mundo" && estudianteInfo?.id) registrarIngresoMundo(); }, [vista, estudianteInfo?.id]);
@@ -228,7 +230,16 @@ export function PortalEstudiante() {
           )}
 
           {vista === "album" && estudianteInfo && (
-            <MarcoSeccion zonaLabel="Comunidad — Álbum" icono="🏆"><AlbumEstudiante estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} /></MarcoSeccion>
+            <MarcoSeccion zonaLabel="Comunidad — Álbum" icono="🏆">
+              <div className="flex gap-2 mb-4">
+                {[["laminas", "📒 Álbumes"], ["criaturas", "🐉 Criaturas"]].map(([k, t]) => (
+                  <button key={k} onClick={() => setTabAlbum(k)} className={`text-xs font-bold px-4 py-2 rounded-full border ${tabAlbum === k ? "bg-violet-600 text-white border-violet-600" : "bg-white text-slate-600 border-slate-200"}`}>{t}</button>
+                ))}
+              </div>
+              {tabAlbum === "laminas"
+                ? <AlbumesEstudiante estudianteId={estudianteInfo.id} onMonedasActualizadas={() => consultar()} />
+                : <AlbumEstudiante estudianteId={estudianteInfo.id} monedas={datos.monedas} onMonedasActualizadas={() => consultar()} />}
+            </MarcoSeccion>
           )}
 
           {vista === "comarca" && estudianteInfo && <MarcoSeccion zonaLabel="Comunidad — Mi Comarca" icono="🏆"><MiComarcaEstudiante estudianteInfo={estudianteInfo} /></MarcoSeccion>}
