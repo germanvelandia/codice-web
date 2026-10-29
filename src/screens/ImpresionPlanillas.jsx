@@ -82,7 +82,7 @@ const firmas = (docente) => `<div class="pie"><div class="firma">${esc(docente |
 const tablaVacia = (msg) => `<p class="vacio">${esc(msg)}</p>`;
 
 /* ---------- datos de la planilla (igual que la pantalla de Calificaciones) ---------- */
-async function datosPeriodo({ materiaId, gradoId, periodo, estudiantes, categorias, config }) {
+export async function datosPeriodo({ materiaId, gradoId, periodo, estudiantes, categorias, config }) {
   const acts = await api.fetchActividades(materiaId, gradoId, periodo);
   const filas = await api.fetchValores(acts.map((a) => a.id));
   const valores = {};
