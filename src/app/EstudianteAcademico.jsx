@@ -97,6 +97,70 @@ export function AvisoRendimiento({ estudianteId }) {
   );
 }
 
+const COLORES_CATEGORIA = ["#2F55A4", "#7C3AED", "#0F766E", "#B45309", "#BE185D", "#0369A1", "#4D7C0F"];
+
+// Actividades del periodo actual agrupadas por categoría: cada categoría con su color,
+// su porcentaje y su promedio, y cada nota con el color de su desempeño.
+export function ActividadesPorCategoria({ actividades, config }) {
+  const grupos = [];
+  const idx = {};
+  actividades.forEach((a) => {
+    const catId = a.notas_actividades?.categoria_id ?? "sin";
+    if (idx[catId] === undefined) {
+      idx[catId] = grupos.length;
+      grupos.push({
+        id: catId,
+        nombre: a.notas_actividades?.notas_categorias?.nombre || "Otras actividades",
+        porcentaje: a.notas_actividades?.notas_categorias?.porcentaje ?? null,
+        items: [],
+      });
+    }
+    grupos[idx[catId]].items.push(a);
+  });
+  return (
+    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+      {grupos.map((g, gi) => {
+        const color = COLORES_CATEGORIA[gi % COLORES_CATEGORIA.length];
+        const valores = g.items.map((a) => Number(a.valor)).filter((v) => !isNaN(v));
+        const prom = valores.length ? Math.round((valores.reduce((x, y) => x + y, 0) / valores.length) * 10) / 10 : null;
+        const bProm = bandaDesempeno(prom, config) || { color: "#94A3B8" };
+        return (
+          <div key={g.id} className="rounded-xl overflow-hidden bg-white" style={{ border: `1px solid ${color}40` }}>
+            <div className="flex items-center justify-between gap-2 px-3 py-1.5" style={{ background: `${color}15` }}>
+              <div className="min-w-0">
+                <div className="text-[12px] font-extrabold truncate" style={{ color }}>{g.nombre}</div>
+                {g.porcentaje != null && <div className="text-[10px] text-slate-500">{g.porcentaje}% de la nota</div>}
+              </div>
+              {prom !== null && (
+                <span className="text-[11px] font-extrabold px-2 py-0.5 rounded-full shrink-0" style={{ background: `${bProm.color}22`, color: bProm.color }} title="Promedio de la categoría">
+                  Prom. {prom}
+                </span>
+              )}
+            </div>
+            <div className="p-2 space-y-1.5">
+              {g.items.map((a) => {
+                const b = bandaDesempeno(a.valor, config) || { color: "#94A3B8" };
+                return (
+                  <div key={a.id}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] text-slate-600 leading-snug">{a.notas_actividades?.nombre}</span>
+                      <span className="text-[11px] font-extrabold px-2 py-0.5 rounded-full shrink-0" style={{ background: `${b.color}22`, color: b.color }}>{a.valor}</span>
+                    </div>
+                    {a.observacion && (
+                      <div className="text-[10px] text-violet-600 italic bg-violet-50 rounded-lg px-2 py-1 mt-0.5">📝 {a.observacion}</div>
+                    )}
+                    <RubricaCalificadaAlumno resultado={a.rubrica_resultado} config={config} />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function MisNotas({ estudianteId }) {
   const [datos, setDatos] = useState(null);
   const [comentarios, setComentarios] = useState({});
@@ -206,20 +270,7 @@ export function MisNotas({ estudianteId }) {
                           {!f.enCurso && !f.esActual && <span className="text-slate-400 font-normal"> · Resultado final</span>}
                         </div>
                         {f.esActual && f.actividadesPeriodo.length > 0 && (
-                          <div className="ml-2 mt-1 space-y-0.5">
-                            {f.actividadesPeriodo.map((a) => (
-                              <div key={a.id}>
-                                <div className="text-[11px] text-slate-500 flex justify-between">
-                                  <span>{a.notas_actividades?.nombre}{a.notas_actividades?.notas_categorias?.nombre ? ` (${a.notas_actividades.notas_categorias.nombre})` : ""}</span>
-                                  <span className="font-semibold">{a.valor}</span>
-                                </div>
-                                {a.observacion && (
-                                  <div className="text-[10px] text-violet-600 italic bg-violet-50 rounded-lg px-2 py-1 mt-0.5">📝 {a.observacion}</div>
-                                )}
-                                <RubricaCalificadaAlumno resultado={a.rubrica_resultado} config={config} />
-                              </div>
-                            ))}
-                          </div>
+                          <ActividadesPorCategoria actividades={f.actividadesPeriodo} config={config} />
                         )}
                         {f.esActual && f.actividadesPeriodo.length > 0 && (
                           <BonoEnCurso materiaId={f.actividadesPeriodo[0].notas_actividades?.materia_id} periodo={f.periodo} estudianteId={estudianteId} nota={f.nota} />
