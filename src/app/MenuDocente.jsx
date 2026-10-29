@@ -76,6 +76,7 @@ export const MENU_PANEL_GRUPOS = [
       { key: "herr_rankdiplomas", label: "Ranking → diplomas", icono: "🏆" },
       { key: "herr_rankingganancias", label: "Ranking de ganancias (XP/oro)", icono: "🏅" },
       { key: "herr_album", label: "Álbum", icono: "🖼️" },
+      { key: "albumes", label: "Álbumes de colección", icono: "📒" },
       { key: "herr_avatares", label: "Sala de avatares", icono: "🎭" },
       { key: "herr_banco", label: "Banco", icono: "🏦" },
       { key: "herr_ruletamonedas", label: "Ruleta de Monedas", icono: "🪙" },
