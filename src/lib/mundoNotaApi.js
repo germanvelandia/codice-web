@@ -33,7 +33,8 @@ export async function syncAhoraMundo(id) {
 }
 export function mensajeMundoNota(e) {
   const m = String(e?.message || e || "");
-  if (m.includes("mundo_nota") || m.includes("mundo_ingresos")) return "Falta correr el script 112 en Supabase.";
+  if (m.includes("dias_plataforma") || m.includes("mundo_nota_calcular")) return "Falta correr el script 123 en Supabase.";
+  if (m.includes("mundo_nota") || m.includes("mundo_ingresos")) return "Falta correr el script 112 (y el 123) en Supabase.";
   if (m.includes("no_autorizado")) return "No tienes permiso sobre esa configuración.";
   return m || "No se pudo completar.";
 }
