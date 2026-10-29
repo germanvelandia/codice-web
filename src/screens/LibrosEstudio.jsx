@@ -25,13 +25,13 @@ const ordenar = (a) => [...a].sort((x, y) => (x.orden - y.orden) || (x.id - y.id
 async function fetchLibros(materiaId, gradoId, periodo) {
   const uid = await uidActual();
   let q = supabase.from("libros_estudio").select("*, libro_capitulos(id)").eq("docente_id", uid).eq("grado_id", gradoId);
-  if (materiaId && materiaId !== "todas") q = q.eq("materia_id", materiaId);
+  if (materiaId && materiaId !== "todas") q = q.or(`materia_id.eq.${materiaId},materia_id.is.null`);
   if (periodo) q = q.eq("periodo", periodo);
   const { data, error } = await q.order("creado_en", { ascending: false });
   if (error) throw error;
   const lista = data || [];
   const nombres = await nombresMaterias(lista.map((l) => l.materia_id));
-  return lista.map((l) => ({ ...l, materias: { nombre: nombres[String(l.materia_id)] || "" } }));
+  return lista.map((l) => ({ ...l, materias: { nombre: l.materia_id == null ? "Todas las materias" : (nombres[String(l.materia_id)] || "") } }));
 }
 async function nombresMaterias(ids) {
   const u = [...new Set((ids || []).filter((x) => x != null))]; const out = {};
@@ -44,12 +44,12 @@ async function fetchLibrosParaGrado(gradoId) {
   if (error) throw error;
   const lista = data || [];
   const nombres = await nombresMaterias(lista.map((l) => l.materia_id));
-  return lista.map((l) => ({ ...l, materias: { nombre: nombres[String(l.materia_id)] || "" } }));
+  return lista.map((l) => ({ ...l, materias: { nombre: l.materia_id == null ? "Todas las materias" : (nombres[String(l.materia_id)] || "") } }));
 }
 async function fetchLibroCompleto(id) {
   const { data: libro, error } = await supabase.from("libros_estudio").select("*").eq("id", id).single();
   if (error) throw error;
-  libro.materias = { nombre: (await nombresMaterias([libro.materia_id]))[String(libro.materia_id)] || "" };
+  libro.materias = { nombre: libro.materia_id == null ? "Todas las materias" : ((await nombresMaterias([libro.materia_id]))[String(libro.materia_id)] || "") };
   const { data: caps, error: e2 } = await supabase.from("libro_capitulos").select("*").eq("libro_id", id);
   if (e2) throw e2;
   const ids = (caps || []).map((c) => c.id);
@@ -346,6 +346,8 @@ function EditorLibro({ libroId, onVolver, institucion }) {
   const [meta, setMeta] = useState({});
   const [progresoAbierto, setProgresoAbierto] = useState(false);
   const [iaAbierta, setIaAbierta] = useState(false);
+  const [listaMaterias, setListaMaterias] = useState([]);
+  useEffect(() => { api.fetchMaterias().then((d) => setListaMaterias(d || [])).catch(() => {}); }, []);
 
   const cargar = async () => { const d = await fetchLibroCompleto(libroId); setDatos(d); setMeta({ titulo: d.libro.titulo, descripcion: d.libro.descripcion || "", tiempo_estimado: d.libro.tiempo_estimado || "", fecha_entrega: d.libro.fecha_entrega || "" }); };
   useEffect(() => { cargar().catch((e) => alert("No se pudo abrir el libro: " + e.message)); }, [libroId]);
@@ -395,6 +397,9 @@ function EditorLibro({ libroId, onVolver, institucion }) {
       <div className="rounded-2xl border border-slate-200 bg-white p-3 mb-3 grid gap-2">
         <input value={meta.titulo || ""} onChange={(e) => guardarMeta({ titulo: e.target.value })} onBlur={persistirMeta} placeholder="Título del libro" className="text-lg font-extrabold text-[#17264D] outline-none border-b border-transparent focus:border-violet-300" />
         <input value={meta.descripcion || ""} onChange={(e) => guardarMeta({ descripcion: e.target.value })} onBlur={persistirMeta} placeholder="Descripción breve (qué van a aprender)" className="text-sm text-slate-600 outline-none border-b border-transparent focus:border-violet-300" />
+        <div className="flex items-center gap-2"><span className="text-xs text-slate-500">Materia:</span>
+          <select value={datos?.libro?.materia_id == null ? "todas" : String(datos.libro.materia_id)} onChange={async (e) => { try { const v = e.target.value; await editarLibro(libro.id, { materia_id: v === "todas" ? null : v }); await refrescar(); } catch (er) { alert("No se pudo cambiar la materia: " + er.message); } }} className="text-xs rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white">
+            <option value="todas">Todas las materias</option>{listaMaterias.map((m) => <option key={m.id} value={String(m.id)}>{m.nombre}</option>)}</select></div>
         <div className="grid grid-cols-2 gap-2"><input value={meta.tiempo_estimado || ""} onChange={(e) => guardarMeta({ tiempo_estimado: e.target.value })} onBlur={persistirMeta} placeholder="Tiempo estimado (ej: 3 horas)" className="text-xs rounded-lg px-3 py-2 border border-slate-200 outline-none" />
           <input type="date" value={meta.fecha_entrega || ""} onChange={(e) => guardarMeta({ fecha_entrega: e.target.value })} onBlur={persistirMeta} className="text-xs rounded-lg px-3 py-2 border border-slate-200 outline-none" /></div>
       </div>
