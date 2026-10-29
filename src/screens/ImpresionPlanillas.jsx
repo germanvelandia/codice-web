@@ -38,6 +38,7 @@ const ordenar = (lista, orden) => (orden === "apellido"
   : [...lista].sort(porNombre));
 
 const INFORMES = [
+  { key: "estudiante", emoji: "🧾", titulo: "Informe individual del estudiante", desc: "Una hoja completa: periodos, recuperaciones, notas actuales por categoría, observaciones y asistencia.", horizontal: false, usa: ["estudiante"] },
   { key: "planilla", emoji: "📖", titulo: "Planilla del periodo", desc: "Todas las columnas de notas por categoría, nota final y desempeño.", horizontal: true, usa: ["periodo"] },
   { key: "consolidado", emoji: "📚", titulo: "Consolidado por periodos", desc: "Nota final de cada periodo y definitiva del año.", horizontal: false, usa: [] },
   { key: "desempeno", emoji: "📊", titulo: "Cuadro de desempeño", desc: "Estudiantes agrupados en Superior, Alto, Básico y Bajo.", horizontal: false, usa: ["periodo"] },
@@ -79,6 +80,13 @@ th.vert{height:var(--hv,120px);padding:3px 1px;font-weight:700;vertical-align:bo
 th.vert div{writing-mode:vertical-rl;transform:rotate(180deg);margin:0 auto;max-height:calc(var(--hv,120px) - 8px);font-size:${denso ? 8.5 : 9.5}px;line-height:1.2;letter-spacing:.01em;white-space:normal;word-break:normal;overflow-wrap:anywhere}
 th.horiz{font-size:${denso ? 8.5 : 9.5}px;line-height:1.2;padding:4px 3px;min-width:34px}
 td.fin{font-weight:700;background:#f8fafc}
+.mat{margin:0 0 14px}.mat h3{margin:0 0 5px;font-size:12px;padding:4px 8px;color:#fff;background:#17264D;border-radius:3px}
+.mat h4{margin:8px 0 3px;font-size:10.5px;color:#17264D}
+td.izq,th.izq{text-align:left}.obs{font-size:9px;color:#475569;text-align:left}
+.cuadro{border:1px solid #cbd5e1;border-radius:4px;padding:6px 8px;margin:6px 0;font-size:10px;background:#f8fafc;line-height:1.35}
+.est{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin:0 0 10px;padding:8px 10px;border:2px solid #17264D;border-radius:6px}
+.est .nm{font-size:16px;font-weight:800;color:#17264D;flex:1;min-width:200px}
+.chip{display:inline-block;padding:2px 8px;border-radius:10px;font-weight:700;font-size:10px}
 td.bajo{color:#B91C1C;font-weight:700}
 tfoot td{background:#f1f5f9;font-weight:700}
 .pie{margin-top:14px;display:flex;justify-content:space-between;gap:30px;font-size:10px;color:#475569}
@@ -236,6 +244,119 @@ function htmlBlanco(ctx, columnas) {
   return { cuerpo: `<table><thead><tr><th class="n">N°</th><th class="nom">Estudiante</th>${Array.from({ length: n }, () => "<th style=\"min-width:26px\">&nbsp;</th>").join("")}</tr></thead><tbody>${filas}</tbody></table>`, denso: n > 14 };
 }
 
+
+/* ---------- informe individual del estudiante ---------- */
+const ESTADO_NIV = { pendiente: "Pendiente", en_proceso: "En proceso", superado: "Superado" };
+const promedioDe = (arr) => { const v = arr.filter((x) => x !== null && x !== undefined && !Number.isNaN(Number(x))).map(Number); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+
+export async function htmlEstudiante(ctx, { estudiante: e, materias, opts, curso }) {
+  const { gradoId } = ctx;
+  const comentarios = await api.fetchComentariosDesempeno().catch(() => ({}));
+  const bloques = [];
+  const actuales = []; // nota actual de cada materia, para el resumen superior
+  let configBase = CONFIG_DEFAULT;
+
+  for (const m of materias) {
+    const [config, categorias, finales, niv] = await Promise.all([
+      api.fetchNotasConfig(m.id).catch(() => CONFIG_DEFAULT), api.fetchCategorias(m.id).catch(() => []),
+      api.fetchNotasFinales(m.id).catch(() => []), api.fetchNivelacion(m.id).catch(() => []),
+    ]);
+    configBase = config;
+    const periodos = periodosDe(config);
+    const actual = String(config.periodo_actual || "1");
+    const mias = {}; (finales || []).filter((f) => f.estudiante_id === e.id).forEach((f) => { mias[String(f.periodo)] = f.nota; });
+    const nivs = {}; (niv || []).filter((n) => n.estudiante_id === e.id).forEach((n) => { nivs[String(n.periodo)] = n; });
+    const acts = await api.fetchActividades(m.id, gradoId, actual).catch(() => []);
+    if (!acts.length && !Object.keys(mias).length) continue; // nada de esta materia para el curso
+
+    const d = acts.length ? await datosPeriodo({ materiaId: m.id, gradoId, periodo: actual, estudiantes: [e], categorias, config }) : null;
+    const notaDe = (p) => (String(p) === actual && d ? d.finalDe(e.id) : (mias[String(p)] ?? null));
+    const notaActual = notaDe(actual);
+    actuales.push({ materia: m.nombre, nota: notaActual, config });
+
+    // Resultado por periodo
+    const filaNotas = periodos.map((p) => {
+      const n = notaDe(p);
+      const enCurso = String(p) === actual && mias[String(p)] === undefined;
+      return `<td${estiloNota(n, config)}>${n === null || n === undefined ? "—" : `<b>${fmtNota(n)}</b>`}${enCurso && n !== null ? `<div class="obs" style="text-align:center">en curso</div>` : ""}</td>`;
+    }).join("");
+    const filaBanda = periodos.map((p) => { const n = notaDe(p); return n === null || n === undefined ? "<td>—</td>" : `<td${estiloNota(n, config)}>${esc(bandaDesempeno(n, config).label)}</td>`; }).join("");
+    const hayNiv = periodos.some((p) => nivs[String(p)]);
+    const filaNiv = hayNiv ? `<tr><td class="nom">Recuperación / nivelación</td>${periodos.map((p) => {
+      const r = nivs[String(p)]; if (!r) return "<td>—</td>";
+      const partes = [`<b>${esc(ESTADO_NIV[r.estado] || r.estado)}</b>`];
+      if (r.nota_original !== null && r.nota_original !== undefined) partes.push(`nota original ${fmtNota(r.nota_original)}`);
+      if (r.nota_recuperacion !== null && r.nota_recuperacion !== undefined) partes.push(`recuperación ${fmtNota(r.nota_recuperacion)}`);
+      return `<td style="font-size:9px">${partes.join("<br>")}</td>`;
+    }).join("")}<td></td></tr>` : "";
+    const prom = promedioDe(periodos.map((p) => notaDe(p)));
+    const tabla = `<table><thead><tr><th class="nom">Resultado</th>${periodos.map((p) => `<th>Periodo ${esc(p)}</th>`).join("")}<th>Promedio</th></tr></thead><tbody>
+      <tr><td class="nom">Nota final</td>${filaNotas}${celdaNota(prom, config, "fin")}</tr>
+      <tr><td class="nom">Desempeño</td>${filaBanda}${celdaBanda(prom, config)}</tr>${filaNiv}</tbody></table>`;
+
+    // Detalle del periodo actual por categoría
+    let detalle = "";
+    if (opts.actividades && acts.length && d) {
+      let valoresBD = {};
+      try { (await api.fetchValores(acts.map((a) => a.id))).filter((v) => v.estudiante_id === e.id).forEach((v) => { valoresBD[v.actividad_id] = v; }); } catch { /* sin observaciones */ }
+      const grupos = categorias.map((c) => ({ c, items: acts.filter((a) => a.categoria_id === c.id) })).filter((g) => g.items.length);
+      const usadas = new Set(grupos.flatMap((g) => g.items.map((a) => a.id)));
+      const otras = acts.filter((a) => !usadas.has(a.id));
+      if (otras.length) grupos.push({ c: { id: "o", nombre: "Otras actividades", porcentaje: null }, items: otras });
+      const filas = grupos.map((g) => {
+        const vals = g.items.map((a) => d.valorDe(a, e.id));
+        const pc = promedioDe(vals);
+        const cab = `<tr><td colspan="${opts.observaciones ? 4 : 3}" class="izq" style="background:#eef2ff;font-weight:700;color:#17264D">${esc(g.c.nombre)}${g.c.porcentaje != null ? ` · ${esc(g.c.porcentaje)}% de la nota` : ""}</td></tr>`;
+        const cuerpo = g.items.map((a, i) => {
+          const v = vals[i];
+          const obs = valoresBD[a.id]?.observacion;
+          return `<tr><td></td><td class="izq">${esc(a.nombre)}</td>${celdaNota(v, config)}${opts.observaciones ? `<td class="obs">${obs ? esc(obs) : ""}</td>` : ""}</tr>`;
+        }).join("");
+        const pie = `<tr><td></td><td class="izq" style="font-weight:700">Promedio de la categoría</td>${celdaNota(pc, config, "fin")}${opts.observaciones ? "<td></td>" : ""}</tr>`;
+        return cab + cuerpo + pie;
+      }).join("");
+      detalle = `<h4>Notas del periodo ${esc(actual)} (periodo actual)</h4><table><thead><tr><th style="width:14px"></th><th class="izq">Actividad</th><th style="width:48px">Nota</th>${opts.observaciones ? '<th class="izq">Observación del docente</th>' : ""}</tr></thead><tbody>${filas}</tbody></table>`;
+    }
+    const band = notaActual !== null && notaActual !== undefined ? bandaDesempeno(notaActual, config) : null;
+    const coment = band && comentarios[band.key] ? `<div class="cuadro"><b>Comentario de desempeño (${esc(band.label)}):</b> ${esc(comentarios[band.key])}</div>` : "";
+    bloques.push(`<div class="mat"><h3>📘 ${esc(m.nombre)}</h3>${tabla}${detalle}${coment}</div>`);
+  }
+
+  // Resumen superior
+  const conNota = actuales.filter((a) => a.nota !== null && a.nota !== undefined);
+  const promG = promedioDe(conNota.map((a) => a.nota));
+  const perdiendo = conNota.filter((a) => Number(a.nota) < Number(a.config.nota_minima));
+  const chips = [
+    promG !== null ? `<span class="chip"${estiloNota(promG, configBase)}>Promedio periodo actual: ${fmtNota(promG)}</span>` : "",
+    perdiendo.length ? `<span class="chip" style="background:#FEE2E2;color:#B91C1C">Perdiendo ${perdiendo.length}: ${esc(perdiendo.map((p) => p.materia).join(", "))}</span>` : (conNota.length ? `<span class="chip" style="background:#DCFCE7;color:#15803D">Sin materias perdidas</span>` : ""),
+  ].join(" ");
+  const encabezado = `<div class="est"><div class="nm">${esc(e.nombre)}</div><div style="font-size:10px;color:#334155">Curso: <b>${esc(curso || gradoId)}</b></div><div>${chips}</div></div>`;
+
+  // Asistencia
+  let asistencia = "";
+  if (opts.asistencia) {
+    try {
+      const a = await api.fetchAsistenciaConsolidadaEstudiante(e.id);
+      const filasA = Object.entries(a.porMateria).map(([nom, x]) => `<tr><td class="nom">${esc(nom)}</td><td>${x.P || 0}</td><td>${x.R || 0}</td><td class="${(x.FI || 0) >= 3 ? "bajo" : ""}">${x.FI || 0}</td><td>${x.FJ || 0}</td><td class="fin">${x.total ? Math.round((((x.P || 0) + (x.R || 0)) / x.total) * 100) + "%" : ""}</td></tr>`).join("");
+      const g = a.general;
+      asistencia = a.registros.length ? `<div class="mat"><h3>🗓️ Asistencia</h3><table><thead><tr><th class="nom">Materia</th><th>P</th><th>R</th><th>FI</th><th>FJ</th><th>% asistencia</th></tr></thead><tbody>${filasA}</tbody><tfoot><tr><td class="nom">Total</td><td>${g.P || 0}</td><td>${g.R || 0}</td><td>${g.FI || 0}</td><td>${g.FJ || 0}</td><td>${g.total ? Math.round((((g.P || 0) + (g.R || 0)) / g.total) * 100) + "%" : ""}</td></tr></tfoot></table><div class="leyenda">P presente · R retardo · FI falta injustificada · FJ falta justificada</div></div>` : "";
+    } catch { /* sin asistencia */ }
+  }
+
+  // Observador (opcional: es información sensible)
+  let observador = "";
+  if (opts.observador) {
+    try {
+      const an = await api.fetchAnotaciones(e.id);
+      const texto = (x) => x.descripcion || x.texto || x.observacion || x.detalle || x.anotacion || x.comentario || "";
+      if (an.length) observador = `<div class="mat"><h3>🗒️ Observaciones del observador</h3>${an.map((x) => `<div class="cuadro"><b>${esc(fmtFecha(x.fecha || x.created_at || ""))}</b>${x.categoria ? ` · ${esc(x.categoria)}` : ""}${x.titulo ? ` · <b>${esc(x.titulo)}</b>` : ""}<br>${esc(texto(x))}</div>`).join("")}</div>`;
+    } catch { /* sin anotaciones */ }
+  }
+
+  if (!bloques.length && !asistencia && !observador) return { cuerpo: encabezado + tablaVacia("Este estudiante todavía no tiene notas registradas en tus materias."), denso: false };
+  return { cuerpo: encabezado + bloques.join("") + asistencia + observador + (conNota.length ? leyendaBandas(configBase) : ""), denso: false };
+}
+
 /* ---------- pantalla ---------- */
 export function VistaImpresion({ grados = [], gradoActivo, materiaActiva }) {
   const [gradoId, setGradoId] = useState(gradoActivo || grados[0]?.id || "");
@@ -252,6 +373,9 @@ export function VistaImpresion({ grados = [], gradoActivo, materiaActiva }) {
   const [orden, setOrden] = useState("apellido"); // "apellido" | "nombre"
   const [docenteNombre, setDocenteNombre] = useState(() => { try { return localStorage.getItem("codice_print_docente") || ""; } catch { return ""; } });
   const [recordarNombre, setRecordarNombre] = useState(true);
+  const [listaEst, setListaEst] = useState([]);
+  const [estId, setEstId] = useState("");
+  const [opts, setOpts] = useState({ actividades: true, observaciones: true, asistencia: true, observador: false });
   const [html, setHtml] = useState("");
   const [msg, setMsg] = useState("");
   const [trabajando, setTrabajando] = useState(false);
@@ -261,12 +385,16 @@ export function VistaImpresion({ grados = [], gradoActivo, materiaActiva }) {
   useEffect(() => { api.fetchMisMaterias().then((m) => { setMaterias(m); setMateriaId((x) => x || (m.find((q) => String(q.id) === String(materiaActiva))?.id ?? m[0]?.id ?? "")); }).catch((e) => setMsg(e.message)); }, []);
   useEffect(() => { if (materiaActiva) setMateriaId(materiaActiva); }, [materiaActiva]);
   useEffect(() => { if (materiaId) api.fetchNotasConfig(materiaId).then((c) => { setConfig(c); setPeriodo(String(c.periodo_actual || "1")); }).catch(() => {}); }, [materiaId]);
+  useEffect(() => { // lista de estudiantes del curso (para el informe individual)
+    if (!gradoId) return;
+    api.fetchEstudiantesPorGrado(gradoId).then((l) => { const o = ordenar(l, orden); setListaEst(o); setEstId((x) => (o.some((e) => String(e.id) === String(x)) ? x : (o[0]?.id ?? ""))); }).catch(() => {});
+  }, [gradoId, orden]);
   useEffect(() => { // si aún no escribiste tu nombre, usa el de tu perfil (nunca el correo)
     if (docenteNombre) return;
     api.fetchMiPerfil().then((p) => { if (p?.nombre && !/@/.test(p.nombre)) setDocenteNombre(p.nombre); }).catch(() => {});
     // eslint-disable-next-line
   }, []);
-  useEffect(() => { setHtml(""); }, [docenteNombre, gradoId, materiaId, periodo, informe, papel, desde, hasta, columnas, firmasOn, orden]);
+  useEffect(() => { setHtml(""); }, [estId, opts, docenteNombre, gradoId, materiaId, periodo, informe, papel, desde, hasta, columnas, firmasOn, orden]);
 
   const def = INFORMES.find((i) => i.key === informe);
   const materia = materias.find((m) => String(m.id) === String(materiaId));
@@ -276,7 +404,7 @@ export function VistaImpresion({ grados = [], gradoActivo, materiaActiva }) {
     setMsg(""); setTrabajando(true); setHtml("");
     try {
       if (!gradoId) throw new Error("Elige un curso.");
-      const necesitaMateria = informe !== "blanco";
+      const necesitaMateria = informe !== "blanco" && informe !== "estudiante";
       if (necesitaMateria && !materiaId) throw new Error("Elige una materia.");
       const [ins, perfil, estRaw, cats] = await Promise.all([
         api.fetchInstitucion().catch(() => null), api.fetchMiPerfil().catch(() => null),
@@ -290,6 +418,11 @@ export function VistaImpresion({ grados = [], gradoActivo, materiaActiva }) {
       else if (informe === "consolidado") r = await htmlConsolidado(ctx);
       else if (informe === "asistencia") r = await htmlAsistencia(ctx, { desde, hasta, materiaId });
       else if (informe === "resumen") r = await htmlResumen(ctx, { desde, hasta, materiaId });
+      else if (informe === "estudiante") {
+        const est = estudiantes.find((x) => String(x.id) === String(estId));
+        if (!est) throw new Error("Elige un estudiante.");
+        r = await htmlEstudiante(ctx, { estudiante: est, materias, opts, curso: grado?.nombre || gradoId });
+      }
       else r = htmlBlanco(ctx, columnas);
       const nombreDoc = docenteNombre.trim() || (perfil?.nombre && !/@/.test(perfil.nombre) ? perfil.nombre : "");
       if (docenteNombre.trim()) {
@@ -303,7 +436,7 @@ export function VistaImpresion({ grados = [], gradoActivo, materiaActiva }) {
         ["Periodo", def.usa.includes("periodo") ? `Periodo ${periodo}` : ""],
         ["Fechas", def.usa.includes("fechas") ? `${fmtFecha(desde)} al ${fmtFecha(hasta)}` : ""],
         ["Estudiantes", String(estudiantes.length)],
-      ];
+      ].filter((x) => !(informe === "estudiante" && (x[0] === "Estudiantes" || x[0] === "Materia")));
       setHtml(documento({ titulo: def.titulo, subtitulo: def.titulo, ins, meta, cuerpo: r.cuerpo, pie: firmasOn ? firmas(nombreDoc) : "", papel, horizontal: def.horizontal, denso: r.denso }));
     } catch (e) { setMsg(e.message || String(e)); }
     setTrabajando(false);
@@ -331,7 +464,14 @@ export function VistaImpresion({ grados = [], gradoActivo, materiaActiva }) {
         <div className="text-sm font-semibold text-slate-700">2. Datos del documento</div>
         <div className="flex flex-wrap items-center gap-2">
           <select className={sel} value={gradoId} onChange={(e) => setGradoId(e.target.value)}>{grados.map((g) => <option key={g.id} value={g.id}>{g.nombre || g.id}</option>)}</select>
-          {informe !== "blanco" && <select className={sel} value={materiaId} onChange={(e) => setMateriaId(e.target.value)}>{materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select>}
+          {informe !== "blanco" && informe !== "estudiante" && <select className={sel} value={materiaId} onChange={(e) => setMateriaId(e.target.value)}>{materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select>}
+          {mostrar("estudiante") && <select className={sel + " w-64"} value={estId} onChange={(e) => setEstId(e.target.value)}>{listaEst.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}</select>}
+          {mostrar("estudiante") && <div className="basis-full flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+            <span className="font-semibold">Incluir:</span>
+            {[["actividades", "Notas del periodo actual"], ["observaciones", "Observaciones por actividad"], ["asistencia", "Asistencia"], ["observador", "Anotaciones del observador (sensible)"]].map(([k, t]) => (
+              <label key={k} className="flex items-center gap-1"><input type="checkbox" checked={opts[k]} onChange={(e) => setOpts((o) => ({ ...o, [k]: e.target.checked }))} /> {t}</label>
+            ))}
+          </div>}
           {mostrar("periodo") && <select className={sel} value={periodo} onChange={(e) => setPeriodo(e.target.value)}>{periodosDe(config).map((p) => <option key={p} value={p}>Periodo {p}</option>)}</select>}
           {mostrar("fechas") && <><label className="text-xs text-slate-600">Desde <input type="date" className={sel} value={desde} onChange={(e) => setDesde(e.target.value)} /></label>
             <label className="text-xs text-slate-600">Hasta <input type="date" className={sel} value={hasta} onChange={(e) => setHasta(e.target.value)} /></label></>}
