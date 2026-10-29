@@ -1,3 +1,4 @@
+import { descargarPdfAlbum } from "../lib/albumPdf";
 import React, { useEffect, useMemo, useState } from "react";
 import * as api from "../lib/albumColeccionApi";
 import { LibroAlbum, RAREZA, ESTILOS_ALBUM } from "./AlbumLibro";
@@ -132,9 +133,12 @@ function AlbumAbierto({ estudianteId, albumId, onVolver, onMonedas }) {
           <h3 className="font-extrabold text-slate-800 text-lg leading-tight">📒 {a.nombre}</h3>
           <div className="text-[11px] text-slate-500">{stats.tengo}/{stats.total} láminas · {stats.repetidas} repetidas · 🪙 {det.monedas}</div>
         </div>
+        <div className="flex items-center gap-2">
+        <button onClick={() => descargarPdfAlbum({ album: a, modo: "estudiante", paginas: det.paginas, quien: det.estudiante_nombre || "" })} className="text-xs font-semibold px-3 py-2 rounded-full border border-slate-300 text-slate-600" title="Elige «Guardar como PDF»">📄 PDF</button>
         <button onClick={abrirSobre} disabled={!puede || abriendo} className="text-sm font-extrabold px-5 py-2.5 rounded-full text-white disabled:opacity-50" style={{ background: a.color }}>
           {abriendo ? <span className="inline-block alb-sacudir">✉️</span> : "✉️"} {abriendo ? "Abriendo…" : `Abrir sobre (🪙 ${a.costo_sobre})`}
         </button>
+        </div>
       </div>
       <div className="h-2.5 rounded-full bg-slate-200 overflow-hidden mb-1"><div className="h-full rounded-full transition-all" style={{ width: `${stats.total ? (stats.tengo / stats.total) * 100 : 0}%`, background: a.color }} /></div>
       <div className="text-[10px] text-slate-400 mb-3">Cada sobre trae {a.laminas_por_sobre} láminas al azar. Completa una página y ganas 🪙 {a.premio_pagina}; completa el álbum y ganas 🪙 {a.premio_album}.</div>
