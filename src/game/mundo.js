@@ -329,7 +329,7 @@ const EDIFICIOS_DEF = [
   { id: "agora", nombre: "Ágora de la Ética", x: 38, y: 26, w: 8, h: 5, pared: "#d8d3c4", techo: "#3b5b92", icono: "⚖️", interior: { cols: 16, filas: 11, tema: "agora" } },
   { id: "templo", nombre: "Templo de la Gratitud", x: 8, y: 27, w: 7, h: 5, pared: "#efe6d2", techo: "#7b4fa3", icono: "🕊️", interior: { cols: 14, filas: 11, tema: "templo" } },
   { id: "mercado", nombre: "Mercado del Códice", x: 24, y: 4, w: 8, h: 4, pared: "#e0b36a", techo: "#c0562b", icono: "🛒", interior: { cols: 16, filas: 11, tema: "mercado" } },
-  { id: "acertijos", nombre: "Casa de los Acertijos", x: 31, y: 29, w: 7, h: 5, pared: "#e6dcc0", techo: "#d9822b", icono: "🧩", interior: { cols: 16, filas: 11, tema: "acertijos" } },
+  { id: "acertijos", nombre: "Casa de los Acertijos", x: 31, y: 29, w: 7, h: 5, pared: "#e6dcc0", techo: "#d9822b", icono: "🧩", interior: { cols: 16, filas: 13, tema: "acertijos" } },
   { id: "comarca", nombre: "Sala de la Comarca", x: 19, y: 29, w: 7, h: 5, pared: "#cfd6e6", techo: "#8c2f48", icono: "🏰", interior: { cols: 16, filas: 11, tema: "comarca" } },
   { id: "camara", nombre: "Cámara del Códice", x: 47, y: 29, w: 7, h: 5, pared: "#8f93ad", techo: "#2a2f55", icono: "🔐", interior: { cols: 14, filas: 10, tema: "camara" } },
   { id: "laboratorio", nombre: "Laboratorio de Monstruos", x: 3, y: 16, w: 7, h: 5, pared: "#bfe0d8", techo: "#2f6b66", icono: "🧪", interior: { cols: 16, filas: 11, tema: "laboratorio" } },
@@ -982,9 +982,9 @@ function disenoInterior(tema, W, H) {
     base.comarca = { mapa: { x: cx, y: 214 }, heraldo: { x: cx + 80, y: 140 } };
     base.slots = [{ x: cx - 100, y: 130 }, { x: cx - 30, y: 292 }, { x: 150, y: 306 }, { x: W - 150, y: 306 }, { x: cx + 40, y: 300 }];
   } else if (tema === "acertijos") {
-    base.muebles = [["estante", 80, 86], ["estante", W - 80, 86], ["mesa", 60, 214], ["mesa", 158, 214], ["mesa", 256, 214], ["mesa", 354, 214], ["mesa", 452, 214], ["planta", 52, 324], ["planta", W - 52, 324]];
-    base.mesas = [{ juego: "sopa", x: 60, y: 214 }, { juego: "cripto", x: 158, y: 214 }, { juego: "ahorcado", x: 256, y: 214 }, { juego: "rompe", x: 354, y: 214 }, { juego: "rosco", x: 452, y: 214 }];
-    base.slots = [{ x: cx - 34, y: 126 }, { x: cx + 34, y: 126 }, { x: 150, y: 300 }, { x: W - 150, y: 300 }, { x: cx, y: 300 }];
+    base.muebles = [["estante", 80, 86], ["estante", W - 80, 86], ["mesa", 100, 176], ["mesa", 204, 176], ["mesa", 308, 176], ["mesa", 412, 176], ["mesa", 152, 268], ["mesa", 256, 268], ["mesa", 360, 268], ["planta", 52, 388], ["planta", W - 52, 388]];
+    base.mesas = [{ juego: "sopa", x: 100, y: 176 }, { juego: "cripto", x: 204, y: 176 }, { juego: "ahorcado", x: 308, y: 176 }, { juego: "rompe", x: 412, y: 176 }, { juego: "rosco", x: 152, y: 268 }, { juego: "escalera", x: 256, y: 268 }, { juego: "apuesta", x: 360, y: 268 }];
+    base.slots = [{ x: cx - 34, y: 126 }, { x: cx + 34, y: 126 }, { x: 56, y: 344 }, { x: W - 56, y: 344 }, { x: cx, y: 362 }];
   } else { // mercado
     base.muebles = [["puesto", 100, 128], ["puesto", cx, 128], ["puesto", W - 100, 128], ["caja", W - 52, 236], ["caja", W - 52, 266], ["barril", 52, 240], ["barril", 52, 274], ["planta", W - 50, 306]];
     base.slots = [{ x: (100 + cx) / 2, y: 156 }, { x: (cx + W - 100) / 2, y: 156 }, { x: cx, y: 230 }, { x: 150, y: 290 }, { x: W - 150, y: 290 }];
