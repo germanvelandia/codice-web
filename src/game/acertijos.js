@@ -7,6 +7,7 @@ export const TIPOS_ACERTIJO = {
   sopa: { nombre: "Sopa de letras", emoji: "🔤", ayuda: "Escribe las palabras a buscar, separadas por comas o una por línea (de 3 a 14 letras). Ejemplo: PAZ, RESPETO, JUSTICIA" },
   cripto: { nombre: "Criptograma", emoji: "🔐", ayuda: "Escribe la frase secreta (mínimo 8 letras). El estudiante la descifra: cada letra se oculta detrás de un número." },
   ahorcado: { nombre: "Ahorcado", emoji: "🪢", ayuda: "Escribe la palabra o frase que hay que adivinar (mínimo 3 letras). Usa la pista para orientar." },
+  rosco: { nombre: "Rosco de palabras", emoji: "🎡", ayuda: "Una palabra por línea, con su definición: respuesta | definición. La letra del rosco es la inicial de la respuesta. Si quieres «contiene la X», escribe X: respuesta | definición. De 5 a 26 líneas. Ejemplo: AUTONOMIA | Capacidad de decidir por uno mismo. Gana quien acierta al menos el 70 %." },
   rompe: { nombre: "Rompecabezas", emoji: "🧩", ayuda: "Opcional: el enlace (URL) de una imagen para armar. Si lo dejas vacío, las fichas llevan números." },
 };
 export const CLAVES_TIPO = Object.keys(TIPOS_ACERTIJO);
@@ -139,11 +140,34 @@ export function moverRompe(est, i) {
   return { ...est, piezas, movimientos: est.movimientos + 1 };
 }
 
+// =====================================================================================
+//  ROSCO DE PALABRAS (estilo Pasapalabra): una letra, una definición, una respuesta.
+//  Formato de cada línea:   respuesta | definición        (empieza por la letra de la respuesta)
+//                           X: respuesta | definición     (contiene la letra X)
+// =====================================================================================
+export function parsearRosco(texto) {
+  const items = [];
+  String(texto ?? "").split(/\n+/).forEach((linea) => {
+    let m = linea.match(/^\s*([A-Za-zÁÉÍÓÚÜÑáéíóúüñ])\s*:\s*([^|]+)\|(.+)$/), modo = "contiene", letra, resp, def;
+    if (m) { letra = soloLetras(m[1]); resp = soloLetras(m[2]); def = m[3].trim(); }
+    else { m = linea.match(/^\s*([^|]+)\|(.+)$/); if (!m) return; modo = "empieza"; resp = soloLetras(m[1]); letra = resp.slice(0, 1); def = m[2].trim(); }
+    if (!letra || resp.length < 2 || !def) return;
+    if (modo === "contiene" && !resp.includes(letra)) return;
+    items.push({ letra, modo, respuesta: resp, definicion: def });
+  });
+  const ORD = "ABCDEFGHIJKLMNÑOPQRSTUVWXYZ";
+  return items.slice(0, 26).sort((x, y) => ORD.indexOf(x.letra) - ORD.indexOf(y.letra)); // el rosco va de la A a la Z
+}
+export const aciertaRosco = (item, intento) => soloLetras(intento) === item.respuesta;
+export const metaRosco = (n) => Math.ceil(n * 0.7);
+export const segundosRosco = (n) => Math.max(60, n * 10);
+
 // ¿El contenido que escribió la docente sirve para ese tipo? Devuelve "" si está bien o el mensaje de error.
 export function validarContenido(tipo, contenido, { tam } = {}) {
   if (tipo === "sopa") { const p = parsearPalabras(contenido); if (p.length < 3) return "Escribe al menos 3 palabras válidas (de 3 a 14 letras, separadas por comas)."; const s = crearSopa(p, { tam, rand: rng(7) }); return s.imposible ? "Las palabras no caben en la sopa; usa menos o más cortas." : ""; }
   if (tipo === "cripto") { const c = crearCripto(contenido, { rand: rng(7) }); return c.imposible ? (c.motivo === "muchas" ? "La frase tiene demasiadas letras distintas." : "La frase es muy corta (mínimo 8 letras y 4 letras distintas).") : ""; }
   if (tipo === "ahorcado") return crearAhorcado(contenido).imposible ? "Escribe una palabra o frase de al menos 3 letras (2 distintas)." : "";
+  if (tipo === "rosco") { const n = parsearRosco(contenido).length; const lineas = String(contenido || "").split(/\n+/).filter((l) => l.trim()).length; return n < 5 ? `Escribe al menos 5 líneas válidas con el formato «respuesta | definición» (ahora hay ${n}${lineas > n ? `; ${lineas - n} línea(s) no se entienden` : ""}).` : ""; }
   if (tipo === "rompe") { const u = String(contenido || "").trim(); return u && !/^https?:\/\/\S+$/i.test(u) ? "La imagen debe ser un enlace que empiece por http:// o https://" : ""; }
   return "Tipo de acertijo desconocido.";
 }
