@@ -2,7 +2,7 @@
 //  PANTALLA DE LOS JUEGOS DE LA CASA DE LOS ACERTIJOS (sopa, criptograma, ahorcado, rompecabezas)
 //  Usa la lógica de acertijos.js. Se monta dentro de un contenedor y avisa cuando el estudiante gana.
 // =====================================================================================
-import { crearSopa, palabraEnLinea, parsearPalabras, crearCripto, estadoCripto, crearAhorcado, estadoAhorcado, crearRompe, moverRompe, rompeResuelto, letraDe, soloLetras, parsearRosco, aciertaRosco, metaRosco, segundosRosco } from "./acertijos";
+import { crearSopa, palabraEnLinea, parsearPalabras, crearCripto, estadoCripto, crearAhorcado, estadoAhorcado, crearRompe, moverRompe, rompeResuelto, letraDe, soloLetras, parsearRosco, parsearPreguntas, aciertaRosco, metaRosco, segundosRosco } from "./acertijos";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const ABC = [..."ABCDEFGHIJKLMNÑOPQRSTUVWXYZ"];
@@ -16,7 +16,7 @@ export function montarJuego(host, ac, cb = {}) {
   const q = (s) => host.querySelector(s), qa = (s) => host.querySelectorAll(s);
   const pista = ac.pista ? `<div class="jg-pista">💡 ${esc(ac.pista)}</div>` : "";
   const otra = '<button class="jg-otra" data-a="otra">🔄 Otra vez</button>';
-  const empezar = () => { ganado = false; ({ sopa: juegoSopa, cripto: juegoCripto, ahorcado: juegoAhorcado, rompe: juegoRompe, rosco: juegoRosco }[ac.tipo] || juegoError)(); };
+  const empezar = () => { ganado = false; ({ sopa: juegoSopa, cripto: juegoCripto, ahorcado: juegoAhorcado, rompe: juegoRompe, rosco: juegoRosco, escalera: juegoEscalera, apuesta: juegoApuesta }[ac.tipo] || juegoError)(); };
   host.onclick = (e) => { const b = e.target.closest && e.target.closest('[data-a="otra"]'); if (b) empezar(); };
 
   function juegoError() { host.innerHTML = '<p class="m-texto">Este acertijo no se puede mostrar todavía.</p>'; }
@@ -165,6 +165,75 @@ export function montarJuego(host, ac, cb = {}) {
     }, 1000);
     manejaTecla = () => false; // el campo de texto usa el teclado normal
     pintar();
+  }
+
+  // ---------- escalera millonaria y apuesta tu respuesta (opción múltiple) ----------
+  const CSS_SABER = "#jg-saber-css";
+  function estilosSaber() {
+    if (host.ownerDocument.querySelector(CSS_SABER)) return;
+    const st = host.ownerDocument.createElement("style"); st.id = "jg-saber-css";
+    st.textContent = ".jg-sq{background:var(--fondo,#f1f5f9);border:1px solid var(--borde,#cbd5e1);border-radius:12px;padding:10px 12px;margin:8px 0;font-size:15px;font-weight:700;line-height:1.35}.jg-so{display:grid;gap:6px;margin:6px 0}.jg-sb{border:2px solid var(--borde,#cbd5e1);background:var(--fondo,#fff);color:var(--texto,#0f172a);border-radius:10px;padding:9px 11px;font-size:14px;font-weight:600;text-align:left}.jg-sb:disabled{opacity:.5}.jg-sb.ok{background:#16a34a;border-color:#16a34a;color:#fff;opacity:1}.jg-sb.mal{background:#dc2626;border-color:#dc2626;color:#fff;opacity:1}.jg-sl{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin:4px 0}.jg-ss{min-width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;background:#334155;color:#fff}.jg-ss.hecho{background:#16a34a}.jg-ss.ahora{background:#f59e0b;box-shadow:0 0 0 3px #fde68a}.jg-sc{display:flex;gap:6px;justify-content:center;margin:6px 0}.jg-sk{border:0;border-radius:99px;padding:6px 12px;font-size:12px;font-weight:800;background:var(--acento,#7c3aed);color:#fff}.jg-sk:disabled{opacity:.35}.jg-sp{text-align:center;font-size:26px;font-weight:900;margin:4px 0}.jg-sa{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:6px 0}";
+    host.ownerDocument.head.appendChild(st);
+  }
+  const barajarLista = (l) => { const a = [...l]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const opcionesDe = (p) => barajarLista([{ t: p.correcta, ok: true }, ...p.incorrectas.map((t) => ({ t, ok: false }))]);
+
+  function juegoEscalera() {
+    estilosSaber();
+    const preg = parsearPreguntas(ac.contenido).slice(0, 15); if (preg.length < 5) return juegoError();
+    const n = preg.length; let i = 0, cincuenta = true, segunda = true, bloqueado = false, opts = opcionesDe(preg[0]), tachadas = new Set(), aviso = "";
+    const escalones = () => `<div class="jg-sl">${preg.map((_, k) => `<span class="jg-ss ${k < i ? "hecho" : k === i ? "ahora" : ""}">${k + 1}</span>`).join("")}</div>`;
+    const pintar = (marca) => {
+      host.innerHTML = `${pista}${escalones()}<div class="jg-ayuda" style="text-align:center">Pregunta ${i + 1} de ${n}</div>
+        <div class="jg-sq">${esc(preg[i].pregunta)}</div>
+        <div class="jg-sc"><button class="jg-sk" data-c="50" ${cincuenta ? "" : "disabled"}>✂️ 50/50</button><button class="jg-sk" data-c="2" ${segunda ? "" : "disabled"} title="Si fallas, puedes intentarlo otra vez">🛟 Segunda oportunidad</button></div>
+        ${aviso ? `<div class="jg-ayuda" style="text-align:center">${aviso}</div>` : ""}
+        <div class="jg-so">${opts.map((o, k) => `<button class="jg-sb ${marca && marca.k === k ? marca.cls : ""}" data-k="${k}" ${tachadas.has(k) || bloqueado ? "disabled" : ""}>${esc(o.t)}</button>`).join("")}</div>`;
+      qa(".jg-sb").forEach((b) => (b.onclick = () => elegir(Number(b.dataset.k))));
+      const c50 = q('[data-c="50"]'), c2 = q('[data-c="2"]');
+      if (c50) c50.onclick = () => { if (!cincuenta || bloqueado) return; cincuenta = false; const malas = opts.map((o, k) => (o.ok || tachadas.has(k) ? -1 : k)).filter((k) => k >= 0); barajarLista(malas).slice(0, Math.max(0, malas.length - 1)).slice(0, 2).forEach((k) => tachadas.add(k)); pintar(); };
+      if (c2) c2.onclick = () => { if (!segunda || bloqueado) return; segunda = false; aviso = "🛟 Segunda oportunidad lista: si fallas esta pregunta, puedes volver a intentarla."; armada = true; pintar(); };
+    };
+    let armada = false;
+    const siguiente = () => { i += 1; if (i >= n) { host.innerHTML = `${pista}${escalones()}<div class="jg-msg">🎉 ¡Llegaste a la cima de la escalera!</div>${otra}`; return ganar(); } opts = opcionesDe(preg[i]); tachadas = new Set(); aviso = ""; armada = false; bloqueado = false; pintar(); };
+    const elegir = (k) => {
+      if (bloqueado) return; const o = opts[k];
+      if (o.ok) { bloqueado = true; pintar({ k, cls: "ok" }); setTimeout(() => { if (vivo) siguiente(); }, 800); return; }
+      if (armada) { armada = false; tachadas.add(k); aviso = "❌ Fallaste, pero usaste tu segunda oportunidad. ¡Intenta de nuevo!"; pintar({ k, cls: "mal" }); return; }
+      bloqueado = true; const ok = opts.findIndex((x) => x.ok);
+      host.innerHTML = `${pista}${escalones()}<div class="jg-sq">${esc(preg[i].pregunta)}</div><div class="jg-so">${opts.map((x, kk) => `<button class="jg-sb ${kk === ok ? "ok" : kk === k ? "mal" : ""}" disabled>${esc(x.t)}</button>`).join("")}</div>
+        <div class="jg-msg">Te quedaste en el escalón ${i + 1} de ${n}. ¡Inténtalo otra vez!</div>${otra}`;
+    };
+    manejaTecla = () => false; pintar();
+  }
+
+  function juegoApuesta() {
+    estilosSaber();
+    const todas = parsearPreguntas(ac.contenido).slice(0, 20); if (todas.length < 5) return juegoError();
+    const preg = barajarLista(todas).slice(0, 10), n = preg.length, META = 150;
+    let i = 0, puntos = 100, apuesta = 0, opts = opcionesDe(preg[0]), historia = [];
+    const cab = () => `<div class="jg-sp">🪙 ${puntos}</div><div class="jg-ayuda" style="text-align:center">Pregunta ${i + 1} de ${n} · meta: ${META} puntos</div>`;
+    const fin = () => {
+      const gano = puntos >= META;
+      host.innerHTML = `${pista}<div class="jg-sp">🪙 ${puntos}</div><div class="jg-msg">${gano ? `🎉 ¡Llegaste a ${puntos} puntos! Apostaste bien.` : puntos <= 0 ? "Te quedaste sin puntos. ¡Inténtalo otra vez!" : `Terminaste con ${puntos} puntos. Necesitas ${META}. ¡Inténtalo otra vez!`}</div>
+        <div class="jg-ayuda" style="text-align:center">${historia.map((h) => (h.ok ? "✅" : "❌") + " " + h.apuesta).join(" · ")}</div>${otra}`;
+      if (gano) ganar();
+    };
+    const apostar = () => {
+      const montos = [10, 25, 50].filter((m) => m <= puntos);
+      host.innerHTML = `${pista}${cab()}<div class="jg-sq">${esc(preg[i].pregunta)}</div><div class="jg-ayuda" style="text-align:center">¿Cuánto apuestas? Si aciertas ganas lo apostado; si fallas, lo pierdes.</div>
+        <div class="jg-sa">${montos.map((m) => `<button class="jg-sk" data-a="${m}">🪙 ${m}</button>`).join("")}<button class="jg-sk" data-a="${puntos}" style="background:#dc2626">🔥 Todo (${puntos})</button></div>`;
+      qa("[data-a]").forEach((b) => (b.onclick = () => { apuesta = Number(b.dataset.a); responder(); }));
+    };
+    const responder = (marca) => {
+      host.innerHTML = `${pista}${cab()}<div class="jg-sq">${esc(preg[i].pregunta)}</div><div class="jg-ayuda" style="text-align:center">Apostaste 🪙 ${apuesta}</div>
+        <div class="jg-so">${opts.map((o, k) => `<button class="jg-sb ${marca ? (o.ok ? "ok" : marca.k === k ? "mal" : "") : ""}" data-k="${k}" ${marca ? "disabled" : ""}>${esc(o.t)}</button>`).join("")}</div>`;
+      if (!marca) qa(".jg-sb").forEach((b) => (b.onclick = () => {
+        const k = Number(b.dataset.k), ok = opts[k].ok; puntos += ok ? apuesta : -apuesta; historia.push({ ok, apuesta });
+        responder({ k }); setTimeout(() => { if (!vivo) return; i += 1; if (i >= n || puntos <= 0) return fin(); opts = opcionesDe(preg[i]); apostar(); }, 1100);
+      }));
+    };
+    manejaTecla = () => false; apostar();
   }
 
   empezar();
