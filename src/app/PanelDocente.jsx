@@ -59,7 +59,7 @@ import { ModulosAdmin } from "../components/ModulosAdmin";
 import { VistaActividadesProgramadas } from "../screens/ActividadesProgramadas";
 import { VistaEvaluaciones } from "../screens/Evaluaciones";
 import { VistaProyectosForja } from "../screens/TareasCalificables";
-import { CLAVES_SOLO_ADMIN, MENU_PANEL, MENU_PANEL_GRUPOS, SidebarTarjetas, TarjetasMenuInicio } from "./MenuDocente";
+import { CLAVES_SOLO_ADMIN, MENU_PANEL, MENU_PANEL_GRUPOS, SidebarTarjetas, TarjetasMenuInicio, PantallaGrupoMenu } from "./MenuDocente";
 import { MarcoSeccion, NOMBRES_HERRAMIENTAS } from "./comunes";
 
 export function Panel({ session }) {
@@ -118,7 +118,7 @@ export function Panel({ session }) {
   // Para que el menú resalte bien el ítem activo cuando estás en una
   // herramienta específica (en vez de mostrar "Herramientas" resaltado
   // en general sin distinguir cuál).
-  const claveActivaMenu = tab === "herramientas" ? `herr_${subTabHerramientas}` : tab;
+  const claveActivaMenu = tab === "herramientas" ? `herr_${subTabHerramientas}` : String(tab).startsWith("grupo:") ? "inicio" : tab;
 
   // Los docentes que no son admin no ven las opciones de administración, y los grupos que quedan vacíos se ocultan.
   const menuPanelVisible = esAdminEfectivo ? MENU_PANEL_GRUPOS : MENU_PANEL_GRUPOS
@@ -139,7 +139,7 @@ export function Panel({ session }) {
   // es null y una pantalla de administración recordada se perdería en cada F5.
   const seccionesValidas = ["inicio", "herramientas", ...MENU_PANEL.map((i) => i.key).filter((k) => !k.startsWith("herr_"))];
   useEffect(() => {
-    if (!seccionesValidas.includes(tab)) { setTab("inicio"); return; }
+    if (!seccionesValidas.includes(tab) && !(String(tab).startsWith("grupo:") && menuPanelVisible.some((g) => "grupo:" + g.key === tab))) { setTab("inicio"); return; }
     if (esAdmin === null) return;
     if (!esAdminEfectivo && CLAVES_SOLO_ADMIN.includes(tab)) { setTab("inicio"); }
   }, [tab, esAdmin, esAdminEfectivo]);
@@ -169,6 +169,10 @@ export function Panel({ session }) {
 
       <div className="flex-1 min-w-0 p-5 md:p-10">
         {tab === "inicio" && <VistaInicio onIrA={irA} contenidoMedio={<TarjetasMenuInicio grupos={menuPanelVisible} onIrA={irA} favoritos={favoritos} />} />}
+        {String(tab).startsWith("grupo:") && (() => {
+          const g = menuPanelVisible.find((x) => "grupo:" + x.key === tab);
+          return g ? <PantallaGrupoMenu grupo={g} onIrA={irA} onVolver={() => setTab("inicio")} favoritos={favoritos} onAlternarFavorito={alternarFavorito} /> : null;
+        })()}
         {tab === "entregasrevisar" && <MarcoSeccion zonaLabel="Académico — Entregas por revisar" icono="🎓"><VistaEntregasPorRevisar onIrAGrado={irAGradoDesdeRevisar} /></MarcoSeccion>}
         {tab === "estudiantes" && (
           <MarcoSeccion zonaLabel="Académico — Estudiantes" icono="🎓">
