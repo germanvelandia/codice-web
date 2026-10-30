@@ -192,31 +192,18 @@ export const COLORES_GRUPO = {
 
 export function TarjetasMenuInicio({ grupos, onIrA, favoritos = [] }) {
   const [busqueda, setBusqueda] = useState("");
-  const [abierto, setAbierto] = api.useEstadoPersistente("inicio_grupo_abierto", null); // submenú abierto (se recuerda al volver)
   const q = busqueda.trim().toLowerCase();
   const todos = grupos.filter((g) => g.key !== "inicio_grupo");
-  const grupoAbierto = todos.find((g) => g.key === abierto) || null;
   const todasLasSecciones = grupos.flatMap((g) => g.items);
   // Con texto en el buscador se muestran las secciones que coinciden (de todos los grupos).
   const coincidencias = q ? todos.map((g) => ({ ...g, items: g.items.filter((it) => it.label.toLowerCase().includes(q)) })).filter((g) => g.items.length > 0) : [];
-  const Boton = ({ it, color, grande }) => (
-    <button key={it.key} onClick={() => onIrA(it.key)}
-      className={`flex items-center gap-2.5 text-left rounded-xl hover:shadow-md transition-all ${grande ? "px-3.5 py-3.5" : "px-2.5 py-2"}`}
-      style={{ background: color + "12", border: `1px solid ${color}22` }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = color + "26"; }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = color + "12"; }}>
-      <span className={grande ? "text-2xl shrink-0" : "text-base shrink-0"}>{it.icono}</span>
-      <span className={`${grande ? "text-[13px]" : "text-[12px]"} font-bold leading-tight text-slate-700`}>{it.label}</span>
-    </button>
-  );
   return (
     <div className="mb-4">
       <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-        <div className="font-extrabold text-slate-800 text-base">{grupoAbierto && !q ? `${grupoAbierto.icono} ${grupoAbierto.label}` : "🧭 ¿A dónde vamos hoy?"}</div>
+        <div className="font-extrabold text-slate-800 text-base">🧭 ¿A dónde vamos hoy?</div>
         <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="🔎 Buscar sección…"
           className="text-sm rounded-full px-3.5 py-1.5 border border-slate-200 bg-white outline-none focus:border-[#2F55A4] w-full sm:w-64" />
       </div>
-
       {q ? (
         coincidencias.length === 0 ? <p className="text-sm text-slate-400">No hay secciones con ese nombre.</p> : (
           <div className="space-y-3">
@@ -225,36 +212,19 @@ export function TarjetasMenuInicio({ grupos, onIrA, favoritos = [] }) {
               return (
                 <div key={g.key}>
                   <div className="text-[11px] font-extrabold uppercase tracking-wide mb-1.5" style={{ color }}>{g.icono} {g.label}</div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">{g.items.map((it) => <Boton key={it.key} it={it} color={color} />)}</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+                    {g.items.map((it) => (
+                      <button key={it.key} onClick={() => onIrA(it.key)} className="flex items-center gap-2 text-left rounded-xl px-2.5 py-2 hover:shadow-sm" style={{ background: color + "12" }}>
+                        <span className="text-base shrink-0">{it.icono}</span><span className="text-[12px] font-bold leading-tight text-slate-700">{it.label}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               );
             })}
           </div>
         )
-      ) : grupoAbierto ? (
-        // ---- Pantalla del submenú: las opciones de esa tarjeta ----
-        (() => {
-          const color = COLORES_GRUPO[grupoAbierto.key] || "#2F55A4";
-          return (
-            <div>
-              <button onClick={() => setAbierto(null)} className="text-xs font-bold text-slate-500 hover:text-slate-800 mb-3 flex items-center gap-1">← Todas las secciones</button>
-              <div className="rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-sm">
-                <div className="flex items-center gap-3 px-5 py-4" style={{ background: `linear-gradient(135deg, ${color}, ${color}CC)` }}>
-                  <span className="text-3xl">{grupoAbierto.icono}</span>
-                  <div>
-                    <div className="text-white font-extrabold text-lg leading-tight">{grupoAbierto.label}</div>
-                    <div className="text-white/75 text-xs">{grupoAbierto.items.length} {grupoAbierto.items.length === 1 ? "sección" : "secciones"} · elige a dónde ir</div>
-                  </div>
-                </div>
-                <div className="p-3 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
-                  {grupoAbierto.items.map((it) => <Boton key={it.key} it={it} color={color} grande />)}
-                </div>
-              </div>
-            </div>
-          );
-        })()
       ) : (
-        // ---- Pantalla principal: solo el nombre de cada tarjeta ----
         <>
           {favoritos.length > 0 && (
             <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50/60 p-3">
@@ -268,11 +238,12 @@ export function TarjetasMenuInicio({ grupos, onIrA, favoritos = [] }) {
               </div>
             </div>
           )}
+          {/* Solo el nombre de cada tarjeta: al tocarla se abre su propia pantalla con las opciones */}
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
             {todos.map((g) => {
               const color = COLORES_GRUPO[g.key] || "#2F55A4";
               return (
-                <button key={g.key} onClick={() => setAbierto(g.key)}
+                <button key={g.key} onClick={() => onIrA("grupo:" + g.key)}
                   className="rounded-2xl p-4 text-left text-white shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all min-h-[104px] flex flex-col justify-between"
                   style={{ background: `linear-gradient(135deg, ${color}, ${color}CC)` }}>
                   <span className="text-3xl">{g.icono}</span>
@@ -286,6 +257,43 @@ export function TarjetasMenuInicio({ grupos, onIrA, favoritos = [] }) {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// Pantalla propia de una tarjeta: se abre al tocar el grupo en el Inicio y muestra sus opciones.
+export function PantallaGrupoMenu({ grupo, onIrA, onVolver, favoritos = [], onAlternarFavorito }) {
+  const color = COLORES_GRUPO[grupo.key] || "#2F55A4";
+  return (
+    <div className="max-w-5xl mx-auto">
+      <button onClick={onVolver} className="text-xs font-bold text-slate-500 hover:text-slate-800 mb-3 flex items-center gap-1">← Inicio</button>
+      <div className="rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center gap-3 px-5 py-5" style={{ background: `linear-gradient(135deg, ${color}, ${color}CC)` }}>
+          <span className="text-4xl">{grupo.icono}</span>
+          <div>
+            <h2 className="text-white font-extrabold text-xl leading-tight">{grupo.label}</h2>
+            <div className="text-white/75 text-xs">{grupo.items.length} {grupo.items.length === 1 ? "sección" : "secciones"} · elige a dónde ir</div>
+          </div>
+        </div>
+        <div className="p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          {grupo.items.map((it) => {
+            const fav = favoritos.includes(it.key);
+            return (
+              <div key={it.key} className="relative group">
+                <button onClick={() => onIrA(it.key)} className="w-full flex items-center gap-3 text-left rounded-xl px-4 py-4 hover:shadow-md transition-all"
+                  style={{ background: color + "12", border: `1px solid ${color}22` }}>
+                  <span className="text-3xl shrink-0">{it.icono}</span>
+                  <span className="text-sm font-bold leading-tight text-slate-700 pr-6">{it.label}</span>
+                </button>
+                {onAlternarFavorito && (
+                  <button onClick={() => onAlternarFavorito(it.key)} title={fav ? "Quitar de favoritos" : "Agregar a favoritos"}
+                    className={`absolute top-2 right-2.5 text-base ${fav ? "text-amber-400" : "text-slate-300 hover:text-amber-400"}`}>{fav ? "★" : "☆"}</button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
