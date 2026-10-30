@@ -2,7 +2,7 @@
 //  PANTALLA DE LOS JUEGOS DE LA CASA DE LOS ACERTIJOS (sopa, criptograma, ahorcado, rompecabezas)
 //  Usa la lógica de acertijos.js. Se monta dentro de un contenedor y avisa cuando el estudiante gana.
 // =====================================================================================
-import { crearSopa, palabraEnLinea, parsearPalabras, crearCripto, estadoCripto, crearAhorcado, estadoAhorcado, crearRompe, moverRompe, rompeResuelto, letraDe } from "./acertijos";
+import { crearSopa, palabraEnLinea, parsearPalabras, crearCripto, estadoCripto, crearAhorcado, estadoAhorcado, crearRompe, moverRompe, rompeResuelto, letraDe, soloLetras, parsearRosco, aciertaRosco, metaRosco, segundosRosco } from "./acertijos";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const ABC = [..."ABCDEFGHIJKLMNÑOPQRSTUVWXYZ"];
@@ -16,7 +16,7 @@ export function montarJuego(host, ac, cb = {}) {
   const q = (s) => host.querySelector(s), qa = (s) => host.querySelectorAll(s);
   const pista = ac.pista ? `<div class="jg-pista">💡 ${esc(ac.pista)}</div>` : "";
   const otra = '<button class="jg-otra" data-a="otra">🔄 Otra vez</button>';
-  const empezar = () => { ganado = false; ({ sopa: juegoSopa, cripto: juegoCripto, ahorcado: juegoAhorcado, rompe: juegoRompe }[ac.tipo] || juegoError)(); };
+  const empezar = () => { ganado = false; ({ sopa: juegoSopa, cripto: juegoCripto, ahorcado: juegoAhorcado, rompe: juegoRompe, rosco: juegoRosco }[ac.tipo] || juegoError)(); };
   host.onclick = (e) => { const b = e.target.closest && e.target.closest('[data-a="otra"]'); if (b) empezar(); };
 
   function juegoError() { host.innerHTML = '<p class="m-texto">Este acertijo no se puede mostrar todavía.</p>'; }
@@ -113,6 +113,60 @@ export function montarJuego(host, ac, cb = {}) {
     manejaTecla = () => false; pintar();
   }
 
+  // ---------- rosco de palabras ----------
+  let relojRosco = null;
+  function juegoRosco() {
+    clearInterval(relojRosco);
+    const items = parsearRosco(ac.contenido); if (items.length < 5) return juegoError();
+    const n = items.length, meta = metaRosco(n); let restante = segundosRosco(n);
+    const est = items.map(() => "pend"), pasadas = new Set(); let cur = 0, aviso = "", fin = false;
+    const css = "#jg-rosco-css";
+    if (!host.ownerDocument.querySelector(css)) {
+      const st = host.ownerDocument.createElement("style"); st.id = "jg-rosco-css";
+      st.textContent = ".jg-rr{position:relative;width:min(290px,100%);aspect-ratio:1;margin:6px auto}.jg-rl{position:absolute;width:11%;aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:clamp(10px,3vw,14px);background:#334155;color:#fff;border:2px solid transparent}.jg-rl.ok{background:#16a34a}.jg-rl.mal{background:#dc2626}.jg-rl.pasa{background:#d97706}.jg-rl.cur{border-color:#fde047;box-shadow:0 0 0 3px #fde04788;transform:translate(-50%,-50%) scale(1.25);z-index:2}.jg-rc{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800}.jg-rc b{font-size:24px}.jg-rc span{font-size:11px;opacity:.7}.jg-rq{background:var(--fondo,#f1f5f9);border:1px solid var(--borde,#cbd5e1);border-radius:12px;padding:9px 11px;margin:6px 0;font-size:14px;line-height:1.35}.jg-rq small{display:block;font-weight:800;opacity:.75;margin-bottom:2px}.jg-rf{display:flex;gap:6px}.jg-ri{flex:1;min-width:0;font-size:16px;padding:8px 10px;border-radius:10px;border:2px solid var(--borde,#cbd5e1);background:#fff;color:#0f172a;text-transform:uppercase}.jg-rb{border:0;border-radius:10px;padding:8px 12px;font-weight:800;font-size:13px;background:var(--acento,#7c3aed);color:#fff}.jg-rb.sec{background:var(--borde,#e2e8f0);color:var(--texto,#0f172a)}";
+      host.ownerDocument.head.appendChild(st);
+    }
+    const aciertos = () => est.filter((e) => e === "ok").length;
+    const siguiente = (desde) => { for (let k = 1; k <= n; k++) { const j = (desde + k) % n; if (est[j] === "pend") return j; } return -1; };
+    const mmss = () => `${Math.floor(restante / 60)}:${String(restante % 60).padStart(2, "0")}`;
+    const circulo = () => items.map((it, i) => { const ang = (-90 + (360 * i) / n) * (Math.PI / 180); const cls = est[i] !== "pend" ? est[i] : pasadas.has(i) ? "pasa" : ""; return `<span class="jg-rl ${cls} ${i === cur && !fin ? "cur" : ""}" style="left:${50 + 44 * Math.cos(ang)}%;top:${50 + 44 * Math.sin(ang)}%">${esc(it.letra)}</span>`; }).join("");
+    const terminar = () => {
+      if (fin) return; fin = true; clearInterval(relojRosco);
+      const ok = aciertos(), gano = ok >= meta;
+      host.innerHTML = `${pista}<div class="jg-rr">${circulo()}<div class="jg-rc"><b>${ok}/${n}</b><span>aciertos</span></div></div>
+        <div class="jg-msg">${gano ? `🎉 ¡Completaste el rosco! (${ok} de ${n}, se pedían ${meta})` : `Acertaste ${ok} de ${n}. Se necesitan ${meta} para ganar. ¡Inténtalo otra vez!`}</div>
+        <div class="jg-ayuda">${items.map((it, i) => est[i] === "ok" ? "" : `<div>❌ <b>${esc(it.letra)}</b>: ${esc(it.respuesta)}</div>`).join("")}</div>${otra}`;
+      if (gano) ganar();
+    };
+    const pintar = () => {
+      if (fin) return;
+      const it = items[cur];
+      host.innerHTML = `${pista}<div class="jg-rr">${circulo()}<div class="jg-rc"><b class="jg-rt">${mmss()}</b><span>${aciertos()}/${n} · meta ${meta}</span></div></div>
+        <div class="jg-rq"><small>${it.modo === "empieza" ? `Empieza por ${esc(it.letra)}` : `Contiene la ${esc(it.letra)}`}</small>${esc(it.definicion)}</div>
+        ${aviso ? `<div class="jg-ayuda">${aviso}</div>` : ""}
+        <div class="jg-rf"><input class="jg-ri" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Tu respuesta…" aria-label="Tu respuesta"><button class="jg-rb" data-r="ok">✔</button><button class="jg-rb sec" data-r="pasa">⏭ Pasapalabra</button></div>`;
+      const inp = q(".jg-ri");
+      q('[data-r="ok"]').onclick = responder; q('[data-r="pasa"]').onclick = pasar;
+      inp.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); responder(); } };
+      try { inp.focus({ preventScroll: true }); } catch (e) { /* nada */ }
+    };
+    const avanzar = () => { const j = siguiente(cur); if (j < 0) return terminar(); cur = j; pintar(); };
+    function responder() {
+      if (fin) return; const inp = q(".jg-ri"); const v = inp ? inp.value : ""; if (!soloLetras(v)) return;
+      const it = items[cur];
+      if (aciertaRosco(it, v)) { est[cur] = "ok"; aviso = ""; } else { est[cur] = "mal"; aviso = `❌ Era <b>${esc(it.respuesta)}</b>.`; }
+      avanzar();
+    }
+    function pasar() { if (fin) return; pasadas.add(cur); aviso = ""; const j = siguiente(cur); if (j < 0 || j === cur) return pintar(); cur = j; pintar(); }
+    relojRosco = setInterval(() => {
+      if (!vivo || !host.isConnected) return clearInterval(relojRosco);
+      restante -= 1; const t = q(".jg-rt"); if (t) t.textContent = mmss();
+      if (restante <= 0) terminar();
+    }, 1000);
+    manejaTecla = () => false; // el campo de texto usa el teclado normal
+    pintar();
+  }
+
   empezar();
-  return { tecla: (k) => (vivo ? manejaTecla(k) : false), destruir() { vivo = false; host.onclick = null; host.innerHTML = ""; } };
+  return { tecla: (k) => (vivo ? manejaTecla(k) : false), destruir() { vivo = false; clearInterval(relojRosco); host.onclick = null; host.innerHTML = ""; } };
 }
