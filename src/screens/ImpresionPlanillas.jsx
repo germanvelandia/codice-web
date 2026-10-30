@@ -96,6 +96,13 @@ th.vert{height:var(--hv,120px);padding:3px 1px;font-weight:700;vertical-align:bo
 th.vert div{writing-mode:vertical-rl;transform:rotate(180deg);margin:0 auto;max-height:calc(var(--hv,120px) - 8px);font-size:${denso ? 8.5 : 9.5}px;line-height:1.2;letter-spacing:.01em;white-space:normal;word-break:normal;overflow-wrap:anywhere}
 th.horiz{font-size:${denso ? 8.5 : 9.5}px;line-height:1.2;padding:4px 3px;min-width:34px}
 td.fin{font-weight:700;background:#f8fafc}
+.secg table{width:auto;min-width:60%}
+.secg td.nom,.secg th.nom{font-size:11.5px;font-weight:600;padding:4px 8px;white-space:nowrap}
+.secg td,.secg th{font-size:10.5px}
+.secg td.n,.secg th.n{width:26px}
+.secg th.vert{min-width:26px}.secg th.vert div{font-size:10px}.secg th.horiz{font-size:10px;min-width:44px}
+.secg th.cat{font-size:8.5px}
+.secg td.fin,.secg td:last-child{white-space:nowrap}
 .secg{page-break-after:always;break-after:page}.secg:last-child{page-break-after:auto;break-after:auto}.gt{margin:0 0 6px;font-size:13px;color:#17264D;border-bottom:2px solid #17264D;padding-bottom:3px}
 .mat{margin:0 0 14px}.mat h3{margin:0 0 5px;font-size:12px;padding:4px 8px;color:#fff;background:#17264D;border-radius:3px}
 .mat h4{margin:8px 0 3px;font-size:10.5px;color:#17264D}
@@ -385,7 +392,7 @@ async function htmlGruposNotas(ctx, { ids, grupos, periodo, materiaId }) {
       : tablaVacia(est.length ? "Este grupo todavía no tiene actividades en este periodo." : "Este grupo no tiene estudiantes.");
     partes.push(`<div class="secg"><h3 class="gt">👥 ${esc(g?.nombre || "Grupo mixto")} · ${est.length} estudiante(s)${g?.descripcion ? ` · ${esc(quitarHtml(g.descripcion))}` : ""}</h3>${cuerpo}</div>`);
   }
-  return { cuerpo: partes.join(""), denso: true };
+  return { cuerpo: partes.join(""), denso: false };
 }
 
 async function htmlGrupo(ctx, { grupoId, grupoNombre }) {
