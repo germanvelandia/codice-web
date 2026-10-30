@@ -907,6 +907,57 @@ function CopiarPlanillaOtroCursoModal({ materiaId, gradoId, grados, periodo, per
   );
 }
 
+function ModificarColumnasModal({ ids, actividades, categorias, periodos, periodoActual, onClose, onListo }) {
+  const [categoria, setCategoria] = useState("");
+  const [periodo, setPeriodo] = useState("");
+  const [fecha, setFecha] = useState("");
+  const [limpiarFecha, setLimpiarFecha] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const elegidas = actividades.filter((a) => ids.includes(a.id));
+  const cambios = {};
+  if (categoria) cambios.categoria_id = parseInt(categoria, 10);
+  if (periodo) cambios.periodo = periodo;
+  if (limpiarFecha) cambios.fecha = null; else if (fecha) cambios.fecha = fecha;
+  const aplicar = async () => {
+    if (!Object.keys(cambios).length) { alert("Elige al menos un cambio."); return; }
+    setGuardando(true);
+    try { for (const a of elegidas) await api.editarActividad(a.id, cambios); onListo(); }
+    catch (e) { alert("No se pudo modificar: " + e.message); setGuardando(false); }
+  };
+  const campo = "w-full text-sm rounded-lg px-3 py-2 border border-slate-200 outline-none bg-white";
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-md max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="font-bold text-slate-800">✎ Modificar {elegidas.length} columna{elegidas.length === 1 ? "" : "s"}</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+        <div className="text-[11px] text-slate-500 bg-slate-50 rounded-lg p-2 mb-3 max-h-24 overflow-y-auto">{elegidas.map((a) => a.nombre).join(" · ")}</div>
+        <p className="text-xs text-slate-500 mb-3">Solo se cambia lo que elijas aquí; lo demás queda igual. Las notas no se tocan.</p>
+        <label className="text-xs text-slate-500 block mb-1">Pasarlas a la categoría</label>
+        <select value={categoria} onChange={(e) => setCategoria(e.target.value)} className={campo + " mb-3"}>
+          <option value="">— No cambiar —</option>
+          {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre} ({c.porcentaje}%)</option>)}
+        </select>
+        <label className="text-xs text-slate-500 block mb-1">Pasarlas al periodo</label>
+        <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className={campo + " mb-3"}>
+          <option value="">— No cambiar —</option>
+          {periodos.filter((p) => String(p) !== String(periodoActual)).map((p) => <option key={p} value={p}>Periodo {p}</option>)}
+        </select>
+        <label className="text-xs text-slate-500 block mb-1">Fecha</label>
+        <div className="flex gap-2 items-center mb-4">
+          <input type="date" value={fecha} onChange={(e) => { setFecha(e.target.value); setLimpiarFecha(false); }} disabled={limpiarFecha} className={campo} />
+          <label className="text-xs text-slate-500 flex items-center gap-1 shrink-0"><input type="checkbox" checked={limpiarFecha} onChange={(e) => setLimpiarFecha(e.target.checked)} /> Quitar fecha</label>
+        </div>
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="text-sm text-slate-500 px-4 py-2">Cancelar</button>
+          <button onClick={aplicar} disabled={guardando || !Object.keys(cambios).length} className="text-sm font-bold px-5 py-2 rounded-lg bg-violet-500 text-white disabled:opacity-40">{guardando ? "Guardando…" : "Aplicar"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CopiarColumnasModal({ materiaDestinoId, gradoId, grados = [], periodos, categoriasDestino, materias, estudiantes, onClose, onCopiado }) {
   // De qué planilla traer las notas: esta misma (otra materia), otro curso o un grupo mixto.
   const [gradoOrigen, setGradoOrigen] = useState(gradoId);
@@ -1500,13 +1551,22 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
   const colorPorActividad = {};
   gruposCategoria.forEach((g) => g.items.forEach((a) => { colorPorActividad[a.id] = g.color; }));
 
+  // ¿Cuántos estudiantes tienen nota en cada columna? (las automáticas se calculan solas)
+  const conteoNotas = {};
+  actividades.forEach((a) => { conteoNotas[a.id] = Object.values(valores[a.id] || {}).filter((v) => v !== null && v !== undefined && v !== "").length; });
+  const esVacia = (a) => !a.es_automatica && conteoNotas[a.id] === 0;
+  const vacias = actividadesOrdenadas.filter(esVacia);
+  const [modificarAbierto, setModificarAbierto] = useState(false);
+
   const toggleSeleccion = (id) => {
     setSeleccionadas((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
   };
 
   const eliminarSeleccionadas = async () => {
     if (seleccionadas.length === 0) return;
-    if (!confirm(`¿Eliminar ${seleccionadas.length} columna${seleccionadas.length === 1 ? "" : "s"} de notas? Esta acción no se puede deshacer.`)) return;
+    const conNotas = actividadesOrdenadas.filter((a) => seleccionadas.includes(a.id) && !esVacia(a) && !a.es_automatica);
+    const aviso = conNotas.length ? `\n\n⚠️ ${conNotas.length} de ellas TIENEN NOTAS y esas notas se perderán:\n· ${conNotas.slice(0, 8).map((a) => `${a.nombre} (${conteoNotas[a.id]} notas)`).join("\n· ")}${conNotas.length > 8 ? "\n· …" : ""}` : "\n\nTodas están vacías (sin notas).";
+    if (!confirm(`¿Eliminar ${seleccionadas.length} columna${seleccionadas.length === 1 ? "" : "s"}? Esta acción no se puede deshacer.${aviso}`)) return;
     for (const id of seleccionadas) { await api.eliminarActividad(id); }
     setSeleccionadas([]);
     setSeleccionando(false);
@@ -1543,9 +1603,17 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
         <div className="flex flex-wrap items-center gap-1.5">
           <ChipCal Icono={Edit} onClick={() => setNotaMasivaAbierta(true)}>Nota masiva</ChipCal>
           <ChipCal Icono={FileText} onClick={() => setObservacionMasivaAbierta(true)}>Observación masiva</ChipCal>
+          {!seleccionando && <ChipCal onClick={() => setSeleccionando(true)}>☑️ Seleccionar columnas</ChipCal>}
 
           {seleccionando ? (
             <>
+              <ChipCal onClick={() => setSeleccionadas(vacias.map((a) => a.id))}>⚪ Seleccionar vacías ({vacias.length})</ChipCal>
+              <ChipCal onClick={() => setSeleccionadas(actividadesOrdenadas.map((a) => a.id))}>☑️ Todas</ChipCal>
+              <ChipCal onClick={() => setSeleccionadas([])}>Ninguna</ChipCal>
+              <button onClick={() => setModificarAbierto(true)} disabled={seleccionadas.length === 0}
+                className="text-xs font-semibold px-3 py-2 rounded-xl bg-violet-500 text-white disabled:opacity-40">
+                ✎ Modificar {seleccionadas.length > 0 ? `(${seleccionadas.length})` : ""}
+              </button>
               <button onClick={eliminarSeleccionadas} disabled={seleccionadas.length === 0}
                 className="text-xs font-semibold px-3 py-2 rounded-xl bg-rose-500 text-white disabled:opacity-40">
                 🗑 Eliminar {seleccionadas.length > 0 ? `(${seleccionadas.length})` : ""}
@@ -1564,7 +1632,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
                 { Icono: FileText, label: "Copiar planilla a otro curso", onClick: () => setCopiarPlanillaAbierto(true) },
                 { Icono: Archive, label: "Importar de Moodle/Excel", onClick: () => setImportarMoodleAbierto(true) },
                 { separador: true },
-                { emoji: "🗑", label: "Borrar varias columnas", peligro: true, onClick: () => setSeleccionando(true) },
+                { emoji: "☑️", label: "Seleccionar columnas (modificar o borrar)", onClick: () => setSeleccionando(true) },
               ]} />
             </div>
           )}
@@ -1602,6 +1670,12 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
                       )}
                       <span>{a.nombre}</span>
                       {a.fecha && <span className="text-[9px] text-slate-400 font-normal">({a.fecha.slice(5)})</span>}
+                      {!a.es_automatica && (
+                        <span className={`text-[9px] font-bold rounded-full px-1.5 py-0.5 ${conteoNotas[a.id] === 0 ? "bg-slate-200 text-slate-500" : "bg-emerald-100 text-emerald-700"}`}
+                          title={conteoNotas[a.id] === 0 ? "Sin notas: se puede borrar sin perder nada" : `${conteoNotas[a.id]} nota(s) cargada(s)`}>
+                          {conteoNotas[a.id] === 0 ? "⚪ vacía" : `🟢 ${conteoNotas[a.id]}`}
+                        </span>
+                      )}
                       {!seleccionando && (
                         <>
                           {!a.es_automatica && (
@@ -1726,6 +1800,10 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
         <AsistenciaNotaModal materiaId={materiaId} gradoId={gradoId} periodo={periodo} categorias={categorias} actividades={actividades}
           estudiantes={estudiantes} config={config} actividadInicial={asistNotaAbierta.actividad}
           onClose={() => setAsistNotaAbierta(null)} onAplicado={cargar} />
+      )}
+      {modificarAbierto && (
+        <ModificarColumnasModal ids={seleccionadas} actividades={actividades} categorias={categorias} periodos={periodosDe(config)} periodoActual={periodo}
+          onClose={() => setModificarAbierto(false)} onListo={() => { setModificarAbierto(false); setSeleccionadas([]); setSeleccionando(false); cargar(); }} />
       )}
       {copiarColumnasAbierto && (
         <CopiarColumnasModal materiaDestinoId={materiaId} gradoId={gradoId} grados={grados} periodos={periodosDe(config)} categoriasDestino={categorias} materias={materias} estudiantes={estudiantes}
