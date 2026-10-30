@@ -1,5 +1,6 @@
 import { bandaDesempeno, notaFinalPonderada } from "../lib/calificaciones";
 import React, { useEffect, useState } from "react";
+import { fetchPeriodosActualesEstudiante } from "../lib/periodoActualApi";
 import * as api from "../lib/api";
 import { RubricaCalificadaAlumno } from "../components/Rubrica";
 import BonoEnCurso from "../screens/BonoEnCurso";
@@ -251,9 +252,9 @@ export function MisNotas({ estudianteId }) {
       .then(async ([d, c]) => {
         setDatos(d); setComentarios(c); setCargando(false);
         // periodo "actual" de cada materia, según la configuración del docente
-        const ids = [...new Set([...d.finales.map((f) => f.materia_id), ...d.valores.map((v) => v.notas_actividades?.materia_id)].filter((x) => x != null))];
-        const pares = await Promise.all(ids.map((id) => api.fetchNotasConfig(id).then((cfg) => [id, cfg?.periodo_actual]).catch(() => [id, null])));
-        setPeriodoActualDe(Object.fromEntries(pares.filter(([, p]) => p != null && p !== "")));
+        // Función segura del servidor (SQL 128). Si todavía no existe, se usa el periodo más reciente con actividades.
+        // OJO: no se lee notas_config directamente: al estudiante la seguridad se lo oculta y devolvía "Periodo 1" por defecto.
+        try { setPeriodoActualDe(await fetchPeriodosActualesEstudiante(estudianteId)); } catch { setPeriodoActualDe({}); }
       })
       .catch((e) => { setError(e.message); setCargando(false); });
   }, [estudianteId]);
