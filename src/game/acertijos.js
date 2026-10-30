@@ -7,6 +7,8 @@ export const TIPOS_ACERTIJO = {
   sopa: { nombre: "Sopa de letras", emoji: "🔤", ayuda: "Escribe las palabras a buscar, separadas por comas o una por línea (de 3 a 14 letras). Ejemplo: PAZ, RESPETO, JUSTICIA" },
   cripto: { nombre: "Criptograma", emoji: "🔐", ayuda: "Escribe la frase secreta (mínimo 8 letras). El estudiante la descifra: cada letra se oculta detrás de un número." },
   ahorcado: { nombre: "Ahorcado", emoji: "🪢", ayuda: "Escribe la palabra o frase que hay que adivinar (mínimo 3 letras). Usa la pista para orientar." },
+  escalera: { nombre: "Escalera millonaria", emoji: "🪜", ayuda: "Una pregunta por línea, de la más fácil a la más difícil: pregunta | respuesta correcta | incorrecta | incorrecta | incorrecta (de 1 a 3 incorrectas). De 5 a 15 preguntas. El estudiante sube un escalón por cada acierto; tiene un comodín 50/50 y una segunda oportunidad. Gana si llega arriba." },
+  apuesta: { nombre: "Apuesta tu respuesta", emoji: "🎲", ayuda: "Una pregunta por línea: pregunta | respuesta correcta | incorrecta | incorrecta | incorrecta (de 1 a 3 incorrectas). De 5 a 20 preguntas (se usan 10 al azar). El estudiante empieza con 100 puntos, apuesta antes de contestar y gana si termina con 150 o más." },
   rosco: { nombre: "Rosco de palabras", emoji: "🎡", ayuda: "Una palabra por línea, con su definición: respuesta | definición. La letra del rosco es la inicial de la respuesta. Si quieres «contiene la X», escribe X: respuesta | definición. De 5 a 26 líneas. Ejemplo: AUTONOMIA | Capacidad de decidir por uno mismo. Gana quien acierta al menos el 70 %." },
   rompe: { nombre: "Rompecabezas", emoji: "🧩", ayuda: "Opcional: el enlace (URL) de una imagen para armar. Si lo dejas vacío, las fichas llevan números." },
 };
@@ -162,11 +164,36 @@ export const aciertaRosco = (item, intento) => soloLetras(intento) === item.resp
 export const metaRosco = (n) => Math.ceil(n * 0.7);
 export const segundosRosco = (n) => Math.max(60, n * 10);
 
+// =====================================================================================
+//  PREGUNTAS DE OPCIÓN MÚLTIPLE (Escalera millonaria y Apuesta tu respuesta)
+//  Cada línea:  pregunta | correcta | incorrecta | incorrecta | incorrecta
+// =====================================================================================
+export function parsearPreguntas(texto) {
+  const lista = [];
+  String(texto ?? "").split(/\n+/).forEach((linea) => {
+    const t = linea.split("|").map((x) => x.trim()).filter((x) => x.length);
+    if (t.length < 3) return;
+    const [pregunta, correcta, ...malas] = t;
+    const vistas = new Set([correcta.toLowerCase()]); const inc = [];
+    malas.slice(0, 3).forEach((m) => { if (!vistas.has(m.toLowerCase())) { vistas.add(m.toLowerCase()); inc.push(m); } });
+    if (inc.length) lista.push({ pregunta, correcta, incorrectas: inc });
+  });
+  return lista;
+}
+const msgPreguntas = (tipo, contenido) => {
+  const n = parsearPreguntas(contenido).length, lineas = String(contenido || "").split(/\n+/).filter((l) => l.trim()).length;
+  const [min, max] = tipo === "escalera" ? [5, 15] : [5, 20];
+  if (n < min) return `Escribe al menos ${min} preguntas con el formato «pregunta | correcta | incorrecta | incorrecta» (ahora hay ${n}${lineas > n ? `; ${lineas - n} línea(s) no se entienden` : ""}).`;
+  if (n > max) return `Este juego admite máximo ${max} preguntas (hay ${n}).`;
+  return "";
+};
+
 // ¿El contenido que escribió la docente sirve para ese tipo? Devuelve "" si está bien o el mensaje de error.
 export function validarContenido(tipo, contenido, { tam } = {}) {
   if (tipo === "sopa") { const p = parsearPalabras(contenido); if (p.length < 3) return "Escribe al menos 3 palabras válidas (de 3 a 14 letras, separadas por comas)."; const s = crearSopa(p, { tam, rand: rng(7) }); return s.imposible ? "Las palabras no caben en la sopa; usa menos o más cortas." : ""; }
   if (tipo === "cripto") { const c = crearCripto(contenido, { rand: rng(7) }); return c.imposible ? (c.motivo === "muchas" ? "La frase tiene demasiadas letras distintas." : "La frase es muy corta (mínimo 8 letras y 4 letras distintas).") : ""; }
   if (tipo === "ahorcado") return crearAhorcado(contenido).imposible ? "Escribe una palabra o frase de al menos 3 letras (2 distintas)." : "";
+  if (tipo === "escalera" || tipo === "apuesta") return msgPreguntas(tipo, contenido);
   if (tipo === "rosco") { const n = parsearRosco(contenido).length; const lineas = String(contenido || "").split(/\n+/).filter((l) => l.trim()).length; return n < 5 ? `Escribe al menos 5 líneas válidas con el formato «respuesta | definición» (ahora hay ${n}${lineas > n ? `; ${lineas - n} línea(s) no se entienden` : ""}).` : ""; }
   if (tipo === "rompe") { const u = String(contenido || "").trim(); return u && !/^https?:\/\/\S+$/i.test(u) ? "La imagen debe ser un enlace que empiece por http:// o https://" : ""; }
   return "Tipo de acertijo desconocido.";
