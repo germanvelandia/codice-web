@@ -1009,8 +1009,8 @@ function PanelAcertijos({ cursos, niveles, gradoActual }) {
             </select></div>
         </div>
         <div className="mb-3"><label className="text-[11px] text-slate-500 block mb-1">Título (lo ve el estudiante)</label><input value={form.titulo} onChange={(e) => set("titulo", e.target.value)} maxLength={80} className={input} aria-label="Título" placeholder="Ej: Valores de convivencia" /></div>
-        <div className="mb-3"><label className="text-[11px] text-slate-500 block mb-1">{form.tipo === "rompe" ? "Enlace de la imagen (opcional)" : form.tipo === "sopa" ? "Palabras a buscar" : "Frase o palabra"}</label>
-          <textarea value={form.contenido} onChange={(e) => set("contenido", e.target.value)} rows={form.tipo === "rompe" ? 1 : 3} className={input} aria-label="Contenido" />
+        <div className="mb-3"><label className="text-[11px] text-slate-500 block mb-1">{form.tipo === "rompe" ? "Enlace de la imagen (opcional)" : form.tipo === "sopa" ? "Palabras a buscar" : form.tipo === "rosco" ? "Palabras y definiciones (una por línea)" : "Frase o palabra"}</label>
+          <textarea value={form.contenido} onChange={(e) => set("contenido", e.target.value)} rows={form.tipo === "rompe" ? 1 : form.tipo === "rosco" ? 9 : 3} className={input} aria-label="Contenido" />
           <div className="text-[11px] text-slate-400 mt-1">{T.ayuda}</div></div>
         <div className="mb-3"><label className="text-[11px] text-slate-500 block mb-1">Pista (opcional)</label><input value={form.pista} onChange={(e) => set("pista", e.target.value)} maxLength={140} className={input} aria-label="Pista" /></div>
         <div className="grid grid-cols-3 gap-3 mb-3">
