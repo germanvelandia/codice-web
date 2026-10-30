@@ -1356,11 +1356,18 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
   const [celdaRubricaAbierta, setCeldaRubricaAbierta] = useState(null); // { actividad, estudianteId }
   const [resultadosRubrica, setResultadosRubrica] = useState({}); // { actividadId: { estudianteId: resultado } }
 
+  // Cada carga lleva un número: si mientras llega una respuesta ya se pidió otro periodo, la vieja se descarta
+  // (en conexiones lentas, como una tableta, la respuesta del Periodo 1 llegaba tarde y pisaba al Periodo 3).
+  const cargaN = useRef(0);
   const cargar = async () => {
+    const mi = ++cargaN.current;
+    const vigente = () => mi === cargaN.current;
     setCargando(true);
     const acts = await api.fetchActividades(materiaId, gradoId, periodo);
-    setActividades(acts);
+    if (!vigente()) return;
     const valoresRows = await api.fetchValores(acts.map((a) => a.id));
+    if (!vigente()) return;
+    setActividades(acts);
     const valMap = {};
     const obsMap = {};
     const rubMap = {};
@@ -1379,6 +1386,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
       api.fetchNotasFinales(materiaId),
       api.fetchBonosPlanilla(materiaId, periodo, estudiantes).catch(() => null),
     ]);
+    if (!vigente()) return;
     setXpMapa(xp);
     setFinalesGuardados(finales.filter((f) => f.periodo === periodo));
     if (bono) { setBonoCfg(bono.cfg); setBonosMapa(bono.bonos); } else { setBonoCfg(null); setBonosMapa({}); }
@@ -2226,7 +2234,12 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
   // para esa materia (no siempre en el Periodo 1).
   useEffect(() => {
     cargarConfigYCategorias().then((cfg) => {
-      if (cfg && periodoRecordado.current) { periodoRecordado.current = false; return; }
+      if (cfg && periodoRecordado.current) {
+        periodoRecordado.current = false;
+        // Se respeta el periodo recordado solo si no es anterior al vigente (si no, se quedaba pegado en el Periodo 1).
+        const rec = parseInt(leerPersistido("planillas_periodo"), 10), vig = parseInt(cfg.periodo_actual, 10);
+        if (!soloVigente || Number.isNaN(rec) || Number.isNaN(vig) || rec >= vig) return;
+      }
       if (cfg?.periodo_actual) setPeriodo(cfg.periodo_actual);
     });
   }, [materiaActualId]);
