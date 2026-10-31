@@ -5,7 +5,7 @@ import { errorLeccion } from "../lib/leccion";
 import { MODOS_NOTA, notaDeModulo } from "../lib/notasModulo";
 import { CrearModuloIA, CrearLeccionIA } from "./ModulosIA";
 import { EditorLeccion } from "./EditorLeccion";
-import { ModuloPrevia } from "./Modulosestudiante";
+import { ModuloPrevia } from "./ModulosEstudiante";
 import { nivelesDe, esNivel, claveNivel, nombreNivel, etiquetaPara } from "../lib/gradosMundo";
 
 const input = "w-full text-sm rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none bg-white";
@@ -26,6 +26,7 @@ export function ModulosAdmin({ grados = [] }) {
   const [previa, setPrevia] = useState(null);   // módulo que se está previsualizando
   const [leccionIA, setLeccionIA] = useState(null); // módulo al que se le agrega una lección con IA
   const [reflexiones, setReflexiones] = useState(null); // { actividad, filas } lo que escribieron los estudiantes
+  const [entregas, setEntregas] = useState(null); // { modulo, filas, curso, estado }
   const [guardando, setGuardando] = useState(false);
   const reloj = useRef(null);
   useEffect(() => () => clearTimeout(reloj.current), []);
@@ -95,6 +96,48 @@ export function ModulosAdmin({ grados = [] }) {
     const del = datos.actividades.filter((a) => a.modulo_id === leccionIA.id);
     return <CrearLeccionIA modulo={leccionIA} siguienteOrden={1 + Math.max(0, ...del.map((a) => a.orden || 0))} onCerrar={() => setLeccionIA(null)}
       onCreada={async () => { setLeccionIA(null); await cargar(); setAbierto(leccionIA.id); avisar("Lección creada ✓ Ábrela para ajustarla o agregar imágenes y videos."); }} />;
+  }
+  if (entregas) {
+    const { modulo, filas } = entregas, cursosE = [...new Set(filas.map((f) => f.grado_id))];
+    const vis = filas.filter((f) => (!entregas.curso || f.grado_id === entregas.curso) && (!entregas.estado || f.estado === entregas.estado));
+    const cuenta = (est) => filas.filter((f) => (!entregas.curso || f.grado_id === entregas.curso) && f.estado === est).length;
+    const ETQ = { completo: ["✅ Lo completó", "bg-emerald-100 text-emerald-700"], proceso: ["⏳ En proceso", "bg-amber-100 text-amber-700"], nada: ["⚪ No ha empezado", "bg-slate-100 text-slate-500"] };
+    const fmt = (d) => (d ? new Date(d).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" }) : "—");
+    const descargar = () => {
+      const q = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+      const csv = ["Grado,Estudiante,Actividades hechas,Total,Estado,Último envío", ...vis.map((f) => [f.grado_id, f.nombre, f.hechas, f.total, ETQ[f.estado][0].replace(/^\S+\s/, ""), fmt(f.ultimo)].map(q).join(","))].join("\n");
+      const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" })); a.download = `Modulo_${modulo.numero}_entregas.csv`; a.click();
+    };
+    return (
+      <div data-testid="entregas-modulo">
+        <button onClick={() => setEntregas(null)} className="text-sm text-violet-500 mb-3">← Volver a los módulos</button>
+        <h3 className="font-bold text-slate-800 mb-1">👥 Quién desarrolló · {modulo.emoji} Módulo {modulo.numero} · {modulo.nombre}</h3>
+        <div className="flex flex-wrap gap-2 items-center mb-3">
+          <select value={entregas.curso} onChange={(e) => setEntregas({ ...entregas, curso: e.target.value })} className="text-sm rounded-lg px-2 py-1 border border-slate-200 bg-white">
+            <option value="">Todos los cursos</option>{cursosE.map((c) => <option key={c} value={c}>Curso {c}</option>)}
+          </select>
+          {["completo", "proceso", "nada"].map((k) => (
+            <button key={k} onClick={() => setEntregas({ ...entregas, estado: entregas.estado === k ? "" : k })} className={`text-xs font-semibold rounded-full px-3 py-1 ${ETQ[k][1]} ${entregas.estado === k ? "ring-2 ring-violet-400" : ""}`}>{ETQ[k][0]} · {cuenta(k)}</button>
+          ))}
+          <button onClick={descargar} className="ml-auto text-xs font-semibold text-emerald-700 hover:underline">⬇ Descargar (Excel)</button>
+        </div>
+        {!vis.length ? <p className="text-sm text-slate-400">No hay estudiantes con ese filtro.</p> : (
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-[11px] uppercase text-slate-500"><tr><th className="text-left px-3 py-2">Grado</th><th className="text-left px-3 py-2">Estudiante</th><th className="text-left px-3 py-2">Avance</th><th className="text-left px-3 py-2">Envío</th><th className="text-left px-3 py-2">Último envío</th></tr></thead>
+              <tbody>{vis.map((f) => (
+                <tr key={f.estudiante_id} className="border-t border-slate-100">
+                  <td className="px-3 py-1.5 font-semibold text-slate-600">{f.grado_id}</td>
+                  <td className="px-3 py-1.5 text-slate-800">{f.nombre}</td>
+                  <td className="px-3 py-1.5 text-slate-600">{f.hechas}/{f.total}</td>
+                  <td className="px-3 py-1.5"><span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${ETQ[f.estado][1]}`}>{ETQ[f.estado][0]}</span></td>
+                  <td className="px-3 py-1.5 text-slate-500 text-xs">{fmt(f.ultimo)}</td>
+                </tr>))}</tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
   }
   if (reflexiones) {
     return (
@@ -211,6 +254,7 @@ export function ModulosAdmin({ grados = [] }) {
                     </button>
                     {!m.nota_activa && <button onClick={() => { setError(""); setFormM({ ...m, materia_id: m.materia_id || "", numero: String(m.numero), xp: String(m.xp), oro: String(m.oro), nota_activa: true, nota_categoria_id: m.nota_categoria_id || "", nota_periodo: m.nota_periodo || "", nota_modo: m.nota_modo || "proporcional", nota_nombre: m.nota_nombre || "", nota_auto: !!m.nota_auto }); setTimeout(() => { const el = document.querySelector("[data-testid=seccion-nota]"); if (el && el.scrollIntoView) el.scrollIntoView({ block: "center" }); }, 80); }} className="text-xs font-semibold text-slate-500 hover:text-emerald-700 hover:underline" aria-label="Configurar nota" data-testid={`config-nota-${m.id}`}>📒 Nota</button>}
                     {m.nota_activa && <button onClick={() => accion(async () => { const r = await api.sincronizarNotasModulo(m.id); setAviso(""); avisar(r.ok ? `📒 ${r.mensaje}` : r.mensaje, 7000); })} className="text-xs font-semibold text-emerald-700 hover:underline" aria-label="Actualizar notas" data-testid={`notas-${m.id}`}>📒 Actualizar notas</button>}
+                    <button onClick={() => accion(async () => setEntregas({ modulo: m, filas: await api.fetchEntregasModulo(m), curso: "", estado: "" }))} className="text-xs font-semibold text-sky-700 hover:underline" aria-label="Quién desarrolló el módulo" data-testid={`entregas-${m.id}`}>👥 Quién lo hizo</button>
                     <button onClick={() => setPrevia(m)} className="text-xs font-semibold text-violet-600 hover:underline" aria-label="Vista previa del módulo" data-testid={`previa-${m.id}`}>👁 Vista previa</button>
                     <button onClick={() => { setError(""); setFormM({ ...m, materia_id: m.materia_id || "", numero: String(m.numero), xp: String(m.xp), oro: String(m.oro) }); }} className="text-xs text-slate-400 hover:text-violet-600" aria-label="Editar módulo">✏️</button>
                     <button onClick={() => accion(() => api.alternarModulo(m.id, !m.activo), m.activo ? "Módulo oculto" : "Módulo visible")} className="text-xs text-slate-400 hover:text-violet-600" aria-label="Mostrar u ocultar">{m.activo ? "👁" : "🚫"}</button>
