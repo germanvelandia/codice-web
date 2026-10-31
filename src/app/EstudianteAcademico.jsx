@@ -320,21 +320,43 @@ export function MisNotas({ estudianteId }) {
       const ant = k > 0 ? filas[k - 1].nota : null;
       f.delta = f.esActual && ant != null && f.nota != null ? Math.round((f.nota - ant) * 10) / 10 : null;
     });
-    return { nombre: nombreMateria, filas, actual: filas.find((f) => f.esActual) || null };
+    // Nota final de la materia: promedio de los periodos que ya tienen nota (provisional si alguno sigue en curso)
+    const conNota = filas.filter((f) => f.nota != null);
+    const final = conNota.length ? Math.round((conNota.reduce((a, f) => a + Number(f.nota), 0) / conNota.length) * 10) / 10 : null;
+    return { nombre: nombreMateria, filas, actual: filas.find((f) => f.esActual) || null, final, finalProvisional: conNota.some((f) => f.enCurso), periodosConNota: conNota.length };
   });
+  const finalesMaterias = resumenMaterias.filter((r) => r.final != null);
+  const promedioFinalGeneral = finalesMaterias.length ? Math.round((finalesMaterias.reduce((a, r) => a + r.final, 0) / finalesMaterias.length) * 10) / 10 : null;
+  const bGeneral = promedioFinalGeneral != null ? bandaDesempeno(promedioFinalGeneral, config) : null;
 
   return (
     <div className="mt-4 pt-4 border-t border-slate-100">
       <div className="text-xs font-semibold text-slate-600 mb-2">📚 Mis notas</div>
+      {promedioFinalGeneral != null && (
+        <div className="rounded-2xl p-3 mb-3 flex items-center justify-between gap-3" style={{ background: `${bGeneral.color}15`, border: `1px solid ${bGeneral.color}44` }}>
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Mi nota final (promedio de todas las materias)</div>
+            <div className="text-[11px] text-slate-500">{finalesMaterias.some((r) => r.finalProvisional) ? "Provisional: incluye periodos en curso" : "Promedio de los periodos con nota"}</div>
+          </div>
+          <div className="text-right shrink-0">
+            <div className="text-2xl font-extrabold leading-none" style={{ color: bGeneral.color }}>{promedioFinalGeneral.toFixed(1)}</div>
+            <div className="text-[10px] font-bold" style={{ color: bGeneral.color }}>{bGeneral.label}</div>
+          </div>
+        </div>
+      )}
       <ResumenGeneral materias={resumenMaterias} config={config} />
       <div className="space-y-2">
         {Object.entries(materias).map(([nombreMateria, m]) => {
           const abierta = materiaAbierta === nombreMateria;
-          const { filas } = resumenMaterias.find((r) => r.nombre === nombreMateria);
+          const { filas, final: notaFinal, finalProvisional, periodosConNota } = resumenMaterias.find((r) => r.nombre === nombreMateria);
+          const bFinal = notaFinal != null ? bandaDesempeno(notaFinal, config) : null;
           return (
             <div key={nombreMateria} className="bg-slate-50 rounded-xl p-3">
               <button onClick={() => setMateriaAbierta(abierta ? null : nombreMateria)} className="w-full text-left">
-                <div className="text-sm font-semibold text-slate-800">{nombreMateria}</div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-sm font-semibold text-slate-800">{nombreMateria}</div>
+                  {bFinal && <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full shrink-0" style={{ background: `${bFinal.color}22`, color: bFinal.color }} title="Promedio de los periodos con nota">Final: {notaFinal.toFixed(1)}{finalProvisional && " 🕓"}</span>}
+                </div>
                 <div className="flex flex-wrap gap-1.5 mt-1">
                   {filas.map((f) => {
                     const b = bandaDesempeno(f.nota, config);
@@ -349,6 +371,7 @@ export function MisNotas({ estudianteId }) {
 
               {abierta && (
                 <div className="mt-2 pt-2 border-t border-slate-200 space-y-2">
+                  {bFinal && <div className="text-xs font-bold rounded-lg px-2.5 py-1.5" style={{ background: `${bFinal.color}15`, color: bFinal.color }}>🏁 Nota final: {notaFinal.toFixed(1)} ({bFinal.label}) · promedio de {periodosConNota} {periodosConNota === 1 ? "periodo" : "periodos"}{finalProvisional ? " · provisional" : ""}</div>}
                   {filas.map((f) => {
                     const b = bandaDesempeno(f.nota, config);
                     return (
