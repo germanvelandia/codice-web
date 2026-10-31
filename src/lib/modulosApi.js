@@ -3,6 +3,7 @@ import { supabase } from "./supabaseClient";
 import { gradoDeEstudiante, bonoEvento, aportarAComarca } from "./mundoApi";
 import { estadoModulos, resumenPorMateria, esCorrecta, errorActividad, errorModulo, limpiarActividad, ordenarModulos } from "./modulos";
 import { requeridos } from "./leccion";
+import { misionVisiblePara } from "./gradosMundo";
 import { planNotas, errorNotaModulo, nombreColumnaNota, textoResumenNotas } from "./notasModulo";
 
 const lanzar = (error) => { if (error) { const e = new Error(error.message || "error"); e.code = error.code; throw e; } };
@@ -262,4 +263,29 @@ export async function fetchReflexionesAdmin(actividadId) {
   const { data: es } = await supabase.from("estudiantes").select("id,nombre").in("id", ids);
   const nom = new Map((es || []).map((e) => [e.id, e.nombre]));
   return filas.map((f) => ({ ...f, nombre: nom.get(f.estudiante_id) || `Estudiante ${f.estudiante_id}` })).sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), "es"));
+}
+
+// Para la docente: quién desarrolló un módulo → [{ estudiante_id, nombre, grado_id, hechas, total, estado, ultimo }]
+// estado: "completo" | "proceso" | "nada". Incluye a los estudiantes que aún no empiezan.
+export async function fetchEntregasModulo(modulo) {
+  const [acts, avance, ests, cierres] = await Promise.all([
+    leerPaginado("modulo_actividades", "id,activa", (q) => q.eq("modulo_id", modulo.id)),
+    leerPaginado("modulo_avance", "id,estudiante_id,actividad_id,hecho_en", (q) => q.eq("modulo_id", modulo.id)),
+    leerPaginado("estudiantes", "id,nombre,grado_id,activo"),
+    supabase.from("modulo_cierres").select("estudiante_id").eq("modulo_id", modulo.id).then((r) => r.data || []),
+  ]);
+  const ids = new Set(acts.filter((a) => a.activa !== false).map((a) => Number(a.id)));
+  const por = new Map();
+  avance.forEach((r) => {
+    if (!ids.has(Number(r.actividad_id))) return;
+    const k = Number(r.estudiante_id); const o = por.get(k) || { n: new Set(), ult: null };
+    o.n.add(Number(r.actividad_id)); if (r.hecho_en && (!o.ult || r.hecho_en > o.ult)) o.ult = r.hecho_en; por.set(k, o);
+  });
+  const cerrado = new Set(cierres.map((c) => Number(c.estudiante_id)));
+  const total = ids.size;
+  return ests.filter((e) => e.activo !== false && e.activo !== 0 && misionVisiblePara(modulo.grado_id || "", e.grado_id)).map((e) => {
+    const o = por.get(Number(e.id)); const hechas = o ? o.n.size : 0;
+    const estado = (total > 0 && hechas >= total) || cerrado.has(Number(e.id)) ? "completo" : hechas > 0 ? "proceso" : "nada";
+    return { estudiante_id: e.id, nombre: e.nombre || `Estudiante ${e.id}`, grado_id: String(e.grado_id ?? ""), hechas, total, estado, ultimo: o?.ult || null };
+  }).sort((a, b) => a.grado_id.localeCompare(b.grado_id, "es", { numeric: true }) || String(a.nombre).localeCompare(String(b.nombre), "es"));
 }
