@@ -11,6 +11,8 @@ import { CATEGORIA_INFO_ESTUDIANTE } from "./EstudianteComunidad";
 
 // Resume, por materia, los periodos con nota (final o en curso calculada en vivo) —
 // misma lógica que usa "Mis notas", reutilizada acá para el aviso general.
+const TOTAL_PERIODOS_ANIO = 3; // periodos del año escolar
+
 export function resumenPorMateria(datos) {
   const materias = {};
   datos.finales.forEach((f) => {
@@ -335,8 +337,8 @@ export function MisNotas({ estudianteId }) {
       {promedioFinalGeneral != null && (
         <div className="rounded-2xl p-3 mb-3 flex items-center justify-between gap-3" style={{ background: `${bGeneral.color}15`, border: `1px solid ${bGeneral.color}44` }}>
           <div>
-            <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Mi nota final (promedio de todas las materias)</div>
-            <div className="text-[11px] text-slate-500">{finalesMaterias.some((r) => r.finalProvisional) ? "Provisional: incluye periodos en curso" : "Promedio de los periodos con nota"}</div>
+            <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Promedio del año (todas las materias)</div>
+            <div className="text-[11px] text-slate-500">{finalesMaterias.some((r) => r.finalProvisional) ? "Provisional: faltan periodos o alguno sigue en curso" : "Suma de los periodos ÷ número de periodos"}</div>
           </div>
           <div className="text-right shrink-0">
             <div className="text-2xl font-extrabold leading-none" style={{ color: bGeneral.color }}>{promedioFinalGeneral.toFixed(1)}</div>
@@ -355,7 +357,7 @@ export function MisNotas({ estudianteId }) {
               <button onClick={() => setMateriaAbierta(abierta ? null : nombreMateria)} className="w-full text-left">
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-sm font-semibold text-slate-800">{nombreMateria}</div>
-                  {bFinal && <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full shrink-0" style={{ background: `${bFinal.color}22`, color: bFinal.color }} title="Promedio de los periodos con nota">Final: {notaFinal.toFixed(1)}{finalProvisional && " 🕓"}</span>}
+                  {bFinal && <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full shrink-0" style={{ background: `${bFinal.color}22`, color: bFinal.color }} title="Promedio del año: suma de los periodos ÷ número de periodos">Año: {notaFinal.toFixed(1)}{finalProvisional && " 🕓"}</span>}
                 </div>
                 <div className="flex flex-wrap gap-1.5 mt-1">
                   {filas.map((f) => {
@@ -371,7 +373,7 @@ export function MisNotas({ estudianteId }) {
 
               {abierta && (
                 <div className="mt-2 pt-2 border-t border-slate-200 space-y-2">
-                  {bFinal && <div className="text-xs font-bold rounded-lg px-2.5 py-1.5" style={{ background: `${bFinal.color}15`, color: bFinal.color }}>🏁 Nota final: {notaFinal.toFixed(1)} ({bFinal.label}) · promedio de {periodosConNota} {periodosConNota === 1 ? "periodo" : "periodos"}{finalProvisional ? " · provisional" : ""}</div>}
+                  {bFinal && <div className="text-xs font-bold rounded-lg px-2.5 py-1.5" style={{ background: `${bFinal.color}15`, color: bFinal.color }}>🏁 Promedio del año: {notaFinal.toFixed(1)} ({bFinal.label}) · ({filas.filter((f) => f.nota != null).map((f) => `P${f.periodo}`).join(" + ")}) ÷ {periodosConNota}{periodosConNota < TOTAL_PERIODOS_ANIO || finalProvisional ? " · provisional" : ""}</div>}
                   {filas.map((f) => {
                     const b = bandaDesempeno(f.nota, config);
                     return (
