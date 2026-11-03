@@ -14,8 +14,8 @@
 //  Solo se guardan los cambios de los estudiantes; el terreno se genera igual cada vez con una semilla.
 // =====================================================================================
 
-export const SX = 128, SY = 40, SZ = 128, CH = 16, NCX = SX / CH, NCZ = SZ / CH;
-export const CENTRO = 64, RADIO_PLAZA = 26, RADIO_ADOQUIN = 12; // la aldea (53 × 53) está protegida; el empedrado de la plaza es de 25 × 25
+export const SX = 256, SY = 40, SZ = 256, CH = 16, NCX = SX / CH, NCZ = SZ / CH;
+export const CENTRO = 128, RADIO_PLAZA = 34, RADIO_ADOQUIN = 12; // la aldea (69 × 69) está protegida; el empedrado de la plaza es de 25 × 25
 const AIRE = 0, AGUA = 11, PORTAL = 12, ADOQUIN = 13;
 
 export const NOMBRES = { 1: "Pasto", 2: "Tierra", 3: "Piedra", 4: "Tronco", 5: "Hojas", 6: "Tablones", 7: "Ladrillo", 8: "Cristal", 9: "Arena", 10: "Mineral", 11: "Agua", 12: "Portal", 13: "Adoquín" };
@@ -27,7 +27,7 @@ export const RECETAS = [
   { sale: 8, n: 2, cuesta: { 9: 2 }, txt: "2 arena → 2 cristales" },
 ];
 // El Cruce de los Mundos (portales a otros cursos) está lejos de la aldea, al sureste.
-export const CRUCE = { x: 108, z: 104 };
+export const CRUCE = { x: 216, z: 200 };
 export const enPlazaProtegida = (x, z) => (Math.abs(x - CENTRO) <= RADIO_PLAZA && Math.abs(z - CENTRO) <= RADIO_PLAZA) || (Math.abs(x - CRUCE.x) <= 14 && Math.abs(z - CRUCE.z) <= 8);
 
 // atlas: 0 pasto arriba, 1 pasto lado, 2 tierra, 3 piedra, 4 tronco lado, 5 tronco arriba, 6 hojas, 7 tablones, 8 ladrillo, 9 cristal, 10 arena, 11 mineral, 12 agua, 13 portal, 14 adoquín
@@ -76,23 +76,34 @@ export function dibujarIcono(canvas, item) {
 const hashTxt = (s) => { let h = 2166136261 >>> 0; for (const ch of String(s)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return h; };
 function ruidoV(seed, x, z) {
   const xi = Math.floor(x), zi = Math.floor(z), xf = x - xi, zf = z - zi;
-  const h = (a, b) => { let n = Math.imul((a * 374761393 + b * 668265263 + seed) | 0, 1274126177); n = (n ^ (n >>> 13)) >>> 0; n = Math.imul(n, 1274126177) >>> 0; return (n ^ (n >>> 16)) / 4294967296; };
+  const h = (a, b) => { let n = Math.imul((a * 374761393 + b * 668265263 + seed) | 0, 1274126177); n = (n ^ (n >>> 13)) >>> 0; n = Math.imul(n, 1274126177) >>> 0; return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
   const sm = (t) => t * t * (3 - 2 * t);
   const a = h(xi, zi), b = h(xi + 1, zi), c = h(xi, zi + 1), d = h(xi + 1, zi + 1), u = sm(xf), v = sm(zf);
   return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
 }
-const MONTE = { x: 100, z: 26, r: 34 }, LAGO = { x: 64, z: 106, r: 22 };
+const MONTE = { x: 208, z: 48, r: 52 }, LAGO = { x: 128, z: 214, r: 34 };
+// Caminos de adoquín que salen de la plaza hacia cada terreno del reino: [nombre, puntos]
+export const CAMINOS = [
+  ["🌲 Bosque de la Curiosidad", [[116, 118], [116, 96], [96, 80], [70, 66], [58, 58]]],
+  ["⛰️ Montaña del Esfuerzo", [[140, 118], [140, 96], [160, 80], [184, 68], [200, 62]]],
+  ["🏞️ Lago y muelle", [[128, 141], [128, 166], [128, 184]]],
+  ["🌀 Cruce de los Mundos", [[142, 142], [172, 150], [198, 176], [206, 196]]],
+];
+function distSeg(x, z, a, b) { const dx = b[0] - a[0], dz = b[1] - a[1], l2 = dx * dx + dz * dz, t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / l2)); return Math.hypot(x - (a[0] + t * dx), z - (a[1] + t * dz)); }
+function distCamino(x, z) { let d = 1e9; for (const [, pts] of CAMINOS) for (let i = 0; i < pts.length - 1; i++) d = Math.min(d, distSeg(x, z, pts[i], pts[i + 1])); return d; }
 function altura(x, z, seed) {
   const n = ruidoV(seed, x * .06, z * .06) * .6 + ruidoV(seed + 1, x * .15, z * .15) * .3 + ruidoV(seed + 2, x * .4, z * .4) * .1;
-  let h = 12 + (n - .5) * 5;
+  let h = 13 + (n - .5) * 5; // el campo queda siempre sobre el nivel del agua (solo hay agua en el lago)
   const md = Math.hypot(x - MONTE.x, z - MONTE.z), mt = Math.max(0, 1 - md / MONTE.r);
   h += mt * mt * (3 - 2 * mt) * 24 * (.75 + .5 * ruidoV(seed + 3, x * .09, z * .09));
   const ld = Math.hypot((x - LAGO.x) * .8, z - LAGO.z), lg = Math.max(0, 1 - ld / LAGO.r);
   h -= lg * lg * (3 - 2 * lg) * 8;
-  const e = Math.max(Math.abs(x - CENTRO), Math.abs(z - CENTRO)), f = Math.min(1, Math.max(0, (e - RADIO_PLAZA) / 10)), ff = f * f * (3 - 2 * f);
+  const e = Math.max(Math.abs(x - CENTRO), Math.abs(z - CENTRO)), f = Math.min(1, Math.max(0, (e - RADIO_PLAZA) / 14)), ff = f * f * (3 - 2 * f);
   h = 12 + (h - 12) * ff;
   const ex = Math.max(0, Math.abs(x - CRUCE.x) - 16), ez = Math.max(0, Math.abs(z - CRUCE.z) - 10), pe = Math.max(ex, ez), pf = Math.min(1, pe / 8), pff = pf * pf * (3 - 2 * pf);
   h = 12 + (h - 12) * pff;
+  const dr = distCamino(x, z), fr = Math.min(1, Math.max(0, (dr - 2) / 6)), frr = fr * fr * (3 - 2 * fr); // los caminos van parejos
+  h = 12 + (h - 12) * frr;
   return Math.max(2, Math.min(SY - 8, Math.round(h)));
 }
 export function zonaDe(x, z) {
@@ -100,27 +111,27 @@ export function zonaDe(x, z) {
   if (Math.max(Math.abs(x - CENTRO), Math.abs(z - CENTRO)) <= RADIO_PLAZA + 3) return "Aldea del Códice";
   if (Math.hypot(x - MONTE.x, z - MONTE.z) < MONTE.r) return "Montaña del Esfuerzo";
   if (Math.hypot((x - LAGO.x) * .8, z - LAGO.z) < LAGO.r + 3) return "Lago";
-  if (x < 60 && z < 60) return "Bosque de la Curiosidad";
+  if (x < 110 && z < 110) return "Bosque de la Curiosidad";
   return "Campos de Oakhaven";
 }
 
 
 // ---------- la aldea: edificios con su lugar (las claves son las mismas del Mundo 2D) ----------
 export const EDIFICIOS = [
-  { key: "biblioteca", nombre: "Biblioteca", emoji: "📚", cx: 47, cz: 47, pared: 7 },
-  { key: "agora", nombre: "Ágora de la Ética", emoji: "⚖️", cx: 64, cz: 43, pared: 3 },
-  { key: "templo", nombre: "Templo de la Gratitud", emoji: "🕊️", cx: 81, cz: 47, pared: 9 },
-  { key: "mercado", nombre: "Mercado del Códice", emoji: "🛒", cx: 43, cz: 64, pared: 6 },
-  { key: "acertijos", nombre: "Casa de los Acertijos", emoji: "🧩", cx: 85, cz: 64, pared: 7 },
-  { key: "comarca", nombre: "Sala de la Comarca", emoji: "🏰", cx: 47, cz: 81, pared: 3 },
-  { key: "posada", nombre: "Posada del Descanso", emoji: "🛏️", cx: 81, cz: 81, pared: 6 },
+  { key: "biblioteca", nombre: "Biblioteca", emoji: "📚", cx: 106, cz: 106, pared: 7 },
+  { key: "agora", nombre: "Ágora de la Ética", emoji: "⚖️", cx: 128, cz: 102, pared: 3 },
+  { key: "templo", nombre: "Templo de la Gratitud", emoji: "🕊️", cx: 150, cz: 106, pared: 9 },
+  { key: "mercado", nombre: "Mercado del Códice", emoji: "🛒", cx: 102, cz: 128, pared: 6 },
+  { key: "acertijos", nombre: "Casa de los Acertijos", emoji: "🧩", cx: 154, cz: 128, pared: 7 },
+  { key: "comarca", nombre: "Sala de la Comarca", emoji: "🏰", cx: 106, cz: 152, pared: 3 },
+  { key: "posada", nombre: "Posada del Descanso", emoji: "🛏️", cx: 150, cz: 152, pared: 6 },
 ];
 // Puntos de interés al aire libre (mismas claves de lugar que el Mundo 2D): [x, z, nombre]
 export const PUNTOS = {
-  claro: [28, 28, "Claro del Bosque"], arroyo: [36, 44, "Arroyo Cantarino"], mirador: [22, 46, "Mirador"], campamento: [44, 22, "Campamento del Ermitaño"],
-  cascada: [14, 32, "Cascada Escondida"], roble: [30, 10, "Gran Roble"], ruinas: [12, 12, "Ruinas Antiguas"],
-  sendero: [88, 42, "Sendero de Piedra"], cueva: [96, 46, "Cueva del Eco"], cumbre: [101, 26, "Cumbre"],
-  orilla: [50, 93, "Orilla"], muelle: [66, 93, "Muelle"], isla: [64, 106, "Isla Serena"],
+  claro: [62, 62, "Claro del Bosque"], arroyo: [90, 84, "Arroyo Cantarino"], mirador: [40, 96, "Mirador"], campamento: [92, 40, "Campamento del Ermitaño"],
+  cascada: [28, 70, "Cascada Escondida"], roble: [64, 26, "Gran Roble"], ruinas: [22, 22, "Ruinas Antiguas"],
+  sendero: [184, 68, "Sendero de Piedra"], cueva: [232, 84, "Cueva del Eco"], cumbre: [208, 48, "Cumbre"],
+  orilla: [100, 184, "Orilla"], muelle: [128, 188, "Muelle"], isla: [128, 214, "Isla Serena"],
 };
 // De qué lado está la puerta (mirando a la plaza)
 function ladoPuerta(e) { const dx = CENTRO - e.cx, dz = CENTRO - e.cz; return Math.abs(dx) > Math.abs(dz) ? { eje: "x", sg: Math.sign(dx) } : { eje: "z", sg: Math.sign(dz) }; }
@@ -128,8 +139,8 @@ function ladoPuerta(e) { const dx = CENTRO - e.cx, dz = CENTRO - e.cz; return Ma
 // ---------- portales (en el Cruce de los Mundos, lejos de la aldea) ----------
 // Marco de 4 de ancho × 5 de alto, hueco de 2 × 3. Dos filas sobre una plataforma de piedra.
 export function posicionesPortales(n) {
-  const xs = [98, 104, 110, 116], res = [];
-  for (let i = 0; i < Math.min(8, n); i++) res.push({ x: xs[i % 4], z: i < 4 ? 100 : 108, y: 13 });
+  const xs = [-10, -4, 2, 8].map((o) => CRUCE.x + o), res = [];
+  for (let i = 0; i < Math.min(8, n); i++) res.push({ x: xs[i % 4], z: CRUCE.z + (i < 4 ? -4 : 4), y: 13 });
   return res;
 }
 
@@ -150,16 +161,17 @@ export function iniciarMundo3D(host, ctx) {
   for (let z = 0; z < SZ; z++) for (let x = 0; x < SX; x++) {
     const h = altura(x, z, semilla); alt[z * SX + x] = h;
     const enPlaza = Math.max(Math.abs(x - CENTRO), Math.abs(z - CENTRO)) <= RADIO_ADOQUIN, nearLago = Math.hypot((x - LAGO.x) * .8, z - LAGO.z) < LAGO.r + 3;
+    const enCamino = distCamino(x, z) <= 1.5; // los caminos son de adoquín
     for (let y = 0; y <= h; y++) {
       let b;
-      if (y === h) b = enPlaza ? ADOQUIN : (h <= 11 || (h === 12 && nearLago)) ? 9 : (h >= 30 ? 3 : 1);
-      else if (y >= h - 3) b = (h <= 11 || nearLago && h <= 12) ? 9 : (h >= 30 ? 3 : 2);
+      if (y === h) b = (enPlaza || enCamino) ? ADOQUIN : (nearLago && h <= 12) ? 9 : (h >= 30 ? 3 : 1);
+      else if (y >= h - 3) b = (nearLago && h <= 12) ? 9 : (h >= 30 ? 3 : 2);
       else { b = 3; if (y > 1 && y < h - 5 && rnd() < .03) b = 10; }
       mundo[idx(x, y, z)] = b;
     }
     for (let y = h + 1; y <= 11; y++) mundo[idx(x, y, z)] = AGUA;
   }
-  for (let i = 0; i < 18; i++) { // cuevas
+  for (let i = 0; i < 50; i++) { // cuevas
     let cx = (rnd() * SX) | 0, cy = 4 + ((rnd() * 8) | 0), cz = (rnd() * SZ) | 0; const r = 2;
     for (let k = 0; k < 18; k++) {
       for (let dz = -r; dz <= r; dz++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
@@ -172,6 +184,7 @@ export function iniciarMundo3D(host, ctx) {
     const a = alt[z * SX + x]; if (mundo[idx(x, a, z)] !== 1) continue;
     if (Math.max(Math.abs(x - CENTRO), Math.abs(z - CENTRO)) < RADIO_PLAZA + 6) continue;
     if (Math.abs(x - CRUCE.x) < 20 && Math.abs(z - CRUCE.z) < 14) continue;
+    if (distCamino(x, z) < 4) continue;
     const p = zonaDe(x, z) === "Bosque de la Curiosidad" ? .035 : .004;
     if (rnd() < p) {
       const t = 4 + ((rnd() * 2) | 0);
@@ -184,22 +197,14 @@ export function iniciarMundo3D(host, ctx) {
   // el Cruce de los Mundos: plataforma de adoquín y un camino que sale de la aldea
   const portalesZona = []; const etiquetas = [];
   for (let dz = -6; dz <= 6; dz++) for (let dx = -12; dx <= 12; dx++) { const x = CRUCE.x + dx, z = CRUCE.z + dz; mundo[idx(x, 12, z)] = ADOQUIN; for (let y = 13; y <= 19; y++) mundo[idx(x, y, z)] = AIRE; }
-  { const ruta = [[88, 72], [100, 88], [104, 98]];
-    for (let k = 0; k < ruta.length - 1; k++) {
-      const [x0, z0] = ruta[k], [x1, z1] = ruta[k + 1], pasos = Math.ceil(Math.hypot(x1 - x0, z1 - z0) * 2);
-      for (let i = 0; i <= pasos; i++) {
-        const cx = Math.round(x0 + (x1 - x0) * i / pasos), cz = Math.round(z0 + (z1 - z0) * i / pasos);
-        for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
-          const x = cx + dx, z = cz + dz, a = Math.max(12, alt[z * SX + x]); if (enPlazaProtegida(x, z)) continue;
-          for (let y = alt[z * SX + x] + 1; y < a; y++) mundo[idx(x, y, z)] = 2; // si hay agua o un hueco, se rellena: el camino siempre se puede pisar
-          mundo[idx(x, a, z)] = ADOQUIN; for (let y = a + 1; y <= a + 6; y++) mundo[idx(x, y, z)] = AIRE;
-        }
-      }
-    }
-    const a0 = alt[73 * SX + 90]; for (let k = 1; k <= 3; k++) mundo[idx(90, a0 + k, 73)] = 4; mundo[idx(90, a0 + 4, 73)] = 6;
-    etiquetas.push({ x: 90.5, y: a0 + 5.6, z: 73.5, texto: "➡ Cruce de los Mundos", clase: "edif" });
-    etiquetas.push({ x: CRUCE.x + .5, y: 20.5, z: CRUCE.z + .5, texto: "🌀 Cruce de los Mundos", clase: "edif" });
+  // letreros en cada camino (donde sale de la aldea) y el letrero del Cruce
+  for (const [nombre, pts] of CAMINOS) {
+    let px = pts[0][0], pz = pts[0][1];
+    outer: for (let k = 0; k < pts.length - 1; k++) { const [x0, z0] = pts[k], [x1, z1] = pts[k + 1], n = Math.ceil(Math.hypot(x1 - x0, z1 - z0)); for (let i = 0; i <= n; i++) { px = Math.round(x0 + (x1 - x0) * i / n); pz = Math.round(z0 + (z1 - z0) * i / n); if (Math.max(Math.abs(px - CENTRO), Math.abs(pz - CENTRO)) >= RADIO_PLAZA + 3) break outer; } }
+    const sx = px + 3, a0 = alt[pz * SX + sx]; for (let k = 1; k <= 3; k++) mundo[idx(sx, a0 + k, pz)] = 4; mundo[idx(sx, a0 + 4, pz)] = 6;
+    etiquetas.push({ x: sx + .5, y: a0 + 5.6, z: pz + .5, texto: nombre, clase: "edif" });
   }
+  etiquetas.push({ x: CRUCE.x + .5, y: 20.5, z: CRUCE.z + .5, texto: "🌀 Cruce de los Mundos", clase: "edif" });
   // portales
   posicionesPortales((ctx.portales || []).length).forEach((p, i) => {
     const info = ctx.portales[i];
@@ -231,12 +236,23 @@ export function iniciarMundo3D(host, ctx) {
     mundo[idx(e.cx, y0 + 1, e.cz)] = 6; mundo[idx(e.cx + 1, y0 + 1, e.cz)] = 6; // una mesa al centro
     etiquetas.push({ x: e.cx + .5, y: y0 + 9.2, z: e.cz + .5, texto: e.emoji + " " + e.nombre, clase: "edif" });
   }
-  for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) if (dx * dx + dz * dz <= 5) { // la isla del lago
-    const x = 64 + dx, z = 106 + dz; for (let y = 1; y <= 12; y++) if (!mundo[idx(x, y, z)] || mundo[idx(x, y, z)] === AGUA) mundo[idx(x, y, z)] = 9;
+  for (let z = LAGO.z - 30; z <= LAGO.z - 12; z++) for (let x = LAGO.x - 1; x <= LAGO.x + 1; x++) { mundo[idx(x, 12, z)] = 6; for (let y = 13; y <= 16; y++) mundo[idx(x, y, z)] = AIRE; } // el muelle
+  for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) if (dx * dx + dz * dz <= 10) { // la isla del lago
+    const x = LAGO.x + dx, z = LAGO.z + dz; for (let y = 1; y <= 12; y++) if (!mundo[idx(x, y, z)] || mundo[idx(x, y, z)] === AGUA) mundo[idx(x, y, z)] = 9;
   }
 
   // ----- personajes (NPC) -----
   let npcs = [];
+  // el suelo firme más cercano a un punto (nunca agua, árboles ni huecos): ahí se paran los personajes al aire libre
+  function firme(x0, z0) {
+    for (let r = 0; r <= 10; r++) for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+      const x = x0 + dx, z = z0 + dz; if (x < 2 || z < 2 || x >= SX - 2 || z >= SZ - 2) continue;
+      let y = SY - 3; while (y > 0 && !mundo[idx(x, y, z)]) y--;
+      if (y >= 12 && [1, 2, 3, 6, 9, 13].includes(mundo[idx(x, y, z)]) && !mundo[idx(x, y + 1, z)] && !mundo[idx(x, y + 2, z)]) return { x: x + .5, z: z + .5, y: y + 1 };
+    }
+    return { x: x0 + .5, z: z0 + .5, y: 13 };
+  }
   function posNpc(lista) {
     const porLugar = {};
     for (const n of lista) (porLugar[n.lugar || "plaza"] = porLugar[n.lugar || "plaza"] || []).push(n);
@@ -249,8 +265,7 @@ export function iniciarMundo3D(host, ctx) {
           x = d.eje === "x" ? ed.cx + fondo + .5 : ed.cx + o + .5; z = d.eje === "x" ? ed.cz + o + .5 : ed.cz + fondo + .5;
         } else if (lugar === "plaza" || !PUNTOS[lugar]) { const a = (i / Math.max(1, ns.length)) * Math.PI * 2 + .6; x = CENTRO + .5 + Math.cos(a) * 6; z = CENTRO + .5 + Math.sin(a) * 6 - 1; }
         else {
-          const pt = PUNTOS[lugar] || [CENTRO + 34 + (hashTxt(lugar) % 20), CENTRO - 30 + (hashTxt(lugar + "z") % 20), lugar];
-          x = pt[0] + .5 + i * 1.6; z = pt[1] + .5; y = alt[Math.floor(z) * SX + Math.floor(x)] + 1; if (lugar === "isla") y = 13;
+          const pt = PUNTOS[lugar], f = firme(pt[0] + i * 2, pt[1]); x = f.x; z = f.z; y = f.y;
         }
         res.push({ ...n, x, y, z, r: ed ? (ns.length > 3 ? .8 : 1.5) : lugar === "plaza" || !PUNTOS[lugar] ? 2.5 : 2 });
       });
@@ -615,7 +630,7 @@ export function iniciarMundo3D(host, ctx) {
     gl.enableVertexAttribArray(loc.p); gl.enableVertexAttribArray(loc.u); gl.enableVertexAttribArray(loc.s);
     for (let cz = 0; cz < NCZ; cz++) for (let cx = 0; cx < NCX; cx++) {
       const ch = chunks[cz * NCX + cx]; if (!ch || !ch.n) continue;
-      const dx = cx * CH + CH / 2 - jug.x, dz = cz * CH + CH / 2 - jug.z; if (dx * dx + dz * dz > 110 * 110) continue;
+      const dx = cx * CH + CH / 2 - jug.x, dz = cz * CH + CH / 2 - jug.z; if (dx * dx + dz * dz > 100 * 100) continue;
       gl.bindBuffer(gl.ARRAY_BUFFER, ch.pb); gl.vertexAttribPointer(loc.p, 3, gl.FLOAT, false, 0, 0);
       gl.bindBuffer(gl.ARRAY_BUFFER, ch.ub); gl.vertexAttribPointer(loc.u, 2, gl.FLOAT, false, 0, 0);
       gl.bindBuffer(gl.ARRAY_BUFFER, ch.sb); gl.vertexAttribPointer(loc.s, 1, gl.FLOAT, false, 0, 0);
