@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { iniciarMundo3D, dibujarIcono, COLOCABLES, NOMBRES, RECETAS } from "../game3d/mundo3d";
+import { iniciarMundo3D, dibujarIcono, COLOCABLES, MATERIALES, HERRAMIENTAS, NOMBRES, RECETAS } from "../game3d/mundo3d";
 import * as api from "../lib/mundo3dApi";
 import * as mundoApi from "../lib/mundoApi";
 import * as apiGeneral from "../lib/api";
@@ -14,6 +14,13 @@ function Icono({ item }) {
   const ref = useRef(null);
   useEffect(() => { if (ref.current) dibujarIcono(ref.current, item); }, [item]);
   return <canvas ref={ref} width={16} height={16} style={{ width: 30, height: 30, imageRendering: "pixelated" }} />;
+}
+
+const GRUPOS_REC = ["Bloques básicos", "Materiales", "Herramientas", "Bloques valiosos", "Lanas"];
+function ListaRecetas({ inv, visitando, alFabricar }) {
+  return GRUPOS_REC.map((g) => { const rs = RECETAS.filter((r) => (r.g || "Bloques básicos") === g); if (!rs.length) return null;
+    return (<div key={g}><h4>{g}</h4>{rs.map((r) => { const puede = Object.entries(r.cuesta).every(([k, v]) => (inv[k] || 0) >= v);
+      return (<div key={r.sale} className="m3d-rec"><Icono item={r.sale} /><b>{NOMBRES[r.sale]}{r.n > 1 ? " ×" + r.n : ""}<br /><span style={{ fontWeight: 500, fontSize: 11, opacity: .75 }}>{r.txt}</span></b><button disabled={!puede || visitando} onClick={() => alFabricar(r)}>Fabricar</button></div>); })}</div>); });
 }
 
 // Ajustes de cámara: se recuerdan en este navegador
@@ -48,6 +55,16 @@ const CSS_ENTRADA = `
 .m3d-anillo-g{animation-duration:1.6s}
 @keyframes m3d-gira{to{transform:rotate(360deg)}}
 @keyframes m3d-pulso{50%{transform:scale(.88);filter:brightness(1.4)}}
+@media (pointer:coarse){.m3d-hot{bottom:12px;left:50%;max-width:calc(100% - 12px);overflow-x:auto;scrollbar-width:none}.m3d-hot::-webkit-scrollbar{display:none}.m3d-hot button{flex:0 0 auto}}
+@media (pointer:coarse) and (orientation:portrait){.m3d-hot{bottom:152px;left:6px;right:6px;transform:none;max-width:none;justify-content:flex-start}.m3d-aviso{top:92px;max-width:92%}.m3d-hud{max-width:62%}}
+@media (max-width:560px){.m3d-barra button .t{display:none}.m3d-barra button{padding:8px 10px;font-size:15px}.m3d-ajustes{max-height:70dvh;overflow:auto}}
+.m3d-inv{position:absolute;z-index:36;left:50%;top:50%;transform:translate(-50%,-50%);width:min(580px,calc(100% - 12px));max-height:calc(100% - 16px);overflow:auto;background:#111827f5;color:#fff;border:1px solid #fff4;border-radius:16px;padding:12px;font:13px system-ui,sans-serif}
+.m3d-inv h4{margin:10px 0 6px;font:800 12px system-ui,sans-serif;color:#c4b5fd;text-transform:uppercase;letter-spacing:.04em}
+.m3d-celdas{display:flex;flex-wrap:wrap;gap:6px}
+.m3d-celda{position:relative;width:54px;height:58px;border-radius:10px;border:2px solid #fff3;background:#0006;display:flex;flex-direction:column;align-items:center;justify-content:center;font:700 11px system-ui,sans-serif;color:#fff;cursor:default}
+.m3d-celda.sel{border-color:#fbbf24;background:#78350f66}.m3d-celda small{font-size:9px;font-weight:600;color:#cbd5e1;max-width:50px;text-align:center;line-height:1.05;overflow:hidden;max-height:22px}
+.m3d-rec{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid #fff2}.m3d-rec:first-of-type{border-top:0}
+.m3d-rec b{flex:1}.m3d-rec button{border:0;border-radius:8px;padding:6px 12px;background:#7c3aed;color:#fff;font:800 12px system-ui,sans-serif}.m3d-rec button:disabled{opacity:.35}
 @media (prefers-reduced-motion:reduce){.m3d-anillo,.m3d-anillo i{animation:none}.m3d-velo{transition:none}}`;
 
 export default function Mundo3D({ estudianteInfo }) {
@@ -74,6 +91,7 @@ export default function Mundo3D({ estudianteInfo }) {
   const [snd, setSnd] = useState(leerSnd), sndRef = useRef(null); sndRef.current = snd;
   const puertasRef = useRef({}), estado_ref = useRef({});
   const [ajustes, setAjustes] = useState(false);
+  const [mochila, setMochila] = useState(false), [pestana, setPestana] = useState("mochila"), mochilaRef = useRef(null);
   const [ampliado, setAmpliado] = useState(false);
   const [avatar, setAvatar] = useState(null), avatarRef = useRef(null); avatarRef.current = avatar;
   const [looks, setLooks] = useState({});
@@ -84,7 +102,8 @@ export default function Mundo3D({ estudianteInfo }) {
   const abrirVelo = (txt) => { setVeloTxt(txt); setVelo(true); setMinOk(false); clearTimeout(relojVelo.current); relojVelo.current = setTimeout(() => setMinOk(true), 1700); };
   useEffect(() => () => clearTimeout(relojVelo.current), []);
   useEffect(() => { if (velo && minOk && listo) { const t = setTimeout(() => setVelo(false), 150); return () => clearTimeout(t); } }, [velo, minOk, listo]);
-  const entrar = () => { abrirVelo("Cruzando el portal hacia el curso " + gradoVer + "…"); setEntrado(true); };
+  const esTactil = typeof matchMedia === "function" && matchMedia("(pointer:coarse)").matches;
+  const entrar = () => { if (esTactil) alternarPantalla(); abrirVelo("Cruzando el portal hacia el curso " + gradoVer + "…"); setEntrado(true); };
   const salir = () => { setEntrado(false); setVelo(false); setDialogo(null); };
   const avisar = (t) => { setMsg(t); clearTimeout(reloj.current); reloj.current = setTimeout(() => setMsg(""), 3500); };
   useEffect(() => () => clearTimeout(reloj.current), []);
@@ -176,6 +195,20 @@ export default function Mundo3D({ estudianteInfo }) {
     const p = {}; ZONAS.forEach((z) => { if (z.previa) p[z.key] = !!(estado[z.key] && estado[z.key].desbloqueada); });
     puertasRef.current = p; if (ctl.current) ctl.current.setPuertas(p);
   }, [estado, listo]);
+  // compañeros conectados: se envía mi posición y se reciben las de los demás (cada 2 s; en pausa si la pestaña está oculta)
+  const [conectados, setConectados] = useState(0);
+  useEffect(() => {
+    if (!est || !listo || !gradoVer) return; let vivo = true, busy = false;
+    const tic = async () => {
+      if (busy || document.hidden || !ctl.current) return; busy = true;
+      try {
+        const p = ctl.current.posicion(), lista = await api.latidoMundo3D(est, gradoVer, p.x, p.y, p.z, p.yaw, avatarRef.current);
+        if (vivo && ctl.current) { ctl.current.setOtros(lista); setConectados(lista.length); }
+      } catch (_) { /* sin el SQL 136 o sin red: simplemente no se ven compañeros */ } finally { busy = false; }
+    };
+    tic(); const r = setInterval(tic, 2000);
+    return () => { vivo = false; clearInterval(r); setConectados(0); api.salirMundo3D(est).catch(() => {}); };
+  }, [est, listo, gradoVer]); // eslint-disable-line
   useEffect(() => { guardarSnd(snd); if (ctl.current) ctl.current.setSonido(snd); }, [snd, listo]);
   const cerrarDialogo = () => { setDialogo(null); ctl.current && ctl.current.pausar(false); };
   const alHecha = (id, r) => { setDatos((d) => ({ ...d, hechas: new Set([...d.hechas, id]) })); if (r && typeof r.xp === "number") setProg({ xp: r.xp, oro: r.oro }); };
@@ -216,6 +249,8 @@ export default function Mundo3D({ estudianteInfo }) {
           alSeleccion: (i) => { selRef.current = i; setSel(i); },
           alZona: setZona, alError: (t) => avisar(t),
           puertas: puertasRef.current, sonido: sndRef.current,
+          alInventario: () => mochilaRef.current && mochilaRef.current(true),
+          recolectar: async (tipo) => { const r = await api.recolectarMundo3D(est, tipo); if (r && r.item) fijarInv({ ...invRef.current, [r.item]: Math.min(999, (invRef.current[r.item] || 0) + (r.n || 1)) }); return r; },
           alPuerta: (k) => { const z = ZONAS.find((x) => x.key === k); const e = estado_ref.current[k] || {}; avisar("🔒 El portón de «" + (z ? z.nombre : k) + "» está cerrado." + (e.cumplido === false ? " Completa más misiones de la zona anterior." : " Vence al guardián de la zona anterior.")); },
           alPortal: (id) => { const t = "Viajando al mundo de " + (String(id) === miGrado ? "tu curso" : "curso " + id) + "…"; abrirVelo(t); setGradoVer(String(id)); },
         });
@@ -249,18 +284,20 @@ export default function Mundo3D({ estudianteInfo }) {
     try { if (el.requestFullscreen) { await el.requestFullscreen(); realRef.current = true; } else if (el.webkitRequestFullscreen) { el.webkitRequestFullscreen(); realRef.current = true; } } catch (_) { realRef.current = false; }
     setAmpliado(true);
   };
-  const abrirAjustes = (v) => { setAjustes(v); ctl.current && ctl.current.pausar(v); };
+  const abrirAjustes = (v) => { setAjustes(v); if (v) setMochila(false); ctl.current && ctl.current.pausar(v); };
+  const abrirMochila = (v) => { setMochila(v); if (v) setAjustes(false); ctl.current && ctl.current.pausar(v); };
+  mochilaRef.current = abrirMochila;
   const ciclarCamara = () => setCam((c) => ({ ...c, modo: (c.modo + 1) % 3 }));
 
   const elegir = (i) => { setSel(i); selRef.current = i; ctl.current && ctl.current.seleccionar(i); };
   const fabricar = async (r) => {
-    try { const res = await api.fabricarMundo3D(est, r.sale); fijarInv(Object.fromEntries(Object.entries(res.inventario || {}).map(([k, v]) => [Number(k), v]))); avisar("Fabricaste " + r.n + " de " + NOMBRES[r.sale].toLowerCase() + "."); }
+    try { const res = await api.fabricarMundo3D(est, r.sale); fijarInv(Object.fromEntries(Object.entries(res.inventario || {}).map(([k, v]) => [Number(k), v]))); avisar("Fabricaste " + (r.n > 1 ? r.n + " de " : "") + NOMBRES[r.sale].toLowerCase() + "."); }
     catch (er) { avisar(/sin_material/.test(er.message) ? "No tienes suficiente material." : /demasiado_rapido/.test(er.message) ? "Vas muy rápido." : "No se pudo fabricar."); }
   };
   const cambiarCalidad = () => { const v = !calidadAlta; setCalidadAlta(v); ctl.current && ctl.current.setCalidad(v); };
 
-  const barraBloques = COLOCABLES.map((id, i) => (
-    <button key={id} onClick={() => elegir(id)} aria-pressed={sel === id} aria-label={NOMBRES[id] + " (tecla " + (i + 1) + ")"}
+  const barraBloques = COLOCABLES.filter((id) => id <= 9 || (inv[id] || 0) > 0).map((id, i) => (
+    <button key={id} onClick={() => elegir(id)} aria-pressed={sel === id} aria-label={NOMBRES[id] + (i < 9 ? " (tecla " + (i + 1) + ")" : "")}
       className={`w-[52px] h-[56px] rounded-lg border-2 flex flex-col items-center pt-1 text-[11px] font-bold ${sel === id ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-white"} ${(inv[id] || 0) === 0 ? "opacity-50" : ""}`}>
       <Icono item={id} /><span className="text-slate-600">{inv[id] || 0}</span>
     </button>
@@ -275,6 +312,7 @@ export default function Mundo3D({ estudianteInfo }) {
         <span className="font-extrabold text-slate-800">🧊 Mundo 3D · {visitando ? "Visitando el curso " + gradoVer : "Mi curso " + gradoVer}</span>
         {prog.xp != null && <span className="text-[11px] font-bold rounded-full px-2.5 py-0.5 bg-amber-100 text-amber-700">⭐ {prog.xp} XP · 🪙 {prog.oro}</span>}
         {zona && <span className="text-[11px] font-bold rounded-full px-2.5 py-0.5 bg-emerald-100 text-emerald-700">📍 {zona}</span>}
+        {conectados > 0 && <span className="text-[11px] font-bold rounded-full px-2.5 py-0.5 bg-sky-100 text-sky-700">👥 {conectados + 1} conectados</span>}
         {visitando && <><span className="text-[11px] font-bold rounded-full px-2.5 py-0.5 bg-amber-100 text-amber-700">👀 Solo mirar</span>
           <button onClick={() => { abrirVelo("Volviendo a tu mundo…"); setGradoVer(miGrado); }} className="text-[11px] font-bold text-violet-600 hover:underline">← Volver a mi mundo</button></>}
         {entrado && <button onClick={salir} className="text-[11px] font-bold text-slate-500 hover:underline">Salir del mundo</button>}
@@ -302,10 +340,27 @@ export default function Mundo3D({ estudianteInfo }) {
         {entrado && !velo && (
           <>
             <div className="m3d-barra">
-              <button onClick={ciclarCamara} title="Cambiar cámara (tecla V)">📷 {MODOS_CAM[cam.modo]}</button>
+              <button onClick={ciclarCamara} title="Cambiar cámara (tecla V)">📷<span className="t"> {MODOS_CAM[cam.modo]}</span></button>
+              <button onClick={() => abrirMochila(!mochila)} aria-expanded={mochila} title="Mochila y fabricación (tecla I)">🎒<span className="t"> Mochila</span></button>
               <button onClick={() => abrirAjustes(!ajustes)} aria-expanded={ajustes} title="Ajustes de cámara">⚙️</button>
-              <button onClick={alternarPantalla} title={ampliado ? "Reducir la pantalla" : "Ampliar la pantalla"}>{ampliado ? "🗗 Reducir" : "⛶ Ampliar"}</button>
+              <button onClick={alternarPantalla} title={ampliado ? "Reducir la pantalla" : "Ampliar la pantalla"}>{ampliado ? "🗗" : "⛶"}<span className="t">{ampliado ? " Reducir" : " Ampliar"}</span></button>
             </div>
+            {mochila && (
+              <div className="m3d-inv" role="dialog" aria-label="Mochila">
+                <div className="m3d-seg" style={{ marginTop: 0 }}><button className={pestana === "mochila" ? "on" : ""} onClick={() => setPestana("mochila")}>🎒 Mochila</button><button className={pestana === "fabricar" ? "on" : ""} onClick={() => setPestana("fabricar")}>🔨 Fabricar</button></div>
+                {pestana === "mochila" ? (() => {
+                  const celda = (id, ponible) => (<button key={id} className={"m3d-celda" + (sel === id ? " sel" : "")} onClick={() => ponible && elegir(id)} style={{ cursor: ponible ? "pointer" : "default" }} title={NOMBRES[id]}><Icono item={id} /><span>{inv[id]}</span><small>{NOMBRES[id]}</small></button>);
+                  const tengo = (lista) => lista.filter((id) => (inv[id] || 0) > 0), hr = tengo(HERRAMIENTAS), bl = COLOCABLES.filter((id) => (inv[id] || 0) > 0), ma = tengo(MATERIALES);
+                  return (<>
+                    {hr.length > 0 && <><h4>Herramientas (se usan solas al picar)</h4><div className="m3d-celdas">{hr.map((id) => celda(id, false))}</div></>}
+                    <h4>Bloques (toca uno para elegirlo)</h4><div className="m3d-celdas">{bl.length ? bl.map((id) => celda(id, true)) : <span style={{ opacity: .7 }}>Aún no tienes bloques: pica el suelo.</span>}</div>
+                    {ma.length > 0 && <><h4>Materiales</h4><div className="m3d-celdas">{ma.map((id) => celda(id, false))}</div></>}
+                    <div style={{ marginTop: 10, color: "#cbd5e1", fontSize: 11 }}>Pica con pico para sacar carbón, hierro, oro y diamante. Esquila ovejas, recoge huevos y ordeña vacas con la tecla E. Fabrica herramientas mejores para picar más rápido.</div>
+                  </>);
+                })() : <ListaRecetas inv={inv} visitando={visitando} alFabricar={fabricar} />}
+                <button onClick={() => abrirMochila(false)} style={{ marginTop: 10, width: "100%", border: 0, borderRadius: 8, padding: 7, background: "#7c3aed", color: "#fff", fontWeight: 800 }}>Cerrar</button>
+              </div>
+            )}
             {ajustes && (
               <div className="m3d-ajustes" role="dialog" aria-label="Ajustes de cámara">
                 <b>Cámara</b>
@@ -324,7 +379,7 @@ export default function Mundo3D({ estudianteInfo }) {
             )}
             {ampliado && (
               <>
-                <div className="m3d-hud">{zona && <span>📍 {zona}</span>}{prog.xp != null && <span>⭐ {prog.xp} · 🪙 {prog.oro}</span>}{datos.duelos.insignias.map((k) => { const z = ZONAS.find((x) => x.key === k); return z ? <span key={k} title={z.insignia.nombre}>{z.insignia.emoji}</span> : null; })}</div>
+                <div className="m3d-hud">{zona && <span>📍 {zona}</span>}{conectados > 0 && <span>👥 {conectados + 1} conectados</span>}{prog.xp != null && <span>⭐ {prog.xp} · 🪙 {prog.oro}</span>}{datos.duelos.insignias.map((k) => { const z = ZONAS.find((x) => x.key === k); return z ? <span key={k} title={z.insignia.nombre}>{z.insignia.emoji}</span> : null; })}</div>
                 {msg && <div className="m3d-aviso" role="status">{msg}</div>}
                 <div className="m3d-hot">{barraBloques}</div>
               </>
@@ -340,16 +395,9 @@ export default function Mundo3D({ estudianteInfo }) {
 
       <div className="grid md:grid-cols-2 gap-3">
         <div className="rounded-xl border border-slate-200 p-3">
-          <div className="text-xs font-extrabold text-slate-700 mb-2">🔨 Taller</div>
-          {RECETAS.map((r) => {
-            const puede = Object.entries(r.cuesta).every(([k, v]) => (inv[k] || 0) >= v);
-            return (
-              <div key={r.sale} className="flex items-center justify-between gap-2 py-1.5 border-t border-slate-100 first:border-0">
-                <div><div className="text-sm font-semibold text-slate-800">{NOMBRES[r.sale]} ×{r.n}</div><div className="text-[11px] text-slate-500">{r.txt}</div></div>
-                <button disabled={!puede || visitando} onClick={() => fabricar(r)} className="text-xs font-bold rounded-lg px-3 py-1.5 bg-violet-600 text-white disabled:opacity-40">Fabricar</button>
-              </div>
-            );
-          })}
+          <div className="text-xs font-extrabold text-slate-700 mb-2">🔨 Taller · usa 🎒 Mochila dentro del juego (tecla I)</div>
+          <div className="text-[11px] text-slate-500">Pica troncos, piedra y minerales para conseguir materiales. Con 2 tablones haces 4 palos y con palos y tablones, tu primer pico. Después mejora a piedra, hierro y diamante.</div>
+          <div style={{ background: "#111827", color: "#fff", borderRadius: 10, padding: "4px 10px", marginTop: 8, maxHeight: 260, overflow: "auto" }} className="m3d-inv-lista"><style>{CSS_ENTRADA}</style><ListaRecetas inv={inv} visitando={visitando} alFabricar={fabricar} /></div>
         </div>
         <div className="rounded-xl border border-slate-200 p-3 text-sm text-slate-600">
           <div className="text-xs font-extrabold text-slate-700 mb-2">🧱 Tu construcción</div>
