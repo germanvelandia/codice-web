@@ -132,6 +132,8 @@ export const PUNTOS = {
   cascada: [28, 70, "Cascada Escondida"], roble: [64, 26, "Gran Roble"], ruinas: [22, 22, "Ruinas Antiguas"],
   sendero: [184, 68, "Sendero de Piedra"], cueva: [232, 84, "Cueva del Eco"], cumbre: [208, 48, "Cumbre"],
   orilla: [100, 184, "Orilla"], muelle: [128, 188, "Muelle"], isla: [128, 214, "Isla Serena"],
+  // guardianes de cada zona (duelo para ganar la insignia)
+  guardia_aldea: [138, 122, "Guardiana de la Aldea"], guardia_bosque: [67, 72, "Guardia del Bosque"], guardia_montana: [188, 72, "Guardia de la Montaña"], guardia_lago: [124, 178, "Guardia del Lago"],
 };
 // De qué lado está la puerta (mirando a la plaza)
 function ladoPuerta(e) { const dx = CENTRO - e.cx, dz = CENTRO - e.cz; return Math.abs(dx) > Math.abs(dz) ? { eje: "x", sg: Math.sign(dx) } : { eje: "z", sg: Math.sign(dz) }; }
@@ -296,6 +298,7 @@ export function iniciarMundo3D(host, ctx) {
   const estilo = document.createElement("style");
   estilo.textContent = `.m3d{position:relative;width:100%;overflow:hidden;background:#000;touch-action:none;user-select:none;-webkit-user-select:none;border-radius:8px}
 .m3d canvas{display:block;width:100%;aspect-ratio:16/9;cursor:crosshair;touch-action:none}
+.m3d-full .m3d{height:100vh;height:100dvh;border-radius:0}.m3d-full .m3d canvas{height:100%;aspect-ratio:auto}
 .m3d-mira{position:absolute;left:50%;top:50%;width:18px;height:18px;transform:translate(-50%,-50%);pointer-events:none}
 .m3d-mira:before,.m3d-mira:after{content:"";position:absolute;background:#fff;mix-blend-mode:difference}
 .m3d-mira:before{left:8px;top:0;width:2px;height:18px}.m3d-mira:after{top:8px;left:0;height:2px;width:18px}
@@ -393,25 +396,49 @@ export function iniciarMundo3D(host, ctx) {
     const piel = PIELES[h % 5], pelo = PELOS[(h >>> 3) % 6], ropa = hsl((h >>> 6) % 360, .5, .42), estilo = (h >>> 14) % 3;
     return { piel, pelo, ropa, manga: oscuro(ropa, .8), pant: hex("#3b3f55"), cinto: hex("#5a3b1e"), sombrero: oscuro(ropa, .7), estilo, k: .96 + ((h >>> 17) % 12) / 100, semilla: (h % 628) / 100 };
   }
+  // la apariencia del jugador: viene de su avatar (colores y accesorio) y se arma con las mismas piezas
+  function aspectoDesde(c) {
+    const ropa = hex(c.ropa || "#3b6fb6");
+    return { piel: hex(c.piel || "#e0ac84"), pelo: hex(c.pelo || "#4a2f1b"), ropa, manga: oscuro(ropa, .8), pant: hex(c.pant || "#3b3f55"), cinto: hex("#5a3b1e"), sombrero: oscuro(ropa, .7),
+      estilo: 0, largo: !!c.largo, acc: c.acc || null, accCol: hex(c.accCol || "#c9a227"), capa: c.capa ? hex(c.capa) : null, k: 1, semilla: 0.5 };
+  }
+  const aspectoJugadorDefecto = () => { const h = hashTxt("jug" + (ctx.yo || 0)); return { piel: ["#f1c9a5", "#e0ac84", "#c68642", "#9a6a45"][h % 4], pelo: ["#2b1b12", "#4a2f1b", "#8a5a2b", "#d6b25e"][(h >>> 3) % 4], ropa: "#" + hsl((h >>> 6) % 360, .5, .42).map((v) => Math.round(v * 255).toString(16).padStart(2, "0")).join(""), pant: "#3b3f55" }; };
   // cada pieza: [ancho, alto, fondo, desplazamiento x, y, z, color]
   const cuerpo = (a) => ({
+    capa: a.capa ? [[.5, .85, .05, 0, -.42, -.03, a.capa]] : null,
     piernaI: [[.25, .72, .27, 0, -.36, 0, a.pant]], piernaD: [[.25, .72, .27, 0, -.36, 0, a.pant]],
     torso: [[.56, .72, .32, 0, 1.08, 0, a.ropa], [.58, .08, .34, 0, .8, 0, a.cinto]],
     brazoI: [[.2, .4, .24, 0, -.2, 0, a.manga], [.18, .26, .22, 0, -.53, 0, a.piel]], brazoD: [[.2, .4, .24, 0, -.2, 0, a.manga], [.18, .26, .22, 0, -.53, 0, a.piel]],
     cabeza: [[.5, .5, .5, 0, .25, 0, a.piel], [.1, .14, .1, 0, .2, .3, oscuro(a.piel, .85)], [.08, .08, .03, -.12, .3, .26, [.1, .1, .12]], [.08, .08, .03, .12, .3, .26, [.1, .1, .12]], [.16, .03, .02, 0, .1, .255, [.45, .2, .2]],
-      [.54, .4, .08, 0, .3, -.27, a.pelo],
-      ...(a.estilo === 1 ? [[.88, .06, .88, 0, .52, 0, a.sombrero], [.42, .2, .42, 0, .65, 0, a.sombrero]] : [[.54, .14, .54, 0, .55, 0, a.pelo]]),
+      ...(a.largo ? [[.54, .72, .1, 0, .1, -.27, a.pelo], [.06, .4, .3, -.28, .2, -.08, a.pelo], [.06, .4, .3, .28, .2, -.08, a.pelo]] : [[.54, .4, .08, 0, .3, -.27, a.pelo]]),
+      ...(a.acc === "casco" ? [[.6, .26, .6, 0, .5, 0, a.accCol], [.08, .22, .04, 0, .3, .27, a.accCol]]
+        : a.acc === "capucha" ? [[.62, .12, .62, 0, .57, 0, a.sombrero], [.62, .56, .1, 0, .27, -.29, a.sombrero], [.08, .5, .5, -.29, .25, -.02, a.sombrero], [.08, .5, .5, .29, .25, -.02, a.sombrero]]
+        : a.acc === "corona" ? [[.54, .14, .54, 0, .55, 0, a.pelo], [.5, .08, .5, 0, .62, 0, a.accCol], [.08, .14, .08, -.18, .72, 0, a.accCol], [.08, .16, .08, 0, .73, 0, a.accCol], [.08, .14, .08, .18, .72, 0, a.accCol]]
+        : a.acc === "gafas" ? [[.54, .14, .54, 0, .55, 0, a.pelo], [.17, .13, .03, -.12, .3, .27, [.08, .08, .1]], [.17, .13, .03, .12, .3, .27, [.08, .08, .1]], [.08, .03, .03, 0, .31, .27, [.08, .08, .1]]]
+        : a.estilo === 1 ? [[.88, .06, .88, 0, .52, 0, a.sombrero], [.42, .2, .42, 0, .65, 0, a.sombrero]] : [[.54, .14, .54, 0, .55, 0, a.pelo]]),
       ...(a.estilo === 2 ? [[.4, .22, .08, 0, .08, .27, a.pelo]] : [])],
   });
+  const jugV = { n: { x: 0, y: 0, z: 0, hecha: true, tipo: "jugador" }, ap: null, partes: null, h: 0, fase: 0, amp: 0, cab: 0, nodFijo: 0, mover: false, habla: false, dist: 99 };
+  const ponerAvatar = (c) => { jugV.ap = aspectoDesde(c || aspectoJugadorDefecto()); jugV.partes = cuerpo(jugV.ap); };
+  ponerAvatar(ctx.avatar);
   let vis = [], hablandoCon = null;
   function limpiarNpcs() { vis.forEach((v) => v.el.remove()); vis = []; }
   function montarNpcs(lista) {
-    limpiarNpcs(); npcs = posNpc(lista || []);
+    const previos = new Map(vis.map((v) => [v.n.id, v])); vis.forEach((v) => v.el.remove()); vis = [];
+    npcs = posNpc(lista || []);
     for (const n of npcs) {
-      const ap = aspecto(n), el = document.createElement("div");
+      const viejo = previos.get(n.id), llave = JSON.stringify(n.look || null);
+      const el = document.createElement("div");
       el.className = "m3d-npc" + (n.hecha ? " ok" : ""); el.textContent = (n.hecha ? "✅ " : (n.marca || "❗ ")) + n.nombre; el.style.display = "none"; raiz.append(el);
-      vis.push({ n, ap, el, partes: cuerpo(ap), h: Math.atan2(CENTRO - n.x, CENTRO - n.z), x0: n.x, z0: n.z, obj: null, espera: 1 + Math.random() * 3, fase: ap.semilla, amp: 0, cab: 0, nod: 0 });
+      if (viejo && viejo.llave === llave) { // el mismo personaje: conserva su lugar, su paso y su rumbo
+        Object.assign(viejo.n, { nombre: n.nombre, hecha: n.hecha, marca: n.marca, tipo: n.tipo, emoji: n.emoji, zona: n.zona, misiones: n.misiones, r: n.r });
+        if (hablandoCon === viejo.n || hablandoCon === n) hablandoCon = viejo.n;
+        viejo.el = el; vis.push(viejo); continue;
+      }
+      const ap = n.look ? aspectoDesde(n.look) : aspecto(n);
+      vis.push({ n, ap, el, llave, partes: cuerpo(ap), h: Math.atan2(CENTRO - n.x, CENTRO - n.z), x0: n.x, z0: n.z, obj: null, espera: 1 + Math.random() * 3, fase: ap.semilla, amp: 0, cab: 0, nod: 0 });
     }
+    npcs = vis.map((v) => v.n);
   }
   const angDif = (a, b) => { let d = a - b; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; };
   // dónde pisaría un personaje en (x, z): busca el suelo cerca de la altura de referencia y exige 2 bloques libres arriba
@@ -451,7 +478,7 @@ export function iniciarMundo3D(host, ctx) {
   }
   function dibujarAldeano(v, t) {
     const n = v.n, a = v.ap, sw = Math.sin(v.fase) * .7 * v.amp, sue = Math.sin(t * 1.3 + a.semilla) * .04;
-    let bI = -sw * .8 + sue, bD = sw * .8 - sue, nod = 0;
+    let bI = -sw * .8 + sue, bD = sw * .8 - sue, nod = v.nodFijo || 0;
     if (v.habla) { bD = -.7 + Math.sin(t * 4 + a.semilla) * .4; bI = -.25 + Math.sin(t * 3.1) * .2; nod = Math.sin(t * 5) * .1; }
     else if (!v.mover && !n.hecha && n.tipo !== "posada" && v.dist < 9) bD = -2.7 + Math.sin(t * 7) * .4; // saluda con la mano
     const resp = 1 + Math.sin(t * 1.8 + a.semilla) * .012;
@@ -461,6 +488,7 @@ export function iniciarMundo3D(host, ctx) {
     grupo(mul(base, mul(T4(-.14, .72, 0), RX(sw))), P.piernaI); grupo(mul(base, mul(T4(.14, .72, 0), RX(-sw))), P.piernaD);
     grupo(base, P.torso);
     grupo(mul(base, mul(T4(-.4, 1.38, 0), RX(bI))), P.brazoI); grupo(mul(base, mul(T4(.4, 1.38, 0), RX(bD))), P.brazoD);
+    if (P.capa) grupo(mul(base, mul(T4(0, 1.4, -.17), RX(.12 + Math.abs(sw) * .5))), P.capa);
     grupo(mul(base, mul(T4(0, 1.44, 0), mul(RY(v.cab), RX(nod)))), P.cabeza);
   }
   montarNpcs(ctx.npcs);
@@ -470,9 +498,19 @@ export function iniciarMundo3D(host, ctx) {
   const mul = (a, b) => { const o = new Array(16); for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) { let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k]; o[c * 4 + r] = s; } return o; };
   const jug = { x: CENTRO + .5, y: 13.1, z: CENTRO + 6.5, vx: 0, vy: 0, vz: 0, suelo: false, yaw: 0, pitch: 0 };
   const ojo = () => jug.y + 1.6;
-  function vista() {
-    const cy = Math.cos(jug.yaw), sy = Math.sin(jug.yaw), cp = Math.cos(jug.pitch), sp = Math.sin(jug.pitch);
-    const ex = jug.x, ey = ojo(), ez = jug.z, rx = cy, rz = -sy, ux = -sp * sy, uy = cp, uz = -sp * cy, bx = sy * cp, by = sp, bz = cy * cp;
+  // cámara: 0 = primera persona, 1 = tercera (detrás del personaje), 2 = de frente (para ver cómo se ve tu avatar)
+  const cam = { modo: ctx.camara || 0, dist: 4.5, fov: 1.2, sens: 1 };
+  function camaraActual() {
+    if (cam.modo === 0) return { ex: jug.x, ey: ojo(), ez: jug.z, yaw: jug.yaw, pitch: jug.pitch };
+    const f = adelante(), dir = cam.modo === 1 ? -1 : 1, ey0 = ojo(); let t = .3;
+    while (t < cam.dist) { const px = jug.x + f[0] * dir * (t + .25), py = ey0 + f[1] * dir * (t + .25), pz = jug.z + f[2] * dir * (t + .25); if (solido(Math.floor(px), Math.floor(py), Math.floor(pz))) break; t += .2; }
+    const d = Math.max(.5, Math.min(cam.dist, t - .1));
+    const ex = jug.x + f[0] * dir * d, ey = ey0 + f[1] * dir * d, ez = jug.z + f[2] * dir * d;
+    return cam.modo === 1 ? { ex, ey, ez, yaw: jug.yaw, pitch: jug.pitch } : { ex, ey, ez, yaw: jug.yaw + Math.PI, pitch: -jug.pitch };
+  }
+  function vista(c) {
+    const cy = Math.cos(c.yaw), sy = Math.sin(c.yaw), cp = Math.cos(c.pitch), sp = Math.sin(c.pitch);
+    const ex = c.ex, ey = c.ey, ez = c.ez, rx = cy, rz = -sy, ux = -sp * sy, uy = cp, uz = -sp * cy, bx = sy * cp, by = sp, bz = cy * cp;
     return [rx, ux, bx, 0, 0, uy, by, 0, rz, uz, bz, 0, -(rx * ex + rz * ez), -(ux * ex + uy * ey + uz * ez), -(bx * ex + by * ey + bz * ez), 1];
   }
   const adelante = () => { const cy = Math.cos(jug.yaw), sy = Math.sin(jug.yaw), cp = Math.cos(jug.pitch), sp = Math.sin(jug.pitch); return [-sy * cp, -sp, -cy * cp]; };
@@ -574,13 +612,13 @@ export function iniciarMundo3D(host, ctx) {
   const bloqueado = () => document.pointerLockElement === cv;
   let jugando = false, sinBloqueo = false, arrastraRaton = false;
   const mapaTecla = (k) => (k === "arrowup" ? "w" : k === "arrowdown" ? "s" : k === "arrowleft" ? "a" : k === "arrowright" ? "d" : k);
-  const mirar = (dx, dy, k) => { jug.yaw -= dx * k; jug.pitch = Math.max(-1.55, Math.min(1.55, jug.pitch + dy * k)); };
+  const mirar = (dx, dy, k) => { jug.yaw -= dx * k * cam.sens; jug.pitch = Math.max(-1.55, Math.min(1.55, jug.pitch + dy * k * cam.sens)); };
   const seleccionar = (item) => { sel = item; ctx.alSeleccion && ctx.alSeleccion(item); };
   const escuchas = [];
   const on = (obj, ev, fn, op) => { obj.addEventListener(ev, fn, op); escuchas.push([obj, ev, fn, op]); };
   on(window, "keydown", (e) => {
     if (pausado || (!jugando && !bloqueado())) return;
-    const k = e.key.toLowerCase(); if (k === "e") { hablar(); return; } if ([" ", "arrowup", "arrowdown"].includes(k)) e.preventDefault();
+    const k = e.key.toLowerCase(); if (k === "e") { hablar(); return; } if (k === "v") { cam.modo = (cam.modo + 1) % 3; try { ctx.alCamara && ctx.alCamara(cam.modo); } catch (_) {} return; } if ([" ", "arrowup", "arrowdown"].includes(k)) e.preventDefault();
     tec[mapaTecla(k)] = true; if (k === "f" && sinBloqueo) picar = true;
     const n = +e.key; if (n >= 1 && n <= 8) seleccionar(COLOCABLES[n - 1]);
   });
@@ -619,13 +657,13 @@ export function iniciarMundo3D(host, ctx) {
 
   // ----- tamaño y bucle -----
   let alta = true;
-  const tamano = () => { const r = cv.getBoundingClientRect(); const k = alta ? Math.min(devicePixelRatio || 1, 1.5) : .6; const w = Math.max(320, Math.round(r.width * k)); if (cv.width !== w) { cv.width = w; cv.height = Math.round(w * 9 / 16); } };
+  const tamano = () => { const r = cv.getBoundingClientRect(); const k = alta ? Math.min(devicePixelRatio || 1, 1.5) : .6; const w = Math.max(320, Math.round(r.width * k)), h = Math.max(180, Math.round(r.height * k)); if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; } };
   const ro = new ResizeObserver(tamano); ro.observe(cv);
   let zonaAct = "", cooldownPortal = 0, M = null;
   function dibujar() {
     gl.viewport(0, 0, cv.width, cv.height);
     const cielo = enAgua ? [.2, .4, .7] : [.52, .74, .93]; gl.clearColor(cielo[0], cielo[1], cielo[2], 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    M = mul(perspectiva(1.2, cv.width / cv.height, .05, 140), vista());
+    M = mul(perspectiva(cam.fov, cv.width / cv.height, .05, 140), vista(camaraActual()));
     gl.useProgram(P); gl.uniformMatrix4fv(loc.m, false, new Float32Array(M)); gl.uniform1i(loc.t, 0); gl.uniform3f(loc.cn, cielo[0], cielo[1], cielo[2]);
     gl.enableVertexAttribArray(loc.p); gl.enableVertexAttribArray(loc.u); gl.enableVertexAttribArray(loc.s);
     for (let cz = 0; cz < NCZ; cz++) for (let cx = 0; cx < NCX; cx++) {
@@ -644,6 +682,11 @@ export function iniciarMundo3D(host, ctx) {
       gl.enableVertexAttribArray(locC.s); gl.vertexAttribPointer(locC.s, 1, gl.FLOAT, false, 16, 12);
       gl.disable(gl.CULL_FACE);
       for (const v of vis) if (Math.hypot(v.n.x - jug.x, v.n.z - jug.z) < 64) dibujarAldeano(v, tt);
+      if (cam.modo !== 0) { // tu personaje, con tu avatar
+        const hv = Math.hypot(jug.vx, jug.vz); jugV.n.x = jug.x; jugV.n.y = jug.y; jugV.n.z = jug.z; jugV.h = jug.yaw + Math.PI;
+        jugV.mover = hv > .3 && jug.suelo; jugV.amp += ((jugV.mover ? 1 : 0) - jugV.amp) * .2; if (jugV.mover) jugV.fase += hv * .03; jugV.nodFijo = Math.max(-.8, Math.min(.8, jug.pitch * .7));
+        dibujarAldeano(jugV, tt);
+      }
       gl.enable(gl.CULL_FACE); gl.disableVertexAttribArray(locC.p); gl.disableVertexAttribArray(locC.s);
     }
     const h = apuntar();
@@ -695,6 +738,9 @@ export function iniciarMundo3D(host, ctx) {
     aplicar: (filas) => aplicar(filas),
     seleccionar: (i) => { sel = i; },
     setCalidad: (v) => { alta = !!v; tamano(); },
+    setCamara: (o) => { Object.assign(cam, o); },
+    getCamara: () => ({ ...cam }),
+    setAvatar: (c) => ponerAvatar(c),
     pausar: (v) => { pausado = !!v; if (!pausado) hablandoCon = null; if (pausado) { limpiarEntrada(); if (bloqueado()) document.exitPointerLock(); } else if (jugando && !sinBloqueo) ayuda.textContent = "Haz clic para seguir jugando"; },
     actualizarNpcs: (lista) => montarNpcs(lista),
     posicion: () => ({ x: jug.x, y: jug.y, z: jug.z }),
