@@ -118,3 +118,4 @@ export const PersonajeRol = lazy(() => import("../components/PersonajeRol"));
 export const PersonajeConMejoras = lazy(() => import("../components/PersonajeConMejoras"));
 
 export const VistaMundo = lazy(() => import("../screens/Mundo"));
+export const VistaMundo3D = lazy(() => import("../screens/Mundo3D"));
