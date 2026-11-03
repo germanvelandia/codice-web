@@ -50,17 +50,17 @@ function Mision({ npc, mision: misionOriginal, hecha, est, alHecha, volver, cerr
     <>
       <div className="text-sm font-bold mb-1">{mision.titulo} <Premio xp={mision.xp} oro={mision.oro} /></div>
       <p className="m-texto">{mision.texto}</p>
-      <div className="space-y-2">
+      {estado !== "hecha" && <div className="space-y-2">
         {mision.opciones.map((o, i) => {
           const bien = (estado === "bien" || estado === "hecha") && i === mision.correcta, mal = estado === "mal" && i === elegida;
           return <button key={i} disabled={estado === "guardando" || estado === "bien" || estado === "hecha"} onClick={() => responder(i)}
             className={`block w-full text-left text-sm rounded-xl border-2 px-3 py-2.5 ${bien ? "border-emerald-500 bg-emerald-50" : mal ? "border-rose-400 bg-rose-50" : "border-slate-200 bg-slate-50 hover:border-violet-400"}`}>{o}</button>;
         })}
-      </div>
+      </div>}
       {estado === "mal" && <div className="m-retro mal">{mision.pista ? "💡 " + mision.pista : "Esa no es. ¡Inténtalo de nuevo!"}</div>}
       {estado === "guardando" && <div className="m-retro bien">⏳ Guardando tu premio…</div>}
       {estado === "bien" && <div className="m-retro bien">{mision.retro || "¡Correcto!"}<br /><b>🎁 +{mision.xp} XP · +{mision.oro} 🪙</b>{res && res.evento ? " (con bono de evento)" : ""}{res && res.comarca && res.comarca.ok ? " · aportaste a tu Comarca 🏰" : ""}</div>}
-      {estado === "hecha" && <div className="m-retro bien">{mision.retro || "¡Correcto!"} Ya habías completado esta misión ✅</div>}
+      {estado === "hecha" && <div className="m-retro bien">Ya completaste esta misión ✅ (tu premio ya fue entregado). Por seguridad no se vuelve a mostrar la respuesta.</div>}
       {estado === "error" && <div className="m-retro mal">No se pudo guardar: {res && res.mensaje}. Intenta de nuevo.</div>}
       <div className="flex gap-2 mt-3">
         {volver && <button onClick={volver} className="flex-1 rounded-xl py-2 text-sm font-bold bg-slate-100 hover:bg-slate-200">← Otras misiones</button>}
