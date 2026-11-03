@@ -38,12 +38,13 @@ export const MENU_CODICE_GRUPOS = [
       { key: "personaje", label: "Personaje", icono: "🎨" },
       { key: "salaavatares", label: "Sala de avatares", icono: "🎭" },
       { key: "mundo", label: "Mundo", icono: "🌍" },
+      { key: "mundo3d", label: "Mundo 3D", icono: "🧊" },
       { key: "tablero", label: "Tablero Mundial", icono: "🧭" },
     ],
   },
   {
     key: "cuenta", label: "Mi cuenta", icono: "👤", items: [
-      { key: "coevaluacion", label: "Evaluarnos", icono: "🪞" },
+      { key: "coevaluacion", label: "Autoevaluación", icono: "🪞" },
       { key: "misdiplomas", label: "Mis diplomas", icono: "🎖️" },
       { key: "encuesta", label: "Encuesta", icono: "📝" },
       { key: "perfil", label: "Perfil", icono: "👤" },
