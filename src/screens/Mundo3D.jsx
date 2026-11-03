@@ -2,6 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { iniciarMundo3D, dibujarIcono, COLOCABLES, NOMBRES, RECETAS } from "../game3d/mundo3d";
 import * as api from "../lib/mundo3dApi";
 import * as mundoApi from "../lib/mundoApi";
+import * as apiGeneral from "../lib/api";
+import { imagenPersonajeRol } from "../lib/personajesRol";
+import { avatarDesdePersonaje } from "../game3d/avatar3d";
+import { ZONAS, estadoZonas, misionesDisponibles, zonaDeMision } from "../game/zonas";
 import PanelAldea from "./Mundo3DAldea";
 
 // Mundo 3D del estudiante: un mundo de construcción por grado, con portales para visitar otros grados
@@ -12,9 +16,27 @@ function Icono({ item }) {
   return <canvas ref={ref} width={16} height={16} style={{ width: 30, height: 30, imageRendering: "pixelated" }} />;
 }
 
+// Ajustes de cámara: se recuerdan en este navegador
+const CAM_DEFECTO = { modo: 1, dist: 4.5, fov: 70, sens: 1 };
+const leerCam = () => { try { return { ...CAM_DEFECTO, ...JSON.parse(localStorage.getItem("m3d_cam") || "{}") }; } catch (_) { return { ...CAM_DEFECTO }; } };
+const guardarCam = (c) => { try { localStorage.setItem("m3d_cam", JSON.stringify(c)); } catch (_) { /* sin almacenamiento: no pasa nada */ } };
+const MODOS_CAM = ["Primera persona", "Tercera persona", "De frente"];
+const aplicarCam = (ctl, c) => ctl && ctl.setCamara({ modo: c.modo, dist: c.dist, fov: (c.fov * Math.PI) / 180, sens: c.sens });
+const partirSprite = (k) => { const i = String(k || "").lastIndexOf("_"); return i > 0 ? { rolKey: k.slice(0, i), genero: k.slice(i + 1) } : null; };
+
 const CSS_ENTRADA = `
 .m3d-puerta,.m3d-velo{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#fff;padding:0 16px}
 .m3d-velo{z-index:40}
+.m3d-barra{position:absolute;top:8px;right:8px;z-index:30;display:flex;gap:6px;align-items:flex-start}
+.m3d-barra button{border:1px solid #fff6;background:#000a;color:#fff;border-radius:10px;padding:6px 10px;font:700 12px system-ui,sans-serif;cursor:pointer}
+.m3d-barra button:hover{background:#000d}
+.m3d-ajustes{position:absolute;top:46px;right:8px;z-index:31;width:min(290px,calc(100% - 16px));background:#111827f2;color:#fff;border:1px solid #fff4;border-radius:14px;padding:12px;font:12px system-ui,sans-serif}
+.m3d-ajustes label{display:block;margin-top:8px;font-weight:700}.m3d-ajustes input[type=range]{width:100%}
+.m3d-seg{display:flex;gap:4px;margin-top:4px}.m3d-seg button{flex:1;border:1px solid #fff5;background:#0006;color:#fff;border-radius:8px;padding:5px 2px;font:700 11px system-ui,sans-serif;cursor:pointer}.m3d-seg button.on{background:#7c3aed;border-color:#c4b5fd}
+.m3d-hud{position:absolute;top:8px;left:8px;z-index:30;display:flex;flex-wrap:wrap;gap:6px;max-width:55%}
+.m3d-hud span{background:#000a;color:#fff;border-radius:99px;padding:3px 10px;font:700 11px system-ui,sans-serif}
+.m3d-aviso{position:absolute;top:48px;left:50%;transform:translateX(-50%);z-index:30;background:#be123cee;color:#fff;border-radius:10px;padding:6px 12px;font:700 12px system-ui,sans-serif;max-width:80%}
+.m3d-hot{position:absolute;left:50%;bottom:34px;transform:translateX(-50%);z-index:30;display:flex;gap:4px;background:#000a;border-radius:12px;padding:4px}
 .m3d-puerta,.m3d-velo{background:radial-gradient(circle at 50% 45%,#5b21b6 0%,#2e1065 55%,#0b0420 100%)}
 .m3d-velo{transition:opacity .7s ease,transform .7s ease}
 .m3d-velo-fuera{opacity:0;transform:scale(1.35);pointer-events:none}
@@ -40,10 +62,16 @@ export default function Mundo3D({ estudianteInfo }) {
   const [calidadAlta, setCalidadAlta] = useState(true);
   const [listo, setListo] = useState(false);
   const reloj = useRef(null);
-  const [datos, setDatos] = useState({ misiones: [], hechas: new Set(), acertijos: null, posada: null, cargado: false });
+  const [datos, setDatos] = useState({ misiones: [], hechas: new Set(), acertijos: null, posada: null, zonas: { abiertas: [], requisitos: {} }, duelos: { activo: false, insignias: [], exige: {}, bancos: {}, esperaHasta: {} }, cargado: false });
   const [dialogo, setDialogo] = useState(null);
   const [prog, setProg] = useState({ xp: null, oro: null });
   const npcsRef = useRef([]);
+  const marco = useRef(null), realRef = useRef(false);
+  const [cam, setCam] = useState(leerCam), camRef = useRef(null); camRef.current = cam;
+  const [ajustes, setAjustes] = useState(false);
+  const [ampliado, setAmpliado] = useState(false);
+  const [avatar, setAvatar] = useState(null), avatarRef = useRef(null); avatarRef.current = avatar;
+  const [looks, setLooks] = useState({});
   // entrada al mundo: puerta + transición (también al viajar por un portal)
   const [entrado, setEntrado] = useState(false);
   const [velo, setVelo] = useState(false), [minOk, setMinOk] = useState(true), [veloTxt, setVeloTxt] = useState("");
@@ -74,32 +102,73 @@ export default function Mundo3D({ estudianteInfo }) {
     return () => { vivo = false; };
   }, [est]); // eslint-disable-line
 
+  // el avatar del estudiante (su personaje y su equipo) para verlo en pantalla
+  useEffect(() => {
+    if (!est) return; let vivo = true;
+    (async () => {
+      const [p, m] = await Promise.allSettled([apiGeneral.fetchPersonajeElegido(est), apiGeneral.fetchMejorasDeEstudiante(est)]);
+      const pers = p.status === "fulfilled" ? p.value : null, mej = m.status === "fulfilled" ? m.value.filter((f) => f.mejora).map((f) => f.mejora) : [];
+      const cfg = await avatarDesdePersonaje({ rolKey: pers && pers.rolKey, genero: pers && pers.genero, mejoras: mej });
+      if (vivo) setAvatar(cfg);
+    })();
+    return () => { vivo = false; };
+  }, [est]);
+  useEffect(() => { if (ctl.current && avatar) ctl.current.setAvatar(avatar); }, [avatar, listo]);
+  useEffect(() => { guardarCam(cam); aplicarCam(ctl.current, cam); }, [cam, listo]);
+
   // misiones, acertijos y posada (los mismos del Mundo 2D)
   useEffect(() => {
     if (!est) return; let vivo = true;
     (async () => {
-      const [m, h, a, p] = await Promise.allSettled([mundoApi.fetchMisionesMundo(miGrado || null), mundoApi.fetchHechasMundo(est), mundoApi.fetchAcertijosMundo(est, miGrado || null), mundoApi.fetchPosadaMundo()]);
+      const [m, h, a, p, z, d] = await Promise.allSettled([mundoApi.fetchMisionesMundo(miGrado || null), mundoApi.fetchHechasMundo(est), mundoApi.fetchAcertijosMundo(est, miGrado || null), mundoApi.fetchPosadaMundo(), mundoApi.fetchZonasMundo(miGrado || null), mundoApi.fetchDuelosMundo(est)]);
       if (!vivo) return;
-      setDatos({ misiones: m.status === "fulfilled" ? m.value : [], hechas: new Set(h.status === "fulfilled" ? h.value : []), acertijos: a.status === "fulfilled" ? a.value : null, posada: p.status === "fulfilled" ? p.value : null, cargado: true });
+      const hayTablas = m.status === "fulfilled" && h.status === "fulfilled";
+      setDatos({
+        misiones: m.status === "fulfilled" ? m.value : [], hechas: new Set(h.status === "fulfilled" ? h.value : []), acertijos: a.status === "fulfilled" ? a.value : null, posada: p.status === "fulfilled" ? p.value : null,
+        zonas: z.status === "fulfilled" ? z.value : { abiertas: [], requisitos: {} },       // sin el SQL 64 solo existe la Aldea
+        duelos: d.status === "fulfilled" && hayTablas ? d.value : { activo: false, insignias: [], exige: {}, bancos: {}, esperaHasta: {} },
+        cargado: true,
+      });
     })();
     return () => { vivo = false; };
   }, [est, miGrado]);
 
-  // personajes: uno por cada (lugar, nombre) con sus misiones; más el maestro de acertijos y el posadero
+  // qué zonas están abiertas para este estudiante (docente + misiones + insignias), igual que en el Mundo 2D
+  const estado = useMemo(() => estadoZonas({ misiones: datos.misiones, hechas: datos.hechas, abiertas: datos.zonas.abiertas, requisitos: datos.zonas.requisitos, insignias: datos.duelos.insignias, exigen: datos.duelos.exige }), [datos]);
+
+  // el aspecto de cada personaje sale de su dibujo (mismo rol y género que en el Mundo 2D)
+  useEffect(() => {
+    const claves = new Set(datos.misiones.map((m) => m.npc_sprite).filter(Boolean)); ZONAS.forEach((z) => z.guardian && claves.add(z.guardian.sprite));
+    const faltan = [...claves].filter((k) => !(k in looks)); if (!faltan.length) return; let vivo = true;
+    (async () => {
+      const nuevo = {};
+      for (const k of faltan) { const sp = partirSprite(k); nuevo[k] = sp && imagenPersonajeRol(sp.rolKey, sp.genero) ? await avatarDesdePersonaje(sp) : null; }
+      if (vivo) setLooks((l) => ({ ...l, ...nuevo }));
+    })();
+    return () => { vivo = false; };
+  }, [datos.misiones]); // eslint-disable-line
+
+  // personajes: uno por cada (lugar, nombre) con sus misiones (solo de zonas abiertas); un guardián por zona; el maestro de acertijos y el posadero
   const npcs = useMemo(() => {
     if (gradoVer !== miGrado) return []; // de visita no se habla con nadie
     const grupos = new Map();
-    for (const m of datos.misiones) { const k = m.lugar + "|" + m.npc_nombre; if (!grupos.has(k)) grupos.set(k, { id: "m-" + k, tipo: "misiones", nombre: m.npc_nombre, emoji: m.npc_emoji || "🧑", lugar: m.lugar, misiones: [] }); grupos.get(k).misiones.push(m); }
+    for (const m of misionesDisponibles(datos.misiones, estado)) { const k = m.lugar + "|" + m.npc_nombre; if (!grupos.has(k)) grupos.set(k, { id: "m-" + k, tipo: "misiones", nombre: m.npc_nombre, emoji: m.npc_emoji || "🧑", lugar: m.lugar, look: looks[m.npc_sprite] || null, misiones: [] }); grupos.get(k).misiones.push(m); }
     const lista = [...grupos.values()].map((n) => ({ ...n, hecha: n.misiones.every((m) => datos.hechas.has(m.id)) }));
     const ac = datos.acertijos;
     if (ac && ac.lista.length) lista.push({ id: "s-acertijos", tipo: "acertijos", nombre: "Maestra de acertijos", emoji: "🧩", lugar: "acertijos", marca: "🧩 ", hecha: ac.lista.every((x) => ac.hechos.includes(x.id)) });
     if (datos.posada && datos.posada.activa) lista.push({ id: "s-posada", tipo: "posada", nombre: "Posadero", emoji: "🛏️", lugar: "posada", marca: "💤 " });
+    for (const z of ZONAS) if (z.guardian) {
+      const tiene = datos.duelos.insignias.includes(z.key);
+      lista.push({ id: "g-" + z.key, tipo: "guardian", zona: z.key, nombre: z.guardian.nombre, emoji: "🛡️", lugar: "guardia_" + z.key, marca: estado[z.key] && estado[z.key].desbloqueada ? "⚔️ " : "🔒 ", look: looks[z.guardian.sprite] || null, hecha: tiene });
+    }
     return lista;
-  }, [datos, gradoVer, miGrado]);
+  }, [datos, estado, looks, gradoVer, miGrado]);
   npcsRef.current = npcs;
   useEffect(() => { if (ctl.current) ctl.current.actualizarNpcs(npcs); }, [npcs, listo]);
   const cerrarDialogo = () => { setDialogo(null); ctl.current && ctl.current.pausar(false); };
   const alHecha = (id, r) => { setDatos((d) => ({ ...d, hechas: new Set([...d.hechas, id]) })); if (r && typeof r.xp === "number") setProg({ xp: r.xp, oro: r.oro }); };
+  const alInsignia = (zonaKey, r) => setDatos((d) => ({ ...d, duelos: { ...d.duelos, insignias: d.duelos.insignias.includes(zonaKey) ? d.duelos.insignias : [...d.duelos.insignias, zonaKey] } }));
+  const alDerrota = (zonaKey) => setDatos((d) => ({ ...d, duelos: { ...d.duelos, esperaHasta: { ...(d.duelos.esperaHasta || {}), [zonaKey]: d.duelos.esperaMin > 0 ? Date.now() + d.duelos.esperaMin * 60000 : 0 } } }));
   const alHechoAcertijo = (id) => setDatos((d) => ({ ...d, acertijos: d.acertijos ? { ...d.acertijos, hechos: [...d.acertijos.hechos, id] } : d.acertijos }));
 
   // portales: tu mundo (si visitas) y otros grados, hasta 8
@@ -126,6 +195,8 @@ export default function Mundo3D({ estudianteInfo }) {
         host.current.innerHTML = "";
         c = iniciarMundo3D(host.current, {
           grado: gradoVer, yo: est, soloMirar: gradoVer !== miGrado, portales, cambios: filas, npcs: npcsRef.current,
+          avatar: avatarRef.current, camara: camRef.current.modo,
+          alCamara: (m) => setCam((c) => ({ ...c, modo: m })),
           alNpc: (n) => setDialogo(n),
           cantidad: (i) => invRef.current[i] || 0,
           picar: async (x, y, z, b) => { const r = await api.picarMundo3D(est, x, y, z, b); if (r && r.item) fijarInv({ ...invRef.current, [r.item]: Math.min(999, (invRef.current[r.item] || 0) + 1) }); setColocados((n) => n); return r; },
@@ -134,7 +205,7 @@ export default function Mundo3D({ estudianteInfo }) {
           alZona: setZona, alError: (t) => avisar(t),
           alPortal: (id) => { const t = "Viajando al mundo de " + (String(id) === miGrado ? "tu curso" : "curso " + id) + "…"; abrirVelo(t); setGradoVer(String(id)); },
         });
-        c.seleccionar(selRef.current); ctl.current = c; setListo(true);
+        c.seleccionar(selRef.current); aplicarCam(c, camRef.current); ctl.current = c; setListo(true);
         // ver lo que construyen los compañeros mientras juegas
         relojPoll = setInterval(async () => {
           if (document.hidden) return;
@@ -148,12 +219,38 @@ export default function Mundo3D({ estudianteInfo }) {
     return () => { vivo = false; clearInterval(relojPoll); if (c) c.cerrar(); if (ctl.current === c) ctl.current = null; };
   }, [est, grados, gradoVer, entrado]); // eslint-disable-line
 
+  // pantalla completa: la del navegador si existe; si no (por ejemplo en iPhone) se amplía sobre toda la página
+  useEffect(() => {
+    const salida = () => { if (realRef.current && !document.fullscreenElement && !document.webkitFullscreenElement) { realRef.current = false; setAmpliado(false); } };
+    document.addEventListener("fullscreenchange", salida); document.addEventListener("webkitfullscreenchange", salida);
+    return () => { document.removeEventListener("fullscreenchange", salida); document.removeEventListener("webkitfullscreenchange", salida); };
+  }, []);
+  useEffect(() => { if (!ampliado) return undefined; const antes = document.body.style.overflow; document.body.style.overflow = "hidden"; return () => { document.body.style.overflow = antes; }; }, [ampliado]);
+  useEffect(() => { // al salir del mundo o de la pantalla se limpia todo
+    if (!entrado) { setAjustes(false); if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); setAmpliado(false); realRef.current = false; }
+  }, [entrado]);
+  const alternarPantalla = async () => {
+    if (ampliado) { if (document.fullscreenElement) { try { await document.exitFullscreen(); } catch (_) { /* nada */ } } realRef.current = false; setAmpliado(false); return; }
+    const el = marco.current; if (!el) return;
+    try { if (el.requestFullscreen) { await el.requestFullscreen(); realRef.current = true; } else if (el.webkitRequestFullscreen) { el.webkitRequestFullscreen(); realRef.current = true; } } catch (_) { realRef.current = false; }
+    setAmpliado(true);
+  };
+  const abrirAjustes = (v) => { setAjustes(v); ctl.current && ctl.current.pausar(v); };
+  const ciclarCamara = () => setCam((c) => ({ ...c, modo: (c.modo + 1) % 3 }));
+
   const elegir = (i) => { setSel(i); selRef.current = i; ctl.current && ctl.current.seleccionar(i); };
   const fabricar = async (r) => {
     try { const res = await api.fabricarMundo3D(est, r.sale); fijarInv(Object.fromEntries(Object.entries(res.inventario || {}).map(([k, v]) => [Number(k), v]))); avisar("Fabricaste " + r.n + " de " + NOMBRES[r.sale].toLowerCase() + "."); }
     catch (er) { avisar(/sin_material/.test(er.message) ? "No tienes suficiente material." : /demasiado_rapido/.test(er.message) ? "Vas muy rápido." : "No se pudo fabricar."); }
   };
   const cambiarCalidad = () => { const v = !calidadAlta; setCalidadAlta(v); ctl.current && ctl.current.setCalidad(v); };
+
+  const barraBloques = COLOCABLES.map((id, i) => (
+    <button key={id} onClick={() => elegir(id)} aria-pressed={sel === id} aria-label={NOMBRES[id] + " (tecla " + (i + 1) + ")"}
+      className={`w-[52px] h-[56px] rounded-lg border-2 flex flex-col items-center pt-1 text-[11px] font-bold ${sel === id ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-white"} ${(inv[id] || 0) === 0 ? "opacity-50" : ""}`}>
+      <Icono item={id} /><span className="text-slate-600">{inv[id] || 0}</span>
+    </button>
+  ));
 
   if (!est) return <p className="text-sm text-slate-400">Entra con tu código para abrir el Mundo 3D.</p>;
   if (error) return <div className="text-sm text-rose-600 bg-rose-50 rounded-xl p-3">{error} Si es la primera vez, la docente debe ejecutar el archivo 133_mundo3d.sql en Supabase.</div>;
@@ -170,7 +267,7 @@ export default function Mundo3D({ estudianteInfo }) {
         {msg && <span className="ml-auto text-[12px] font-semibold text-rose-600" role="status">{msg}</span>}
       </div>
 
-      <div className="relative rounded-xl overflow-hidden" style={{ position: "relative", overflow: "hidden", minHeight: entrado ? 120 : 380 }}>
+      <div ref={marco} className={ampliado ? "m3d-full" : "rounded-xl"} style={ampliado ? { position: "fixed", inset: 0, zIndex: 70, background: "#000", overflow: "hidden" } : { position: "relative", overflow: "hidden", minHeight: entrado ? 120 : 380 }}>
         <style>{CSS_ENTRADA}</style>
         <div ref={host} style={{ minHeight: 120 }} />
         {!entrado && (
@@ -188,19 +285,40 @@ export default function Mundo3D({ estudianteInfo }) {
             <p className="text-xs text-violet-200 mt-1">Preparando bloques, personajes y portales…</p>
           </div>
         )}
-        <PanelAldea dialogo={dialogo} datos={datos} est={est} alHecha={alHecha} alHechoAcertijo={alHechoAcertijo} cerrar={cerrarDialogo} />
+        {entrado && !velo && (
+          <>
+            <div className="m3d-barra">
+              <button onClick={ciclarCamara} title="Cambiar cámara (tecla V)">📷 {MODOS_CAM[cam.modo]}</button>
+              <button onClick={() => abrirAjustes(!ajustes)} aria-expanded={ajustes} title="Ajustes de cámara">⚙️</button>
+              <button onClick={alternarPantalla} title={ampliado ? "Reducir la pantalla" : "Ampliar la pantalla"}>{ampliado ? "🗗 Reducir" : "⛶ Ampliar"}</button>
+            </div>
+            {ajustes && (
+              <div className="m3d-ajustes" role="dialog" aria-label="Ajustes de cámara">
+                <b>Cámara</b>
+                <div className="m3d-seg">{MODOS_CAM.map((n, i) => <button key={n} className={cam.modo === i ? "on" : ""} onClick={() => setCam((c) => ({ ...c, modo: i }))}>{n}</button>)}</div>
+                <label>Distancia: {cam.dist.toFixed(1)}<input type="range" min="2" max="9" step="0.5" value={cam.dist} onChange={(e) => setCam((c) => ({ ...c, dist: +e.target.value }))} /></label>
+                <label>Campo de visión: {cam.fov}°<input type="range" min="55" max="100" step="1" value={cam.fov} onChange={(e) => setCam((c) => ({ ...c, fov: +e.target.value }))} /></label>
+                <label>Sensibilidad del giro: {cam.sens.toFixed(1)}×<input type="range" min="0.4" max="2.5" step="0.1" value={cam.sens} onChange={(e) => setCam((c) => ({ ...c, sens: +e.target.value }))} /></label>
+                <label>Calidad<div className="m3d-seg"><button className={calidadAlta ? "on" : ""} onClick={() => { setCalidadAlta(true); ctl.current && ctl.current.setCalidad(true); }}>Alta</button><button className={!calidadAlta ? "on" : ""} onClick={() => { setCalidadAlta(false); ctl.current && ctl.current.setCalidad(false); }}>Baja</button></div></label>
+                <div style={{ marginTop: 8, color: "#cbd5e1" }}>Tecla V: cambia de cámara. «De frente» te deja ver tu avatar.</div>
+                <button onClick={() => abrirAjustes(false)} style={{ marginTop: 8, width: "100%", border: 0, borderRadius: 8, padding: 6, background: "#7c3aed", color: "#fff", fontWeight: 800 }}>Listo</button>
+              </div>
+            )}
+            {ampliado && (
+              <>
+                <div className="m3d-hud">{zona && <span>📍 {zona}</span>}{prog.xp != null && <span>⭐ {prog.xp} · 🪙 {prog.oro}</span>}{datos.duelos.insignias.map((k) => { const z = ZONAS.find((x) => x.key === k); return z ? <span key={k} title={z.insignia.nombre}>{z.insignia.emoji}</span> : null; })}</div>
+                {msg && <div className="m3d-aviso" role="status">{msg}</div>}
+                <div className="m3d-hot">{barraBloques}</div>
+              </>
+            )}
+          </>
+        )}
+        <PanelAldea dialogo={dialogo} datos={datos} estado={estado} est={est} alHecha={alHecha} alHechoAcertijo={alHechoAcertijo} alInsignia={alInsignia} alDerrota={alDerrota} cerrar={cerrarDialogo} />
       </div>
       {entrado && !listo && !velo && <p className="text-xs text-slate-400">Preparando el mundo…</p>}
 
-      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Bloques">
-        {COLOCABLES.map((id, i) => (
-          <button key={id} onClick={() => elegir(id)} aria-pressed={sel === id} aria-label={NOMBRES[id] + " (tecla " + (i + 1) + ")"}
-            className={`w-[52px] h-[56px] rounded-lg border-2 flex flex-col items-center pt-1 text-[11px] font-bold ${sel === id ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-white"} ${(inv[id] || 0) === 0 ? "opacity-50" : ""}`}>
-            <Icono item={id} /><span className="text-slate-600">{inv[id] || 0}</span>
-          </button>
-        ))}
-      </div>
-      <p className="text-[11px] text-slate-500">Mover: W A S D · Mirar: ratón · Saltar: espacio · Clic izquierdo mantenido: picar · Clic derecho: poner · Rueda o 1 a 8: elegir bloque · E: hablar con un personaje (❗ tiene misión) · Esc: soltar el ratón. En tablet: palanca a la izquierda, arrastra a la derecha para mirar. Entra a los edificios de la aldea y habla con sus aldeanos: la Biblioteca, el Ágora, el Templo, el Mercado, la Casa de los Acertijos y la Posada. Los portales 🌀 a otros cursos están en el Cruce de los Mundos, lejos de la aldea: sigue el camino de adoquín hacia el sureste (allí solo se mira).</p>
+      {!ampliado && <div className="flex flex-wrap gap-1.5" role="group" aria-label="Bloques">{barraBloques}</div>}
+      <p className="text-[11px] text-slate-500">Mover: W A S D · Mirar: ratón · Saltar: espacio · Clic izquierdo mantenido: picar · Clic derecho: poner · Rueda o 1 a 8: elegir bloque · E: hablar con un personaje (❗ misión, ⚔️ duelo con el guardián) · V: cambiar de cámara · Esc: soltar el ratón. Con «⛶ Ampliar» juegas a pantalla completa y con ⚙️ ajustas la cámara. En tablet: palanca a la izquierda, arrastra a la derecha para mirar. Entra a los edificios de la aldea y habla con sus aldeanos: la Biblioteca, el Ágora, el Templo, el Mercado, la Casa de los Acertijos y la Posada. Los portales 🌀 a otros cursos están en el Cruce de los Mundos, lejos de la aldea: sigue el camino de adoquín hacia el sureste (allí solo se mira).</p>
 
       <div className="grid md:grid-cols-2 gap-3">
         <div className="rounded-xl border border-slate-200 p-3">
