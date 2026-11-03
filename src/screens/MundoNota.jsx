@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import * as api from "../lib/api";
 import * as mn from "../lib/mundoNotaApi";
 import { CONFIG_DEFAULT, periodosDe } from "../lib/calificaciones";
+import Mundo3DDocente from "./Mundo3DDocente";
 
 const hoy = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
 const haceDias = (n) => new Date(Date.now() - n * 86400000).toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
@@ -12,11 +13,11 @@ export function VistaMundoNota({ grados = [], gradoActivo, materiaActiva }) {
   return (
     <div className="w-full max-w-5xl mx-auto space-y-3">
       <div className="flex gap-1">
-        {[["calcular", "🌍 Calcular y pasar a la Planilla"], ["auto", "🔄 Columnas automáticas"]].map(([k, l]) => (
+        {[["calcular", "🌍 Calcular y pasar a la Planilla"], ["auto", "🔄 Columnas automáticas"], ["mundo3d", "🧊 Mundo 3D (observar y moderar)"]].map(([k, l]) => (
           <button key={k} onClick={() => setTab(k)} className={`text-sm px-3 py-1.5 rounded-full border ${tab === k ? "bg-violet-600 text-white border-violet-600" : "bg-white text-slate-600 border-slate-200"}`}>{l}</button>
         ))}
       </div>
-      {tab === "calcular" ? <Calcular grados={grados} gradoActivo={gradoActivo} materiaActiva={materiaActiva} onCreadaAuto={() => setTab("auto")} /> : <Automaticas grados={grados} />}
+      {tab === "calcular" ? <Calcular grados={grados} gradoActivo={gradoActivo} materiaActiva={materiaActiva} onCreadaAuto={() => setTab("auto")} /> : tab === "auto" ? <Automaticas grados={grados} /> : <Mundo3DDocente />}
     </div>
   );
 }
