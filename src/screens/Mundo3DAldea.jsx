@@ -3,6 +3,8 @@ import { montarJuego } from "../game/juegosUI";
 import { TIPOS_ACERTIJO } from "../game/acertijos";
 import { CSS_JUEGO } from "../game3d/juegoCss";
 import * as mundoApi from "../lib/mundoApi";
+import { ZONAS, zonaPorClave, zonaDeMision } from "../game/zonas";
+import { armarPool, crearDuelo, esperaRestanteMin } from "../game/duelo";
 
 // Ventanas que se abren al hablar con los personajes de la aldea 3D:
 // misiones (las mismas del Mundo 2D), Casa de los Acertijos y Posada. Todo el premio lo entrega la base de datos.
@@ -142,8 +144,88 @@ function VistaPosada({ est, cerrar }) {
   );
 }
 
-export default function PanelAldea({ dialogo, datos, est, alHecha, alHechoAcertijo, cerrar }) {
+// El guardián de cada zona: un duelo de preguntas. Al vencerlo se gana la insignia de la zona (una sola vez) y un premio.
+function VistaGuardian({ npc, datos, estado, est, alInsignia, alDerrota, cerrar }) {
+  const z = ZONAS.find((x) => x.key === npc.zona), e = estado[z.key] || {}, du = datos.duelos;
+  const [fase, setFase] = useState("intro"); // intro | duelo | fin
+  const duelo = useRef(null);
+  const [resp, setResp] = useState(null), [fin, setFin] = useState(null), [motivo, setMotivo] = useState(""), [q, setQ] = useState(null);
+  const tiene = du.insignias.includes(z.key), espera = esperaRestanteMin(du.esperaHasta && du.esperaHasta[z.key]);
+  const previa = e.previa ? zonaPorClave(e.previa) : null;
+  const razon = e.desbloqueada ? "" : !e.abierta ? "Tu docente todavía no ha abierto esta zona." : !e.cumplido ? `Completa ${e.requeridas} misión(es) de ${previa ? previa.nombre : "la zona anterior"} (llevas ${e.hechasPrevia}).` : `Necesitas la insignia de ${previa ? previa.nombre : "la zona anterior"}: véncelo a su guardián.`;
+
+  const empezar = () => {
+    const pool = armarPool(datos.misiones.filter((m) => zonaDeMision(m) === z.key), du.bancos[z.key] || []);
+    const d = crearDuelo({ pool, aciertos: du.aciertos, vidas: du.vidas });
+    if (d.imposible) { setMotivo(`Todavía no hay preguntas suficientes en esta zona (hay ${d.disponibles} y se necesitan ${d.necesarios}). Avísale a tu docente.`); return; }
+    duelo.current = d; setResp(null); setQ(d.actual()); setFase("duelo");
+  };
+  const terminar = async (resultado) => {
+    const pr = duelo.current.progreso(), ganado = resultado === "gana"; setFase("fin"); setFin({ ganado, guardando: true });
+    try {
+      const r = await mundoApi.registrarDuelo(est, z.key, { ganado, aciertos: pr.aciertos, errores: pr.errores });
+      if (ganado) alInsignia(z.key, r); else alDerrota(z.key);
+      setFin({ ganado, r });
+    } catch (er) { setFin({ ganado, error: (er && er.message) || "No se pudo guardar el resultado." }); }
+  };
+  const responder = (i) => { if (resp) return; const r = duelo.current.responder(i); setResp({ i, r }); };
+  const siguiente = () => { if (resp && resp.r.fin) terminar(resp.r.fin); else { setResp(null); setQ(duelo.current.actual()); } };
+  const rendirse = () => { const f = duelo.current.rendirse(); terminar(f); };
+
+  const pr = duelo.current ? duelo.current.progreso() : null;
+
+  return (
+    <Marco titulo={npc.nombre} emoji="🛡️" sub={z.guardian.titulo} onCerrar={cerrar}>
+      <style>{CSS_JUEGO}</style>
+      {fase === "intro" && (
+        <>
+          <p className="m-texto">{z.guardian.reto}</p>
+          <div className="text-xs text-slate-500 mb-2">{z.insignia.emoji} <b>{z.insignia.nombre}</b> · Premio: +{du.premio.xp} XP · +{du.premio.oro} 🪙 (solo la primera vez)</div>
+          {!du.activo ? <div className="m-retro mal">Los duelos con guardianes no están disponibles por ahora.</div>
+            : razon ? <div className="m-retro mal">🔒 {razon}</div>
+              : tiene ? <div className="m-retro bien">Ya tienes la {z.insignia.nombre} {z.insignia.emoji}. ¡Puedes seguir explorando!</div>
+                : espera > 0 ? <div className="m-retro mal">Descansa un poco: podrás volver a retarme en {espera} min.</div>
+                  : <>
+                    <p className="text-sm">Para vencerme debes acertar <b>{du.aciertos}</b> preguntas antes de perder tus <b>{du.vidas}</b> ❤️.</p>
+                    {motivo && <div className="m-retro mal">{motivo}</div>}
+                    <button onClick={empezar} className="mt-3 w-full rounded-xl py-2.5 text-sm font-bold bg-violet-600 text-white">⚔️ ¡Aceptar el duelo!</button>
+                  </>}
+          <button onClick={cerrar} className="mt-3 w-full rounded-xl py-2 text-sm font-bold bg-slate-100 hover:bg-slate-200">Seguir explorando</button>
+        </>
+      )}
+      {fase === "duelo" && pr && (
+        <>
+          <div className="flex items-center justify-between text-sm font-bold mb-2"><span>{"❤️".repeat(pr.vidasRestantes)}{"🖤".repeat(Math.max(0, pr.corazones - pr.vidasRestantes))}</span><span>Aciertos {pr.aciertos}/{pr.necesarios}</span></div>
+          {q && (() => {
+            return <>
+              <p className="m-texto font-semibold">{q.texto}</p>
+              <div className="space-y-2">{q.opciones.map((o, i) => {
+                const mostrada = !!resp, bien = mostrada && i === resp.r.correcta, mal = mostrada && i === resp.i && !resp.r.acierto;
+                return <button key={i} disabled={mostrada} onClick={() => responder(i)} className={`block w-full text-left text-sm rounded-xl border-2 px-3 py-2.5 ${bien ? "border-emerald-500 bg-emerald-50" : mal ? "border-rose-400 bg-rose-50" : "border-slate-200 bg-slate-50 hover:border-violet-400"}`}>{o}</button>;
+              })}</div>
+              {resp && <div className={`m-retro ${resp.r.acierto ? "bien" : "mal"}`}>{resp.r.acierto ? "¡Acertaste! " : "Esa no era. "}{resp.r.retro || (!resp.r.acierto && resp.r.pista) || ""}</div>}
+              {resp ? <button onClick={siguiente} className="mt-3 w-full rounded-xl py-2.5 text-sm font-bold bg-violet-600 text-white">{resp.r.fin ? "Ver el resultado" : "Siguiente pregunta"}</button>
+                : <button onClick={rendirse} className="mt-3 w-full rounded-xl py-2 text-xs font-bold bg-slate-100 hover:bg-slate-200">Rendirme</button>}
+            </>;
+          })()}
+        </>
+      )}
+      {fase === "fin" && fin && (
+        <>
+          {fin.guardando ? <p className="m-texto">⏳ Guardando el resultado…</p>
+            : fin.error ? <div className="m-retro mal">No se pudo guardar: {fin.error}</div>
+              : fin.ganado ? <div className="m-retro bien"><b>¡Me venciste!</b> {z.insignia.emoji} Ganaste la {z.insignia.nombre}.{fin.r && !fin.r.yaTenia ? <><br />🎁 +{fin.r.xp || 0} XP · +{fin.r.oro || 0} 🪙</> : " (Ya la tenías, sin premio doble.)"}{fin.r && fin.r.comarca && fin.r.comarca.ok ? " · aportaste a tu Comarca 🏰" : ""}</div>
+                : <div className="m-retro mal">No esta vez. Estudia un poco y vuelve a retarme{du.esperaMin > 0 ? ` (en ${du.esperaMin} min)` : ""}.</div>}
+          <button onClick={cerrar} className="mt-3 w-full rounded-xl py-2.5 text-sm font-bold bg-violet-600 text-white">Seguir explorando</button>
+        </>
+      )}
+    </Marco>
+  );
+}
+
+export default function PanelAldea({ dialogo, datos, estado, est, alHecha, alHechoAcertijo, alInsignia, alDerrota, cerrar }) {
   if (!dialogo) return null;
+  if (dialogo.tipo === "guardian") return <VistaGuardian key={dialogo.id} npc={dialogo} datos={datos} estado={estado} est={est} alInsignia={alInsignia} alDerrota={alDerrota} cerrar={cerrar} />;
   if (dialogo.tipo === "acertijos") return <VistaAcertijos datos={datos} est={est} alHecho={alHechoAcertijo} cerrar={cerrar} />;
   if (dialogo.tipo === "posada") return <VistaPosada est={est} cerrar={cerrar} />;
   return <VistaNpc key={dialogo.id} npc={dialogo} datos={datos} est={est} alHecha={alHecha} cerrar={cerrar} />;
