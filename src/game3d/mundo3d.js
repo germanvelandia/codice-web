@@ -34,6 +34,8 @@ export const NOMBRES = { 1: "Pasto", 2: "Tierra", 3: "Piedra", 4: "Tronco", 5: "
   50: "Pico de madera", 51: "Pico de piedra", 52: "Pico de hierro", 53: "Pico de diamante", 54: "Hacha de madera", 55: "Hacha de piedra", 56: "Hacha de hierro", 57: "Hacha de diamante",
   58: "Pala de madera", 59: "Pala de piedra", 60: "Pala de hierro", 61: "Pala de diamante" };
 export const COLOCABLES = [1, 2, 3, 4, 6, 7, 8, 9, 16, 17, 18, 19, 20, 21, 22, 23];
+// Frases rápidas del chat (los mismos números que la tabla mundo3d_frases del servidor)
+export const FRASES_CHAT = { 1: "¡Hola!", 2: "¡Buen trabajo!", 3: "¿Me ayudas?", 4: "¡Gracias!", 5: "¿Construimos juntos?", 6: "¡Mira lo que hice!", 7: "Vamos a la aldea", 8: "Necesito piedra", 9: "¡Qué bien!", 10: "¡Hasta luego!", 11: "Sígueme", 12: "¡Cuidado!" };
 export const MATERIALES = [40, 41, 42, 43, 44, 45, 46, 47, 48];
 export const HERRAMIENTAS = [50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61];
 const DUREZA = { 1: .3, 2: .3, 3: .9, 4: .6, 5: .15, 6: .5, 7: .9, 8: .2, 9: .25, 10: 1.1, 16: 1.6, 17: 1.6, 18: 2, 19: .3, 20: .3, 21: .3, 22: .3, 23: .3 };
@@ -442,6 +444,7 @@ export function iniciarMundo3D(host, ctx) {
 .m3d-npc{position:absolute;left:0;top:0;transform:translate(-50%,-100%);font:600 12px system-ui,sans-serif;color:#fff;background:#92400ecc;padding:2px 8px;border-radius:10px;pointer-events:none;white-space:nowrap}
 .m3d-npc.ok{background:#166534cc}
 .m3d-botin{position:absolute;left:10px;top:70px;display:flex;flex-direction:column;gap:3px;pointer-events:none;z-index:5}.m3d-botin div{font:700 12px system-ui,sans-serif;color:#fff;background:#0009;padding:3px 9px;border-radius:8px;width:max-content;animation:m3d-botin 2.2s ease forwards}@keyframes m3d-botin{0%{opacity:0;transform:translateX(-10px)}10%{opacity:1;transform:none}80%{opacity:1}100%{opacity:0}}
+.m3d-burbuja{position:absolute;left:0;top:0;transform:translate(-50%,-100%);font:700 13px system-ui,sans-serif;color:#111;background:#fff;padding:4px 10px;border-radius:12px;pointer-events:none;white-space:nowrap;box-shadow:0 2px 6px #0006;z-index:6}
 .m3d-otro{position:absolute;left:0;top:0;transform:translate(-50%,-100%);font:600 12px system-ui,sans-serif;color:#fff;background:#0369a1cc;padding:2px 8px;border-radius:10px;pointer-events:none;white-space:nowrap}
 .m3d-hablar{position:absolute;left:50%;bottom:44px;transform:translateX(-50%);font:600 13px system-ui,sans-serif;color:#fff;background:#000a;border:1px solid #fff6;padding:6px 12px;border-radius:10px;pointer-events:none;display:none}
 .m3d-acc button.hab{display:none;background:#b45309cc}
@@ -557,6 +560,7 @@ export function iniciarMundo3D(host, ctx) {
   const ponerAvatar = (c) => { jugV.ap = aspectoDesde(c || aspectoJugadorDefecto()); jugV.partes = cuerpo(jugV.ap); };
   ponerAvatar(ctx.avatar);
   // ----- otros jugadores conectados (compañeros): llegan del servidor cada par de segundos y se mueven suavizados -----
+  let cercaOtro = null;
   const otros = new Map(), esColor = (c) => typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c);
   const avatarSeguro = (a) => { const o = {}; if (a && typeof a === "object") { for (const k of ["piel", "pelo", "ropa", "pant", "accCol", "capa"]) if (esColor(a[k])) o[k] = a[k]; if (["casco", "capucha", "corona", "gafas"].includes(a.acc)) o.acc = a.acc; o.largo = a.largo === true; } return o; };
   function setOtros(lista) {
@@ -567,14 +571,16 @@ export function iniciarMundo3D(host, ctx) {
       const llave = JSON.stringify(j.avatar || null);
       if (!o) {
         const el = document.createElement("div"); el.className = "m3d-otro"; el.style.display = "none"; raiz.append(el);
-        o = { id, n: { x: +j.x, y: +j.y, z: +j.z, hecha: true, tipo: "jugador" }, tx: +j.x, ty: +j.y, tz: +j.z, th: (+j.yaw || 0) + Math.PI, h: (+j.yaw || 0) + Math.PI, fase: Math.random() * 6, amp: 0, cab: 0, nodFijo: 0, mover: false, habla: false, dist: 99, el, llave: null };
+        const bub = document.createElement("div"); bub.className = "m3d-burbuja"; bub.style.display = "none"; raiz.append(bub);
+        o = { id, n: { x: +j.x, y: +j.y, z: +j.z, hecha: true, tipo: "jugador" }, tx: +j.x, ty: +j.y, tz: +j.z, th: (+j.yaw || 0) + Math.PI, h: (+j.yaw || 0) + Math.PI, fase: Math.random() * 6, amp: 0, cab: 0, nodFijo: 0, mover: false, habla: false, dist: 99, el, bub, llave: null };
         otros.set(id, o);
       }
       if (o.llave !== llave) { o.llave = llave; o.ap = aspectoDesde({ piel: "#e0ac84", pelo: "#4a2f1b", ropa: "#3b6fb6", pant: "#3b3f55", ...avatarSeguro(j.avatar) }); o.partes = cuerpo(o.ap); }
       o.tx = +j.x; o.ty = +j.y; o.tz = +j.z; o.th = (+j.yaw || 0) + Math.PI;
+      o.frase = FRASES_CHAT[j.frase] || ""; if (o.bub.textContent !== o.frase) o.bub.textContent = o.frase;
       const txt = String(j.nombre || "Compañero").slice(0, 40); if (o.el.textContent !== txt) o.el.textContent = "👤 " + txt;
     }
-    for (const [id, o] of otros) if (!ids.has(id)) { o.el.remove(); otros.delete(id); }
+    for (const [id, o] of otros) if (!ids.has(id)) { o.el.remove(); o.bub.remove(); otros.delete(id); }
   }
   function moverOtros(dt) {
     for (const o of otros.values()) {
@@ -585,6 +591,8 @@ export function iniciarMundo3D(host, ctx) {
       const mover = d > .08; o.mover = mover; o.amp += ((mover ? 1 : 0) - o.amp) * Math.min(1, 8 * dt); if (mover) o.fase += dt * 9;
       o.dist = Math.hypot(o.n.x - jug.x, o.n.z - jug.z);
     }
+    let cer = null, md = 8; for (const o of otros.values()) if (o.dist < md) { md = o.dist; cer = o; } // ¿hay alguien cerca para saludar?
+    const nom = cer ? cer.el.textContent.replace("👤 ", "") : null; if (nom !== cercaOtro) { cercaOtro = nom; try { ctx.alCerca && ctx.alCerca(nom); } catch (_) {} }
   }
   let vis = [], hablandoCon = null;
   function limpiarNpcs() { vis.forEach((v) => v.el.remove()); vis = []; }
@@ -853,7 +861,7 @@ export function iniciarMundo3D(host, ctx) {
   const on = (obj, ev, fn, op) => { obj.addEventListener(ev, fn, op); escuchas.push([obj, ev, fn, op]); };
   on(window, "keydown", (e) => {
     if (pausado || (!jugando && !bloqueado())) return;
-    const k = e.key.toLowerCase(); if (k === "e") { hablar(); return; } if (k === "i" || k === "b") { try { ctx.alInventario && ctx.alInventario(); } catch (_) {} return; } if (k === "v") { cam.modo = (cam.modo + 1) % 3; try { ctx.alCamara && ctx.alCamara(cam.modo); } catch (_) {} return; } if ([" ", "arrowup", "arrowdown"].includes(k)) e.preventDefault();
+    const k = e.key.toLowerCase(); if (k === "e") { hablar(); return; } if (k === "t") { try { ctx.alChat && ctx.alChat(); } catch (_) {} return; } if (k === "i" || k === "b") { try { ctx.alInventario && ctx.alInventario(); } catch (_) {} return; } if (k === "v") { cam.modo = (cam.modo + 1) % 3; try { ctx.alCamara && ctx.alCamara(cam.modo); } catch (_) {} return; } if ([" ", "arrowup", "arrowdown"].includes(k)) e.preventDefault();
     tec[mapaTecla(k)] = true; if (k === "f" && sinBloqueo) picar = true;
     const n = +e.key; if (n >= 1 && n <= 9) { const mios = COLOCABLES.filter((b) => ctx.cantidad(b) > 0 || b <= 9); if (mios[n - 1]) seleccionar(mios[n - 1]); }
   });
@@ -1111,7 +1119,8 @@ export function iniciarMundo3D(host, ctx) {
     }
     for (const o of otros.values()) { // etiquetas de los compañeros
       const ey = o.n.y + 2.3, q = [M[0] * o.n.x + M[4] * ey + M[8] * o.n.z + M[12], M[1] * o.n.x + M[5] * ey + M[9] * o.n.z + M[13], M[3] * o.n.x + M[7] * ey + M[11] * o.n.z + M[15]];
-      if (o.dist > 40 || q[2] <= .1) o.el.style.display = "none"; else { o.el.style.display = ""; o.el.style.left = ((q[0] / q[2] * .5 + .5) * w) + "px"; o.el.style.top = ((1 - (q[1] / q[2] * .5 + .5)) * hh) + "px"; }
+      if (o.dist > 40 || q[2] <= .1) { o.el.style.display = "none"; o.bub.style.display = "none"; } else { const lx = ((q[0] / q[2] * .5 + .5) * w) + "px", ty = ((1 - (q[1] / q[2] * .5 + .5)) * hh);
+        o.el.style.display = ""; o.el.style.left = lx; o.el.style.top = ty + "px"; o.bub.style.display = o.frase ? "" : "none"; o.bub.style.left = lx; o.bub.style.top = (ty - 24) + "px"; }
     }
     cercano = pausado ? null : cerca;
     animalCer = null;
@@ -1177,7 +1186,7 @@ export function iniciarMundo3D(host, ctx) {
       escuchas.forEach(([o, e, f, op]) => o.removeEventListener(e, f, op));
       if (bloqueado()) document.exitPointerLock();
       chunks.forEach((c) => { if (c) { gl.deleteBuffer(c.pb); gl.deleteBuffer(c.ub); gl.deleteBuffer(c.sb); gl.deleteBuffer(c.ib); } });
-      sonido.cerrar(); limpiarNpcs(); otros.forEach((o) => o.el.remove()); otros.clear(); gl.deleteTexture(tex); const ex = gl.getExtension("WEBGL_lose_context"); if (ex) ex.loseContext();
+      sonido.cerrar(); limpiarNpcs(); otros.forEach((o) => { o.el.remove(); o.bub.remove(); }); otros.clear(); gl.deleteTexture(tex); const ex = gl.getExtension("WEBGL_lose_context"); if (ex) ex.loseContext();
       raiz.remove();
     },
   };
