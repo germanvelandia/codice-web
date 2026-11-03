@@ -12,6 +12,19 @@ function Icono({ item }) {
   return <canvas ref={ref} width={16} height={16} style={{ width: 30, height: 30, imageRendering: "pixelated" }} />;
 }
 
+const CSS_ENTRADA = `
+.m3d-puerta,.m3d-velo{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#fff;padding:0 16px}
+.m3d-velo{z-index:40}
+.m3d-puerta,.m3d-velo{background:radial-gradient(circle at 50% 45%,#5b21b6 0%,#2e1065 55%,#0b0420 100%)}
+.m3d-velo{transition:opacity .7s ease,transform .7s ease}
+.m3d-velo-fuera{opacity:0;transform:scale(1.35);pointer-events:none}
+.m3d-anillo{position:relative;width:130px;height:170px;border-radius:50%;background:conic-gradient(from 0deg,#a78bfa,#38bdf8,#f0abfc,#a78bfa);padding:10px;animation:m3d-gira 4s linear infinite;box-shadow:0 0 40px #a78bfa88}
+.m3d-anillo i{display:block;width:100%;height:100%;border-radius:50%;background:radial-gradient(circle,#1e1b4b 0%,#4c1d95 70%,#7c3aed 100%);animation:m3d-pulso 2.2s ease-in-out infinite}
+.m3d-anillo-g{animation-duration:1.6s}
+@keyframes m3d-gira{to{transform:rotate(360deg)}}
+@keyframes m3d-pulso{50%{transform:scale(.88);filter:brightness(1.4)}}
+@media (prefers-reduced-motion:reduce){.m3d-anillo,.m3d-anillo i{animation:none}.m3d-velo{transition:none}}`;
+
 export default function Mundo3D({ estudianteInfo }) {
   const est = estudianteInfo?.id;
   const miGrado = String(estudianteInfo?.grado_id ?? "");
@@ -31,6 +44,15 @@ export default function Mundo3D({ estudianteInfo }) {
   const [dialogo, setDialogo] = useState(null);
   const [prog, setProg] = useState({ xp: null, oro: null });
   const npcsRef = useRef([]);
+  // entrada al mundo: puerta + transición (también al viajar por un portal)
+  const [entrado, setEntrado] = useState(false);
+  const [velo, setVelo] = useState(false), [minOk, setMinOk] = useState(true), [veloTxt, setVeloTxt] = useState("");
+  const relojVelo = useRef(null);
+  const abrirVelo = (txt) => { setVeloTxt(txt); setVelo(true); setMinOk(false); clearTimeout(relojVelo.current); relojVelo.current = setTimeout(() => setMinOk(true), 1700); };
+  useEffect(() => () => clearTimeout(relojVelo.current), []);
+  useEffect(() => { if (velo && minOk && listo) { const t = setTimeout(() => setVelo(false), 150); return () => clearTimeout(t); } }, [velo, minOk, listo]);
+  const entrar = () => { abrirVelo("Cruzando el portal hacia el curso " + gradoVer + "…"); setEntrado(true); };
+  const salir = () => { setEntrado(false); setVelo(false); setDialogo(null); };
   const avisar = (t) => { setMsg(t); clearTimeout(reloj.current); reloj.current = setTimeout(() => setMsg(""), 3500); };
   useEffect(() => () => clearTimeout(reloj.current), []);
 
@@ -94,7 +116,7 @@ export default function Mundo3D({ estudianteInfo }) {
 
   // crear el mundo del grado que se mira
   useEffect(() => {
-    if (!est || !grados || !gradoVer || !host.current) return;
+    if (!entrado || !est || !grados || !gradoVer || !host.current) return;
     let vivo = true; let relojPoll = null; let c = null; setListo(false);
     (async () => {
       try {
@@ -110,7 +132,7 @@ export default function Mundo3D({ estudianteInfo }) {
           poner: async (x, y, z, i) => { const r = await api.ponerMundo3D(est, x, y, z, i); fijarInv({ ...invRef.current, [i]: r.cantidad }); setColocados((n) => n + 1); return r; },
           alSeleccion: (i) => { selRef.current = i; setSel(i); },
           alZona: setZona, alError: (t) => avisar(t),
-          alPortal: (id) => { avisar("Viajando al mundo de " + (String(id) === miGrado ? "tu curso" : "curso " + id) + "…"); setGradoVer(String(id)); },
+          alPortal: (id) => { const t = "Viajando al mundo de " + (String(id) === miGrado ? "tu curso" : "curso " + id) + "…"; abrirVelo(t); setGradoVer(String(id)); },
         });
         c.seleccionar(selRef.current); ctl.current = c; setListo(true);
         // ver lo que construyen los compañeros mientras juegas
@@ -124,7 +146,7 @@ export default function Mundo3D({ estudianteInfo }) {
       } catch (er) { if (vivo) setError(er.message || "No se pudo cargar el mundo."); }
     })();
     return () => { vivo = false; clearInterval(relojPoll); if (c) c.cerrar(); if (ctl.current === c) ctl.current = null; };
-  }, [est, grados, gradoVer]); // eslint-disable-line
+  }, [est, grados, gradoVer, entrado]); // eslint-disable-line
 
   const elegir = (i) => { setSel(i); selRef.current = i; ctl.current && ctl.current.seleccionar(i); };
   const fabricar = async (r) => {
@@ -143,15 +165,32 @@ export default function Mundo3D({ estudianteInfo }) {
         {prog.xp != null && <span className="text-[11px] font-bold rounded-full px-2.5 py-0.5 bg-amber-100 text-amber-700">⭐ {prog.xp} XP · 🪙 {prog.oro}</span>}
         {zona && <span className="text-[11px] font-bold rounded-full px-2.5 py-0.5 bg-emerald-100 text-emerald-700">📍 {zona}</span>}
         {visitando && <><span className="text-[11px] font-bold rounded-full px-2.5 py-0.5 bg-amber-100 text-amber-700">👀 Solo mirar</span>
-          <button onClick={() => setGradoVer(miGrado)} className="text-[11px] font-bold text-violet-600 hover:underline">← Volver a mi mundo</button></>}
+          <button onClick={() => { abrirVelo("Volviendo a tu mundo…"); setGradoVer(miGrado); }} className="text-[11px] font-bold text-violet-600 hover:underline">← Volver a mi mundo</button></>}
+        {entrado && <button onClick={salir} className="text-[11px] font-bold text-slate-500 hover:underline">Salir del mundo</button>}
         {msg && <span className="ml-auto text-[12px] font-semibold text-rose-600" role="status">{msg}</span>}
       </div>
 
-      <div className="relative">
+      <div className="relative rounded-xl overflow-hidden" style={{ position: "relative", overflow: "hidden", minHeight: entrado ? 120 : 380 }}>
+        <style>{CSS_ENTRADA}</style>
         <div ref={host} style={{ minHeight: 120 }} />
+        {!entrado && (
+          <div className="m3d-puerta absolute inset-0 flex flex-col items-center justify-center text-center text-white px-4">
+            <div className="m3d-anillo" aria-hidden="true"><i /></div>
+            <h2 className="mt-5 text-xl font-extrabold">Mundo 3D · Curso {gradoVer || miGrado}</h2>
+            <p className="text-sm text-violet-100 max-w-sm mt-1">Un mundo de bloques para tu curso: construye, explora la aldea y visita a los personajes. Cruza el portal para entrar.</p>
+            <button onClick={entrar} disabled={!grados || !gradoVer} className="mt-4 rounded-full px-6 py-2.5 font-extrabold bg-white text-violet-700 shadow-lg hover:scale-105 transition disabled:opacity-50">{grados ? "🌀 Entrar al mundo" : "Preparando…"}</button>
+          </div>
+        )}
+        {entrado && (
+          <div className={`m3d-velo absolute inset-0 z-40 flex flex-col items-center justify-center text-white text-center px-4 ${velo ? "" : "m3d-velo-fuera"}`} aria-live="polite">
+            <div className="m3d-anillo m3d-anillo-g" aria-hidden="true"><i /></div>
+            <p className="mt-5 font-extrabold text-lg">{veloTxt}</p>
+            <p className="text-xs text-violet-200 mt-1">Preparando bloques, personajes y portales…</p>
+          </div>
+        )}
         <PanelAldea dialogo={dialogo} datos={datos} est={est} alHecha={alHecha} alHechoAcertijo={alHechoAcertijo} cerrar={cerrarDialogo} />
       </div>
-      {!listo && <p className="text-xs text-slate-400">Preparando el mundo…</p>}
+      {entrado && !listo && !velo && <p className="text-xs text-slate-400">Preparando el mundo…</p>}
 
       <div className="flex flex-wrap gap-1.5" role="group" aria-label="Bloques">
         {COLOCABLES.map((id, i) => (
