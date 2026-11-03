@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { montarJuego } from "../game/juegosUI";
 import { TIPOS_ACERTIJO } from "../game/acertijos";
 import { CSS_JUEGO } from "../game3d/juegoCss";
@@ -24,7 +24,16 @@ const Marco = ({ titulo, sub, emoji, onCerrar, children }) => (
 
 const Premio = ({ xp, oro }) => <span className="text-[11px] font-bold text-amber-600">+{xp || 0} XP · +{oro || 0} 🪙</span>;
 
-function Mision({ npc, mision, hecha, est, alHecha, volver, cerrar }) {
+// Mezcla las respuestas cada vez que se abre la misión (como en el Mundo 2D): así la correcta no queda siempre en la A.
+// Devuelve la misión con las opciones en el nuevo orden y el índice de la correcta recalculado.
+function mezclada(m) {
+  const n = (m.opciones || []).length, orden = Array.from({ length: n }, (_, i) => i);
+  for (let i = n - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [orden[i], orden[j]] = [orden[j], orden[i]]; }
+  return { ...m, opciones: orden.map((i) => m.opciones[i]), correcta: orden.indexOf(Number(m.correcta)), _orig: m };
+}
+
+function Mision({ npc, mision: misionOriginal, hecha, est, alHecha, volver, cerrar }) {
+  const mision = useMemo(() => mezclada(misionOriginal), [misionOriginal.id]); // eslint-disable-line
   const [elegida, setElegida] = useState(null);
   const [estado, setEstado] = useState(hecha ? "hecha" : "pregunta"); // pregunta | mal | guardando | bien | hecha | error
   const [res, setRes] = useState(null);
@@ -33,7 +42,7 @@ function Mision({ npc, mision, hecha, est, alHecha, volver, cerrar }) {
     setElegida(i);
     if (i !== mision.correcta) { setEstado("mal"); return; }
     setEstado("guardando");
-    let r; try { r = await mundoApi.completarMisionMundo(est, mision); } catch (e) { r = { ok: false, mensaje: e && e.message }; }
+    let r; try { r = await mundoApi.completarMisionMundo(est, misionOriginal); } catch (e) { r = { ok: false, mensaje: e && e.message }; }
     if (!r.ok) { setRes(r); setEstado("error"); return; }
     setRes(r); setEstado(r.yaEstaba ? "hecha" : "bien"); alHecha(mision.id, r);
   };
