@@ -15,7 +15,7 @@
 // =====================================================================================
 
 export const SX = 128, SY = 40, SZ = 128, CH = 16, NCX = SX / CH, NCZ = SZ / CH;
-export const CENTRO = 64, RADIO_PLAZA = 12; // plaza protegida: 25 × 25 alrededor del centro
+export const CENTRO = 64, RADIO_PLAZA = 26, RADIO_ADOQUIN = 12; // la aldea (53 × 53) está protegida; el empedrado de la plaza es de 25 × 25
 const AIRE = 0, AGUA = 11, PORTAL = 12, ADOQUIN = 13;
 
 export const NOMBRES = { 1: "Pasto", 2: "Tierra", 3: "Piedra", 4: "Tronco", 5: "Hojas", 6: "Tablones", 7: "Ladrillo", 8: "Cristal", 9: "Arena", 10: "Mineral", 11: "Agua", 12: "Portal", 13: "Adoquín" };
@@ -87,17 +87,38 @@ function altura(x, z, seed) {
   h += mt * mt * (3 - 2 * mt) * 24 * (.75 + .5 * ruidoV(seed + 3, x * .09, z * .09));
   const ld = Math.hypot((x - LAGO.x) * .8, z - LAGO.z), lg = Math.max(0, 1 - ld / LAGO.r);
   h -= lg * lg * (3 - 2 * lg) * 8;
-  const e = Math.max(Math.abs(x - CENTRO), Math.abs(z - CENTRO)), f = Math.min(1, Math.max(0, (e - 14) / 10)), ff = f * f * (3 - 2 * f);
+  const e = Math.max(Math.abs(x - CENTRO), Math.abs(z - CENTRO)), f = Math.min(1, Math.max(0, (e - RADIO_PLAZA) / 10)), ff = f * f * (3 - 2 * f);
   h = 12 + (h - 12) * ff;
   return Math.max(2, Math.min(SY - 8, Math.round(h)));
 }
 export function zonaDe(x, z) {
-  if (Math.max(Math.abs(x - CENTRO), Math.abs(z - CENTRO)) <= 16) return "Aldea del Códice";
+  if (Math.max(Math.abs(x - CENTRO), Math.abs(z - CENTRO)) <= RADIO_PLAZA + 3) return "Aldea del Códice";
   if (Math.hypot(x - MONTE.x, z - MONTE.z) < MONTE.r) return "Montaña del Esfuerzo";
   if (Math.hypot((x - LAGO.x) * .8, z - LAGO.z) < LAGO.r + 3) return "Lago";
   if (x < 60 && z < 60) return "Bosque de la Curiosidad";
   return "Campos de Oakhaven";
 }
+
+
+// ---------- la aldea: edificios con su lugar (las claves son las mismas del Mundo 2D) ----------
+export const EDIFICIOS = [
+  { key: "biblioteca", nombre: "Biblioteca", emoji: "📚", cx: 47, cz: 47, pared: 7 },
+  { key: "agora", nombre: "Ágora de la Ética", emoji: "⚖️", cx: 64, cz: 43, pared: 3 },
+  { key: "templo", nombre: "Templo de la Gratitud", emoji: "🕊️", cx: 81, cz: 47, pared: 9 },
+  { key: "mercado", nombre: "Mercado del Códice", emoji: "🛒", cx: 43, cz: 64, pared: 6 },
+  { key: "acertijos", nombre: "Casa de los Acertijos", emoji: "🧩", cx: 85, cz: 64, pared: 7 },
+  { key: "comarca", nombre: "Sala de la Comarca", emoji: "🏰", cx: 47, cz: 81, pared: 3 },
+  { key: "posada", nombre: "Posada del Descanso", emoji: "🛏️", cx: 81, cz: 81, pared: 6 },
+];
+// Puntos de interés al aire libre (mismas claves de lugar que el Mundo 2D): [x, z, nombre]
+export const PUNTOS = {
+  claro: [28, 28, "Claro del Bosque"], arroyo: [36, 44, "Arroyo Cantarino"], mirador: [22, 46, "Mirador"], campamento: [44, 22, "Campamento del Ermitaño"],
+  cascada: [14, 32, "Cascada Escondida"], roble: [30, 10, "Gran Roble"], ruinas: [12, 12, "Ruinas Antiguas"],
+  sendero: [88, 42, "Sendero de Piedra"], cueva: [96, 46, "Cueva del Eco"], cumbre: [101, 26, "Cumbre"],
+  orilla: [50, 93, "Orilla"], muelle: [66, 93, "Muelle"], isla: [64, 106, "Isla Serena"],
+};
+// De qué lado está la puerta (mirando a la plaza)
+function ladoPuerta(e) { const dx = CENTRO - e.cx, dz = CENTRO - e.cz; return Math.abs(dx) > Math.abs(dz) ? { eje: "x", sg: Math.sign(dx) } : { eje: "z", sg: Math.sign(dz) }; }
 
 // ---------- portales (en la plaza) ----------
 // Marco de 4 de ancho × 5 de alto, hueco de 2 × 3. Filas al norte (z=54) y al sur (z=74) de la plaza.
@@ -123,7 +144,7 @@ export function iniciarMundo3D(host, ctx) {
   const alt = new Int16Array(SX * SZ);
   for (let z = 0; z < SZ; z++) for (let x = 0; x < SX; x++) {
     const h = altura(x, z, semilla); alt[z * SX + x] = h;
-    const enPlaza = enPlazaProtegida(x, z), nearLago = Math.hypot((x - LAGO.x) * .8, z - LAGO.z) < LAGO.r + 3;
+    const enPlaza = Math.max(Math.abs(x - CENTRO), Math.abs(z - CENTRO)) <= RADIO_ADOQUIN, nearLago = Math.hypot((x - LAGO.x) * .8, z - LAGO.z) < LAGO.r + 3;
     for (let y = 0; y <= h; y++) {
       let b;
       if (y === h) b = enPlaza ? ADOQUIN : (h <= 11 || (h === 12 && nearLago)) ? 9 : (h >= 30 ? 3 : 1);
@@ -144,7 +165,7 @@ export function iniciarMundo3D(host, ctx) {
   }
   for (let z = 3; z < SZ - 3; z++) for (let x = 3; x < SX - 3; x++) { // árboles (más densos en el bosque)
     const a = alt[z * SX + x]; if (mundo[idx(x, a, z)] !== 1) continue;
-    if (Math.max(Math.abs(x - CENTRO), Math.abs(z - CENTRO)) < 18) continue;
+    if (Math.max(Math.abs(x - CENTRO), Math.abs(z - CENTRO)) < RADIO_PLAZA + 6) continue;
     const p = zonaDe(x, z) === "Bosque de la Curiosidad" ? .035 : .004;
     if (rnd() < p) {
       const t = 4 + ((rnd() * 2) | 0);
@@ -165,6 +186,57 @@ export function iniciarMundo3D(host, ctx) {
     portalesZona.push({ ...p, id: info.id, nombre: info.nombre });
     etiquetas.push({ x: p.x + 2, y: p.y + 5.6, z: p.z + .5, texto: info.nombre });
   });
+
+  // edificios de la aldea (9 × 9, paredes de 5 de alto, techo, puerta de 3 × 3 hacia la plaza, ventanas de cristal)
+  for (const e of EDIFICIOS) {
+    const d = ladoPuerta(e), y0 = 12;
+    for (let dx = -4; dx <= 4; dx++) for (let dz = -4; dz <= 4; dz++) {
+      const x = e.cx + dx, z = e.cz + dz, borde = Math.abs(dx) === 4 || Math.abs(dz) === 4;
+      mundo[idx(x, y0, z)] = 6;
+      for (let y = y0 + 1; y <= y0 + 5; y++) mundo[idx(x, y, z)] = borde ? e.pared : AIRE;
+      mundo[idx(x, y0 + 6, z)] = 6;
+      if (Math.abs(dx) <= 3 && Math.abs(dz) <= 3) mundo[idx(x, y0 + 7, z)] = 6;
+    }
+    for (let o = -1; o <= 1; o++) for (let y = y0 + 1; y <= y0 + 3; y++) {
+      const x = d.eje === "x" ? e.cx + d.sg * 4 : e.cx + o, z = d.eje === "x" ? e.cz + o : e.cz + d.sg * 4; mundo[idx(x, y, z)] = AIRE;
+    }
+    for (const o of [-2, 2]) for (const y of [y0 + 2, y0 + 3]) {
+      if (d.eje === "x") { mundo[idx(e.cx - d.sg * 4, y, e.cz + o)] = 8; mundo[idx(e.cx + o, y, e.cz - 4)] = 8; mundo[idx(e.cx + o, y, e.cz + 4)] = 8; }
+      else { mundo[idx(e.cx + o, y, e.cz - d.sg * 4)] = 8; mundo[idx(e.cx - 4, y, e.cz + o)] = 8; mundo[idx(e.cx + 4, y, e.cz + o)] = 8; }
+    }
+    mundo[idx(e.cx, y0 + 1, e.cz)] = 6; mundo[idx(e.cx + 1, y0 + 1, e.cz)] = 6; // una mesa al centro
+    etiquetas.push({ x: e.cx + .5, y: y0 + 9.2, z: e.cz + .5, texto: e.emoji + " " + e.nombre, clase: "edif" });
+  }
+  for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) if (dx * dx + dz * dz <= 5) { // la isla del lago
+    const x = 64 + dx, z = 106 + dz; for (let y = 1; y <= 12; y++) if (!mundo[idx(x, y, z)] || mundo[idx(x, y, z)] === AGUA) mundo[idx(x, y, z)] = 9;
+  }
+
+  // ----- personajes (NPC) -----
+  let npcs = [];
+  function posNpc(lista) {
+    const porLugar = {};
+    for (const n of lista) (porLugar[n.lugar || "plaza"] = porLugar[n.lugar || "plaza"] || []).push(n);
+    const res = [];
+    for (const [lugar, ns] of Object.entries(porLugar)) {
+      ns.forEach((n, i) => {
+        let x, z, y = 13; const ed = EDIFICIOS.find((e) => e.key === lugar);
+        if (ed) {
+          const d = ladoPuerta(ed), o = ns.length === 1 ? 0 : -2.5 + (5 * i) / (ns.length - 1), fondo = -d.sg * 3;
+          x = d.eje === "x" ? ed.cx + fondo + .5 : ed.cx + o + .5; z = d.eje === "x" ? ed.cz + o + .5 : ed.cz + fondo + .5;
+        } else if (lugar === "plaza" || !PUNTOS[lugar]) { const a = (i / Math.max(1, ns.length)) * Math.PI * 2 + .6; x = CENTRO + .5 + Math.cos(a) * 6; z = CENTRO + .5 + Math.sin(a) * 6 - 1; }
+        else {
+          const pt = PUNTOS[lugar] || [CENTRO + 34 + (hashTxt(lugar) % 20), CENTRO - 30 + (hashTxt(lugar + "z") % 20), lugar];
+          x = pt[0] + .5 + i * 1.6; z = pt[1] + .5; y = alt[Math.floor(z) * SX + Math.floor(x)] + 1; if (lugar === "isla") y = 13;
+        }
+        res.push({ ...n, x, y, z });
+      });
+    }
+    return res;
+  }
+  npcs = posNpc(ctx.npcs || []);
+  // en lugares al aire libre, cada punto de interés lleva un letrero
+  const lugaresConNpc = [...new Set(npcs.map((n) => n.lugar))].filter((l) => PUNTOS[l]);
+  lugaresConNpc.forEach((l) => { const p = PUNTOS[l]; etiquetas.push({ x: p[0] + .5, y: (alt[p[1] * SX + p[0]] || 12) + 3.6, z: p[1] + .5, texto: "📍 " + p[2], clase: "edif" }); });
 
   // ----- cambios guardados -----
   function aplicar(filas, noMarcar) {
@@ -194,16 +266,23 @@ export function iniciarMundo3D(host, ctx) {
 .m3d-joy i{position:absolute;left:35px;top:35px;width:40px;height:40px;border-radius:50%;background:#fff7}
 .m3d-acc{position:absolute;right:12px;bottom:12px;display:none;gap:8px;flex-direction:column}
 .m3d-acc button{width:64px;height:46px;border-radius:10px;border:2px solid #fff6;background:#0007;color:#fff;font:12px monospace;touch-action:none}
-@media (pointer:coarse){.m3d-joy{display:block}.m3d-acc{display:flex}}`;
+.m3d-et.edif{background:#14532dcc;font-size:13px}
+.m3d-npc{position:absolute;left:0;top:0;transform:translate(-50%,-100%);font:600 12px system-ui,sans-serif;color:#fff;background:#92400ecc;padding:2px 8px;border-radius:10px;pointer-events:none;white-space:nowrap}
+.m3d-npc.ok{background:#166534cc}
+.m3d-hablar{position:absolute;left:50%;bottom:44px;transform:translateX(-50%);font:600 13px system-ui,sans-serif;color:#fff;background:#000a;border:1px solid #fff6;padding:6px 12px;border-radius:10px;pointer-events:none;display:none}
+.m3d-acc button.hab{display:none;background:#b45309cc}
+@media (pointer:coarse){.m3d-joy{display:block}.m3d-acc{display:flex}.m3d-hablar{display:none!important}}`;
   const raiz = document.createElement("div"); raiz.className = "m3d";
   const cv = document.createElement("canvas"); cv.width = 800; cv.height = 450; cv.setAttribute("aria-label", "Mundo 3D de bloques");
   const mira = document.createElement("div"); mira.className = "m3d-mira";
   const ayuda = document.createElement("div"); ayuda.className = "m3d-ayuda"; ayuda.textContent = "Haz clic para jugar";
   const joyEl = document.createElement("div"); joyEl.className = "m3d-joy"; joyEl.innerHTML = "<i></i>";
   const acc = document.createElement("div"); acc.className = "m3d-acc";
-  acc.innerHTML = '<button data-k="salto">SALTAR</button><button data-k="picar">PICAR</button><button data-k="poner">PONER</button>';
-  raiz.append(estilo, cv, mira, ayuda, joyEl, acc);
-  const capaEt = etiquetas.map((e) => { const d = document.createElement("div"); d.className = "m3d-et"; d.textContent = "🌀 " + e.texto; d.style.display = "none"; raiz.append(d); return d; });
+  acc.innerHTML = '<button data-k="salto">SALTAR</button><button data-k="picar">PICAR</button><button data-k="poner">PONER</button><button data-k="hablar" class="hab">HABLAR</button>';
+  const hablarEl = document.createElement("div"); hablarEl.className = "m3d-hablar";
+  raiz.append(estilo, cv, mira, ayuda, joyEl, acc, hablarEl);
+  const btnHab = acc.querySelector(".hab");
+  const capaEt = etiquetas.map((e) => { const d = document.createElement("div"); d.className = "m3d-et" + (e.clase ? " " + e.clase : ""); d.textContent = (e.clase ? "" : "🌀 ") + e.texto; d.style.display = "none"; raiz.append(d); return d; });
   host.append(raiz);
 
   // ----- WebGL -----
@@ -250,6 +329,29 @@ export function iniciarMundo3D(host, ctx) {
   const cajaB = gl.createBuffer();
   { const e = .002, a = -e, b = 1 + e; const v = [[a, a, a], [b, a, a], [b, a, a], [b, a, b], [b, a, b], [a, a, b], [a, a, b], [a, a, a], [a, b, a], [b, b, a], [b, b, a], [b, b, b], [b, b, b], [a, b, b], [a, b, b], [a, b, a], [a, a, a], [a, b, a], [b, a, a], [b, b, a], [b, a, b], [b, b, b], [a, a, b], [a, b, b]];
     gl.bindBuffer(gl.ARRAY_BUFFER, cajaB); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(v.flat()), gl.STATIC_DRAW); }
+
+  // ----- personajes (siempre de frente a la cámara) -----
+  const PN = prog("attribute vec2 c;uniform mat4 m;uniform vec3 o;uniform vec3 r;uniform vec2 sz;varying vec2 vu;varying float vd;void main(){vec3 p=o+r*(c.x*sz.x)+vec3(0.0,c.y*sz.y,0.0);vec4 q=m*vec4(p,1.0);gl_Position=q;vu=vec2(c.x+0.5,1.0-c.y);vd=q.w;}",
+    "precision mediump float;uniform sampler2D t;uniform vec3 cn;varying vec2 vu;varying float vd;void main(){vec4 c=texture2D(t,vu);if(c.a<0.5)discard;float f=clamp((vd-40.0)/45.0,0.0,1.0);gl_FragColor=vec4(mix(c.rgb,cn,f),1.0);}");
+  const locN = { c: gl.getAttribLocation(PN, "c"), m: gl.getUniformLocation(PN, "m"), o: gl.getUniformLocation(PN, "o"), r: gl.getUniformLocation(PN, "r"), sz: gl.getUniformLocation(PN, "sz"), t: gl.getUniformLocation(PN, "t"), cn: gl.getUniformLocation(PN, "cn") };
+  const esqB = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, esqB); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-.5, 0, .5, 0, .5, 1, -.5, 0, .5, 1, -.5, 1]), gl.STATIC_DRAW);
+  let vis = [];
+  function limpiarNpcs() { vis.forEach((v) => { gl.deleteTexture(v.tex); v.el.remove(); }); vis = []; }
+  function montarNpcs(lista) {
+    limpiarNpcs(); npcs = posNpc(lista || []);
+    for (const n of npcs) {
+      const c = document.createElement("canvas"); c.width = c.height = 128; const g = c.getContext("2d");
+      g.fillStyle = "rgba(0,0,0,.28)"; g.beginPath(); g.ellipse(64, 118, 34, 8, 0, 0, 7); g.fill();
+      g.fillStyle = `hsl(${hashTxt(n.id || n.nombre) % 360},55%,45%)`; g.strokeStyle = "#fff"; g.lineWidth = 5; g.beginPath(); g.arc(64, 62, 46, 0, 7); g.fill(); g.stroke();
+      g.font = "70px 'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(n.emoji || "🧑", 64, 62);
+      const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+      for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+      const el = document.createElement("div"); el.className = "m3d-npc" + (n.hecha ? " ok" : ""); el.textContent = (n.hecha ? "✅ " : (n.marca || "❗ ")) + n.nombre; el.style.display = "none"; raiz.append(el);
+      vis.push({ n, tex: t, el });
+    }
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+  }
+  montarNpcs(ctx.npcs);
 
   // ----- cámara -----
   const perspectiva = (fov, asp, n, f) => { const t = 1 / Math.tan(fov / 2); return [t / asp, 0, 0, 0, 0, t, 0, 0, 0, 0, (f + n) / (n - f), -1, 0, 0, 2 * f * n / (n - f), 0]; };
@@ -302,7 +404,13 @@ export function iniciarMundo3D(host, ctx) {
   }
 
   // ----- acciones -----
-  let sel = 1, picar = false, picando = null, ocupado = false;
+  let sel = 1, picar = false, picando = null, ocupado = false, pausado = false, cercano = null;
+  function limpiarEntrada() { for (const k in tec) tec[k] = false; picar = false; joy.x = joy.y = 0; }
+  function hablar() {
+    if (pausado || !cercano) return;
+    pausado = true; limpiarEntrada(); if (document.pointerLockElement === cv) document.exitPointerLock();
+    try { ctx.alNpc && ctx.alNpc(cercano); } catch (_) {}
+  }
   const clave = (x, y, z) => x + "," + y + "," + z;
   const aviso = (t) => { try { ctx.alError && ctx.alError(t); } catch (_) {} };
   function puedeEditar(x, y, z) {
@@ -359,8 +467,8 @@ export function iniciarMundo3D(host, ctx) {
   const escuchas = [];
   const on = (obj, ev, fn, op) => { obj.addEventListener(ev, fn, op); escuchas.push([obj, ev, fn, op]); };
   on(window, "keydown", (e) => {
-    if (!jugando && !bloqueado()) return;
-    const k = e.key.toLowerCase(); if ([" ", "arrowup", "arrowdown"].includes(k)) e.preventDefault();
+    if (pausado || (!jugando && !bloqueado())) return;
+    const k = e.key.toLowerCase(); if (k === "e") { hablar(); return; } if ([" ", "arrowup", "arrowdown"].includes(k)) e.preventDefault();
     tec[mapaTecla(k)] = true; if (k === "f" && sinBloqueo) picar = true;
     const n = +e.key; if (n >= 1 && n <= 8) seleccionar(COLOCABLES[n - 1]);
   });
@@ -369,6 +477,7 @@ export function iniciarMundo3D(host, ctx) {
   on(cv, "contextmenu", (e) => e.preventDefault());
   const toques = {};
   on(cv, "pointerdown", (e) => {
+    if (pausado) return;
     if (e.pointerType === "touch") {
       cv.setPointerCapture(e.pointerId); ayuda.textContent = ""; jugando = true;
       const r = cv.getBoundingClientRect(); toques[e.pointerId] = { izq: (e.clientX - r.left) < r.width * .4, x: e.clientX, y: e.clientY, ox: e.clientX, oy: e.clientY }; return;
@@ -391,7 +500,7 @@ export function iniciarMundo3D(host, ctx) {
   on(cv, "pointerup", finT); on(cv, "pointercancel", finT);
   acc.querySelectorAll("button").forEach((b) => {
     const k = b.dataset.k;
-    on(b, "pointerdown", (e) => { e.preventDefault(); jugando = true; ayuda.textContent = ""; if (k === "salto") tec[" "] = true; else if (k === "picar") picar = true; else poner(); });
+    on(b, "pointerdown", (e) => { e.preventDefault(); if (k === "hablar") { hablar(); return; } if (pausado) return; jugando = true; ayuda.textContent = ""; if (k === "salto") tec[" "] = true; else if (k === "picar") picar = true; else poner(); });
     const up = () => { if (k === "salto") tec[" "] = false; else if (k === "picar") picar = false; };
     on(b, "pointerup", up); on(b, "pointerleave", up); on(b, "pointercancel", up);
   });
@@ -416,6 +525,18 @@ export function iniciarMundo3D(host, ctx) {
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ch.ib); gl.drawElements(gl.TRIANGLES, ch.n, gl.UNSIGNED_INT, 0);
     }
     gl.disableVertexAttribArray(loc.u); gl.disableVertexAttribArray(loc.s);
+    if (vis.length) {
+      const tt = performance.now() / 1000, cyw = Math.cos(jug.yaw), syw = Math.sin(jug.yaw);
+      gl.useProgram(PN); gl.uniformMatrix4fv(locN.m, false, new Float32Array(M)); gl.uniform1i(locN.t, 0); gl.uniform3f(locN.cn, cielo[0], cielo[1], cielo[2]);
+      gl.uniform3f(locN.r, cyw, 0, -syw); gl.uniform2f(locN.sz, 1.3, 1.7);
+      gl.bindBuffer(gl.ARRAY_BUFFER, esqB); gl.enableVertexAttribArray(locN.c); gl.vertexAttribPointer(locN.c, 2, gl.FLOAT, false, 0, 0);
+      gl.disable(gl.CULL_FACE);
+      for (const v of vis) {
+        if (Math.hypot(v.n.x - jug.x, v.n.z - jug.z) > 70) continue;
+        gl.uniform3f(locN.o, v.n.x, v.n.y + Math.sin(tt * 2 + v.n.x) * .04, v.n.z); gl.bindTexture(gl.TEXTURE_2D, v.tex); gl.drawArrays(gl.TRIANGLES, 0, 6);
+      }
+      gl.enable(gl.CULL_FACE); gl.disableVertexAttribArray(locN.c); gl.bindTexture(gl.TEXTURE_2D, tex);
+    }
     const h = apuntar();
     if (h) {
       gl.useProgram(PL); gl.uniformMatrix4fv(locL.m, false, new Float32Array(mul(M, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, h.x, h.y, h.z, 1])));
@@ -426,17 +547,30 @@ export function iniciarMundo3D(host, ctx) {
     const w = cv.clientWidth, hh = cv.clientHeight;
     etiquetas.forEach((e, i) => {
       const dx = e.x - jug.x, dz = e.z - jug.z, dist = Math.hypot(dx, dz), el = capaEt[i];
-      if (dist > 30) { el.style.display = "none"; return; }
+      if (dist > (e.clase ? 22 : 30)) { el.style.display = "none"; return; }
       const q = [M[0] * e.x + M[4] * e.y + M[8] * e.z + M[12], M[1] * e.x + M[5] * e.y + M[9] * e.z + M[13], M[3] * e.x + M[7] * e.y + M[11] * e.z + M[15]];
       if (q[2] <= .1) { el.style.display = "none"; return; }
       el.style.display = ""; el.style.left = ((q[0] / q[2] * .5 + .5) * w) + "px"; el.style.top = ((1 - (q[1] / q[2] * .5 + .5)) * hh) + "px";
     });
+    // etiquetas de los personajes y el más cercano al que se puede hablar
+    const fw = adelante(), fl = Math.hypot(fw[0], fw[2]) || 1; let cerca = null, mejor = 3.4;
+    for (const v of vis) {
+      const n = v.n, dx = n.x - jug.x, dz = n.z - jug.z, dist = Math.hypot(dx, dz), el = v.el, ey = n.y + 1.95;
+      const q = [M[0] * n.x + M[4] * ey + M[8] * n.z + M[12], M[1] * n.x + M[5] * ey + M[9] * n.z + M[13], M[3] * n.x + M[7] * ey + M[11] * n.z + M[15]];
+      if (dist > 24 || q[2] <= .1) el.style.display = "none";
+      else { el.style.display = ""; el.style.left = ((q[0] / q[2] * .5 + .5) * w) + "px"; el.style.top = ((1 - (q[1] / q[2] * .5 + .5)) * hh) + "px"; }
+      if (dist < mejor && Math.abs(n.y - jug.y) < 3 && (dx * fw[0] + dz * fw[2]) / (dist * fl + 1e-6) > .3) { mejor = dist; cerca = n; }
+    }
+    cercano = pausado ? null : cerca;
+    hablarEl.style.display = cercano ? "block" : "none"; if (cercano) hablarEl.textContent = "E · Hablar con " + cercano.nombre;
+    btnHab.style.display = cercano ? "block" : "none";
   }
   let ult = performance.now(), raf = 0;
   function bucle(t) {
     if (!vivo) return;
     const dt = Math.min(.05, (t - ult) / 1000); ult = t;
     for (const k of sucios) construir(k % NCX, (k / NCX) | 0); sucios.clear();
+    if (pausado) limpiarEntrada();
     actualizar(dt); quePicar(dt); dibujar();
     const z = zonaDe(Math.floor(jug.x), Math.floor(jug.z)); if (z !== zonaAct) { zonaAct = z; ctx.alZona && ctx.alZona(z); }
     cooldownPortal = Math.max(0, cooldownPortal - dt);
@@ -452,6 +586,8 @@ export function iniciarMundo3D(host, ctx) {
     aplicar: (filas) => aplicar(filas),
     seleccionar: (i) => { sel = i; },
     setCalidad: (v) => { alta = !!v; tamano(); },
+    pausar: (v) => { pausado = !!v; if (pausado) { limpiarEntrada(); if (bloqueado()) document.exitPointerLock(); } else if (jugando && !sinBloqueo) ayuda.textContent = "Haz clic para seguir jugando"; },
+    actualizarNpcs: (lista) => montarNpcs(lista),
     posicion: () => ({ x: jug.x, y: jug.y, z: jug.z }),
     _debug: { jug, apuntar, get, picarAhora: (v) => { picar = v; }, poner },
     cerrar: () => {
@@ -459,7 +595,7 @@ export function iniciarMundo3D(host, ctx) {
       escuchas.forEach(([o, e, f, op]) => o.removeEventListener(e, f, op));
       if (bloqueado()) document.exitPointerLock();
       chunks.forEach((c) => { if (c) { gl.deleteBuffer(c.pb); gl.deleteBuffer(c.ub); gl.deleteBuffer(c.sb); gl.deleteBuffer(c.ib); } });
-      gl.deleteTexture(tex); const ex = gl.getExtension("WEBGL_lose_context"); if (ex) ex.loseContext();
+      limpiarNpcs(); gl.deleteTexture(tex); const ex = gl.getExtension("WEBGL_lose_context"); if (ex) ex.loseContext();
       raiz.remove();
     },
   };
