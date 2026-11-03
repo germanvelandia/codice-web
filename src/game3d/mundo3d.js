@@ -5,6 +5,8 @@
 //      grado,            // grado cuyo mundo se muestra (semilla del terreno)
 //      yo,               // id del estudiante (para saber qué bloques son suyos)
 //      soloMirar,        // true al visitar otro grado: no se puede picar ni poner
+//      vuelo,            // true para el docente observador: vuela sin chocar
+//      alApuntar(info),  // observador: { autor, x, y, z } del bloque que mira (o null)
 //      portales,         // [{ id, nombre }] hacia otros mundos (máximo 8)
 //      cambios,          // filas [{x,y,z,bloque,autor_id}] ya guardadas
 //      cantidad(item),   // cuántos bloques de ese tipo tiene el estudiante
@@ -149,6 +151,7 @@ export function posicionesPortales(n) {
 export function iniciarMundo3D(host, ctx) {
   let vivo = true;
   const mundo = new Uint8Array(SX * SY * SZ);
+  let ultApuntado = "";
   const autores = new Map(); // "x,y,z" → autor_id de los bloques cambiados
   const idx = (x, y, z) => (y * SZ + z) * SX + x;
   const get = (x, y, z) => (x < 0 || x >= SX || z < 0 || z >= SZ || y < 0) ? (y < 0 ? 3 : 0) : (y >= SY ? 0 : mundo[idx(x, y, z)]);
@@ -521,6 +524,15 @@ export function iniciarMundo3D(host, ctx) {
   const tec = {}; const joy = { x: 0, y: 0 };
   let enAgua = false;
   function actualizar(dt) {
+    if (ctx.vuelo) { // modo observador (docente): vuela sin chocar; W A S D siguen la mirada, espacio sube, mayúscula baja, Ctrl acelera
+      const f = adelante(), cy = Math.cos(jug.yaw), sy = Math.sin(jug.yaw), v = tec.control ? 45 : 16;
+      let ax = (tec.d ? 1 : 0) - (tec.a ? 1 : 0) + joy.x, af = (tec.w ? 1 : 0) - (tec.s ? 1 : 0) - joy.y;
+      const l = Math.hypot(ax, af); if (l > 1) { ax /= l; af /= l; }
+      jug.x += (f[0] * af + cy * ax) * v * dt; jug.z += (f[2] * af - sy * ax) * v * dt; jug.y += (f[1] * af + (tec[" "] ? 1 : 0) - (tec.shift ? 1 : 0)) * v * dt;
+      jug.vx = jug.vy = jug.vz = 0; jug.suelo = false; enAgua = false;
+      jug.x = Math.max(.5, Math.min(SX - .5, jug.x)); jug.z = Math.max(.5, Math.min(SZ - .5, jug.z)); jug.y = Math.max(1, Math.min(SY + 40, jug.y));
+      return;
+    }
     let ax = (tec.d ? 1 : 0) - (tec.a ? 1 : 0) + joy.x, az = (tec.s ? 1 : 0) - (tec.w ? 1 : 0) + joy.y;
     const l = Math.hypot(ax, az); if (l > 1) { ax /= l; az /= l; }
     enAgua = get(Math.floor(jug.x), Math.floor(jug.y + .9), Math.floor(jug.z)) === AGUA;
@@ -544,7 +556,7 @@ export function iniciarMundo3D(host, ctx) {
     const tdx = d[0] ? Math.abs(1 / d[0]) : 1e9, tdy = d[1] ? Math.abs(1 / d[1]) : 1e9, tdz = d[2] ? Math.abs(1 / d[2]) : 1e9;
     let tx = d[0] ? (sx > 0 ? ix + 1 - x : x - ix) * tdx : 1e9, ty = d[1] ? (sy > 0 ? iy + 1 - y : y - iy) * tdy : 1e9, tz = d[2] ? (sz > 0 ? iz + 1 - z : z - iz) * tdz : 1e9;
     let px = ix, py = iy, pz = iz, t = 0;
-    while (t <= 5.5) {
+    while (t <= (ctx.vuelo ? 60 : 5.5)) {
       const b = get(ix, iy, iz);
       if (b !== AIRE && b !== AGUA && b !== PORTAL && iy >= 0 && iy < SY) return { x: ix, y: iy, z: iz, px, py, pz, b };
       px = ix; py = iy; pz = iz;
@@ -604,6 +616,7 @@ export function iniciarMundo3D(host, ctx) {
     if (/sin_material/.test(m)) return "No tienes suficiente material.";
     if (/limite_de_bloques/.test(m)) return "Llegaste al máximo de bloques puestos.";
     if (/zona_protegida/.test(m)) return "La plaza está protegida.";
+    if (/construccion_cerrada/.test(m)) return "Tu docente cerró la construcción por ahora: puedes explorar.";
     if (/ocupado/.test(m)) return "Ese lugar ya está ocupado.";
     return "No se pudo guardar el cambio. Intenta de nuevo.";
   }
@@ -690,6 +703,10 @@ export function iniciarMundo3D(host, ctx) {
       gl.enable(gl.CULL_FACE); gl.disableVertexAttribArray(locC.p); gl.disableVertexAttribArray(locC.s);
     }
     const h = apuntar();
+    if (ctx.alApuntar) { // el docente ve quién puso el bloque que mira
+      const au = h ? autores.get(clave(h.x, h.y, h.z)) : undefined, k = h ? (au === undefined ? "base" : String(au)) : "";
+      if (k !== ultApuntado) { ultApuntado = k; try { ctx.alApuntar(h ? { autor: au === undefined ? null : au, x: h.x, y: h.y, z: h.z } : null); } catch (_) {} }
+    }
     if (h) {
       gl.useProgram(PL); gl.uniformMatrix4fv(locL.m, false, new Float32Array(mul(M, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, h.x, h.y, h.z, 1])));
       gl.bindBuffer(gl.ARRAY_BUFFER, cajaB); gl.enableVertexAttribArray(locL.p); gl.vertexAttribPointer(locL.p, 3, gl.FLOAT, false, 0, 0);
@@ -740,6 +757,7 @@ export function iniciarMundo3D(host, ctx) {
     setCalidad: (v) => { alta = !!v; tamano(); },
     setCamara: (o) => { Object.assign(cam, o); },
     getCamara: () => ({ ...cam }),
+    ir: (x, y, z, yaw, pitch) => { jug.x = x; jug.y = y; jug.z = z; if (yaw != null) jug.yaw = yaw; if (pitch != null) jug.pitch = pitch; jug.vx = jug.vy = jug.vz = 0; },
     setAvatar: (c) => ponerAvatar(c),
     pausar: (v) => { pausado = !!v; if (!pausado) hablandoCon = null; if (pausado) { limpiarEntrada(); if (bloqueado()) document.exitPointerLock(); } else if (jugando && !sinBloqueo) ayuda.textContent = "Haz clic para seguir jugando"; },
     actualizarNpcs: (lista) => montarNpcs(lista),
