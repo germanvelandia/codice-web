@@ -11,7 +11,7 @@ const DESCRIPCION = {
   ranking: "Cómo vas frente al grupo", salonhonor: "Los mejores del periodo", recompensas: "Canjea tus monedas",
   album: "Colecciona criaturas", comarca: "El reino de tu grupo",
   preguntados: "Gira la ruleta y responde", quizvivo: "Juega en vivo con el docente", personaje: "Personaliza tu personaje",
-  salaavatares: "Conoce los avatares", mundo: "Explora, misiones y reinos", tablero: "El tablero de todos los grupos",
+  salaavatares: "Conoce los avatares", mundo: "Explora, misiones y reinos", mundo3d: "Construye y visita otros cursos", tablero: "El tablero de todos los grupos",
   coevaluacion: "Evalúa tu trabajo y el de tu equipo", misdiplomas: "Tus reconocimientos", encuesta: "Cuéntanos cómo vas", perfil: "Tus datos y tu foto",
 };
 const COLORES = { estudio: "#2F55A4", comunidad: "#B45309", diversion: "#7C3AED", cuenta: "#0F766E" };
