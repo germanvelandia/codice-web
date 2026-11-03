@@ -106,7 +106,7 @@ function Observador({ grado, nombres, foco, cerrar }) {
 
 export default function Mundo3DDocente() {
   const [grados, setGrados] = useState(null), [grado, setGrado] = useState("");
-  const [filas, setFilas] = useState(null), [aj, setAj] = useState({ construir: true, limite: 4000, presencia: true }), [conectados, setConectados] = useState([]), [hist, setHist] = useState([]);
+  const [filas, setFilas] = useState(null), [aj, setAj] = useState({ construir: true, limite: 4000, presencia: true, chat: true }), [conectados, setConectados] = useState([]), [hist, setHist] = useState([]);
   const [msg, setMsg] = useState(""), [err, setErr] = useState(""), [ocupado, setOcupado] = useState(false);
   const [confirma, setConfirma] = useState(null); // { autor, desde, texto }
   const [obs, setObs] = useState(null);           // { foco }
@@ -120,7 +120,7 @@ export default function Mundo3DDocente() {
     if (!grado) return; setErr(""); setFilas(null);
     try {
       const [r, a, h] = await Promise.all([api.fetchResumenMundo3D(grado), api.fetchAjustesMundo3D(grado), api.fetchHistorialMundo3D(grado)]);
-      setFilas(r); setAj({ construir: a.construir !== false, limite: a.limite ?? 4000, presencia: a.presencia !== false }); setHist(h);
+      setFilas(r); setAj({ construir: a.construir !== false, limite: a.limite ?? 4000, presencia: a.presencia !== false, chat: a.chat !== false }); setHist(h);
     } catch (e) { setErr(e.message || "No se pudo cargar el curso."); setFilas([]); }
   }, [grado]);
   useEffect(() => { cargar(); setConfirma(null); setMsg(""); }, [cargar]);
@@ -136,7 +136,7 @@ export default function Mundo3DDocente() {
 
   const guardarAj = async () => {
     setOcupado(true); setErr(""); setMsg("");
-    try { const r = await api.guardarAjustesMundo3D(grado, aj.construir, aj.limite); await api.fijarPresenciaMundo3D(grado, aj.presencia !== false); setAj({ construir: r.construir, limite: r.limite, presencia: aj.presencia !== false }); setMsg(r.construir ? "Guardado: la construcción está abierta." : "Guardado: la construcción está cerrada (los estudiantes pueden explorar)."); cargar(); }
+    try { const r = await api.guardarAjustesMundo3D(grado, aj.construir, aj.limite); await api.fijarPresenciaMundo3D(grado, aj.presencia !== false); await api.fijarChatMundo3D(grado, aj.chat !== false); setAj({ construir: r.construir, limite: r.limite, presencia: aj.presencia !== false, chat: aj.chat !== false }); setMsg(r.construir ? "Guardado: la construcción está abierta." : "Guardado: la construcción está cerrada (los estudiantes pueden explorar)."); cargar(); }
     catch (e) { setErr(e.message || "No se pudo guardar."); } setOcupado(false);
   };
   const revertir = async () => {
@@ -174,6 +174,9 @@ export default function Mundo3DDocente() {
         </label>
         <label className="flex items-center gap-2 text-sm font-bold">
           <input type="checkbox" checked={aj.presencia !== false} onChange={(e) => setAj((a) => ({ ...a, presencia: e.target.checked }))} /> Presencia: que los estudiantes se vean entre sí (solo el primer nombre)
+        </label>
+        <label className="flex items-center gap-2 text-sm font-bold">
+          <input type="checkbox" checked={aj.chat !== false} onChange={(e) => setAj((a) => ({ ...a, chat: e.target.checked }))} /> Chat rápido (solo frases predeterminadas, sin texto libre)
         </label>
         <label className="flex items-center gap-2 text-sm font-bold">Límite de bloques por estudiante
           <input type="number" min="0" max="20000" value={aj.limite} onChange={(e) => setAj((a) => ({ ...a, limite: e.target.value }))} className="w-24 rounded-lg border border-slate-300 px-2 py-1" />
