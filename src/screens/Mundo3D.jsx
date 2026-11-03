@@ -21,6 +21,9 @@ const CAM_DEFECTO = { modo: 1, dist: 4.5, fov: 70, sens: 1 };
 const leerCam = () => { try { return { ...CAM_DEFECTO, ...JSON.parse(localStorage.getItem("m3d_cam") || "{}") }; } catch (_) { return { ...CAM_DEFECTO }; } };
 const guardarCam = (c) => { try { localStorage.setItem("m3d_cam", JSON.stringify(c)); } catch (_) { /* sin almacenamiento: no pasa nada */ } };
 const MODOS_CAM = ["Primera persona", "Tercera persona", "De frente"];
+const SND_DEF = { volumen: 0.7, musica: true, silencio: false };
+const leerSnd = () => { try { return { ...SND_DEF, ...JSON.parse(localStorage.getItem("m3d_snd") || "{}") }; } catch (_) { return { ...SND_DEF }; } };
+const guardarSnd = (c) => { try { localStorage.setItem("m3d_snd", JSON.stringify(c)); } catch (_) { /* sin almacenamiento */ } };
 const aplicarCam = (ctl, c) => ctl && ctl.setCamara({ modo: c.modo, dist: c.dist, fov: (c.fov * Math.PI) / 180, sens: c.sens });
 const partirSprite = (k) => { const i = String(k || "").lastIndexOf("_"); return i > 0 ? { rolKey: k.slice(0, i), genero: k.slice(i + 1) } : null; };
 
@@ -68,6 +71,8 @@ export default function Mundo3D({ estudianteInfo }) {
   const npcsRef = useRef([]);
   const marco = useRef(null), realRef = useRef(false);
   const [cam, setCam] = useState(leerCam), camRef = useRef(null); camRef.current = cam;
+  const [snd, setSnd] = useState(leerSnd), sndRef = useRef(null); sndRef.current = snd;
+  const puertasRef = useRef({}), estado_ref = useRef({});
   const [ajustes, setAjustes] = useState(false);
   const [ampliado, setAmpliado] = useState(false);
   const [avatar, setAvatar] = useState(null), avatarRef = useRef(null); avatarRef.current = avatar;
@@ -135,6 +140,7 @@ export default function Mundo3D({ estudianteInfo }) {
 
   // qué zonas están abiertas para este estudiante (docente + misiones + insignias), igual que en el Mundo 2D
   const estado = useMemo(() => estadoZonas({ misiones: datos.misiones, hechas: datos.hechas, abiertas: datos.zonas.abiertas, requisitos: datos.zonas.requisitos, insignias: datos.duelos.insignias, exigen: datos.duelos.exige }), [datos]);
+  estado_ref.current = estado;
 
   // el aspecto de cada personaje sale de su dibujo (mismo rol y género que en el Mundo 2D)
   useEffect(() => {
@@ -165,6 +171,12 @@ export default function Mundo3D({ estudianteInfo }) {
   }, [datos, estado, looks, gradoVer, miGrado]);
   npcsRef.current = npcs;
   useEffect(() => { if (ctl.current) ctl.current.actualizarNpcs(npcs); }, [npcs, listo]);
+  // portones de las zonas: se abren cuando la zona está desbloqueada
+  useEffect(() => {
+    const p = {}; ZONAS.forEach((z) => { if (z.previa) p[z.key] = !!(estado[z.key] && estado[z.key].desbloqueada); });
+    puertasRef.current = p; if (ctl.current) ctl.current.setPuertas(p);
+  }, [estado, listo]);
+  useEffect(() => { guardarSnd(snd); if (ctl.current) ctl.current.setSonido(snd); }, [snd, listo]);
   const cerrarDialogo = () => { setDialogo(null); ctl.current && ctl.current.pausar(false); };
   const alHecha = (id, r) => { setDatos((d) => ({ ...d, hechas: new Set([...d.hechas, id]) })); if (r && typeof r.xp === "number") setProg({ xp: r.xp, oro: r.oro }); };
   const alInsignia = (zonaKey, r) => setDatos((d) => ({ ...d, duelos: { ...d.duelos, insignias: d.duelos.insignias.includes(zonaKey) ? d.duelos.insignias : [...d.duelos.insignias, zonaKey] } }));
@@ -203,6 +215,8 @@ export default function Mundo3D({ estudianteInfo }) {
           poner: async (x, y, z, i) => { const r = await api.ponerMundo3D(est, x, y, z, i); fijarInv({ ...invRef.current, [i]: r.cantidad }); setColocados((n) => n + 1); return r; },
           alSeleccion: (i) => { selRef.current = i; setSel(i); },
           alZona: setZona, alError: (t) => avisar(t),
+          puertas: puertasRef.current, sonido: sndRef.current,
+          alPuerta: (k) => { const z = ZONAS.find((x) => x.key === k); const e = estado_ref.current[k] || {}; avisar("🔒 El portón de «" + (z ? z.nombre : k) + "» está cerrado." + (e.cumplido === false ? " Completa más misiones de la zona anterior." : " Vence al guardián de la zona anterior.")); },
           alPortal: (id) => { const t = "Viajando al mundo de " + (String(id) === miGrado ? "tu curso" : "curso " + id) + "…"; abrirVelo(t); setGradoVer(String(id)); },
         });
         c.seleccionar(selRef.current); aplicarCam(c, camRef.current); ctl.current = c; setListo(true);
@@ -299,6 +313,10 @@ export default function Mundo3D({ estudianteInfo }) {
                 <label>Distancia: {cam.dist.toFixed(1)}<input type="range" min="2" max="9" step="0.5" value={cam.dist} onChange={(e) => setCam((c) => ({ ...c, dist: +e.target.value }))} /></label>
                 <label>Campo de visión: {cam.fov}°<input type="range" min="55" max="100" step="1" value={cam.fov} onChange={(e) => setCam((c) => ({ ...c, fov: +e.target.value }))} /></label>
                 <label>Sensibilidad del giro: {cam.sens.toFixed(1)}×<input type="range" min="0.4" max="2.5" step="0.1" value={cam.sens} onChange={(e) => setCam((c) => ({ ...c, sens: +e.target.value }))} /></label>
+                <b style={{ marginTop: 8, display: "block" }}>Sonido</b>
+                <label>Volumen: {Math.round(snd.volumen * 100)}%<input type="range" min="0" max="1" step="0.05" value={snd.volumen} onChange={(e) => setSnd((c) => ({ ...c, volumen: +e.target.value }))} /></label>
+                <div className="m3d-seg"><button className={!snd.silencio ? "on" : ""} onClick={() => setSnd((c) => ({ ...c, silencio: false }))}>🔊 Con sonido</button><button className={snd.silencio ? "on" : ""} onClick={() => setSnd((c) => ({ ...c, silencio: true }))}>🔇 Silencio</button></div>
+                <div className="m3d-seg" style={{ marginTop: 4 }}><button className={snd.musica ? "on" : ""} onClick={() => setSnd((c) => ({ ...c, musica: true }))}>🎵 Música</button><button className={!snd.musica ? "on" : ""} onClick={() => setSnd((c) => ({ ...c, musica: false }))}>Sin música</button></div>
                 <label>Calidad<div className="m3d-seg"><button className={calidadAlta ? "on" : ""} onClick={() => { setCalidadAlta(true); ctl.current && ctl.current.setCalidad(true); }}>Alta</button><button className={!calidadAlta ? "on" : ""} onClick={() => { setCalidadAlta(false); ctl.current && ctl.current.setCalidad(false); }}>Baja</button></div></label>
                 <div style={{ marginTop: 8, color: "#cbd5e1" }}>Tecla V: cambia de cámara. «De frente» te deja ver tu avatar.</div>
                 <button onClick={() => abrirAjustes(false)} style={{ marginTop: 8, width: "100%", border: 0, borderRadius: 8, padding: 6, background: "#7c3aed", color: "#fff", fontWeight: 800 }}>Listo</button>
