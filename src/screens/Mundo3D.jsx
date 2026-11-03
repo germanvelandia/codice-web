@@ -58,7 +58,7 @@ export default function Mundo3D({ estudianteInfo }) {
   const [zona, setZona] = useState("");
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
-  const [colocados, setColocados] = useState(0);
+  const [colocados, setColocados] = useState(0), [limite, setLimite] = useState(4000), [abierto, setAbierto] = useState(true);
   const [calidadAlta, setCalidadAlta] = useState(true);
   const [listo, setListo] = useState(false);
   const reloj = useRef(null);
@@ -95,7 +95,7 @@ export default function Mundo3D({ estudianteInfo }) {
         const [e, g] = await Promise.all([api.fetchEstadoMundo3D(est), api.fetchGradosMundo3D(est)]);
         if (!vivo) return;
         fijarInv(Object.fromEntries(Object.entries(e.inventario || {}).map(([k, v]) => [Number(k), v])));
-        setColocados(e.colocados || 0); setGrados(g);
+        setColocados(e.colocados || 0); setLimite(e.limite || 4000); setAbierto(e.construir !== false); setGrados(g);
         if (!gradoVer && e.grado_id) setGradoVer(String(e.grado_id));
       } catch (er) { if (vivo) setError(er.message || "No se pudo abrir el Mundo 3D."); }
     })();
@@ -335,7 +335,7 @@ export default function Mundo3D({ estudianteInfo }) {
         </div>
         <div className="rounded-xl border border-slate-200 p-3 text-sm text-slate-600">
           <div className="text-xs font-extrabold text-slate-700 mb-2">🧱 Tu construcción</div>
-          <div>Bloques que has puesto: <b>{colocados}</b> (máximo 4000)</div>
+          <div>Bloques que has puesto: <b>{colocados}</b> (máximo {limite}){!abierto && <b> · 🔒 construcción cerrada por tu docente</b>}</div>
           <div className="text-[11px] text-slate-500 mt-1">Solo tú (y tu docente) pueden quitar lo que construyes. La plaza está protegida. Pica bloques para conseguir materiales.</div>
           <button onClick={cambiarCalidad} className="mt-2 text-xs font-bold rounded-lg px-3 py-1.5 border border-slate-300 text-slate-700">Calidad: {calidadAlta ? "alta" : "baja"}</button>
         </div>
