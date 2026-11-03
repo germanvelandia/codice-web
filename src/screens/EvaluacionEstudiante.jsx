@@ -227,7 +227,7 @@ function TomarEvaluacion({ evaluacion, estudianteId, onCerrar }) {
             ) : (
               <div className="grid gap-3" style={{ gridTemplateColumns: (preguntaActual.opciones || []).length > 2 ? "1fr 1fr" : "1fr" }}>
                 {(preguntaActual.opciones || []).map((o, j) => {
-                  const color = COLORES_OPCION[j % COLORES_OPCION.length]; const marcada = respuestas[preguntaActual.id] === o.texto;
+                  const color = COLORES_OPCION[j % COLORES_OPCION.length] || COLORES_OPCION[0]; const marcada = respuestas[preguntaActual.id] === o.texto;
                   return (
                     <button key={j} onClick={() => elegirOpcion(o.texto)} className="flex items-center gap-3 p-5 rounded-2xl font-bold text-white text-left"
                       style={{ background: color.bg, borderBottom: `5px solid ${color.borde}`, outline: marcada ? "3px solid white" : "none" }}>
@@ -284,10 +284,10 @@ function TarjetaEvaluacionEstudiante({ evaluacion, estudianteId }) {
   const publicado = intentos.filter((i) => i.visible_para_estudiante).sort((a, b) => b.numero_intento - a.numero_intento)[0];
   const hayPendiente = !publicado && intentos.some((i) => i.estado !== "en_progreso");
   const pct = publicado && Number(publicado.puntaje_maximo) > 0 ? Math.round((Number(publicado.puntaje_obtenido) / Number(publicado.puntaje_maximo)) * 100) : null;
-  const cn = pct !== null ? colorNota(pct) : null;
+  const cn = colorNota(pct ?? 0); // nunca null: si el puntaje máximo es 0 o falta, se muestra "Por mejorar" en vez de romper la pantalla
 
   let borde, chip;
-  if (publicado) { borde = cn.borde; chip = { bg: cn.bg, txt: `${publicado.puntaje_obtenido}/${publicado.puntaje_maximo}` }; }
+  if (publicado) { borde = pct === null ? "#94A3B8" : cn.borde; chip = { bg: pct === null ? "#64748b" : cn.bg, txt: `${publicado.puntaje_obtenido ?? "—"}/${publicado.puntaje_maximo ?? "—"}` }; }
   else if (hayPendiente) { borde = "#F59E0B"; chip = { bg: "#d97706", txt: "⏳ En revisión" }; }
   else if (ventana === "proxima") { borde = "#38BDF8"; chip = { bg: "#0284c7", txt: "🗓️ Próxima" }; }
   else if (ventana === "cerrada") { borde = "#94A3B8"; chip = { bg: usados === 0 ? "#e11d48" : "#64748b", txt: usados === 0 ? "No presentada" : "Cerrada" }; }
