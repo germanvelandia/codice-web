@@ -27,10 +27,11 @@ const cuando = (t) => {
 function Observador({ grado, nombres, foco, cerrar }) {
   const host = useRef(null), ctl = useRef(null), ult = useRef(null);
   const [info, setInfo] = useState(null), [error, setError] = useState(""), [listo, setListo] = useState(false);
+  const [conect, setConect] = useState([]);
   const nombresRef = useRef(nombres); nombresRef.current = nombres;
 
   useEffect(() => {
-    let vivo = true, reloj = null, c = null;
+    let vivo = true, reloj = null, relojP = null, c = null;
     (async () => {
       try {
         const filas = await api.fetchCambiosDocente(grado);
@@ -57,9 +58,12 @@ function Observador({ grado, nombres, foco, cerrar }) {
             if (n.length && ctl.current === c) { ult.current = n[n.length - 1].actualizado; c.aplicar(n); }
           } catch (_) { /* se reintenta */ }
         }, 6000);
+        // estudiantes conectados ahora mismo (se ven como personajes en el mundo)
+        const tic = async () => { if (document.hidden) return; try { const l = await api.fetchPresenciaDocente(grado); if (ctl.current === c) { c.setOtros(l.map((p) => ({ id: p.estudiante_id, x: p.x, y: p.y, z: p.z, yaw: p.yaw, avatar: p.avatar, nombre: p.nombre }))); setConect(l); } } catch (_) { /* sin el SQL 136 no hay presencia */ } };
+        tic(); relojP = setInterval(tic, 2500);
       } catch (e) { if (vivo) setError(e.message || "No se pudo cargar el mundo."); }
     })();
-    return () => { vivo = false; clearInterval(reloj); if (c) c.cerrar(); ctl.current = null; };
+    return () => { vivo = false; clearInterval(reloj); clearInterval(relojP); if (c) c.cerrar(); ctl.current = null; };
   }, [grado, foco]);
 
   useEffect(() => { const k = (e) => { if (e.key === "Escape" && !document.pointerLockElement) cerrar(); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [cerrar]);
@@ -69,7 +73,10 @@ function Observador({ grado, nombres, foco, cerrar }) {
     if (lugar === "aldea") c.ir(CENTRO + .5, 28, CENTRO + 44, 0, .5);
     else if (lugar === "cruce") c.ir(CRUCE.x + .5, 24, CRUCE.z + 22, 0, .4);
     else if (lugar === "alto") c.ir(CENTRO + .5, 64, CENTRO + .5, 0, 1.45);
+    else if (lugar.startsWith("est:")) { const p = conect.find((q) => String(q.estudiante_id) === lugar.slice(4)); if (p) c.ir(p.x, p.y + 4, p.z + 8, 0, .35); }
   };
+  const hora = (v) => { const c = ctl.current; if (!c) return; c.setAmbiente({ hora: v === "auto" ? null : Number(v) }); };
+  const clima = (v) => { const c = ctl.current; if (!c) return; c.setAmbiente({ clima: v === "auto" ? null : v }); };
   const quien = info ? (info.autor == null ? "Terreno original" : (nombresRef.current[info.autor] || "Estudiante #" + info.autor)) : "";
 
   return (
@@ -81,7 +88,11 @@ function Observador({ grado, nombres, foco, cerrar }) {
         <span style={{ color: "#fff", font: "700 12px system-ui", textShadow: "0 1px 3px #000" }}>👁️ Curso {grado} · solo mirar</span>
         <select aria-label="Ir a…" defaultValue="" onChange={(e) => { ir(e.target.value); e.target.value = ""; }}>
           <option value="" disabled>Ir a…</option><option value="aldea">🏘️ La aldea</option><option value="cruce">🌀 Cruce de los Mundos</option><option value="alto">🦅 Vista desde arriba</option>
+          {conect.map((p) => <option key={p.estudiante_id} value={"est:" + p.estudiante_id}>👤 {p.nombre}{p.visita ? " (visita)" : ""}</option>)}
         </select>
+        <select aria-label="Hora del día" defaultValue="auto" onChange={(e) => hora(e.target.value)}><option value="auto">🕒 Hora real</option><option value="0.05">🌅 Amanecer</option><option value="0.3">☀️ Día</option><option value="0.62">🌇 Atardecer</option><option value="0.85">🌙 Noche</option></select>
+        <select aria-label="Clima" defaultValue="auto" onChange={(e) => clima(e.target.value)}><option value="auto">☁️ Clima real</option><option value="despejado">☀️ Despejado</option><option value="lluvia">🌧️ Lluvia</option></select>
+        <span style={{ color: "#fff", font: "700 12px system-ui", textShadow: "0 1px 3px #000" }}>👥 {conect.length} conectado{conect.length === 1 ? "" : "s"}</span>
       </div>
       {info && <div className="obs-info">{info.autor == null ? "🌱 " : "🧱 "}{quien} · ({info.x}, {info.y}, {info.z})</div>}
       {!listo && !error && <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "#fff", font: "700 14px system-ui" }}>Cargando el mundo…</div>}
@@ -95,7 +106,7 @@ function Observador({ grado, nombres, foco, cerrar }) {
 
 export default function Mundo3DDocente() {
   const [grados, setGrados] = useState(null), [grado, setGrado] = useState("");
-  const [filas, setFilas] = useState(null), [aj, setAj] = useState({ construir: true, limite: 4000 }), [hist, setHist] = useState([]);
+  const [filas, setFilas] = useState(null), [aj, setAj] = useState({ construir: true, limite: 4000, presencia: true }), [conectados, setConectados] = useState([]), [hist, setHist] = useState([]);
   const [msg, setMsg] = useState(""), [err, setErr] = useState(""), [ocupado, setOcupado] = useState(false);
   const [confirma, setConfirma] = useState(null); // { autor, desde, texto }
   const [obs, setObs] = useState(null);           // { foco }
@@ -109,17 +120,23 @@ export default function Mundo3DDocente() {
     if (!grado) return; setErr(""); setFilas(null);
     try {
       const [r, a, h] = await Promise.all([api.fetchResumenMundo3D(grado), api.fetchAjustesMundo3D(grado), api.fetchHistorialMundo3D(grado)]);
-      setFilas(r); setAj({ construir: a.construir !== false, limite: a.limite ?? 4000 }); setHist(h);
+      setFilas(r); setAj({ construir: a.construir !== false, limite: a.limite ?? 4000, presencia: a.presencia !== false }); setHist(h);
     } catch (e) { setErr(e.message || "No se pudo cargar el curso."); setFilas([]); }
   }, [grado]);
   useEffect(() => { cargar(); setConfirma(null); setMsg(""); }, [cargar]);
 
+  // quiénes están conectados ahora (cada 5 s mientras se mira el panel)
+  useEffect(() => {
+    if (!grado || obs) return undefined; let vivo = true;
+    const tic = async () => { if (document.hidden) return; try { const l = await api.fetchPresenciaDocente(grado); if (vivo) setConectados(l); } catch (_) { if (vivo) setConectados([]); } };
+    tic(); const r = setInterval(tic, 5000); return () => { vivo = false; clearInterval(r); };
+  }, [grado, obs]);
   const nombres = {}; (filas || []).forEach((f) => { nombres[f.estudiante_id] = f.nombre; });
   const total = (filas || []).reduce((a, f) => a + Number(f.colocados || 0), 0);
 
   const guardarAj = async () => {
     setOcupado(true); setErr(""); setMsg("");
-    try { const r = await api.guardarAjustesMundo3D(grado, aj.construir, aj.limite); setAj({ construir: r.construir, limite: r.limite }); setMsg(r.construir ? "Guardado: la construcción está abierta." : "Guardado: la construcción está cerrada (los estudiantes pueden explorar)."); cargar(); }
+    try { const r = await api.guardarAjustesMundo3D(grado, aj.construir, aj.limite); await api.fijarPresenciaMundo3D(grado, aj.presencia !== false); setAj({ construir: r.construir, limite: r.limite, presencia: aj.presencia !== false }); setMsg(r.construir ? "Guardado: la construcción está abierta." : "Guardado: la construcción está cerrada (los estudiantes pueden explorar)."); cargar(); }
     catch (e) { setErr(e.message || "No se pudo guardar."); } setOcupado(false);
   };
   const revertir = async () => {
@@ -155,10 +172,18 @@ export default function Mundo3DDocente() {
         <label className="flex items-center gap-2 text-sm font-bold">
           <input type="checkbox" checked={aj.construir} onChange={(e) => setAj((a) => ({ ...a, construir: e.target.checked }))} /> Construcción abierta (si la cierras, los estudiantes solo exploran)
         </label>
+        <label className="flex items-center gap-2 text-sm font-bold">
+          <input type="checkbox" checked={aj.presencia !== false} onChange={(e) => setAj((a) => ({ ...a, presencia: e.target.checked }))} /> Presencia: que los estudiantes se vean entre sí (solo el primer nombre)
+        </label>
         <label className="flex items-center gap-2 text-sm font-bold">Límite de bloques por estudiante
           <input type="number" min="0" max="20000" value={aj.limite} onChange={(e) => setAj((a) => ({ ...a, limite: e.target.value }))} className="w-24 rounded-lg border border-slate-300 px-2 py-1" />
         </label>
         <button onClick={guardarAj} disabled={ocupado || !grado} className="rounded-lg bg-violet-600 text-white px-3 py-1.5 text-sm font-bold disabled:opacity-50">Guardar</button>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-3" aria-live="polite">
+        <h3 className="font-extrabold text-sm mb-1">🟢 Conectados ahora ({conectados.length})</h3>
+        {conectados.length ? <div className="flex flex-wrap gap-1.5">{conectados.map((p) => <span key={p.estudiante_id} className="rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold px-2.5 py-0.5">{p.nombre}{p.visita ? " · visita" : ""}</span>)}</div> : <p className="text-xs text-slate-500">Nadie conectado en este momento en el curso {grado}.</p>}
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-3">
