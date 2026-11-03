@@ -24,7 +24,7 @@ import { AlbumesEstudiante } from "../screens/AlbumesEstudiante";
 import { AlbumEstudiante, BancoEstudiante, CosmeticosEstudiante, DesafioReinoEstudiante, LogrosEstudiante, MiComarcaEstudiante, MicroMisionesEstudiante, PreguntadosEstudiante, RankingEstudiante, SalonHonorEstudiante, TarjetaPersonajeEstudiante } from "./EstudianteJuego";
 import { AnunciosEstudiante, BibliotecaEstudiante, CodiceEstudiante, ValorSemanaEstudiante } from "./EstudianteComunidad";
 import { AvisoRendimiento, ForjaEstudiante, HistorialEstudiante, MisNotas, ProyectosEstudiante } from "./EstudianteAcademico";
-import { FondoCastillo, MarcoSeccion, VistaMundo } from "./comunes";
+import { FondoCastillo, MarcoSeccion, VistaMundo, VistaMundo3D } from "./comunes";
 import { PortalAcudiente } from "./PortalAcudiente";
 
 export function PortalEstudiante() {
@@ -190,6 +190,9 @@ export function PortalEstudiante() {
             <MarcoSeccion zonaLabel="Diversión — Sala de avatares" icono="🎭"><SalaAvatares /></MarcoSeccion>
           )}
 
+          {vista === "mundo3d" && estudianteInfo && (
+            <MarcoSeccion zonaLabel="Diversión — Mundo 3D" icono="🧊"><Suspense fallback={<p className="text-sm text-slate-400">Cargando…</p>}><VistaMundo3D estudianteInfo={estudianteInfo} /></Suspense></MarcoSeccion>
+          )}
           {vista === "mundo" && estudianteInfo && (
             <MarcoSeccion zonaLabel="Diversión — Mundo" icono="🎡"><Suspense fallback={<p className="text-sm text-slate-400">Cargando…</p>}><VistaMundo estudianteInfo={estudianteInfo} datos={datos} onProgreso={() => consultar()} onIrAPersonaje={() => setVista("personaje")} /></Suspense></MarcoSeccion>
           )}
@@ -222,7 +225,7 @@ export function PortalEstudiante() {
           )}
 
           {vista === "coevaluacion" && estudianteInfo && (
-            <MarcoSeccion zonaLabel="Mi cuenta — Evaluarnos" icono="🪞"><CoevaluacionEstudiante /></MarcoSeccion>
+            <MarcoSeccion zonaLabel="Mi cuenta — Autoevaluación" icono="🪞"><CoevaluacionEstudiante /></MarcoSeccion>
           )}
 
           {vista === "quizvivo" && estudianteInfo && (
