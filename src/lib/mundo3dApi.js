@@ -13,7 +13,15 @@ export const fetchGradosMundo3D = async (est) => (await llamar("mundo3d_grados",
 export const fetchCambiosMundo3D = async (est, grado, desde = null) => (await llamar("mundo3d_cargar", { p_est: est, p_grado: String(grado), p_desde: desde })) || [];
 export const picarMundo3D = (est, x, y, z, bloque) => llamar("mundo3d_picar", { p_est: est, p_x: x, p_y: y, p_z: z, p_bloque: bloque });
 export const ponerMundo3D = (est, x, y, z, item) => llamar("mundo3d_poner", { p_est: est, p_x: x, p_y: y, p_z: z, p_item: item });
+export const recolectarMundo3D = (est, tipo) => llamar("mundo3d_recolectar", { p_est: est, p_tipo: String(tipo) });
 export const fabricarMundo3D = (est, sale) => llamar("mundo3d_fabricar", { p_est: est, p_sale: sale });
+
+// Presencia: registra mi posición y devuelve a los compañeros conectados en ese mundo (SQL 136)
+const num = (v) => (Number.isFinite(v) ? v : 0);
+export const latidoMundo3D = async (est, grado, x, y, z, yaw, avatar = null) => (await llamar("mundo3d_latido", { p_est: est, p_grado: String(grado), p_x: num(x), p_y: num(y), p_z: num(z), p_yaw: num(yaw), p_avatar: avatar })) || [];
+export const salirMundo3D = (est) => llamar("mundo3d_salir", { p_est: est });
+export const fetchPresenciaDocente = async (grado) => (await llamar("mundo3d_presencia_docente", { p_grado: String(grado) })) || [];
+export const fijarPresenciaMundo3D = (grado, activa) => llamar("mundo3d_presencia_set", { p_grado: String(grado), p_on: !!activa });
 
 // Docente
 export const fetchResumenMundo3D = async (grado) => (await llamar("mundo3d_resumen", { p_grado: String(grado) })) || [];
