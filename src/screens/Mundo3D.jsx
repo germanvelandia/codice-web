@@ -200,7 +200,7 @@ export default function Mundo3D({ estudianteInfo }) {
           </button>
         ))}
       </div>
-      <p className="text-[11px] text-slate-500">Mover: W A S D · Mirar: ratón · Saltar: espacio · Clic izquierdo mantenido: picar · Clic derecho: poner · Rueda o 1 a 8: elegir bloque · E: hablar con un personaje (❗ tiene misión) · Esc: soltar el ratón. En tablet: palanca a la izquierda, arrastra a la derecha para mirar. Entra a los edificios de la aldea: la Biblioteca, el Ágora, el Templo, el Mercado, la Casa de los Acertijos y la Posada. Los portales 🌀 de la plaza llevan a otros cursos (allí solo se mira).</p>
+      <p className="text-[11px] text-slate-500">Mover: W A S D · Mirar: ratón · Saltar: espacio · Clic izquierdo mantenido: picar · Clic derecho: poner · Rueda o 1 a 8: elegir bloque · E: hablar con un personaje (❗ tiene misión) · Esc: soltar el ratón. En tablet: palanca a la izquierda, arrastra a la derecha para mirar. Entra a los edificios de la aldea y habla con sus aldeanos: la Biblioteca, el Ágora, el Templo, el Mercado, la Casa de los Acertijos y la Posada. Los portales 🌀 a otros cursos están en el Cruce de los Mundos, lejos de la aldea: sigue el camino de adoquín hacia el sureste (allí solo se mira).</p>
 
       <div className="grid md:grid-cols-2 gap-3">
         <div className="rounded-xl border border-slate-200 p-3">
