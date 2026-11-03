@@ -65,6 +65,7 @@ export function crearSonido(inicial = {}) {
   const portal = () => { tono(220, 660, .9, { tipo: "sine", g: .1, vib: 8 }); tono(330, 990, .9, { tipo: "triangle", g: .05 }); ruido(.9, { tipo: "bandpass", f: 500, f2: 3000, g: .08, ataque: .2 }); };
   const abrirPuerta = () => { tono(110, 190, .55, { tipo: "sawtooth", g: .05, vib: 6 }); ruido(.5, { tipo: "bandpass", f: 400, f2: 900, g: .06 }); tono(520, 780, .25, { tipo: "sine", g: .06, t0: .45 }); };
   const puertaCerrada = () => { tono(95, 80, .22, { tipo: "square", g: .06 }); tono(80, 70, .22, { tipo: "square", g: .06, t0: .26 }); };
+  const recoger = () => { tono(880, 1320, .09, { tipo: "sine", g: .08 }); tono(1320, 1760, .08, { tipo: "sine", g: .05, t0: .05 }); };
   const clic = () => ruido(.04, { tipo: "bandpass", f: 2400, g: .06, q: 3 });
   const logro = () => [523, 659, 784, 1047].forEach((f, i) => tono(f, f, .5, { tipo: "triangle", g: .09, t0: i * .11 }));
   const animal = (tipo) => {
@@ -96,7 +97,7 @@ export function crearSonido(inicial = {}) {
   }
 
   return {
-    activar, actualizar, paso, picar, romper, poner, agua, salto, portal, abrirPuerta, puertaCerrada, clic, logro, animal,
+    activar, actualizar, paso, picar, romper, poner, agua, salto, portal, abrirPuerta, puertaCerrada, clic, recoger, logro, animal,
     ajustar: (o) => { if (o.volumen != null) volumen = Math.max(0, Math.min(1, o.volumen)); if (o.musica != null) musica = !!o.musica; if (o.silencio != null) silencio = !!o.silencio; },
     estado: () => ({ volumen, musica, silencio, activo: !!ac }),
     cerrar: () => { try { nodos.forEach((n) => n.stop()); } catch (_) {} if (ac) ac.close().catch(() => {}); ac = null; },
