@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { iniciarMundo3D, dibujarIcono, COLOCABLES, MATERIALES, HERRAMIENTAS, NOMBRES, RECETAS } from "../game3d/mundo3d";
+import { iniciarMundo3D, dibujarIcono, FRASES_CHAT, COLOCABLES, MATERIALES, HERRAMIENTAS, NOMBRES, RECETAS } from "../game3d/mundo3d";
 import * as api from "../lib/mundo3dApi";
 import * as mundoApi from "../lib/mundoApi";
 import * as apiGeneral from "../lib/api";
@@ -60,6 +60,10 @@ const CSS_ENTRADA = `
 @media (pointer:coarse){.m3d-hot{bottom:12px;left:50%;max-width:calc(100% - 12px);overflow-x:auto;scrollbar-width:none}.m3d-hot::-webkit-scrollbar{display:none}.m3d-hot button{flex:0 0 auto}}
 @media (pointer:coarse) and (orientation:portrait){.m3d-hot{bottom:152px;left:6px;right:6px;transform:none;max-width:none;justify-content:flex-start}.m3d-aviso{top:92px;max-width:92%}.m3d-hud{max-width:62%}}
 @media (max-width:560px){.m3d-barra button .t{display:none}.m3d-barra button{padding:8px 10px;font-size:15px}.m3d-ajustes{max-height:70dvh;overflow:auto}}
+.m3d-chat{position:absolute;z-index:35;left:8px;right:8px;bottom:70px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;background:#111827ee;border:1px solid #fff4;border-radius:14px;padding:8px}
+.m3d-chat button{border:0;border-radius:99px;padding:7px 12px;background:#fff;color:#111;font:700 12px system-ui,sans-serif}
+.m3d-cerca{position:absolute;z-index:30;left:50%;top:50px;transform:translateX(-50%);background:#0369a1ee;color:#fff;border:0;border-radius:99px;padding:6px 14px;font:700 12px system-ui,sans-serif;white-space:nowrap}
+@media (pointer:coarse) and (orientation:portrait){.m3d-chat{bottom:210px}}
 .m3d-inv{position:absolute;z-index:36;left:50%;top:50%;transform:translate(-50%,-50%);width:min(580px,calc(100% - 12px));max-height:calc(100% - 16px);overflow:auto;background:#111827f5;color:#fff;border:1px solid #fff4;border-radius:16px;padding:12px;font:13px system-ui,sans-serif}
 .m3d-inv h4{margin:10px 0 6px;font:800 12px system-ui,sans-serif;color:#c4b5fd;text-transform:uppercase;letter-spacing:.04em}
 .m3d-celdas{display:flex;flex-wrap:wrap;gap:6px}
@@ -93,6 +97,7 @@ export default function Mundo3D({ estudianteInfo }) {
   const [snd, setSnd] = useState(leerSnd), sndRef = useRef(null); sndRef.current = snd;
   const puertasRef = useRef({}), estado_ref = useRef({});
   const [ajustes, setAjustes] = useState(false);
+  const [chat, setChat] = useState(false), [cerca, setCerca] = useState(null), chatRef = useRef(null);
   const [ori, setOri] = useState(leerOri), [vertical, setVertical] = useState(() => typeof matchMedia === "function" && matchMedia("(orientation:portrait)").matches);
   useEffect(() => { if (typeof matchMedia !== "function") return undefined; const m = matchMedia("(orientation:portrait)"), f = () => setVertical(m.matches); f(); m.addEventListener ? m.addEventListener("change", f) : m.addListener(f); return () => { m.removeEventListener ? m.removeEventListener("change", f) : m.removeListener(f); }; }, []);
   const cambiarOri = (o) => { setOri(o); try { localStorage.setItem("m3d_orient", o); } catch (_) { /* nada */ } fijarOri(o); };
@@ -255,6 +260,7 @@ export default function Mundo3D({ estudianteInfo }) {
           alZona: setZona, alError: (t) => avisar(t),
           puertas: puertasRef.current, sonido: sndRef.current,
           alInventario: () => mochilaRef.current && mochilaRef.current(true),
+          alChat: () => chatRef.current && chatRef.current(), alCerca: (n) => setCerca(n),
           recolectar: async (tipo) => { const r = await api.recolectarMundo3D(est, tipo); if (r && r.item) fijarInv({ ...invRef.current, [r.item]: Math.min(999, (invRef.current[r.item] || 0) + (r.n || 1)) }); return r; },
           alPuerta: (k) => { const z = ZONAS.find((x) => x.key === k); const e = estado_ref.current[k] || {}; avisar("🔒 El portón de «" + (z ? z.nombre : k) + "» está cerrado." + (e.cumplido === false ? " Completa más misiones de la zona anterior." : " Vence al guardián de la zona anterior.")); },
           alPortal: (id) => { const t = "Viajando al mundo de " + (String(id) === miGrado ? "tu curso" : "curso " + id) + "…"; abrirVelo(t); setGradoVer(String(id)); },
@@ -291,6 +297,8 @@ export default function Mundo3D({ estudianteInfo }) {
     if (esTactil) fijarOri(ori);
   };
   const abrirAjustes = (v) => { setAjustes(v); if (v) setMochila(false); ctl.current && ctl.current.pausar(v); };
+  const decir = async (id) => { setChat(false); try { await api.decirMundo3D(est, id); avisar("💬 Tú: " + FRASES_CHAT[id]); } catch (er) { avisar(/chat_cerrado/.test(er.message) ? "Tu docente cerró el chat por ahora." : /demasiado_rapido/.test(er.message) ? "Espera un momento para hablar otra vez." : /sin_presencia/.test(er.message) ? "Aún no hay nadie conectado contigo." : "No se pudo enviar."); } };
+  chatRef.current = (v) => setChat((c) => (typeof v === "boolean" ? v : !c));
   const abrirMochila = (v) => { setMochila(v); if (v) setAjustes(false); ctl.current && ctl.current.pausar(v); };
   mochilaRef.current = abrirMochila;
   const ciclarCamara = () => setCam((c) => ({ ...c, modo: (c.modo + 1) % 3 }));
@@ -347,10 +355,17 @@ export default function Mundo3D({ estudianteInfo }) {
           <>
             <div className="m3d-barra">
               <button onClick={ciclarCamara} title="Cambiar cámara (tecla V)">📷<span className="t"> {MODOS_CAM[cam.modo]}</span></button>
+              <button onClick={() => setChat((c) => !c)} aria-expanded={chat} title="Chat rápido (tecla T)">💬<span className="t"> Chat</span></button>
               <button onClick={() => abrirMochila(!mochila)} aria-expanded={mochila} title="Mochila y fabricación (tecla I)">🎒<span className="t"> Mochila</span></button>
               <button onClick={() => abrirAjustes(!ajustes)} aria-expanded={ajustes} title="Ajustes de cámara">⚙️</button>
               <button onClick={alternarPantalla} title={ampliado ? "Reducir la pantalla" : "Ampliar la pantalla"}>{ampliado ? "🗗" : "⛶"}<span className="t">{ampliado ? " Reducir" : " Ampliar"}</span></button>
             </div>
+            {cerca && !chat && <button className="m3d-cerca" onClick={() => setChat(true)}>👋 {cerca} está cerca · toca para saludar</button>}
+            {chat && (
+              <div className="m3d-chat" role="dialog" aria-label="Chat rápido">
+                {Object.entries(FRASES_CHAT).map(([id, t]) => <button key={id} onClick={() => decir(Number(id))}>{t}</button>)}
+              </div>
+            )}
             {mochila && (
               <div className="m3d-inv" role="dialog" aria-label="Mochila">
                 <div className="m3d-seg" style={{ marginTop: 0 }}><button className={pestana === "mochila" ? "on" : ""} onClick={() => setPestana("mochila")}>🎒 Mochila</button><button className={pestana === "fabricar" ? "on" : ""} onClick={() => setPestana("fabricar")}>🔨 Fabricar</button></div>
