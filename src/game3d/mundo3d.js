@@ -27,20 +27,37 @@ export const SX = 256, SY = 40, SZ = 256, CH = 16, NCX = SX / CH, NCZ = SZ / CH;
 export const CENTRO = 128, RADIO_PLAZA = 34, RADIO_ADOQUIN = 12; // la aldea (69 × 69) está protegida; el empedrado de la plaza es de 25 × 25
 const AIRE = 0, AGUA = 11, PORTAL = 12, ADOQUIN = 13;
 
-export const NOMBRES = { 1: "Pasto", 2: "Tierra", 3: "Piedra", 4: "Tronco", 5: "Hojas", 6: "Tablones", 7: "Ladrillo", 8: "Cristal", 9: "Arena", 10: "Mineral", 11: "Agua", 12: "Portal", 13: "Adoquín", 14: "Muralla", 15: "Portón" };
-export const COLOCABLES = [1, 2, 3, 4, 6, 7, 8, 9];
-const DUREZA = { 1: .3, 2: .3, 3: .9, 4: .6, 5: .15, 6: .5, 7: .9, 8: .2, 9: .25, 10: 1.1 };
+const NOMBRES_BASE = { 42: "Hierro", 3: "Piedra", 44: "Diamante" };
+export const NOMBRES = { 1: "Pasto", 2: "Tierra", 3: "Piedra", 4: "Tronco", 5: "Hojas", 6: "Tablones", 7: "Ladrillo", 8: "Cristal", 9: "Arena", 10: "Mineral", 11: "Agua", 12: "Portal", 13: "Adoquín", 14: "Muralla", 15: "Portón",
+  16: "Bloque de hierro", 17: "Bloque de oro", 18: "Bloque de diamante", 19: "Lana blanca", 20: "Lana roja", 21: "Lana azul", 22: "Lana verde", 23: "Lana amarilla",
+  40: "Palo", 41: "Carbón", 42: "Hierro", 43: "Oro", 44: "Diamante", 45: "Lana", 46: "Huevo", 47: "Manzana", 48: "Leche",
+  50: "Pico de madera", 51: "Pico de piedra", 52: "Pico de hierro", 53: "Pico de diamante", 54: "Hacha de madera", 55: "Hacha de piedra", 56: "Hacha de hierro", 57: "Hacha de diamante",
+  58: "Pala de madera", 59: "Pala de piedra", 60: "Pala de hierro", 61: "Pala de diamante" };
+export const COLOCABLES = [1, 2, 3, 4, 6, 7, 8, 9, 16, 17, 18, 19, 20, 21, 22, 23];
+export const MATERIALES = [40, 41, 42, 43, 44, 45, 46, 47, 48];
+export const HERRAMIENTAS = [50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61];
+const DUREZA = { 1: .3, 2: .3, 3: .9, 4: .6, 5: .15, 6: .5, 7: .9, 8: .2, 9: .25, 10: 1.1, 16: 1.6, 17: 1.6, 18: 2, 19: .3, 20: .3, 21: .3, 22: .3, 23: .3 };
 export const RECETAS = [
   { sale: 6, n: 4, cuesta: { 4: 1 }, txt: "1 tronco → 4 tablones" },
   { sale: 7, n: 2, cuesta: { 3: 2 }, txt: "2 piedra → 2 ladrillos" },
   { sale: 8, n: 2, cuesta: { 9: 2 }, txt: "2 arena → 2 cristales" },
+  { sale: 40, n: 4, cuesta: { 6: 2 }, txt: "2 tablones → 4 palos", g: "Materiales" },
+  ...[["madera", 6, 0], ["piedra", 3, 1], ["hierro", 42, 2], ["diamante", 44, 3]].flatMap(([nom, mat, t]) => [
+    { sale: 50 + t, n: 1, cuesta: { [mat]: 3, 40: 2 }, txt: "3 " + (mat === 6 ? "tablones" : NOMBRES_BASE[mat].toLowerCase()) + " + 2 palos", g: "Herramientas" },
+    { sale: 54 + t, n: 1, cuesta: { [mat]: 3, 40: 2 }, txt: "3 " + (mat === 6 ? "tablones" : NOMBRES_BASE[mat].toLowerCase()) + " + 2 palos", g: "Herramientas" },
+    { sale: 58 + t, n: 1, cuesta: { [mat]: 1, 40: 2 }, txt: "1 " + (mat === 6 ? "tablón" : NOMBRES_BASE[mat].toLowerCase()) + " + 2 palos", g: "Herramientas" },
+  ]),
+  { sale: 16, n: 1, cuesta: { 42: 4 }, txt: "4 hierro → 1 bloque", g: "Bloques valiosos" },
+  { sale: 17, n: 1, cuesta: { 43: 4 }, txt: "4 oro → 1 bloque", g: "Bloques valiosos" },
+  { sale: 18, n: 1, cuesta: { 44: 4 }, txt: "4 diamante → 1 bloque", g: "Bloques valiosos" },
+  ...[19, 20, 21, 22, 23].map((id) => ({ sale: id, n: 1, cuesta: { 45: 1 }, txt: "1 lana → 1 " + ["lana blanca", "lana roja", "lana azul", "lana verde", "lana amarilla"][id - 19], g: "Lanas" })),
 ];
 // El Cruce de los Mundos (portales a otros cursos) está lejos de la aldea, al sureste.
 export const CRUCE = { x: 216, z: 200 };
 export const enPlazaProtegida = (x, z) => (Math.abs(x - CENTRO) <= RADIO_PLAZA && Math.abs(z - CENTRO) <= RADIO_PLAZA) || (Math.abs(x - CRUCE.x) <= 14 && Math.abs(z - CRUCE.z) <= 8);
 
 // atlas: 0 pasto arriba, 1 pasto lado, 2 tierra, 3 piedra, 4 tronco lado, 5 tronco arriba, 6 hojas, 7 tablones, 8 ladrillo, 9 cristal, 10 arena, 11 mineral, 12 agua, 13 portal, 14 adoquín
-const NT = 17;
+const NT = 25;
 function tileDe(b, cara) { // cara: 0 +x, 1 -x, 2 +y, 3 -y, 4 +z, 5 -z
   switch (b) {
     case 1: return cara === 2 ? 0 : cara === 3 ? 2 : 1;
@@ -49,9 +66,11 @@ function tileDe(b, cara) { // cara: 0 +x, 1 -x, 2 +y, 3 -y, 4 +z, 5 -z
     case 5: return 6; case 6: return 7; case 7: return 8; case 8: return 9; case 9: return 10; case 10: return 11;
     case 11: return 12; case 12: return 13; case 13: return 14; case 14: return 15; case 15: return 16;
   }
+  if (b >= 16 && b <= 23) return b + 1;
   return 3;
 }
-let _atlas = null;
+let _atlas = null, _palRef = null;
+const _pal = () => { atlasCanvas(); return _palRef; };
 export function atlasCanvas() {
   if (_atlas) return _atlas;
   const a = document.createElement("canvas"); a.width = 16 * NT; a.height = 16;
@@ -59,7 +78,10 @@ export function atlasCanvas() {
   const pal = [["#5aa63c", "#6dbb4a", "#3f8a2c"], ["#5aa63c", "#6dbb4a", "#3f8a2c"], ["#8a5a35", "#9a6a42", "#734a2a"], ["#8b8f96", "#9ca0a7", "#767a82"],
     ["#6b4a2b", "#7b5836", "#58391f"], ["#a07a48", "#b08a56", "#8a6638"], ["#2f7d32", "#3f9440", "#256a29"], ["#c8964f", "#d6a661", "#b7843f"],
     ["#b5503c", "#c4604a", "#8f3c2c"], ["#9fd8e8", "#c3ecf7", "#7cc2d6"], ["#dcc58a", "#e8d49c", "#c9b177"], ["#8b8f96", "#9ca0a7", "#767a82"],
-    ["#2f6fcf", "#3a7fe0", "#2a62b8"], ["#7a3fd0", "#9a5cf0", "#5b2aa8"], ["#a8a49a", "#b8b4aa", "#948f84"], ["#6a4a26", "#7d5a30", "#5a3d1e"], ["#a77b45", "#b98a52", "#946b39"]];
+    ["#2f6fcf", "#3a7fe0", "#2a62b8"], ["#7a3fd0", "#9a5cf0", "#5b2aa8"], ["#a8a49a", "#b8b4aa", "#948f84"], ["#6a4a26", "#7d5a30", "#5a3d1e"], ["#a77b45", "#b98a52", "#946b39"],
+    ["#d8d8dc", "#e8e8ec", "#c2c2c8"], ["#f3c93a", "#ffe066", "#d9a820"], ["#3fd8d0", "#7df3ee", "#2bb5b0"],
+    ["#ececec", "#f7f7f7", "#dcdcdc"], ["#c0392b", "#d44a3a", "#a22d21"], ["#2f5fc4", "#3d72dd", "#274fa6"], ["#3d9a3a", "#4cb148", "#2f7d2d"], ["#f1c40f", "#f7d63a", "#d4aa0a"]];
+  _palRef = pal;
   for (let t = 0; t < NT; t++) {
     const ox = t * 16;
     for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { g.fillStyle = pal[t][(r() * 3) | 0]; g.fillRect(ox + x, y, 1, 1); }
@@ -74,13 +96,44 @@ export function atlasCanvas() {
     if (t === 13) { g.fillStyle = "#e9d8ff"; for (let i = 0; i < 9; i++) g.fillRect(ox + ((r() * 14) | 0), ((r() * 14) | 0), 1, 1); }
     if (t === 14) { g.fillStyle = "#0004"; g.fillRect(ox, 7, 16, 1); g.fillRect(ox + 7, 0, 1, 16); }
     if (t === 15) { g.fillStyle = "#2a1a0a"; for (let x = 3; x < 16; x += 4) g.fillRect(ox + x, 0, 1, 16); g.fillStyle = "#8f6a3a"; for (let x = 0; x < 16; x += 4) g.fillRect(ox + x, 0, 2, 16); g.fillStyle = "#3a3f46"; g.fillRect(ox, 3, 16, 2); g.fillRect(ox, 11, 16, 2); }
+    if (t >= 17 && t <= 19) { g.fillStyle = "#0003"; g.fillRect(ox, 0, 16, 1); g.fillRect(ox, 15, 16, 1); g.fillRect(ox, 0, 1, 16); g.fillRect(ox + 15, 0, 1, 16); g.fillStyle = "#fff6"; g.fillRect(ox + 2, 2, 3, 1); g.fillRect(ox + 2, 2, 1, 3); }
+    if (t >= 20) { g.fillStyle = "#0002"; for (let i = 0; i < 12; i++) g.fillRect(ox + ((r() * 14) | 0), ((r() * 14) | 0), 2, 1); }
     if (t === 16) { g.fillStyle = "#0004"; for (let x = 4; x < 16; x += 4) g.fillRect(ox + x, 0, 1, 16); g.fillStyle = "#3a3f46"; g.fillRect(ox, 2, 16, 3); g.fillRect(ox, 11, 16, 3); g.fillStyle = "#9aa1ab"; for (let x = 2; x < 16; x += 5) { g.fillRect(ox + x, 3, 1, 1); g.fillRect(ox + x, 12, 1, 1); } g.fillStyle = "#d4af37"; g.fillRect(ox + 11, 7, 3, 3); }
   }
   return (_atlas = a);
 }
+const TIER = ["#b9854a", "#8b8f96", "#e2e2e6", "#4de3e0"];
+const hexRgb = (h) => [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255];
+const COL_ITEM = { 40: "#8a5a2b", 41: "#2b2b2f", 42: "#e2e2e6", 43: "#f7d63a", 44: "#4de3e0", 45: "#f4f4f0", 46: "#efe3c4", 47: "#d83a2f", 48: "#f2f6ff" };
+// color representativo de un bloque o item (para las partículas y lo que cae al picar)
+export function colorItem(item) {
+  if (COL_ITEM[item]) return hexRgb(COL_ITEM[item]);
+  if (item >= 50 && item <= 61) return hexRgb(TIER[(item - 50) % 4]);
+  const k = (item === 1 ? 1 : tileDe(item, 0)); return hexRgb(_pal()[Math.min(k, NT - 1)][0]);
+}
+// dibujo de un item en un canvas: los bloques salen del atlas; materiales y herramientas se dibujan en una cuadrícula de 16 × 16
 export function dibujarIcono(canvas, item) {
   const c = canvas.getContext("2d"); c.imageSmoothingEnabled = false; c.clearRect(0, 0, canvas.width, canvas.height);
-  c.drawImage(atlasCanvas(), (item === 1 ? 1 : tileDe(item, 0)) * 16, 0, 16, 16, 0, 0, canvas.width, canvas.height);
+  if (item < 40) { c.drawImage(atlasCanvas(), (item === 1 ? 1 : tileDe(item, 0)) * 16, 0, 16, 16, 0, 0, canvas.width, canvas.height); return; }
+  c.save(); c.scale(canvas.width / 16, canvas.height / 16);
+  const px = (col, x, y, w = 1, h = 1) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
+  const pts = (col, a) => a.forEach(([x, y]) => px(col, x, y));
+  if (item >= 50) {
+    const k = ((item - 50) / 4) | 0, col = TIER[(item - 50) % 4], oscuro = "#00000044";
+    for (let i = 0; i < 10; i++) { px("#7a5230", 3 + i, 13 - i); px("#5b3b20", 3 + i, 14 - i); }
+    const head = k === 0 ? [[5, 3], [6, 2], [7, 2], [8, 1], [9, 1], [10, 1], [11, 2], [12, 3], [13, 4], [13, 5], [14, 6], [6, 3], [10, 2], [11, 3], [12, 4]]
+      : k === 1 ? [[9, 2], [10, 2], [11, 2], [12, 2], [8, 3], [9, 3], [10, 3], [11, 3], [12, 3], [13, 3], [8, 4], [9, 4], [10, 4], [11, 4], [12, 4], [13, 4], [9, 5], [10, 5], [11, 5], [12, 5], [10, 6], [11, 6]]
+        : [[11, 1], [12, 1], [13, 1], [10, 2], [11, 2], [12, 2], [13, 2], [14, 2], [10, 3], [11, 3], [12, 3], [13, 3], [14, 3], [11, 4], [12, 4], [13, 4]];
+    pts(col, head); pts(oscuro, head.slice(0, Math.floor(head.length / 4)).map(([x, y]) => [x, y + 1]));
+  } else if (item === 40) { for (let i = 0; i < 12; i++) { px("#8a5a2b", 2 + i, 13 - i); px("#6a431f", 3 + i, 13 - i); } }
+  else if (item === 41) { pts("#2b2b2f", [[5, 4], [6, 4], [7, 4], [8, 4], [9, 4], [4, 5], [5, 5], [6, 5], [7, 5], [8, 5], [9, 5], [10, 5], [4, 6], [5, 6], [6, 6], [7, 6], [8, 6], [9, 6], [10, 6], [11, 6], [4, 7], [5, 7], [6, 7], [7, 7], [8, 7], [9, 7], [10, 7], [11, 7], [5, 8], [6, 8], [7, 8], [8, 8], [9, 8], [10, 8], [11, 8], [6, 9], [7, 9], [8, 9], [9, 9], [10, 9]]); pts("#555a66", [[6, 5], [7, 5], [5, 6]]); }
+  else if (item === 42 || item === 43) { const base = item === 42 ? "#d8d8dc" : "#f3c93a", luz = item === 42 ? "#ffffff" : "#fff3a0", som = item === 42 ? "#9a9aa2" : "#b88a10"; px(som, 3, 7, 11, 5); px(base, 3, 6, 11, 5); px(luz, 4, 6, 8, 1); px(som, 3, 11, 11, 1); px("#0002", 13, 6, 1, 5); }
+  else if (item === 44) { const d = [[7, 2], [8, 2], [6, 3], [7, 3], [8, 3], [9, 3], [5, 4], [6, 4], [7, 4], [8, 4], [9, 4], [10, 4], [4, 5], [5, 5], [6, 5], [7, 5], [8, 5], [9, 5], [10, 5], [11, 5], [5, 6], [6, 6], [7, 6], [8, 6], [9, 6], [10, 6], [6, 7], [7, 7], [8, 7], [9, 7], [7, 8], [8, 8]]; pts("#2bb5b0", d); pts("#7df3ee", d.filter(([x, y]) => x + y < 12 && y < 7)); pts("#ffffff", [[7, 3], [6, 4]]); }
+  else if (item === 45) { px("#dcdcd6", 3, 5, 10, 8); px("#f7f7f3", 3, 4, 10, 8); px("#f7f7f3", 4, 3, 8, 1); px("#cfcfc8", 5, 7, 2, 1); px("#cfcfc8", 9, 9, 2, 1); }
+  else if (item === 46) { const e = [[7, 3], [8, 3], [6, 4], [7, 4], [8, 4], [9, 4], [5, 5], [6, 5], [7, 5], [8, 5], [9, 5], [10, 5], [5, 6], [6, 6], [7, 6], [8, 6], [9, 6], [10, 6], [5, 7], [6, 7], [7, 7], [8, 7], [9, 7], [10, 7], [5, 8], [6, 8], [7, 8], [8, 8], [9, 8], [10, 8], [6, 9], [7, 9], [8, 9], [9, 9], [6, 10], [7, 10], [8, 10], [9, 10]]; pts("#e2cf9f", e); pts("#f6ecd2", e.filter(([x, y]) => x < 8 && y < 8)); }
+  else if (item === 47) { const a = [[5, 5], [6, 5], [7, 5], [9, 5], [10, 5], [4, 6], [5, 6], [6, 6], [7, 6], [8, 6], [9, 6], [10, 6], [11, 6], [4, 7], [5, 7], [6, 7], [7, 7], [8, 7], [9, 7], [10, 7], [11, 7], [4, 8], [5, 8], [6, 8], [7, 8], [8, 8], [9, 8], [10, 8], [11, 8], [5, 9], [6, 9], [7, 9], [8, 9], [9, 9], [10, 9], [5, 10], [6, 10], [9, 10], [10, 10]]; pts("#c62f26", a); pts("#ec5b4f", [[5, 6], [6, 6], [5, 7]]); pts("#5a3b1e", [[8, 3], [8, 4]]); pts("#3d9a3a", [[9, 3], [10, 3], [10, 4]]); }
+  else if (item === 48) { px("#cfd6e6", 6, 2, 4, 2); px("#f2f6ff", 5, 4, 6, 9); px("#b8c3dc", 5, 12, 6, 1); px("#7aa2ff", 6, 7, 4, 3); }
+  c.restore();
 }
 
 // ---------- terreno ----------
@@ -181,6 +234,7 @@ export function iniciarMundo3D(host, ctx) {
       if (y === h) b = (enPlaza || enCamino) ? ADOQUIN : (nearLago && h <= 12) ? 9 : (h >= 30 ? 3 : 1);
       else if (y >= h - 3) b = (nearLago && h <= 12) ? 9 : (h >= 30 ? 3 : 2);
       else { b = 3; if (y > 1 && y < h - 5 && rnd() < .03) b = 10; }
+      if (b === 3 && h >= 26 && y >= h - 2 && !enCamino && !enPlaza && ((Math.imul((x * 73856093) ^ (y * 19349663) ^ (z * 83492791) ^ semilla, 2654435761) >>> 0) % 1000) < 45) b = 10; // vetas a la vista en la montaña
       mundo[idx(x, y, z)] = b;
     }
     for (let y = h + 1; y <= 11; y++) mundo[idx(x, y, z)] = AGUA;
@@ -387,13 +441,18 @@ export function iniciarMundo3D(host, ctx) {
 .m3d-et.edif{background:#14532dcc;font-size:13px}
 .m3d-npc{position:absolute;left:0;top:0;transform:translate(-50%,-100%);font:600 12px system-ui,sans-serif;color:#fff;background:#92400ecc;padding:2px 8px;border-radius:10px;pointer-events:none;white-space:nowrap}
 .m3d-npc.ok{background:#166534cc}
+.m3d-botin{position:absolute;left:10px;top:70px;display:flex;flex-direction:column;gap:3px;pointer-events:none;z-index:5}.m3d-botin div{font:700 12px system-ui,sans-serif;color:#fff;background:#0009;padding:3px 9px;border-radius:8px;width:max-content;animation:m3d-botin 2.2s ease forwards}@keyframes m3d-botin{0%{opacity:0;transform:translateX(-10px)}10%{opacity:1;transform:none}80%{opacity:1}100%{opacity:0}}
+.m3d-otro{position:absolute;left:0;top:0;transform:translate(-50%,-100%);font:600 12px system-ui,sans-serif;color:#fff;background:#0369a1cc;padding:2px 8px;border-radius:10px;pointer-events:none;white-space:nowrap}
 .m3d-hablar{position:absolute;left:50%;bottom:44px;transform:translateX(-50%);font:600 13px system-ui,sans-serif;color:#fff;background:#000a;border:1px solid #fff6;padding:6px 12px;border-radius:10px;pointer-events:none;display:none}
 .m3d-acc button.hab{display:none;background:#b45309cc}
-@media (pointer:coarse){.m3d-joy{display:block}.m3d-acc{display:flex}.m3d-hablar{display:none!important}}`;
+@media (pointer:coarse){.m3d-joy{display:block}.m3d-acc{display:flex}.m3d-hablar{display:none!important}}
+@media (pointer:coarse) and (orientation:portrait){.m3d-joy{left:12px;bottom:18px;width:120px;height:120px}.m3d-joy i{left:40px;top:40px}.m3d-acc{flex-direction:row;flex-wrap:wrap;justify-content:flex-end;width:154px;right:10px;bottom:18px}.m3d-acc button{width:72px;height:56px;font-size:13px;font-weight:700}.m3d-ayuda{bottom:150px}}
+.m3d,.m3d canvas{-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}`;
   const raiz = document.createElement("div"); raiz.className = "m3d";
   const cv = document.createElement("canvas"); cv.width = 800; cv.height = 450; cv.setAttribute("aria-label", "Mundo 3D de bloques");
   const mira = document.createElement("div"); mira.className = "m3d-mira";
-  const ayuda = document.createElement("div"); ayuda.className = "m3d-ayuda"; ayuda.textContent = "Haz clic para jugar";
+  const esTactil = typeof matchMedia === "function" && matchMedia("(pointer:coarse)").matches;
+  const ayuda = document.createElement("div"); ayuda.className = "m3d-ayuda"; ayuda.textContent = esTactil ? "Toca para jugar" : "Haz clic para jugar";
   const joyEl = document.createElement("div"); joyEl.className = "m3d-joy"; joyEl.innerHTML = "<i></i>";
   const acc = document.createElement("div"); acc.className = "m3d-acc";
   acc.innerHTML = '<button data-k="salto">SALTAR</button><button data-k="picar">PICAR</button><button data-k="poner">PONER</button><button data-k="hablar" class="hab">HABLAR</button>';
@@ -497,6 +556,36 @@ export function iniciarMundo3D(host, ctx) {
   const jugV = { n: { x: 0, y: 0, z: 0, hecha: true, tipo: "jugador" }, ap: null, partes: null, h: 0, fase: 0, amp: 0, cab: 0, nodFijo: 0, mover: false, habla: false, dist: 99 };
   const ponerAvatar = (c) => { jugV.ap = aspectoDesde(c || aspectoJugadorDefecto()); jugV.partes = cuerpo(jugV.ap); };
   ponerAvatar(ctx.avatar);
+  // ----- otros jugadores conectados (compañeros): llegan del servidor cada par de segundos y se mueven suavizados -----
+  const otros = new Map(), esColor = (c) => typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c);
+  const avatarSeguro = (a) => { const o = {}; if (a && typeof a === "object") { for (const k of ["piel", "pelo", "ropa", "pant", "accCol", "capa"]) if (esColor(a[k])) o[k] = a[k]; if (["casco", "capucha", "corona", "gafas"].includes(a.acc)) o.acc = a.acc; o.largo = a.largo === true; } return o; };
+  function setOtros(lista) {
+    const ids = new Set();
+    for (const j of (lista || []).slice(0, 60)) {
+      if (!j || !Number.isFinite(+j.x) || !Number.isFinite(+j.y) || !Number.isFinite(+j.z)) continue;
+      const id = String(j.id); ids.add(id); let o = otros.get(id);
+      const llave = JSON.stringify(j.avatar || null);
+      if (!o) {
+        const el = document.createElement("div"); el.className = "m3d-otro"; el.style.display = "none"; raiz.append(el);
+        o = { id, n: { x: +j.x, y: +j.y, z: +j.z, hecha: true, tipo: "jugador" }, tx: +j.x, ty: +j.y, tz: +j.z, th: (+j.yaw || 0) + Math.PI, h: (+j.yaw || 0) + Math.PI, fase: Math.random() * 6, amp: 0, cab: 0, nodFijo: 0, mover: false, habla: false, dist: 99, el, llave: null };
+        otros.set(id, o);
+      }
+      if (o.llave !== llave) { o.llave = llave; o.ap = aspectoDesde({ piel: "#e0ac84", pelo: "#4a2f1b", ropa: "#3b6fb6", pant: "#3b3f55", ...avatarSeguro(j.avatar) }); o.partes = cuerpo(o.ap); }
+      o.tx = +j.x; o.ty = +j.y; o.tz = +j.z; o.th = (+j.yaw || 0) + Math.PI;
+      const txt = String(j.nombre || "Compañero").slice(0, 40); if (o.el.textContent !== txt) o.el.textContent = "👤 " + txt;
+    }
+    for (const [id, o] of otros) if (!ids.has(id)) { o.el.remove(); otros.delete(id); }
+  }
+  function moverOtros(dt) {
+    for (const o of otros.values()) {
+      const dx = o.tx - o.n.x, dz = o.tz - o.n.z, d = Math.hypot(dx, dz);
+      if (d > 12) { o.n.x = o.tx; o.n.z = o.tz; o.n.y = o.ty; }
+      else { const k = Math.min(1, 6 * dt); o.n.x += dx * k; o.n.z += dz * k; o.n.y += (o.ty - o.n.y) * k; }
+      o.h += angDif(o.th, o.h) * Math.min(1, 10 * dt);
+      const mover = d > .08; o.mover = mover; o.amp += ((mover ? 1 : 0) - o.amp) * Math.min(1, 8 * dt); if (mover) o.fase += dt * 9;
+      o.dist = Math.hypot(o.n.x - jug.x, o.n.z - jug.z);
+    }
+  }
   let vis = [], hablandoCon = null;
   function limpiarNpcs() { vis.forEach((v) => v.el.remove()); vis = []; }
   function montarNpcs(lista) {
@@ -609,7 +698,7 @@ export function iniciarMundo3D(host, ctx) {
     let ax = (tec.d ? 1 : 0) - (tec.a ? 1 : 0) + joy.x, az = (tec.s ? 1 : 0) - (tec.w ? 1 : 0) + joy.y;
     const l = Math.hypot(ax, az); if (l > 1) { ax /= l; az /= l; }
     enAgua = get(Math.floor(jug.x), Math.floor(jug.y + .9), Math.floor(jug.z)) === AGUA;
-    const cy = Math.cos(jug.yaw), sy = Math.sin(jug.yaw), v = enAgua ? 2.4 : 4.3;
+    const cy = Math.cos(jug.yaw), sy = Math.sin(jug.yaw), v = enAgua ? 2.4 : ((tec.shift || tec.control || joy.corre) ? 6.4 : 4.3);
     jug.vx = (ax * cy + az * sy) * v; jug.vz = (-ax * sy + az * cy) * v;
     if (enAgua) { jug.vy = Math.max(jug.vy - 8 * dt, -2.5); if (tec[" "]) jug.vy = 3.2; }
     else { if (tec[" "] && jug.suelo) { jug.vy = 8.6; jug.suelo = false; sonido.salto(); } jug.vy = Math.max(jug.vy - 26 * dt, -30); }
@@ -640,12 +729,64 @@ export function iniciarMundo3D(host, ctx) {
 
   // ----- acciones -----
   let sel = 1, picar = false, picando = null, ocupado = false, pausado = false, cercano = null;
+  // ----- herramientas: la mejor que tengas en el inventario acelera el picado (pico: piedra y minerales, hacha: madera, pala: tierra y arena) -----
+  const CLASE = { 3: 0, 7: 0, 10: 0, 16: 0, 17: 0, 18: 0, 4: 1, 6: 1, 5: 1, 15: 1, 1: 2, 2: 2, 9: 2 };
+  const MULT = [2.2, 3.6, 5.5, 8];
+  function herramientaPara(b) {
+    const k = CLASE[b]; if (k === undefined) return { mult: 1, id: 0, k: -1 };
+    for (let t = 3; t >= 0; t--) { const id = 50 + k * 4 + t; if (ctx.cantidad(id) > 0) return { mult: MULT[t], id, k }; }
+    return { mult: 1, id: 0, k };
+  }
+  // ----- efectos: partículas al picar, lo que cae del bloque y avisos de lo recogido -----
+  const particulas = [], caidos = [];
+  const rr = (a, b) => a + Math.random() * (b - a);
+  function soltarParticulas(x, y, z, b, n, fuerza) {
+    const c = colorItem(b); if (particulas.length > 160) particulas.splice(0, n);
+    for (let i = 0; i < n; i++) { const k = .75 + Math.random() * .4; particulas.push({ x: x + rr(-.35, .35), y: y + rr(-.35, .35), z: z + rr(-.35, .35), vx: rr(-1, 1) * fuerza, vy: rr(.5, 1.8) * fuerza, vz: rr(-1, 1) * fuerza, vida: rr(.5, .9), tam: rr(.06, .13), c: [c[0] * k, c[1] * k, c[2] * k] }); }
+  }
+  function soltarItem(x, y, z, item) { if (caidos.length > 40) caidos.shift(); caidos.push({ x: x + .5, y: y + .4, z: z + .5, vx: rr(-1.2, 1.2), vy: 3.4, vz: rr(-1.2, 1.2), t: 0, item, c: colorItem(item), ph: Math.random() * 6 }); }
+  const botin = document.createElement("div"); botin.className = "m3d-botin"; raiz.append(botin);
+  let ultBotin = null;
+  function avisoBotin(item, n) {
+    const nombre = NOMBRES[item] || "Objeto", ahora = performance.now();
+    if (ultBotin && ultBotin.item === item && ahora - ultBotin.t < 1800 && ultBotin.el.parentNode) { ultBotin.n += n; ultBotin.t = ahora; ultBotin.el.textContent = "+" + ultBotin.n + " " + nombre; ultBotin.el.style.animation = "none"; void ultBotin.el.offsetWidth; ultBotin.el.style.animation = ""; return; }
+    const el = document.createElement("div"); el.textContent = "+" + n + " " + nombre; botin.append(el); while (botin.childNodes.length > 4) botin.firstChild.remove(); setTimeout(() => el.remove(), 2200);
+    ultBotin = { item, n, t: ahora, el };
+  }
+  function moverEfectos(dt) {
+    for (let i = particulas.length - 1; i >= 0; i--) { const p = particulas[i]; p.vida -= dt; p.vy -= 16 * dt; const nx = p.x + p.vx * dt, ny = p.y + p.vy * dt, nz = p.z + p.vz * dt;
+      if (solido(Math.floor(nx), Math.floor(ny), Math.floor(nz))) { p.vx *= -.3; p.vz *= -.3; p.vy *= -.3; } else { p.x = nx; p.y = ny; p.z = nz; }
+      if (p.vida <= 0) particulas.splice(i, 1); }
+    for (let i = caidos.length - 1; i >= 0; i--) { const d = caidos[i]; d.t += dt;
+      if (d.t < .45) { d.vy -= 18 * dt; const nx = d.x + d.vx * dt, ny = d.y + d.vy * dt, nz = d.z + d.vz * dt; if (!solido(Math.floor(nx), Math.floor(ny - .15), Math.floor(nz))) { d.x = nx; d.y = ny; d.z = nz; } else { d.vy = 0; d.vx *= .5; d.vz *= .5; } }
+      else { const tx = jug.x, ty = jug.y + .8, tz = jug.z, dx = tx - d.x, dy = ty - d.y, dz = tz - d.z, dist = Math.hypot(dx, dy, dz), v = Math.min(dist, (6 + d.t * 4) * dt);
+        if (dist < .55 || d.t > 6) { caidos.splice(i, 1); sonido.recoger(); avisoBotin(d.item, 1); continue; } d.x += dx / dist * v; d.y += dy / dist * v; d.z += dz / dist * v; } }
+  }
+  const pcol = (c) => gl.uniform3f(locC.c, c[0], c[1], c[2]);
+  function dibujarEfectos(cielo, tt) {
+    if (!particulas.length && !caidos.length && !picando) return;
+    prepararPC(cielo, false);
+    const cj = (g, w, h, d, ox, oy, oz, c) => { gl.uniformMatrix4fv(locC.m, false, new Float32Array(mul(g, mul(T4(ox, oy, oz), S4(w, h, d))))); pcol(c); gl.drawArrays(gl.TRIANGLES, 0, 36); };
+    for (const p of particulas) cj(M, p.tam, p.tam, p.tam, p.x, p.y, p.z, p.c);
+    for (const d of caidos) { const g = mul(M, mul(T4(d.x, d.y + Math.sin(tt * 4 + d.ph) * .05, d.z), RY(tt * 2.2 + d.ph))); cj(g, .24, .24, .24, 0, 0, 0, d.c); cj(g, .16, .16, .16, 0, 0, 0, [Math.min(1, d.c[0] * 1.25), Math.min(1, d.c[1] * 1.25), Math.min(1, d.c[2] * 1.25)]); }
+    if (picando && picando.dur) { // grietas que crecen sobre el bloque
+      const pr = Math.min(1, picando.t / picando.dur), n = 1 + Math.floor(pr * 11); let sd = (Math.imul(picando.x * 73856093 ^ picando.y * 19349663 ^ picando.z * 83492791, 2654435761) >>> 0) || 1; const q = () => { sd = (Math.imul(sd, 1664525) + 1013904223) >>> 0; return sd / 4294967296; };
+      const g = mul(M, T4(picando.x + .5, picando.y + .5, picando.z + .5));
+      for (let i = 0; i < n; i++) { const cara = (q() * 6) | 0, sg = cara % 2 ? -1 : 1, u = (q() - .5) * .8, v = (q() - .5) * .8, a = .08 + q() * .22, b2 = .02 + q() * .02, o = .506 * sg, co = [.13, .12, .12];
+        if (cara < 2) cj(g, .012, b2 + a * (i % 2), a * ((i + 1) % 2) + .03, o, u, v, co); else if (cara < 4) cj(g, a * ((i + 1) % 2) + .03, .012, b2 + a * (i % 2), u, o, v, co); else cj(g, b2 + a * (i % 2), a * ((i + 1) % 2) + .03, .012, u, v, o, co); }
+    }
+    cerrarPC();
+  }
   function limpiarEntrada() { for (const k in tec) tec[k] = false; picar = false; joy.x = joy.y = 0; }
-  let animalCer = null;
+  let animalCer = null, avisoPico = false;
+  const ACCION_ANIMAL = { oveja: "E · Esquilar a la ", gallina: "E · Recoger huevo de la ", vaca: "E · Ordeñar a la " };
   function hablar() {
     if (pausado) return;
     if (!cercano) { // sin personaje cerca: si hay un animal delante, se le saluda
-      if (animalCer) { const a = animalCer; sonido.animal(a.tipo); a.pasta = 0; a.espera = 2; a.susto = 0; aviso(FRASES[a.tipo] || "🐾"); }
+      if (animalCer) { const a = animalCer; sonido.animal(a.tipo); a.pasta = 0; a.espera = 2; a.susto = 0; aviso(FRASES[a.tipo] || "🐾");
+        if (ctx.recolectar && !ctx.soloMirar && ["oveja", "gallina", "vaca"].includes(a.tipo)) {
+          Promise.resolve(ctx.recolectar(a.tipo)).then((r) => { if (r && r.item) { sonido.recoger(); avisoBotin(r.item, r.n || 1); } }).catch((e) => { const m = String((e && e.message) || e || ""), t = /todavia_no:(\d+)/.exec(m); aviso(t ? "Todavía no tiene más. Vuelve en " + t[1] + " s." : /demasiado_rapido/.test(m) ? "Vas muy rápido." : "No se pudo recoger ahora."); });
+        } }
       return;
     }
     pausado = true; hablandoCon = cercano; limpiarEntrada(); if (document.pointerLockElement === cv) document.exitPointerLock();
@@ -663,16 +804,18 @@ export function iniciarMundo3D(host, ctx) {
   function quePicar(dt) {
     if (!picar) { picando = null; return; }
     const h = apuntar(); if (!h || h.b === ADOQUIN || h.y <= 0) { picando = null; return; }
-    if (!picando || picando.x !== h.x || picando.y !== h.y || picando.z !== h.z) { picando = { x: h.x, y: h.y, z: h.z, t: 0, b: h.b }; }
+    if (!picando || picando.x !== h.x || picando.y !== h.y || picando.z !== h.z) { const hr = herramientaPara(h.b); picando = { x: h.x, y: h.y, z: h.z, t: 0, b: h.b, dur: (DUREZA[h.b] || 1) / hr.mult, herr: hr.id, p: 0 };
+      if (h.b === 10 && hr.k === 0 && !hr.id && !avisoPico) { avisoPico = true; aviso("Con un pico sacas más minerales (y mejores). Fabrica uno en la mochila 🎒."); } }
     picando.t += dt; picando.s = (picando.s || 0) + dt; if (picando.s > .28) { picando.s = 0; sonido.picar(h.b); }
-    if (picando.t >= (DUREZA[h.b] || 1)) {
+    picando.p += dt; if (picando.p > .09) { picando.p = 0; soltarParticulas(h.x + .5 - adelante()[0] * .5, h.y + .5 - adelante()[1] * .5, h.z + .5 - adelante()[2] * .5, h.b, 1, 1.4); }
+    if (picando.t >= picando.dur) {
       const { x, y, z, b } = picando; picando = null;
       if (ocupado) return;
       if (!puedeEditar(x, y, z)) { picar = false; return; }
       const dueno = autores.get(clave(x, y, z));
       if (dueno != null && dueno !== ctx.yo && b > 0 && mundo[idx(x, y, z)] > 0) { aviso("Ese bloque lo puso otro compañero."); picar = false; return; }
-      mundo[idx(x, y, z)] = AIRE; marcar(x, z); ocupado = true; sonido.romper(b);
-      Promise.resolve(ctx.picar(x, y, z, b)).then(() => { autores.set(clave(x, y, z), ctx.yo); }).catch((e) => {
+      mundo[idx(x, y, z)] = AIRE; marcar(x, z); ocupado = true; sonido.romper(b); soltarParticulas(x + .5, y + .5, z + .5, b, 16, 2.6);
+      Promise.resolve(ctx.picar(x, y, z, b)).then((r) => { autores.set(clave(x, y, z), ctx.yo); if (r && r.item) soltarItem(x, y, z, r.item); }).catch((e) => {
         if (!vivo) return; mundo[idx(x, y, z)] = b; marcar(x, z); aviso(mensajeError(e));
       }).finally(() => { ocupado = false; });
     }
@@ -710,9 +853,9 @@ export function iniciarMundo3D(host, ctx) {
   const on = (obj, ev, fn, op) => { obj.addEventListener(ev, fn, op); escuchas.push([obj, ev, fn, op]); };
   on(window, "keydown", (e) => {
     if (pausado || (!jugando && !bloqueado())) return;
-    const k = e.key.toLowerCase(); if (k === "e") { hablar(); return; } if (k === "v") { cam.modo = (cam.modo + 1) % 3; try { ctx.alCamara && ctx.alCamara(cam.modo); } catch (_) {} return; } if ([" ", "arrowup", "arrowdown"].includes(k)) e.preventDefault();
+    const k = e.key.toLowerCase(); if (k === "e") { hablar(); return; } if (k === "i" || k === "b") { try { ctx.alInventario && ctx.alInventario(); } catch (_) {} return; } if (k === "v") { cam.modo = (cam.modo + 1) % 3; try { ctx.alCamara && ctx.alCamara(cam.modo); } catch (_) {} return; } if ([" ", "arrowup", "arrowdown"].includes(k)) e.preventDefault();
     tec[mapaTecla(k)] = true; if (k === "f" && sinBloqueo) picar = true;
-    const n = +e.key; if (n >= 1 && n <= 8) seleccionar(COLOCABLES[n - 1]);
+    const n = +e.key; if (n >= 1 && n <= 9) { const mios = COLOCABLES.filter((b) => ctx.cantidad(b) > 0 || b <= 9); if (mios[n - 1]) seleccionar(mios[n - 1]); }
   });
   on(window, "keyup", (e) => { const k = e.key.toLowerCase(); tec[mapaTecla(k)] = false; if (k === "f" && sinBloqueo) picar = false; });
   on(window, "blur", () => { for (const k in tec) tec[k] = false; picar = false; });
@@ -722,7 +865,9 @@ export function iniciarMundo3D(host, ctx) {
     if (pausado) return;
     if (e.pointerType === "touch") {
       cv.setPointerCapture(e.pointerId); ayuda.textContent = ""; jugando = true;
-      const r = cv.getBoundingClientRect(); toques[e.pointerId] = { izq: (e.clientX - r.left) < r.width * .4, x: e.clientX, y: e.clientY, ox: e.clientX, oy: e.clientY }; return;
+      const r = cv.getBoundingClientRect(); const t = toques[e.pointerId] = { izq: (e.clientX - r.left) < r.width * .4, x: e.clientX, y: e.clientY, ox: e.clientX, oy: e.clientY, t0: performance.now(), movio: false, picando: false };
+      if (!t.izq) t.reloj = setTimeout(() => { if (toques[e.pointerId] === t && !t.movio && !pausado) { t.picando = true; picar = true; } }, 300); // mantener el dedo = picar; toque corto = poner
+      return;
     }
     if (!bloqueado() && !sinBloqueo) { try { cv.requestPointerLock(); } catch (_) { sinBloqueo = true; } jugando = true; ayuda.textContent = ""; }
     if (e.button === 2) { poner(); return; }
@@ -732,13 +877,13 @@ export function iniciarMundo3D(host, ctx) {
   on(window, "pointerup", (e) => { if (e.pointerType !== "touch") { arrastraRaton = false; if (e.button === 0 && !sinBloqueo) picar = false; } });
   on(window, "mousemove", (e) => { if (bloqueado()) mirar(e.movementX, e.movementY, .0024); else if (arrastraRaton) mirar(e.movementX, e.movementY, .004); });
   on(document, "pointerlockchange", () => { if (!bloqueado()) { picar = false; if (jugando && !sinBloqueo) ayuda.textContent = "Haz clic para seguir jugando"; } });
-  on(cv, "wheel", (e) => { e.preventDefault(); const i = COLOCABLES.indexOf(sel); seleccionar(COLOCABLES[(i + (e.deltaY > 0 ? 1 : -1) + COLOCABLES.length) % COLOCABLES.length]); }, { passive: false });
+  on(cv, "wheel", (e) => { e.preventDefault(); const mios = COLOCABLES.filter((b) => ctx.cantidad(b) > 0 || b === sel), i = Math.max(0, mios.indexOf(sel)); seleccionar(mios[(i + (e.deltaY > 0 ? 1 : -1) + mios.length) % mios.length]); }, { passive: false });
   on(cv, "pointermove", (e) => {
     const t = toques[e.pointerId]; if (!t) return;
-    if (t.izq) { const dx = e.clientX - t.ox, dy = e.clientY - t.oy, m = Math.min(1, Math.hypot(dx, dy) / 45), a = Math.atan2(dy, dx); joy.x = Math.cos(a) * m; joy.y = Math.sin(a) * m; joyEl.firstChild.style.transform = `translate(${joy.x * 30}px,${joy.y * 30}px)`; }
-    else { mirar(e.clientX - t.x, e.clientY - t.y, .006); t.x = e.clientX; t.y = e.clientY; }
+    if (t.izq) { const dx = e.clientX - t.ox, dy = e.clientY - t.oy, m = Math.min(1, Math.hypot(dx, dy) / 45), a = Math.atan2(dy, dx); joy.corre = Math.hypot(dx, dy) > 80; joy.x = Math.cos(a) * m; joy.y = Math.sin(a) * m; joyEl.firstChild.style.transform = `translate(${joy.x * 30}px,${joy.y * 30}px)`; }
+    else { if (!t.picando && Math.hypot(e.clientX - t.ox, e.clientY - t.oy) > 10) t.movio = true; mirar(e.clientX - t.x, e.clientY - t.y, .006); t.x = e.clientX; t.y = e.clientY; }
   });
-  const finT = (e) => { const t = toques[e.pointerId]; if (!t) return; if (t.izq) { joy.x = joy.y = 0; joyEl.firstChild.style.transform = ""; } delete toques[e.pointerId]; };
+  const finT = (e) => { const t = toques[e.pointerId]; if (!t) return; if (t.izq) { joy.x = joy.y = 0; joy.corre = false; joyEl.firstChild.style.transform = ""; } else { clearTimeout(t.reloj); if (t.picando) picar = false; else if (!t.movio && e.type === "pointerup" && performance.now() - t.t0 < 300 && !pausado) poner(); } delete toques[e.pointerId]; };
   on(cv, "pointerup", finT); on(cv, "pointercancel", finT);
   acc.querySelectorAll("button").forEach((b) => {
     const k = b.dataset.k;
@@ -905,7 +1050,8 @@ export function iniciarMundo3D(host, ctx) {
     gl.viewport(0, 0, cv.width, cv.height);
     amb = ambiente.get(); const tt0 = performance.now() / 1000, dt0 = Math.min(.05, Math.max(0, tt0 - (dibujar.t || tt0))); dibujar.t = tt0;
     const kAg = .3 + .7 * amb.dia, cielo = enAgua ? [.2 * kAg, .4 * kAg, .7 * kAg] : amb.cielo; gl.clearColor(cielo[0], cielo[1], cielo[2], 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    const cc = camaraActual(); M = mul(perspectiva(cam.fov, cv.width / cv.height, .05, 140), vista(cc));
+    const cc = camaraActual(); const asp = cv.width / cv.height, fovV = asp < 16 / 9 ? Math.min(1.75, 2 * Math.atan(Math.tan(cam.fov / 2) * Math.pow(16 / 9 / asp, .6))) : cam.fov; // en pantallas verticales se abre el campo para no ver 'por un tubo'
+    M = mul(perspectiva(fovV, asp, .05, 140), vista(cc));
     if (!enAgua) dibujarCielo(cc, cielo, tt0);
     gl.useProgram(P); gl.uniformMatrix4fv(loc.m, false, new Float32Array(M)); gl.uniform1i(loc.t, 0); gl.uniform3f(loc.cn, cielo[0], cielo[1], cielo[2]);
     gl.uniform3f(loc.lc, amb.luz[0], amb.luz[1], amb.luz[2]); gl.uniform2f(loc.fg, 40 - 14 * amb.lluvia, 45 - 15 * amb.lluvia);
@@ -919,13 +1065,14 @@ export function iniciarMundo3D(host, ctx) {
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ch.ib); gl.drawElements(gl.TRIANGLES, ch.n, gl.UNSIGNED_INT, 0);
     }
     gl.disableVertexAttribArray(loc.u); gl.disableVertexAttribArray(loc.s);
-    if (vis.length) {
+    if (vis.length || otros.size) {
       const tt = performance.now() / 1000;
       gl.useProgram(PC); gl.uniform3f(locC.cn, cielo[0], cielo[1], cielo[2]); gl.uniform3f(locC.lc, amb.luz[0], amb.luz[1], amb.luz[2]); gl.uniform2f(locC.fg, 40 - 14 * amb.lluvia, 45 - 15 * amb.lluvia);
       gl.bindBuffer(gl.ARRAY_BUFFER, cuboB); gl.enableVertexAttribArray(locC.p); gl.vertexAttribPointer(locC.p, 3, gl.FLOAT, false, 16, 0);
       gl.enableVertexAttribArray(locC.s); gl.vertexAttribPointer(locC.s, 1, gl.FLOAT, false, 16, 12);
       gl.disable(gl.CULL_FACE);
       for (const v of vis) if (Math.hypot(v.n.x - jug.x, v.n.z - jug.z) < 64) dibujarAldeano(v, tt);
+      for (const o of otros.values()) if (o.dist < 64) dibujarAldeano(o, tt);
       if (cam.modo !== 0) { // tu personaje, con tu avatar
         const hv = Math.hypot(jug.vx, jug.vz); jugV.n.x = jug.x; jugV.n.y = jug.y; jugV.n.z = jug.z; jugV.h = jug.yaw + Math.PI;
         jugV.mover = hv > .3 && jug.suelo; jugV.amp += ((jugV.mover ? 1 : 0) - jugV.amp) * .2; if (jugV.mover) jugV.fase += hv * .03; jugV.nodFijo = Math.max(-.8, Math.min(.8, jug.pitch * .7));
@@ -933,7 +1080,7 @@ export function iniciarMundo3D(host, ctx) {
       }
       gl.enable(gl.CULL_FACE); gl.disableVertexAttribArray(locC.p); gl.disableVertexAttribArray(locC.s);
     }
-    dibujarDecor(cielo, tt0); dibujarAnimales(cielo, tt0); dibujarAtmosfera(cc, cielo, tt0, dt0);
+    dibujarDecor(cielo, tt0); dibujarAnimales(cielo, tt0); dibujarEfectos(cielo, tt0); dibujarAtmosfera(cc, cielo, tt0, dt0);
     const h = apuntar();
     if (ctx.alApuntar) { // el docente ve quién puso el bloque que mira
       const au = h ? autores.get(clave(h.x, h.y, h.z)) : undefined, k = h ? (au === undefined ? "base" : String(au)) : "";
@@ -962,11 +1109,15 @@ export function iniciarMundo3D(host, ctx) {
       else { el.style.display = ""; el.style.left = ((q[0] / q[2] * .5 + .5) * w) + "px"; el.style.top = ((1 - (q[1] / q[2] * .5 + .5)) * hh) + "px"; }
       if (dist < mejor && Math.abs(n.y - jug.y) < 3 && (dx * fw[0] + dz * fw[2]) / (dist * fl + 1e-6) > .3) { mejor = dist; cerca = n; }
     }
+    for (const o of otros.values()) { // etiquetas de los compañeros
+      const ey = o.n.y + 2.3, q = [M[0] * o.n.x + M[4] * ey + M[8] * o.n.z + M[12], M[1] * o.n.x + M[5] * ey + M[9] * o.n.z + M[13], M[3] * o.n.x + M[7] * ey + M[11] * o.n.z + M[15]];
+      if (o.dist > 40 || q[2] <= .1) o.el.style.display = "none"; else { o.el.style.display = ""; o.el.style.left = ((q[0] / q[2] * .5 + .5) * w) + "px"; o.el.style.top = ((1 - (q[1] / q[2] * .5 + .5)) * hh) + "px"; }
+    }
     cercano = pausado ? null : cerca;
     animalCer = null;
     if (!cercano && !pausado && !ctx.vuelo) { let mj = 3; for (const a of animales) { const dx = a.x - jug.x, dz = a.z - jug.z, dist = Math.hypot(dx, dz); if (dist < mj && Math.abs(a.y - jug.y) < 2.5 && (dx * fw[0] + dz * fw[2]) / (dist * fl + 1e-6) > .45) { mj = dist; animalCer = a; } } }
     const algo = cercano || animalCer;
-    hablarEl.style.display = algo ? "block" : "none"; if (algo) hablarEl.textContent = cercano ? "E · Hablar con " + cercano.nombre : "E · Acariciar " + animalCer.esp.nombre.toLowerCase();
+    hablarEl.style.display = algo ? "block" : "none"; if (algo) hablarEl.textContent = cercano ? "E · Hablar con " + cercano.nombre : (ACCION_ANIMAL[animalCer.tipo] || "E · Acariciar ") + animalCer.esp.nombre.toLowerCase();
     btnHab.style.display = algo ? "block" : "none";
   }
   let ult = performance.now(), raf = 0;
@@ -992,7 +1143,7 @@ export function iniciarMundo3D(host, ctx) {
     const dt = Math.min(.05, (t - ult) / 1000); ult = t;
     for (const k of sucios) construir(k % NCX, (k / NCX) | 0); sucios.clear();
     if (pausado) limpiarEntrada();
-    actualizar(dt); quePicar(dt); moverNpcs(dt, performance.now() / 1000); moverAnimales(dt); vigilarPuertas(dt); dibujar(); ambienteSonoro(dt);
+    actualizar(dt); quePicar(dt); moverNpcs(dt, performance.now() / 1000); moverOtros(dt); moverEfectos(dt); moverAnimales(dt); vigilarPuertas(dt); dibujar(); ambienteSonoro(dt);
     const z = zonaDe(Math.floor(jug.x), Math.floor(jug.z)); if (z !== zonaAct) { zonaAct = z; ctx.alZona && ctx.alZona(z); }
     cooldownPortal = Math.max(0, cooldownPortal - dt);
     if (!cooldownPortal) for (const p of portalesZona) {
@@ -1018,14 +1169,15 @@ export function iniciarMundo3D(host, ctx) {
     getAmbiente: () => ({ hora: amb.hora, lluvia: amb.lluvia, dia: amb.dia }),
     pausar: (v) => { pausado = !!v; if (!pausado) hablandoCon = null; if (pausado) { limpiarEntrada(); if (bloqueado()) document.exitPointerLock(); } else if (jugando && !sinBloqueo) ayuda.textContent = "Haz clic para seguir jugando"; },
     actualizarNpcs: (lista) => montarNpcs(lista),
-    posicion: () => ({ x: jug.x, y: jug.y, z: jug.z }),
+    setOtros: (lista) => setOtros(lista),
+    posicion: () => ({ x: jug.x, y: jug.y, z: jug.z, yaw: jug.yaw }),
     _debug: { jug, apuntar, get, picarAhora: (v) => { picar = v; }, poner, animales, ambiente, sonido },
     cerrar: () => {
       vivo = false; cancelAnimationFrame(raf); ro.disconnect();
       escuchas.forEach(([o, e, f, op]) => o.removeEventListener(e, f, op));
       if (bloqueado()) document.exitPointerLock();
       chunks.forEach((c) => { if (c) { gl.deleteBuffer(c.pb); gl.deleteBuffer(c.ub); gl.deleteBuffer(c.sb); gl.deleteBuffer(c.ib); } });
-      sonido.cerrar(); limpiarNpcs(); gl.deleteTexture(tex); const ex = gl.getExtension("WEBGL_lose_context"); if (ex) ex.loseContext();
+      sonido.cerrar(); limpiarNpcs(); otros.forEach((o) => o.el.remove()); otros.clear(); gl.deleteTexture(tex); const ex = gl.getExtension("WEBGL_lose_context"); if (ex) ex.loseContext();
       raiz.remove();
     },
   };
