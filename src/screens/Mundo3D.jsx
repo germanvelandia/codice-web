@@ -31,6 +31,8 @@ const MODOS_CAM = ["Primera persona", "Tercera persona", "De frente"];
 const SND_DEF = { volumen: 0.7, musica: true, silencio: false };
 const leerSnd = () => { try { return { ...SND_DEF, ...JSON.parse(localStorage.getItem("m3d_snd") || "{}") }; } catch (_) { return { ...SND_DEF }; } };
 const guardarSnd = (c) => { try { localStorage.setItem("m3d_snd", JSON.stringify(c)); } catch (_) { /* sin almacenamiento */ } };
+const leerOri = () => { try { return localStorage.getItem("m3d_orient") || "h"; } catch (_) { return "h"; } };
+const fijarOri = async (o) => { try { if (!screen.orientation) return; if (o === "libre") screen.orientation.unlock(); else await screen.orientation.lock(o === "h" ? "landscape" : "portrait"); } catch (_) { /* iPhone y algunos navegadores no permiten bloquear: se avisa al jugador */ } };
 const aplicarCam = (ctl, c) => ctl && ctl.setCamara({ modo: c.modo, dist: c.dist, fov: (c.fov * Math.PI) / 180, sens: c.sens });
 const partirSprite = (k) => { const i = String(k || "").lastIndexOf("_"); return i > 0 ? { rolKey: k.slice(0, i), genero: k.slice(i + 1) } : null; };
 
@@ -91,6 +93,9 @@ export default function Mundo3D({ estudianteInfo }) {
   const [snd, setSnd] = useState(leerSnd), sndRef = useRef(null); sndRef.current = snd;
   const puertasRef = useRef({}), estado_ref = useRef({});
   const [ajustes, setAjustes] = useState(false);
+  const [ori, setOri] = useState(leerOri), [vertical, setVertical] = useState(() => typeof matchMedia === "function" && matchMedia("(orientation:portrait)").matches);
+  useEffect(() => { if (typeof matchMedia !== "function") return undefined; const m = matchMedia("(orientation:portrait)"), f = () => setVertical(m.matches); f(); m.addEventListener ? m.addEventListener("change", f) : m.addListener(f); return () => { m.removeEventListener ? m.removeEventListener("change", f) : m.removeListener(f); }; }, []);
+  const cambiarOri = (o) => { setOri(o); try { localStorage.setItem("m3d_orient", o); } catch (_) { /* nada */ } fijarOri(o); };
   const [mochila, setMochila] = useState(false), [pestana, setPestana] = useState("mochila"), mochilaRef = useRef(null);
   const [ampliado, setAmpliado] = useState(false);
   const [avatar, setAvatar] = useState(null), avatarRef = useRef(null); avatarRef.current = avatar;
@@ -283,6 +288,7 @@ export default function Mundo3D({ estudianteInfo }) {
     const el = marco.current; if (!el) return;
     try { if (el.requestFullscreen) { await el.requestFullscreen(); realRef.current = true; } else if (el.webkitRequestFullscreen) { el.webkitRequestFullscreen(); realRef.current = true; } } catch (_) { realRef.current = false; }
     setAmpliado(true);
+    if (esTactil) fijarOri(ori);
   };
   const abrirAjustes = (v) => { setAjustes(v); if (v) setMochila(false); ctl.current && ctl.current.pausar(v); };
   const abrirMochila = (v) => { setMochila(v); if (v) setAjustes(false); ctl.current && ctl.current.pausar(v); };
@@ -368,6 +374,7 @@ export default function Mundo3D({ estudianteInfo }) {
                 <label>Distancia: {cam.dist.toFixed(1)}<input type="range" min="2" max="9" step="0.5" value={cam.dist} onChange={(e) => setCam((c) => ({ ...c, dist: +e.target.value }))} /></label>
                 <label>Campo de visión: {cam.fov}°<input type="range" min="55" max="100" step="1" value={cam.fov} onChange={(e) => setCam((c) => ({ ...c, fov: +e.target.value }))} /></label>
                 <label>Sensibilidad del giro: {cam.sens.toFixed(1)}×<input type="range" min="0.4" max="2.5" step="0.1" value={cam.sens} onChange={(e) => setCam((c) => ({ ...c, sens: +e.target.value }))} /></label>
+                {esTactil && <><b style={{ marginTop: 8, display: "block" }}>Pantalla del celular</b><div className="m3d-seg"><button className={ori === "h" ? "on" : ""} onClick={() => cambiarOri("h")}>↔ Horizontal</button><button className={ori === "v" ? "on" : ""} onClick={() => cambiarOri("v")}>↕ Vertical</button><button className={ori === "libre" ? "on" : ""} onClick={() => cambiarOri("libre")}>Libre</button></div></>}
                 <b style={{ marginTop: 8, display: "block" }}>Sonido</b>
                 <label>Volumen: {Math.round(snd.volumen * 100)}%<input type="range" min="0" max="1" step="0.05" value={snd.volumen} onChange={(e) => setSnd((c) => ({ ...c, volumen: +e.target.value }))} /></label>
                 <div className="m3d-seg"><button className={!snd.silencio ? "on" : ""} onClick={() => setSnd((c) => ({ ...c, silencio: false }))}>🔊 Con sonido</button><button className={snd.silencio ? "on" : ""} onClick={() => setSnd((c) => ({ ...c, silencio: true }))}>🔇 Silencio</button></div>
@@ -380,6 +387,7 @@ export default function Mundo3D({ estudianteInfo }) {
             {ampliado && (
               <>
                 <div className="m3d-hud">{zona && <span>📍 {zona}</span>}{conectados > 0 && <span>👥 {conectados + 1} conectados</span>}{prog.xp != null && <span>⭐ {prog.xp} · 🪙 {prog.oro}</span>}{datos.duelos.insignias.map((k) => { const z = ZONAS.find((x) => x.key === k); return z ? <span key={k} title={z.insignia.nombre}>{z.insignia.emoji}</span> : null; })}</div>
+                {esTactil && ori === "h" && vertical && <div className="m3d-aviso" style={{ top: 50, background: "#4c1d95ee" }} role="status">↻ Gira el celular en horizontal para jugar mejor (o elige Vertical en ⚙️)</div>}
                 {msg && <div className="m3d-aviso" role="status">{msg}</div>}
                 <div className="m3d-hot">{barraBloques}</div>
               </>
