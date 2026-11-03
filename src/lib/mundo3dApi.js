@@ -17,4 +17,12 @@ export const fabricarMundo3D = (est, sale) => llamar("mundo3d_fabricar", { p_est
 
 // Docente
 export const fetchResumenMundo3D = async (grado) => (await llamar("mundo3d_resumen", { p_grado: String(grado) })) || [];
-export const revertirMundo3D = (grado, autor = null, desde = null) => llamar("mundo3d_revertir", { p_grado: String(grado), p_autor: autor, p_desde: desde });
+export const revertirMundo3D = (grado, autor = null, desde = null) => llamar("mundo3d_revertir", { p_grado: String(grado), p_autor: autor, p_desde: desde }); // → { lote, cantidad }
+
+// Docente (panel y observador): todas pasan por funciones que exigen sesión de docente
+export const fetchGradosDocente = async () => (await llamar("mundo3d_docente_grados", {})) || [];
+export const fetchCambiosDocente = async (grado, desde = null) => (await llamar("mundo3d_docente_cargar", { p_grado: String(grado), p_desde: desde })) || [];
+export const fetchAjustesMundo3D = (grado) => llamar("mundo3d_ajustes_get", { p_grado: String(grado) });
+export const guardarAjustesMundo3D = (grado, construir, limite) => llamar("mundo3d_ajustes_set", { p_grado: String(grado), p_construir: !!construir, p_limite: Math.max(0, Math.min(20000, Math.floor(Number(limite) || 0))) });
+export const deshacerReversionMundo3D = (lote) => llamar("mundo3d_deshacer", { p_lote: lote });
+export const fetchHistorialMundo3D = async (grado) => (await llamar("mundo3d_historial", { p_grado: String(grado) })) || [];
