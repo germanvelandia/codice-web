@@ -20,6 +20,8 @@ export const fabricarMundo3D = (est, sale) => llamar("mundo3d_fabricar", { p_est
 const num = (v) => (Number.isFinite(v) ? v : 0);
 export const latidoMundo3D = async (est, grado, x, y, z, yaw, avatar = null) => (await llamar("mundo3d_latido", { p_est: est, p_grado: String(grado), p_x: num(x), p_y: num(y), p_z: num(z), p_yaw: num(yaw), p_avatar: avatar })) || [];
 export const salirMundo3D = (est) => llamar("mundo3d_salir", { p_est: est });
+export const decirMundo3D = (est, frase) => llamar("mundo3d_decir", { p_est: est, p_frase: frase });
+export const fijarChatMundo3D = (grado, activo) => llamar("mundo3d_chat_set", { p_grado: String(grado), p_on: !!activo });
 export const fetchPresenciaDocente = async (grado) => (await llamar("mundo3d_presencia_docente", { p_grado: String(grado) })) || [];
 export const fijarPresenciaMundo3D = (grado, activa) => llamar("mundo3d_presencia_set", { p_grado: String(grado), p_on: !!activa });
 
