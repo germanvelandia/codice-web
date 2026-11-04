@@ -38,6 +38,7 @@ import { VistaGoogleCalendar } from "../screens/GoogleCalendar";
 import { VistaVidaNota } from "../screens/VidaNota";
 import { VistaImpresion } from "../screens/ImpresionPlanillas";
 import { VistaMundoNota } from "../screens/MundoNota";
+import { VistaDetectives } from "../screens/DetectivesDocente";
 import { VistaTableroMundial } from "../screens/TableroMundial";
 import { VistaPuntosConducta } from "../screens/PuntosConducta";
 import { VistaReportes } from "../screens/Reportes";
@@ -251,6 +252,7 @@ export function Panel({ session }) {
         {tab === "gcal" && <MarcoSeccion zonaLabel="Académico — Google Calendar" icono="📆"><VistaGoogleCalendar /></MarcoSeccion>}
         {tab === "vidanota" && grados.length > 0 && <MarcoSeccion zonaLabel="Gamificación — Vida → nota" icono="🩸"><VistaVidaNota grados={grados} gradoActivo={gradoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
         {tab === "imprimir" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Imprimir" icono="🖨️"><VistaImpresion grados={grados} gradoActivo={gradoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
+        {tab === "detectives" && <MarcoSeccion zonaLabel="Gamificación — Detectives del Códice" icono="🕵️"><VistaDetectives grados={grados} gradoActivo={gradoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
         {tab === "mundonota" && grados.length > 0 && <MarcoSeccion zonaLabel="Gamificación — Mundo → nota" icono="🧮"><VistaMundoNota grados={grados} gradoActivo={gradoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
         {tab === "tablero" && grados.length > 0 && <MarcoSeccion zonaLabel="Gamificación — Tablero Mundial" icono="🌍"><VistaTableroMundial grados={grados} gradoActivo={gradoActivo} /></MarcoSeccion>}
         {tab === "puntosconducta" && <MarcoSeccion zonaLabel="Gamificación — Puntos por conducta" icono="🎮"><VistaPuntosConducta /></MarcoSeccion>}
