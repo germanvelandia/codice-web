@@ -32,15 +32,15 @@ function mezclada(m) {
   return { ...m, opciones: orden.map((i) => m.opciones[i]), correcta: orden.indexOf(Number(m.correcta)), _orig: m };
 }
 
-function Mision({ npc, mision: misionOriginal, hecha, est, alHecha, volver, cerrar }) {
+function Mision({ npc, mision: misionOriginal, hecha, est, alHecha, alFallo, volver, cerrar }) {
   const mision = useMemo(() => mezclada(misionOriginal), [misionOriginal.id]); // eslint-disable-line
   const [elegida, setElegida] = useState(null);
   const [estado, setEstado] = useState(hecha ? "hecha" : "pregunta"); // pregunta | mal | guardando | bien | hecha | error
-  const [res, setRes] = useState(null);
+  const [res, setRes] = useState(null), [perdio, setPerdio] = useState(0);
   const responder = async (i) => {
     if (estado === "guardando" || estado === "bien" || estado === "hecha") return;
     setElegida(i);
-    if (i !== mision.correcta) { setEstado("mal"); return; }
+    if (i !== mision.correcta) { setEstado("mal"); if (alFallo) Promise.resolve(alFallo()).then((r) => r && r.danio && setPerdio(r.danio)).catch(() => {}); return; }
     setEstado("guardando");
     let r; try { r = await mundoApi.completarMisionMundo(est, misionOriginal); } catch (e) { r = { ok: false, mensaje: e && e.message }; }
     if (!r.ok) { setRes(r); setEstado("error"); return; }
@@ -57,7 +57,7 @@ function Mision({ npc, mision: misionOriginal, hecha, est, alHecha, volver, cerr
             className={`block w-full text-left text-sm rounded-xl border-2 px-3 py-2.5 ${bien ? "border-emerald-500 bg-emerald-50" : mal ? "border-rose-400 bg-rose-50" : "border-slate-200 bg-slate-50 hover:border-violet-400"}`}>{o}</button>;
         })}
       </div>}
-      {estado === "mal" && <div className="m-retro mal">{mision.pista ? "💡 " + mision.pista : "Esa no es. ¡Inténtalo de nuevo!"}</div>}
+      {estado === "mal" && <div className="m-retro mal">{perdio > 0 && <b>💔 −{perdio} de vida. </b>}{mision.pista ? "💡 " + mision.pista : "Esa no es. ¡Inténtalo de nuevo!"}</div>}
       {estado === "guardando" && <div className="m-retro bien">⏳ Guardando tu premio…</div>}
       {estado === "bien" && <div className="m-retro bien">{mision.retro || "¡Correcto!"}<br /><b>🎁 +{mision.xp} XP · +{mision.oro} 🪙</b>{res && res.evento ? " (con bono de evento)" : ""}{res && res.comarca && res.comarca.ok ? " · aportaste a tu Comarca 🏰" : ""}</div>}
       {estado === "hecha" && <div className="m-retro bien">Ya completaste esta misión ✅ (tu premio ya fue entregado). Por seguridad no se vuelve a mostrar la respuesta.</div>}
@@ -70,12 +70,12 @@ function Mision({ npc, mision: misionOriginal, hecha, est, alHecha, volver, cerr
   );
 }
 
-function VistaNpc({ npc, datos, est, alHecha, cerrar }) {
+function VistaNpc({ npc, datos, est, alHecha, alFallo, cerrar }) {
   const [sel, setSel] = useState(npc.misiones.length === 1 ? npc.misiones[0] : null);
   const pend = npc.misiones.filter((m) => !datos.hechas.has(m.id)).length;
   return (
     <Marco titulo={npc.nombre} emoji={npc.emoji || "🧑"} sub={sel ? sel.titulo : pend ? pend + " misión(es) por hacer" : "Todas las misiones hechas ✅"} onCerrar={cerrar}>
-      {sel ? <Mision key={sel.id} npc={npc} mision={sel} hecha={datos.hechas.has(sel.id)} est={est} alHecha={alHecha} volver={npc.misiones.length > 1 ? () => setSel(null) : null} cerrar={cerrar} />
+      {sel ? <Mision key={sel.id} npc={npc} mision={sel} hecha={datos.hechas.has(sel.id)} est={est} alHecha={alHecha} alFallo={alFallo} volver={npc.misiones.length > 1 ? () => setSel(null) : null} cerrar={cerrar} />
         : <div className="space-y-2">
           <p className="m-texto">¡Hola! Tengo estos retos para ti:</p>
           {npc.misiones.map((m) => {
@@ -154,10 +154,11 @@ function VistaPosada({ est, cerrar }) {
 }
 
 // El guardián de cada zona: un duelo de preguntas. Al vencerlo se gana la insignia de la zona (una sola vez) y un premio.
-function VistaGuardian({ npc, datos, estado, est, alInsignia, alDerrota, cerrar }) {
+function VistaGuardian({ npc, datos, estado, est, alInsignia, alDerrota, alFallo, cerrar }) {
   const z = ZONAS.find((x) => x.key === npc.zona), e = estado[z.key] || {}, du = datos.duelos;
   const [fase, setFase] = useState("intro"); // intro | duelo | fin
   const duelo = useRef(null);
+  const [perdio, setPerdio] = useState(0);
   const [resp, setResp] = useState(null), [fin, setFin] = useState(null), [motivo, setMotivo] = useState(""), [q, setQ] = useState(null);
   const tiene = du.insignias.includes(z.key), espera = esperaRestanteMin(du.esperaHasta && du.esperaHasta[z.key]);
   const previa = e.previa ? zonaPorClave(e.previa) : null;
@@ -177,8 +178,8 @@ function VistaGuardian({ npc, datos, estado, est, alInsignia, alDerrota, cerrar 
       setFin({ ganado, r });
     } catch (er) { setFin({ ganado, error: (er && er.message) || "No se pudo guardar el resultado." }); }
   };
-  const responder = (i) => { if (resp) return; const r = duelo.current.responder(i); setResp({ i, r }); };
-  const siguiente = () => { if (resp && resp.r.fin) terminar(resp.r.fin); else { setResp(null); setQ(duelo.current.actual()); } };
+  const responder = (i) => { if (resp) return; const r = duelo.current.responder(i); setResp({ i, r }); if (!r.acierto && alFallo) Promise.resolve(alFallo()).then((d) => d && d.danio && setPerdio(d.danio)).catch(() => {}); };
+  const siguiente = () => { if (resp && resp.r.fin) terminar(resp.r.fin); else { setResp(null); setPerdio(0); setQ(duelo.current.actual()); } };
   const rendirse = () => { const f = duelo.current.rendirse(); terminar(f); };
 
   const pr = duelo.current ? duelo.current.progreso() : null;
@@ -213,6 +214,7 @@ function VistaGuardian({ npc, datos, estado, est, alInsignia, alDerrota, cerrar 
                 return <button key={i} disabled={mostrada} onClick={() => responder(i)} className={`block w-full text-left text-sm rounded-xl border-2 px-3 py-2.5 ${bien ? "border-emerald-500 bg-emerald-50" : mal ? "border-rose-400 bg-rose-50" : "border-slate-200 bg-slate-50 hover:border-violet-400"}`}>{o}</button>;
               })}</div>
               {resp && <div className={`m-retro ${resp.r.acierto ? "bien" : "mal"}`}>{resp.r.acierto ? "¡Acertaste! " : "Esa no era. "}{resp.r.retro || (!resp.r.acierto && resp.r.pista) || ""}</div>}
+              {resp && !resp.r.acierto && perdio > 0 && <div className="m-retro mal">💔 −{perdio} de vida</div>}
               {resp ? <button onClick={siguiente} className="mt-3 w-full rounded-xl py-2.5 text-sm font-bold bg-violet-600 text-white">{resp.r.fin ? "Ver el resultado" : "Siguiente pregunta"}</button>
                 : <button onClick={rendirse} className="mt-3 w-full rounded-xl py-2 text-xs font-bold bg-slate-100 hover:bg-slate-200">Rendirme</button>}
             </>;
@@ -232,10 +234,10 @@ function VistaGuardian({ npc, datos, estado, est, alInsignia, alDerrota, cerrar 
   );
 }
 
-export default function PanelAldea({ dialogo, datos, estado, est, alHecha, alHechoAcertijo, alInsignia, alDerrota, cerrar }) {
+export default function PanelAldea({ dialogo, datos, estado, est, alHecha, alHechoAcertijo, alInsignia, alDerrota, alFallo, cerrar }) {
   if (!dialogo) return null;
-  if (dialogo.tipo === "guardian") return <VistaGuardian key={dialogo.id} npc={dialogo} datos={datos} estado={estado} est={est} alInsignia={alInsignia} alDerrota={alDerrota} cerrar={cerrar} />;
+  if (dialogo.tipo === "guardian") return <VistaGuardian key={dialogo.id} npc={dialogo} datos={datos} estado={estado} est={est} alInsignia={alInsignia} alDerrota={alDerrota} alFallo={alFallo} cerrar={cerrar} />;
   if (dialogo.tipo === "acertijos") return <VistaAcertijos datos={datos} est={est} alHecho={alHechoAcertijo} cerrar={cerrar} />;
   if (dialogo.tipo === "posada") return <VistaPosada est={est} cerrar={cerrar} />;
-  return <VistaNpc key={dialogo.id} npc={dialogo} datos={datos} est={est} alHecha={alHecha} cerrar={cerrar} />;
+  return <VistaNpc key={dialogo.id} npc={dialogo} datos={datos} est={est} alHecha={alHecha} alFallo={alFallo} cerrar={cerrar} />;
 }
