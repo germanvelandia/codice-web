@@ -1976,18 +1976,25 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
   const [soloPerdiendo, setSoloPerdiendo] = useState(false);
   const [busqueda, setBusqueda] = useState("");
   const [incumplimientosAbierto, setIncumplimientosAbierto] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [errorCarga, setErrorCarga] = useState("");
 
   const cargar = async () => {
-    setCargando(true);
-    const [f, n] = await Promise.all([api.fetchNotasFinales(materiaId), api.fetchNivelacion(materiaId)]);
-    setFinales(f); setNivelacion(n);
+    setCargando(true); setErrorCarga("");
+    try {
+      const [f, n] = await Promise.all([api.fetchNotasFinales(materiaId), api.fetchNivelacion(materiaId)]);
+      setFinales(f); setNivelacion(n);
+    } catch (e) { setErrorCarga(e.message || "No se pudieron cargar las notas finales."); }
     setCargando(false);
   };
   useEffect(() => { cargar(); }, [materiaId]);
 
-  const notaGuardada = (estudianteId, periodo) => finales.find((f) => f.estudiante_id === estudianteId && f.periodo === periodo)?.nota ?? null;
-  const estadoNiv = (estudianteId, periodo) => nivelacion.find((n) => n.estudiante_id === estudianteId && n.periodo === periodo)?.estado || "";
-  const nivelacionDe = (estudianteId, periodo) => nivelacion.find((n) => n.estudiante_id === estudianteId && n.periodo === periodo);
+  // Índices para buscar al instante (antes se recorría la lista completa en cada celda).
+  const idxFinales = useMemo(() => new Map(finales.map((f) => [`${f.estudiante_id}|${f.periodo}`, f])), [finales]);
+  const idxNiv = useMemo(() => new Map(nivelacion.map((n) => [`${n.estudiante_id}|${n.periodo}`, n])), [nivelacion]);
+  const notaGuardada = (estudianteId, periodo) => idxFinales.get(`${estudianteId}|${periodo}`)?.nota ?? null;
+  const estadoNiv = (estudianteId, periodo) => idxNiv.get(`${estudianteId}|${periodo}`)?.estado || "";
+  const nivelacionDe = (estudianteId, periodo) => idxNiv.get(`${estudianteId}|${periodo}`);
 
   const guardarNotaManual = async (estudianteId, periodo) => {
     const valor = valorTemp.trim() === "" ? null : parseFloat(valorTemp.replace(",", "."));
@@ -2013,7 +2020,7 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
   };
 
   const cambiarNivelacion = async (estudianteId, periodo, estado) => {
-    const registroPrevio = nivelacion.find((n) => n.estudiante_id === estudianteId && n.periodo === periodo);
+    const registroPrevio = idxNiv.get(`${estudianteId}|${periodo}`);
     const notaActual = notaGuardada(estudianteId, periodo);
     // La nota original solo se fija la primera vez que se marca "superado" para este
     // periodo — si ya se había guardado antes, se conserva (no se pisa en toggles repetidos).
@@ -2049,10 +2056,11 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
         <button onClick={() => setIncumplimientosAbierto(true)} className="text-xs font-semibold px-4 py-2 rounded-full border border-violet-300 text-violet-700 shrink-0">
           🖨️ Incumplimientos por grado
         </button>
-        <button onClick={async () => { await guardarActual(); cargar(); }} className="text-xs font-semibold px-4 py-2 rounded-full bg-violet-500 text-white shrink-0">
-          💾 Guardar notas finales del periodo actual
+        <button disabled={guardando} onClick={async () => { setGuardando(true); try { await guardarActual(); } finally { setGuardando(false); } cargar(); }} className="text-xs font-semibold px-4 py-2 rounded-full bg-violet-500 text-white shrink-0 disabled:opacity-60">
+          {guardando ? "⏳ Guardando…" : "💾 Guardar notas finales del periodo actual"}
         </button>
       </div>
+      {errorCarga && <div role="alert" className="mb-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm p-2.5">{errorCarga} <button onClick={cargar} className="underline font-bold">Reintentar</button></div>}
       {cargando ? (
         <div className="text-sm text-slate-400">Cargando…</div>
       ) : (
@@ -2338,17 +2346,26 @@ export function VistaCalificaciones({ grados, destinoBusqueda, gradoActivo, mate
     (esGrupoMixto(gradoId) ? fetchEstudiantesGrupo(gradoId).then(ordenarGrupoMixto) : api.fetchEstudiantesPorGrado(gradoId)).then(setEstudiantes).catch(() => setEstudiantes([]));
   }, [gradoId, refrescoGrupo]);
 
+  // Guarda las notas finales del periodo EN BLOQUE (rápido) y avisa con claridad qué pasó:
+  // cuántas se guardaron, cuántos estudiantes no tienen ninguna nota cargada y si algo falló.
   const guardarNotasFinalesActual = async () => {
-    const notas = await api.calcularNotasFinalesPeriodo(materiaActualId, gradoId, periodo, estudiantes, categorias, config);
-    const materiaActual = materias.find((m) => m.id === materiaActualId);
-    for (const s of estudiantes) {
-      const final = notas[s.id];
-      if (final !== null && final !== undefined) {
-        await api.guardarNotaFinal(materiaActualId, s.id, periodo, final);
-        await api.crearActaNivelacionSiReprobado(materiaActualId, materiaActual?.nombre || "la materia", s.id, periodo, final, config);
+    try {
+      const notas = await api.calcularNotasFinalesPeriodo(materiaActualId, gradoId, periodo, estudiantes, categorias, config);
+      const materiaActual = materias.find((m) => m.id === materiaActualId);
+      const conNota = estudiantes.filter((s) => notas[s.id] !== null && notas[s.id] !== undefined);
+      const sinNota = estudiantes.length - conNota.length;
+      const guardadas = await api.guardarNotasFinalesLote(materiaActualId, conNota.map((s) => ({ estudiante_id: s.id, periodo, nota: notas[s.id] })));
+      let extra = "";
+      try {
+        const r = await api.crearActasNivelacionLote(materiaActualId, materiaActual?.nombre || "la materia", periodo, conNota.map((s) => ({ estudianteId: s.id, nota: notas[s.id] })), config);
+        if (r.creadas) extra = ` Se crearon ${r.creadas} acta(s) de nivelación.`;
+      } catch (e) {
+        extra = ` Las notas quedaron guardadas, pero no se pudieron crear las actas de nivelación (${e.message || "error"}).`;
       }
+      alert(`Notas finales del periodo ${periodo} guardadas: ${guardadas}.${sinNota ? ` ${sinNota} estudiante(s) no tienen ninguna nota cargada en este periodo y quedan en «—».` : ""}${extra}`);
+    } catch (e) {
+      alert(`No se pudieron guardar las notas finales: ${e.message || e}. Inténtalo de nuevo; lo que ya se guardó no se pierde.`);
     }
-    alert("Notas finales del periodo guardadas en el boletín.");
   };
 
   if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
