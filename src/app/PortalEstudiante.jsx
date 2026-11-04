@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useState } from "react";
+import React, { Suspense, lazy, useEffect, useState } from "react";
 import { registrarIngresoMundo } from "../lib/mundoNotaApi";
 import * as api from "../lib/api";
 import { registrarAccesoUnaVez } from "../lib/accesos";
@@ -25,6 +25,7 @@ import { AlbumEstudiante, BancoEstudiante, CosmeticosEstudiante, DesafioReinoEst
 import { AnunciosEstudiante, BibliotecaEstudiante, CodiceEstudiante, ValorSemanaEstudiante } from "./EstudianteComunidad";
 import { AvisoRendimiento, ForjaEstudiante, HistorialEstudiante, MisNotas, ProyectosEstudiante } from "./EstudianteAcademico";
 import { FondoCastillo, MarcoSeccion, VistaMundo, VistaMundo3D } from "./comunes";
+const VistaDetectivesEst = lazy(() => import("../screens/DetectivesEstudiante"));
 import { PortalAcudiente } from "./PortalAcudiente";
 
 export function PortalEstudiante() {
@@ -190,6 +191,9 @@ export function PortalEstudiante() {
             <MarcoSeccion zonaLabel="Diversión — Sala de avatares" icono="🎭"><SalaAvatares /></MarcoSeccion>
           )}
 
+          {vista === "detectives" && estudianteInfo && (
+            <MarcoSeccion zonaLabel="Diversión — Detectives del Códice" icono="🕵️"><Suspense fallback={<p className="text-sm text-slate-400">Cargando…</p>}><VistaDetectivesEst estudianteInfo={estudianteInfo} /></Suspense></MarcoSeccion>
+          )}
           {vista === "mundo3d" && estudianteInfo && (
             <MarcoSeccion zonaLabel="Diversión — Mundo 3D" icono="🧊"><Suspense fallback={<p className="text-sm text-slate-400">Cargando…</p>}><VistaMundo3D estudianteInfo={estudianteInfo} /></Suspense></MarcoSeccion>
           )}
