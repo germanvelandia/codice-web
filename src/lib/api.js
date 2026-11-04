@@ -4994,10 +4994,63 @@ export async function fetchXpPorCategoria(estudianteIds, categorias) {
   return mapa;
 }
 
+// Trae TODAS las filas por páginas: la API corta en 1000 y, en una materia con varios cursos, se
+// perdían notas en silencio (unas salían y otras quedaban en «—» aunque estuvieran guardadas).
+async function traerTodoPorPaginas(construir, pagina = 1000) {
+  const filas = [];
+  for (let desde = 0; ; desde += pagina) {
+    const { data, error } = await construir().order("id").range(desde, desde + pagina - 1);
+    if (error) throw error;
+    filas.push(...(data || []));
+    if (!data || data.length < pagina) break;
+  }
+  return filas;
+}
+
 export async function fetchNotasFinales(materiaId) {
-  const { data, error } = await supabase.from("notas_finales_periodo").select("*").eq("materia_id", materiaId);
-  if (error) throw error;
-  return data || [];
+  return traerTodoPorPaginas(() => supabase.from("notas_finales_periodo").select("*").eq("materia_id", materiaId));
+}
+
+// Guarda muchas notas finales de una sola vez (en tandas), en vez de una petición por estudiante.
+export async function guardarNotasFinalesLote(materiaId, filas) {
+  const limpias = (filas || []).filter((f) => f && f.nota !== null && f.nota !== undefined).map((f) => ({ materia_id: materiaId, estudiante_id: f.estudiante_id, periodo: f.periodo, nota: f.nota }));
+  for (let i = 0; i < limpias.length; i += 200) {
+    const { error } = await supabase.from("notas_finales_periodo").upsert(limpias.slice(i, i + 200), { onConflict: "materia_id,estudiante_id,periodo" });
+    if (error) throw error;
+  }
+  return limpias.length;
+}
+
+// Versión en bloque de crearActaNivelacionSiReprobado: una consulta para ver qué actas ya existen,
+// una inserción para las nuevas. items: [{ estudianteId, nota }]. Devuelve { creadas, actualizadas }.
+export async function crearActasNivelacionLote(materiaId, materiaNombre, periodo, items, config) {
+  const reprobados = (items || []).filter((x) => x.nota !== null && x.nota !== undefined && x.nota < config.nota_minima);
+  if (!reprobados.length) return { creadas: 0, actualizadas: 0 };
+  const existentes = [];
+  for (let i = 0; i < reprobados.length; i += 100) {
+    const ids = reprobados.slice(i, i + 100).map((x) => x.estudianteId);
+    const { data, error } = await supabase.from("actas").select("id, estudiante_id, estado").in("estudiante_id", ids)
+      .eq("materia_id", materiaId).eq("periodo", periodo).eq("tipo", "Nivelación");
+    if (error) throw error;
+    existentes.push(...(data || []));
+  }
+  const porEst = new Map(existentes.map((a) => [a.estudiante_id, a]));
+  const hoy = new Date().toISOString().slice(0, 10);
+  const motivo = (nota) => `Pérdida de ${materiaNombre} en el periodo ${periodo} (nota final ${nota}, mínima aprobatoria ${config.nota_minima}).`;
+  const { data: userData } = await supabase.auth.getUser();
+  const nuevas = reprobados.filter((x) => !porEst.has(x.estudianteId)).map((x) => ({
+    estudiante_id: x.estudianteId, registrado_por: userData?.user?.id || null, tipo: "Nivelación", fecha: hoy, materia_id: materiaId, periodo, estado: "pendiente",
+    motivo: motivo(x.nota), descripcion: "Acta generada automáticamente al guardar las notas finales del periodo.", compromisos_academicos: NIVELACION_COMPROMISOS_DEFAULT,
+  }));
+  for (let i = 0; i < nuevas.length; i += 100) {
+    const { error } = await supabase.from("actas").insert(nuevas.slice(i, i + 100));
+    if (error) throw error;
+  }
+  const porActualizar = reprobados.filter((x) => porEst.has(x.estudianteId) && porEst.get(x.estudianteId).estado !== "superado");
+  for (let i = 0; i < porActualizar.length; i += 10) {
+    await Promise.all(porActualizar.slice(i, i + 10).map((x) => editarActa(porEst.get(x.estudianteId).id, { motivo: motivo(x.nota), fecha: hoy })));
+  }
+  return { creadas: nuevas.length, actualizadas: porActualizar.length };
 }
 
 // Control transversal: notas finales de un grado en TODAS las materias
@@ -5052,9 +5105,7 @@ export async function eliminarNotaFinalPeriodo(materiaId, estudianteId, periodo)
 }
 
 export async function fetchNivelacion(materiaId) {
-  const { data, error } = await supabase.from("nivelacion").select("*").eq("materia_id", materiaId);
-  if (error) throw error;
-  return data || [];
+  return traerTodoPorPaginas(() => supabase.from("nivelacion").select("*").eq("materia_id", materiaId));
 }
 
 /* ==================== 🖨️ Incumplimientos de nivelación ====================
@@ -5188,6 +5239,7 @@ export async function calcularNotasFinalesPeriodo(materiaId, gradoId, periodo, e
   const categoriasGam = [...new Set(acts.filter((a) => a.es_automatica).map((a) => a.gam_categoria))];
   const xpMapa = categoriasGam.length > 0 ? await fetchXpPorCategoria(estudiantes.map((s) => s.id), categoriasGam) : {};
   const resultado = {};
+  const valorDe = new Map(valoresRows.map((r) => [`${r.actividad_id}|${r.estudiante_id}`, r.valor]));
   for (const s of estudiantes) {
     const porCategoria = {};
     acts.forEach((a) => {
@@ -5196,7 +5248,7 @@ export async function calcularNotasFinalesPeriodo(materiaId, gradoId, periodo, e
         const xp = xpMapa[s.id]?.[a.gam_categoria] || 0;
         v = notaAutomatica(xp, a.xp_meta, config);
       } else {
-        v = valoresRows.find((r) => r.actividad_id === a.id && r.estudiante_id === s.id)?.valor ?? null;
+        v = valorDe.get(`${a.id}|${s.id}`) ?? null;
       }
       if (v === null || v === undefined) return;
       porCategoria[a.categoria_id] = porCategoria[a.categoria_id] || [];
