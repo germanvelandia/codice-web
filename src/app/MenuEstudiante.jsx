@@ -39,6 +39,7 @@ export const MENU_CODICE_GRUPOS = [
       { key: "salaavatares", label: "Sala de avatares", icono: "🎭" },
       { key: "mundo", label: "Mundo", icono: "🌍" },
       { key: "mundo3d", label: "Mundo 3D", icono: "🧊" },
+      { key: "detectives", label: "Detectives del Códice", icono: "🕵️" },
       { key: "tablero", label: "Tablero Mundial", icono: "🧭" },
     ],
   },
@@ -60,7 +61,7 @@ export const MENU_CODICE = MENU_CODICE_GRUPOS.flatMap((g) => g.items);
 // siendo la misma (la key de MENU_CODICE).
 export const ICONO_MAPA = {
   album: "🏯", biblioteca: "📚", codice: "📖", forja: "⚒️", guias: "🗺️", modulos: "🧭",
-  inicio: "🏰", mundo: "🌍", misiones: "⚔️", evaluaciones: "📝", notas: "📜", personaje: "🧙", salaavatares: "🎭", historial: "📖", perfil: "🛡️", preguntados: "🎡", quizvivo: "⚡", encuesta: "📝", coevaluacion: "🪞", misdiplomas: "🎖️", tablero: "🧭",
+  inicio: "🏰", mundo: "🌍", misiones: "⚔️", evaluaciones: "📝", notas: "📜", personaje: "🧙", salaavatares: "🎭", historial: "📖", perfil: "🛡️", preguntados: "🎡", quizvivo: "⚡", encuesta: "📝", coevaluacion: "🪞", misdiplomas: "🎖️", tablero: "🧭", detectives: "🕵️",
   proyectos: "🏹", ranking: "👑", recompensas: "💎", salonhonor: "🏆",
 };
 
