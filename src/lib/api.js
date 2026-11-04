@@ -4999,7 +4999,7 @@ export async function fetchXpPorCategoria(estudianteIds, categorias) {
 async function traerTodoPorPaginas(construir, pagina = 1000) {
   const filas = [];
   for (let desde = 0; ; desde += pagina) {
-    const { data, error } = await construir().order("id").range(desde, desde + pagina - 1);
+    const { data, error } = await construir().order("estudiante_id").order("periodo").range(desde, desde + pagina - 1); // sin «id»: algunas tablas tienen llave compuesta
     if (error) throw error;
     filas.push(...(data || []));
     if (!data || data.length < pagina) break;
