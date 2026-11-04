@@ -35,13 +35,14 @@ function Observador({ grado, nombres, foco, cerrar }) {
     (async () => {
       try {
         const filas = await api.fetchCambiosDocente(grado);
+        const parc = await api.fetchParcelasDocente(grado).catch(() => []);
         if (!vivo) return;
         ult.current = filas.length ? filas[filas.length - 1].actualizado : null;
         host.current.innerHTML = "";
         c = iniciarMundo3D(host.current, {
           grado, yo: 0, soloMirar: true, vuelo: true, portales: [], cambios: filas, npcs: [], camara: 0,
           cantidad: () => 0, picar: async () => {}, poner: async () => {},
-          alApuntar: (i) => setInfo(i), alError: () => {}, alSeleccion: () => {},
+          parcelas: parc, alApuntar: (i) => setInfo(i), alError: () => {}, alSeleccion: () => {},
         });
         ctl.current = c;
         // punto de partida: lo construido por el estudiante elegido, o la aldea vista desde arriba
@@ -120,7 +121,7 @@ export default function Mundo3DDocente() {
     if (!grado) return; setErr(""); setFilas(null);
     try {
       const [r, a, h] = await Promise.all([api.fetchResumenMundo3D(grado), api.fetchAjustesMundo3D(grado), api.fetchHistorialMundo3D(grado)]);
-      setFilas(r); setAj({ construir: a.construir !== false, limite: a.limite ?? 4000, presencia: a.presencia !== false, chat: a.chat !== false }); setHist(h);
+      setFilas(r); setAj({ construir: a.construir !== false, limite: a.limite ?? 4000, presencia: a.presencia !== false, chat: a.chat !== false, monstruos: a.monstruos !== false, danio_error: a.danio_error ?? 5 }); setHist(h);
     } catch (e) { setErr(e.message || "No se pudo cargar el curso."); setFilas([]); }
   }, [grado]);
   useEffect(() => { cargar(); setConfirma(null); setMsg(""); }, [cargar]);
@@ -136,7 +137,7 @@ export default function Mundo3DDocente() {
 
   const guardarAj = async () => {
     setOcupado(true); setErr(""); setMsg("");
-    try { const r = await api.guardarAjustesMundo3D(grado, aj.construir, aj.limite); await api.fijarPresenciaMundo3D(grado, aj.presencia !== false); await api.fijarChatMundo3D(grado, aj.chat !== false); setAj({ construir: r.construir, limite: r.limite, presencia: aj.presencia !== false, chat: aj.chat !== false }); setMsg(r.construir ? "Guardado: la construcción está abierta." : "Guardado: la construcción está cerrada (los estudiantes pueden explorar)."); cargar(); }
+    try { const r = await api.guardarAjustesMundo3D(grado, aj.construir, aj.limite); await api.fijarPresenciaMundo3D(grado, aj.presencia !== false); await api.fijarChatMundo3D(grado, aj.chat !== false); try { await api.fijarVidaMundo3D(grado, aj.monstruos !== false, aj.danio_error ?? 5); } catch (_) { /* sin SQL 141 */ } setAj({ construir: r.construir, limite: r.limite, presencia: aj.presencia !== false, chat: aj.chat !== false, monstruos: aj.monstruos !== false, danio_error: aj.danio_error ?? 5 }); setMsg(r.construir ? "Guardado: la construcción está abierta." : "Guardado: la construcción está cerrada (los estudiantes pueden explorar)."); cargar(); }
     catch (e) { setErr(e.message || "No se pudo guardar."); } setOcupado(false);
   };
   const revertir = async () => {
@@ -177,6 +178,12 @@ export default function Mundo3DDocente() {
         </label>
         <label className="flex items-center gap-2 text-sm font-bold">
           <input type="checkbox" checked={aj.chat !== false} onChange={(e) => setAj((a) => ({ ...a, chat: e.target.checked }))} /> Chat rápido (solo frases predeterminadas, sin texto libre)
+        </label>
+        <label className="flex items-center gap-2 text-sm font-bold">
+          <input type="checkbox" checked={aj.monstruos !== false} onChange={(e) => setAj((a) => ({ ...a, monstruos: e.target.checked }))} /> Monstruos: aparecen fuera de la aldea y le quitan vida al personaje (se combaten con las herramientas)
+        </label>
+        <label className="flex items-center gap-2 text-sm font-bold">Vida que se pierde por respuesta equivocada (0 a 20)
+          <input type="number" min="0" max="20" value={aj.danio_error ?? 5} onChange={(e) => setAj((a) => ({ ...a, danio_error: e.target.value }))} className="w-20 rounded-lg border border-slate-300 px-2 py-1" />
         </label>
         <label className="flex items-center gap-2 text-sm font-bold">Límite de bloques por estudiante
           <input type="number" min="0" max="20000" value={aj.limite} onChange={(e) => setAj((a) => ({ ...a, limite: e.target.value }))} className="w-24 rounded-lg border border-slate-300 px-2 py-1" />
