@@ -22,6 +22,9 @@ export const latidoMundo3D = async (est, grado, x, y, z, yaw, avatar = null) => 
 export const salirMundo3D = (est) => llamar("mundo3d_salir", { p_est: est });
 export const decirMundo3D = (est, frase) => llamar("mundo3d_decir", { p_est: est, p_frase: frase });
 export const fijarChatMundo3D = (grado, activo) => llamar("mundo3d_chat_set", { p_grado: String(grado), p_on: !!activo });
+export const fetchMiParcela = (est) => llamar("mundo3d_mi_parcela", { p_est: est });
+export const fetchParcelasMundo3D = async (est) => (await llamar("mundo3d_parcelas", { p_est: est })) || [];
+export const fetchParcelasDocente = async (grado) => (await llamar("mundo3d_docente_parcelas", { p_grado: String(grado) })) || [];
 export const fetchPresenciaDocente = async (grado) => (await llamar("mundo3d_presencia_docente", { p_grado: String(grado) })) || [];
 export const fijarPresenciaMundo3D = (grado, activa) => llamar("mundo3d_presencia_set", { p_grado: String(grado), p_on: !!activa });
 
@@ -36,3 +39,10 @@ export const fetchAjustesMundo3D = (grado) => llamar("mundo3d_ajustes_get", { p_
 export const guardarAjustesMundo3D = (grado, construir, limite) => llamar("mundo3d_ajustes_set", { p_grado: String(grado), p_construir: !!construir, p_limite: Math.max(0, Math.min(20000, Math.floor(Number(limite) || 0))) });
 export const deshacerReversionMundo3D = (lote) => llamar("mundo3d_deshacer", { p_lote: lote });
 export const fetchHistorialMundo3D = async (grado) => (await llamar("mundo3d_historial", { p_grado: String(grado) })) || [];
+
+// Vida y monstruos (SQL 141). El servidor decide el daño y limita el ritmo; aquí solo se avisa qué pasó.
+export const fetchVidaMundo3D = (est) => llamar("mundo3d_vida", { p_est: est });                       // → { vida, monstruos, danio_error }
+export const golpeMundo3D = (est, motivo, tipo = null) => llamar("mundo3d_golpe", { p_est: est, p_motivo: motivo, p_tipo: tipo }); // → { vida, danio, desmayo }
+export const revivirMundo3D = (est) => llamar("mundo3d_revivir", { p_est: est });                      // → { vida }
+export const monstruoVencidoMundo3D = (est, tipo) => llamar("mundo3d_monstruo_vencido", { p_est: est, p_tipo: String(tipo) }); // → { xp, oro }
+export const fijarVidaMundo3D = (grado, monstruos, danioError) => llamar("mundo3d_vida_set", { p_grado: String(grado), p_monstruos: !!monstruos, p_danio_error: Math.max(0, Math.min(20, Math.floor(Number(danioError)) || 0)) });
