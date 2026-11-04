@@ -58,6 +58,7 @@ export const MENU_PANEL_GRUPOS = [
       { key: "tablero", label: "Tablero Mundial", icono: "🌍" },
       { key: "puntosconducta", label: "Puntos por conducta", icono: "⚖️" },
       { key: "mundonota", label: "Mundo → nota", icono: "🧮" },
+      { key: "detectives", label: "Detectives del Códice", icono: "🕵️" },
       { key: "vidanota", label: "Vida → nota de comportamiento", icono: "🩸" },
       { key: "herr_accionesmasivas", label: "Acciones Masivas", icono: "🎯" },
       { key: "herr_recompensas", label: "Recompensas de estudiantes", icono: "🎁" },
