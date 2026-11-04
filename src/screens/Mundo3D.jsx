@@ -33,6 +33,7 @@ const leerSnd = () => { try { return { ...SND_DEF, ...JSON.parse(localStorage.ge
 const guardarSnd = (c) => { try { localStorage.setItem("m3d_snd", JSON.stringify(c)); } catch (_) { /* sin almacenamiento */ } };
 const leerOri = () => { try { return localStorage.getItem("m3d_orient") || "h"; } catch (_) { return "h"; } };
 const fijarOri = async (o) => { try { if (!screen.orientation) return; if (o === "libre") screen.orientation.unlock(); else await screen.orientation.lock(o === "h" ? "landscape" : "portrait"); } catch (_) { /* iPhone y algunos navegadores no permiten bloquear: se avisa al jugador */ } };
+const leerGiro = () => { try { const v = localStorage.getItem("m3d_giro"); return v == null ? null : v === "1"; } catch (_) { return null; } };
 const aplicarCam = (ctl, c) => ctl && ctl.setCamara({ modo: c.modo, dist: c.dist, fov: (c.fov * Math.PI) / 180, sens: c.sens });
 const partirSprite = (k) => { const i = String(k || "").lastIndexOf("_"); return i > 0 ? { rolKey: k.slice(0, i), genero: k.slice(i + 1) } : null; };
 
@@ -91,12 +92,15 @@ export default function Mundo3D({ estudianteInfo }) {
   const [datos, setDatos] = useState({ misiones: [], hechas: new Set(), acertijos: null, posada: null, zonas: { abiertas: [], requisitos: {} }, duelos: { activo: false, insignias: [], exige: {}, bancos: {}, esperaHasta: {} }, cargado: false });
   const [dialogo, setDialogo] = useState(null);
   const [prog, setProg] = useState({ xp: null, oro: null });
+  const [vida, setVida] = useState(null), vidaCfg = useRef({ monstruos: true });
   const npcsRef = useRef([]);
   const marco = useRef(null), realRef = useRef(false);
   const [cam, setCam] = useState(leerCam), camRef = useRef(null); camRef.current = cam;
   const [snd, setSnd] = useState(leerSnd), sndRef = useRef(null); sndRef.current = snd;
   const puertasRef = useRef({}), estado_ref = useRef({});
   const [ajustes, setAjustes] = useState(false);
+  const parcelasRef = useRef([]), [parcelas, setParcelas] = useState([]);
+  const [giro, setGiro] = useState(() => { const v = leerGiro(); return v == null ? (typeof matchMedia === "function" && matchMedia("(pointer:coarse)").matches) : v; }), giroRef = useRef(false); giroRef.current = giro;
   const [chat, setChat] = useState(false), [cerca, setCerca] = useState(null), chatRef = useRef(null);
   const [ori, setOri] = useState(leerOri), [vertical, setVertical] = useState(() => typeof matchMedia === "function" && matchMedia("(orientation:portrait)").matches);
   useEffect(() => { if (typeof matchMedia !== "function") return undefined; const m = matchMedia("(orientation:portrait)"), f = () => setVertical(m.matches); f(); m.addEventListener ? m.addEventListener("change", f) : m.addListener(f); return () => { m.removeEventListener ? m.removeEventListener("change", f) : m.removeListener(f); }; }, []);
@@ -119,7 +123,7 @@ export default function Mundo3D({ estudianteInfo }) {
   useEffect(() => () => clearTimeout(reloj.current), []);
 
   const fijarInv = (nuevo) => { invRef.current = nuevo; setInv(nuevo); };
-  const visitando = gradoVer !== miGrado;
+  const visitando = gradoVer !== miGrado, visitandoRef = useRef(false); visitandoRef.current = visitando;
 
   // estado propio y lista de grados
   useEffect(() => {
@@ -205,6 +209,13 @@ export default function Mundo3D({ estudianteInfo }) {
     const p = {}; ZONAS.forEach((z) => { if (z.previa) p[z.key] = !!(estado[z.key] && estado[z.key].desbloqueada); });
     puertasRef.current = p; if (ctl.current) ctl.current.setPuertas(p);
   }, [estado, listo]);
+  // mi parcela y las de mis compañeros (solo en el mundo de mi curso)
+  useEffect(() => {
+    if (!est || !listo || visitando) { parcelasRef.current = []; if (ctl.current) ctl.current.setParcelas([]); return undefined; } let vivo = true;
+    const cargar = async () => { try { await api.fetchMiParcela(est); const l = await api.fetchParcelasMundo3D(est); if (vivo) { parcelasRef.current = l; setParcelas(l); if (ctl.current) ctl.current.setParcelas(l); } } catch (_) { /* sin el SQL 139 no hay parcelas */ } };
+    cargar(); const r = setInterval(cargar, 60000); return () => { vivo = false; clearInterval(r); };
+  }, [est, listo, visitando]); // eslint-disable-line
+  useEffect(() => { try { localStorage.setItem("m3d_giro", giro ? "1" : "0"); } catch (_) { /* nada */ } if (ctl.current) ctl.current.setControl({ giro }); }, [giro, listo]);
   // compañeros conectados: se envía mi posición y se reciben las de los demás (cada 2 s; en pausa si la pestaña está oculta)
   const [conectados, setConectados] = useState(0);
   useEffect(() => {
@@ -219,6 +230,17 @@ export default function Mundo3D({ estudianteInfo }) {
     tic(); const r = setInterval(tic, 2000);
     return () => { vivo = false; clearInterval(r); setConectados(0); api.salirMundo3D(est).catch(() => {}); };
   }, [est, listo, gradoVer]); // eslint-disable-line
+  // vida del personaje (la misma de CÓDICE): se lee al entrar y cada 25 s para ver la recuperación lenta
+  useEffect(() => {
+    if (!listo || !est) return; let vivo = true;
+    const leer = async () => { try { const r = await api.fetchVidaMundo3D(est); if (!vivo || !r) return; setVida(r.vida); vidaCfg.current = { monstruos: r.monstruos !== false }; if (ctl.current) ctl.current.setVida({ monstruos: r.monstruos !== false }); } catch (_) { /* sin SQL 141: el juego sigue sin vida */ } };
+    leer(); const t = setInterval(() => { if (!document.hidden) leer(); }, 25000);
+    return () => { vivo = false; clearInterval(t); };
+  }, [est, listo, gradoVer]); // eslint-disable-line
+  // al fallar una pregunta: el servidor quita vida; si llega a 0 el personaje se desmaya y despierta en la aldea
+  const alFallo = async () => {
+    try { const r = await api.golpeMundo3D(est, "error"); if (r && typeof r.vida === "number") setVida(r.vida); if (r && r.desmayo) { setDialogo(null); if (ctl.current) { ctl.current.pausar(false); ctl.current.desmayarse(); } } return r; } catch (_) { return null; }
+  };
   useEffect(() => { guardarSnd(snd); if (ctl.current) ctl.current.setSonido(snd); }, [snd, listo]);
   const cerrarDialogo = () => { setDialogo(null); ctl.current && ctl.current.pausar(false); };
   const alHecha = (id, r) => { setDatos((d) => ({ ...d, hechas: new Set([...d.hechas, id]) })); if (r && typeof r.xp === "number") setProg({ xp: r.xp, oro: r.oro }); };
@@ -259,8 +281,11 @@ export default function Mundo3D({ estudianteInfo }) {
           alSeleccion: (i) => { selRef.current = i; setSel(i); },
           alZona: setZona, alError: (t) => avisar(t),
           puertas: puertasRef.current, sonido: sndRef.current,
-          alInventario: () => mochilaRef.current && mochilaRef.current(true),
+          alInventario: () => mochilaRef.current && mochilaRef.current(true), alMesa: () => { setPestana("fabricar"); mochilaRef.current && mochilaRef.current(true); },
+          parcelas: visitandoRef.current ? [] : parcelasRef.current, giroPalanca: giroRef.current,
           alChat: () => chatRef.current && chatRef.current(), alCerca: (n) => setCerca(n),
+          alDanio: (tipo) => api.golpeMundo3D(est, "monstruo", tipo), alVida: (r) => { if (r && typeof r.vida === "number") setVida(r.vida); }, alRevivir: () => api.revivirMundo3D(est),
+          alMonstruoVencido: async (tipo) => { const r = await api.monstruoVencidoMundo3D(est, tipo); if (r && (r.xp || r.oro)) setProg((p) => (p.xp == null ? p : { xp: p.xp + r.xp, oro: p.oro + r.oro })); return r; },
           recolectar: async (tipo) => { const r = await api.recolectarMundo3D(est, tipo); if (r && r.item) fijarInv({ ...invRef.current, [r.item]: Math.min(999, (invRef.current[r.item] || 0) + (r.n || 1)) }); return r; },
           alPuerta: (k) => { const z = ZONAS.find((x) => x.key === k); const e = estado_ref.current[k] || {}; avisar("🔒 El portón de «" + (z ? z.nombre : k) + "» está cerrado." + (e.cumplido === false ? " Completa más misiones de la zona anterior." : " Vence al guardián de la zona anterior.")); },
           alPortal: (id) => { const t = "Viajando al mundo de " + (String(id) === miGrado ? "tu curso" : "curso " + id) + "…"; abrirVelo(t); setGradoVer(String(id)); },
@@ -299,6 +324,7 @@ export default function Mundo3D({ estudianteInfo }) {
   const abrirAjustes = (v) => { setAjustes(v); if (v) setMochila(false); ctl.current && ctl.current.pausar(v); };
   const decir = async (id) => { setChat(false); try { await api.decirMundo3D(est, id); avisar("💬 Tú: " + FRASES_CHAT[id]); } catch (er) { avisar(/chat_cerrado/.test(er.message) ? "Tu docente cerró el chat por ahora." : /demasiado_rapido/.test(er.message) ? "Espera un momento para hablar otra vez." : /sin_presencia/.test(er.message) ? "Aún no hay nadie conectado contigo." : "No se pudo enviar."); } };
   chatRef.current = (v) => setChat((c) => (typeof v === "boolean" ? v : !c));
+  const irParcela = () => { if (ctl.current && ctl.current.irAMiParcela()) avisar("🏠 Estás en tu parcela: aquí solo construyes tú. Fuera de ella puedes construir en cualquier parte, menos en la plaza y en las parcelas de otros."); };
   const abrirMochila = (v) => { setMochila(v); if (v) setAjustes(false); ctl.current && ctl.current.pausar(v); };
   mochilaRef.current = abrirMochila;
   const ciclarCamara = () => setCam((c) => ({ ...c, modo: (c.modo + 1) % 3 }));
@@ -325,6 +351,7 @@ export default function Mundo3D({ estudianteInfo }) {
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="font-extrabold text-slate-800">🧊 Mundo 3D · {visitando ? "Visitando el curso " + gradoVer : "Mi curso " + gradoVer}</span>
         {prog.xp != null && <span className="text-[11px] font-bold rounded-full px-2.5 py-0.5 bg-amber-100 text-amber-700">⭐ {prog.xp} XP · 🪙 {prog.oro}</span>}
+        {vida != null && <span title="Vida del personaje" className="text-[11px] font-bold rounded-full px-2.5 py-0.5" style={{ background: `linear-gradient(90deg,#fecaca ${vida}%,#f1f5f9 ${vida}%)`, color: vida <= 25 ? "#b91c1c" : "#7f1d1d", minWidth: 84, textAlign: "center" }}>❤️ {vida}</span>}
         {zona && <span className="text-[11px] font-bold rounded-full px-2.5 py-0.5 bg-emerald-100 text-emerald-700">📍 {zona}</span>}
         {conectados > 0 && <span className="text-[11px] font-bold rounded-full px-2.5 py-0.5 bg-sky-100 text-sky-700">👥 {conectados + 1} conectados</span>}
         {visitando && <><span className="text-[11px] font-bold rounded-full px-2.5 py-0.5 bg-amber-100 text-amber-700">👀 Solo mirar</span>
@@ -355,6 +382,7 @@ export default function Mundo3D({ estudianteInfo }) {
           <>
             <div className="m3d-barra">
               <button onClick={ciclarCamara} title="Cambiar cámara (tecla V)">📷<span className="t"> {MODOS_CAM[cam.modo]}</span></button>
+              <button onClick={irParcela} title="Ir a mi parcela" disabled={visitando || !parcelas.some((p) => p.mia)}>🏠<span className="t"> Mi parcela</span></button>
               <button onClick={() => setChat((c) => !c)} aria-expanded={chat} title="Chat rápido (tecla T)">💬<span className="t"> Chat</span></button>
               <button onClick={() => abrirMochila(!mochila)} aria-expanded={mochila} title="Mochila y fabricación (tecla I)">🎒<span className="t"> Mochila</span></button>
               <button onClick={() => abrirAjustes(!ajustes)} aria-expanded={ajustes} title="Ajustes de cámara">⚙️</button>
@@ -389,6 +417,9 @@ export default function Mundo3D({ estudianteInfo }) {
                 <label>Distancia: {cam.dist.toFixed(1)}<input type="range" min="2" max="9" step="0.5" value={cam.dist} onChange={(e) => setCam((c) => ({ ...c, dist: +e.target.value }))} /></label>
                 <label>Campo de visión: {cam.fov}°<input type="range" min="55" max="100" step="1" value={cam.fov} onChange={(e) => setCam((c) => ({ ...c, fov: +e.target.value }))} /></label>
                 <label>Sensibilidad del giro: {cam.sens.toFixed(1)}×<input type="range" min="0.4" max="2.5" step="0.1" value={cam.sens} onChange={(e) => setCam((c) => ({ ...c, sens: +e.target.value }))} /></label>
+                <b style={{ marginTop: 8, display: "block" }}>Control de la palanca</b>
+                <div className="m3d-seg"><button className={giro ? "on" : ""} onClick={() => setGiro(true)}>🖐 Una mano (gira)</button><button className={!giro ? "on" : ""} onClick={() => setGiro(false)}>↔ Libre (de lado)</button></div>
+                <div style={{ color: "#cbd5e1", marginTop: 3 }}>Una mano: la palanca avanza y, hacia los lados, gira la mirada.</div>
                 {esTactil && <><b style={{ marginTop: 8, display: "block" }}>Pantalla del celular</b><div className="m3d-seg"><button className={ori === "h" ? "on" : ""} onClick={() => cambiarOri("h")}>↔ Horizontal</button><button className={ori === "v" ? "on" : ""} onClick={() => cambiarOri("v")}>↕ Vertical</button><button className={ori === "libre" ? "on" : ""} onClick={() => cambiarOri("libre")}>Libre</button></div></>}
                 <b style={{ marginTop: 8, display: "block" }}>Sonido</b>
                 <label>Volumen: {Math.round(snd.volumen * 100)}%<input type="range" min="0" max="1" step="0.05" value={snd.volumen} onChange={(e) => setSnd((c) => ({ ...c, volumen: +e.target.value }))} /></label>
@@ -401,7 +432,7 @@ export default function Mundo3D({ estudianteInfo }) {
             )}
             {ampliado && (
               <>
-                <div className="m3d-hud">{zona && <span>📍 {zona}</span>}{conectados > 0 && <span>👥 {conectados + 1} conectados</span>}{prog.xp != null && <span>⭐ {prog.xp} · 🪙 {prog.oro}</span>}{datos.duelos.insignias.map((k) => { const z = ZONAS.find((x) => x.key === k); return z ? <span key={k} title={z.insignia.nombre}>{z.insignia.emoji}</span> : null; })}</div>
+                <div className="m3d-hud">{zona && <span>📍 {zona}</span>}{conectados > 0 && <span>👥 {conectados + 1} conectados</span>}{vida != null && <span title="Vida" style={{ background: `linear-gradient(90deg,#dc2626 ${vida}%,#000a ${vida}%)`, minWidth: 92, textAlign: "center" }}>❤️ {vida}</span>}{prog.xp != null && <span>⭐ {prog.xp} · 🪙 {prog.oro}</span>}{datos.duelos.insignias.map((k) => { const z = ZONAS.find((x) => x.key === k); return z ? <span key={k} title={z.insignia.nombre}>{z.insignia.emoji}</span> : null; })}</div>
                 {esTactil && ori === "h" && vertical && <div className="m3d-aviso" style={{ top: 50, background: "#4c1d95ee" }} role="status">↻ Gira el celular en horizontal para jugar mejor (o elige Vertical en ⚙️)</div>}
                 {msg && <div className="m3d-aviso" role="status">{msg}</div>}
                 <div className="m3d-hot">{barraBloques}</div>
@@ -409,7 +440,7 @@ export default function Mundo3D({ estudianteInfo }) {
             )}
           </>
         )}
-        <PanelAldea dialogo={dialogo} datos={datos} estado={estado} est={est} alHecha={alHecha} alHechoAcertijo={alHechoAcertijo} alInsignia={alInsignia} alDerrota={alDerrota} cerrar={cerrarDialogo} />
+        <PanelAldea dialogo={dialogo} datos={datos} estado={estado} est={est} alHecha={alHecha} alHechoAcertijo={alHechoAcertijo} alInsignia={alInsignia} alDerrota={alDerrota} alFallo={alFallo} cerrar={cerrarDialogo} />
       </div>
       {entrado && !listo && !velo && <p className="text-xs text-slate-400">Preparando el mundo…</p>}
 
