@@ -66,6 +66,11 @@ export function crearSonido(inicial = {}) {
   const abrirPuerta = () => { tono(110, 190, .55, { tipo: "sawtooth", g: .05, vib: 6 }); ruido(.5, { tipo: "bandpass", f: 400, f2: 900, g: .06 }); tono(520, 780, .25, { tipo: "sine", g: .06, t0: .45 }); };
   const puertaCerrada = () => { tono(95, 80, .22, { tipo: "square", g: .06 }); tono(80, 70, .22, { tipo: "square", g: .06, t0: .26 }); };
   const recoger = () => { tono(880, 1320, .09, { tipo: "sine", g: .08 }); tono(1320, 1760, .08, { tipo: "sine", g: .05, t0: .05 }); };
+  const dano = () => { tono(220, 90, .22, { tipo: "sawtooth", g: .12 }); ruido(.12, { tipo: "lowpass", f: 700, g: .12 }); };
+  const pegar = () => { ruido(.08, { tipo: "bandpass", f: 1400, g: .12, q: 2 }); tono(300, 160, .08, { tipo: "square", g: .05 }); };
+  const monstruo = (t) => { if (t === "limo") tono(140, 260, .18, { tipo: "sine", g: .07, vib: 12 }); else if (t === "sombra") tono(330, 210, .35, { tipo: "sine", g: .05, vib: 9 }); else tono(180, 120, .2, { tipo: "square", g: .04 }); };
+  const vencido = () => { tono(500, 180, .25, { tipo: "triangle", g: .09 }); ruido(.18, { tipo: "bandpass", f: 900, g: .08 }); };
+  const desmayo = () => { tono(400, 70, .9, { tipo: "sine", g: .12 }); };
   const clic = () => ruido(.04, { tipo: "bandpass", f: 2400, g: .06, q: 3 });
   const logro = () => [523, 659, 784, 1047].forEach((f, i) => tono(f, f, .5, { tipo: "triangle", g: .09, t0: i * .11 }));
   const animal = (tipo) => {
@@ -97,7 +102,7 @@ export function crearSonido(inicial = {}) {
   }
 
   return {
-    activar, actualizar, paso, picar, romper, poner, agua, salto, portal, abrirPuerta, puertaCerrada, clic, recoger, logro, animal,
+    activar, actualizar, paso, picar, romper, poner, agua, salto, portal, abrirPuerta, puertaCerrada, clic, recoger, logro, animal, dano, pegar, monstruo, vencido, desmayo,
     ajustar: (o) => { if (o.volumen != null) volumen = Math.max(0, Math.min(1, o.volumen)); if (o.musica != null) musica = !!o.musica; if (o.silencio != null) silencio = !!o.silencio; },
     estado: () => ({ volumen, musica, silencio, activo: !!ac }),
     cerrar: () => { try { nodos.forEach((n) => n.stop()); } catch (_) {} if (ac) ac.close().catch(() => {}); ac = null; },
