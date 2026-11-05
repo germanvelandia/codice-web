@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as api from "../lib/detectivesApi";
+import { Rostro, Jefa, Escena, MapaFondo, Cartel, Globo, asignarPuntos, rangoDe, sonido, fijarSilencio, estaSilenciado } from "./detectivesArte";
 
-// Detectives del Códice — pantalla del estudiante.
+// Detectives del Códice — pantalla del estudiante (versión ilustrada).
 // Todo lo importante (respuesta correcta, destino correcto, culpable) lo decide el servidor.
+// El arte es original y se dibuja con SVG; los rostros salen de los rasgos del caso.
 
 const mezclar = (arr) => { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-
 const CSS = `
 @keyframes dtPop{0%{opacity:0;transform:translateY(12px) scale(.92)}70%{transform:translateY(-2px) scale(1.02)}100%{opacity:1;transform:none}}
 @keyframes dtSlide{0%{opacity:0;transform:translateX(40px)}100%{opacity:1;transform:none}}
@@ -49,7 +50,16 @@ const CSS = `
 .dt-conf{position:fixed;top:-20px;z-index:60;pointer-events:none;animation:dtFall 3.2s linear both}
 .dt-track{position:relative;height:30px}
 .dt-detective{position:absolute;top:-6px;font-size:24px;transition:left .9s cubic-bezier(.4,.1,.2,1);transform:translateX(-50%)}
-@media (prefers-reduced-motion: reduce){.dt-pop,.dt-slide,.dt-shake,.dt-flash,.dt-float,.dt-bounce,.dt-lose,.dt-stamp,.dt-glow,.dt-swing,.dt-spark,.dt-walker,.dt-walker span,.dt-ground,.dt-cloud,.dt-siren,.dt-car,.dt-conf{animation:none!important}.dt-detective{transition:none}}
+@keyframes dtDash{0%{stroke-dashoffset:60}100%{stroke-dashoffset:0}}
+@keyframes dtPin{0%,100%{transform:translate(-50%,-100%) translateY(0)}50%{transform:translate(-50%,-100%) translateY(-4px)}}
+@keyframes dtSpot{0%,100%{opacity:.55}50%{opacity:.95}}
+.dt-ruta{stroke-dasharray:6 5;animation:dtDash 1.9s linear both}
+.dt-pin{position:absolute;transform:translate(-50%,-100%);animation:dtPin 1.8s ease-in-out infinite;border:0;background:none;padding:0;cursor:pointer;text-align:center}
+.dt-pin:disabled{opacity:.4;cursor:default;animation:none}
+.dt-pin:not(:disabled):hover .dt-chip{background:#fde047;color:#1e293b}
+.dt-chip{display:block;margin-top:1px;background:#0f172ae6;color:#fff;border-radius:8px;padding:1px 6px;font:700 10px system-ui,sans-serif;max-width:110px;line-height:1.2;box-shadow:0 2px 6px #0006}
+.dt-spot{animation:dtSpot .5s ease-in-out infinite}
+@media (prefers-reduced-motion: reduce){.dt-pop,.dt-slide,.dt-shake,.dt-flash,.dt-float,.dt-bounce,.dt-lose,.dt-stamp,.dt-glow,.dt-swing,.dt-spark,.dt-walker,.dt-walker span,.dt-ground,.dt-cloud,.dt-siren,.dt-car,.dt-conf,.dt-ruta,.dt-pin,.dt-spot{animation:none!important}.dt-detective{transition:none}}
 `;
 const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
 const CHISPAS = Array.from({ length: 12 }, (_, i) => { const a = (i / 12) * Math.PI * 2; const d = 50 + (i % 3) * 22; return { dx: Math.round(Math.cos(a) * d), dy: Math.round(Math.sin(a) * d), e: ["✨", "⭐", "💫"][i % 3], t: (i % 4) * 40 }; });
@@ -70,25 +80,30 @@ function Horas({ n, max }) {
   );
 }
 
+const marco = { background: "linear-gradient(160deg,#0f172a,#1e1b4b)", borderRadius: 18, padding: 12, color: "#fff" };
+
 export default function DetectivesEstudiante(props) { return <><style>{CSS}</style><Juego {...props} /></>; }
 
 function Juego({ estudianteInfo }) {
   const est = estudianteInfo?.id;
   const [lista, setLista] = useState(null);
-  const [vista, setVista] = useState(null);       // estado seguro que devuelve el servidor
-  const [caso, setCaso] = useState(null);         // id del caso abierto
+  const [vista, setVista] = useState(null);
+  const [caso, setCaso] = useState(null);
   const [err, setErr] = useState("");
   const [ocupado, setOcupado] = useState(false);
-  const [aviso, setAviso] = useState(null);       // { tipo:'ok'|'mal', texto, pista, rasgo }
-  const [malas, setMalas] = useState([]);         // opciones/destinos ya descartados en esta parada
+  const [aviso, setAviso] = useState(null);       // solo errores: { texto }
+  const [testimonio, setTestimonio] = useState(null); // tras acertar: { retro, pista, rasgo }
+  const [malas, setMalas] = useState([]);
   const [intro, setIntro] = useState(false);
   const [final, setFinal] = useState(null);
   const [ranking, setRanking] = useState([]);
   const [expediente, setExpediente] = useState(false);
   const [confirmar, setConfirmar] = useState(null);
-  const [fx, setFx] = useState("");               // efecto breve: "mal"
-  const [viaje, setViaje] = useState(null);       // animación de viaje entre paradas
-  const [sirena, setSirena] = useState(null);      // animación del arresto
+  const [fx, setFx] = useState("");
+  const [viaje, setViaje] = useState(null);
+  const [sirena, setSirena] = useState(null);
+  const [mudo, setMudo] = useState(estaSilenciado());
+  const [antes, setAntes] = useState(0);
   const bloqueo = useRef(false);
   const efecto = (t) => { setFx(t); setTimeout(() => setFx(""), 900); };
 
@@ -104,49 +119,75 @@ function Juego({ estudianteInfo }) {
     try { return await fn(); } catch (e) { setErr(e.message); return null; } finally { bloqueo.current = false; setOcupado(false); }
   };
 
+  const resueltos = (lista || []).filter((c) => c.resuelto).length;
   const abrir = (id) => accion(async () => {
     const v = await api.iniciarDetectives(est, id);
-    setCaso(id); setVista(v); setAviso(null); setMalas([]); setFinal(null); setConfirmar(null); setExpediente(false);
+    setAntes(resueltos);
+    setCaso(id); setVista(v); setAviso(null); setTestimonio(null); setMalas([]); setFinal(null); setConfirmar(null); setExpediente(false);
+    const ult = (v.pistas || [])[v.pistas.length - 1];
+    if (v.fase !== "pregunta" && ult) setTestimonio({ retro: "", pista: { testigo: ult.testigo, texto: ult.texto }, rasgo: null });
     setIntro(v.parada === 1 && v.fase === "pregunta" && !(v.pistas || []).length);
   });
-  const salir = () => { setCaso(null); setVista(null); setFinal(null); setAviso(null); cargar(); };
+  const salir = () => { setCaso(null); setVista(null); setFinal(null); setAviso(null); setTestimonio(null); cargar(); };
 
   const responder = (op) => accion(async () => {
+    sonido.click();
     const r = await api.responderDetectives(est, caso, op);
     setVista(r.vista);
-    if (r.ok) { setAviso({ tipo: "ok", texto: r.retro, pista: r.pista, rasgo: r.rasgo }); setMalas([]); }
-    else { setAviso({ tipo: "mal", texto: r.retro || "Respuesta incorrecta." }); setMalas((m) => [...m, op]); efecto("mal"); }
+    if (r.ok) { sonido.ok(); setAviso(null); setTestimonio({ retro: r.retro, pista: r.pista, rasgo: r.rasgo }); setMalas([]); }
+    else { sonido.mal(); setAviso({ texto: r.retro || "Respuesta incorrecta.", costo: 1 }); setMalas((m) => [...m, op]); efecto("mal"); if (r.vista.estado === "fallido") setFinal({ ganado: false }); }
   });
-  const viajar = (d) => accion(async () => {
+  const viajar = (d, desde, hasta) => accion(async () => {
     const r = await api.viajarDetectives(est, caso, d);
     setVista(r.vista);
     if (r.ok) {
-      setAviso(null); setMalas([]);
+      sonido.viaje();
+      setAviso(null); setMalas([]); setTestimonio(null);
       const fin = r.vista.fase === "arresto";
-      setViaje({ nombre: fin ? "el escondite del culpable" : r.vista.lugar?.lugar, emoji: fin ? "🚨" : r.vista.lugar?.emoji });
-      await esperar(2000); setViaje(null);
-    } else { setAviso({ tipo: "mal", texto: "Aquí no hay rastro del culpable. Perdiste una hora." }); setMalas((m) => [...m, d]); efecto("mal"); }
+      setViaje({ nombre: fin ? "el escondite del culpable" : r.vista.lugar?.lugar, desde, hasta });
+      await esperar(2100); setViaje(null);
+      const ult = r.vista.pistas[r.vista.pistas.length - 1];
+      if (fin && ult) setTestimonio({ retro: "", pista: { testigo: ult.testigo, texto: ult.texto }, rasgo: null });
+    } else { sonido.mal(); setAviso({ texto: "Aquí no hay rastro del culpable.", costo: 1 }); setMalas((m) => [...m, d]); efecto("mal"); if (r.vista.estado === "fallido") setFinal({ ganado: false }); }
   });
   const arrestar = (s) => accion(async () => {
-    setConfirmar(null); setSirena(s);
-    const [r] = await Promise.all([api.arrestarDetectives(est, caso, s.id).catch((e) => { setSirena(null); throw e; }), esperar(1700)]);
+    setConfirmar(null); setSirena(s); sonido.sirena();
+    const [r] = await Promise.all([api.arrestarDetectives(est, caso, s.id).catch((e) => { setSirena(null); throw e; }), esperar(2000)]);
     setSirena(null); setVista(r.vista);
-    if (r.ok) { setFinal({ ganado: true, ...r }); api.rankingDetectives(est, caso).then(setRanking).catch(() => {}); }
-    else { setAviso({ tipo: "mal", texto: `${s.nombre} era inocente. Pierdes 2 horas.` }); setMalas((m) => [...m, `s${s.id}`]); efecto("mal"); if (r.vista.estado === "fallido") setFinal({ ganado: false, culpable: r.culpable }); }
+    if (r.ok) { sonido.victoria(); setFinal({ ganado: true, ...r }); api.rankingDetectives(est, caso).then(setRanking).catch(() => {}); }
+    else {
+      sonido.mal(); setAviso({ texto: `${s.nombre} era inocente.`, costo: 2 }); setMalas((m) => [...m, `s${s.id}`]); efecto("mal");
+      if (r.vista.estado === "fallido") { sonido.derrota(); setFinal({ ganado: false, culpable: r.culpable }); }
+    }
   });
 
-  const dest = useMemo(() => (vista?.destinos ? mezclar(vista.destinos) : []), [vista?.parada, vista?.fase === "destino"]); // eslint-disable-line
-  const ops = useMemo(() => (vista?.pregunta ? mezclar(vista.pregunta.opciones) : []), [vista?.parada, vista?.fase === "pregunta"]); // eslint-disable-line
+  const puntos = useMemo(() => (vista?.lugar ? asignarPuntos([vista.lugar.lugar, ...(vista.destinos || [])]) : {}), [vista?.parada, vista?.fase === "destino"]); // eslint-disable-line
 
   if (!est) return <p className="text-sm text-slate-400">Inicia sesión para jugar.</p>;
+
+  const alternarSonido = () => { fijarSilencio(!mudo); setMudo(!mudo); };
+  const rango = rangoDe(resueltos);
 
   // ---------- LISTA ----------
   if (!vista) {
     return (
       <div className="space-y-4">
-        <div className="rounded-2xl p-4 text-white" style={{ background: "linear-gradient(135deg,#0f172a,#312e81)" }}>
-          <h2 className="text-xl font-extrabold">🕵️ Detectives del Códice</h2>
-          <p className="text-sm opacity-90 mt-1">Investiga, responde a los testigos, sigue las pistas y arresta al culpable antes de que se acaben tus horas.</p>
+        <div style={{ ...marco, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ flexShrink: 0 }}><Jefa ancho={96} /></div>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ fontSize: 11, letterSpacing: 3, opacity: 0.7, fontWeight: 800 }}>AGENCIA CÓDICE · DIVISIÓN DE DETECTIVES</div>
+            <h2 className="text-xl font-extrabold">🕵️ Detectives del Códice</h2>
+            <p className="text-sm opacity-90">Cada caso te lleva por varios lugares: responde bien a los testigos, arma el retrato hablado y arresta al culpable antes de que se acaben tus horas.</p>
+            <div style={{ marginTop: 8, background: "#ffffff1f", borderRadius: 12, padding: "6px 10px", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 26 }}>{rango.emoji}</span>
+              <div style={{ flex: 1, minWidth: 140 }}>
+                <div className="font-extrabold text-sm">Rango: {rango.nombre}</div>
+                <div style={{ height: 6, background: "#0006", borderRadius: 6, overflow: "hidden", marginTop: 3 }}><div style={{ height: "100%", width: `${rango.siguiente ? Math.min(100, ((resueltos - rango.min) / (rango.siguiente.min - rango.min)) * 100) : 100}%`, background: "#fbbf24", transition: "width .8s" }} /></div>
+                <div style={{ fontSize: 11, opacity: 0.8, marginTop: 2 }}>{rango.siguiente ? `${rango.falta} caso(s) resuelto(s) para ser ${rango.siguiente.nombre}` : "¡Has llegado al máximo rango!"} · Casos resueltos: {resueltos}</div>
+              </div>
+              <button onClick={alternarSonido} className="dt-btn" style={{ background: "#ffffff22", borderRadius: 10, padding: "4px 9px", fontSize: 14 }} aria-label={mudo ? "Activar sonido" : "Silenciar"}>{mudo ? "🔇" : "🔊"}</button>
+            </div>
+          </div>
         </div>
         {err && <div role="alert" className="rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm p-2.5">{err}</div>}
         {lista === null && <p className="text-sm text-slate-400">Cargando casos…</p>}
@@ -155,20 +196,20 @@ function Juego({ estudianteInfo }) {
           {(lista || []).map((c) => {
             const amb = api.AMBIENTES[c.ambientacion] || api.AMBIENTES.oakhaven;
             return (
-              <div key={c.id} className="rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-sm">
-                <div className="p-3 text-white flex items-center gap-2" style={{ background: amb.fondo }}>
-                  <span className="text-3xl">{amb.emoji}</span>
-                  <div className="min-w-0"><div className="font-extrabold leading-tight">{c.titulo}</div><div className="text-xs opacity-80">{amb.label} · {c.paradas} paradas</div></div>
+              <div key={c.id} className="dt-pop" style={{ borderRadius: 18, overflow: "hidden", background: "#fff", boxShadow: "0 3px 12px #0002", border: "1px solid #e2e8f0" }}>
+                <div style={{ position: "relative" }}>
+                  <Escena lugar={c.ambientacion === "mundo" ? "aeropuerto" : c.ambientacion === "valores" ? "colegio" : "torre del reloj"} ambientacion={c.ambientacion} testigo={null} />
+                  <div style={{ position: "absolute", left: 8, top: 8, background: "#0f172acc", color: "#fff", borderRadius: 8, padding: "2px 8px", fontSize: 11, fontWeight: 800 }}>{amb.emoji} {amb.label}</div>
+                  {c.resuelto && <div className="dt-stamp" style={{ position: "absolute", right: 10, bottom: 14, border: "3px solid #16a34a", color: "#16a34a", background: "#ffffffd9", borderRadius: 6, padding: "1px 8px", fontWeight: 900, letterSpacing: 2 }}>RESUELTO</div>}
                 </div>
-                <div className="p-3 flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-bold rounded-full bg-amber-100 text-amber-800 px-2 py-0.5">+{c.xp} XP · +{c.oro} 🪙</span>
-                  {c.resuelto && <span className="text-xs font-bold rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5">✅ Resuelto</span>}
-                  {c.en_curso && <span className="text-xs font-bold rounded-full bg-sky-100 text-sky-700 px-2 py-0.5">En curso</span>}
-                  <button disabled={ocupado} onClick={() => abrir(c.id)} className="ml-auto rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 text-sm font-extrabold disabled:opacity-50">
-                    {c.en_curso ? "Continuar" : c.resuelto ? "Jugar otra vez" : "Investigar"}
+                <div style={{ padding: 12 }}>
+                  <div className="font-extrabold leading-tight">{c.titulo}</div>
+                  <div className="text-xs text-slate-500 mt-0.5">{c.paradas} paradas · recompensa +{c.xp} XP · +{c.oro} 🪙</div>
+                  <button disabled={ocupado} onClick={() => abrir(c.id)} className="dt-btn mt-2 w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white py-2 font-extrabold disabled:opacity-50">
+                    {c.en_curso ? "▶ Continuar el caso" : c.resuelto ? "↻ Jugar otra vez" : "📂 Abrir expediente"}
                   </button>
+                  {c.resuelto && <p className="text-[11px] text-slate-500 mt-1">El premio se entrega una sola vez; jugar de nuevo solo mejora tu puntaje.</p>}
                 </div>
-                {c.resuelto && <p className="px-3 pb-2 text-[11px] text-slate-500">El premio se entrega una sola vez; jugar de nuevo solo mejora tu puntaje.</p>}
               </div>
             );
           })}
@@ -179,84 +220,98 @@ function Juego({ estudianteInfo }) {
 
   const amb = api.AMBIENTES[vista.ambientacion] || api.AMBIENTES.oakhaven;
   const terminado = vista.estado !== "en_curso";
+  const meta = (lista || []).find((c) => c.id === caso) || {};
 
   // ---------- ANIMACIONES DE ESCENA ----------
   if (sirena) {
     return (
-      <div className="dt-siren relative overflow-hidden rounded-2xl text-white text-center" style={{ height: 300 }} role="status" aria-live="polite">
-        <div style={{ position: "absolute", left: 0, right: 0, top: 20, fontSize: 20, fontWeight: 800 }}>🚨 ¡Alto en nombre del Códice! 🚨</div>
-        <div style={{ position: "absolute", left: 0, right: 0, top: 64, fontSize: 60 }}><span className="dt-bounce">{sirena.emoji}</span></div>
-        <div className="dt-car">🚔</div>
-        <div style={{ position: "absolute", left: 0, right: 0, bottom: 20, fontSize: 14, opacity: 0.9 }}>Arrestando a {sirena.nombre}…</div>
+      <div className="dt-siren" role="status" aria-live="polite" style={{ position: "relative", overflow: "hidden", borderRadius: 18, height: 340, color: "#fff", textAlign: "center" }}>
+        <div style={{ position: "absolute", left: 0, right: 0, top: 14, fontSize: 19, fontWeight: 800 }}>🚨 ¡Alto en nombre del Códice! 🚨</div>
+        <div className="dt-spot" style={{ position: "absolute", left: "50%", top: 48, width: 180, height: 250, transform: "translateX(-50%)", background: "radial-gradient(ellipse at 50% 0%, #fff9 0%, #fff0 70%)", clipPath: "polygon(35% 0,65% 0,100% 100%,0 100%)" }} />
+        <div style={{ position: "absolute", left: "50%", top: 78, transform: "translateX(-50%)" }} className="dt-shake"><Rostro nombre={sirena.nombre} rasgos={sirena.rasgos} ancho={140} /></div>
+        <div style={{ position: "absolute", left: 0, right: 0, bottom: 52, fontSize: 38 }}><span className="dt-bounce">⛓️</span></div>
+        <div className="dt-car" style={{ fontSize: 46, bottom: 8 }}>🚔</div>
+        <div style={{ position: "absolute", left: 0, right: 0, bottom: 10, fontSize: 13, opacity: 0.9 }}>Arrestando a {sirena.nombre}…</div>
       </div>
     );
   }
   if (viaje) {
+    const d = viaje.desde || [20, 50], h = viaje.hasta || [80, 50];
+    const [x1, y1, x2, y2] = [d[0] * 3.6, d[1] * 2, h[0] * 3.6, h[1] * 2];
+    const ruta = `M${x1} ${y1} Q${(x1 + x2) / 2} ${Math.min(y1, y2) - 50} ${x2} ${y2}`;
     return (
       <div className="space-y-3" role="status" aria-live="polite">
-        <div className="dt-road">
-          <span className="dt-cloud" style={{ animationDuration: "7s" }}>☁️</span>
-          <span className="dt-cloud" style={{ animationDuration: "11s", animationDelay: "-4s", top: 44, fontSize: 24 }}>☁️</span>
-          <div className="dt-ground" />
-          <div className="dt-walker"><span>🕵️</span></div>
-        </div>
-        <p className="text-center font-extrabold text-slate-700">Viajando hacia {viaje.emoji} {viaje.nombre}…</p>
+        <MapaFondo ambientacion={vista.ambientacion}>
+          <svg viewBox="0 0 360 200" preserveAspectRatio="none" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }} aria-hidden="true">
+            <path d={ruta} fill="none" stroke="#fff" strokeWidth="2.4" className="dt-ruta" />
+            <circle cx={x1} cy={y1} r="5" fill="#fbbf24" stroke="#fff" strokeWidth="2" /><circle cx={x2} cy={y2} r="5" fill="#ef4444" stroke="#fff" strokeWidth="2" />
+            <g><path d="M-8 -5 L12 0 L-8 5 L-4 0 Z" fill="#fff" stroke="#1e293b" strokeWidth="1" /><animateMotion dur="1.9s" fill="freeze" rotate="auto" path={ruta} /></g>
+          </svg>
+        </MapaFondo>
+        <p className="text-center font-extrabold text-slate-700">✈️ Viajando hacia {viaje.nombre}…</p>
       </div>
     );
   }
 
-  // ---------- INTRODUCCIÓN ----------
+  // ---------- BRIEFING (la jefa te da el caso) ----------
   if (intro && !terminado) {
     return (
-      <div className="rounded-2xl overflow-hidden border border-slate-200 bg-white shadow">
-        <div className="p-4 text-white" style={{ background: amb.fondo }}>
-          <div className="text-5xl dt-float">{amb.emoji}</div>
-          <h2 className="text-xl font-extrabold mt-1 dt-slide">{vista.titulo}</h2>
-        </div>
-        <div className="p-4 space-y-3">
-          <p className="text-slate-700 whitespace-pre-line leading-relaxed dt-pop" style={{ animationDelay: ".25s" }}>{vista.historia}</p>
-          <p className="text-sm text-slate-500">Tienes <b>{vista.vidas_max} horas</b>. Cada error cuesta una; arrestar a un inocente cuesta dos. {vista.total} paradas te separan del culpable.</p>
-          <div className="flex gap-2">
-            <button onClick={() => setIntro(false)} className="dt-btn dt-glow rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 font-extrabold">🔎 Empezar la investigación</button>
-            <button onClick={salir} className="rounded-xl bg-slate-100 hover:bg-slate-200 px-3 py-2 text-sm font-bold">Volver</button>
+      <div style={{ ...marco, padding: 14 }} className="space-y-3">
+        <div style={{ fontSize: 11, letterSpacing: 3, opacity: 0.7, fontWeight: 800 }}>AGENCIA CÓDICE · CASO CONFIDENCIAL</div>
+        <h2 className="text-xl font-extrabold dt-slide">{amb.emoji} {vista.titulo}</h2>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-start" }}>
+          <div style={{ flex: "1 1 260px", minWidth: 240 }}>
+            <Globo quien="Comisaria Alba Ferrer" texto={`Agente, te necesito ahora mismo.\n\n${vista.historia}\n\nTienes ${vista.vidas_max} horas y ${vista.total} paradas para seguir el rastro. Cada error cuesta una hora; arrestar a un inocente cuesta dos. ¡Confío en ti!`}>
+              <button onClick={() => { sonido.click(); setIntro(false); }} className="dt-btn dt-glow rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 font-extrabold">🔎 Aceptar el caso</button>
+            </Globo>
+            <div style={{ marginTop: 14 }}><Jefa ancho={92} /></div>
           </div>
+          <div style={{ flex: "0 0 auto", margin: "0 auto" }} className="dt-pop"><Cartel titulo={vista.titulo} recompensa={`+${meta.xp ?? "?"} XP · +${meta.oro ?? "?"} 🪙`} silueta ancho={176} /></div>
         </div>
+        <button onClick={salir} className="rounded-lg bg-white/15 hover:bg-white/25 px-3 py-1.5 text-sm font-bold">← Volver a los casos</button>
       </div>
     );
   }
 
   // ---------- RESULTADO ----------
-  if (terminado) {
+  if (terminado || final) {
     const gano = vista.estado === "resuelto";
+    const culpable = (vista.sospechosos || []).find((s) => s.nombre === final?.culpable);
+    const nuevoRango = gano && final?.premio ? rangoDe(antes + 1) : null;
+    const subio = nuevoRango && nuevoRango.i > rangoDe(antes).i;
     return (
-      <div className="rounded-2xl overflow-hidden border border-slate-200 bg-white shadow">
+      <div style={{ borderRadius: 18, overflow: "hidden", background: "#fff", boxShadow: "0 3px 12px #0002", border: "1px solid #e2e8f0" }}>
         {gano && CONFETI.map((c, i) => <span key={i} className="dt-conf" style={{ left: `${c.l}%`, animationDelay: `${c.d}s`, fontSize: c.s }} aria-hidden="true">{c.e}</span>)}
-        <div className="p-5 text-white text-center" style={{ background: gano ? "linear-gradient(135deg,#065f46,#047857)" : "linear-gradient(135deg,#7f1d1d,#b91c1c)" }}>
+        <div style={{ background: gano ? "linear-gradient(135deg,#065f46,#047857)" : "linear-gradient(135deg,#7f1d1d,#b91c1c)", color: "#fff", textAlign: "center", padding: 16 }}>
           <div className={`text-5xl ${gano ? "dt-bounce" : "dt-swing"}`}>{gano ? "🏆" : "⌛"}</div>
           <h2 className="text-2xl font-extrabold mt-1">{gano ? "¡Caso resuelto!" : "Se acabó el tiempo"}</h2>
-          <p className="opacity-90 text-sm mt-1">{vista.titulo}</p>
+          <p className="opacity-90 text-sm">{vista.titulo}</p>
         </div>
-        <div className="p-4 space-y-3 text-center">
+        <div className="p-4 space-y-3" style={{ textAlign: "center" }}>
           {gano ? (
             <>
-              <p className="text-slate-700 dt-pop">El culpable era <b>{final?.culpable}</b>. <span className="inline-block dt-stamp font-extrabold text-rose-600 border-2 border-rose-500 rounded px-1.5">ARRESTADO</span></p>
+              <div style={{ display: "flex", justifyContent: "center" }} className="dt-pop"><Cartel titulo={vista.titulo} nombre={final?.culpable} rasgos={culpable?.rasgos || []} silueta={false} capturado ancho={170} /></div>
               <div className="flex justify-center gap-2 flex-wrap text-sm font-extrabold">
                 {final?.premio ? <span className="rounded-full bg-amber-100 text-amber-800 px-3 py-1">+{final.xp} XP · +{final.oro} 🪙</span> : <span className="rounded-full bg-slate-100 text-slate-600 px-3 py-1">Premio ya recibido antes</span>}
                 <span className="rounded-full bg-indigo-100 text-indigo-700 px-3 py-1">Puntaje {final?.puntos ?? 0}</span>
               </div>
+              {subio && <div className="dt-pop rounded-xl bg-violet-100 text-violet-800 font-extrabold p-2">{nuevoRango.emoji} ¡Ascendiste a {nuevoRango.nombre}!</div>}
               {!!ranking.length && (
                 <div className="text-left max-w-sm mx-auto">
                   <div className="text-xs font-bold text-slate-500 mb-1">🏆 Mejores detectives del curso</div>
-                  {ranking.map((r, i) => <div key={i} className={`flex justify-between text-sm px-2 py-1 rounded ${r.yo ? "bg-indigo-50 font-bold" : ""}`}><span>{i + 1}. {r.nombre}</span><span>{r.puntos}</span></div>)}
+                  {ranking.map((r, i) => <div key={i} className={`flex justify-between text-sm px-2 py-1 rounded ${r.yo ? "bg-indigo-50 font-bold" : ""}`}><span>{["🥇", "🥈", "🥉"][i] || `${i + 1}.`} {r.nombre}</span><span>{r.puntos}</span></div>)}
                 </div>
               )}
             </>
           ) : (
-            <p className="text-slate-700">{final?.culpable ? <>El culpable era <b>{final.culpable}</b> y escapó. </> : "El culpable escapó. "}Repasa el tema y vuelve a intentarlo: puedes reabrir el caso cuando quieras.</p>
+            <>
+              <div style={{ display: "flex", justifyContent: "center" }}><Cartel titulo="Escapó" nombre="" silueta ancho={150} /></div>
+              <p className="text-slate-700">{final?.culpable ? <>El culpable era <b>{final.culpable}</b> y escapó. </> : "El culpable escapó. "}Repasa el tema y vuelve a intentarlo: puedes reabrir el caso cuando quieras.</p>
+            </>
           )}
           <div className="flex justify-center gap-2">
-            <button onClick={() => abrir(caso)} disabled={ocupado} className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 font-extrabold disabled:opacity-50">{gano ? "Jugar otra vez" : "Reintentar"}</button>
-            <button onClick={salir} className="rounded-xl bg-slate-100 hover:bg-slate-200 px-4 py-2 font-bold">Volver a los casos</button>
+            <button onClick={() => abrir(caso)} disabled={ocupado} className="dt-btn rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 font-extrabold disabled:opacity-50">{gano ? "Jugar otra vez" : "Reintentar"}</button>
+            <button onClick={salir} className="dt-btn rounded-xl bg-slate-100 hover:bg-slate-200 px-4 py-2 font-bold">Volver a los casos</button>
           </div>
           {err && <div role="alert" className="text-sm text-rose-600">{err}</div>}
         </div>
@@ -266,121 +321,141 @@ function Juego({ estudianteInfo }) {
 
   // ---------- JUEGO ----------
   const lugar = vista.lugar || {};
+  const encontrados = vista.rasgos || [];
+  const faltan = Math.max(0, vista.total - encontrados.length);
+  const ultimo = vista.pistas[vista.pistas.length - 1];
+
+  const Retrato = (
+    <div style={{ ...marco, padding: 10 }} aria-label="Retrato hablado">
+      <div style={{ fontSize: 11, letterSpacing: 2, fontWeight: 800, opacity: 0.75 }}>🖼️ RETRATO HABLADO</div>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 6 }}>
+        <div style={{ background: "#e2e8f0", borderRadius: 12, padding: 4, flexShrink: 0 }}><Rostro nombre="culpable" rasgos={encontrados} silueta={!encontrados.length} parcial ancho={92} /></div>
+        <ul style={{ fontSize: 12.5, lineHeight: 1.4, margin: 0, padding: 0, listStyle: "none", flex: 1 }}>
+          {encontrados.map((r, i) => <li key={i} className="dt-pop" style={{ animationDelay: `${i * 60}ms` }}>🔍 {r}</li>)}
+          {Array.from({ length: faltan }).map((_, i) => <li key={`f${i}`} style={{ opacity: 0.45 }}>❓ Rasgo por descubrir</li>)}
+        </ul>
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-3">
-      <div className="rounded-2xl p-3 text-white flex items-center gap-2 flex-wrap" style={{ background: amb.fondo }}>
+      <div style={{ ...marco, padding: "8px 10px", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <button onClick={salir} className="rounded-lg bg-white/20 hover:bg-white/30 px-2 py-1 text-xs font-bold" aria-label="Salir del caso">←</button>
-        <div className="min-w-0 flex-1"><div className="font-extrabold leading-tight truncate">{vista.titulo}</div><div className="text-xs opacity-80">Parada {vista.parada} de {vista.total}</div></div>
+        <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 10, letterSpacing: 2, opacity: 0.7, fontWeight: 800 }}>AGENCIA CÓDICE</div><div className="font-extrabold leading-tight truncate">{vista.titulo}</div></div>
         <div className="text-lg"><Horas n={vista.vidas} max={vista.vidas_max} /></div>
-        <button onClick={() => setExpediente((x) => !x)} className="rounded-lg bg-white/20 hover:bg-white/30 px-2.5 py-1 text-sm font-bold">📁 Expediente</button>
+        <button onClick={alternarSonido} className="rounded-lg bg-white/20 hover:bg-white/30 px-2 py-1 text-sm" aria-label={mudo ? "Activar sonido" : "Silenciar"}>{mudo ? "🔇" : "🔊"}</button>
+        <button onClick={() => setExpediente((x) => !x)} className="rounded-lg bg-white/20 hover:bg-white/30 px-2.5 py-1 text-sm font-bold">📁</button>
       </div>
 
       <div className="px-3" aria-label={`Parada ${vista.parada} de ${vista.total}`}>
         <div className="dt-track">
           <div style={{ position: "absolute", left: 0, right: 0, top: 12, height: 4, borderRadius: 4, background: "#cbd5e1" }} />
-          {Array.from({ length: vista.total + 1 }).map((_, i) => <span key={i} style={{ position: "absolute", top: 7, width: 14, height: 14, borderRadius: 999, borderWidth: 2, borderStyle: "solid", left: `${(i / vista.total) * 100}%`, transform: "translateX(-50%)" }} className={`${i < vista.parada - 1 + (vista.fase === "arresto" ? 1 : 0) + (vista.fase === "destino" ? 0 : 0) ? "bg-emerald-500 border-emerald-600" : "bg-white border-slate-400"}`}>{i === vista.total && <span style={{ position: "absolute", top: -4, left: 12, fontSize: 12 }}>🚨</span>}</span>)}
+          {Array.from({ length: vista.total + 1 }).map((_, i) => <span key={i} style={{ position: "absolute", top: 7, width: 14, height: 14, borderRadius: 999, borderWidth: 2, borderStyle: "solid", left: `${(i / vista.total) * 100}%`, transform: "translateX(-50%)" }} className={i < vista.parada - 1 + (vista.fase === "arresto" ? 1 : 0) ? "bg-emerald-500 border-emerald-600" : "bg-white border-slate-400"}>{i === vista.total && <span style={{ position: "absolute", top: -4, left: 12, fontSize: 12 }}>🚨</span>}</span>)}
           <span className="dt-detective" style={{ left: `${(Math.min(vista.fase === "arresto" ? vista.total : vista.parada - 1, vista.total) / vista.total) * 100}%` }}>🕵️</span>
         </div>
       </div>
 
       {expediente && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm space-y-2">
-          <div className="font-extrabold text-amber-900">📁 Tu expediente</div>
-          {!vista.rasgos.length && !vista.pistas.length && <p className="text-amber-800/80">Aún no tienes pistas.</p>}
-          {!!vista.rasgos.length && <div><b>Rasgos del culpable:</b><ul className="list-disc ml-5">{vista.rasgos.map((r, i) => <li key={i}>{r}</li>)}</ul></div>}
-          {!!vista.pistas.length && <div><b>Testimonios:</b>{vista.pistas.map((p, i) => <p key={i} className="mt-1"><i>{p.testigo} ({p.lugar}):</i> «{p.texto}»</p>)}</div>}
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm space-y-1">
+          <div className="font-extrabold text-amber-900">📁 Testimonios recogidos</div>
+          {!vista.pistas.length && <p className="text-amber-800/80">Aún no tienes testimonios.</p>}
+          {vista.pistas.map((p, i) => <p key={i}><i>{p.testigo} ({p.lugar}):</i> «{p.texto}»</p>)}
+        </div>
+      )}
+      {err && <div role="alert" className="rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm p-2.5">{err}</div>}
+
+      <div key={`${vista.parada}-${vista.fase === "arresto" ? "a" : "p"}`} className={`dt-slide ${fx === "mal" ? "dt-shake dt-flash" : ""}`} style={{ borderRadius: 18 }}>
+        <div style={{ position: "relative" }}>
+          <Escena lugar={lugar.lugar} ambientacion={vista.ambientacion} testigo={lugar.testigo || "Testigo"} />
+          <div style={{ position: "absolute", left: 8, top: 8, background: "#0f172acc", color: "#fff", borderRadius: 10, padding: "3px 10px", fontWeight: 800, fontSize: 13, display: "flex", gap: 6, alignItems: "center" }}><span className="dt-float">{lugar.emoji}</span>{lugar.lugar}</div>
+          <div style={{ position: "absolute", right: 8, bottom: 6, background: "#0f172acc", color: "#fff", borderRadius: 8, padding: "1px 8px", fontSize: 11, fontWeight: 800 }}>{lugar.testigo}</div>
+          <div style={{ position: "absolute", left: 8, bottom: 6, background: "#0f172acc", color: "#fff", borderRadius: 8, padding: "1px 8px", fontSize: 11, fontWeight: 800 }}>Parada {vista.parada}/{vista.total}</div>
+        </div>
+        {lugar.escena && <p className="text-xs text-slate-600 italic mt-1.5 px-1">{lugar.escena}</p>}
+      </div>
+
+      <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", alignItems: "start" }}>
+        <div className="space-y-3">
+          {vista.fase === "pregunta" && vista.pregunta && (
+            <div key={`q${vista.parada}`} className="space-y-3">
+              <Globo quien={lugar.testigo} texto="Tengo información sobre el culpable… pero antes demuéstrame que eres un buen detective." />
+              <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm space-y-2" style={{ marginTop: 14 }}>
+                <p className="font-bold text-slate-800">{vista.pregunta.texto}</p>
+                <OpcionesPregunta opciones={vista.pregunta.opciones} malas={malas} ocupado={ocupado} onElegir={responder} clave={vista.parada} />
+              </div>
+            </div>
+          )}
+
+          {vista.fase !== "pregunta" && (
+            <div className="space-y-3">
+              {testimonio?.retro && <div className="dt-pop rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-sm p-2.5 relative"><b>✅ ¡Correcto!</b> {testimonio.retro}{CHISPAS.map((c, i) => <span key={i} className="dt-spark" style={{ "--dx": `${c.dx}px`, "--dy": `${c.dy}px`, animationDelay: `${c.t}ms` }} aria-hidden="true">{c.e}</span>)}</div>}
+              {(testimonio?.pista || ultimo) && <Globo quien={testimonio?.pista?.testigo || ultimo?.testigo} texto={`«${testimonio?.pista?.texto || ultimo?.texto}»`} color="#fffbeb" />}
+              {testimonio?.rasgo && <div className="dt-pop rounded-xl bg-amber-50 border border-amber-200 p-2 text-sm" style={{ marginTop: 14, animationDelay: ".4s" }}>🔍 Nuevo rasgo del culpable: <b className="dt-glow rounded px-1">{testimonio.rasgo}</b> <span className="text-xs text-slate-500">(ya está en tu retrato hablado)</span></div>}
+            </div>
+          )}
+
+          {aviso && <div role="status" className="dt-pop rounded-xl p-3 text-sm border bg-rose-50 border-rose-200 text-rose-800"><b>⏳ −{aviso.costo === 2 ? "2 horas" : "1 hora"}.</b> {aviso.texto}</div>}
+        </div>
+        <div className="space-y-3">{Retrato}</div>
+      </div>
+
+      {vista.fase === "destino" && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm space-y-2">
+          <div className="text-xs font-bold text-slate-500">🧭 Con la pista del testigo, ¿a dónde viajas?</div>
+          <MapaFondo ambientacion={vista.ambientacion}>
+            <div style={{ position: "absolute", left: `${puntos[lugar.lugar]?.[0]}%`, top: `${puntos[lugar.lugar]?.[1]}%`, transform: "translate(-50%,-100%)", textAlign: "center" }} aria-label="Estás aquí">
+              <div style={{ fontSize: 24 }}>🕵️</div><span className="dt-chip" style={{ background: "#fbbf24", color: "#1e293b" }}>Estás aquí</span>
+            </div>
+            {(vista.destinos || []).map((d, k) => (
+              <button key={d} className="dt-pin" disabled={ocupado || malas.includes(d)} onClick={() => viajar(d, puntos[lugar.lugar], puntos[d])}
+                style={{ left: `${puntos[d]?.[0]}%`, top: `${puntos[d]?.[1]}%`, animationDelay: `${k * 200}ms` }} aria-label={`Viajar a ${d}`}>
+                <span style={{ fontSize: 26, filter: "drop-shadow(0 2px 2px #0008)" }}>{malas.includes(d) ? "❌" : "📍"}</span><span className="dt-chip">{d}</span>
+              </button>
+            ))}
+          </MapaFondo>
         </div>
       )}
 
-      {err && <div role="alert" className="rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm p-2.5">{err}</div>}
-
-      <div key={`${vista.parada}-${vista.fase === "arresto" ? "a" : "p"}`} className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3 dt-slide ${fx === "mal" ? "dt-shake dt-flash" : ""}`}>
-        <div className="flex items-start gap-3">
-          <div className="text-4xl dt-float">{lugar.emoji}</div>
-          <div><div className="font-extrabold text-lg leading-tight">{lugar.lugar}</div>{lugar.escena && <p className="text-sm text-slate-600 mt-0.5">{lugar.escena}</p>}</div>
-        </div>
-
-        {vista.fase === "pregunta" && vista.pregunta && (
-          <>
-            {aviso?.tipo === "ok" ? null : (
-              <>
-                <div className="text-xs font-bold text-slate-500">💬 Para que {lugar.testigo} hable, responde:</div>
-                <p className="font-bold text-slate-800">{vista.pregunta.texto}</p>
-                <div className="grid gap-2">
-                  {ops.map((o, j) => (
-                    <button key={o} disabled={ocupado || malas.includes(o)} onClick={() => responder(o)}
-                      className="dt-btn dt-pop text-left rounded-xl text-white px-3 py-2.5 font-semibold disabled:opacity-40 flex gap-2" style={{ background: COL_OP[j % COL_OP.length], animationDelay: `${j * 90}ms` }}>
-                      <b>{LETRAS[j]}.</b><span>{o}</span>
-                    </button>
-                  ))}
+      {vista.fase === "arresto" && (
+        <div style={{ ...marco, padding: 10 }}>
+          <div className="font-extrabold">🚨 ¡Lo encontraste! Rueda de reconocimiento</div>
+          <p className="text-xs opacity-85 mb-2">Compara a cada sospechoso con tu retrato hablado. Arrestar a un inocente cuesta 2 horas.</p>
+          <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", backgroundImage: "repeating-linear-gradient(0deg,#ffffff14 0 1px,transparent 1px 28px)", borderRadius: 12, padding: 8 }}>
+            {(vista.sospechosos || []).map((s, k) => {
+              const coinc = encontrados.filter((r) => s.rasgos.includes(r)).length;
+              const descartado = malas.includes(`s${s.id}`);
+              return (
+                <div key={s.id} className={`dt-pop ${descartado ? "dt-shake" : ""}`} style={{ background: descartado ? "#1e293b99" : "#f8fafc", color: "#0f172a", borderRadius: 14, padding: 8, textAlign: "center", opacity: descartado ? 0.5 : 1, animationDelay: `${k * 120}ms` }}>
+                  <div style={{ background: "#e2e8f0", borderRadius: 10, display: "flex", justifyContent: "center" }}><Rostro nombre={s.nombre} rasgos={s.rasgos} ancho={96} /></div>
+                  <div className="font-extrabold text-sm mt-1">{s.nombre}</div>
+                  <ul style={{ textAlign: "left", fontSize: 11.5, margin: "4px 0", padding: 0, listStyle: "none" }}>
+                    {s.rasgos.map((r, i) => <li key={i} style={{ color: encontrados.includes(r) ? "#047857" : "#475569", fontWeight: encontrados.includes(r) ? 800 : 400 }}>{encontrados.includes(r) ? "✔" : "•"} {r}</li>)}
+                  </ul>
+                  <div style={{ fontSize: 10.5, color: "#64748b" }}>Coincide en {coinc} de {encontrados.length}</div>
+                  {confirmar === s.id
+                    ? <div style={{ display: "flex", gap: 6, marginTop: 6 }}><button disabled={ocupado} onClick={() => arrestar(s)} className="dt-btn" style={{ flex: 1, background: "#e11d48", color: "#fff", borderRadius: 8, padding: "5px 0", fontWeight: 800, fontSize: 12 }}>¡Sí, arrestar!</button><button onClick={() => setConfirmar(null)} style={{ background: "#e2e8f0", borderRadius: 8, padding: "5px 10px", fontWeight: 700, fontSize: 12 }}>No</button></div>
+                    : <button disabled={ocupado || descartado} onClick={() => { sonido.click(); setConfirmar(s.id); }} className="dt-btn" style={{ marginTop: 6, width: "100%", background: "#0f172a", color: "#fff", borderRadius: 8, padding: "5px 0", fontWeight: 800, fontSize: 12, opacity: descartado ? 0.5 : 1 }}>🚔 Arrestar</button>}
                 </div>
-              </>
-            )}
-          </>
-        )}
-
-        {vista.fase === "destino" && (
-          <>
-            {aviso?.tipo === "ok" ? null : (
-              <>
-                <div className="rounded-xl bg-indigo-50 border border-indigo-100 p-3 text-sm">
-                  <b>{vista.pistas[vista.pistas.length - 1]?.testigo}:</b> «{vista.pistas[vista.pistas.length - 1]?.texto}»
-                </div>
-                <div className="text-xs font-bold text-slate-500">🧭 ¿A dónde viajas?</div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {dest.map((d) => (
-                    <button key={d} disabled={ocupado || malas.includes(d)} onClick={() => viajar(d)}
-                      className="dt-btn dt-pop rounded-xl bg-slate-800 hover:bg-slate-700 text-white px-3 py-2.5 font-bold disabled:opacity-40" style={{ animationDelay: `${dest.indexOf(d) * 90}ms` }}>🚩 {d}</button>
-                  ))}
-                </div>
-              </>
-            )}
-          </>
-        )}
-
-        {vista.fase === "arresto" && (
-          <>
-            <div className="rounded-xl bg-indigo-50 border border-indigo-100 p-3 text-sm">
-              <b>{vista.pistas[vista.pistas.length - 1]?.testigo}:</b> «{vista.pistas[vista.pistas.length - 1]?.texto}»
-            </div>
-            <div className="text-xs font-bold text-slate-500">🚨 ¡Lo encontraste! Compara los rasgos de tu expediente y arresta al sospechoso correcto.</div>
-            <div className="rounded-xl bg-amber-50 border border-amber-200 p-2 text-sm"><b>Buscas a alguien que:</b> {vista.rasgos.join(" · ") || "—"}</div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {(vista.sospechosos || []).map((s) => {
-                const coinc = vista.rasgos.filter((r) => s.rasgos.includes(r)).length;
-                const descartado = malas.includes(`s${s.id}`);
-                return (
-                  <div key={s.id} className={`dt-pop rounded-xl border p-3 transition-opacity ${descartado ? "opacity-40 border-slate-200 dt-shake" : "border-slate-300 bg-slate-50"}`} style={{ animationDelay: `${(vista.sospechosos || []).indexOf(s) * 120}ms` }}>
-                    <div className="flex items-center gap-2"><span className="text-3xl dt-float">{s.emoji}</span><div className="font-extrabold">{s.nombre}</div></div>
-                    <ul className="mt-1 text-sm space-y-0.5">{s.rasgos.map((r, i) => <li key={i} className={vista.rasgos.includes(r) ? "text-emerald-700 font-bold" : "text-slate-600"}>{vista.rasgos.includes(r) ? "✔" : "•"} {r}</li>)}</ul>
-                    <div className="text-[11px] text-slate-500 mt-1">Coincide en {coinc} de {vista.rasgos.length}</div>
-                    {confirmar === s.id
-                      ? <div className="flex gap-2 mt-2"><button disabled={ocupado} onClick={() => arrestar(s)} className="flex-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white py-1.5 text-sm font-extrabold disabled:opacity-50">¡Sí, arrestar!</button><button onClick={() => setConfirmar(null)} className="rounded-lg bg-slate-200 px-3 text-sm font-bold">No</button></div>
-                      : <button disabled={ocupado || descartado} onClick={() => setConfirmar(s.id)} className="mt-2 w-full rounded-lg bg-slate-800 hover:bg-slate-700 text-white py-1.5 text-sm font-bold disabled:opacity-50">🚔 Arrestar</button>}
-                  </div>
-                );
-              })}
-            </div>
-          </>
-        )}
-
-        {aviso && (
-          <div role="status" className={`rounded-xl p-3 text-sm border ${aviso.tipo === "ok" ? "bg-emerald-50 border-emerald-200 text-emerald-900" : "bg-rose-50 border-rose-200 text-rose-800"}`}>
-            {aviso.tipo === "ok" ? (
-              <div className="space-y-2 relative dt-pop">
-                {CHISPAS.map((c, i) => <span key={i} className="dt-spark" style={{ "--dx": `${c.dx}px`, "--dy": `${c.dy}px`, animationDelay: `${c.t}ms` }} aria-hidden="true">{c.e}</span>)}
-                <div className="font-extrabold">✅ ¡Correcto!</div>
-                {aviso.texto && <p>{aviso.texto}</p>}
-                {aviso.pista && <p className="rounded-lg bg-white/70 p-2 dt-slide" style={{ animationDelay: ".3s" }}><b>{aviso.pista.testigo}:</b> «{aviso.pista.texto}»</p>}
-                {aviso.rasgo && <p className="dt-pop" style={{ animationDelay: ".6s" }}>🔍 Nuevo rasgo del culpable: <b className="dt-glow rounded px-1">{aviso.rasgo}</b></p>}
-                <button onClick={() => setAviso(null)} className="dt-btn rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 font-extrabold">Elegir destino →</button>
-              </div>
-            ) : (
-              <div className="dt-pop"><b>⏳ −{aviso.texto.includes("2 horas") ? "2 horas" : "1 hora"}.</b> {aviso.texto}</div>
-            )}
+              );
+            })}
           </div>
-        )}
-      </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OpcionesPregunta({ opciones, malas, ocupado, onElegir, clave }) {
+  const ops = useMemo(() => mezclar(opciones), [clave]); // eslint-disable-line
+  return (
+    <div className="grid gap-2">
+      {ops.map((o, j) => (
+        <button key={o} disabled={ocupado || malas.includes(o)} onClick={() => onElegir(o)}
+          className="dt-btn dt-pop text-left rounded-xl text-white px-3 py-2.5 font-semibold disabled:opacity-40 flex gap-2" style={{ background: COL_OP[j % COL_OP.length], animationDelay: `${j * 90}ms` }}>
+          <b>{LETRAS[j]}.</b><span>{o}</span>
+        </button>
+      ))}
     </div>
   );
 }
