@@ -90,6 +90,7 @@ Reglas:
 - ${paradas} paradas. En cada parada el estudiante responde UNA pregunta de opción múltiple (3 o 4 opciones) sobre el tema; si acierta, un testigo le da una pista que apunta al siguiente lugar y un rasgo del culpable.
 - Cada parada tiene "destinos": 3 o 4 lugares posibles a donde viajar; "destino_ok" debe ser uno de ellos y la pista del testigo debe permitir deducirlo (sin nombrarlo de forma obvia).
 - La última parada también lleva destinos; su pista apunta al escondite del culpable.
+- Los "rasgo" y los "rasgos" de los sospechosos deben ser VISUALES y cortos, como: «Lleva una capa verde», «Usa un sombrero morado», «Tiene gafas», «Tiene bigote», «Lleva una bufanda roja», «Usa un anillo de plata», «Tiene una cicatriz», «Tiene el cabello rubio». La app los dibuja, así que usa prendas, colores y accesorios; evita rasgos que no se ven (olores, cojera, voz) o úsalos solo como complemento.
 - Exactamente 4 sospechosos; solo UNO es culpable y es el único que reúne TODOS los rasgos descubiertos (uno por parada). Cada inocente debe fallar en al menos un rasgo.
 - "correcta" debe ser idéntica a una de las "opciones". "retro" explica en 1 frase por qué.
 - Responde SOLO con JSON válido (sin texto antes ni después, sin comentarios), con esta forma exacta:
@@ -171,17 +172,17 @@ export const CASO_EJEMPLO = {
       retro: "La honestidad es actuar con verdad y justicia aunque nadie nos esté mirando.",
       pista: "Vi a alguien con una capa verde cruzar la plaza. Murmuró que necesitaba «un lugar lleno de libros antiguos» para esconderse.", rasgo: "Lleva una capa verde",
       destinos: ["Biblioteca Antigua", "Mercado del Puerto", "Herrería del Norte"], destino_ok: "Biblioteca Antigua" },
-    { lugar: "Biblioteca Antigua", emoji: "📚", escena: "Estantes altísimos y olor a papel viejo. Sobre una mesa hay un pañuelo olvidado.", testigo: "Don Eustaquio, el bibliotecario",
+    { lugar: "Biblioteca Antigua", emoji: "📚", escena: "Estantes altísimos y olor a papel viejo. Sobre una mesa quedó una nota arrugada.", testigo: "Don Eustaquio, el bibliotecario",
       pregunta: "¿Qué significa ser una persona responsable?",
       opciones: ["Cumplir mis compromisos y asumir las consecuencias de mis decisiones", "Echarle la culpa a otro cuando algo sale mal", "Hacer solo lo que me conviene", "Prometer mucho y cumplir poco"], correcta: "Cumplir mis compromisos y asumir las consecuencias de mis decisiones",
       retro: "Responsabilidad es responder por lo que hago, para bien y para mal.",
-      pista: "El pañuelo huele a menta. El encapuchado preguntó dónde se forja el hierro más fuerte de la comarca.", rasgo: "Huele a menta",
+      pista: "Se le cayó este sombrero morado al correr. Preguntó dónde se forja el hierro más fuerte de la comarca.", rasgo: "Usa un sombrero morado",
       destinos: ["Taberna del Roble", "Herrería del Norte", "Jardines del Castillo"], destino_ok: "Herrería del Norte" },
-    { lugar: "Herrería del Norte", emoji: "⚒️", escena: "El yunque aún está tibio. Hay huellas irregulares en la ceniza, como de alguien que arrastra un pie.", testigo: "Brunilda, la herrera",
+    { lugar: "Herrería del Norte", emoji: "⚒️", escena: "El yunque aún está tibio y el fuego recién se apagó.", testigo: "Brunilda, la herrera",
       pregunta: "¿Qué es la empatía?",
       opciones: ["Ponerme en el lugar del otro y comprender lo que siente", "Reírme de lo que le pasa a los demás", "Opinar siempre sin escuchar", "Ayudar solo a mis amigos"], correcta: "Ponerme en el lugar del otro y comprender lo que siente",
       retro: "La empatía nos permite entender al otro y actuar con cuidado hacia sus sentimientos.",
-      pista: "Cojeaba de la pierna izquierda y dejó una moneda de pago sobre el yunque. Dijo que iba a ver el río desde lo alto.", rasgo: "Cojea de la pierna izquierda",
+      pista: "Se limpiaba unas gafas redondas mientras esperaba su pedido. Dijo que iba a ver el río desde lo alto.", rasgo: "Tiene gafas",
       destinos: ["Mirador del Río", "Puerto de Oakhaven", "Cripta Vieja"], destino_ok: "Mirador del Río" },
     { lugar: "Mirador del Río", emoji: "🌉", escena: "Desde aquí se ve toda la comarca. En la baranda quedó marcado un anillo de plata.", testigo: "Un guardia que patrulla",
       pregunta: "Un grupo excluye a un compañero por pensar distinto. ¿Qué valor falta en esa situación?",
@@ -191,9 +192,9 @@ export const CASO_EJEMPLO = {
       destinos: ["Torre del Reloj", "Establos Reales", "Fuente de los Deseos"], destino_ok: "Torre del Reloj" },
   ],
   sospechosos: [
-    { nombre: "Valeria Brisa", emoji: "🧙‍♀️", rasgos: ["Lleva una capa verde", "Huele a menta", "Cojea de la pierna izquierda", "Usa un anillo de plata"], culpable: true },
-    { nombre: "Teodoro Roble", emoji: "🧔", rasgos: ["Lleva una capa verde", "Huele a menta", "Cojea de la pierna izquierda", "Usa una bufanda roja"], culpable: false },
-    { nombre: "Isolda Nube", emoji: "👩‍🎤", rasgos: ["Lleva una capa azul", "Huele a menta", "Cojea de la pierna izquierda", "Usa un anillo de plata"], culpable: false },
-    { nombre: "Bruno Ceniza", emoji: "🧑‍🔧", rasgos: ["Lleva una capa verde", "Huele a lavanda", "Cojea de la pierna derecha", "Usa un anillo de plata"], culpable: false },
+    { nombre: "Valeria Brisa", emoji: "🧙‍♀️", rasgos: ["Lleva una capa verde", "Usa un sombrero morado", "Tiene gafas", "Usa un anillo de plata"], culpable: true },
+    { nombre: "Teodoro Roble", emoji: "🧔", rasgos: ["Lleva una capa verde", "Usa un sombrero morado", "Tiene gafas", "Lleva una bufanda roja"], culpable: false },
+    { nombre: "Isolda Nube", emoji: "👩‍🎤", rasgos: ["Lleva una capa azul", "Usa un sombrero morado", "Tiene gafas", "Usa un anillo de plata"], culpable: false },
+    { nombre: "Bruno Ceniza", emoji: "🧑‍🔧", rasgos: ["Lleva una capa verde", "Usa un sombrero amarillo", "Tiene gafas", "Usa un anillo de plata"], culpable: false },
   ],
 };
