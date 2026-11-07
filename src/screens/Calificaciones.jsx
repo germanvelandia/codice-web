@@ -1375,12 +1375,46 @@ function CeldaConRubrica({ actividad, estudianteId, estudianteNombre, config, pr
   );
 }
 
+// Barra de «Guardar cambios» de la planilla. Vive aparte para que, al escribir notas, solo ella se repinte
+// (y no toda la tabla): así puedes pasar de una casilla a otra sin esperas ni recargas.
+function BarraGuardadoPlanilla({ bus, modoManual, onModo, onGuardar, onDescartar, guardando }) {
+  const [n, setN] = useState(bus.map.size);
+  useEffect(() => { const f = () => setN(bus.map.size); bus.subs.add(f); f(); return () => { bus.subs.delete(f); }; }, [bus]);
+  useEffect(() => {
+    if (!n) return undefined;
+    const aviso = (e) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", aviso);
+    return () => window.removeEventListener("beforeunload", aviso);
+  }, [n]);
+  return (
+    <div className="mb-2 flex flex-wrap items-center gap-2" style={{ position: "sticky", top: 8, zIndex: 30 }}>
+      <label className="text-[11px] text-slate-500 flex items-center gap-1.5 bg-white border border-slate-200 rounded-full px-3 py-1 cursor-pointer">
+        <input type="checkbox" checked={modoManual} onChange={(e) => onModo(e.target.checked)} /> ✋ Guardar con botón (no automático)
+      </label>
+      {modoManual && n > 0 && (
+        <div className="flex items-center gap-2 rounded-full px-3 py-1 shadow" style={{ background: "#fef3c7", border: "1px solid #f59e0b" }} role="status">
+          <span className="text-xs font-semibold text-amber-900">● {n} cambio{n === 1 ? "" : "s"} sin guardar</span>
+          <button disabled={guardando} onClick={onGuardar} className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-600 text-white disabled:opacity-60">{guardando ? "Guardando…" : "💾 Guardar cambios"}</button>
+          <button disabled={guardando} onClick={onDescartar} className="text-[11px] font-semibold px-2 py-1 rounded-full border border-slate-300 text-slate-600 bg-white">Descartar</button>
+        </div>
+      )}
+      {modoManual && n === 0 && <span className="text-[11px] text-slate-400">Escribe las notas con calma y pulsa «Guardar cambios» al terminar. Con Enter bajas a la siguiente casilla.</span>}
+    </div>
+  );
+}
+
 function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados, periodo, materias, onCambioCategorias, estudianteDestacadoId }) {
   const [actividades, setActividades] = useState([]);
   const [valores, setValores] = useState({});
   const [observaciones, setObservaciones] = useState({});
   const [xpMapa, setXpMapa] = useState({});
   const [cargando, setCargando] = useState(true);
+  // Guardado manual: las notas escritas quedan «pendientes» (sin tocar el servidor ni repintar la tabla) hasta pulsar Guardar.
+  const bus = useRef({ map: new Map(), subs: new Set() }).current;
+  const [modoManual, setModoManualEstado] = useState(() => { try { return localStorage.getItem("codice_planilla_manual") !== "0"; } catch { return true; } });
+  const setModoManual = (v) => { setModoManualEstado(v); try { localStorage.setItem("codice_planilla_manual", v ? "1" : "0"); } catch { /* sin almacenamiento */ } };
+  const [guardandoPend, setGuardandoPend] = useState(false);
+  const avisarBus = () => bus.subs.forEach((f) => f());
   const [modalAbierto, setModalAbierto] = useState(false);
   const [actividadEditar, setActividadEditar] = useState(null);
   const [importarMoodleAbierto, setImportarMoodleAbierto] = useState(false);
@@ -1464,6 +1498,59 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
     const v = valorTexto === "" ? null : Math.max(config.escala_min, Math.min(config.nota_maxima, parseFloat(valorTexto)));
     await api.setValor(actividadId, estudianteId, v);
     setValores((prev) => ({ ...prev, [actividadId]: { ...(prev[actividadId] || {}), [estudianteId]: v } }));
+  };
+
+  // --- guardado manual de notas ---
+  const marcarPendiente = (actividadId, estudianteId, texto, original, el) => {
+    const clave = `${actividadId}|${estudianteId}`;
+    const igual = String(texto).trim() === String(original ?? "").trim();
+    if (igual) {
+      bus.map.delete(clave);
+      if (el) { el.style.boxShadow = ""; el.removeAttribute("data-pend"); }
+    } else {
+      bus.map.set(clave, { actividadId, estudianteId, texto, original, el });
+      if (el) { el.style.boxShadow = "0 0 0 2px #f59e0b"; el.setAttribute("data-pend", "1"); }
+    }
+    avisarBus();
+  };
+  const limpiarEl = (el) => { if (el) { el.style.boxShadow = ""; el.removeAttribute("data-pend"); } };
+  const guardarPendientes = async () => {
+    const lista = [...bus.map.entries()];
+    if (!lista.length) return;
+    setGuardandoPend(true);
+    const guardados = []; let fallos = 0;
+    for (let i = 0; i < lista.length; i += 6) {
+      const tanda = lista.slice(i, i + 6);
+      const res = await Promise.allSettled(tanda.map(([, p]) => {
+        const num = String(p.texto).trim() === "" ? null : Math.max(config.escala_min, Math.min(config.nota_maxima, parseFloat(p.texto)));
+        if (num !== null && Number.isNaN(num)) return Promise.reject(new Error("Nota no válida"));
+        return api.setValor(p.actividadId, p.estudianteId, num).then(() => num);
+      }));
+      res.forEach((r, k) => {
+        const [clave, p] = tanda[k];
+        if (r.status === "fulfilled") { guardados.push({ ...p, num: r.value }); bus.map.delete(clave); limpiarEl(p.el); } else { fallos++; }
+      });
+    }
+    if (guardados.length) {
+      setValores((prev) => {
+        const nuevo = { ...prev };
+        guardados.forEach((g) => { nuevo[g.actividadId] = { ...(nuevo[g.actividadId] || {}), [g.estudianteId]: g.num }; });
+        return nuevo;
+      });
+    }
+    avisarBus(); setGuardandoPend(false);
+    if (fallos) alert(`${guardados.length} nota(s) guardadas, pero ${fallos} no se pudieron guardar (siguen marcadas en amarillo). Revisa tu conexión y pulsa «Guardar cambios» otra vez.`);
+  };
+  const descartarPendientes = () => {
+    if (!confirm("¿Descartar las notas que no has guardado?")) return;
+    bus.map.forEach((p) => { if (p.el) { p.el.value = p.original ?? ""; limpiarEl(p.el); } });
+    bus.map.clear(); avisarBus();
+  };
+  const siguienteCasilla = (e, actividadId) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const fila = e.target.closest("tr"); let sig = fila?.nextElementSibling;
+    while (sig) { const c = sig.querySelector(`input[data-col="${actividadId}"]`); if (c) { c.focus(); c.select(); return; } sig = sig.nextElementSibling; }
   };
 
   const aplicarNotaMasiva = (actividadId, estudianteIds, valor) => {
@@ -1638,6 +1725,7 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
           )}
         </div>
       </div>
+      <BarraGuardadoPlanilla bus={bus} modoManual={modoManual} onModo={setModoManual} onGuardar={guardarPendientes} onDescartar={descartarPendientes} guardando={guardandoPend} />
       {cargando ? (
         <div className="text-sm text-slate-400">Cargando…</div>
       ) : (
@@ -1725,8 +1813,11 @@ function Planilla({ materiaId, config, categorias, estudiantes, gradoId, grados,
                                 {v ?? "📊"}
                               </button>
                             ) : (
-                              <input type="number" step="0.1" defaultValue={v ?? ""} onBlur={(e) => guardarValorManual(a.id, s.id, e.target.value)}
-                                style={v !== null && v !== undefined ? { color: b.color, borderColor: b.color, background: `${b.color}11`, fontWeight: 700 } : {}}
+                              <input type="number" step="0.1" data-col={a.id} defaultValue={bus.map.get(`${a.id}|${s.id}`)?.texto ?? v ?? ""}
+                                onChange={modoManual ? (e) => marcarPendiente(a.id, s.id, e.target.value, v, e.target) : undefined}
+                                onBlur={modoManual ? undefined : (e) => guardarValorManual(a.id, s.id, e.target.value)}
+                                onKeyDown={(e) => siguienteCasilla(e, a.id)}
+                                style={{ ...(v !== null && v !== undefined ? { color: b.color, borderColor: b.color, background: `${b.color}11`, fontWeight: 700 } : {}), ...(bus.map.has(`${a.id}|${s.id}`) ? { boxShadow: "0 0 0 2px #f59e0b" } : {}) }}
                                 className="w-14 text-center text-xs rounded px-1 py-1 border border-slate-200 outline-none" />
                             )}
                             {observaciones[a.id]?.[s.id] && (
