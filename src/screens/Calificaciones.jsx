@@ -2064,6 +2064,16 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
   const [actaEstudiante, setActaEstudiante] = useState(null);
   const [editandoCelda, setEditandoCelda] = useState(null); // { estudianteId, periodo }
   const [valorTemp, setValorTemp] = useState("");
+  // Cambios sin guardar: { "estudianteId|periodo": nota | null }. null = quitar la nota fijada y volver a calcular en vivo.
+  const [pend, setPend] = useState({});
+  const [guardandoPend, setGuardandoPend] = useState(false);
+  const nPend = Object.keys(pend).length;
+  useEffect(() => {
+    if (!nPend) return undefined;
+    const aviso = (e) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", aviso);
+    return () => window.removeEventListener("beforeunload", aviso);
+  }, [nPend]);
   const [soloPerdiendo, setSoloPerdiendo] = useState(false);
   const [busqueda, setBusqueda] = useState("");
   const [incumplimientosAbierto, setIncumplimientosAbierto] = useState(false);
@@ -2083,36 +2093,69 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
   // Índices para buscar al instante (antes se recorría la lista completa en cada celda).
   const idxFinales = useMemo(() => new Map(finales.map((f) => [`${f.estudiante_id}|${f.periodo}`, f])), [finales]);
   const idxNiv = useMemo(() => new Map(nivelacion.map((n) => [`${n.estudiante_id}|${n.periodo}`, n])), [nivelacion]);
-  const notaGuardada = (estudianteId, periodo) => idxFinales.get(`${estudianteId}|${periodo}`)?.nota ?? null;
+  const notaServidor = (estudianteId, periodo) => idxFinales.get(`${estudianteId}|${periodo}`)?.nota ?? null;
+  const esPend = (estudianteId, periodo) => Object.prototype.hasOwnProperty.call(pend, `${estudianteId}|${periodo}`);
+  // La nota que se ve: si hay un cambio sin guardar, ese; si no, la guardada.
+  const notaGuardada = (estudianteId, periodo) => (esPend(estudianteId, periodo) ? pend[`${estudianteId}|${periodo}`] : notaServidor(estudianteId, periodo));
   const estadoNiv = (estudianteId, periodo) => idxNiv.get(`${estudianteId}|${periodo}`)?.estado || "";
   const nivelacionDe = (estudianteId, periodo) => idxNiv.get(`${estudianteId}|${periodo}`);
 
-  const guardarNotaManual = async (estudianteId, periodo) => {
+  const marcarPend = (estudianteId, periodo, valor) => {
+    const k = `${estudianteId}|${periodo}`;
+    setPend((prev) => {
+      const sig = { ...prev };
+      if (valor === notaServidor(estudianteId, periodo)) delete sig[k]; else sig[k] = valor;
+      return sig;
+    });
+  };
+
+  // ✔ solo anota el cambio en pantalla; nada se envía hasta pulsar «Guardar cambios».
+  const guardarNotaManual = (estudianteId, periodo) => {
     const valor = valorTemp.trim() === "" ? null : parseFloat(valorTemp.replace(",", "."));
     if (valorTemp.trim() !== "" && (isNaN(valor) || valor < config.escala_min || valor > config.nota_maxima)) {
       alert(`La nota debe estar entre ${config.escala_min} y ${config.nota_maxima}.`);
       return;
     }
-    if (valor === null) {
-      // Borra la fila por completo (no solo el valor) para que el periodo vuelva
-      // a calcularse en vivo, en vez de quedar "cerrado" con una nota vacía.
-      await api.eliminarNotaFinalPeriodo(materiaId, estudianteId, periodo);
-    } else {
-      await api.guardarNotaFinal(materiaId, estudianteId, periodo, valor);
-    }
+    marcarPend(estudianteId, periodo, valor);
     setEditandoCelda(null);
-    cargar();
   };
 
-  const volverACalcularEnVivo = async (estudianteId, periodo) => {
-    if (!confirm("¿Quitar la nota fijada de este periodo y volver a calcularla en vivo a partir de las actividades? Esta acción no borra las actividades, solo el valor que quedó guardado como definitivo.")) return;
-    await api.eliminarNotaFinalPeriodo(materiaId, estudianteId, periodo);
-    cargar();
+  const volverACalcularEnVivo = (estudianteId, periodo) => {
+    marcarPend(estudianteId, periodo, null);
+  };
+
+  const guardarPendientes = async () => {
+    const entradas = Object.entries(pend);
+    if (!entradas.length) return;
+    setGuardandoPend(true);
+    const ok = []; let fallos = 0;
+    const conNota = entradas.filter(([, v]) => v !== null).map(([k, v]) => { const [e, p] = k.split("|"); return { k, estudiante_id: isNaN(Number(e)) ? e : Number(e), periodo: p, nota: v }; });
+    try {
+      if (conNota.length) { await api.guardarNotasFinalesLote(materiaId, conNota); conNota.forEach((x) => ok.push(x.k)); }
+    } catch (e) { fallos += conNota.length; }
+    const sinNota = entradas.filter(([, v]) => v === null).map(([k]) => { const [e, p] = k.split("|"); return { k, estudiante_id: isNaN(Number(e)) ? e : Number(e), periodo: p }; });
+    for (let i = 0; i < sinNota.length; i += 6) {
+      const tanda = sinNota.slice(i, i + 6);
+      const res = await Promise.allSettled(tanda.map((x) => api.eliminarNotaFinalPeriodo(materiaId, x.estudiante_id, x.periodo)));
+      res.forEach((r, j) => { if (r.status === "fulfilled") ok.push(tanda[j].k); else fallos++; });
+    }
+    setFinales((prev) => {
+      let sig = [...prev];
+      ok.forEach((k) => {
+        const [e, p] = k.split("|"); const per = p; const v = pend[k];
+        sig = sig.filter((f) => !(String(f.estudiante_id) === e && f.periodo === per));
+        if (v !== null && v !== undefined) sig.push({ materia_id: materiaId, estudiante_id: isNaN(Number(e)) ? e : Number(e), periodo: per, nota: v });
+      });
+      return sig;
+    });
+    setPend((prev) => { const sig = { ...prev }; ok.forEach((k) => delete sig[k]); return sig; });
+    setGuardandoPend(false);
+    if (fallos) alert(`${ok.length} cambio(s) guardados, pero ${fallos} no se pudieron guardar (siguen marcados en amarillo). Revisa tu conexión y pulsa «Guardar cambios» otra vez.`);
   };
 
   const cambiarNivelacion = async (estudianteId, periodo, estado) => {
     const registroPrevio = idxNiv.get(`${estudianteId}|${periodo}`);
-    const notaActual = notaGuardada(estudianteId, periodo);
+    const notaActual = notaServidor(estudianteId, periodo);
     // La nota original solo se fija la primera vez que se marca "superado" para este
     // periodo — si ya se había guardado antes, se conserva (no se pisa en toggles repetidos).
     const notaOriginal = estado === "superado"
@@ -2123,6 +2166,7 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
     await api.sincronizarEstadoActaNivelacion(estudianteId, materiaId, periodo, estado);
     if (estado === "superado" && (notaActual === null || notaActual < config.nota_minima)) {
       await api.guardarNotaFinal(materiaId, estudianteId, periodo, config.nota_minima);
+      setPend((prev) => { const sig = { ...prev }; delete sig[`${estudianteId}|${periodo}`]; return sig; });
     }
     cargar();
   };
@@ -2151,6 +2195,13 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
           {guardando ? "⏳ Guardando…" : "💾 Guardar notas finales del periodo actual"}
         </button>
       </div>
+      {nPend > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-2xl px-3 py-2 shadow" style={{ position: "sticky", top: 8, zIndex: 30, background: "#fef3c7", border: "1px solid #f59e0b" }} role="status">
+          <span className="text-xs font-semibold text-amber-900">● {nPend} cambio{nPend === 1 ? "" : "s"} sin guardar en las notas finales</span>
+          <button disabled={guardandoPend} onClick={guardarPendientes} className="text-xs font-bold px-4 py-1.5 rounded-full bg-emerald-600 text-white disabled:opacity-60">{guardandoPend ? "Guardando…" : "💾 Guardar cambios"}</button>
+          <button disabled={guardandoPend} onClick={() => { if (confirm("¿Descartar los cambios que no has guardado?")) setPend({}); }} className="text-[11px] font-semibold px-3 py-1.5 rounded-full border border-slate-300 text-slate-600 bg-white">Descartar</button>
+        </div>
+      )}
       {errorCarga && <div role="alert" className="mb-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm p-2.5">{errorCarga} <button onClick={cargar} className="underline font-bold">Reintentar</button></div>}
       {cargando ? (
         <div className="text-sm text-slate-400">Cargando…</div>
@@ -2192,7 +2243,7 @@ function Boletin({ materiaId, config, categorias, estudiantes, gradoId, guardarA
                             </div>
                           ) : (
                             <div className="flex items-center justify-center gap-1 group">
-                              <span className="cursor-pointer" style={{ color: n !== null ? b.color : "#94A3B8", fontWeight: n !== null ? 700 : 400 }}
+                              <span className="cursor-pointer" title={esPend(s.id, p) ? "Cambio sin guardar" : undefined} style={{ color: n !== null ? b.color : "#94A3B8", fontWeight: n !== null ? 700 : 400, ...(esPend(s.id, p) ? { background: "#fef3c7", borderRadius: 6, padding: "0 6px", boxShadow: "0 0 0 2px #f59e0b" } : {}) }}
                                 onClick={() => { setEditandoCelda({ estudianteId: s.id, periodo: p }); setValorTemp(n !== null ? String(n) : ""); }}>
                                 {n ?? "—"}
                                 {mostrarOriginal && <span className="text-[10px] text-slate-400 font-normal"> ({registroNiv.nota_original})</span>}
