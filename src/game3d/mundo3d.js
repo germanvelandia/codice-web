@@ -23,6 +23,7 @@ import { crearAmbiente } from "./ambiente3d";
 import { crearSonido } from "./sonido3d";
 import { ESPECIES, POBLACION } from "./animales3d";
 import { MONSTRUOS, danioDeArma } from "./monstruos3d";
+import { CRIATURAS } from "./criaturas3d";
 
 export const SX = 256, SY = 40, SZ = 256, CH = 16, NCX = SX / CH, NCZ = SZ / CH;
 export const CENTRO = 128, RADIO_PLAZA = 34, RADIO_ADOQUIN = 12; // la aldea (69 × 69) está protegida; el empedrado de la plaza es de 25 × 25
@@ -38,13 +39,13 @@ export const NOMBRES = { 1: "Pasto", 2: "Tierra", 3: "Piedra", 4: "Tronco", 5: "
   37: "Tierra labrada", 72: "Semillas", 73: "Zanahoria", 74: "Papa", 75: "Trigo", 76: "Pan", 77: "Papa asada", 78: "Huevo frito",
   80: "Azada de madera", 81: "Azada de piedra", 82: "Azada de hierro", 83: "Azada de diamante",
   ...Object.fromEntries(["cobre", "hierro", "diamante"].flatMap((m, t) => ["Casco", "Peto", "Pantalón", "Botas"].map((n, p) => [84 + t * 4 + p, n + " de " + m]))),
-  96: "Llave de brasas", 97: "Fragmento de brasa", 98: "Corazón de brasa", 112: "Basalto", 113: "Roca ígnea", 114: "Lava", 115: "Brasa luminosa", 116: "Mena de brasa", 117: "Ladrillo ígneo", 119: "Velo de brasas",
+  120: "Cápsula de captura", 96: "Llave de brasas", 97: "Fragmento de brasa", 98: "Corazón de brasa", 112: "Basalto", 113: "Roca ígnea", 114: "Lava", 115: "Brasa luminosa", 116: "Mena de brasa", 117: "Ladrillo ígneo", 119: "Velo de brasas",
   24: "Horno", 25: "Bloque de cobre", 62: "Cobre crudo", 63: "Lingote de cobre", 65: "Hierro crudo", 66: "Oro crudo",
   68: "Espada de madera", 69: "Espada de piedra", 70: "Espada de hierro", 71: "Espada de diamante" };
 export const COLOCABLES = [1, 2, 3, 4, 6, 7, 8, 9, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 112, 113, 115, 117];
 // Frases rápidas del chat (los mismos números que la tabla mundo3d_frases del servidor)
 export const FRASES_CHAT = { 1: "¡Hola!", 2: "¡Buen trabajo!", 3: "¿Me ayudas?", 4: "¡Gracias!", 5: "¿Construimos juntos?", 6: "¡Mira lo que hice!", 7: "Vamos a la aldea", 8: "Necesito piedra", 9: "¡Qué bien!", 10: "¡Hasta luego!", 11: "Sígueme", 12: "¡Cuidado!" };
-export const MATERIALES = [40, 41, 42, 43, 44, 45, 46, 47, 48, 62, 63, 65, 66, 75, 76, 77, 78, 96, 97, 98];
+export const MATERIALES = [40, 41, 42, 43, 44, 45, 46, 47, 48, 62, 63, 65, 66, 75, 76, 77, 78, 96, 97, 98, 120];
 // Lo que se lleva en la mano y se usa sobre el terreno: semillas y cultivos (se siembran) y azadas (labran)
 export const USABLES = [72, 73, 74, 80, 81, 82, 83];
 // Armaduras (84-95) y comida: mismos números que el servidor (tabla mundo3d_comida y _m3d_defensa)
@@ -75,6 +76,7 @@ export const RECETAS = [
   ]),
   ...[["madera", 6, 0], ["piedra", 3, 1], ["hierro", 42, 2], ["diamante", 44, 3]].map(([nom, mat, t]) => ({ sale: 68 + t, n: 1, cuesta: { [mat]: 2, 40: 1 }, txt: "2 " + (mat === 6 ? "tablones" : NOMBRES_BASE[mat].toLowerCase()) + " + 1 palo", g: "Armas" })),
   ...[63, 42, 44].flatMap((mat, t) => [["Casco", 3], ["Peto", 5], ["Pantalón", 4], ["Botas", 2]].map(([n, c], p) => ({ sale: 84 + t * 4 + p, n: 1, cuesta: { [mat]: c }, txt: c + " " + (t === 0 ? "lingotes de cobre" : t === 1 ? "hierro" : "diamante"), g: "Armaduras" }))),
+  { sale: 120, n: 2, cuesta: { 42: 2, 41: 1 }, txt: "2 hierro + 1 carbón → 2 cápsulas para capturar criaturas 🐾", g: "Criaturas" },
   { sale: 96, n: 1, cuesta: { 42: 6, 43: 2 }, txt: "6 hierro + 2 oro → llave para entrar al Reino de Brasas", g: "Dimensiones" },
   { sale: 115, n: 1, cuesta: { 97: 3 }, txt: "3 fragmentos de brasa → 1 brasa luminosa", g: "Dimensiones" },
   { sale: 117, n: 2, cuesta: { 97: 1, 3: 2 }, txt: "1 fragmento + 2 piedra → 2 ladrillos ígneos", g: "Dimensiones" },
@@ -236,6 +238,7 @@ export function dibujarIcono(canvas, item) {
   else if (item === 76) { px("#a66a2a", 2, 8, 12, 5); px("#d9993f", 2, 6, 12, 5); px("#e8b563", 3, 5, 10, 2); px("#f4d28f", 4, 6, 3, 1); px("#8a561f", 2, 12, 12, 1); }
   else if (item === 77) { px("#7a4a1c", 4, 6, 9, 6); px("#a8692a", 5, 5, 7, 6); px("#f3d9a0", 6, 7, 4, 2); px("#4a2d10", 8, 10, 1, 1); }
   else if (item === 78) { px("#ffffff", 3, 5, 11, 7); px("#eeeeee", 3, 11, 11, 1); px("#f7c52e", 6, 6, 5, 5); px("#e0a916", 6, 10, 5, 1); }
+  else if (item === 120) { px("#2b1b5a", 4, 3, 8, 10); px("#2b1b5a", 3, 4, 10, 8); px("#7c5cff", 4, 4, 8, 8); px("#a78bfa", 5, 5, 3, 2); px("#ffd43b", 7, 7, 2, 2); px("#ffd43b", 6, 8, 4, 1); px("#ffd43b", 7, 6, 2, 4); px("#e9d5ff", 5, 5, 1, 1); }
   else if (item === 96) { px("#c0392b", 3, 3, 6, 6); px("#7a1a12", 5, 5, 2, 2); for (let i = 0; i < 6; i++) px("#e8e8ec", 8 + i, 8 + i, 2, 1); px("#e8e8ec", 11, 11, 3, 1); px("#e8e8ec", 13, 10, 1, 3); px("#ffcc4d", 4, 4, 2, 1); }
   else if (item === 97) { pts("#b53a08", [[7, 3], [6, 4], [8, 4], [5, 5], [9, 5], [4, 6], [10, 6], [5, 8], [9, 8], [6, 9], [8, 9]]); for (let y = 4; y < 9; y++) px("#ff8a1f", 6 + ((y < 6) ? 6 - y : 0), y, 3 + (y < 6 ? (y - 4) * 2 : 4 - (y - 6)), 1); px("#ffe08a", 7, 5, 2, 2); }
   else if (item === 98) { const hh = [[4, 4], [5, 4], [6, 4], [9, 4], [10, 4], [11, 4], [3, 5], [4, 5], [5, 5], [6, 5], [7, 5], [8, 5], [9, 5], [10, 5], [11, 5], [12, 5], [3, 6], [4, 6], [5, 6], [6, 6], [7, 6], [8, 6], [9, 6], [10, 6], [11, 6], [12, 6], [4, 7], [5, 7], [6, 7], [7, 7], [8, 7], [9, 7], [10, 7], [11, 7], [5, 8], [6, 8], [7, 8], [8, 8], [9, 8], [10, 8], [6, 9], [7, 9], [8, 9], [9, 9], [7, 10], [8, 10]]; pts("#e63a12", hh); pts("#ff9a3a", [[4, 5], [5, 5], [4, 6]]); pts("#ffe08a", [[5, 5]]); }
@@ -1388,6 +1391,7 @@ export function iniciarMundo3D(host, ctx) {
   }
   // ¿hay un monstruo justo delante? Si lo hay, se le pega (cada .5 s) en vez de picar
   function golpearMonstruo() {
+    { const cr = criaturaAlFrente(); if (cr) { cr.lock = true; sonido.pegar(); try { ctx.alCriatura && ctx.alCriatura(cr.num, cr.id); } catch (_) {} return true; } }
     if (!mons.length || pausado || desmayado > 0 || ctx.soloMirar) return false;
     const f = adelante(), ex = jug.x, ey = ojo(), ez = jug.z; let mejor = null, md = 1e9;
     for (const m of mons) { const vx = m.x - ex, vy = m.y + .8 - ey, vz = m.z - ez, d = Math.hypot(vx, vy, vz); if (d > 3.7) continue; if ((vx * f[0] + vy * f[1] + vz * f[2]) / d < .86) continue; if (d < md) { md = d; mejor = m; } }
@@ -1402,7 +1406,57 @@ export function iniciarMundo3D(host, ctx) {
     }
     return true;
   }
+
+  // ----- criaturas del Códice: salvajes que se pueden enfrentar y capturar (la batalla y la captura las decide el servidor) -----
+  const cria = []; let criT = 4, criId = 1;
+  function tipoCriatura() {
+    const noche = amb.noche > .5, z = zonaDe(Math.floor(jug.x), Math.floor(jug.z)), op = [];
+    if (DIM === 1) { op.push([11, 6], [5, 2]); }
+    else {
+      op.push([1, 5], [2, 5], [4, 4], [5, 2], [6, 2], [7, 2], [8, 2]);
+      if (z === "Lago de la Reflexión" || z === "Lago") op.push([3, 8]);
+      if (noche) op.push([9, 2]); else op.push([10, 2]);
+    }
+    let t = op.reduce((s, o) => s + o[1], 0) * Math.random();
+    for (const o of op) { t -= o[1]; if (t <= 0) return o[0]; }
+    return op[0][0];
+  }
+  function aparecerCriatura() {
+    if (cria.length >= (DIM ? 4 : 6)) return;
+    for (let i = 0; i < 10; i++) {
+      const ang = Math.random() * 6.283, d = 12 + Math.random() * 18, x = jug.x + Math.cos(ang) * d, z = jug.z + Math.sin(ang) * d;
+      const xi = Math.floor(x), zi = Math.floor(z); if (xi < 4 || zi < 4 || xi > SX - 5 || zi > SZ - 5 || enAldea(x, z)) continue;
+      const y = sueloPara(x, z, alt[zi * SX + xi] + 1); if (y == null || Math.abs(y - jug.y) > 9) continue;
+      const tipo = tipoCriatura(), def = CRIATURAS[tipo]; if (!def) return;
+      cria.push({ id: criId++, tipo: "cr" + tipo, num: tipo, def, x, y, z, h: Math.random() * 6.28, hp: 1, flash: 0, lunge: 0, fase: Math.random() * 6, amp: 0, obj: null, espera: Math.random() * 3, avisada: false, vida: 150 + Math.random() * 120, lock: false });
+      return;
+    }
+  }
+  function moverCriaturas(dt) {
+    const activo = ctx.criaturas !== false && !ctx.soloMirar && !ctx.vuelo && !pausado && desmayado <= 0;
+    if (!activo) { if (cria.length) cria.length = 0; return; }
+    criT -= dt; if (criT <= 0) { criT = 5 + Math.random() * 5; if (!enAldea(jug.x, jug.z)) aparecerCriatura(); }
+    for (const c of [...cria]) {
+      const d = Math.hypot(jug.x - c.x, jug.z - c.z); c.vida -= dt;
+      if (c.lock) continue;
+      if (d > 70 || c.vida <= 0) { cria.splice(cria.indexOf(c), 1); continue; }
+      if (!c.avisada && d < 10) { c.avisada = true; aviso(c.def.emoji + " ¡" + c.def.nombre + " salvaje cerca! Acércate y haz clic para enfrentarla."); }
+      let mover = false;
+      if (c.obj) { const ox = c.obj[0] - c.x, oz = c.obj[1] - c.z, dd = Math.hypot(ox, oz); if (dd < .3) { c.obj = null; c.espera = 1 + Math.random() * 3; } else {
+        c.h += Math.max(-4 * dt, Math.min(4 * dt, angDif(Math.atan2(ox, oz), c.h))); const p = (c.def.vel || 1) * dt, nx = c.x + Math.sin(c.h) * p, nz = c.z + Math.cos(c.h) * p, sy = sueloPara(nx, nz, c.y);
+        if (sy != null && Math.abs(sy - c.y) <= 1.01 && !enAldea(nx, nz)) { c.x = nx; c.z = nz; c.y += (sy - c.y) * Math.min(1, 10 * dt); mover = true; } else c.obj = null; } }
+      else { c.espera -= dt; if (c.espera <= 0) { const a = Math.random() * 6.283, r = 2 + Math.random() * 5; c.obj = [c.x + Math.cos(a) * r, c.z + Math.sin(a) * r]; } }
+      c.amp += ((mover ? 1 : 0) - c.amp) * Math.min(1, 8 * dt); c.fase += dt * (mover ? 7 : 1.6);
+    }
+  }
+  function criaturaAlFrente() {
+    if (!cria.length || pausado || desmayado > 0 || ctx.soloMirar) return null;
+    const f = adelante(), ex = jug.x, ey = ojo(), ez = jug.z; let mejor = null, md = 1e9;
+    for (const c of cria) { if (c.lock) continue; const vx = c.x - ex, vy = c.y + .6 - ey, vz = c.z - ez, d = Math.hypot(vx, vy, vz); if (d > 4.2) continue; if ((vx * f[0] + vy * f[1] + vz * f[2]) / d < .82) continue; if (d < md) { md = d; mejor = c; } }
+    return mejor;
+  }
   function moverMonstruos(dt) {
+    moverCriaturas(dt);
     if (golpeCd > 0) golpeCd -= dt; if (invJug > 0) invJug -= dt;
     if (desmayado > 0) { desmayado -= dt; if (desmayado <= 0) desmayoEl.style.display = "none"; return; }
     if (empuje) { empuje.t -= dt; const nx = jug.x + empuje.x * dt, nz = jug.z + empuje.z * dt; if (!choca(nx, jug.y, jug.z)) jug.x = nx; if (!choca(jug.x, jug.y, nz)) jug.z = nz; if (empuje.t <= 0) empuje = null; }
@@ -1430,8 +1484,8 @@ export function iniciarMundo3D(host, ctx) {
     }
   }
   function dibujarMonstruos(cielo, tt) {
-    if (!mons.length) return; prepararPC(cielo, false);
-    for (const m of mons) {
+    if (!mons.length && !cria.length) return; prepararPC(cielo, false);
+    for (const m of mons.concat(cria)) {
       if (Math.hypot(m.x - jug.x, m.z - jug.z) > 60) continue;
       const def = m.def, sw = Math.sin(m.fase) * .8 * m.amp, flota = def.flota ? .35 + Math.sin(tt * 2 + m.fase) * .12 : 0;
       const sq = m.tipo === "limo" ? 1 + Math.sin(m.fase) * .12 * (m.amp + .3) : 1, lung = m.lunge > 0 ? Math.sin(m.lunge / .3 * Math.PI) * .35 : 0;
@@ -1615,10 +1669,11 @@ export function iniciarMundo3D(host, ctx) {
     actualizarNpcs: (lista) => montarNpcs(lista),
     setOtros: (lista) => setOtros(lista),
     setParcelas: (lista) => setParcelas(lista), irAMiParcela: () => irAMiParcela(), verParcelaAjena: () => verParcelaAjena(), setControl: (o) => { if (o && "giro" in o) control.giro = !!o.giro; },
+    criaturaFin: (id, viva) => { const i = cria.findIndex((c) => c.id === id); if (i < 0) return; if (viva) cria[i].lock = false; else cria.splice(i, 1); },
     setVida: (o) => { if (o && "monstruos" in o) { monActivo = !!o.monstruos; if (!monActivo) mons.length = 0; } },
     desmayarse: () => desmayarse(),
     posicion: () => ({ x: jug.x, y: jug.y, z: jug.z, yaw: jug.yaw }),
-    _debug: { mons, aparecerMonstruo, ponerMonstruo: (tipo, x, z) => { const def = MONSTRUOS[tipo], y = sueloPara(x, z, jug.y); if (!def || y == null) return null; const m = { tipo, def, x, y, z, h: 0, hp: def.hp, flash: 0, cd: 1.2, lunge: 0, fase: 0, amp: 0, kb: null, quema: 0 }; mons.push(m); return m; }, golpearMonstruo, jug, apuntar, get, picarAhora: (v) => { picar = v; }, poner, animales, ambiente, sonido },
+    _debug: { cria, ponerCriatura: (n, x, z) => { const def = CRIATURAS[n], y = sueloPara(x, z, jug.y); if (!def || y == null) return null; const c = { id: criId++, tipo: "cr" + n, num: n, def, x, y, z, h: 0, hp: 1, flash: 0, lunge: 0, fase: 0, amp: 0, obj: null, espera: 99, avisada: true, vida: 1e9, lock: false }; cria.push(c); return c; }, mons, aparecerMonstruo, ponerMonstruo: (tipo, x, z) => { const def = MONSTRUOS[tipo], y = sueloPara(x, z, jug.y); if (!def || y == null) return null; const m = { tipo, def, x, y, z, h: 0, hp: def.hp, flash: 0, cd: 1.2, lunge: 0, fase: 0, amp: 0, kb: null, quema: 0 }; mons.push(m); return m; }, golpearMonstruo, jug, apuntar, get, picarAhora: (v) => { picar = v; }, poner, animales, ambiente, sonido },
     cerrar: () => {
       vivo = false; cancelAnimationFrame(raf); ro.disconnect();
       escuchas.forEach(([o, e, f, op]) => o.removeEventListener(e, f, op));
