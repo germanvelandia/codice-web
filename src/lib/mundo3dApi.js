@@ -25,6 +25,8 @@ export const cosecharMundo3D = (est, x, y, z) => llamar("mundo3d_cosechar", { p_
 export const fetchCultivosMundo3D = async (est, grado) => (await llamar("mundo3d_cultivos_ver", { p_est: est, p_grado: String(grado) })) || [];
 export const venderMundo3D = (est, item, n) => llamar("mundo3d_vender", { p_est: est, p_item: item, p_n: n });
 export const fetchMercadoHoyMundo3D = (est) => llamar("mundo3d_mercado_hoy", { p_est: est });
+// Comer (SQL 146): devuelve { vida, cura, cantidad }
+export const comerMundo3D = (est, item) => llamar("mundo3d_comer", { p_est: est, p_item: item });
 export const fabricarMundo3D = (est, sale) => llamar("mundo3d_fabricar", { p_est: est, p_sale: sale });
 
 // Presencia: registra mi posición y devuelve a los compañeros conectados en ese mundo (SQL 136)
