@@ -77,6 +77,7 @@ export function crearSonido(inicial = {}) {
     if (tipo === "vaca") { tono(150, 105, .85, { tipo: "sawtooth", g: .09, vib: 5, ataque: .08 }); ruido(.8, { tipo: "lowpass", f: 400, g: .04 }); }
     else if (tipo === "oveja") { tono(420, 360, .6, { tipo: "sawtooth", g: .06, vib: 28, ataque: .05 }); tono(430, 380, .5, { tipo: "triangle", g: .04, vib: 24, t0: .02 }); }
     else if (tipo === "cerdo") { for (let i = 0; i < 2; i++) { ruido(.14, { tipo: "bandpass", f: 330, g: .13, q: 3, ataque: .02, f2: 250 }); tono(240, 190, .13, { tipo: "square", g: .03, t0: i * .2 }); } }
+    else if (tipo === "conejo") { for (let i = 0; i < 2; i++) tono(rnd(1500, 1900), rnd(1900, 2400), .05, { tipo: "triangle", g: .04, t0: i * .08 }); }
     else if (tipo === "gallina") { for (let i = 0; i < 4; i++) tono(rnd(900, 1300), rnd(1100, 1700), .08, { tipo: "triangle", g: .06, t0: i * .11 }); }
   };
 
