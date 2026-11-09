@@ -16,7 +16,8 @@ function Icono({ item }) {
   return <canvas ref={ref} width={16} height={16} style={{ width: 30, height: 30, imageRendering: "pixelated" }} />;
 }
 
-const GRUPOS_REC = ["Bloques básicos", "Materiales", "Herramientas", "Armas", "Armaduras", "Granja", "Comida", "Hornos y cobre", "Dimensiones", "Bloques valiosos", "Lanas"];
+import { PanelBatalla, PanelColeccion } from "./Criaturas3D";
+const GRUPOS_REC = ["Bloques básicos", "Materiales", "Herramientas", "Armas", "Armaduras", "Granja", "Comida", "Hornos y cobre", "Criaturas", "Dimensiones", "Bloques valiosos", "Lanas"];
 // Mercado de la aldea: se venden cosechas y minerales por oro (el servidor limita cuánto se gana por día)
 function PanelMercado({ inv, visitando, restante, alVender }) {
   const lista = MERCADO.filter((m) => (inv[m.item] || 0) > 0);
@@ -132,6 +133,7 @@ export default function Mundo3D({ estudianteInfo }) {
   const [snd, setSnd] = useState(leerSnd), sndRef = useRef(null); sndRef.current = snd;
   const puertasRef = useRef({}), estado_ref = useRef({});
   const [ajustes, setAjustes] = useState(false);
+  const [batalla, setBatalla] = useState(null), [colec, setColec] = useState(false), critRef = useRef(0);
   const parcelasRef = useRef([]), [parcelas, setParcelas] = useState([]);
   const [giro, setGiro] = useState(() => { const v = leerGiro(); return v == null ? (typeof matchMedia === "function" && matchMedia("(pointer:coarse)").matches) : v; }), giroRef = useRef(false); giroRef.current = giro;
   const [chat, setChat] = useState(false), [cerca, setCerca] = useState(null), chatRef = useRef(null);
@@ -276,6 +278,9 @@ export default function Mundo3D({ estudianteInfo }) {
     try { const r = await api.golpeMundo3D(est, "error"); if (r && typeof r.vida === "number") setVida(r.vida); if (r && r.desmayo) { setDialogo(null); if (ctl.current) { ctl.current.pausar(false); ctl.current.desmayarse(); } } return r; } catch (_) { return null; }
   };
   useEffect(() => { guardarSnd(snd); if (ctl.current) ctl.current.setSonido(snd); }, [snd, listo]);
+  const refrescarInv = () => api.fetchEstadoMundo3D(est).then((e) => { if (e && e.inventario) fijarInv(Object.fromEntries(Object.entries(e.inventario).map(([k, v]) => [Number(k), v]))); }).catch(() => {});
+  const abrirColec = (v) => { setColec(v); if (v) { setAjustes(false); setMochila(false); } ctl.current && ctl.current.pausar(v); };
+  const finBatalla = (r, extra) => { const id = critRef.current; setBatalla(null); if (ctl.current) { ctl.current.criaturaFin(id, false); ctl.current.pausar(false); } if (r === "capturada" && extra && extra.xp) setProg((p) => (p.xp == null ? p : { xp: p.xp + extra.xp, oro: p.oro + extra.oro })); };
   const cerrarDialogo = () => { setDialogo(null); ctl.current && ctl.current.pausar(false); };
   const alHecha = (id, r) => { setDatos((d) => ({ ...d, hechas: new Set([...d.hechas, id]) })); if (r && typeof r.xp === "number") setProg({ xp: r.xp, oro: r.oro }); };
   const alInsignia = (zonaKey, r) => setDatos((d) => ({ ...d, duelos: { ...d.duelos, insignias: d.duelos.insignias.includes(zonaKey) ? d.duelos.insignias : [...d.duelos.insignias, zonaKey] } }));
@@ -321,6 +326,11 @@ export default function Mundo3D({ estudianteInfo }) {
           alSeleccion: (i) => { selRef.current = i; setSel(i); },
           alZona: setZona, alError: (t) => avisar(t),
           puertas: enDim ? {} : puertasRef.current, sonido: sndRef.current,
+          alCriatura: async (tipo, id) => {
+            critRef.current = id; if (ctl.current) ctl.current.pausar(true);
+            try { const r = await api.encontrarCriaturaMundo3D(est, tipo); setBatalla(r); }
+            catch (er) { const m = String(er.message || ""); if (ctl.current) { ctl.current.pausar(false); ctl.current.criaturaFin(id, !/bloqueada|su_mundo/.test(m)); } avisar(/bloqueada/.test(m) ? "Esa criatura aún es demasiado fuerte: vence a un guardián de zona primero." : /desmayado/.test(m) ? "Estás sin vida: espera a recuperarte." : /demasiado_rapido/.test(m) ? "Más despacio…" : "No se pudo iniciar la batalla (¿falta el SQL 148?)."); }
+          },
           alDim: async (d) => {
             if (visitandoRef.current) { avisar("De visita no puedes cruzar al Reino de Brasas."); return; }
             try { await api.viajarDimMundo3D(est, d); abrirVelo(d ? "🔥 Cruzando al Reino de Brasas…" : "🌀 Volviendo al mundo principal…"); setDim(d); }
@@ -448,6 +458,7 @@ export default function Mundo3D({ estudianteInfo }) {
           <>
             <div className="m3d-barra">
               <button onClick={ciclarCamara} title="Cambiar cámara (tecla V)">📷<span className="t"> {MODOS_CAM[cam.modo]}</span></button>
+              <button onClick={() => abrirColec(true)} title="Mis criaturas capturadas" disabled={visitando}>🐾<span className="t"> Criaturas</span></button>
               <button onClick={verParcelas} title="Ver las parcelas de mis compañeros" disabled={visitando || parcelas.filter((p) => !p.mia).length === 0}>👀<span className="t"> Ver parcelas</span></button>
               <button onClick={irParcela} title="Ir a mi parcela" disabled={visitando || !parcelas.some((p) => p.mia)}>🏠<span className="t"> Mi parcela</span></button>
               <button onClick={() => setChat((c) => !c)} aria-expanded={chat} title="Chat rápido (tecla T)">💬<span className="t"> Chat</span></button>
@@ -510,6 +521,8 @@ export default function Mundo3D({ estudianteInfo }) {
             )}
           </>
         )}
+        {batalla && <PanelBatalla est={est} inicial={batalla} capsulas={inv[120] || 0} alFin={finBatalla} alInv={refrescarInv} />}
+        {colec && <PanelColeccion est={est} cerrar={() => abrirColec(false)} />}
         <PanelAldea dialogo={dialogo} datos={datos} estado={estado} est={est} alHecha={alHecha} alHechoAcertijo={alHechoAcertijo} alInsignia={alInsignia} alDerrota={alDerrota} alFallo={alFallo} cerrar={cerrarDialogo} />
       </div>
       {entrado && !listo && !velo && <p className="text-xs text-slate-400">Preparando el mundo…</p>}
