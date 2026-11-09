@@ -16,7 +16,7 @@ function Icono({ item }) {
   return <canvas ref={ref} width={16} height={16} style={{ width: 30, height: 30, imageRendering: "pixelated" }} />;
 }
 
-const GRUPOS_REC = ["Bloques básicos", "Materiales", "Herramientas", "Armas", "Armaduras", "Granja", "Comida", "Hornos y cobre", "Bloques valiosos", "Lanas"];
+const GRUPOS_REC = ["Bloques básicos", "Materiales", "Herramientas", "Armas", "Armaduras", "Granja", "Comida", "Hornos y cobre", "Dimensiones", "Bloques valiosos", "Lanas"];
 // Mercado de la aldea: se venden cosechas y minerales por oro (el servidor limita cuánto se gana por día)
 function PanelMercado({ inv, visitando, restante, alVender }) {
   const lista = MERCADO.filter((m) => (inv[m.item] || 0) > 0);
@@ -114,6 +114,7 @@ export default function Mundo3D({ estudianteInfo }) {
   const [sel, setSel] = useState(1);
   const [grados, setGrados] = useState(null);
   const [gradoVer, setGradoVer] = useState(miGrado);
+  const [dim, setDim] = useState(0), dimRef = useRef(0); dimRef.current = dim; const sincDim = useRef(false);
   const [zona, setZona] = useState("");
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
@@ -252,7 +253,7 @@ export default function Mundo3D({ estudianteInfo }) {
   // compañeros conectados: se envía mi posición y se reciben las de los demás (cada 2 s; en pausa si la pestaña está oculta)
   const [conectados, setConectados] = useState(0);
   useEffect(() => {
-    if (!est || !listo || !gradoVer) return; let vivo = true, busy = false;
+    if (!est || !listo || !gradoVer || dim) return; let vivo = true, busy = false;
     const tic = async () => {
       if (busy || document.hidden || !ctl.current) return; busy = true;
       try {
@@ -262,7 +263,7 @@ export default function Mundo3D({ estudianteInfo }) {
     };
     tic(); const r = setInterval(tic, 2000);
     return () => { vivo = false; clearInterval(r); setConectados(0); api.salirMundo3D(est).catch(() => {}); };
-  }, [est, listo, gradoVer]); // eslint-disable-line
+  }, [est, listo, gradoVer, dim]); // eslint-disable-line
   // vida del personaje (la misma de CÓDICE): se lee al entrar y cada 25 s para ver la recuperación lenta
   useEffect(() => {
     if (!listo || !est) return; let vivo = true;
@@ -299,12 +300,14 @@ export default function Mundo3D({ estudianteInfo }) {
     let vivo = true; let relojPoll = null; let c = null; setListo(false);
     (async () => {
       try {
-        const filas = await api.fetchCambiosMundo3D(est, gradoVer);
+        if (!sincDim.current) { sincDim.current = true; try { await api.viajarDimMundo3D(est, 0); } catch (_) { /* sin el SQL 147 */ } } // al entrar siempre se empieza en el mundo principal
+        const enDim = gradoVer === miGrado ? dim : 0, llave = enDim ? gradoVer + "~" + enDim : gradoVer;
+        const filas = await api.fetchCambiosMundo3D(est, llave);
         if (!vivo) return;
         ultCambio.current = filas.length ? filas[filas.length - 1].actualizado : null;
         host.current.innerHTML = "";
         c = iniciarMundo3D(host.current, {
-          grado: gradoVer, yo: est, soloMirar: gradoVer !== miGrado, portales, cambios: filas, npcs: npcsRef.current,
+          grado: gradoVer, dim: enDim, yo: est, soloMirar: gradoVer !== miGrado, portales: enDim ? [] : portales, cambios: filas, npcs: enDim ? [] : npcsRef.current,
           avatar: avatarRef.current, camara: camRef.current.modo,
           alCamara: (m) => setCam((c) => ({ ...c, modo: m })),
           alNpc: (n) => setDialogo(n),
@@ -317,18 +320,23 @@ export default function Mundo3D({ estudianteInfo }) {
           alComer: () => comerRef.current && comerRef.current(),
           alSeleccion: (i) => { selRef.current = i; setSel(i); },
           alZona: setZona, alError: (t) => avisar(t),
-          puertas: puertasRef.current, sonido: sndRef.current,
+          puertas: enDim ? {} : puertasRef.current, sonido: sndRef.current,
+          alDim: async (d) => {
+            if (visitandoRef.current) { avisar("De visita no puedes cruzar al Reino de Brasas."); return; }
+            try { await api.viajarDimMundo3D(est, d); abrirVelo(d ? "🔥 Cruzando al Reino de Brasas…" : "🌀 Volviendo al mundo principal…"); setDim(d); }
+            catch (er) { const m = String(er.message || ""); avisar(/sin_llave/.test(m) ? "🔑 Necesitas la llave de brasas (6 hierro + 2 oro) para entrar. Se fabrica en la mesa." : /desmayado/.test(m) ? "Estás sin vida: espera a recuperarte." : "No se pudo cruzar el portal."); }
+          },
           alInventario: () => mochilaRef.current && mochilaRef.current(true), alMesa: () => { setPestana("fabricar"); mochilaRef.current && mochilaRef.current(true); },
-          parcelas: visitandoRef.current ? [] : parcelasRef.current, giroPalanca: giroRef.current,
+          parcelas: visitandoRef.current || enDim ? [] : parcelasRef.current, giroPalanca: giroRef.current,
           alChat: () => chatRef.current && chatRef.current(), alCerca: (n) => setCerca(n),
-          alDanio: (tipo) => api.golpeMundo3D(est, "monstruo", tipo).then((r) => { if (r && r.armadura) usarHerr(r.armadura); return r; }), alVida: (r) => { if (r && typeof r.vida === "number") setVida(r.vida); }, alRevivir: () => api.revivirMundo3D(est),
-          alMonstruoVencido: async (tipo) => { api.gastarArmaMundo3D(est).then((d) => { if (d) usarHerr(d); }).catch(() => {}); const r = await api.monstruoVencidoMundo3D(est, tipo); if (r && (r.xp || r.oro)) setProg((p) => (p.xp == null ? p : { xp: p.xp + r.xp, oro: p.oro + r.oro })); return r; },
+          alDanio: (tipo) => (tipo === "lava" ? api.golpeMundo3D(est, "lava") : api.golpeMundo3D(est, "monstruo", tipo)).then((r) => { if (r && r.armadura) usarHerr(r.armadura); return r; }), alVida: (r) => { if (r && typeof r.vida === "number") setVida(r.vida); }, alRevivir: () => api.revivirMundo3D(est).then((r) => { if (dimRef.current) { abrirVelo("💫 Despiertas en la aldea…"); setDim(0); } return r; }),
+          alMonstruoVencido: async (tipo) => { api.gastarArmaMundo3D(est).then((d) => { if (d) usarHerr(d); }).catch(() => {}); const r = await api.monstruoVencidoMundo3D(est, tipo); if (r && (r.xp || r.oro)) setProg((p) => (p.xp == null ? p : { xp: p.xp + r.xp, oro: p.oro + r.oro })); if (r && (r.xp || r.oro)) api.fetchEstadoMundo3D(est).then((e) => { if (e && e.inventario) fijarInv(Object.fromEntries(Object.entries(e.inventario).map(([k, v]) => [Number(k), v]))); }).catch(() => {}); return r; },
           recolectar: async (tipo) => { const r = await api.recolectarMundo3D(est, tipo); if (r && r.item) fijarInv({ ...invRef.current, [r.item]: Math.min(999, (invRef.current[r.item] || 0) + (r.n || 1)) }); return r; },
           alPuerta: (k) => { const z = ZONAS.find((x) => x.key === k); const e = estado_ref.current[k] || {}; avisar("🔒 El portón de «" + (z ? z.nombre : k) + "» está cerrado." + (e.cumplido === false ? " Completa más misiones de la zona anterior." : " Vence al guardián de la zona anterior.")); },
           alPortal: (id) => { const t = "Viajando al mundo de " + (String(id) === miGrado ? "tu curso" : "curso " + id) + "…"; abrirVelo(t); setGradoVer(String(id)); },
         });
         c.seleccionar(selRef.current); aplicarCam(c, camRef.current); ctl.current = c; setListo(true);
-        const verCultivos = () => api.fetchCultivosMundo3D(est, gradoVer).then((l) => { if (vivo && ctl.current === c) c.aplicarCultivos(l); }).catch(() => {});
+        const verCultivos = () => enDim ? Promise.resolve() : api.fetchCultivosMundo3D(est, gradoVer).then((l) => { if (vivo && ctl.current === c) c.aplicarCultivos(l); }).catch(() => {});
         verCultivos();
         // ver lo que construyen los compañeros mientras juegas
         let vuelta = 0;
@@ -336,14 +344,14 @@ export default function Mundo3D({ estudianteInfo }) {
           if (document.hidden) return;
           if (++vuelta % 2 === 0) verCultivos();
           try {
-            const nuevas = await api.fetchCambiosMundo3D(est, gradoVer, ultCambio.current);
+            const nuevas = await api.fetchCambiosMundo3D(est, llave, ultCambio.current);
             if (nuevas.length && ctl.current === c) { ultCambio.current = nuevas[nuevas.length - 1].actualizado; c.aplicar(nuevas); }
           } catch (_) { /* se reintenta en el siguiente ciclo */ }
         }, 8000);
       } catch (er) { if (vivo) setError(er.message || "No se pudo cargar el mundo."); }
     })();
     return () => { vivo = false; clearInterval(relojPoll); if (c) c.cerrar(); if (ctl.current === c) ctl.current = null; };
-  }, [est, grados, gradoVer, entrado]); // eslint-disable-line
+  }, [est, grados, gradoVer, entrado, dim]); // eslint-disable-line
 
   // pantalla completa: la del navegador si existe; si no (por ejemplo en iPhone) se amplía sobre toda la página
   useEffect(() => {
