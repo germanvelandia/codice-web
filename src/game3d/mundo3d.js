@@ -673,8 +673,11 @@ export function iniciarMundo3D(host, ctx) {
 .m3d-otro{position:absolute;left:0;top:0;transform:translate(-50%,-100%);font:600 12px system-ui,sans-serif;color:#fff;background:#0369a1cc;padding:2px 8px;border-radius:10px;pointer-events:none;white-space:nowrap}
 .m3d-hablar{position:absolute;left:50%;bottom:44px;transform:translateX(-50%);font:600 13px system-ui,sans-serif;color:#fff;background:#000a;border:1px solid #fff6;padding:6px 12px;border-radius:10px;pointer-events:none;display:none}
 .m3d-acc button.hab{display:none;background:#b45309cc}
-@media (pointer:coarse){.m3d-joy{display:block}.m3d-acc{display:flex}.m3d-hablar{display:none!important}}
-@media (pointer:coarse) and (orientation:portrait){.m3d-joy{left:12px;bottom:18px;width:120px;height:120px}.m3d-joy i{left:40px;top:40px}.m3d-acc{flex-direction:row;flex-wrap:wrap;justify-content:flex-end;width:154px;right:10px;bottom:18px}.m3d-acc button{width:72px;height:56px;font-size:13px;font-weight:700}.m3d-ayuda{bottom:150px}}
+.m3d-acc{align-items:flex-end}.m3d-acc button[data-k=salto]{width:78px;height:78px;border-radius:50%;font-size:26px;order:3;background:#0009}.m3d-acc button[data-k=agachar],.m3d-acc button[data-k=inv]{width:56px;height:56px;border-radius:50%;font-size:22px}
+.m3d-acc button[data-k=agachar].on{background:#1d4ed8cc;border-color:#fff}.m3d-acc button[data-k=inv]{order:1}.m3d-acc button[data-k=agachar]{order:2}.m3d-acc button.hab{order:0;border-radius:12px}
+.m3d-acc.sin-pp button[data-k=picar],.m3d-acc.sin-pp button[data-k=poner]{display:none}.m3d-hot{max-width:94%;overflow-x:auto}
+@media (pointer:coarse){.m3d-joy{display:block;bottom:84px}.m3d-acc{display:flex;bottom:84px}.m3d-hablar{display:none!important}}
+@media (pointer:coarse) and (orientation:portrait){.m3d-joy{left:12px;bottom:84px;width:120px;height:120px}.m3d-joy i{left:40px;top:40px}.m3d-acc{right:10px;bottom:84px}.m3d-ayuda{bottom:210px}}
 .m3d,.m3d canvas{-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}`;
   const raiz = document.createElement("div"); raiz.className = "m3d";
   const cv = document.createElement("canvas"); cv.width = 800; cv.height = 450; cv.setAttribute("aria-label", "Mundo 3D de bloques");
@@ -683,7 +686,8 @@ export function iniciarMundo3D(host, ctx) {
   const ayuda = document.createElement("div"); ayuda.className = "m3d-ayuda"; ayuda.textContent = esTactil ? "Toca para jugar" : "Haz clic para jugar";
   const joyEl = document.createElement("div"); joyEl.className = "m3d-joy"; joyEl.innerHTML = "<i></i>";
   const acc = document.createElement("div"); acc.className = "m3d-acc";
-  acc.innerHTML = '<button data-k="salto">SALTAR</button><button data-k="picar">PICAR</button><button data-k="poner">PONER</button><button data-k="hablar" class="hab">HABLAR</button>';
+  acc.innerHTML = '<button data-k="salto" aria-label="Saltar">⬆</button><button data-k="agachar" aria-label="Agacharse">🧎</button><button data-k="inv" aria-label="Inventario">🎒</button><button data-k="picar">PICAR</button><button data-k="poner">PONER</button><button data-k="hablar" class="hab">USAR</button>';
+  acc.classList.toggle("sin-pp", ctx.botonesPP !== true);
   const hablarEl = document.createElement("div"); hablarEl.className = "m3d-hablar";
   estilo.textContent += ".m3d-dano{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,rgba(255,0,0,0) 38%,rgba(190,0,0,.7) 100%);opacity:0;transition:opacity .45s ease-out}.m3d-dano.on{opacity:1;transition:none}.m3d-desmayo{position:absolute;inset:0;display:none;align-items:center;justify-content:center;text-align:center;background:#000d;color:#fff;font:700 20px system-ui,sans-serif;z-index:5;padding:20px}";
   const rayoEl = document.createElement("div"); rayoEl.style.cssText = "position:absolute;inset:0;pointer-events:none;background:#eaf2ff;opacity:0";
@@ -909,7 +913,7 @@ export function iniciarMundo3D(host, ctx) {
   const perspectiva = (fov, asp, n, f) => { const t = 1 / Math.tan(fov / 2); return [t / asp, 0, 0, 0, 0, t, 0, 0, 0, 0, (f + n) / (n - f), -1, 0, 0, 2 * f * n / (n - f), 0]; };
   const mul = (a, b) => { const o = new Array(16); for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) { let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k]; o[c * 4 + r] = s; } return o; };
   const jug = { x: CENTRO + .5, y: 13.1, z: CENTRO + 6.5, vx: 0, vy: 0, vz: 0, suelo: false, yaw: 0, pitch: 0 };
-  const ojo = () => jug.y + 1.6;
+  const ojo = () => jug.y + (agachado ? 1.35 : 1.6);
   // cámara: 0 = primera persona, 1 = tercera (detrás del personaje), 2 = de frente (para ver cómo se ve tu avatar)
   const cam = { modo: ctx.camara || 0, dist: 4.5, fov: 1.2, sens: 1 };
   function camaraActual() {
@@ -930,8 +934,8 @@ export function iniciarMundo3D(host, ctx) {
   // ----- física -----
   const RAD = .3, ALTO = 1.75;
   const choca = (x, y, z) => { for (let yy = Math.floor(y); yy <= Math.floor(y + ALTO - .001); yy++) for (let zz = Math.floor(z - RAD); zz <= Math.floor(z + RAD); zz++) for (let xx = Math.floor(x - RAD); xx <= Math.floor(x + RAD); xx++) if (solido(xx, yy, zz)) return true; return false; };
-  const tec = {}; const joy = { x: 0, y: 0 }; const control = { giro: !!ctx.giroPalanca };
-  let enAgua = false, enLava = false;
+  const tec = {}; const joy = { x: 0, y: 0 }; const control = { giro: !!ctx.giroPalanca }; let sprintW = false, ultW = 0;
+  let enAgua = false, enLava = false, agachado = false;
   function actualizar(dt) {
     if (ctx.vuelo) { // modo observador (docente): vuela sin chocar; W A S D siguen la mirada, espacio sube, mayúscula baja, Ctrl acelera
       const f = adelante(), cy = Math.cos(jug.yaw), sy = Math.sin(jug.yaw), v = tec.control ? 45 : 16;
@@ -946,12 +950,13 @@ export function iniciarMundo3D(host, ctx) {
     let ax = (tec.d ? 1 : 0) - (tec.a ? 1 : 0) + jx, az = (tec.s ? 1 : 0) - (tec.w ? 1 : 0) + joy.y;
     const l = Math.hypot(ax, az); if (l > 1) { ax /= l; az /= l; }
     { const bj = get(Math.floor(jug.x), Math.floor(jug.y + .9), Math.floor(jug.z)); enLava = bj === LAVA || get(Math.floor(jug.x), Math.floor(jug.y + .1), Math.floor(jug.z)) === LAVA; enAgua = bj === AGUA || enLava; }
-    const cy = Math.cos(jug.yaw), sy = Math.sin(jug.yaw), v = enAgua ? 2.4 : ((tec.shift || tec.control || joy.corre) ? 6.4 : 4.3);
+    const cy = Math.cos(jug.yaw), sy = Math.sin(jug.yaw); agachado = !!tec.shift && !enAgua; if (!(tec.w || joy.y < -.3)) sprintW = false; const v = enAgua ? 2.4 : agachado ? 1.7 : ((tec.control || sprintW || joy.corre) ? 6.4 : 4.3);
     jug.vx = (ax * cy + az * sy) * v; jug.vz = (-ax * sy + az * cy) * v;
     if (enAgua) { jug.vy = Math.max(jug.vy - 8 * dt, -2.5); if (tec[" "]) jug.vy = 3.2; }
     else { if (tec[" "] && jug.suelo) { jug.vy = 8.6; jug.suelo = false; sonido.salto(); } jug.vy = Math.max(jug.vy - 26 * dt, -30); }
-    let nx = jug.x + jug.vx * dt; if (!choca(nx, jug.y, jug.z)) jug.x = nx;
-    let nz = jug.z + jug.vz * dt; if (!choca(jug.x, jug.y, nz)) jug.z = nz;
+    const sinBorde = (x, z) => !(agachado && jug.suelo) || solido(Math.floor(x), Math.floor(jug.y - .05), Math.floor(z)); // agachado no te caes del borde
+    let nx = jug.x + jug.vx * dt; if (!choca(nx, jug.y, jug.z) && sinBorde(nx, jug.z)) jug.x = nx;
+    let nz = jug.z + jug.vz * dt; if (!choca(jug.x, jug.y, nz) && sinBorde(jug.x, nz)) jug.z = nz;
     let ny = jug.y + jug.vy * dt; jug.suelo = false;
     if (!choca(jug.x, ny, jug.z)) jug.y = ny; else { if (jug.vy < 0) { jug.y = Math.floor(ny) + 1.001; jug.suelo = true; } jug.vy = 0; }
     jug.x = Math.max(.5, Math.min(SX - .5, jug.x)); jug.z = Math.max(.5, Math.min(SZ - .5, jug.z));
@@ -1077,11 +1082,11 @@ export function iniciarMundo3D(host, ctx) {
     }
     cerrarPC();
   }
-  function limpiarEntrada() { for (const k in tec) tec[k] = false; picar = false; joy.x = joy.y = 0; }
+  function limpiarEntrada() { for (const k in tec) tec[k] = false; sprintW = false; ponerMant = false; { const bs = acc.querySelector('[data-k=agachar]'); if (bs) bs.classList.remove('on'); } picar = false; joy.x = joy.y = 0; }
   let animalCer = null, avisoPico = false;
   // lo que se puede llevar en la mano (bloques que tienes, o los básicos; más semillas y azadas)
   const listaMano = (extra) => [...COLOCABLES.filter((b) => ctx.cantidad(b) > 0 || b <= 9 || b === extra), ...USABLES.filter((b) => ctx.cantidad(b) > 0 || b === extra)];
-  const ACCION_ANIMAL = { oveja: "E · Esquilar a la ", gallina: "E · Recoger huevo de la ", vaca: "E · Ordeñar a la ", cerdo: "E · Buscar papas con el ", conejo: "E · Pedir una zanahoria al " };
+  const U = esTactil ? "Toca" : "Clic derecho", ACCION_ANIMAL = { oveja: U + " · Esquilar a la ", gallina: U + " · Recoger huevo de la ", vaca: U + " · Ordeñar a la ", cerdo: U + " · Buscar papas con el ", conejo: U + " · Pedir una zanahoria al " };
   function hablar() {
     if (pausado) return;
     if (!cercano && !animalCer && mesaCer) { try { ctx.alMesa && ctx.alMesa(); } catch (_) {} return; }
@@ -1125,6 +1130,16 @@ export function iniciarMundo3D(host, ctx) {
         if (!vivo) return; mundo[idx(x, y, z)] = b; marcar(x, z); aviso(mensajeError(e));
       }).finally(() => { ocupado = false; });
     }
+  }
+  // «usar» (clic derecho / toque): habla con un personaje o animal, abre la mesa, come, o pone el bloque elegido. Como en Minecraft.
+  let ponerMant = false, ponerCd = 0;
+  function mesaApuntada() { if (!mesaCer) return false; const h = apuntar(); return !!h && Math.hypot(h.x + .5 - mesaCer.x, h.z + .5 - mesaCer.z) < 1.9; }
+  function usar() {
+    if (pausado) return;
+    if (golpearMonstruo()) return;
+    if (cercano || animalCer || mesaApuntada()) { hablar(); return; }
+    if (COMIDA[sel] && ctx.cantidad(sel) > 0) { try { ctx.alComer && ctx.alComer(); } catch (_) {} return; }
+    poner();
   }
   function poner() {
     if (golpearMonstruo()) return;
@@ -1190,12 +1205,13 @@ export function iniciarMundo3D(host, ctx) {
   const on = (obj, ev, fn, op) => { obj.addEventListener(ev, fn, op); escuchas.push([obj, ev, fn, op]); };
   on(window, "keydown", (e) => {
     if (pausado || (!jugando && !bloqueado())) return;
-    const k = e.key.toLowerCase(); if (k === "e") { hablar(); return; } if (k === "t") { try { ctx.alChat && ctx.alChat(); } catch (_) {} return; } if (k === "r") { try { ctx.alComer && ctx.alComer(); } catch (_) {} return; } if (k === "i" || k === "b") { try { ctx.alInventario && ctx.alInventario(); } catch (_) {} return; } if (k === "v") { cam.modo = (cam.modo + 1) % 3; try { ctx.alCamara && ctx.alCamara(cam.modo); } catch (_) {} return; } if ([" ", "arrowup", "arrowdown"].includes(k)) e.preventDefault();
+    const k = e.key.toLowerCase(); if (k === "e") { try { ctx.alInventario && ctx.alInventario(); } catch (_) {} return; } if (k === "t") { try { ctx.alChat && ctx.alChat(); } catch (_) {} return; } if (k === "r") { try { ctx.alComer && ctx.alComer(); } catch (_) {} return; } if (k === "i" || k === "b") { try { ctx.alInventario && ctx.alInventario(); } catch (_) {} return; } if (k === "v") { cam.modo = (cam.modo + 1) % 3; try { ctx.alCamara && ctx.alCamara(cam.modo); } catch (_) {} return; } if ([" ", "arrowup", "arrowdown"].includes(k)) e.preventDefault();
+    if (k === "w" && !e.repeat) { const t = performance.now(); if (t - ultW < 300) sprintW = true; ultW = t; }
     tec[mapaTecla(k)] = true; if (k === "f" && sinBloqueo) picar = true;
     const n = +e.key; if (n >= 1 && n <= 9) { const mios = listaMano(); if (mios[n - 1]) seleccionar(mios[n - 1]); }
   });
   on(window, "keyup", (e) => { const k = e.key.toLowerCase(); tec[mapaTecla(k)] = false; if (k === "f" && sinBloqueo) picar = false; });
-  on(window, "blur", () => { for (const k in tec) tec[k] = false; picar = false; });
+  on(window, "blur", () => { for (const k in tec) tec[k] = false; picar = false; ponerMant = false; sprintW = false; });
   on(cv, "contextmenu", (e) => e.preventDefault());
   const toques = {};
   on(cv, "pointerdown", (e) => {
@@ -1207,11 +1223,11 @@ export function iniciarMundo3D(host, ctx) {
       return;
     }
     if (!bloqueado() && !sinBloqueo) { try { cv.requestPointerLock(); } catch (_) { sinBloqueo = true; } jugando = true; ayuda.textContent = ""; }
-    if (e.button === 2) { poner(); return; }
+    if (e.button === 2) { usar(); ponerMant = true; ponerCd = performance.now() + 350; return; }
     if (e.button === 0) { if (sinBloqueo) arrastraRaton = true; else picar = true; }
   });
   on(document, "pointerlockerror", () => { sinBloqueo = true; ayuda.textContent = "Arrastra para mirar · mantén F para picar · clic derecho para poner"; });
-  on(window, "pointerup", (e) => { if (e.pointerType !== "touch") { arrastraRaton = false; if (e.button === 0 && !sinBloqueo) picar = false; } });
+  on(window, "pointerup", (e) => { if (e.pointerType !== "touch") { arrastraRaton = false; if (e.button === 2) ponerMant = false; if (e.button === 0 && !sinBloqueo) picar = false; } });
   on(window, "mousemove", (e) => { if (bloqueado()) mirar(e.movementX, e.movementY, .0024); else if (arrastraRaton) mirar(e.movementX, e.movementY, .004); });
   on(document, "pointerlockchange", () => { if (!bloqueado()) { picar = false; if (jugando && !sinBloqueo) ayuda.textContent = "Haz clic para seguir jugando"; } });
   on(cv, "wheel", (e) => { e.preventDefault(); const mios = listaMano(sel), i = Math.max(0, mios.indexOf(sel)); seleccionar(mios[(i + (e.deltaY > 0 ? 1 : -1) + mios.length) % mios.length]); }, { passive: false });
@@ -1220,11 +1236,11 @@ export function iniciarMundo3D(host, ctx) {
     if (t.izq) { const dx = e.clientX - t.ox, dy = e.clientY - t.oy, m = Math.min(1, Math.hypot(dx, dy) / 45), a = Math.atan2(dy, dx); joy.corre = Math.hypot(dx, dy) > 80; joy.x = Math.cos(a) * m; joy.y = Math.sin(a) * m; joyEl.firstChild.style.transform = `translate(${joy.x * 30}px,${joy.y * 30}px)`; }
     else { if (!t.picando && Math.hypot(e.clientX - t.ox, e.clientY - t.oy) > 10) t.movio = true; mirar(e.clientX - t.x, e.clientY - t.y, .006); t.x = e.clientX; t.y = e.clientY; }
   });
-  const finT = (e) => { const t = toques[e.pointerId]; if (!t) return; if (t.izq) { joy.x = joy.y = 0; joy.corre = false; joyEl.firstChild.style.transform = ""; } else { clearTimeout(t.reloj); if (t.picando) picar = false; else if (!t.movio && e.type === "pointerup" && performance.now() - t.t0 < 300 && !pausado) poner(); } delete toques[e.pointerId]; };
+  const finT = (e) => { const t = toques[e.pointerId]; if (!t) return; if (t.izq) { joy.x = joy.y = 0; joy.corre = false; joyEl.firstChild.style.transform = ""; } else { clearTimeout(t.reloj); if (t.picando) picar = false; else if (!t.movio && e.type === "pointerup" && performance.now() - t.t0 < 300 && !pausado) usar(); } delete toques[e.pointerId]; };
   on(cv, "pointerup", finT); on(cv, "pointercancel", finT);
   acc.querySelectorAll("button").forEach((b) => {
     const k = b.dataset.k;
-    on(b, "pointerdown", (e) => { e.preventDefault(); if (k === "hablar") { hablar(); return; } if (pausado) return; jugando = true; ayuda.textContent = ""; if (k === "salto") tec[" "] = true; else if (k === "picar") picar = true; else poner(); });
+    on(b, "pointerdown", (e) => { e.preventDefault(); if (k === "hablar") { hablar(); return; } if (pausado) return; jugando = true; ayuda.textContent = ""; if (k === "salto") tec[" "] = true; else if (k === "agachar") { tec.shift = !tec.shift; b.classList.toggle("on", !!tec.shift); } else if (k === "inv") { try { ctx.alInventario && ctx.alInventario(); } catch (_) {} } else if (k === "picar") picar = true; else usar(); });
     const up = () => { if (k === "salto") tec[" "] = false; else if (k === "picar") picar = false; };
     on(b, "pointerup", up); on(b, "pointerleave", up); on(b, "pointercancel", up);
   });
@@ -1614,7 +1630,7 @@ export function iniciarMundo3D(host, ctx) {
     animalCer = null;
     if (!cercano && !pausado && !ctx.vuelo) { let mj = 3; for (const a of animales) { const dx = a.x - jug.x, dz = a.z - jug.z, dist = Math.hypot(dx, dz); if (dist < mj && Math.abs(a.y - jug.y) < 2.5 && (dx * fw[0] + dz * fw[2]) / (dist * fl + 1e-6) > .45) { mj = dist; animalCer = a; } } }
     const algo = cercano || animalCer || mesaCer;
-    hablarEl.style.display = algo ? "block" : "none"; if (algo) hablarEl.textContent = !cercano && !animalCer ? "E · Usar la mesa de fabricación" : cercano ? "E · Hablar con " + cercano.nombre : (ACCION_ANIMAL[animalCer.tipo] || "E · Acariciar ") + animalCer.esp.nombre.toLowerCase();
+    hablarEl.style.display = algo ? "block" : "none"; if (algo) hablarEl.textContent = !cercano && !animalCer ? U + " · Usar la mesa de fabricación" : cercano ? U + " · Hablar con " + cercano.nombre : (ACCION_ANIMAL[animalCer.tipo] || U + " · Acariciar ") + animalCer.esp.nombre.toLowerCase();
     btnHab.style.display = algo ? "block" : "none";
   }
   let ult = performance.now(), raf = 0;
@@ -1640,7 +1656,8 @@ export function iniciarMundo3D(host, ctx) {
     const dt = Math.min(.05, (t - ult) / 1000); ult = t;
     for (const k of sucios) construir(k % NCX, (k / NCX) | 0); sucios.clear();
     if (pausado) limpiarEntrada();
-    actualizar(dt); quePicar(dt); moverNpcs(dt, performance.now() / 1000); moverOtros(dt); moverEfectos(dt); ajustarAlturas(dt); moverAnimales(dt); moverMonstruos(dt); vigilarJefe(dt); vigilarLava(dt); vigilarPuertas(dt); vigilarDim(dt); dibujar(); ambienteSonoro(dt);
+    actualizar(dt); quePicar(dt); moverNpcs(dt, performance.now() / 1000); moverOtros(dt); moverEfectos(dt); ajustarAlturas(dt); moverAnimales(dt); if (ponerMant && !pausado && performance.now() > ponerCd && !(cercano || animalCer || mesaCer) && !USABLES.includes(sel) && !COMIDA[sel]) { ponerCd = performance.now() + 260; poner(); }
+    moverMonstruos(dt); vigilarJefe(dt); vigilarLava(dt); vigilarPuertas(dt); vigilarDim(dt); dibujar(); ambienteSonoro(dt);
     const z = DIM === 1 ? "Reino de Brasas" : zonaDe(Math.floor(jug.x), Math.floor(jug.z)); if (z !== zonaAct) { zonaAct = z; ctx.alZona && ctx.alZona(z); }
     cooldownPortal = Math.max(0, cooldownPortal - dt);
     if (!cooldownPortal) for (const p of portalesZona) {
@@ -1668,7 +1685,7 @@ export function iniciarMundo3D(host, ctx) {
     pausar: (v) => { pausado = !!v; if (!pausado) hablandoCon = null; if (pausado) { limpiarEntrada(); if (bloqueado()) document.exitPointerLock(); } else if (jugando && !sinBloqueo) ayuda.textContent = "Haz clic para seguir jugando"; },
     actualizarNpcs: (lista) => montarNpcs(lista),
     setOtros: (lista) => setOtros(lista),
-    setParcelas: (lista) => setParcelas(lista), irAMiParcela: () => irAMiParcela(), verParcelaAjena: () => verParcelaAjena(), setControl: (o) => { if (o && "giro" in o) control.giro = !!o.giro; },
+    setParcelas: (lista) => setParcelas(lista), irAMiParcela: () => irAMiParcela(), verParcelaAjena: () => verParcelaAjena(), setControl: (o) => { if (o && "giro" in o) control.giro = !!o.giro; if (o && "botonesPP" in o) acc.classList.toggle("sin-pp", !o.botonesPP); },
     criaturaFin: (id, viva) => { const i = cria.findIndex((c) => c.id === id); if (i < 0) return; if (viva) cria[i].lock = false; else cria.splice(i, 1); },
     setVida: (o) => { if (o && "monstruos" in o) { monActivo = !!o.monstruos; if (!monActivo) mons.length = 0; } },
     desmayarse: () => desmayarse(),
