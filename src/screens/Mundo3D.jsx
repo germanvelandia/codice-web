@@ -342,12 +342,12 @@ export default function Mundo3D({ estudianteInfo }) {
         let vuelta = 0;
         relojPoll = setInterval(async () => {
           if (document.hidden) return;
-          if (++vuelta % 2 === 0) verCultivos();
+          if (++vuelta % 3 === 0) verCultivos();
           try {
             const nuevas = await api.fetchCambiosMundo3D(est, llave, ultCambio.current);
             if (nuevas.length && ctl.current === c) { ultCambio.current = nuevas[nuevas.length - 1].actualizado; c.aplicar(nuevas); }
           } catch (_) { /* se reintenta en el siguiente ciclo */ }
-        }, 8000);
+        }, 3000);
       } catch (er) { if (vivo) setError(er.message || "No se pudo cargar el mundo."); }
     })();
     return () => { vivo = false; clearInterval(relojPoll); if (c) c.cerrar(); if (ctl.current === c) ctl.current = null; };
@@ -373,6 +373,7 @@ export default function Mundo3D({ estudianteInfo }) {
   const abrirAjustes = (v) => { setAjustes(v); if (v) setMochila(false); ctl.current && ctl.current.pausar(v); };
   const decir = async (id) => { setChat(false); try { await api.decirMundo3D(est, id); avisar("💬 Tú: " + FRASES_CHAT[id]); } catch (er) { avisar(/chat_cerrado/.test(er.message) ? "Tu docente cerró el chat por ahora." : /demasiado_rapido/.test(er.message) ? "Espera un momento para hablar otra vez." : /sin_presencia/.test(er.message) ? "Aún no hay nadie conectado contigo." : "No se pudo enviar."); } };
   chatRef.current = (v) => setChat((c) => (typeof v === "boolean" ? v : !c));
+  const verParcelas = () => { const n = ctl.current && ctl.current.verParcelaAjena(); avisar(n ? "👀 Parcela de " + n + ": mira su construcción (solo él puede modificarla). Pulsa de nuevo para ver la siguiente." : "Aún no hay parcelas de compañeros para ver."); };
   const irParcela = () => { if (ctl.current && ctl.current.irAMiParcela()) avisar("🏠 Estás en tu parcela: aquí solo construyes tú. Fuera de ella puedes construir en cualquier parte, menos en la plaza y en las parcelas de otros."); };
   const abrirMochila = (v) => { setMochila(v); if (v) setAjustes(false); ctl.current && ctl.current.pausar(v); };
   mochilaRef.current = abrirMochila;
@@ -447,6 +448,7 @@ export default function Mundo3D({ estudianteInfo }) {
           <>
             <div className="m3d-barra">
               <button onClick={ciclarCamara} title="Cambiar cámara (tecla V)">📷<span className="t"> {MODOS_CAM[cam.modo]}</span></button>
+              <button onClick={verParcelas} title="Ver las parcelas de mis compañeros" disabled={visitando || parcelas.filter((p) => !p.mia).length === 0}>👀<span className="t"> Ver parcelas</span></button>
               <button onClick={irParcela} title="Ir a mi parcela" disabled={visitando || !parcelas.some((p) => p.mia)}>🏠<span className="t"> Mi parcela</span></button>
               <button onClick={() => setChat((c) => !c)} aria-expanded={chat} title="Chat rápido (tecla T)">💬<span className="t"> Chat</span></button>
               <button onClick={() => abrirMochila(!mochila)} aria-expanded={mochila} title="Mochila y fabricación (tecla I)">🎒<span className="t"> Mochila</span></button>
