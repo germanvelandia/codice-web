@@ -37,6 +37,7 @@ export const NOMBRES = { 1: "Pasto", 2: "Tierra", 3: "Piedra", 4: "Tronco", 5: "
   26: "Grava", 27: "Arena roja", 28: "Nieve", 29: "Hielo", 30: "Cactus", 31: "Arcilla", 32: "Granito", 33: "Andesita", 34: "Diorita", 35: "Pizarra profunda", 36: "Lámpara",
   37: "Tierra labrada", 72: "Semillas", 73: "Zanahoria", 74: "Papa", 75: "Trigo", 76: "Pan", 77: "Papa asada", 78: "Huevo frito",
   80: "Azada de madera", 81: "Azada de piedra", 82: "Azada de hierro", 83: "Azada de diamante",
+  ...Object.fromEntries(["cobre", "hierro", "diamante"].flatMap((m, t) => ["Casco", "Peto", "Pantalón", "Botas"].map((n, p) => [84 + t * 4 + p, n + " de " + m]))),
   24: "Horno", 25: "Bloque de cobre", 62: "Cobre crudo", 63: "Lingote de cobre", 65: "Hierro crudo", 66: "Oro crudo",
   68: "Espada de madera", 69: "Espada de piedra", 70: "Espada de hierro", 71: "Espada de diamante" };
 export const COLOCABLES = [1, 2, 3, 4, 6, 7, 8, 9, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36];
@@ -45,13 +46,18 @@ export const FRASES_CHAT = { 1: "¡Hola!", 2: "¡Buen trabajo!", 3: "¿Me ayudas
 export const MATERIALES = [40, 41, 42, 43, 44, 45, 46, 47, 48, 62, 63, 65, 66, 75, 76, 77, 78];
 // Lo que se lleva en la mano y se usa sobre el terreno: semillas y cultivos (se siembran) y azadas (labran)
 export const USABLES = [72, 73, 74, 80, 81, 82, 83];
+// Armaduras (84-95) y comida: mismos números que el servidor (tabla mundo3d_comida y _m3d_defensa)
+export const ARMADURAS = [84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95];
+export const COMIDA = { 47: 6, 48: 5, 73: 3, 76: 15, 77: 12, 78: 10 };
+const PTS_ARM = [[1, 2, 1, 1], [2, 3, 2, 1], [3, 4, 3, 2]];
+export function defensaDe(cantidad) { let tot = 0; for (let p = 0; p < 4; p++) { let m = 0; for (let t = 0; t < 3; t++) if (cantidad(84 + t * 4 + p) > 0) m = Math.max(m, PTS_ARM[t][p]); tot += m; } return tot; }
 export const SEMILLAS = { 72: 0, 73: 1, 74: 2 };
 export const NOMBRES_CULTIVO = ["trigo", "zanahoria", "papa"];
 // Mercado de la aldea (mismos precios que la tabla mundo3d_mercado)
 export const MERCADO = [{ item: 75, precio: 1 }, { item: 73, precio: 1 }, { item: 74, precio: 1 }, { item: 76, precio: 3 }, { item: 77, precio: 3 }, { item: 78, precio: 2 }, { item: 47, precio: 2 }, { item: 45, precio: 1 }, { item: 63, precio: 2 }, { item: 42, precio: 3 }, { item: 43, precio: 6 }];
 export const HERRAMIENTAS = [50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 68, 69, 70, 71, 80, 81, 82, 83];
 // Usos máximos antes de romperse (los mismos números que _m3d_max_usos del servidor)
-export const MAX_USOS = (id) => (id >= 50 && id <= 61 ? [60, 130, 250, 600][(id - 50) % 4] : id >= 68 && id <= 71 ? [20, 40, 80, 160][id - 68] : id >= 80 && id <= 83 ? [60, 130, 250, 600][id - 80] : 0);
+export const MAX_USOS = (id) => (id >= 50 && id <= 61 ? [60, 130, 250, 600][(id - 50) % 4] : id >= 68 && id <= 71 ? [20, 40, 80, 160][id - 68] : id >= 80 && id <= 83 ? [60, 130, 250, 600][id - 80] : id >= 84 && id <= 95 ? [80, 160, 320][((id - 84) / 4) | 0] : 0);
 // Fundición y combustibles (mismos datos que las tablas mundo3d_fundicion y mundo3d_combustible)
 export const FUNDICION = [{ entrada: 65, sale: 42 }, { entrada: 66, sale: 43 }, { entrada: 62, sale: 63 }, { entrada: 9, sale: 8 }, { entrada: 4, sale: 41 }, { entrada: 31, sale: 7 }, { entrada: 74, sale: 77 }, { entrada: 46, sale: 78 }];
 export const COMBUSTIBLES = [{ item: 41, rinde: 8 }, { item: 4, rinde: 3 }, { item: 6, rinde: 2 }, { item: 40, rinde: 1 }];
@@ -67,6 +73,7 @@ export const RECETAS = [
     { sale: 58 + t, n: 1, cuesta: { [mat]: 1, 40: 2 }, txt: "1 " + (mat === 6 ? "tablón" : NOMBRES_BASE[mat].toLowerCase()) + " + 2 palos", g: "Herramientas" },
   ]),
   ...[["madera", 6, 0], ["piedra", 3, 1], ["hierro", 42, 2], ["diamante", 44, 3]].map(([nom, mat, t]) => ({ sale: 68 + t, n: 1, cuesta: { [mat]: 2, 40: 1 }, txt: "2 " + (mat === 6 ? "tablones" : NOMBRES_BASE[mat].toLowerCase()) + " + 1 palo", g: "Armas" })),
+  ...[63, 42, 44].flatMap((mat, t) => [["Casco", 3], ["Peto", 5], ["Pantalón", 4], ["Botas", 2]].map(([n, c], p) => ({ sale: 84 + t * 4 + p, n: 1, cuesta: { [mat]: c }, txt: c + " " + (t === 0 ? "lingotes de cobre" : t === 1 ? "hierro" : "diamante"), g: "Armaduras" }))),
   { sale: 76, n: 1, cuesta: { 75: 3 }, txt: "3 trigo → 1 pan", g: "Comida" },
   ...[["madera", 6, 0], ["piedra", 3, 1], ["hierro", 42, 2], ["diamante", 44, 3]].map(([nom, mat, t]) => ({ sale: 80 + t, n: 1, cuesta: { [mat]: 2, 40: 2 }, txt: "2 " + (mat === 6 ? "tablones" : NOMBRES_BASE[mat].toLowerCase()) + " + 2 palos", g: "Granja" })),
   { sale: 36, n: 2, cuesta: { 41: 1, 8: 1 }, txt: "1 carbón + 1 cristal → 2 lámparas", g: "Decoración" },
@@ -165,7 +172,7 @@ export function atlasCanvas() {
 }
 const TIER = ["#b9854a", "#8b8f96", "#e2e2e6", "#4de3e0"];
 const hexRgb = (h) => [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255];
-const COL_ITEM = { 40: "#8a5a2b", 41: "#2b2b2f", 42: "#e2e2e6", 43: "#f7d63a", 44: "#4de3e0", 45: "#f4f4f0", 46: "#efe3c4", 47: "#d83a2f", 48: "#f2f6ff", 72: "#b7c85a", 73: "#f08a24", 74: "#c4945a", 75: "#f2d36b", 76: "#d9993f", 77: "#a8692a", 78: "#f7c52e", 80: "#b9854a", 81: "#8b8f96", 82: "#e2e2e6", 83: "#4de3e0", 62: "#c8693a", 63: "#e08a52", 65: "#b9a89a", 66: "#e6c860" };
+const COL_ITEM = { 40: "#8a5a2b", 41: "#2b2b2f", 42: "#e2e2e6", 43: "#f7d63a", 44: "#4de3e0", 45: "#f4f4f0", 46: "#efe3c4", 47: "#d83a2f", 48: "#f2f6ff", 72: "#b7c85a", 73: "#f08a24", 74: "#c4945a", 75: "#f2d36b", 76: "#d9993f", 77: "#a8692a", 78: "#f7c52e", 80: "#b9854a", 81: "#8b8f96", 82: "#e2e2e6", 83: "#4de3e0", 62: "#c8693a", ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [84 + i, ["#e08a52", "#e2e2e6", "#4de3e0"][(i / 4) | 0]])), 63: "#e08a52", 65: "#b9a89a", 66: "#e6c860" };
 // color representativo de un bloque o item (para las partículas y lo que cae al picar)
 export function colorItem(item) {
   if (COL_ITEM[item]) return hexRgb(COL_ITEM[item]);
@@ -180,7 +187,13 @@ export function dibujarIcono(canvas, item) {
   c.save(); c.scale(canvas.width / 16, canvas.height / 16);
   const px = (col, x, y, w = 1, h = 1) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
   const pts = (col, a) => a.forEach(([x, y]) => px(col, x, y));
-  if (item >= 80 && item <= 83) {
+  if (item >= 84 && item <= 95) {
+    const col = ["#e08a52", "#e2e2e6", "#4de3e0"][((item - 84) / 4) | 0], pz = (item - 84) % 4, som = "#00000040";
+    if (pz === 0) { px(col, 3, 4, 10, 6); px(col, 2, 6, 12, 5); px(som, 5, 8, 6, 3); px("#ffffff55", 4, 5, 3, 1); }
+    else if (pz === 1) { px(col, 2, 3, 12, 11); px(col, 0, 3, 3, 5); px(col, 13, 3, 3, 5); px(som, 6, 3, 4, 3); px(som, 4, 10, 8, 1); px("#ffffff55", 3, 4, 2, 4); }
+    else if (pz === 2) { px(col, 3, 2, 10, 4); px(col, 3, 6, 4, 8); px(col, 9, 6, 4, 8); px(som, 7, 6, 2, 8); px("#ffffff55", 4, 3, 3, 1); }
+    else { px(col, 2, 8, 5, 5); px(col, 9, 8, 5, 5); px(col, 1, 11, 6, 3); px(col, 9, 11, 6, 3); px(som, 2, 13, 5, 1); px(som, 9, 13, 5, 1); }
+  } else if (item >= 80 && item <= 83) {
     const col = TIER[item - 80];
     for (let i = 0; i < 11; i++) { px("#7a5230", 3 + i, 13 - i); px("#5b3b20", 4 + i, 13 - i); }
     px(col, 9, 2, 5, 2); px(col, 12, 3, 2, 3); px("#00000044", 9, 4, 3, 1);
@@ -580,9 +593,11 @@ export function iniciarMundo3D(host, ctx) {
   acc.innerHTML = '<button data-k="salto">SALTAR</button><button data-k="picar">PICAR</button><button data-k="poner">PONER</button><button data-k="hablar" class="hab">HABLAR</button>';
   const hablarEl = document.createElement("div"); hablarEl.className = "m3d-hablar";
   estilo.textContent += ".m3d-dano{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,rgba(255,0,0,0) 38%,rgba(190,0,0,.7) 100%);opacity:0;transition:opacity .45s ease-out}.m3d-dano.on{opacity:1;transition:none}.m3d-desmayo{position:absolute;inset:0;display:none;align-items:center;justify-content:center;text-align:center;background:#000d;color:#fff;font:700 20px system-ui,sans-serif;z-index:5;padding:20px}";
+  const rayoEl = document.createElement("div"); rayoEl.style.cssText = "position:absolute;inset:0;pointer-events:none;background:#eaf2ff;opacity:0";
+  let rayoT = 8 + Math.random() * 10, rayoF = 0, truenoT = 0;
   const danoEl = document.createElement("div"); danoEl.className = "m3d-dano";
   const desmayoEl = document.createElement("div"); desmayoEl.className = "m3d-desmayo"; desmayoEl.innerHTML = "<div>💫 ¡Te desmayaste!<br><span style='font-weight:500;font-size:15px'>Despiertas en la aldea. Estudia un poco y vuelve a intentarlo.</span></div>";
-  raiz.append(estilo, cv, mira, ayuda, joyEl, acc, hablarEl, danoEl, desmayoEl);
+  raiz.append(estilo, cv, mira, ayuda, joyEl, acc, hablarEl, rayoEl, danoEl, desmayoEl);
   const btnHab = acc.querySelector(".hab");
   const capaEt = etiquetas.map((e) => { const d = document.createElement("div"); d.className = "m3d-et" + (e.clase ? " " + e.clase : ""); d.textContent = (e.clase ? "" : "🌀 ") + e.texto; d.style.display = "none"; raiz.append(d); return d; });
   host.append(raiz);
@@ -1076,7 +1091,7 @@ export function iniciarMundo3D(host, ctx) {
   const on = (obj, ev, fn, op) => { obj.addEventListener(ev, fn, op); escuchas.push([obj, ev, fn, op]); };
   on(window, "keydown", (e) => {
     if (pausado || (!jugando && !bloqueado())) return;
-    const k = e.key.toLowerCase(); if (k === "e") { hablar(); return; } if (k === "t") { try { ctx.alChat && ctx.alChat(); } catch (_) {} return; } if (k === "i" || k === "b") { try { ctx.alInventario && ctx.alInventario(); } catch (_) {} return; } if (k === "v") { cam.modo = (cam.modo + 1) % 3; try { ctx.alCamara && ctx.alCamara(cam.modo); } catch (_) {} return; } if ([" ", "arrowup", "arrowdown"].includes(k)) e.preventDefault();
+    const k = e.key.toLowerCase(); if (k === "e") { hablar(); return; } if (k === "t") { try { ctx.alChat && ctx.alChat(); } catch (_) {} return; } if (k === "r") { try { ctx.alComer && ctx.alComer(); } catch (_) {} return; } if (k === "i" || k === "b") { try { ctx.alInventario && ctx.alInventario(); } catch (_) {} return; } if (k === "v") { cam.modo = (cam.modo + 1) % 3; try { ctx.alCamara && ctx.alCamara(cam.modo); } catch (_) {} return; } if ([" ", "arrowup", "arrowdown"].includes(k)) e.preventDefault();
     tec[mapaTecla(k)] = true; if (k === "f" && sinBloqueo) picar = true;
     const n = +e.key; if (n >= 1 && n <= 9) { const mios = listaMano(); if (mios[n - 1]) seleccionar(mios[n - 1]); }
   });
@@ -1161,12 +1176,12 @@ export function iniciarMundo3D(host, ctx) {
       pieza([c.ex + rx, n.y, c.ez + rz], S4(n.w, 2.5, n.d), colNube);
     }
     if (amb.lluvia > .12 && !ctx.vuelo) {
-      const activas = Math.floor(gotas.length * amb.lluvia), col = mezclar(cielo, [.7, .8, .96], .75);
+      const nieva = bioma(Math.floor(c.ex), Math.floor(c.ez)) === 2, activas = Math.floor(gotas.length * amb.lluvia), col = nieva ? [.97, .98, 1] : mezclar(cielo, [.7, .8, .96], .75);
       for (let i = 0; i < activas; i++) {
-        const g = gotas[i]; g.y -= 17 * dt;
+        const g = gotas[i]; g.y -= (nieva ? 2.4 : 17) * dt; if (nieva) g.dx += Math.sin(tt * 1.3 + i) * .4 * dt;
         if (g.y < -7 || g.tope < 0) { g.dx = (Math.random() - .5) * 26; g.dz = (Math.random() - .5) * 26; g.y = 8 + Math.random() * 8; g.tope = topeColumna(Math.floor(c.ex + g.dx), Math.floor(c.ez + g.dz)); }
         const yy = c.ey + g.y; if (yy < g.tope) continue;
-        pieza([c.ex + g.dx, yy, c.ez + g.dz], S4(.03, .55, .03), col);
+        pieza([c.ex + g.dx, yy, c.ez + g.dz], nieva ? S4(.1, .1, .1) : S4(.03, .55, .03), col);
       }
     }
     gl.depthMask(true); cerrarPC();
@@ -1371,6 +1386,10 @@ export function iniciarMundo3D(host, ctx) {
   function dibujar() {
     gl.viewport(0, 0, cv.width, cv.height);
     amb = ambiente.get(); const tt0 = performance.now() / 1000, dt0 = Math.min(.05, Math.max(0, tt0 - (dibujar.t || tt0))); dibujar.t = tt0;
+    // tormenta: con lluvia fuerte caen rayos de vez en cuando (destello y trueno que llega un poco después)
+    if (amb.lluvia > .85 && !ctx.vuelo && !pausado) { rayoT -= dt0; if (rayoT <= 0) { rayoT = 14 + Math.random() * 22; rayoF = 1; truenoT = 1 + Math.random() * 2; } }
+    if (rayoF > 0) { rayoF -= dt0 * 3; rayoEl.style.opacity = String(Math.max(0, rayoF) * (rayoF > .5 ? .85 : .5)); }
+    if (truenoT > 0) { truenoT -= dt0; if (truenoT <= 0) { try { sonido.trueno && sonido.trueno(); } catch (_) {} } }
     const kAg = .3 + .7 * amb.dia, cielo = enAgua ? [.2 * kAg, .4 * kAg, .7 * kAg] : amb.cielo; gl.clearColor(cielo[0], cielo[1], cielo[2], 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     const cc = camaraActual(); const asp = cv.width / cv.height, fovV = asp < 16 / 9 ? Math.min(1.75, 2 * Math.atan(Math.tan(cam.fov / 2) * Math.pow(16 / 9 / asp, .6))) : cam.fov; // en pantallas verticales se abre el campo para no ver 'por un tubo'
     M = mul(perspectiva(fovV, asp, .05, 140), vista(cc));
