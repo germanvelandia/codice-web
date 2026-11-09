@@ -68,7 +68,7 @@ export function crearSonido(inicial = {}) {
   const recoger = () => { tono(880, 1320, .09, { tipo: "sine", g: .08 }); tono(1320, 1760, .08, { tipo: "sine", g: .05, t0: .05 }); };
   const dano = () => { tono(220, 90, .22, { tipo: "sawtooth", g: .12 }); ruido(.12, { tipo: "lowpass", f: 700, g: .12 }); };
   const pegar = () => { ruido(.08, { tipo: "bandpass", f: 1400, g: .12, q: 2 }); tono(300, 160, .08, { tipo: "square", g: .05 }); };
-  const monstruo = (t) => { if (t === "limo") tono(140, 260, .18, { tipo: "sine", g: .07, vib: 12 }); else if (t === "sombra") tono(330, 210, .35, { tipo: "sine", g: .05, vib: 9 }); else tono(180, 120, .2, { tipo: "square", g: .04 }); };
+  const monstruo = (t) => { if (t === "limo") tono(140, 260, .18, { tipo: "sine", g: .07, vib: 12 }); else if (t === "sombra") tono(330, 210, .35, { tipo: "sine", g: .05, vib: 9 }); else if (t === "guardian_brasas") tono(70, 40, .6, { tipo: "sawtooth", g: .09, vib: 5 }); else if (t === "brasero" || t === "ceniza") tono(240, 90, .25, { tipo: "sawtooth", g: .035, vib: 14 }); else tono(180, 120, .2, { tipo: "square", g: .04 }); };
   const vencido = () => { tono(500, 180, .25, { tipo: "triangle", g: .09 }); ruido(.18, { tipo: "bandpass", f: 900, g: .08 }); };
   const desmayo = () => { tono(400, 70, .9, { tipo: "sine", g: .12 }); };
   const clic = () => ruido(.04, { tipo: "bandpass", f: 2400, g: .06, q: 3 });
