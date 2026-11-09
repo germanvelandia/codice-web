@@ -35,17 +35,25 @@ export const NOMBRES = { 1: "Pasto", 2: "Tierra", 3: "Piedra", 4: "Tronco", 5: "
   50: "Pico de madera", 51: "Pico de piedra", 52: "Pico de hierro", 53: "Pico de diamante", 54: "Hacha de madera", 55: "Hacha de piedra", 56: "Hacha de hierro", 57: "Hacha de diamante",
   58: "Pala de madera", 59: "Pala de piedra", 60: "Pala de hierro", 61: "Pala de diamante",
   26: "Grava", 27: "Arena roja", 28: "Nieve", 29: "Hielo", 30: "Cactus", 31: "Arcilla", 32: "Granito", 33: "Andesita", 34: "Diorita", 35: "Pizarra profunda", 36: "Lámpara",
+  37: "Tierra labrada", 72: "Semillas", 73: "Zanahoria", 74: "Papa", 75: "Trigo", 76: "Pan", 77: "Papa asada", 78: "Huevo frito",
+  80: "Azada de madera", 81: "Azada de piedra", 82: "Azada de hierro", 83: "Azada de diamante",
   24: "Horno", 25: "Bloque de cobre", 62: "Cobre crudo", 63: "Lingote de cobre", 65: "Hierro crudo", 66: "Oro crudo",
   68: "Espada de madera", 69: "Espada de piedra", 70: "Espada de hierro", 71: "Espada de diamante" };
 export const COLOCABLES = [1, 2, 3, 4, 6, 7, 8, 9, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36];
 // Frases rápidas del chat (los mismos números que la tabla mundo3d_frases del servidor)
 export const FRASES_CHAT = { 1: "¡Hola!", 2: "¡Buen trabajo!", 3: "¿Me ayudas?", 4: "¡Gracias!", 5: "¿Construimos juntos?", 6: "¡Mira lo que hice!", 7: "Vamos a la aldea", 8: "Necesito piedra", 9: "¡Qué bien!", 10: "¡Hasta luego!", 11: "Sígueme", 12: "¡Cuidado!" };
-export const MATERIALES = [40, 41, 42, 43, 44, 45, 46, 47, 48, 62, 63, 65, 66];
-export const HERRAMIENTAS = [50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 68, 69, 70, 71];
+export const MATERIALES = [40, 41, 42, 43, 44, 45, 46, 47, 48, 62, 63, 65, 66, 75, 76, 77, 78];
+// Lo que se lleva en la mano y se usa sobre el terreno: semillas y cultivos (se siembran) y azadas (labran)
+export const USABLES = [72, 73, 74, 80, 81, 82, 83];
+export const SEMILLAS = { 72: 0, 73: 1, 74: 2 };
+export const NOMBRES_CULTIVO = ["trigo", "zanahoria", "papa"];
+// Mercado de la aldea (mismos precios que la tabla mundo3d_mercado)
+export const MERCADO = [{ item: 75, precio: 1 }, { item: 73, precio: 1 }, { item: 74, precio: 1 }, { item: 76, precio: 3 }, { item: 77, precio: 3 }, { item: 78, precio: 2 }, { item: 47, precio: 2 }, { item: 45, precio: 1 }, { item: 63, precio: 2 }, { item: 42, precio: 3 }, { item: 43, precio: 6 }];
+export const HERRAMIENTAS = [50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 68, 69, 70, 71, 80, 81, 82, 83];
 // Usos máximos antes de romperse (los mismos números que _m3d_max_usos del servidor)
-export const MAX_USOS = (id) => (id >= 50 && id <= 61 ? [60, 130, 250, 600][(id - 50) % 4] : id >= 68 && id <= 71 ? [20, 40, 80, 160][id - 68] : 0);
+export const MAX_USOS = (id) => (id >= 50 && id <= 61 ? [60, 130, 250, 600][(id - 50) % 4] : id >= 68 && id <= 71 ? [20, 40, 80, 160][id - 68] : id >= 80 && id <= 83 ? [60, 130, 250, 600][id - 80] : 0);
 // Fundición y combustibles (mismos datos que las tablas mundo3d_fundicion y mundo3d_combustible)
-export const FUNDICION = [{ entrada: 65, sale: 42 }, { entrada: 66, sale: 43 }, { entrada: 62, sale: 63 }, { entrada: 9, sale: 8 }, { entrada: 4, sale: 41 }, { entrada: 31, sale: 7 }];
+export const FUNDICION = [{ entrada: 65, sale: 42 }, { entrada: 66, sale: 43 }, { entrada: 62, sale: 63 }, { entrada: 9, sale: 8 }, { entrada: 4, sale: 41 }, { entrada: 31, sale: 7 }, { entrada: 74, sale: 77 }, { entrada: 46, sale: 78 }];
 export const COMBUSTIBLES = [{ item: 41, rinde: 8 }, { item: 4, rinde: 3 }, { item: 6, rinde: 2 }, { item: 40, rinde: 1 }];
 const DUREZA = { 26: .35, 27: .3, 28: .15, 29: .4, 30: .35, 31: .4, 32: 1, 33: 1, 34: 1, 35: 1.5, 36: .5, 24: 1.2, 25: 1.6, 1: .3, 2: .3, 3: .9, 4: .6, 5: .15, 6: .5, 7: .9, 8: .2, 9: .25, 10: 1.1, 16: 1.6, 17: 1.6, 18: 2, 19: .3, 20: .3, 21: .3, 22: .3, 23: .3 };
 export const RECETAS = [
@@ -59,6 +67,8 @@ export const RECETAS = [
     { sale: 58 + t, n: 1, cuesta: { [mat]: 1, 40: 2 }, txt: "1 " + (mat === 6 ? "tablón" : NOMBRES_BASE[mat].toLowerCase()) + " + 2 palos", g: "Herramientas" },
   ]),
   ...[["madera", 6, 0], ["piedra", 3, 1], ["hierro", 42, 2], ["diamante", 44, 3]].map(([nom, mat, t]) => ({ sale: 68 + t, n: 1, cuesta: { [mat]: 2, 40: 1 }, txt: "2 " + (mat === 6 ? "tablones" : NOMBRES_BASE[mat].toLowerCase()) + " + 1 palo", g: "Armas" })),
+  { sale: 76, n: 1, cuesta: { 75: 3 }, txt: "3 trigo → 1 pan", g: "Comida" },
+  ...[["madera", 6, 0], ["piedra", 3, 1], ["hierro", 42, 2], ["diamante", 44, 3]].map(([nom, mat, t]) => ({ sale: 80 + t, n: 1, cuesta: { [mat]: 2, 40: 2 }, txt: "2 " + (mat === 6 ? "tablones" : NOMBRES_BASE[mat].toLowerCase()) + " + 2 palos", g: "Granja" })),
   { sale: 36, n: 2, cuesta: { 41: 1, 8: 1 }, txt: "1 carbón + 1 cristal → 2 lámparas", g: "Decoración" },
   { sale: 29, n: 1, cuesta: { 28: 4 }, txt: "4 nieve → 1 hielo", g: "Decoración" },
   { sale: 26, n: 2, cuesta: { 3: 1 }, txt: "1 piedra → 2 grava", g: "Decoración" },
@@ -74,7 +84,7 @@ export const CRUCE = { x: 216, z: 200 };
 export const enPlazaProtegida = (x, z) => (Math.abs(x - CENTRO) <= RADIO_PLAZA && Math.abs(z - CENTRO) <= RADIO_PLAZA) || (Math.abs(x - CRUCE.x) <= 14 && Math.abs(z - CRUCE.z) <= 8);
 
 // atlas: 0 pasto arriba, 1 pasto lado, 2 tierra, 3 piedra, 4 tronco lado, 5 tronco arriba, 6 hojas, 7 tablones, 8 ladrillo, 9 cristal, 10 arena, 11 mineral, 12 agua, 13 portal, 14 adoquín
-const NT = 39;
+const NT = 52;
 function tileDe(b, cara) { // cara: 0 +x, 1 -x, 2 +y, 3 -y, 4 +z, 5 -z
   switch (b) {
     case 1: return cara === 2 ? 0 : cara === 3 ? 2 : 1;
@@ -86,6 +96,8 @@ function tileDe(b, cara) { // cara: 0 +x, 1 -x, 2 +y, 3 -y, 4 +z, 5 -z
   if (b >= 16 && b <= 23) return b + 1;
   if (b === 24) return cara === 2 || cara === 3 ? 3 : 25;
   if (b === 25) return 26;
+  if (b === 37) return cara === 2 ? 39 : 2;
+  if (b >= 100 && b <= 111) return 40 + (b - 100);
   if (b === 30) return cara === 2 || cara === 3 ? 32 : 31;
   if (b >= 26 && b <= 29) return b + 1;
   if (b >= 31 && b <= 36) return b + 2;
@@ -106,7 +118,8 @@ export function atlasCanvas() {
     ["#7f838a", "#90949b", "#6b6f76"], ["#c8693a", "#d9794a", "#a9532b"],
     ["#8d8a86", "#a09d98", "#77746f"], ["#b9552f", "#c8653c", "#9d4626"], ["#f4f8fb", "#ffffff", "#dde7ee"], ["#a9d8f0", "#c4e8fa", "#8cc4e0"],
     ["#2f7a3c", "#3b8f4a", "#276832"], ["#3f8a47", "#4aa055", "#327a3b"], ["#9aa3b5", "#adb6c7", "#858ea1"],
-    ["#a5675a", "#b87666", "#8d554a"], ["#78787b", "#898a8d", "#66676a"], ["#cfcfd0", "#dddde0", "#bcbcc0"], ["#4a4c53", "#5a5c64", "#3b3d43"], ["#ffe08a", "#fff0b8", "#f2c75a"]];
+    ["#a5675a", "#b87666", "#8d554a"], ["#78787b", "#898a8d", "#66676a"], ["#cfcfd0", "#dddde0", "#bcbcc0"], ["#4a4c53", "#5a5c64", "#3b3d43"], ["#ffe08a", "#fff0b8", "#f2c75a"],
+    ["#6b4426", "#7a5230", "#583619"], ...Array.from({ length: 12 }, () => ["#000", "#000", "#000"])];
   _palRef = pal;
   for (let t = 0; t < NT; t++) {
     const ox = t * 16;
@@ -123,7 +136,15 @@ export function atlasCanvas() {
     if (t === 14) { g.fillStyle = "#0004"; g.fillRect(ox, 7, 16, 1); g.fillRect(ox + 7, 0, 1, 16); }
     if (t === 15) { g.fillStyle = "#2a1a0a"; for (let x = 3; x < 16; x += 4) g.fillRect(ox + x, 0, 1, 16); g.fillStyle = "#8f6a3a"; for (let x = 0; x < 16; x += 4) g.fillRect(ox + x, 0, 2, 16); g.fillStyle = "#3a3f46"; g.fillRect(ox, 3, 16, 2); g.fillRect(ox, 11, 16, 2); }
     if (t >= 17 && t <= 19) { g.fillStyle = "#0003"; g.fillRect(ox, 0, 16, 1); g.fillRect(ox, 15, 16, 1); g.fillRect(ox, 0, 1, 16); g.fillRect(ox + 15, 0, 1, 16); g.fillStyle = "#fff6"; g.fillRect(ox + 2, 2, 3, 1); g.fillRect(ox + 2, 2, 1, 3); }
-    if (t === 25) { g.fillStyle = "#2a2a2e"; g.fillRect(ox + 3, 6, 10, 7); g.fillStyle = "#ff8a1f"; g.fillRect(ox + 5, 9, 6, 3); g.fillStyle = "#ffd34d"; g.fillRect(ox + 7, 10, 2, 2); g.fillStyle = "#0004"; g.fillRect(ox, 3, 16, 1); }
+    if (t === 39) { g.fillStyle = "#4a2d16"; for (let x = 2; x < 16; x += 5) g.fillRect(ox + x, 0, 2, 16); g.fillStyle = "#8a6a45"; for (let i = 0; i < 6; i++) g.fillRect(ox + ((r() * 14) | 0), ((r() * 14) | 0), 1, 1); }
+    else if (t >= 40 && t <= 51) { // cultivos sobre fondo transparente: cultivo = (t - 40) / 4, etapa = (t - 40) % 4
+      g.clearRect(ox, 0, 16, 16); const cu = ((t - 40) / 4) | 0, et = (t - 40) % 4, alto = [4, 8, 12, 14][et];
+      const tallo = ["#7bbf3a", "#5aa03a", "#4e9a2f"][cu], maduro = ["#e2b93b", "#5aa03a", "#4e9a2f"][cu];
+      for (let c0 = 1; c0 < 16; c0 += 3) { const hh = alto - ((c0 * 7) % 3); g.fillStyle = et === 3 ? maduro : tallo; g.fillRect(ox + c0, 16 - hh, 2, hh); g.fillStyle = "#0002"; g.fillRect(ox + c0 + 1, 16 - hh, 1, hh);
+        if (et === 3) { if (cu === 0) { g.fillStyle = "#f2d36b"; g.fillRect(ox + c0 - 1, 16 - hh, 4, 3); } else if (cu === 1) { g.fillStyle = "#f08a24"; g.fillRect(ox + c0, 16 - hh - 1, 2, 3); } else { g.fillStyle = "#f4f0ff"; g.fillRect(ox + c0, 16 - hh, 2, 2); } }
+        else if (cu === 1 && et > 0) { g.fillStyle = "#3f8a2a"; g.fillRect(ox + c0 - 1, 16 - hh, 1, 2); g.fillRect(ox + c0 + 2, 16 - hh, 1, 2); } }
+    }
+    else if (t === 25) { g.fillStyle = "#2a2a2e"; g.fillRect(ox + 3, 6, 10, 7); g.fillStyle = "#ff8a1f"; g.fillRect(ox + 5, 9, 6, 3); g.fillStyle = "#ffd34d"; g.fillRect(ox + 7, 10, 2, 2); g.fillStyle = "#0004"; g.fillRect(ox, 3, 16, 1); }
     else if (t === 26) { g.fillStyle = "#3fbf9f"; for (let i = 0; i < 9; i++) g.fillRect(ox + ((r() * 14) | 0), ((r() * 14) | 0), 2, 2); g.fillStyle = "#0003"; g.fillRect(ox, 0, 16, 1); g.fillRect(ox, 15, 16, 1); g.fillRect(ox, 0, 1, 16); g.fillRect(ox + 15, 0, 1, 16); }
     else if (t === 27) { g.fillStyle = "#0004"; for (let i = 0; i < 14; i++) g.fillRect(ox + ((r() * 14) | 0), ((r() * 14) | 0), 2, 2); g.fillStyle = "#fff3"; for (let i = 0; i < 8; i++) g.fillRect(ox + ((r() * 14) | 0), ((r() * 14) | 0), 1, 1); }
     else if (t === 28) { g.fillStyle = "#7a2f18"; for (let y = 4; y < 16; y += 5) g.fillRect(ox, y, 16, 1); }
@@ -144,7 +165,7 @@ export function atlasCanvas() {
 }
 const TIER = ["#b9854a", "#8b8f96", "#e2e2e6", "#4de3e0"];
 const hexRgb = (h) => [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255];
-const COL_ITEM = { 40: "#8a5a2b", 41: "#2b2b2f", 42: "#e2e2e6", 43: "#f7d63a", 44: "#4de3e0", 45: "#f4f4f0", 46: "#efe3c4", 47: "#d83a2f", 48: "#f2f6ff", 62: "#c8693a", 63: "#e08a52", 65: "#b9a89a", 66: "#e6c860" };
+const COL_ITEM = { 40: "#8a5a2b", 41: "#2b2b2f", 42: "#e2e2e6", 43: "#f7d63a", 44: "#4de3e0", 45: "#f4f4f0", 46: "#efe3c4", 47: "#d83a2f", 48: "#f2f6ff", 72: "#b7c85a", 73: "#f08a24", 74: "#c4945a", 75: "#f2d36b", 76: "#d9993f", 77: "#a8692a", 78: "#f7c52e", 80: "#b9854a", 81: "#8b8f96", 82: "#e2e2e6", 83: "#4de3e0", 62: "#c8693a", 63: "#e08a52", 65: "#b9a89a", 66: "#e6c860" };
 // color representativo de un bloque o item (para las partículas y lo que cae al picar)
 export function colorItem(item) {
   if (COL_ITEM[item]) return hexRgb(COL_ITEM[item]);
@@ -159,7 +180,11 @@ export function dibujarIcono(canvas, item) {
   c.save(); c.scale(canvas.width / 16, canvas.height / 16);
   const px = (col, x, y, w = 1, h = 1) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
   const pts = (col, a) => a.forEach(([x, y]) => px(col, x, y));
-  if (item >= 68 && item <= 71) {
+  if (item >= 80 && item <= 83) {
+    const col = TIER[item - 80];
+    for (let i = 0; i < 11; i++) { px("#7a5230", 3 + i, 13 - i); px("#5b3b20", 4 + i, 13 - i); }
+    px(col, 9, 2, 5, 2); px(col, 12, 3, 2, 3); px("#00000044", 9, 4, 3, 1);
+  } else if (item >= 68 && item <= 71) {
     const col = TIER[item - 68];
     for (let i = 0; i < 9; i++) px(col, 5 + i, 10 - i); for (let i = 0; i < 9; i++) px("#ffffff55", 6 + i, 10 - i);
     px("#8b8f96", 4, 10, 4, 1); px("#7a5230", 3, 12, 3, 1); px("#5b3b20", 3, 11, 2, 1); px("#7a5230", 2, 13, 2, 2);
@@ -178,6 +203,13 @@ export function dibujarIcono(canvas, item) {
   else if (item === 46) { const e = [[7, 3], [8, 3], [6, 4], [7, 4], [8, 4], [9, 4], [5, 5], [6, 5], [7, 5], [8, 5], [9, 5], [10, 5], [5, 6], [6, 6], [7, 6], [8, 6], [9, 6], [10, 6], [5, 7], [6, 7], [7, 7], [8, 7], [9, 7], [10, 7], [5, 8], [6, 8], [7, 8], [8, 8], [9, 8], [10, 8], [6, 9], [7, 9], [8, 9], [9, 9], [6, 10], [7, 10], [8, 10], [9, 10]]; pts("#e2cf9f", e); pts("#f6ecd2", e.filter(([x, y]) => x < 8 && y < 8)); }
   else if (item === 47) { const a = [[5, 5], [6, 5], [7, 5], [9, 5], [10, 5], [4, 6], [5, 6], [6, 6], [7, 6], [8, 6], [9, 6], [10, 6], [11, 6], [4, 7], [5, 7], [6, 7], [7, 7], [8, 7], [9, 7], [10, 7], [11, 7], [4, 8], [5, 8], [6, 8], [7, 8], [8, 8], [9, 8], [10, 8], [11, 8], [5, 9], [6, 9], [7, 9], [8, 9], [9, 9], [10, 9], [5, 10], [6, 10], [9, 10], [10, 10]]; pts("#c62f26", a); pts("#ec5b4f", [[5, 6], [6, 6], [5, 7]]); pts("#5a3b1e", [[8, 3], [8, 4]]); pts("#3d9a3a", [[9, 3], [10, 3], [10, 4]]); }
   else if (item === 62 || item === 65 || item === 66) { const base = item === 62 ? "#c8693a" : item === 65 ? "#b9a89a" : "#e6c860"; px("#00000033", 3, 7, 11, 6); px("#8b8f96", 3, 6, 11, 6); px(base, 4, 7, 3, 3); px(base, 8, 9, 3, 2); px(base, 6, 4, 4, 3); px(base, 10, 7, 2, 2); }
+  else if (item === 72) { pts("#7a8f2a", [[5, 5], [8, 4], [10, 7], [6, 9], [9, 10], [4, 11], [11, 11], [7, 7]]); pts("#b7c85a", [[5, 4], [8, 3], [10, 6], [6, 8], [9, 9], [4, 10], [11, 10], [7, 6]]); }
+  else if (item === 73) { for (let i = 0; i < 9; i++) px("#f08a24", 5 + ((i * 0) | 0) + (i > 5 ? 1 : 0), 4 + i, 6 - ((i / 2) | 0)); px("#d9731a", 7, 8, 2, 3); px("#4e9a2f", 5, 2, 2, 3); px("#4e9a2f", 8, 1, 2, 3); px("#6bb83a", 6, 1, 2, 2); }
+  else if (item === 74) { px("#a97a42", 4, 6, 9, 6); px("#c4945a", 5, 5, 7, 6); px("#7a5430", 6, 8, 1, 1); px("#7a5430", 9, 7, 1, 1); px("#7a5430", 8, 10, 1, 1); }
+  else if (item === 75) { for (const x of [4, 7, 10]) { px("#c9a227", x, 6, 1, 8); px("#f2d36b", x - 1, 2, 3, 3); px("#f2d36b", x, 5, 1, 1); } }
+  else if (item === 76) { px("#a66a2a", 2, 8, 12, 5); px("#d9993f", 2, 6, 12, 5); px("#e8b563", 3, 5, 10, 2); px("#f4d28f", 4, 6, 3, 1); px("#8a561f", 2, 12, 12, 1); }
+  else if (item === 77) { px("#7a4a1c", 4, 6, 9, 6); px("#a8692a", 5, 5, 7, 6); px("#f3d9a0", 6, 7, 4, 2); px("#4a2d10", 8, 10, 1, 1); }
+  else if (item === 78) { px("#ffffff", 3, 5, 11, 7); px("#eeeeee", 3, 11, 11, 1); px("#f7c52e", 6, 6, 5, 5); px("#e0a916", 6, 10, 5, 1); }
   else if (item === 63) { px("#a9532b", 3, 7, 11, 5); px("#e08a52", 3, 6, 11, 5); px("#f4b184", 4, 6, 8, 1); px("#a9532b", 3, 11, 11, 1); }
   else if (item === 48) { px("#cfd6e6", 6, 2, 4, 2); px("#f2f6ff", 5, 4, 6, 9); px("#b8c3dc", 5, 12, 6, 1); px("#7aa2ff", 6, 7, 4, 3); }
   c.restore();
@@ -276,7 +308,7 @@ export function iniciarMundo3D(host, ctx) {
   const autores = new Map(); // "x,y,z" → autor_id de los bloques cambiados
   const idx = (x, y, z) => (y * SZ + z) * SX + x;
   const get = (x, y, z) => (x < 0 || x >= SX || z < 0 || z >= SZ || y < 0) ? (y < 0 ? 3 : 0) : (y >= SY ? 0 : mundo[idx(x, y, z)]);
-  const esHueco = (b) => b === AIRE || b === AGUA || b === PORTAL;     // no choca
+  const esHueco = (b) => b === AIRE || b === AGUA || b === PORTAL || b >= 100;     // no choca
   const solido = (x, y, z) => { if (y < 0 || x < 0 || x >= SX || z < 0 || z >= SZ) return true; return !esHueco(get(x, y, z)); };
   const sucios = new Set(); const chunks = [];
 
@@ -560,7 +592,7 @@ export function iniciarMundo3D(host, ctx) {
   if (!gl) { raiz.innerHTML = '<div style="padding:24px;text-align:center;color:#98a0ad">Tu navegador no permite gráficos 3D (WebGL). Prueba con otro navegador.</div>'; return { aplicar() {}, seleccionar() {}, setCalidad() {}, cerrar() { raiz.remove(); } }; }
   const prog = (vs, fs) => { const p = gl.createProgram(); for (const [t, s] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]) { const sh = gl.createShader(t); gl.shaderSource(sh, s); gl.compileShader(sh); if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh)); gl.attachShader(p, sh); } gl.linkProgram(p); return p; };
   const P = prog("attribute vec3 p;attribute vec2 u;attribute float s;uniform mat4 m;varying vec2 vu;varying float vs;varying float vd;void main(){vec4 q=m*vec4(p,1.0);gl_Position=q;vu=u;vs=s;vd=q.w;}",
-    "precision mediump float;uniform sampler2D t;uniform vec3 cn;uniform vec3 lc;uniform vec2 fg;varying vec2 vu;varying float vs;varying float vd;void main(){vec4 c=texture2D(t,vu);float f=clamp((vd-fg.x)/fg.y,0.0,1.0);gl_FragColor=vec4(mix(c.rgb*vs*lc,cn,f),1.0);}");
+    "precision mediump float;uniform sampler2D t;uniform vec3 cn;uniform vec3 lc;uniform vec2 fg;varying vec2 vu;varying float vs;varying float vd;void main(){vec4 c=texture2D(t,vu);if(c.a<.5)discard;float f=clamp((vd-fg.x)/fg.y,0.0,1.0);gl_FragColor=vec4(mix(c.rgb*vs*lc,cn,f),1.0);}");
   const PL = prog("attribute vec3 p;uniform mat4 m;void main(){gl_Position=m*vec4(p,1.0);}", "precision mediump float;void main(){gl_FragColor=vec4(1.0);}");
   const loc = { p: gl.getAttribLocation(P, "p"), u: gl.getAttribLocation(P, "u"), s: gl.getAttribLocation(P, "s"), m: gl.getUniformLocation(P, "m"), t: gl.getUniformLocation(P, "t"), cn: gl.getUniformLocation(P, "cn"), lc: gl.getUniformLocation(P, "lc"), fg: gl.getUniformLocation(P, "fg") };
   const locL = { p: gl.getAttribLocation(PL, "p"), m: gl.getUniformLocation(PL, "m") };
@@ -575,11 +607,20 @@ export function iniciarMundo3D(host, ctx) {
     { n: [0, 0, 1], c: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]], s: .9 }, { n: [0, 0, -1], c: [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]], s: .7 },
   ];
   const UVC = [[0, 1], [1, 1], [1, 0], [0, 0]];
-  const transparente = (b) => b === AIRE || b === 8 || b === AGUA || b === PORTAL;
+  const transparente = (b) => b === AIRE || b === 8 || b === AGUA || b === PORTAL || b >= 100;
   function construir(cx, cz) {
     const pos = [], uv = [], sh = [], ind = []; let n = 0;
     for (let z = cz * CH; z < cz * CH + CH; z++) for (let x = cx * CH; x < cx * CH + CH; x++) for (let y = 0; y < SY; y++) {
       const b = mundo[idx(x, y, z)]; if (!b) continue;
+      if (b >= 100) { // cultivo: dos planos cruzados, visibles por ambos lados
+        const t = tileDe(b, 0), u0 = t / NT + .0005, u1 = (t + 1) / NT - .0005;
+        for (const [ax, az, bx, bz] of [[0, 0, 1, 1], [1, 0, 0, 1]]) {
+          pos.push(x + ax, y, z + az, x + bx, y, z + bz, x + bx, y + 1, z + bz, x + ax, y + 1, z + az);
+          uv.push(u0, .999, u1, .999, u1, .001, u0, .001); sh.push(.95, .95, .95, .95);
+          ind.push(n, n + 1, n + 2, n, n + 2, n + 3, n, n + 2, n + 1, n, n + 3, n + 2); n += 4;
+        }
+        continue;
+      }
       for (let f = 0; f < 6; f++) {
         const c = CARAS[f], nb = get(x + c.n[0], y + c.n[1], z + c.n[2]);
         if (!transparente(nb) || nb === b) continue;
@@ -924,13 +965,15 @@ export function iniciarMundo3D(host, ctx) {
   }
   function limpiarEntrada() { for (const k in tec) tec[k] = false; picar = false; joy.x = joy.y = 0; }
   let animalCer = null, avisoPico = false;
-  const ACCION_ANIMAL = { oveja: "E · Esquilar a la ", gallina: "E · Recoger huevo de la ", vaca: "E · Ordeñar a la " };
+  // lo que se puede llevar en la mano (bloques que tienes, o los básicos; más semillas y azadas)
+  const listaMano = (extra) => [...COLOCABLES.filter((b) => ctx.cantidad(b) > 0 || b <= 9 || b === extra), ...USABLES.filter((b) => ctx.cantidad(b) > 0 || b === extra)];
+  const ACCION_ANIMAL = { oveja: "E · Esquilar a la ", gallina: "E · Recoger huevo de la ", vaca: "E · Ordeñar a la ", cerdo: "E · Buscar papas con el ", conejo: "E · Pedir una zanahoria al " };
   function hablar() {
     if (pausado) return;
     if (!cercano && !animalCer && mesaCer) { try { ctx.alMesa && ctx.alMesa(); } catch (_) {} return; }
     if (!cercano) { // sin personaje cerca: si hay un animal delante, se le saluda
       if (animalCer) { const a = animalCer; sonido.animal(a.tipo); a.pasta = 0; a.espera = 2; a.susto = 0; aviso(FRASES[a.tipo] || "🐾");
-        if (ctx.recolectar && !ctx.soloMirar && ["oveja", "gallina", "vaca"].includes(a.tipo)) {
+        if (ctx.recolectar && !ctx.soloMirar && ["oveja", "gallina", "vaca", "cerdo", "conejo"].includes(a.tipo)) {
           Promise.resolve(ctx.recolectar(a.tipo)).then((r) => { if (r && r.item) { sonido.recoger(); avisoBotin(r.item, r.n || 1); } }).catch((e) => { const m = String((e && e.message) || e || ""), t = /todavia_no:(\d+)/.exec(m); aviso(t ? "Todavía no tiene más. Vuelve en " + t[1] + " s." : /demasiado_rapido/.test(m) ? "Vas muy rápido." : "No se pudo recoger ahora."); });
         } }
       return;
@@ -952,6 +995,7 @@ export function iniciarMundo3D(host, ctx) {
     if (!picar) { picando = null; return; }
     if (golpearMonstruo()) { picando = null; return; }
     const h = apuntar(); if (!h || h.b === ADOQUIN || h.y <= 0) { picando = null; return; }
+    if (h.b >= 100) { picando = null; cosecharAhora(h); return; }
     if (!picando || picando.x !== h.x || picando.y !== h.y || picando.z !== h.z) { const hr = herramientaPara(h.b); picando = { x: h.x, y: h.y, z: h.z, t: 0, b: h.b, dur: (DUREZA[h.b] || 1) / hr.mult, herr: hr.id, p: 0 };
       if (h.b === 10 && hr.k === 0 && !hr.id && !avisoPico) { avisoPico = true; aviso("Con un pico sacas más minerales (y mejores). Fabrica uno en la mochila 🎒."); } }
     picando.t += dt; picando.s = (picando.s || 0) + dt; if (picando.s > .28) { picando.s = 0; sonido.picar(h.b); }
@@ -971,6 +1015,7 @@ export function iniciarMundo3D(host, ctx) {
   function poner() {
     if (golpearMonstruo()) return;
     const h = apuntar(); if (!h || ocupado) return;
+    if (USABLES.includes(sel)) { usarMano(h); return; }
     const { px: x, py: y, pz: z } = h; if (!puedeEditar(x, y, z)) return;
     const c = get(x, y, z); if (c !== AIRE && c !== AGUA) return;
     if (!(ctx.cantidad(sel) > 0)) { aviso("No tienes " + NOMBRES[sel].toLowerCase() + ". Pica o fabrica más."); return; }
@@ -980,11 +1025,39 @@ export function iniciarMundo3D(host, ctx) {
       if (!vivo) return; mundo[idx(x, y, z)] = antes; marcar(x, z); aviso(mensajeError(e));
     }).finally(() => { ocupado = false; });
   }
+  // azada: labra pasto o tierra · semillas: se siembran sobre tierra labrada (el servidor decide y cuenta el crecimiento)
+  function usarMano(h) {
+    if (!(ctx.cantidad(sel) > 0)) { aviso("No tienes " + NOMBRES[sel].toLowerCase() + "."); return; }
+    if (sel >= 80) {
+      if (h.b !== 1 && h.b !== 2) { aviso("La azada se usa sobre pasto o tierra."); return; }
+      if (!puedeEditar(h.x, h.y, h.z) || !ctx.labrar) return;
+      const antes = h.b; mundo[idx(h.x, h.y, h.z)] = 37; marcar(h.x, h.z); ocupado = true; sonido.poner(2);
+      Promise.resolve(ctx.labrar(h.x, h.y, h.z, antes)).then(() => { autores.set(clave(h.x, h.y, h.z), ctx.yo); }).catch((e) => { if (!vivo) return; mundo[idx(h.x, h.y, h.z)] = antes; marcar(h.x, h.z); aviso(mensajeError(e)); }).finally(() => { ocupado = false; });
+      return;
+    }
+    if (h.b !== 37) { aviso("Siembra sobre tierra labrada: primero usa una azada en el pasto."); return; }
+    const ax = h.x, ay = h.y + 1, az = h.z; if (get(ax, ay, az) !== AIRE) { aviso("Ahí no cabe una planta."); return; }
+    if (!puedeEditar(ax, ay, az) || !ctx.sembrar) return;
+    const tipo = SEMILLAS[sel]; mundo[idx(ax, ay, az)] = 100 + tipo * 4; marcar(ax, az); ocupado = true; sonido.poner(1);
+    Promise.resolve(ctx.sembrar(h.x, h.y, h.z, sel)).then(() => { autores.set(clave(ax, ay, az), ctx.yo); aviso("🌱 Sembraste " + NOMBRES_CULTIVO[tipo] + ". Crece con el tiempo."); }).catch((e) => { if (!vivo) return; mundo[idx(ax, ay, az)] = AIRE; marcar(ax, az); aviso(mensajeError(e)); }).finally(() => { ocupado = false; });
+  }
+  let cosechaCd = 0;
+  function cosecharAhora(h) {
+    const ahora = performance.now(); if (ahora < cosechaCd || ocupado || ctx.soloMirar || !ctx.cosechar) return; cosechaCd = ahora + 1200;
+    ocupado = true;
+    Promise.resolve(ctx.cosechar(h.x, h.y, h.z)).then((r) => {
+      mundo[idx(h.x, h.y, h.z)] = AIRE; marcar(h.x, h.z); sonido.recoger(); soltarParticulas(h.x + .5, h.y + .5, h.z + .5, 5, 8, 1.6);
+      if (r && r.item) avisoBotin(r.item, r.n || 1); if (r && r.semilla) avisoBotin(r.semilla, r.semilla_n || 1);
+    }).catch((e) => { const m = String((e && e.message) || e || ""), t = /no_madura:(\d+)/.exec(m); aviso(t ? "🌱 Todavía no está madura. Faltan " + (t[1] >= 60 ? Math.ceil(t[1] / 60) + " min" : t[1] + " s") + "." : /bloque_ajeno/.test(m) ? "Esa planta la sembró otro compañero." : mensajeError(e)); }).finally(() => { ocupado = false; });
+  }
   function mensajeError(e) {
     const m = String((e && e.message) || e || "");
     if (/demasiado_rapido/.test(m)) return "Vas muy rápido. Espera un momento.";
     if (/parcela_ajena/.test(m)) return "Esa es la parcela de otro compañero.";
     if (/bloque_ajeno/.test(m)) return "Ese bloque lo puso otro compañero.";
+    if (/sin_azada/.test(m)) return "Necesitas una azada: fabrícala con material y palos.";
+    if (/sin_tierra_labrada/.test(m)) return "Siembra sobre tierra labrada.";
+    if (/semilla_no_valida/.test(m)) return "Eso no se puede sembrar.";
     if (/sin_material/.test(m)) return "No tienes suficiente material.";
     if (/limite_de_bloques/.test(m)) return "Llegaste al máximo de bloques puestos.";
     if (/zona_protegida/.test(m)) return "La plaza está protegida.";
@@ -1005,7 +1078,7 @@ export function iniciarMundo3D(host, ctx) {
     if (pausado || (!jugando && !bloqueado())) return;
     const k = e.key.toLowerCase(); if (k === "e") { hablar(); return; } if (k === "t") { try { ctx.alChat && ctx.alChat(); } catch (_) {} return; } if (k === "i" || k === "b") { try { ctx.alInventario && ctx.alInventario(); } catch (_) {} return; } if (k === "v") { cam.modo = (cam.modo + 1) % 3; try { ctx.alCamara && ctx.alCamara(cam.modo); } catch (_) {} return; } if ([" ", "arrowup", "arrowdown"].includes(k)) e.preventDefault();
     tec[mapaTecla(k)] = true; if (k === "f" && sinBloqueo) picar = true;
-    const n = +e.key; if (n >= 1 && n <= 9) { const mios = COLOCABLES.filter((b) => ctx.cantidad(b) > 0 || b <= 9); if (mios[n - 1]) seleccionar(mios[n - 1]); }
+    const n = +e.key; if (n >= 1 && n <= 9) { const mios = listaMano(); if (mios[n - 1]) seleccionar(mios[n - 1]); }
   });
   on(window, "keyup", (e) => { const k = e.key.toLowerCase(); tec[mapaTecla(k)] = false; if (k === "f" && sinBloqueo) picar = false; });
   on(window, "blur", () => { for (const k in tec) tec[k] = false; picar = false; });
@@ -1027,7 +1100,7 @@ export function iniciarMundo3D(host, ctx) {
   on(window, "pointerup", (e) => { if (e.pointerType !== "touch") { arrastraRaton = false; if (e.button === 0 && !sinBloqueo) picar = false; } });
   on(window, "mousemove", (e) => { if (bloqueado()) mirar(e.movementX, e.movementY, .0024); else if (arrastraRaton) mirar(e.movementX, e.movementY, .004); });
   on(document, "pointerlockchange", () => { if (!bloqueado()) { picar = false; if (jugando && !sinBloqueo) ayuda.textContent = "Haz clic para seguir jugando"; } });
-  on(cv, "wheel", (e) => { e.preventDefault(); const mios = COLOCABLES.filter((b) => ctx.cantidad(b) > 0 || b === sel), i = Math.max(0, mios.indexOf(sel)); seleccionar(mios[(i + (e.deltaY > 0 ? 1 : -1) + mios.length) % mios.length]); }, { passive: false });
+  on(cv, "wheel", (e) => { e.preventDefault(); const mios = listaMano(sel), i = Math.max(0, mios.indexOf(sel)); seleccionar(mios[(i + (e.deltaY > 0 ? 1 : -1) + mios.length) % mios.length]); }, { passive: false });
   on(cv, "pointermove", (e) => {
     const t = toques[e.pointerId]; if (!t) return;
     if (t.izq) { const dx = e.clientX - t.ox, dy = e.clientY - t.oy, m = Math.min(1, Math.hypot(dx, dy) / 45), a = Math.atan2(dy, dx); joy.corre = Math.hypot(dx, dy) > 80; joy.x = Math.cos(a) * m; joy.y = Math.sin(a) * m; joyEl.firstChild.style.transform = `translate(${joy.x * 30}px,${joy.y * 30}px)`; }
@@ -1122,7 +1195,7 @@ export function iniciarMundo3D(host, ctx) {
       }
     }
   }
-  const FRASES = { vaca: "🐄 ¡Muuu!", oveja: "🐑 ¡Beee!", cerdo: "🐖 ¡Oinc, oinc!", gallina: "🐔 ¡Coc, coc, coc!" };
+  const FRASES = { vaca: "🐄 ¡Muuu!", oveja: "🐑 ¡Beee!", cerdo: "🐖 ¡Oinc, oinc!", gallina: "🐔 ¡Coc, coc, coc!", conejo: "🐇 ¡Salta, salta!" };
   function moverAnimales(dt) {
     for (const a of animales) {
       const dxp = jug.x - a.x, dzp = jug.z - a.z, dp = Math.hypot(dxp, dzp); if (dp > 90) continue;
@@ -1411,6 +1484,7 @@ export function iniciarMundo3D(host, ctx) {
 
   return {
     aplicar: (filas) => aplicar(filas),
+    aplicarCultivos: (lista) => { for (const c of lista || []) { if (!(c.x >= 0 && c.x < SX && c.z >= 0 && c.z < SZ && c.y >= 0 && c.y < SY)) continue; const b = mundo[idx(c.x, c.y, c.z)]; if (b >= 100 && b <= 111) { const nb = 100 + (c.tipo | 0) * 4 + Math.min(3, c.etapa | 0); if (nb !== b) { mundo[idx(c.x, c.y, c.z)] = nb; marcar(c.x, c.z); } } } },
     seleccionar: (i) => { sel = i; },
     setCalidad: (v) => { alta = !!v; tamano(); },
     setCamara: (o) => { Object.assign(cam, o); },
