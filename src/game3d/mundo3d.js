@@ -1011,6 +1011,12 @@ export function iniciarMundo3D(host, ctx) {
     const p = parcelas.find((q) => q.mia); if (!p) return false;
     const cx = p.x + 8, cz = p.z + 8; jug.x = cx + .5; jug.z = cz + .5; jug.y = topeSolido(cx, cz) + .1; jug.vx = jug.vy = jug.vz = 0; jug.yaw = 0; return true;
   }
+  let verIdx = -1;
+  function verParcelaAjena() { // salta junto a la parcela del siguiente compañero para mirar su construcción
+    const lista = parcelas.filter((q) => !q.mia); if (!lista.length) return null;
+    verIdx = (verIdx + 1) % lista.length; const p = lista[verIdx], x = Math.max(2, p.x - 3), z = p.z + 8;
+    jug.x = x + .5; jug.z = z + .5; jug.y = topeSolido(x, z) + .1; jug.vx = jug.vy = jug.vz = 0; jug.yaw = -Math.PI / 2; jug.pitch = .15; return p.nombre || "Compañero";
+  }
   function dibujarParcelas(cielo, tt) {
     if (!parcelas.length && !mesas.length) return;
     prepararPC(cielo, false);
@@ -1092,7 +1098,7 @@ export function iniciarMundo3D(host, ctx) {
     if (ctx.soloMirar) { aviso("Estás de visita: aquí solo se puede mirar."); return false; }
     if (veda[z * SX + x]) { aviso("Los muros y portones de las zonas están protegidos."); return false; }
     if (enPlazaProtegida(x, z)) { aviso("La plaza está protegida: construye fuera de ella."); return false; }
-    const pl = plotDe(x, z); if (pl && !pl.mia) { aviso("Esta es la parcela de " + (pl.nombre || "otro compañero") + ": ahí solo construye su dueño."); return false; }
+    const pl = plotDe(x, z); if (pl && !pl.mia) { aviso("🏠 Esta es la parcela de " + (pl.nombre || "otro compañero") + ": puedes mirar su construcción, pero solo él puede cambiarla. Construye en tu parcela o fuera de las parcelas."); return false; }
     if (y < 1 || y >= SY - 1) return false;
     return true;
   }
@@ -1608,7 +1614,7 @@ export function iniciarMundo3D(host, ctx) {
     pausar: (v) => { pausado = !!v; if (!pausado) hablandoCon = null; if (pausado) { limpiarEntrada(); if (bloqueado()) document.exitPointerLock(); } else if (jugando && !sinBloqueo) ayuda.textContent = "Haz clic para seguir jugando"; },
     actualizarNpcs: (lista) => montarNpcs(lista),
     setOtros: (lista) => setOtros(lista),
-    setParcelas: (lista) => setParcelas(lista), irAMiParcela: () => irAMiParcela(), setControl: (o) => { if (o && "giro" in o) control.giro = !!o.giro; },
+    setParcelas: (lista) => setParcelas(lista), irAMiParcela: () => irAMiParcela(), verParcelaAjena: () => verParcelaAjena(), setControl: (o) => { if (o && "giro" in o) control.giro = !!o.giro; },
     setVida: (o) => { if (o && "monstruos" in o) { monActivo = !!o.monstruos; if (!monActivo) mons.length = 0; } },
     desmayarse: () => desmayarse(),
     posicion: () => ({ x: jug.x, y: jug.y, z: jug.z, yaw: jug.yaw }),
