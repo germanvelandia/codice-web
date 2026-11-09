@@ -34,9 +34,10 @@ export const NOMBRES = { 1: "Pasto", 2: "Tierra", 3: "Piedra", 4: "Tronco", 5: "
   40: "Palo", 41: "Carbón", 42: "Hierro", 43: "Oro", 44: "Diamante", 45: "Lana", 46: "Huevo", 47: "Manzana", 48: "Leche",
   50: "Pico de madera", 51: "Pico de piedra", 52: "Pico de hierro", 53: "Pico de diamante", 54: "Hacha de madera", 55: "Hacha de piedra", 56: "Hacha de hierro", 57: "Hacha de diamante",
   58: "Pala de madera", 59: "Pala de piedra", 60: "Pala de hierro", 61: "Pala de diamante",
+  26: "Grava", 27: "Arena roja", 28: "Nieve", 29: "Hielo", 30: "Cactus", 31: "Arcilla", 32: "Granito", 33: "Andesita", 34: "Diorita", 35: "Pizarra profunda", 36: "Lámpara",
   24: "Horno", 25: "Bloque de cobre", 62: "Cobre crudo", 63: "Lingote de cobre", 65: "Hierro crudo", 66: "Oro crudo",
   68: "Espada de madera", 69: "Espada de piedra", 70: "Espada de hierro", 71: "Espada de diamante" };
-export const COLOCABLES = [1, 2, 3, 4, 6, 7, 8, 9, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25];
+export const COLOCABLES = [1, 2, 3, 4, 6, 7, 8, 9, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36];
 // Frases rápidas del chat (los mismos números que la tabla mundo3d_frases del servidor)
 export const FRASES_CHAT = { 1: "¡Hola!", 2: "¡Buen trabajo!", 3: "¿Me ayudas?", 4: "¡Gracias!", 5: "¿Construimos juntos?", 6: "¡Mira lo que hice!", 7: "Vamos a la aldea", 8: "Necesito piedra", 9: "¡Qué bien!", 10: "¡Hasta luego!", 11: "Sígueme", 12: "¡Cuidado!" };
 export const MATERIALES = [40, 41, 42, 43, 44, 45, 46, 47, 48, 62, 63, 65, 66];
@@ -44,9 +45,9 @@ export const HERRAMIENTAS = [50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 68,
 // Usos máximos antes de romperse (los mismos números que _m3d_max_usos del servidor)
 export const MAX_USOS = (id) => (id >= 50 && id <= 61 ? [60, 130, 250, 600][(id - 50) % 4] : id >= 68 && id <= 71 ? [20, 40, 80, 160][id - 68] : 0);
 // Fundición y combustibles (mismos datos que las tablas mundo3d_fundicion y mundo3d_combustible)
-export const FUNDICION = [{ entrada: 65, sale: 42 }, { entrada: 66, sale: 43 }, { entrada: 62, sale: 63 }, { entrada: 9, sale: 8 }, { entrada: 4, sale: 41 }];
+export const FUNDICION = [{ entrada: 65, sale: 42 }, { entrada: 66, sale: 43 }, { entrada: 62, sale: 63 }, { entrada: 9, sale: 8 }, { entrada: 4, sale: 41 }, { entrada: 31, sale: 7 }];
 export const COMBUSTIBLES = [{ item: 41, rinde: 8 }, { item: 4, rinde: 3 }, { item: 6, rinde: 2 }, { item: 40, rinde: 1 }];
-const DUREZA = { 24: 1.2, 25: 1.6, 1: .3, 2: .3, 3: .9, 4: .6, 5: .15, 6: .5, 7: .9, 8: .2, 9: .25, 10: 1.1, 16: 1.6, 17: 1.6, 18: 2, 19: .3, 20: .3, 21: .3, 22: .3, 23: .3 };
+const DUREZA = { 26: .35, 27: .3, 28: .15, 29: .4, 30: .35, 31: .4, 32: 1, 33: 1, 34: 1, 35: 1.5, 36: .5, 24: 1.2, 25: 1.6, 1: .3, 2: .3, 3: .9, 4: .6, 5: .15, 6: .5, 7: .9, 8: .2, 9: .25, 10: 1.1, 16: 1.6, 17: 1.6, 18: 2, 19: .3, 20: .3, 21: .3, 22: .3, 23: .3 };
 export const RECETAS = [
   { sale: 6, n: 4, cuesta: { 4: 1 }, txt: "1 tronco → 4 tablones" },
   { sale: 7, n: 2, cuesta: { 3: 2 }, txt: "2 piedra → 2 ladrillos" },
@@ -58,6 +59,9 @@ export const RECETAS = [
     { sale: 58 + t, n: 1, cuesta: { [mat]: 1, 40: 2 }, txt: "1 " + (mat === 6 ? "tablón" : NOMBRES_BASE[mat].toLowerCase()) + " + 2 palos", g: "Herramientas" },
   ]),
   ...[["madera", 6, 0], ["piedra", 3, 1], ["hierro", 42, 2], ["diamante", 44, 3]].map(([nom, mat, t]) => ({ sale: 68 + t, n: 1, cuesta: { [mat]: 2, 40: 1 }, txt: "2 " + (mat === 6 ? "tablones" : NOMBRES_BASE[mat].toLowerCase()) + " + 1 palo", g: "Armas" })),
+  { sale: 36, n: 2, cuesta: { 41: 1, 8: 1 }, txt: "1 carbón + 1 cristal → 2 lámparas", g: "Decoración" },
+  { sale: 29, n: 1, cuesta: { 28: 4 }, txt: "4 nieve → 1 hielo", g: "Decoración" },
+  { sale: 26, n: 2, cuesta: { 3: 1 }, txt: "1 piedra → 2 grava", g: "Decoración" },
   { sale: 24, n: 1, cuesta: { 3: 8 }, txt: "8 piedra → 1 horno (para fundir)", g: "Hornos y cobre" },
   { sale: 25, n: 1, cuesta: { 63: 4 }, txt: "4 lingotes de cobre → 1 bloque", g: "Hornos y cobre" },
   { sale: 16, n: 1, cuesta: { 42: 4 }, txt: "4 hierro → 1 bloque", g: "Bloques valiosos" },
@@ -70,7 +74,7 @@ export const CRUCE = { x: 216, z: 200 };
 export const enPlazaProtegida = (x, z) => (Math.abs(x - CENTRO) <= RADIO_PLAZA && Math.abs(z - CENTRO) <= RADIO_PLAZA) || (Math.abs(x - CRUCE.x) <= 14 && Math.abs(z - CRUCE.z) <= 8);
 
 // atlas: 0 pasto arriba, 1 pasto lado, 2 tierra, 3 piedra, 4 tronco lado, 5 tronco arriba, 6 hojas, 7 tablones, 8 ladrillo, 9 cristal, 10 arena, 11 mineral, 12 agua, 13 portal, 14 adoquín
-const NT = 27;
+const NT = 39;
 function tileDe(b, cara) { // cara: 0 +x, 1 -x, 2 +y, 3 -y, 4 +z, 5 -z
   switch (b) {
     case 1: return cara === 2 ? 0 : cara === 3 ? 2 : 1;
@@ -82,6 +86,9 @@ function tileDe(b, cara) { // cara: 0 +x, 1 -x, 2 +y, 3 -y, 4 +z, 5 -z
   if (b >= 16 && b <= 23) return b + 1;
   if (b === 24) return cara === 2 || cara === 3 ? 3 : 25;
   if (b === 25) return 26;
+  if (b === 30) return cara === 2 || cara === 3 ? 32 : 31;
+  if (b >= 26 && b <= 29) return b + 1;
+  if (b >= 31 && b <= 36) return b + 2;
   return 3;
 }
 let _atlas = null, _palRef = null;
@@ -96,7 +103,10 @@ export function atlasCanvas() {
     ["#2f6fcf", "#3a7fe0", "#2a62b8"], ["#7a3fd0", "#9a5cf0", "#5b2aa8"], ["#a8a49a", "#b8b4aa", "#948f84"], ["#6a4a26", "#7d5a30", "#5a3d1e"], ["#a77b45", "#b98a52", "#946b39"],
     ["#d8d8dc", "#e8e8ec", "#c2c2c8"], ["#f3c93a", "#ffe066", "#d9a820"], ["#3fd8d0", "#7df3ee", "#2bb5b0"],
     ["#ececec", "#f7f7f7", "#dcdcdc"], ["#c0392b", "#d44a3a", "#a22d21"], ["#2f5fc4", "#3d72dd", "#274fa6"], ["#3d9a3a", "#4cb148", "#2f7d2d"], ["#f1c40f", "#f7d63a", "#d4aa0a"],
-    ["#7f838a", "#90949b", "#6b6f76"], ["#c8693a", "#d9794a", "#a9532b"]];
+    ["#7f838a", "#90949b", "#6b6f76"], ["#c8693a", "#d9794a", "#a9532b"],
+    ["#8d8a86", "#a09d98", "#77746f"], ["#b9552f", "#c8653c", "#9d4626"], ["#f4f8fb", "#ffffff", "#dde7ee"], ["#a9d8f0", "#c4e8fa", "#8cc4e0"],
+    ["#2f7a3c", "#3b8f4a", "#276832"], ["#3f8a47", "#4aa055", "#327a3b"], ["#9aa3b5", "#adb6c7", "#858ea1"],
+    ["#a5675a", "#b87666", "#8d554a"], ["#78787b", "#898a8d", "#66676a"], ["#cfcfd0", "#dddde0", "#bcbcc0"], ["#4a4c53", "#5a5c64", "#3b3d43"], ["#ffe08a", "#fff0b8", "#f2c75a"]];
   _palRef = pal;
   for (let t = 0; t < NT; t++) {
     const ox = t * 16;
@@ -115,7 +125,19 @@ export function atlasCanvas() {
     if (t >= 17 && t <= 19) { g.fillStyle = "#0003"; g.fillRect(ox, 0, 16, 1); g.fillRect(ox, 15, 16, 1); g.fillRect(ox, 0, 1, 16); g.fillRect(ox + 15, 0, 1, 16); g.fillStyle = "#fff6"; g.fillRect(ox + 2, 2, 3, 1); g.fillRect(ox + 2, 2, 1, 3); }
     if (t === 25) { g.fillStyle = "#2a2a2e"; g.fillRect(ox + 3, 6, 10, 7); g.fillStyle = "#ff8a1f"; g.fillRect(ox + 5, 9, 6, 3); g.fillStyle = "#ffd34d"; g.fillRect(ox + 7, 10, 2, 2); g.fillStyle = "#0004"; g.fillRect(ox, 3, 16, 1); }
     else if (t === 26) { g.fillStyle = "#3fbf9f"; for (let i = 0; i < 9; i++) g.fillRect(ox + ((r() * 14) | 0), ((r() * 14) | 0), 2, 2); g.fillStyle = "#0003"; g.fillRect(ox, 0, 16, 1); g.fillRect(ox, 15, 16, 1); g.fillRect(ox, 0, 1, 16); g.fillRect(ox + 15, 0, 1, 16); }
-    else if (t >= 20) { g.fillStyle = "#0002"; for (let i = 0; i < 12; i++) g.fillRect(ox + ((r() * 14) | 0), ((r() * 14) | 0), 2, 1); }
+    else if (t === 27) { g.fillStyle = "#0004"; for (let i = 0; i < 14; i++) g.fillRect(ox + ((r() * 14) | 0), ((r() * 14) | 0), 2, 2); g.fillStyle = "#fff3"; for (let i = 0; i < 8; i++) g.fillRect(ox + ((r() * 14) | 0), ((r() * 14) | 0), 1, 1); }
+    else if (t === 28) { g.fillStyle = "#7a2f18"; for (let y = 4; y < 16; y += 5) g.fillRect(ox, y, 16, 1); }
+    else if (t === 29) { g.fillStyle = "#e3edf3"; for (let i = 0; i < 10; i++) g.fillRect(ox + ((r() * 14) | 0), ((r() * 14) | 0), 2, 1); }
+    else if (t === 30) { g.fillStyle = "#ffffff80"; g.fillRect(ox + 2, 2, 5, 1); g.fillRect(ox + 8, 9, 5, 1); g.fillRect(ox + 4, 12, 3, 1); g.strokeStyle = "#8cc4e0"; g.strokeRect(ox + .5, .5, 15, 15); }
+    else if (t === 31) { g.fillStyle = "#1f5a2a"; for (let x = 3; x < 16; x += 4) g.fillRect(ox + x, 0, 1, 16); g.fillStyle = "#e8f5d8"; for (let y = 2; y < 16; y += 4) for (let x = 1; x < 16; x += 4) g.fillRect(ox + x, y, 1, 1); }
+    else if (t === 32) { g.fillStyle = "#2a6f35"; g.strokeStyle = "#1f5a2a"; g.strokeRect(ox + 1.5, 1.5, 13, 13); g.fillStyle = "#f0e68c"; g.fillRect(ox + 7, 7, 2, 2); }
+    else if (t === 33) { g.fillStyle = "#8691a3"; for (let i = 0; i < 5; i++) g.fillRect(ox + ((r() * 12) | 0), ((r() * 14) | 0), 4, 1); }
+    else if (t === 34) { g.fillStyle = "#d9a590"; for (let i = 0; i < 10; i++) g.fillRect(ox + ((r() * 13) | 0), ((r() * 13) | 0), 3, 2); }
+    else if (t === 35) { g.fillStyle = "#a0a0a4"; for (let i = 0; i < 10; i++) g.fillRect(ox + ((r() * 13) | 0), ((r() * 13) | 0), 2, 2); }
+    else if (t === 36) { g.fillStyle = "#ffffff"; for (let i = 0; i < 12; i++) g.fillRect(ox + ((r() * 14) | 0), ((r() * 14) | 0), 2, 2); g.fillStyle = "#b8b8c0"; for (let i = 0; i < 6; i++) g.fillRect(ox + ((r() * 14) | 0), ((r() * 14) | 0), 2, 1); }
+    else if (t === 37) { g.fillStyle = "#2b2c31"; for (let y = 5; y < 16; y += 6) g.fillRect(ox, y, 16, 1); g.fillStyle = "#6a6d78"; for (let i = 0; i < 6; i++) g.fillRect(ox + ((r() * 14) | 0), ((r() * 14) | 0), 1, 1); }
+    else if (t === 38) { g.fillStyle = "#a8742a"; g.fillRect(ox, 0, 16, 2); g.fillRect(ox, 14, 16, 2); g.fillRect(ox, 0, 2, 16); g.fillRect(ox + 14, 0, 2, 16); g.fillStyle = "#fff8d0"; g.fillRect(ox + 4, 4, 8, 8); }
+    else if (t >= 20 && t <= 24) { g.fillStyle = "#0002"; for (let i = 0; i < 12; i++) g.fillRect(ox + ((r() * 14) | 0), ((r() * 14) | 0), 2, 1); }
     if (t === 16) { g.fillStyle = "#0004"; for (let x = 4; x < 16; x += 4) g.fillRect(ox + x, 0, 1, 16); g.fillStyle = "#3a3f46"; g.fillRect(ox, 2, 16, 3); g.fillRect(ox, 11, 16, 3); g.fillStyle = "#9aa1ab"; for (let x = 2; x < 16; x += 5) { g.fillRect(ox + x, 3, 1, 1); g.fillRect(ox + x, 12, 1, 1); } g.fillStyle = "#d4af37"; g.fillRect(ox + 11, 7, 3, 3); }
   }
   return (_atlas = a);
@@ -195,11 +217,23 @@ function altura(x, z, seed) {
   h = 12 + (h - 12) * frr;
   return Math.max(2, Math.min(SY - 8, Math.round(h)));
 }
+// Biomas nuevos (iguales en todos los mundos): 1 desierto de arena roja (suroeste), 2 tundra nevada (este). Se excluyen la aldea, el lago y el Cruce.
+export function bioma(x, z) {
+  if (Math.max(Math.abs(x - CENTRO), Math.abs(z - CENTRO)) < RADIO_PLAZA + 12) return 0;
+  if (Math.hypot((x - LAGO.x) * .8, z - LAGO.z) < LAGO.r + 6) return 0;
+  if (Math.abs(x - CRUCE.x) < 26 && Math.abs(z - CRUCE.z) < 18) return 0;
+  if (Math.hypot(x - MONTE.x, z - MONTE.z) < MONTE.r + 2) return 0;
+  const j = (ruidoV(77, x * .07, z * .07) - .5) * 20;
+  if (Math.hypot(x - 50, z - 190) < 44 + j) return 1;
+  if (Math.hypot(x - 228, z - 130) < 32 + j) return 2;
+  return 0;
+}
 export function zonaDe(x, z) {
   if (Math.abs(x - CRUCE.x) <= 16 && Math.abs(z - CRUCE.z) <= 10) return "Cruce de los Mundos";
   if (Math.max(Math.abs(x - CENTRO), Math.abs(z - CENTRO)) <= RADIO_PLAZA + 3) return "Aldea del Códice";
   if (Math.hypot(x - MONTE.x, z - MONTE.z) < MONTE.r) return "Montaña del Esfuerzo";
   if (Math.hypot((x - LAGO.x) * .8, z - LAGO.z) < LAGO.r + 3) return "Lago";
+  const bi = bioma(x, z); if (bi === 1) return "Desierto de Arena Roja"; if (bi === 2) return "Tundra Nevada";
   if (x < 110 && z < 110) return "Bosque de la Curiosidad";
   return "Campos de Oakhaven";
 }
@@ -249,7 +283,7 @@ export function iniciarMundo3D(host, ctx) {
   // ----- generar -----
   const semilla = hashTxt("codice-" + ctx.grado) | 0;
   let sem = (semilla >>> 0) || 1; const rnd = () => { sem = (Math.imul(sem, 1664525) + 1013904223) >>> 0; return sem / 4294967296; };
-  const alt = new Int16Array(SX * SZ);
+  const alt = new Int16Array(SX * SZ), eraPasto = new Uint8Array(SX * SZ); // eraPasto: donde el terreno original tenía pasto (para no cambiar la secuencia aleatoria de los árboles)
   for (let z = 0; z < SZ; z++) for (let x = 0; x < SX; x++) {
     const h = altura(x, z, semilla); alt[z * SX + x] = h;
     const enPlaza = Math.max(Math.abs(x - CENTRO), Math.abs(z - CENTRO)) <= RADIO_ADOQUIN, nearLago = Math.hypot((x - LAGO.x) * .8, z - LAGO.z) < LAGO.r + 3;
@@ -260,6 +294,7 @@ export function iniciarMundo3D(host, ctx) {
       else if (y >= h - 3) b = (nearLago && h <= 12) ? 9 : (h >= 30 ? 3 : 2);
       else { b = 3; if (y > 1 && y < h - 5 && rnd() < .03) b = 10; }
       if (b === 3 && h >= 26 && y >= h - 2 && !enCamino && !enPlaza && ((Math.imul((x * 73856093) ^ (y * 19349663) ^ (z * 83492791) ^ semilla, 2654435761) >>> 0) % 1000) < 45) b = 10; // vetas a la vista en la montaña
+      if (y === h && b === 1) eraPasto[z * SX + x] = 1;
       mundo[idx(x, y, z)] = b;
     }
     for (let y = h + 1; y <= 11; y++) mundo[idx(x, y, z)] = AGUA;
@@ -273,13 +308,41 @@ export function iniciarMundo3D(host, ctx) {
       cx += ((rnd() * 3) | 0) - 1; cy += ((rnd() * 3) | 0) - 1; cz += ((rnd() * 3) | 0) - 1;
     }
   }
+  // rocas variadas bajo tierra y superficie de los biomas (sin usar la secuencia aleatoria: los mundos ya construidos no cambian)
+  const hz = (x, y, z, k) => (Math.imul((x * 73856093) ^ (y * 19349663) ^ (z * 83492791) ^ k, 2654435761) >>> 0) / 4294967296;
+  for (let z = 0; z < SZ; z++) for (let x = 0; x < SX; x++) {
+    const h = alt[z * SX + x], bi = bioma(x, z);
+    for (let y = 2; y <= h - 4; y++) {
+      if (mundo[idx(x, y, z)] !== 3) continue;
+      if (y <= 5) { mundo[idx(x, y, z)] = 35; continue; }
+      const gr = ruidoV(semilla + 11 + (y >> 2), x * .09, z * .09), dio = ruidoV(semilla + 37 + (y >> 2), x * .09, z * .09);
+      mundo[idx(x, y, z)] = gr > .72 ? 32 : gr < .17 ? 33 : dio > .74 ? 34 : 3;
+    }
+    if (bi && h < 30 && mundo[idx(x, h, z)] === 1) {
+      if (bi === 1) {
+        const roja = ruidoV(91, x * .1, z * .1) > .6 ? 27 : 9;
+        mundo[idx(x, h, z)] = roja; for (let y = h - 1; y >= h - 3; y--) if (mundo[idx(x, y, z)] === 2) mundo[idx(x, y, z)] = roja;
+        for (let y = h - 4; y >= h - 9 && y > 1; y--) if (mundo[idx(x, y, z)] === 3 && ((y >> 1) & 1)) mundo[idx(x, y, z)] = 27;
+      } else {
+        mundo[idx(x, h, z)] = 28;
+      }
+    }
+  }
   for (let z = 3; z < SZ - 3; z++) for (let x = 3; x < SX - 3; x++) { // árboles (más densos en el bosque)
-    const a = alt[z * SX + x]; if (mundo[idx(x, a, z)] !== 1) continue;
+    const a = alt[z * SX + x]; if (!eraPasto[z * SX + x]) continue;
     if (Math.max(Math.abs(x - CENTRO), Math.abs(z - CENTRO)) < RADIO_PLAZA + 6) continue;
     if (Math.abs(x - CRUCE.x) < 20 && Math.abs(z - CRUCE.z) < 14) continue;
     if (distCamino(x, z) < 4) continue;
-    const p = zonaDe(x, z) === "Bosque de la Curiosidad" ? .035 : .004;
-    if (rnd() < p) {
+    const p = zonaDe(x, z) === "Bosque de la Curiosidad" ? .035 : .004, r0 = rnd(), bi = bioma(x, z);
+    if (bi && mundo[idx(x, a, z)] !== 1) {
+      const h0 = hz(x, 0, z, 5);
+      if (bi === 1) { if (h0 < .012 && !mundo[idx(x, a + 1, z)]) { const t = 1 + ((hz(x, 1, z, 6) * 3) | 0); for (let k = 1; k <= t; k++) mundo[idx(x, a + k, z)] = 30; } }
+      else if (bi === 2 && h0 < .01) { // abeto nevado
+        const t = 5 + ((hz(x, 1, z, 6) * 3) | 0); for (let k = 1; k <= t; k++) mundo[idx(x, a + k, z)] = 4;
+        for (let k = 2; k <= t + 1; k++) { const rr = k % 2 === 0 ? 2 : 1, cima = k >= t; for (let dz = -rr; dz <= rr; dz++) for (let dx = -rr; dx <= rr; dx++) { if ((cima ? Math.abs(dx) + Math.abs(dz) > 0 : Math.abs(dx) + Math.abs(dz) > rr + 1) || (dx === 0 && dz === 0 && k <= t)) continue; const xx = x + dx, yy = a + k, zz = z + dz; if (yy < SY && !mundo[idx(xx, yy, zz)]) mundo[idx(xx, yy, zz)] = 5; } }
+        if (a + t + 2 < SY) mundo[idx(x, a + t + 2, z)] = 28;
+      }
+    } else if (!bi && r0 < p) {
       const t = 4 + ((rnd() * 2) | 0);
       for (let k = 1; k <= t; k++) mundo[idx(x, a + k, z)] = 4;
       for (let dy = -2; dy <= 1; dy++) for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
@@ -766,7 +829,7 @@ export function iniciarMundo3D(host, ctx) {
   // ----- acciones -----
   let sel = 1, picar = false, picando = null, ocupado = false, pausado = false, cercano = null;
   // ----- herramientas: la mejor que tengas en el inventario acelera el picado (pico: piedra y minerales, hacha: madera, pala: tierra y arena) -----
-  const CLASE = { 24: 0, 25: 0, 3: 0, 7: 0, 10: 0, 16: 0, 17: 0, 18: 0, 4: 1, 6: 1, 5: 1, 15: 1, 1: 2, 2: 2, 9: 2 };
+  const CLASE = { 26: 2, 27: 2, 28: 2, 29: 0, 30: 1, 31: 2, 32: 0, 33: 0, 34: 0, 35: 0, 36: 0, 24: 0, 25: 0, 3: 0, 7: 0, 10: 0, 16: 0, 17: 0, 18: 0, 4: 1, 6: 1, 5: 1, 15: 1, 1: 2, 2: 2, 9: 2 };
   const MULT = [2.2, 3.6, 5.5, 8];
   function herramientaPara(b) {
     const k = CLASE[b]; if (k === undefined) return { mult: 1, id: 0, k: -1 };
