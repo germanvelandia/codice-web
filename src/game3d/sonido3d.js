@@ -73,6 +73,7 @@ export function crearSonido(inicial = {}) {
   const desmayo = () => { tono(400, 70, .9, { tipo: "sine", g: .12 }); };
   const clic = () => ruido(.04, { tipo: "bandpass", f: 2400, g: .06, q: 3 });
   const logro = () => [523, 659, 784, 1047].forEach((f, i) => tono(f, f, .5, { tipo: "triangle", g: .09, t0: i * .11 }));
+  const trueno = () => { ruido(2.4, { tipo: "lowpass", f: 240, g: .3, ataque: .06 }); tono(62, 34, 1.8, { tipo: "sawtooth", g: .07, ataque: .05 }); };
   const animal = (tipo) => {
     if (tipo === "vaca") { tono(150, 105, .85, { tipo: "sawtooth", g: .09, vib: 5, ataque: .08 }); ruido(.8, { tipo: "lowpass", f: 400, g: .04 }); }
     else if (tipo === "oveja") { tono(420, 360, .6, { tipo: "sawtooth", g: .06, vib: 28, ataque: .05 }); tono(430, 380, .5, { tipo: "triangle", g: .04, vib: 24, t0: .02 }); }
@@ -103,7 +104,7 @@ export function crearSonido(inicial = {}) {
   }
 
   return {
-    activar, actualizar, paso, picar, romper, poner, agua, salto, portal, abrirPuerta, puertaCerrada, clic, recoger, logro, animal, dano, pegar, monstruo, vencido, desmayo,
+    activar, actualizar, paso, picar, romper, poner, agua, salto, portal, abrirPuerta, puertaCerrada, clic, recoger, logro, animal, trueno, dano, pegar, monstruo, vencido, desmayo,
     ajustar: (o) => { if (o.volumen != null) volumen = Math.max(0, Math.min(1, o.volumen)); if (o.musica != null) musica = !!o.musica; if (o.silencio != null) silencio = !!o.silencio; },
     estado: () => ({ volumen, musica, silencio, activo: !!ac }),
     cerrar: () => { try { nodos.forEach((n) => n.stop()); } catch (_) {} if (ac) ac.close().catch(() => {}); ac = null; },
