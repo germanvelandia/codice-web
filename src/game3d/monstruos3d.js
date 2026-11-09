@@ -40,5 +40,6 @@ export const MONSTRUOS = {
 export function danioDeArma(tiene) {
   let mejor = 1;
   for (let id = 50; id <= 61; id++) if (tiene(id) > 0) { const k = Math.floor((id - 50) / 4), t = (id - 50) % 4; mejor = Math.max(mejor, 1 + (k === 1 ? 2 : 1) + t); }
+  for (let id = 68; id <= 71; id++) if (tiene(id) > 0) mejor = Math.max(mejor, 4 + (id - 68));
   return mejor;
 }
