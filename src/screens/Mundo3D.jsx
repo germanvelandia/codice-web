@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { iniciarMundo3D, dibujarIcono, FRASES_CHAT, COLOCABLES, MATERIALES, HERRAMIENTAS, NOMBRES, RECETAS, MAX_USOS, FUNDICION, COMBUSTIBLES } from "../game3d/mundo3d";
+import { iniciarMundo3D, dibujarIcono, FRASES_CHAT, COLOCABLES, MATERIALES, HERRAMIENTAS, NOMBRES, RECETAS, MAX_USOS, FUNDICION, COMBUSTIBLES, USABLES, MERCADO } from "../game3d/mundo3d";
 import * as api from "../lib/mundo3dApi";
 import * as mundoApi from "../lib/mundoApi";
 import * as apiGeneral from "../lib/api";
@@ -16,7 +16,17 @@ function Icono({ item }) {
   return <canvas ref={ref} width={16} height={16} style={{ width: 30, height: 30, imageRendering: "pixelated" }} />;
 }
 
-const GRUPOS_REC = ["Bloques básicos", "Materiales", "Herramientas", "Armas", "Hornos y cobre", "Bloques valiosos", "Lanas"];
+const GRUPOS_REC = ["Bloques básicos", "Materiales", "Herramientas", "Armas", "Granja", "Comida", "Hornos y cobre", "Bloques valiosos", "Lanas"];
+// Mercado de la aldea: se venden cosechas y minerales por oro (el servidor limita cuánto se gana por día)
+function PanelMercado({ inv, visitando, restante, alVender }) {
+  const lista = MERCADO.filter((m) => (inv[m.item] || 0) > 0);
+  return (<div>
+    <div style={{ fontSize: 12, marginBottom: 6 }}>🛒 Hoy aún puedes ganar <b>{restante == null ? "…" : restante} 🪙</b> aquí.</div>
+    {lista.length === 0 && <div style={{ fontSize: 12, opacity: .8 }}>No tienes nada que vender todavía: siembra, cosecha, cocina o pica minerales.</div>}
+    {lista.map((m) => (<div key={m.item} className="m3d-rec"><Icono item={m.item} /><b>{NOMBRES[m.item]}<br /><span style={{ fontWeight: 500, fontSize: 11, opacity: .75 }}>{m.precio} 🪙 cada uno · tienes {inv[m.item]}</span></b>
+      <button disabled={visitando || restante === 0} onClick={() => alVender(m.item, 1)}>1</button><button disabled={visitando || restante === 0} onClick={() => alVender(m.item, Math.min(inv[m.item], 64))}>Todo</button></div>))}
+  </div>);
+}
 // Horno: elige qué fundir y con qué combustible; el servidor descuenta todo en una sola operación
 function PanelHorno({ inv, visitando, alFundir }) {
   const [comb, setComb] = useState(41);
@@ -299,8 +309,11 @@ export default function Mundo3D({ estudianteInfo }) {
           alCamara: (m) => setCam((c) => ({ ...c, modo: m })),
           alNpc: (n) => setDialogo(n),
           cantidad: (i) => invRef.current[i] || 0,
-          picar: async (x, y, z, b) => { const r = await api.picarMundo3D(est, x, y, z, b); if (r && r.item) fijarInv({ ...invRef.current, [r.item]: Math.min(999, (invRef.current[r.item] || 0) + 1) }); if (r && r.desgaste) usarHerr(r.desgaste); setColocados((n) => n); return r; },
+          picar: async (x, y, z, b) => { const r = await api.picarMundo3D(est, x, y, z, b); if (r && r.item) fijarInv({ ...invRef.current, [r.item]: Math.min(999, (invRef.current[r.item] || 0) + 1) }); if (r && r.extra) fijarInv({ ...invRef.current, [r.extra]: Math.min(999, (invRef.current[r.extra] || 0) + 1) }); if (r && r.desgaste) usarHerr(r.desgaste); setColocados((n) => n); return r; },
           poner: async (x, y, z, i) => { const r = await api.ponerMundo3D(est, x, y, z, i); fijarInv({ ...invRef.current, [i]: r.cantidad }); setColocados((n) => n + 1); return r; },
+          labrar: async (x, y, z, b) => { const r = await api.labrarMundo3D(est, x, y, z, b); if (r && r.desgaste) usarHerr(r.desgaste); return r; },
+          sembrar: async (x, y, z, i) => { const r = await api.sembrarMundo3D(est, x, y, z, i); fijarInv({ ...invRef.current, [i]: r.cantidad }); return r; },
+          cosechar: async (x, y, z) => { const r = await api.cosecharMundo3D(est, x, y, z); if (r && r.inventario) fijarInv(Object.fromEntries(Object.entries(r.inventario).map(([k, v]) => [Number(k), v]))); return r; },
           alSeleccion: (i) => { selRef.current = i; setSel(i); },
           alZona: setZona, alError: (t) => avisar(t),
           puertas: puertasRef.current, sonido: sndRef.current,
@@ -314,9 +327,13 @@ export default function Mundo3D({ estudianteInfo }) {
           alPortal: (id) => { const t = "Viajando al mundo de " + (String(id) === miGrado ? "tu curso" : "curso " + id) + "…"; abrirVelo(t); setGradoVer(String(id)); },
         });
         c.seleccionar(selRef.current); aplicarCam(c, camRef.current); ctl.current = c; setListo(true);
+        const verCultivos = () => api.fetchCultivosMundo3D(est, gradoVer).then((l) => { if (vivo && ctl.current === c) c.aplicarCultivos(l); }).catch(() => {});
+        verCultivos();
         // ver lo que construyen los compañeros mientras juegas
+        let vuelta = 0;
         relojPoll = setInterval(async () => {
           if (document.hidden) return;
+          if (++vuelta % 2 === 0) verCultivos();
           try {
             const nuevas = await api.fetchCambiosMundo3D(est, gradoVer, ultCambio.current);
             if (nuevas.length && ctl.current === c) { ultCambio.current = nuevas[nuevas.length - 1].actualizado; c.aplicar(nuevas); }
@@ -353,6 +370,11 @@ export default function Mundo3D({ estudianteInfo }) {
   const ciclarCamara = () => setCam((c) => ({ ...c, modo: (c.modo + 1) % 3 }));
 
   const elegir = (i) => { setSel(i); selRef.current = i; ctl.current && ctl.current.seleccionar(i); };
+  const [restanteMercado, setRestanteMercado] = useState(null);
+  const vender = async (item, n) => {
+    try { const r = await api.venderMundo3D(est, item, n); fijarInv(Object.fromEntries(Object.entries(r.inventario || {}).map(([k, v]) => [Number(k), v]))); setRestanteMercado(r.restante); setProg((p) => (p.xp == null ? p : { xp: p.xp + r.xp, oro: p.oro + r.oro })); avisar("🛒 Vendiste " + r.vendido + " " + NOMBRES[item].toLowerCase() + ": +" + r.oro + " 🪙"); }
+    catch (er) { avisar(/tope_diario/.test(er.message) ? "Hoy ya ganaste el máximo en el Mercado. ¡Vuelve mañana!" : /sin_material/.test(er.message) ? "No tienes tantos." : /demasiado_rapido/.test(er.message) ? "Vas muy rápido." : "No se pudo vender."); }
+  };
   const fundir = async (f, n, comb) => {
     try { const res = await api.fundirMundo3D(est, f.entrada, n, comb); fijarInv(Object.fromEntries(Object.entries(res.inventario || {}).map(([k, v]) => [Number(k), v]))); avisar("🔥 Fundiste " + n + " → " + NOMBRES[f.sale].toLowerCase() + "."); }
     catch (er) { avisar(/sin_horno/.test(er.message) ? "Necesitas un horno." : /sin_combustible/.test(er.message) ? "No tienes suficiente combustible." : /sin_material/.test(er.message) ? "No tienes suficiente material." : /demasiado_rapido/.test(er.message) ? "Vas muy rápido." : "No se pudo fundir."); }
@@ -363,7 +385,7 @@ export default function Mundo3D({ estudianteInfo }) {
   };
   const cambiarCalidad = () => { const v = !calidadAlta; setCalidadAlta(v); ctl.current && ctl.current.setCalidad(v); };
 
-  const barraBloques = COLOCABLES.filter((id) => id <= 9 || (inv[id] || 0) > 0).map((id, i) => (
+  const barraBloques = [...COLOCABLES.filter((id) => id <= 9 || (inv[id] || 0) > 0), ...USABLES.filter((id) => (inv[id] || 0) > 0)].map((id, i) => (
     <button key={id} onClick={() => elegir(id)} aria-pressed={sel === id} aria-label={NOMBRES[id] + (i < 9 ? " (tecla " + (i + 1) + ")" : "")}
       className={`w-[52px] h-[56px] rounded-lg border-2 flex flex-col items-center pt-1 text-[11px] font-bold ${sel === id ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-white"} ${(inv[id] || 0) === 0 ? "opacity-50" : ""}`}>
       <Icono item={id} /><span className="text-slate-600">{inv[id] || 0}</span>
@@ -423,17 +445,18 @@ export default function Mundo3D({ estudianteInfo }) {
             )}
             {mochila && (
               <div className="m3d-inv" role="dialog" aria-label="Mochila">
-                <div className="m3d-seg" style={{ marginTop: 0 }}><button className={pestana === "mochila" ? "on" : ""} onClick={() => setPestana("mochila")}>🎒 Mochila</button><button className={pestana === "fabricar" ? "on" : ""} onClick={() => setPestana("fabricar")}>🔨 Fabricar</button><button className={pestana === "horno" ? "on" : ""} onClick={() => setPestana("horno")}>🔥 Horno</button></div>
+                <div className="m3d-seg" style={{ marginTop: 0 }}><button className={pestana === "mochila" ? "on" : ""} onClick={() => setPestana("mochila")}>🎒 Mochila</button><button className={pestana === "fabricar" ? "on" : ""} onClick={() => setPestana("fabricar")}>🔨 Fabricar</button><button className={pestana === "horno" ? "on" : ""} onClick={() => setPestana("horno")}>🔥 Horno</button><button className={pestana === "mercado" ? "on" : ""} onClick={() => { setPestana("mercado"); api.fetchMercadoHoyMundo3D(est).then((r) => setRestanteMercado(r && r.restante)).catch(() => {}); }}>🛒 Mercado</button></div>
                 {pestana === "mochila" ? (() => {
                   const celda = (id, ponible) => (<button key={id} className={"m3d-celda" + (sel === id ? " sel" : "")} onClick={() => ponible && elegir(id)} style={{ cursor: ponible ? "pointer" : "default" }} title={NOMBRES[id]}><Icono item={id} /><span>{inv[id]}</span><small>{NOMBRES[id]}</small>{MAX_USOS(id) > 0 && (<i style={{ display: "block", height: 4, borderRadius: 2, background: "#334155", marginTop: 2, overflow: "hidden" }}><b style={{ display: "block", height: "100%", width: Math.max(4, 100 - ((desgaste[id] || 0) / MAX_USOS(id)) * 100) + "%", background: ((desgaste[id] || 0) / MAX_USOS(id)) > .8 ? "#ef4444" : ((desgaste[id] || 0) / MAX_USOS(id)) > .5 ? "#f59e0b" : "#22c55e" }} /></i>)}</button>);
-                  const tengo = (lista) => lista.filter((id) => (inv[id] || 0) > 0), hr = tengo(HERRAMIENTAS), bl = COLOCABLES.filter((id) => (inv[id] || 0) > 0), ma = tengo(MATERIALES);
+                  const tengo = (lista) => lista.filter((id) => (inv[id] || 0) > 0), hr = tengo(HERRAMIENTAS), se = tengo([72, 73, 74]), bl = COLOCABLES.filter((id) => (inv[id] || 0) > 0), ma = tengo(MATERIALES);
                   return (<>
-                    {hr.length > 0 && <><h4>Herramientas y armas (se usan solas; la barra muestra su desgaste)</h4><div className="m3d-celdas">{hr.map((id) => celda(id, false))}</div></>}
+                    {hr.length > 0 && <><h4>Herramientas y armas (la barra muestra su desgaste; la azada se elige para labrar)</h4><div className="m3d-celdas">{hr.map((id) => celda(id, id >= 80))}</div></>}
+                    {se.length > 0 && <><h4>Semillas y cultivos (elígelos y toca tierra labrada)</h4><div className="m3d-celdas">{se.map((id) => celda(id, true))}</div></>}
                     <h4>Bloques (toca uno para elegirlo)</h4><div className="m3d-celdas">{bl.length ? bl.map((id) => celda(id, true)) : <span style={{ opacity: .7 }}>Aún no tienes bloques: pica el suelo.</span>}</div>
                     {ma.length > 0 && <><h4>Materiales</h4><div className="m3d-celdas">{ma.map((id) => celda(id, false))}</div></>}
                     <div style={{ marginTop: 10, color: "#cbd5e1", fontSize: 11 }}>Pica con pico para sacar carbón, hierro, oro y diamante. Esquila ovejas, recoge huevos y ordeña vacas con la tecla E. Fabrica herramientas mejores para picar más rápido.</div>
                   </>);
-                })() : pestana === "horno" ? <PanelHorno inv={inv} visitando={visitando} alFundir={fundir} /> : <ListaRecetas inv={inv} visitando={visitando} alFabricar={fabricar} />}
+                })() : pestana === "mercado" ? <PanelMercado inv={inv} visitando={visitando} restante={restanteMercado} alVender={vender} /> : pestana === "horno" ? <PanelHorno inv={inv} visitando={visitando} alFundir={fundir} /> : <ListaRecetas inv={inv} visitando={visitando} alFabricar={fabricar} />}
                 <button onClick={() => abrirMochila(false)} style={{ marginTop: 10, width: "100%", border: 0, borderRadius: 8, padding: 7, background: "#7c3aed", color: "#fff", fontWeight: 800 }}>Cerrar</button>
               </div>
             )}
