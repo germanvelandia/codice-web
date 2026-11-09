@@ -56,6 +56,8 @@ export const fetchHistorialMundo3D = async (grado) => (await llamar("mundo3d_his
 // Vida y monstruos (SQL 141). El servidor decide el daño y limita el ritmo; aquí solo se avisa qué pasó.
 export const fetchVidaMundo3D = (est) => llamar("mundo3d_vida", { p_est: est });                       // → { vida, monstruos, danio_error }
 export const golpeMundo3D = (est, motivo, tipo = null) => llamar("mundo3d_golpe", { p_est: est, p_motivo: motivo, p_tipo: tipo }); // → { vida, danio, desmayo }
+export const fetchDimensionMundo3D = (est) => llamar("mundo3d_dimension", { p_est: est });                // → { dim }
+export const viajarDimMundo3D = (est, dim) => llamar("mundo3d_viajar_dim", { p_est: est, p_dim: dim });  // → { dim, mundo }; errores: sin_llave, desmayado
 export const revivirMundo3D = (est) => llamar("mundo3d_revivir", { p_est: est });                      // → { vida }
 export const monstruoVencidoMundo3D = (est, tipo) => llamar("mundo3d_monstruo_vencido", { p_est: est, p_tipo: String(tipo) }); // → { xp, oro }
 export const fijarVidaMundo3D = (grado, monstruos, danioError) => llamar("mundo3d_vida_set", { p_grado: String(grado), p_monstruos: !!monstruos, p_danio_error: Math.max(0, Math.min(20, Math.floor(Number(danioError)) || 0)) });
