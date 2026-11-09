@@ -45,8 +45,16 @@ export const ESPECIES = {
       pata(-.07, .28, 0, .28, .05, h("#e9a23a"), 0), pata(.07, .28, 0, .28, .05, h("#e9a23a"), 1),
     ],
   },
+  conejo: {
+    nombre: "Conejo", emoji: "🐇", vel: 1.2, radio: 4, k: 1,
+    partes: [
+      { tipo: "cuerpo", p: [0, 0, 0], cajas: [[.3, .26, .46, 0, .3, 0, h("#b79a78")], [.2, .2, .2, 0, .3, -.28, h("#efe6d8")]] },
+      { tipo: "cabeza", p: [0, .42, .22], cajas: [[.24, .22, .24, 0, .08, .06, h("#b79a78")], [.06, .26, .05, -.06, .3, .02, h("#b79a78")], [.06, .26, .05, .06, .3, .02, h("#b79a78")], [.06, .06, .04, 0, .06, .2, h("#e9a0a0")], ...ojos(0, .12, .18, .07)] },
+      pata(-.1, .22, .16, .2, .08, h("#9c8060"), 0), pata(.1, .22, .16, .2, .08, h("#9c8060"), 1), pata(-.1, .22, -.14, .22, .1, h("#9c8060"), 1), pata(.1, .22, -.14, .22, .1, h("#9c8060"), 0),
+    ],
+  },
 };
 
 // Cuántos de cada uno hay en un mundo, y en cuántos grupos se reparten.
-export const POBLACION = [["vaca", 10], ["oveja", 12], ["cerdo", 8], ["gallina", 12]];
+export const POBLACION = [["vaca", 10], ["oveja", 12], ["cerdo", 8], ["gallina", 12], ["conejo", 10]];
 export const sonidoDe = (esp) => esp;
