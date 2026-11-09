@@ -58,6 +58,13 @@ export const fetchVidaMundo3D = (est) => llamar("mundo3d_vida", { p_est: est });
 export const golpeMundo3D = (est, motivo, tipo = null) => llamar("mundo3d_golpe", { p_est: est, p_motivo: motivo, p_tipo: tipo }); // → { vida, danio, desmayo }
 export const fetchDimensionMundo3D = (est) => llamar("mundo3d_dimension", { p_est: est });                // → { dim }
 export const viajarDimMundo3D = (est, dim) => llamar("mundo3d_viajar_dim", { p_est: est, p_dim: dim });  // → { dim, mundo }; errores: sin_llave, desmayado
+// Criaturas del Códice (SQL 148)
+export const fetchBatallaMundo3D = (est) => llamar("mundo3d_batalla_estado", { p_est: est });
+export const encontrarCriaturaMundo3D = (est, tipo) => llamar("mundo3d_criatura_encontrar", { p_est: est, p_tipo: tipo });
+export const preguntaCriaturaMundo3D = (est) => llamar("mundo3d_criatura_pregunta", { p_est: est });
+export const accionCriaturaMundo3D = (est, accion, opcion = null) => llamar("mundo3d_criatura_accion", { p_est: est, p_accion: accion, p_opcion: opcion });
+export const fetchCriaturasMundo3D = (est) => llamar("mundo3d_criaturas_mias", { p_est: est });
+export const equiparCriaturaMundo3D = (est, id, apodo = null) => llamar("mundo3d_criatura_equipar", { p_est: est, p_id: id, p_apodo: apodo });
 export const revivirMundo3D = (est) => llamar("mundo3d_revivir", { p_est: est });                      // → { vida }
 export const monstruoVencidoMundo3D = (est, tipo) => llamar("mundo3d_monstruo_vencido", { p_est: est, p_tipo: String(tipo) }); // → { xp, oro }
 export const fijarVidaMundo3D = (grado, monstruos, danioError) => llamar("mundo3d_vida_set", { p_grado: String(grado), p_monstruos: !!monstruos, p_danio_error: Math.max(0, Math.min(20, Math.floor(Number(danioError)) || 0)) });
