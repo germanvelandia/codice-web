@@ -18,6 +18,13 @@ export const recolectarMundo3D = (est, tipo) => llamar("mundo3d_recolectar", { p
 export const fundirMundo3D = (est, entrada, n, comb) => llamar("mundo3d_fundir", { p_est: est, p_entrada: entrada, p_n: n, p_comb: comb });
 export const fetchDesgasteMundo3D = async (est) => (await llamar("mundo3d_desgaste_de", { p_est: est })) || {};
 export const gastarArmaMundo3D = (est) => llamar("mundo3d_gastar_arma", { p_est: est });
+// Granja y Mercado (SQL 145)
+export const labrarMundo3D = (est, x, y, z, bloque) => llamar("mundo3d_labrar", { p_est: est, p_x: x, p_y: y, p_z: z, p_bloque: bloque });
+export const sembrarMundo3D = (est, x, y, z, item) => llamar("mundo3d_sembrar", { p_est: est, p_x: x, p_y: y, p_z: z, p_item: item });
+export const cosecharMundo3D = (est, x, y, z) => llamar("mundo3d_cosechar", { p_est: est, p_x: x, p_y: y, p_z: z });
+export const fetchCultivosMundo3D = async (est, grado) => (await llamar("mundo3d_cultivos_ver", { p_est: est, p_grado: String(grado) })) || [];
+export const venderMundo3D = (est, item, n) => llamar("mundo3d_vender", { p_est: est, p_item: item, p_n: n });
+export const fetchMercadoHoyMundo3D = (est) => llamar("mundo3d_mercado_hoy", { p_est: est });
 export const fabricarMundo3D = (est, sale) => llamar("mundo3d_fabricar", { p_est: est, p_sale: sale });
 
 // Presencia: registra mi posición y devuelve a los compañeros conectados en ese mundo (SQL 136)
