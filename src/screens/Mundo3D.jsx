@@ -135,7 +135,7 @@ export default function Mundo3D({ estudianteInfo }) {
   const [ajustes, setAjustes] = useState(false);
   const [batalla, setBatalla] = useState(null), [colec, setColec] = useState(false), critRef = useRef(0);
   const parcelasRef = useRef([]), [parcelas, setParcelas] = useState([]);
-  const [giro, setGiro] = useState(() => { const v = leerGiro(); return v == null ? (typeof matchMedia === "function" && matchMedia("(pointer:coarse)").matches) : v; }), giroRef = useRef(false); giroRef.current = giro;
+  const [giro, setGiro] = useState(() => { const v = leerGiro(); return v == null ? false : v; }), giroRef = useRef(false); giroRef.current = giro;
   const [chat, setChat] = useState(false), [cerca, setCerca] = useState(null), chatRef = useRef(null);
   const [ori, setOri] = useState(leerOri), [vertical, setVertical] = useState(() => typeof matchMedia === "function" && matchMedia("(orientation:portrait)").matches);
   useEffect(() => { if (typeof matchMedia !== "function") return undefined; const m = matchMedia("(orientation:portrait)"), f = () => setVertical(m.matches); f(); m.addEventListener ? m.addEventListener("change", f) : m.addListener(f); return () => { m.removeEventListener ? m.removeEventListener("change", f) : m.removeListener(f); }; }, []);
@@ -251,6 +251,8 @@ export default function Mundo3D({ estudianteInfo }) {
     const cargar = async () => { try { await api.fetchMiParcela(est); const l = await api.fetchParcelasMundo3D(est); if (vivo) { parcelasRef.current = l; setParcelas(l); if (ctl.current) ctl.current.setParcelas(l); } } catch (_) { /* sin el SQL 139 no hay parcelas */ } };
     cargar(); const r = setInterval(cargar, 60000); return () => { vivo = false; clearInterval(r); };
   }, [est, listo, visitando]); // eslint-disable-line
+  const [botonesPP, setBotonesPP] = useState(() => { try { return localStorage.getItem("m3d_pp") === "1"; } catch (_) { return false; } }), ppRef = useRef(false); ppRef.current = botonesPP;
+  useEffect(() => { try { localStorage.setItem("m3d_pp", botonesPP ? "1" : "0"); } catch (_) { /* nada */ } if (ctl.current) ctl.current.setControl({ botonesPP }); }, [botonesPP, listo]);
   useEffect(() => { try { localStorage.setItem("m3d_giro", giro ? "1" : "0"); } catch (_) { /* nada */ } if (ctl.current) ctl.current.setControl({ giro }); }, [giro, listo]);
   // compañeros conectados: se envía mi posición y se reciben las de los demás (cada 2 s; en pausa si la pestaña está oculta)
   const [conectados, setConectados] = useState(0);
@@ -337,7 +339,7 @@ export default function Mundo3D({ estudianteInfo }) {
             catch (er) { const m = String(er.message || ""); avisar(/sin_llave/.test(m) ? "🔑 Necesitas la llave de brasas (6 hierro + 2 oro) para entrar. Se fabrica en la mesa." : /desmayado/.test(m) ? "Estás sin vida: espera a recuperarte." : "No se pudo cruzar el portal."); }
           },
           alInventario: () => mochilaRef.current && mochilaRef.current(true), alMesa: () => { setPestana("fabricar"); mochilaRef.current && mochilaRef.current(true); },
-          parcelas: visitandoRef.current || enDim ? [] : parcelasRef.current, giroPalanca: giroRef.current,
+          parcelas: visitandoRef.current || enDim ? [] : parcelasRef.current, giroPalanca: giroRef.current, botonesPP: ppRef.current,
           alChat: () => chatRef.current && chatRef.current(), alCerca: (n) => setCerca(n),
           alDanio: (tipo) => (tipo === "lava" ? api.golpeMundo3D(est, "lava") : api.golpeMundo3D(est, "monstruo", tipo)).then((r) => { if (r && r.armadura) usarHerr(r.armadura); return r; }), alVida: (r) => { if (r && typeof r.vida === "number") setVida(r.vida); }, alRevivir: () => api.revivirMundo3D(est).then((r) => { if (dimRef.current) { abrirVelo("💫 Despiertas en la aldea…"); setDim(0); } return r; }),
           alMonstruoVencido: async (tipo) => { api.gastarArmaMundo3D(est).then((d) => { if (d) usarHerr(d); }).catch(() => {}); const r = await api.monstruoVencidoMundo3D(est, tipo); if (r && (r.xp || r.oro)) setProg((p) => (p.xp == null ? p : { xp: p.xp + r.xp, oro: p.oro + r.oro })); if (r && (r.xp || r.oro)) api.fetchEstadoMundo3D(est).then((e) => { if (e && e.inventario) fijarInv(Object.fromEntries(Object.entries(e.inventario).map(([k, v]) => [Number(k), v]))); }).catch(() => {}); return r; },
@@ -498,6 +500,7 @@ export default function Mundo3D({ estudianteInfo }) {
                 <label>Distancia: {cam.dist.toFixed(1)}<input type="range" min="2" max="9" step="0.5" value={cam.dist} onChange={(e) => setCam((c) => ({ ...c, dist: +e.target.value }))} /></label>
                 <label>Campo de visión: {cam.fov}°<input type="range" min="55" max="100" step="1" value={cam.fov} onChange={(e) => setCam((c) => ({ ...c, fov: +e.target.value }))} /></label>
                 <label>Sensibilidad del giro: {cam.sens.toFixed(1)}×<input type="range" min="0.4" max="2.5" step="0.1" value={cam.sens} onChange={(e) => setCam((c) => ({ ...c, sens: +e.target.value }))} /></label>
+                {esTactil && <><b style={{ marginTop: 8, display: "block" }}>Botones PICAR / PONER</b><div className="m3d-seg"><button className={!botonesPP ? "on" : ""} onClick={() => setBotonesPP(false)}>Como Minecraft (solo tocar)</button><button className={botonesPP ? "on" : ""} onClick={() => setBotonesPP(true)}>Mostrar botones</button></div><div style={{ color: "#cbd5e1", marginTop: 3 }}>Tocar = poner o usar · mantener el dedo = picar o golpear.</div></>}
                 <b style={{ marginTop: 8, display: "block" }}>Control de la palanca</b>
                 <div className="m3d-seg"><button className={giro ? "on" : ""} onClick={() => setGiro(true)}>🖐 Una mano (gira)</button><button className={!giro ? "on" : ""} onClick={() => setGiro(false)}>↔ Libre (de lado)</button></div>
                 <div style={{ color: "#cbd5e1", marginTop: 3 }}>Una mano: la palanca avanza y, hacia los lados, gira la mirada.</div>
@@ -528,7 +531,7 @@ export default function Mundo3D({ estudianteInfo }) {
       {entrado && !listo && !velo && <p className="text-xs text-slate-400">Preparando el mundo…</p>}
 
       {!ampliado && <div className="flex flex-wrap gap-1.5" role="group" aria-label="Bloques">{barraBloques}</div>}
-      <p className="text-[11px] text-slate-500">Mover: W A S D · Mirar: ratón · Saltar: espacio · Clic izquierdo mantenido: picar · Clic derecho: poner · Rueda o 1 a 8: elegir bloque · E: hablar con un personaje (❗ misión, ⚔️ duelo con el guardián) · V: cambiar de cámara · Esc: soltar el ratón. Con «⛶ Ampliar» juegas a pantalla completa y con ⚙️ ajustas la cámara. En tablet: palanca a la izquierda, arrastra a la derecha para mirar. Entra a los edificios de la aldea y habla con sus aldeanos: la Biblioteca, el Ágora, el Templo, el Mercado, la Casa de los Acertijos y la Posada. Los portales 🌀 a otros cursos están en el Cruce de los Mundos, lejos de la aldea: sigue el camino de adoquín hacia el sureste (allí solo se mira).</p>
+      <p className="text-[11px] text-slate-500">Mover: W A S D (doble W o Ctrl: correr) · Mirar: ratón · Saltar: espacio · Shift: agacharse · Clic izquierdo mantenido: picar o golpear · Clic derecho: poner, hablar con un personaje (❗ misión, ⚔️ duelo con el guardián), usar la mesa o comer · Rueda o 1 a 9: elegir bloque · E: inventario y fabricación · T: chat · V: cambiar de cámara · Esc: soltar el ratón. Con «⛶ Ampliar» juegas a pantalla completa y con ⚙️ ajustas la cámara. En celular o tablet (como Minecraft): palanca a la izquierda, arrastra a la derecha para mirar, toca para poner o usar, mantén el dedo para picar, y los botones ⬆ saltar, 🧎 agacharse y 🎒 inventario. Entra a los edificios de la aldea y habla con sus aldeanos: la Biblioteca, el Ágora, el Templo, el Mercado, la Casa de los Acertijos y la Posada. Los portales 🌀 a otros cursos están en el Cruce de los Mundos, lejos de la aldea: sigue el camino de adoquín hacia el sureste (allí solo se mira).</p>
 
       <div className="grid md:grid-cols-2 gap-3">
         <div className="rounded-xl border border-slate-200 p-3">
