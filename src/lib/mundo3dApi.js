@@ -14,6 +14,10 @@ export const fetchCambiosMundo3D = async (est, grado, desde = null) => (await ll
 export const picarMundo3D = (est, x, y, z, bloque) => llamar("mundo3d_picar", { p_est: est, p_x: x, p_y: y, p_z: z, p_bloque: bloque });
 export const ponerMundo3D = (est, x, y, z, item) => llamar("mundo3d_poner", { p_est: est, p_x: x, p_y: y, p_z: z, p_item: item });
 export const recolectarMundo3D = (est, tipo) => llamar("mundo3d_recolectar", { p_est: est, p_tipo: String(tipo) });
+// Oficios (SQL 143): fundir en el horno y desgaste de herramientas (el servidor lo decide todo)
+export const fundirMundo3D = (est, entrada, n, comb) => llamar("mundo3d_fundir", { p_est: est, p_entrada: entrada, p_n: n, p_comb: comb });
+export const fetchDesgasteMundo3D = async (est) => (await llamar("mundo3d_desgaste_de", { p_est: est })) || {};
+export const gastarArmaMundo3D = (est) => llamar("mundo3d_gastar_arma", { p_est: est });
 export const fabricarMundo3D = (est, sale) => llamar("mundo3d_fabricar", { p_est: est, p_sale: sale });
 
 // Presencia: registra mi posición y devuelve a los compañeros conectados en ese mundo (SQL 136)
