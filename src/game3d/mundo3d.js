@@ -26,7 +26,7 @@ import { MONSTRUOS, danioDeArma } from "./monstruos3d";
 
 export const SX = 256, SY = 40, SZ = 256, CH = 16, NCX = SX / CH, NCZ = SZ / CH;
 export const CENTRO = 128, RADIO_PLAZA = 34, RADIO_ADOQUIN = 12; // la aldea (69 × 69) está protegida; el empedrado de la plaza es de 25 × 25
-const AIRE = 0, AGUA = 11, PORTAL = 12, ADOQUIN = 13;
+const AIRE = 0, AGUA = 11, PORTAL = 12, ADOQUIN = 13, LAVA = 114, VELO = 119;
 
 const NOMBRES_BASE = { 42: "Hierro", 3: "Piedra", 44: "Diamante" };
 export const NOMBRES = { 1: "Pasto", 2: "Tierra", 3: "Piedra", 4: "Tronco", 5: "Hojas", 6: "Tablones", 7: "Ladrillo", 8: "Cristal", 9: "Arena", 10: "Mineral", 11: "Agua", 12: "Portal", 13: "Adoquín", 14: "Muralla", 15: "Portón",
@@ -38,12 +38,13 @@ export const NOMBRES = { 1: "Pasto", 2: "Tierra", 3: "Piedra", 4: "Tronco", 5: "
   37: "Tierra labrada", 72: "Semillas", 73: "Zanahoria", 74: "Papa", 75: "Trigo", 76: "Pan", 77: "Papa asada", 78: "Huevo frito",
   80: "Azada de madera", 81: "Azada de piedra", 82: "Azada de hierro", 83: "Azada de diamante",
   ...Object.fromEntries(["cobre", "hierro", "diamante"].flatMap((m, t) => ["Casco", "Peto", "Pantalón", "Botas"].map((n, p) => [84 + t * 4 + p, n + " de " + m]))),
+  96: "Llave de brasas", 97: "Fragmento de brasa", 98: "Corazón de brasa", 112: "Basalto", 113: "Roca ígnea", 114: "Lava", 115: "Brasa luminosa", 116: "Mena de brasa", 117: "Ladrillo ígneo", 119: "Velo de brasas",
   24: "Horno", 25: "Bloque de cobre", 62: "Cobre crudo", 63: "Lingote de cobre", 65: "Hierro crudo", 66: "Oro crudo",
   68: "Espada de madera", 69: "Espada de piedra", 70: "Espada de hierro", 71: "Espada de diamante" };
-export const COLOCABLES = [1, 2, 3, 4, 6, 7, 8, 9, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36];
+export const COLOCABLES = [1, 2, 3, 4, 6, 7, 8, 9, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 112, 113, 115, 117];
 // Frases rápidas del chat (los mismos números que la tabla mundo3d_frases del servidor)
 export const FRASES_CHAT = { 1: "¡Hola!", 2: "¡Buen trabajo!", 3: "¿Me ayudas?", 4: "¡Gracias!", 5: "¿Construimos juntos?", 6: "¡Mira lo que hice!", 7: "Vamos a la aldea", 8: "Necesito piedra", 9: "¡Qué bien!", 10: "¡Hasta luego!", 11: "Sígueme", 12: "¡Cuidado!" };
-export const MATERIALES = [40, 41, 42, 43, 44, 45, 46, 47, 48, 62, 63, 65, 66, 75, 76, 77, 78];
+export const MATERIALES = [40, 41, 42, 43, 44, 45, 46, 47, 48, 62, 63, 65, 66, 75, 76, 77, 78, 96, 97, 98];
 // Lo que se lleva en la mano y se usa sobre el terreno: semillas y cultivos (se siembran) y azadas (labran)
 export const USABLES = [72, 73, 74, 80, 81, 82, 83];
 // Armaduras (84-95) y comida: mismos números que el servidor (tabla mundo3d_comida y _m3d_defensa)
@@ -54,14 +55,14 @@ export function defensaDe(cantidad) { let tot = 0; for (let p = 0; p < 4; p++) {
 export const SEMILLAS = { 72: 0, 73: 1, 74: 2 };
 export const NOMBRES_CULTIVO = ["trigo", "zanahoria", "papa"];
 // Mercado de la aldea (mismos precios que la tabla mundo3d_mercado)
-export const MERCADO = [{ item: 75, precio: 1 }, { item: 73, precio: 1 }, { item: 74, precio: 1 }, { item: 76, precio: 3 }, { item: 77, precio: 3 }, { item: 78, precio: 2 }, { item: 47, precio: 2 }, { item: 45, precio: 1 }, { item: 63, precio: 2 }, { item: 42, precio: 3 }, { item: 43, precio: 6 }];
+export const MERCADO = [{ item: 75, precio: 1 }, { item: 73, precio: 1 }, { item: 74, precio: 1 }, { item: 76, precio: 3 }, { item: 77, precio: 3 }, { item: 78, precio: 2 }, { item: 47, precio: 2 }, { item: 45, precio: 1 }, { item: 63, precio: 2 }, { item: 42, precio: 3 }, { item: 43, precio: 6 }, { item: 97, precio: 4 }, { item: 98, precio: 25 }];
 export const HERRAMIENTAS = [50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 68, 69, 70, 71, 80, 81, 82, 83];
 // Usos máximos antes de romperse (los mismos números que _m3d_max_usos del servidor)
 export const MAX_USOS = (id) => (id >= 50 && id <= 61 ? [60, 130, 250, 600][(id - 50) % 4] : id >= 68 && id <= 71 ? [20, 40, 80, 160][id - 68] : id >= 80 && id <= 83 ? [60, 130, 250, 600][id - 80] : id >= 84 && id <= 95 ? [80, 160, 320][((id - 84) / 4) | 0] : 0);
 // Fundición y combustibles (mismos datos que las tablas mundo3d_fundicion y mundo3d_combustible)
 export const FUNDICION = [{ entrada: 65, sale: 42 }, { entrada: 66, sale: 43 }, { entrada: 62, sale: 63 }, { entrada: 9, sale: 8 }, { entrada: 4, sale: 41 }, { entrada: 31, sale: 7 }, { entrada: 74, sale: 77 }, { entrada: 46, sale: 78 }];
-export const COMBUSTIBLES = [{ item: 41, rinde: 8 }, { item: 4, rinde: 3 }, { item: 6, rinde: 2 }, { item: 40, rinde: 1 }];
-const DUREZA = { 26: .35, 27: .3, 28: .15, 29: .4, 30: .35, 31: .4, 32: 1, 33: 1, 34: 1, 35: 1.5, 36: .5, 24: 1.2, 25: 1.6, 1: .3, 2: .3, 3: .9, 4: .6, 5: .15, 6: .5, 7: .9, 8: .2, 9: .25, 10: 1.1, 16: 1.6, 17: 1.6, 18: 2, 19: .3, 20: .3, 21: .3, 22: .3, 23: .3 };
+export const COMBUSTIBLES = [{ item: 41, rinde: 8 }, { item: 4, rinde: 3 }, { item: 6, rinde: 2 }, { item: 40, rinde: 1 }, { item: 97, rinde: 16 }];
+const DUREZA = { 112: 1, 113: .9, 115: .5, 116: 1.3, 117: 1.1, 26: .35, 27: .3, 28: .15, 29: .4, 30: .35, 31: .4, 32: 1, 33: 1, 34: 1, 35: 1.5, 36: .5, 24: 1.2, 25: 1.6, 1: .3, 2: .3, 3: .9, 4: .6, 5: .15, 6: .5, 7: .9, 8: .2, 9: .25, 10: 1.1, 16: 1.6, 17: 1.6, 18: 2, 19: .3, 20: .3, 21: .3, 22: .3, 23: .3 };
 export const RECETAS = [
   { sale: 6, n: 4, cuesta: { 4: 1 }, txt: "1 tronco → 4 tablones" },
   { sale: 7, n: 2, cuesta: { 3: 2 }, txt: "2 piedra → 2 ladrillos" },
@@ -74,6 +75,9 @@ export const RECETAS = [
   ]),
   ...[["madera", 6, 0], ["piedra", 3, 1], ["hierro", 42, 2], ["diamante", 44, 3]].map(([nom, mat, t]) => ({ sale: 68 + t, n: 1, cuesta: { [mat]: 2, 40: 1 }, txt: "2 " + (mat === 6 ? "tablones" : NOMBRES_BASE[mat].toLowerCase()) + " + 1 palo", g: "Armas" })),
   ...[63, 42, 44].flatMap((mat, t) => [["Casco", 3], ["Peto", 5], ["Pantalón", 4], ["Botas", 2]].map(([n, c], p) => ({ sale: 84 + t * 4 + p, n: 1, cuesta: { [mat]: c }, txt: c + " " + (t === 0 ? "lingotes de cobre" : t === 1 ? "hierro" : "diamante"), g: "Armaduras" }))),
+  { sale: 96, n: 1, cuesta: { 42: 6, 43: 2 }, txt: "6 hierro + 2 oro → llave para entrar al Reino de Brasas", g: "Dimensiones" },
+  { sale: 115, n: 1, cuesta: { 97: 3 }, txt: "3 fragmentos de brasa → 1 brasa luminosa", g: "Dimensiones" },
+  { sale: 117, n: 2, cuesta: { 97: 1, 3: 2 }, txt: "1 fragmento + 2 piedra → 2 ladrillos ígneos", g: "Dimensiones" },
   { sale: 76, n: 1, cuesta: { 75: 3 }, txt: "3 trigo → 1 pan", g: "Comida" },
   ...[["madera", 6, 0], ["piedra", 3, 1], ["hierro", 42, 2], ["diamante", 44, 3]].map(([nom, mat, t]) => ({ sale: 80 + t, n: 1, cuesta: { [mat]: 2, 40: 2 }, txt: "2 " + (mat === 6 ? "tablones" : NOMBRES_BASE[mat].toLowerCase()) + " + 2 palos", g: "Granja" })),
   { sale: 36, n: 2, cuesta: { 41: 1, 8: 1 }, txt: "1 carbón + 1 cristal → 2 lámparas", g: "Decoración" },
@@ -91,7 +95,7 @@ export const CRUCE = { x: 216, z: 200 };
 export const enPlazaProtegida = (x, z) => (Math.abs(x - CENTRO) <= RADIO_PLAZA && Math.abs(z - CENTRO) <= RADIO_PLAZA) || (Math.abs(x - CRUCE.x) <= 14 && Math.abs(z - CRUCE.z) <= 8);
 
 // atlas: 0 pasto arriba, 1 pasto lado, 2 tierra, 3 piedra, 4 tronco lado, 5 tronco arriba, 6 hojas, 7 tablones, 8 ladrillo, 9 cristal, 10 arena, 11 mineral, 12 agua, 13 portal, 14 adoquín
-const NT = 52;
+const NT = 60;
 function tileDe(b, cara) { // cara: 0 +x, 1 -x, 2 +y, 3 -y, 4 +z, 5 -z
   switch (b) {
     case 1: return cara === 2 ? 0 : cara === 3 ? 2 : 1;
@@ -104,6 +108,7 @@ function tileDe(b, cara) { // cara: 0 +x, 1 -x, 2 +y, 3 -y, 4 +z, 5 -z
   if (b === 24) return cara === 2 || cara === 3 ? 3 : 25;
   if (b === 25) return 26;
   if (b === 37) return cara === 2 ? 39 : 2;
+  if (b >= 112 && b <= 119) return 52 + (b - 112);
   if (b >= 100 && b <= 111) return 40 + (b - 100);
   if (b === 30) return cara === 2 || cara === 3 ? 32 : 31;
   if (b >= 26 && b <= 29) return b + 1;
@@ -126,7 +131,8 @@ export function atlasCanvas() {
     ["#8d8a86", "#a09d98", "#77746f"], ["#b9552f", "#c8653c", "#9d4626"], ["#f4f8fb", "#ffffff", "#dde7ee"], ["#a9d8f0", "#c4e8fa", "#8cc4e0"],
     ["#2f7a3c", "#3b8f4a", "#276832"], ["#3f8a47", "#4aa055", "#327a3b"], ["#9aa3b5", "#adb6c7", "#858ea1"],
     ["#a5675a", "#b87666", "#8d554a"], ["#78787b", "#898a8d", "#66676a"], ["#cfcfd0", "#dddde0", "#bcbcc0"], ["#4a4c53", "#5a5c64", "#3b3d43"], ["#ffe08a", "#fff0b8", "#f2c75a"],
-    ["#6b4426", "#7a5230", "#583619"], ...Array.from({ length: 12 }, () => ["#000", "#000", "#000"])];
+    ["#6b4426", "#7a5230", "#583619"], ...Array.from({ length: 12 }, () => ["#000", "#000", "#000"]),
+    ["#3c3f4a", "#4a4d5a", "#2f323c"], ["#5a2a22", "#6b342a", "#46201a"], ["#e8590c", "#ff7a1a", "#c2410c"], ["#ffcc4d", "#ffe08a", "#f59e0b"], ["#5a2a22", "#6b342a", "#46201a"], ["#5c1f1a", "#722a22", "#44140f"], ["#3c3f4a", "#4a4d5a", "#2f323c"], ["#7a2fd0", "#ff7a1a", "#4a1a90"]];
   _palRef = pal;
   for (let t = 0; t < NT; t++) {
     const ox = t * 16;
@@ -143,7 +149,14 @@ export function atlasCanvas() {
     if (t === 14) { g.fillStyle = "#0004"; g.fillRect(ox, 7, 16, 1); g.fillRect(ox + 7, 0, 1, 16); }
     if (t === 15) { g.fillStyle = "#2a1a0a"; for (let x = 3; x < 16; x += 4) g.fillRect(ox + x, 0, 1, 16); g.fillStyle = "#8f6a3a"; for (let x = 0; x < 16; x += 4) g.fillRect(ox + x, 0, 2, 16); g.fillStyle = "#3a3f46"; g.fillRect(ox, 3, 16, 2); g.fillRect(ox, 11, 16, 2); }
     if (t >= 17 && t <= 19) { g.fillStyle = "#0003"; g.fillRect(ox, 0, 16, 1); g.fillRect(ox, 15, 16, 1); g.fillRect(ox, 0, 1, 16); g.fillRect(ox + 15, 0, 1, 16); g.fillStyle = "#fff6"; g.fillRect(ox + 2, 2, 3, 1); g.fillRect(ox + 2, 2, 1, 3); }
-    if (t === 39) { g.fillStyle = "#4a2d16"; for (let x = 2; x < 16; x += 5) g.fillRect(ox + x, 0, 2, 16); g.fillStyle = "#8a6a45"; for (let i = 0; i < 6; i++) g.fillRect(ox + ((r() * 14) | 0), ((r() * 14) | 0), 1, 1); }
+    if (t === 52) { g.fillStyle = "#1f2128"; for (let y = 2; y < 16; y += 5) g.fillRect(ox, y, 16, 1); g.fillStyle = "#5c6070"; for (let i = 0; i < 8; i++) g.fillRect(ox + ((r() * 14) | 0), ((r() * 14) | 0), 2, 1); }
+    else if (t === 53) { g.fillStyle = "#c2410c"; for (let i = 0; i < 6; i++) g.fillRect(ox + ((r() * 13) | 0), ((r() * 13) | 0), 1, 3); g.fillStyle = "#2a100c"; for (let i = 0; i < 8; i++) g.fillRect(ox + ((r() * 14) | 0), ((r() * 14) | 0), 2, 2); }
+    else if (t === 54) { g.fillStyle = "#ffd34d"; for (let i = 0; i < 12; i++) g.fillRect(ox + ((r() * 13) | 0), ((r() * 13) | 0), 3, 2); g.fillStyle = "#b53a08"; for (let i = 0; i < 6; i++) g.fillRect(ox + ((r() * 13) | 0), ((r() * 13) | 0), 2, 2); }
+    else if (t === 55) { g.fillStyle = "#fff6c8"; for (let i = 0; i < 10; i++) g.fillRect(ox + ((r() * 13) | 0), ((r() * 13) | 0), 3, 3); g.strokeStyle = "#b45309"; g.strokeRect(ox + .5, .5, 15, 15); }
+    else if (t === 56) { g.fillStyle = "#ff8a1f"; for (let i = 0; i < 8; i++) g.fillRect(ox + ((r() * 13) | 0), ((r() * 13) | 0), 2, 2); g.fillStyle = "#ffe08a"; for (let i = 0; i < 5; i++) g.fillRect(ox + ((r() * 14) | 0), ((r() * 14) | 0), 1, 1); }
+    else if (t === 57) { g.fillStyle = "#1a0a08"; for (let y = 3; y < 16; y += 4) g.fillRect(ox, y, 16, 1); for (let y = 0; y < 16; y += 4) for (let x = (y / 4 % 2) * 4 + 3; x < 16; x += 8) g.fillRect(ox + x, y, 1, 4); g.fillStyle = "#ff7a1a55"; for (let i = 0; i < 4; i++) g.fillRect(ox + ((r() * 13) | 0), ((r() * 13) | 0), 2, 1); }
+    else if (t === 59) { g.fillStyle = "#e9a8ff"; for (let i = 0; i < 10; i++) g.fillRect(ox + ((r() * 13) | 0), ((r() * 15) | 0), 3, 1); g.fillStyle = "#ffcc4d"; for (let i = 0; i < 6; i++) g.fillRect(ox + ((r() * 14) | 0), ((r() * 14) | 0), 1, 2); }
+    else if (t === 39) { g.fillStyle = "#4a2d16"; for (let x = 2; x < 16; x += 5) g.fillRect(ox + x, 0, 2, 16); g.fillStyle = "#8a6a45"; for (let i = 0; i < 6; i++) g.fillRect(ox + ((r() * 14) | 0), ((r() * 14) | 0), 1, 1); }
     else if (t >= 40 && t <= 51) { // cultivos sobre fondo transparente: cultivo = (t - 40) / 4, etapa = (t - 40) % 4
       g.clearRect(ox, 0, 16, 16); const cu = ((t - 40) / 4) | 0, et = (t - 40) % 4, alto = [4, 8, 12, 14][et];
       const tallo = ["#7bbf3a", "#5aa03a", "#4e9a2f"][cu], maduro = ["#e2b93b", "#5aa03a", "#4e9a2f"][cu];
@@ -172,7 +185,7 @@ export function atlasCanvas() {
 }
 const TIER = ["#b9854a", "#8b8f96", "#e2e2e6", "#4de3e0"];
 const hexRgb = (h) => [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255];
-const COL_ITEM = { 40: "#8a5a2b", 41: "#2b2b2f", 42: "#e2e2e6", 43: "#f7d63a", 44: "#4de3e0", 45: "#f4f4f0", 46: "#efe3c4", 47: "#d83a2f", 48: "#f2f6ff", 72: "#b7c85a", 73: "#f08a24", 74: "#c4945a", 75: "#f2d36b", 76: "#d9993f", 77: "#a8692a", 78: "#f7c52e", 80: "#b9854a", 81: "#8b8f96", 82: "#e2e2e6", 83: "#4de3e0", 62: "#c8693a", ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [84 + i, ["#e08a52", "#e2e2e6", "#4de3e0"][(i / 4) | 0]])), 63: "#e08a52", 65: "#b9a89a", 66: "#e6c860" };
+const COL_ITEM = { 40: "#8a5a2b", 41: "#2b2b2f", 42: "#e2e2e6", 43: "#f7d63a", 44: "#4de3e0", 45: "#f4f4f0", 46: "#efe3c4", 47: "#d83a2f", 48: "#f2f6ff", 72: "#b7c85a", 73: "#f08a24", 74: "#c4945a", 75: "#f2d36b", 76: "#d9993f", 77: "#a8692a", 78: "#f7c52e", 80: "#b9854a", 81: "#8b8f96", 82: "#e2e2e6", 83: "#4de3e0", 96: "#c0392b", 97: "#ff8a1f", 98: "#ff3b1f", 62: "#c8693a", ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [84 + i, ["#e08a52", "#e2e2e6", "#4de3e0"][(i / 4) | 0]])), 63: "#e08a52", 65: "#b9a89a", 66: "#e6c860" };
 // color representativo de un bloque o item (para las partículas y lo que cae al picar)
 export function colorItem(item) {
   if (COL_ITEM[item]) return hexRgb(COL_ITEM[item]);
@@ -183,7 +196,7 @@ export function colorItem(item) {
 // dibujo de un item en un canvas: los bloques salen del atlas; materiales y herramientas se dibujan en una cuadrícula de 16 × 16
 export function dibujarIcono(canvas, item) {
   const c = canvas.getContext("2d"); c.imageSmoothingEnabled = false; c.clearRect(0, 0, canvas.width, canvas.height);
-  if (item < 40) { c.drawImage(atlasCanvas(), (item === 1 ? 1 : tileDe(item, 0)) * 16, 0, 16, 16, 0, 0, canvas.width, canvas.height); return; }
+  if (item < 40 || (item >= 112 && item <= 119)) { c.drawImage(atlasCanvas(), (item === 1 ? 1 : tileDe(item, 0)) * 16, 0, 16, 16, 0, 0, canvas.width, canvas.height); return; }
   c.save(); c.scale(canvas.width / 16, canvas.height / 16);
   const px = (col, x, y, w = 1, h = 1) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
   const pts = (col, a) => a.forEach(([x, y]) => px(col, x, y));
@@ -223,6 +236,9 @@ export function dibujarIcono(canvas, item) {
   else if (item === 76) { px("#a66a2a", 2, 8, 12, 5); px("#d9993f", 2, 6, 12, 5); px("#e8b563", 3, 5, 10, 2); px("#f4d28f", 4, 6, 3, 1); px("#8a561f", 2, 12, 12, 1); }
   else if (item === 77) { px("#7a4a1c", 4, 6, 9, 6); px("#a8692a", 5, 5, 7, 6); px("#f3d9a0", 6, 7, 4, 2); px("#4a2d10", 8, 10, 1, 1); }
   else if (item === 78) { px("#ffffff", 3, 5, 11, 7); px("#eeeeee", 3, 11, 11, 1); px("#f7c52e", 6, 6, 5, 5); px("#e0a916", 6, 10, 5, 1); }
+  else if (item === 96) { px("#c0392b", 3, 3, 6, 6); px("#7a1a12", 5, 5, 2, 2); for (let i = 0; i < 6; i++) px("#e8e8ec", 8 + i, 8 + i, 2, 1); px("#e8e8ec", 11, 11, 3, 1); px("#e8e8ec", 13, 10, 1, 3); px("#ffcc4d", 4, 4, 2, 1); }
+  else if (item === 97) { pts("#b53a08", [[7, 3], [6, 4], [8, 4], [5, 5], [9, 5], [4, 6], [10, 6], [5, 8], [9, 8], [6, 9], [8, 9]]); for (let y = 4; y < 9; y++) px("#ff8a1f", 6 + ((y < 6) ? 6 - y : 0), y, 3 + (y < 6 ? (y - 4) * 2 : 4 - (y - 6)), 1); px("#ffe08a", 7, 5, 2, 2); }
+  else if (item === 98) { const hh = [[4, 4], [5, 4], [6, 4], [9, 4], [10, 4], [11, 4], [3, 5], [4, 5], [5, 5], [6, 5], [7, 5], [8, 5], [9, 5], [10, 5], [11, 5], [12, 5], [3, 6], [4, 6], [5, 6], [6, 6], [7, 6], [8, 6], [9, 6], [10, 6], [11, 6], [12, 6], [4, 7], [5, 7], [6, 7], [7, 7], [8, 7], [9, 7], [10, 7], [11, 7], [5, 8], [6, 8], [7, 8], [8, 8], [9, 8], [10, 8], [6, 9], [7, 9], [8, 9], [9, 9], [7, 10], [8, 10]]; pts("#e63a12", hh); pts("#ff9a3a", [[4, 5], [5, 5], [4, 6]]); pts("#ffe08a", [[5, 5]]); }
   else if (item === 63) { px("#a9532b", 3, 7, 11, 5); px("#e08a52", 3, 6, 11, 5); px("#f4b184", 4, 6, 8, 1); px("#a9532b", 3, 11, 11, 1); }
   else if (item === 48) { px("#cfd6e6", 6, 2, 4, 2); px("#f2f6ff", 5, 4, 6, 9); px("#b8c3dc", 5, 12, 6, 1); px("#7aa2ff", 6, 7, 4, 3); }
   c.restore();
@@ -316,12 +332,13 @@ export function posicionesPortales(n) {
 
 export function iniciarMundo3D(host, ctx) {
   let vivo = true;
+  const DIM = ctx.dim | 0;
   const mundo = new Uint8Array(SX * SY * SZ);
   let ultApuntado = "";
   const autores = new Map(); // "x,y,z" → autor_id de los bloques cambiados
   const idx = (x, y, z) => (y * SZ + z) * SX + x;
   const get = (x, y, z) => (x < 0 || x >= SX || z < 0 || z >= SZ || y < 0) ? (y < 0 ? 3 : 0) : (y >= SY ? 0 : mundo[idx(x, y, z)]);
-  const esHueco = (b) => b === AIRE || b === AGUA || b === PORTAL || b >= 100;     // no choca
+  const esHueco = (b) => b === AIRE || b === AGUA || b === PORTAL || (b >= 100 && b <= 111) || b === LAVA || b === VELO;     // no choca
   const solido = (x, y, z) => { if (y < 0 || x < 0 || x >= SX || z < 0 || z >= SZ) return true; return !esHueco(get(x, y, z)); };
   const sucios = new Set(); const chunks = [];
 
@@ -536,6 +553,79 @@ export function iniciarMundo3D(host, ctx) {
       if (cambio && Math.hypot(p.cx - jug.x, p.cz - jug.z) < 40) sonido.abrirPuerta();
     }
   }
+
+  // ----- dimensiones: Reino de Brasas (dim 1) y arcos de entrada/salida -----
+  const LAIR = { x: 210, z: 60 };
+  if (DIM === 1) {
+    mundo.fill(0); fijo.fill(0); veda.fill(0); antorchas.length = 0; flores.length = 0; etiquetas.length = 0; portalesZona.length = 0;
+    for (const k in puertasZona) delete puertasZona[k];
+    const hh = (x, z, k) => hz(x, 0, z, k);
+    for (let z = 0; z < SZ; z++) for (let x = 0; x < SX; x++) {
+      const n = ruidoV(semilla + 7, x / 22, z / 22) * .6 + ruidoV(semilla + 13, x / 9, z / 9) * .4;
+      let h = 5 + Math.floor(n * 15);
+      const dp = Math.max(Math.abs(x - CENTRO), Math.abs(z - CENTRO)), dl = Math.hypot(x - LAIR.x, z - LAIR.z);
+      if (dp <= 22) h = 12; else if (dp < RADIO_PLAZA) { const t = (dp - 22) / (RADIO_PLAZA - 22); h = Math.round(12 + (h - 12) * t); }
+      if (dl <= 20) h = 12; else if (dl < 28) { const t = (dl - 20) / 8; h = Math.round(12 + (h - 12) * t); }
+      h = Math.max(5, Math.min(19, h));
+      for (let y = 0; y <= h; y++) mundo[idx(x, y, z)] = (y === h && hh(x, z, 1) < .35) ? 113 : 112;
+      if (h < 9) { for (let y = h + 1; y <= 9; y++) mundo[idx(x, y, z)] = LAVA; alt[z * SX + x] = 9; } else alt[z * SX + x] = h;
+      for (let y = 36; y < SY; y++) mundo[idx(x, y, z)] = 113;
+      if (hh(x, z, 2) < .035 && dp > 14) { const L = 2 + Math.floor(hh(x, z, 3) * 4); for (let y = 36 - L; y < 36; y++) mundo[idx(x, y, z)] = 113; }
+      if (hh(x, z, 4) < .012 && dp > 14) mundo[idx(x, 35, z)] = 115;
+      if (h >= 9 && hh(x, z, 5) < .004 && dp > 14) mundo[idx(x, h, z)] = 115;
+      for (let y = 1; y < h - 1; y++) if (hz(x, y, z, 6) < .012) mundo[idx(x, y, z)] = 116;
+      if (h >= 11 && hh(x, z, 8) < .03 && dp > 14) mundo[idx(x, h, z)] = 116; // vetas a la vista
+    }
+    // plaza segura: suelo de ladrillo ígneo, pilares con brasa y arco de regreso
+    for (let z = CENTRO - 12; z <= CENTRO + 12; z++) for (let x = CENTRO - 12; x <= CENTRO + 12; x++) mundo[idx(x, 12, z)] = 117;
+    for (const [sx, sz] of [[-10, -10], [10, -10], [-10, 10], [10, 10]]) { for (let y = 13; y <= 16; y++) mundo[idx(CENTRO + sx, y, CENTRO + sz)] = 117; mundo[idx(CENTRO + sx, 17, CENTRO + sz)] = 115; }
+    const az = CENTRO - 8;
+    for (let y = 13; y <= 15; y++) { mundo[idx(CENTRO - 2, y, az)] = 117; mundo[idx(CENTRO + 1, y, az)] = 117; mundo[idx(CENTRO - 1, y, az)] = VELO; mundo[idx(CENTRO, y, az)] = VELO; }
+    for (let x = CENTRO - 2; x <= CENTRO + 1; x++) mundo[idx(x, 16, az)] = 117;
+    mundo[idx(CENTRO - 2, 17, az)] = 115; mundo[idx(CENTRO + 1, 17, az)] = 115;
+    etiquetas.push({ x: CENTRO + .5, y: 18.8, z: az + .5, texto: "🔙 Volver al mundo principal", clase: "edif" });
+    etiquetas.push({ x: CENTRO + .5, y: 15.5, z: CENTRO + .5, texto: "🏠 Campamento seguro", clase: "edif" });
+    // arena del Guardián: plataforma, anillo de lava y cuatro puentes
+    for (let z = LAIR.z - 16; z <= LAIR.z + 16; z++) for (let x = LAIR.x - 16; x <= LAIR.x + 16; x++) {
+      const d = Math.hypot(x - LAIR.x, z - LAIR.z), px = Math.abs(x - LAIR.x), pz = Math.abs(z - LAIR.z);
+      if (d <= 11) mundo[idx(x, 12, z)] = 117;
+      else if (d <= 15) { const puente = px <= 1 || pz <= 1; if (puente) mundo[idx(x, 12, z)] = 117; else { mundo[idx(x, 12, z)] = LAVA; mundo[idx(x, 11, z)] = LAVA; mundo[idx(x, 10, z)] = 112; } }
+    }
+    for (const [sx, sz] of [[-8, -8], [8, -8], [-8, 8], [8, 8]]) { for (let y = 13; y <= 17; y++) mundo[idx(LAIR.x + sx, y, LAIR.z + sz)] = 117; mundo[idx(LAIR.x + sx, 18, LAIR.z + sz)] = 115; }
+    etiquetas.push({ x: LAIR.x + .5, y: 22, z: LAIR.z + .5, texto: "👑 Guarida del Guardián de Brasas", clase: "edif" });
+    for (let z = 0; z < SZ; z++) for (let x = 0; x < SX; x++) if (x === 0 || z === 0 || x === SX - 1 || z === SZ - 1) fijo[z * SX + x] = 1;
+  } else if (DIM === 0) {
+    const ax = CRUCE.x + 11, a = 12;
+    for (let dz = -3; dz <= 2; dz++) for (let dx = -1; dx <= 1; dx++) for (let y = a + 1; y <= a + 6; y++) mundo[idx(ax + dx, y, CRUCE.z + dz)] = AIRE;
+    for (let y = a + 1; y <= a + 3; y++) { mundo[idx(ax, y, CRUCE.z - 2)] = 117; mundo[idx(ax, y, CRUCE.z + 1)] = 117; mundo[idx(ax, y, CRUCE.z - 1)] = VELO; mundo[idx(ax, y, CRUCE.z)] = VELO; }
+    for (let z = CRUCE.z - 2; z <= CRUCE.z + 1; z++) mundo[idx(ax, a + 4, z)] = 117;
+    mundo[idx(ax, a + 5, CRUCE.z - 2)] = 115; mundo[idx(ax, a + 5, CRUCE.z + 1)] = 115;
+    etiquetas.push({ x: ax + .5, y: a + 6.6, z: CRUCE.z + .5, texto: "🔥 Reino de Brasas (necesitas la llave)", clase: "edif" });
+    for (let dz = -3; dz <= 2; dz++) for (let dx = -1; dx <= 1; dx++) fijo[(CRUCE.z + dz) * SX + ax + dx] = 1;
+  }
+  let dimCd = 0;
+  function vigilarDim(dt) {
+    dimCd = Math.max(0, dimCd - dt); if (dimCd > 0 || ctx.soloMirar || ctx.vuelo || desmayado > 0) return;
+    const xi = Math.floor(jug.x), zi = Math.floor(jug.z);
+    if (get(xi, Math.floor(jug.y + .3), zi) === VELO || get(xi, Math.floor(jug.y + 1.2), zi) === VELO) { dimCd = 4; try { sonido.portal(); ctx.alDim && ctx.alDim(DIM ? 0 : 1); } catch (_) {} }
+  }
+  // ----- lava: quema (el servidor descuenta la vida) -----
+  let lavaCd = 0;
+  function vigilarLava(dt) {
+    lavaCd = Math.max(0, lavaCd - dt); if (!enLava || lavaCd > 0 || ctx.soloMirar || desmayado > 0) return;
+    lavaCd = 1; danoEl.classList.add("on"); requestAnimationFrame(() => requestAnimationFrame(() => danoEl.classList.remove("on"))); sonido.dano();
+    jug.vy = Math.max(jug.vy, 2.5);
+    Promise.resolve(ctx.alDanio && ctx.alDanio("lava")).then((r) => { if (!r) return; try { ctx.alVida && ctx.alVida(r); } catch (_) {} if (r.desmayo) desmayarse(); }).catch(() => {});
+  }
+  // ----- jefe: el Guardián de Brasas despierta cuando te acercas a su guarida -----
+  let jefeCd = 0;
+  function vigilarJefe(dt) {
+    jefeCd = Math.max(0, jefeCd - dt);
+    if (DIM !== 1 || jefeCd > 0 || !monActivo || ctx.soloMirar || ctx.vuelo || desmayado > 0 || pausado) return;
+    if (mons.some((m) => m.def.jefe) || Math.hypot(jug.x - LAIR.x, jug.z - LAIR.z) > 60) return;
+    const def = MONSTRUOS.guardian_brasas; mons.push({ tipo: "guardian_brasas", def, x: LAIR.x + .5, y: 13, z: LAIR.z + .5, h: 0, hp: def.hp, flash: 0, cd: 2, lunge: 0, fase: 0, amp: 0, kb: null, quema: 0 });
+    aviso("👑 ¡Despierta el Guardián de Brasas!"); sonido.monstruo("guardian_brasas");
+  }
   let esperaPuerta = 0;
   function vigilarPuertas(dt) {
     esperaPuerta = Math.max(0, esperaPuerta - dt); if (esperaPuerta > 0 || ctx.vuelo) return;
@@ -622,12 +712,12 @@ export function iniciarMundo3D(host, ctx) {
     { n: [0, 0, 1], c: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]], s: .9 }, { n: [0, 0, -1], c: [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]], s: .7 },
   ];
   const UVC = [[0, 1], [1, 1], [1, 0], [0, 0]];
-  const transparente = (b) => b === AIRE || b === 8 || b === AGUA || b === PORTAL || b >= 100;
+  const transparente = (b) => b === AIRE || b === 8 || b === AGUA || b === PORTAL || (b >= 100 && b <= 111) || b === LAVA || b === VELO;
   function construir(cx, cz) {
     const pos = [], uv = [], sh = [], ind = []; let n = 0;
     for (let z = cz * CH; z < cz * CH + CH; z++) for (let x = cx * CH; x < cx * CH + CH; x++) for (let y = 0; y < SY; y++) {
       const b = mundo[idx(x, y, z)]; if (!b) continue;
-      if (b >= 100) { // cultivo: dos planos cruzados, visibles por ambos lados
+      if (b >= 100 && b <= 111) { // cultivo: dos planos cruzados, visibles por ambos lados
         const t = tileDe(b, 0), u0 = t / NT + .0005, u1 = (t + 1) / NT - .0005;
         for (const [ax, az, bx, bz] of [[0, 0, 1, 1], [1, 0, 0, 1]]) {
           pos.push(x + ax, y, z + az, x + bx, y, z + bz, x + bx, y + 1, z + bz, x + ax, y + 1, z + az);
@@ -639,7 +729,7 @@ export function iniciarMundo3D(host, ctx) {
       for (let f = 0; f < 6; f++) {
         const c = CARAS[f], nb = get(x + c.n[0], y + c.n[1], z + c.n[2]);
         if (!transparente(nb) || nb === b) continue;
-        const t = tileDe(b, f), u0 = t / NT + .0005, u1 = (t + 1) / NT - .0005, dy = b === AGUA && f === 2 ? -.12 : 0;
+        const t = tileDe(b, f), u0 = t / NT + .0005, u1 = (t + 1) / NT - .0005, dy = (b === AGUA || b === LAVA) && f === 2 ? -.12 : 0;
         for (let k = 0; k < 4; k++) { pos.push(x + c.c[k][0], y + c.c[k][1] + (c.c[k][1] ? dy : 0), z + c.c[k][2]); uv.push(UVC[k][0] ? u1 : u0, UVC[k][1] ? .999 : .001); sh.push(c.s); }
         ind.push(n, n + 1, n + 2, n, n + 2, n + 3); n += 4;
       }
@@ -763,7 +853,7 @@ export function iniciarMundo3D(host, ctx) {
   // dónde pisaría un personaje en (x, z): busca el suelo cerca de la altura de referencia y exige 2 bloques libres arriba
   function sueloPara(x, z, yRef) {
     const xi = Math.floor(x), zi = Math.floor(z);
-    for (let y = Math.round(yRef) + 1; y >= Math.round(yRef) - 2; y--) if (solido(xi, y - 1, zi) && !solido(xi, y, zi) && !solido(xi, y + 1, zi) && get(xi, y - 1, zi) !== AGUA) return y;
+    for (let y = Math.round(yRef) + 1; y >= Math.round(yRef) - 2; y--) if (solido(xi, y - 1, zi) && !solido(xi, y, zi) && !solido(xi, y + 1, zi) && get(xi, y - 1, zi) !== AGUA && get(xi, y, zi) !== LAVA) return y;
     return null;
   }
   function moverNpcs(dt, t) {
@@ -838,7 +928,7 @@ export function iniciarMundo3D(host, ctx) {
   const RAD = .3, ALTO = 1.75;
   const choca = (x, y, z) => { for (let yy = Math.floor(y); yy <= Math.floor(y + ALTO - .001); yy++) for (let zz = Math.floor(z - RAD); zz <= Math.floor(z + RAD); zz++) for (let xx = Math.floor(x - RAD); xx <= Math.floor(x + RAD); xx++) if (solido(xx, yy, zz)) return true; return false; };
   const tec = {}; const joy = { x: 0, y: 0 }; const control = { giro: !!ctx.giroPalanca };
-  let enAgua = false;
+  let enAgua = false, enLava = false;
   function actualizar(dt) {
     if (ctx.vuelo) { // modo observador (docente): vuela sin chocar; W A S D siguen la mirada, espacio sube, mayúscula baja, Ctrl acelera
       const f = adelante(), cy = Math.cos(jug.yaw), sy = Math.sin(jug.yaw), v = tec.control ? 45 : 16;
@@ -852,7 +942,7 @@ export function iniciarMundo3D(host, ctx) {
     let jx = joy.x; if (control.giro && Math.abs(joy.x) > .18) { jug.yaw -= joy.x * 2.3 * dt; jx = 0; } else if (control.giro) jx = 0; // «una mano»: la palanca también gira
     let ax = (tec.d ? 1 : 0) - (tec.a ? 1 : 0) + jx, az = (tec.s ? 1 : 0) - (tec.w ? 1 : 0) + joy.y;
     const l = Math.hypot(ax, az); if (l > 1) { ax /= l; az /= l; }
-    enAgua = get(Math.floor(jug.x), Math.floor(jug.y + .9), Math.floor(jug.z)) === AGUA;
+    { const bj = get(Math.floor(jug.x), Math.floor(jug.y + .9), Math.floor(jug.z)); enLava = bj === LAVA || get(Math.floor(jug.x), Math.floor(jug.y + .1), Math.floor(jug.z)) === LAVA; enAgua = bj === AGUA || enLava; }
     const cy = Math.cos(jug.yaw), sy = Math.sin(jug.yaw), v = enAgua ? 2.4 : ((tec.shift || tec.control || joy.corre) ? 6.4 : 4.3);
     jug.vx = (ax * cy + az * sy) * v; jug.vz = (-ax * sy + az * cy) * v;
     if (enAgua) { jug.vy = Math.max(jug.vy - 8 * dt, -2.5); if (tec[" "]) jug.vy = 3.2; }
@@ -875,7 +965,7 @@ export function iniciarMundo3D(host, ctx) {
     let px = ix, py = iy, pz = iz, t = 0;
     while (t <= (ctx.vuelo ? 60 : 5.5)) {
       const b = get(ix, iy, iz);
-      if (b !== AIRE && b !== AGUA && b !== PORTAL && iy >= 0 && iy < SY) return { x: ix, y: iy, z: iz, px, py, pz, b };
+      if (b !== AIRE && b !== AGUA && b !== PORTAL && b !== LAVA && b !== VELO && iy >= 0 && iy < SY) return { x: ix, y: iy, z: iz, px, py, pz, b };
       px = ix; py = iy; pz = iz;
       if (tx < ty && tx < tz) { ix += sx; t = tx; tx += tdx; } else if (ty < tz) { iy += sy; t = ty; ty += tdy; } else { iz += sz; t = tz; tz += tdz; }
     }
@@ -885,7 +975,7 @@ export function iniciarMundo3D(host, ctx) {
   // ----- acciones -----
   let sel = 1, picar = false, picando = null, ocupado = false, pausado = false, cercano = null;
   // ----- herramientas: la mejor que tengas en el inventario acelera el picado (pico: piedra y minerales, hacha: madera, pala: tierra y arena) -----
-  const CLASE = { 26: 2, 27: 2, 28: 2, 29: 0, 30: 1, 31: 2, 32: 0, 33: 0, 34: 0, 35: 0, 36: 0, 24: 0, 25: 0, 3: 0, 7: 0, 10: 0, 16: 0, 17: 0, 18: 0, 4: 1, 6: 1, 5: 1, 15: 1, 1: 2, 2: 2, 9: 2 };
+  const CLASE = { 112: 0, 113: 0, 115: 0, 116: 0, 117: 0, 26: 2, 27: 2, 28: 2, 29: 0, 30: 1, 31: 2, 32: 0, 33: 0, 34: 0, 35: 0, 36: 0, 24: 0, 25: 0, 3: 0, 7: 0, 10: 0, 16: 0, 17: 0, 18: 0, 4: 1, 6: 1, 5: 1, 15: 1, 1: 2, 2: 2, 9: 2 };
   const MULT = [2.2, 3.6, 5.5, 8];
   function herramientaPara(b) {
     const k = CLASE[b]; if (k === undefined) return { mult: 1, id: 0, k: -1 };
@@ -1032,7 +1122,7 @@ export function iniciarMundo3D(host, ctx) {
     const h = apuntar(); if (!h || ocupado) return;
     if (USABLES.includes(sel)) { usarMano(h); return; }
     const { px: x, py: y, pz: z } = h; if (!puedeEditar(x, y, z)) return;
-    const c = get(x, y, z); if (c !== AIRE && c !== AGUA) return;
+    const c = get(x, y, z); if (c !== AIRE && c !== AGUA && c !== LAVA) return;
     if (!(ctx.cantidad(sel) > 0)) { aviso("No tienes " + NOMBRES[sel].toLowerCase() + ". Pica o fabrica más."); return; }
     if (x + 1 > jug.x - RAD && x < jug.x + RAD && z + 1 > jug.z - RAD && z < jug.z + RAD && y + 1 > jug.y && y < jug.y + ALTO) return;
     const antes = c; mundo[idx(x, y, z)] = sel; marcar(x, z); ocupado = true; sonido.poner(sel);
@@ -1136,7 +1226,7 @@ export function iniciarMundo3D(host, ctx) {
   const ro = new ResizeObserver(tamano); ro.observe(cv);
   let zonaAct = "", cooldownPortal = 0, M = null;
   // ----- ambiente: hora del día, sol, luna, estrellas, nubes y lluvia -----
-  const ambiente = crearAmbiente(), sonido = crearSonido(ctx.sonido || {});
+  const ambiente = crearAmbiente(DIM), sonido = crearSonido(ctx.sonido || {});
   let amb = ambiente.get();
   const mezclar = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
   const RZ = (a) => { const c = Math.cos(a), s2 = Math.sin(a); return [c, s2, 0, 0, -s2, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]; };
@@ -1149,7 +1239,7 @@ export function iniciarMundo3D(host, ctx) {
   const orientar = (d) => mul(RY(Math.atan2(d[0], d[2])), RX(-Math.asin(Math.max(-1, Math.min(1, d[1])))));
   function prepararPC(cielo, flat) {
     gl.useProgram(PC); gl.uniform3f(locC.cn, cielo[0], cielo[1], cielo[2]);
-    if (flat) { gl.uniform3f(locC.lc, 1, 1, 1); gl.uniform2f(locC.fg, 0, .001); } else { gl.uniform3f(locC.lc, amb.luz[0], amb.luz[1], amb.luz[2]); gl.uniform2f(locC.fg, 40 - 14 * amb.lluvia, 45 - 15 * amb.lluvia); }
+    if (flat) { gl.uniform3f(locC.lc, 1, 1, 1); gl.uniform2f(locC.fg, 0, .001); } else { gl.uniform3f(locC.lc, amb.luz[0], amb.luz[1], amb.luz[2]); gl.uniform2f(locC.fg, 40 - 14 * amb.lluvia - 12 * (amb.niebla || 0), 45 - 15 * amb.lluvia - 12 * (amb.niebla || 0)); }
     gl.bindBuffer(gl.ARRAY_BUFFER, cuboB); gl.enableVertexAttribArray(locC.p); gl.vertexAttribPointer(locC.p, 3, gl.FLOAT, false, 16, 0);
     gl.enableVertexAttribArray(locC.s); gl.vertexAttribPointer(locC.s, 1, gl.FLOAT, false, 16, 12);
     gl.disable(gl.CULL_FACE);
@@ -1196,7 +1286,7 @@ export function iniciarMundo3D(host, ctx) {
       if (distCamino(xi, zi) <= 3) return false;
       const h = alt[zi * SX + xi]; return get(xi, h, zi) === 1 && sueloPara(x, z, h + 1) != null;
     };
-    for (const [tipo, n] of POBLACION) {
+    for (const [tipo, n] of DIM ? [] : POBLACION) {
       let puestos = 0, intentos = 0;
       while (puestos < n && intentos < 500) {
         intentos++; const cx = 10 + r3() * (SX - 20), cz = 10 + r3() * (SZ - 20); if (!valido(cx, cz)) continue;
@@ -1266,8 +1356,8 @@ export function iniciarMundo3D(host, ctx) {
   let monActivo = false, monT = 5, invJug = 0, desmayado = 0, golpeCd = 0, empuje = null, monGolpeTxt = 0;
   const enAldea = (x, z) => Math.max(Math.abs(x - CENTRO), Math.abs(z - CENTRO)) < RADIO_PLAZA + 4;
   function aparecerMonstruo() {
-    const noche = amb.noche > .55, tope = noche ? 6 : 2; if (mons.length >= tope) return;
-    const r = Math.random(), tipo = !noche ? "limo" : r < .3 ? "limo" : r < .7 ? "esqueleto" : "sombra";
+    const noche = amb.noche > .55, tope = DIM ? 7 : noche ? 6 : 2; if (mons.filter((q) => !q.def.jefe).length >= tope) return;
+    const r = Math.random(), tipo = DIM ? (r < .55 ? "brasero" : "ceniza") : !noche ? "limo" : r < .3 ? "limo" : r < .7 ? "esqueleto" : "sombra";
     for (let i = 0; i < 12; i++) {
       const ang = Math.random() * 6.283, d = 16 + Math.random() * 14, x = jug.x + Math.cos(ang) * d, z = jug.z + Math.sin(ang) * d;
       const xi = Math.floor(x), zi = Math.floor(z); if (xi < 4 || zi < 4 || xi > SX - 5 || zi > SZ - 5 || enAldea(x, z)) continue;
@@ -1301,7 +1391,8 @@ export function iniciarMundo3D(host, ctx) {
     const dx = m.x - jug.x, dz = m.z - jug.z, dd = Math.hypot(dx, dz) || 1; m.kb = { x: dx / dd * 4, z: dz / dd * 4, t: .15 }; soltarParticulas(m.x, m.y + .8, m.z, m.def.sangre, 4, 1.6);
     if (m.hp <= 0) {
       quitarMonstruo(m, true); sonido.vencido();
-      Promise.resolve(ctx.alMonstruoVencido && ctx.alMonstruoVencido(m.tipo)).then((r) => { if (r && (r.xp || r.oro)) aviso("⚔️ Venciste al " + m.def.nombre.toLowerCase() + ": +" + r.xp + " XP · +" + r.oro + " 🪙"); else if (r && r.tope) aviso("Hoy ya ganaste el máximo de premios por monstruos. ¡Sigue jugando!"); }).catch(() => {});
+      if (m.def.jefe) jefeCd = 300;
+      Promise.resolve(ctx.alMonstruoVencido && ctx.alMonstruoVencido(m.tipo)).then((r) => { if (r && r.jefe_pausa) aviso("👑 Ya venciste al jefe hace poco. ¡Vuelve en unos minutos!"); else if (r && (r.xp || r.oro)) aviso((r.jefe ? "👑 ¡Jefe vencido! +1 corazón de brasa · +" : "⚔️ Venciste al " + m.def.nombre.toLowerCase() + ": +") + r.xp + " XP · +" + r.oro + " 🪙"); else if (r && r.tope) aviso("Hoy ya ganaste el máximo de premios por monstruos. ¡Sigue jugando!"); }).catch(() => {});
     }
     return true;
   }
@@ -1310,11 +1401,11 @@ export function iniciarMundo3D(host, ctx) {
     if (desmayado > 0) { desmayado -= dt; if (desmayado <= 0) desmayoEl.style.display = "none"; return; }
     if (empuje) { empuje.t -= dt; const nx = jug.x + empuje.x * dt, nz = jug.z + empuje.z * dt; if (!choca(nx, jug.y, jug.z)) jug.x = nx; if (!choca(jug.x, jug.y, nz)) jug.z = nz; if (empuje.t <= 0) empuje = null; }
     const activo = monActivo && !ctx.soloMirar && !ctx.vuelo; if (!activo && mons.length) mons.length = 0; if (!activo || pausado) return;
-    monT -= dt; if (monT <= 0) { monT = 5 + Math.random() * 5; if (!enAldea(jug.x, jug.z)) aparecerMonstruo(); }
+    monT -= dt; if (monT <= 0) { monT = (DIM ? 3 : 5) + Math.random() * 5; if (!enAldea(jug.x, jug.z)) aparecerMonstruo(); }
     for (const m of [...mons]) {
       const dx = jug.x - m.x, dz = jug.z - m.z, d = Math.hypot(dx, dz), def = m.def;
-      if (d > 58 || enAldea(m.x, m.z)) { quitarMonstruo(m, false); continue; }
-      if (def.noche && amb.noche < .25) { m.quema += dt; if (m.quema > 1.6) { quitarMonstruo(m, true); continue; } } else m.quema = 0;
+      if (d > (def.jefe ? 140 : 58) || (!def.jefe && enAldea(m.x, m.z))) { quitarMonstruo(m, false); continue; }
+      if (def.noche && !DIM && amb.noche < .25) { m.quema += dt; if (m.quema > 1.6) { quitarMonstruo(m, true); continue; } } else m.quema = 0;
       if (m.flash > 0) m.flash -= dt; if (m.cd > 0) m.cd -= dt; if (m.lunge > 0) m.lunge -= dt;
       let mover = false;
       if (m.kb) { m.kb.t -= dt; const nx = m.x + m.kb.x * dt, nz = m.z + m.kb.z * dt, sy = sueloPara(nx, nz, m.y); if (sy != null && Math.abs(sy - m.y) <= 1.01) { m.x = nx; m.z = nz; m.y = sy; } if (m.kb.t <= 0) m.kb = null; }
@@ -1351,7 +1442,7 @@ export function iniciarMundo3D(host, ctx) {
         }
       }
       if (m.hp < m.def.hp) { // barra de vida sobre la cabeza
-        const hb = mul(M, mul(T4(m.x, m.y + (m.tipo === "limo" ? 1.15 : 2.15) + flota, m.z), RY(Math.atan2(jug.x - m.x, jug.z - m.z))));
+        const hb = mul(M, mul(T4(m.x, m.y + (m.tipo === "limo" ? 1.15 : (m.def.alto || 2.15)) + flota, m.z), RY(Math.atan2(jug.x - m.x, jug.z - m.z))));
         const fr = Math.max(0, m.hp / m.def.hp); gl.uniform3f(locC.lc, 1, 1, 1);
         for (const [w, ox, col] of [[.8, 0, [.15, .15, .15]], [.76 * fr, -.38 * (1 - fr), [.9, .2, .2]]]) { gl.uniformMatrix4fv(locC.m, false, new Float32Array(mul(hb, mul(T4(ox, 0, w === .8 ? 0 : .01), S4(w, .09, .03))))); gl.uniform3f(locC.c, col[0], col[1], col[2]); gl.drawArrays(gl.TRIANGLES, 0, 36); }
         gl.uniform3f(locC.lc, amb.luz[0], amb.luz[1], amb.luz[2]);
@@ -1390,12 +1481,12 @@ export function iniciarMundo3D(host, ctx) {
     if (amb.lluvia > .85 && !ctx.vuelo && !pausado) { rayoT -= dt0; if (rayoT <= 0) { rayoT = 14 + Math.random() * 22; rayoF = 1; truenoT = 1 + Math.random() * 2; } }
     if (rayoF > 0) { rayoF -= dt0 * 3; rayoEl.style.opacity = String(Math.max(0, rayoF) * (rayoF > .5 ? .85 : .5)); }
     if (truenoT > 0) { truenoT -= dt0; if (truenoT <= 0) { try { sonido.trueno && sonido.trueno(); } catch (_) {} } }
-    const kAg = .3 + .7 * amb.dia, cielo = enAgua ? [.2 * kAg, .4 * kAg, .7 * kAg] : amb.cielo; gl.clearColor(cielo[0], cielo[1], cielo[2], 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    const kAg = .3 + .7 * amb.dia, cielo = enLava ? [.55, .12, .02] : enAgua ? [.2 * kAg, .4 * kAg, .7 * kAg] : amb.cielo; gl.clearColor(cielo[0], cielo[1], cielo[2], 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     const cc = camaraActual(); const asp = cv.width / cv.height, fovV = asp < 16 / 9 ? Math.min(1.75, 2 * Math.atan(Math.tan(cam.fov / 2) * Math.pow(16 / 9 / asp, .6))) : cam.fov; // en pantallas verticales se abre el campo para no ver 'por un tubo'
     M = mul(perspectiva(fovV, asp, .05, 140), vista(cc));
-    if (!enAgua) dibujarCielo(cc, cielo, tt0);
+    if (!enAgua && !DIM) dibujarCielo(cc, cielo, tt0);
     gl.useProgram(P); gl.uniformMatrix4fv(loc.m, false, new Float32Array(M)); gl.uniform1i(loc.t, 0); gl.uniform3f(loc.cn, cielo[0], cielo[1], cielo[2]);
-    gl.uniform3f(loc.lc, amb.luz[0], amb.luz[1], amb.luz[2]); gl.uniform2f(loc.fg, 40 - 14 * amb.lluvia, 45 - 15 * amb.lluvia);
+    gl.uniform3f(loc.lc, amb.luz[0], amb.luz[1], amb.luz[2]); gl.uniform2f(loc.fg, 40 - 14 * amb.lluvia - 12 * (amb.niebla || 0), 45 - 15 * amb.lluvia - 12 * (amb.niebla || 0));
     gl.enableVertexAttribArray(loc.p); gl.enableVertexAttribArray(loc.u); gl.enableVertexAttribArray(loc.s);
     for (let cz = 0; cz < NCZ; cz++) for (let cx = 0; cx < NCX; cx++) {
       const ch = chunks[cz * NCX + cx]; if (!ch || !ch.n) continue;
@@ -1408,7 +1499,7 @@ export function iniciarMundo3D(host, ctx) {
     gl.disableVertexAttribArray(loc.u); gl.disableVertexAttribArray(loc.s);
     if (vis.length || otros.size) {
       const tt = performance.now() / 1000;
-      gl.useProgram(PC); gl.uniform3f(locC.cn, cielo[0], cielo[1], cielo[2]); gl.uniform3f(locC.lc, amb.luz[0], amb.luz[1], amb.luz[2]); gl.uniform2f(locC.fg, 40 - 14 * amb.lluvia, 45 - 15 * amb.lluvia);
+      gl.useProgram(PC); gl.uniform3f(locC.cn, cielo[0], cielo[1], cielo[2]); gl.uniform3f(locC.lc, amb.luz[0], amb.luz[1], amb.luz[2]); gl.uniform2f(locC.fg, 40 - 14 * amb.lluvia - 12 * (amb.niebla || 0), 45 - 15 * amb.lluvia - 12 * (amb.niebla || 0));
       gl.bindBuffer(gl.ARRAY_BUFFER, cuboB); gl.enableVertexAttribArray(locC.p); gl.vertexAttribPointer(locC.p, 3, gl.FLOAT, false, 16, 0);
       gl.enableVertexAttribArray(locC.s); gl.vertexAttribPointer(locC.s, 1, gl.FLOAT, false, 16, 12);
       gl.disable(gl.CULL_FACE);
@@ -1421,7 +1512,7 @@ export function iniciarMundo3D(host, ctx) {
       }
       gl.enable(gl.CULL_FACE); gl.disableVertexAttribArray(locC.p); gl.disableVertexAttribArray(locC.s);
     }
-    dibujarDecor(cielo, tt0); dibujarAnimales(cielo, tt0); dibujarMonstruos(cielo, tt0); dibujarEfectos(cielo, tt0); dibujarParcelas(cielo, tt0); dibujarAtmosfera(cc, cielo, tt0, dt0);
+    dibujarDecor(cielo, tt0); dibujarAnimales(cielo, tt0); dibujarMonstruos(cielo, tt0); dibujarEfectos(cielo, tt0); dibujarParcelas(cielo, tt0); if (!DIM) dibujarAtmosfera(cc, cielo, tt0, dt0);
     const h = apuntar();
     if (ctx.alApuntar) { // el docente ve quién puso el bloque que mira
       const au = h ? autores.get(clave(h.x, h.y, h.z)) : undefined, k = h ? (au === undefined ? "base" : String(au)) : "";
@@ -1479,7 +1570,7 @@ export function iniciarMundo3D(host, ctx) {
       else pasoAcc = Math.min(pasoAcc, 1.2);
       enAguaAntes = enAgua;
     }
-    sonido.actualizar(dt, { dia: amb.dia, noche: amb.noche, lluvia: amb.lluvia, bajoTecho: ctx.vuelo ? false : bajoTecho(), enAgua, altura: jug.y });
+    sonido.actualizar(dt, { dia: amb.dia, noche: amb.noche, lluvia: amb.lluvia, bajoTecho: DIM ? true : ctx.vuelo ? false : bajoTecho(), enAgua, altura: jug.y });
   }
   const activarSonido = () => sonido.activar();
   on(window, "pointerdown", activarSonido, true); on(window, "keydown", activarSonido, true);
@@ -1489,8 +1580,8 @@ export function iniciarMundo3D(host, ctx) {
     const dt = Math.min(.05, (t - ult) / 1000); ult = t;
     for (const k of sucios) construir(k % NCX, (k / NCX) | 0); sucios.clear();
     if (pausado) limpiarEntrada();
-    actualizar(dt); quePicar(dt); moverNpcs(dt, performance.now() / 1000); moverOtros(dt); moverEfectos(dt); ajustarAlturas(dt); moverAnimales(dt); moverMonstruos(dt); vigilarPuertas(dt); dibujar(); ambienteSonoro(dt);
-    const z = zonaDe(Math.floor(jug.x), Math.floor(jug.z)); if (z !== zonaAct) { zonaAct = z; ctx.alZona && ctx.alZona(z); }
+    actualizar(dt); quePicar(dt); moverNpcs(dt, performance.now() / 1000); moverOtros(dt); moverEfectos(dt); ajustarAlturas(dt); moverAnimales(dt); moverMonstruos(dt); vigilarJefe(dt); vigilarLava(dt); vigilarPuertas(dt); vigilarDim(dt); dibujar(); ambienteSonoro(dt);
+    const z = DIM === 1 ? "Reino de Brasas" : zonaDe(Math.floor(jug.x), Math.floor(jug.z)); if (z !== zonaAct) { zonaAct = z; ctx.alZona && ctx.alZona(z); }
     cooldownPortal = Math.max(0, cooldownPortal - dt);
     if (!cooldownPortal) for (const p of portalesZona) {
       if (jug.x > p.x + 1 && jug.x < p.x + 3 && Math.abs(jug.z - (p.z + .5)) < .6 && jug.y + .9 > p.y + 1 && jug.y < p.y + 4) { cooldownPortal = 3; sonido.portal(); ctx.alPortal && ctx.alPortal(p.id); break; }
