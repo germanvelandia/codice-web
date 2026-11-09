@@ -32,7 +32,14 @@ export function estadoCielo(hora, lluvia = 0) {
   return { hora, dia, noche: 1 - dia, ocaso, lluvia, cielo, luz, sol, luna: [-sol[0], -sol[1], sol[2] * -1], altura };
 }
 
-export function crearAmbiente() {
+// Dimensiones: cielo fijo (sin sol, luna ni lluvia). 1 = Reino de Brasas: cueva roja y humeante.
+export function estadoDimension(dim) {
+  const cielo = dim === 1 ? [.26, .05, .03] : [.05, .03, .1], luz = dim === 1 ? [1, .74, .58] : [.7, .66, .9];
+  return { hora: .5, dia: .6, noche: 0, ocaso: 0, lluvia: 0, niebla: 1, cielo, luz, sol: [0, 1, .25], luna: [0, -1, -.25], altura: .5 };
+}
+
+export function crearAmbiente(dim = 0) {
+  if (dim) { const e = estadoDimension(dim); return { get: () => e, fijarHora() {}, fijarClima() {} }; }
   let horaFija = null, climaFijo = null; // el docente puede fijar hora o clima (null = automático)
   const get = () => {
     const ahora = Date.now(), hora = horaFija != null ? horaFija : ((ahora / 1000) % DIA_SEG) / DIA_SEG;
