@@ -65,6 +65,11 @@ export const preguntaCriaturaMundo3D = (est) => llamar("mundo3d_criatura_pregunt
 export const accionCriaturaMundo3D = (est, accion, opcion = null) => llamar("mundo3d_criatura_accion", { p_est: est, p_accion: accion, p_opcion: opcion });
 export const fetchCriaturasMundo3D = (est) => llamar("mundo3d_criaturas_mias", { p_est: est });
 export const equiparCriaturaMundo3D = (est, id, apodo = null) => llamar("mundo3d_criatura_equipar", { p_est: est, p_id: id, p_apodo: apodo });
+// Encantamientos y pociones (SQL 149)
+export const encantarMundo3D = (est, item, encanto) => llamar("mundo3d_encantar", { p_est: est, p_item: item, p_enc: encanto });
+export const fetchEncantosMundo3D = (est) => llamar("mundo3d_encantos_ver", { p_est: est });
+export const beberMundo3D = (est, item) => llamar("mundo3d_beber", { p_est: est, p_item: item });
+export const fetchEfectosMundo3D = (est) => llamar("mundo3d_efectos_ver", { p_est: est });
 export const revivirMundo3D = (est) => llamar("mundo3d_revivir", { p_est: est });                      // → { vida }
 export const monstruoVencidoMundo3D = (est, tipo) => llamar("mundo3d_monstruo_vencido", { p_est: est, p_tipo: String(tipo) }); // → { xp, oro }
 export const fijarVidaMundo3D = (grado, monstruos, danioError) => llamar("mundo3d_vida_set", { p_grado: String(grado), p_monstruos: !!monstruos, p_danio_error: Math.max(0, Math.min(20, Math.floor(Number(danioError)) || 0)) });
