@@ -195,7 +195,7 @@ export function PortalEstudiante() {
             <MarcoSeccion zonaLabel="Diversión — Detectives del Códice" icono="🕵️"><Suspense fallback={<p className="text-sm text-slate-400">Cargando…</p>}><VistaDetectivesEst estudianteInfo={estudianteInfo} /></Suspense></MarcoSeccion>
           )}
           {vista === "mundo3d" && estudianteInfo && (
-            <MarcoSeccion zonaLabel="Diversión — Mundo 3D" icono="🧊"><Suspense fallback={<p className="text-sm text-slate-400">Cargando…</p>}><VistaMundo3D estudianteInfo={estudianteInfo} /></Suspense></MarcoSeccion>
+            <MarcoSeccion zonaLabel="Diversión — Códice Craft" icono="🧊"><Suspense fallback={<p className="text-sm text-slate-400">Cargando…</p>}><VistaMundo3D estudianteInfo={estudianteInfo} /></Suspense></MarcoSeccion>
           )}
           {vista === "mundo" && estudianteInfo && (
             <MarcoSeccion zonaLabel="Diversión — Mundo" icono="🎡"><Suspense fallback={<p className="text-sm text-slate-400">Cargando…</p>}><VistaMundo estudianteInfo={estudianteInfo} datos={datos} onProgreso={() => consultar()} onIrAPersonaje={() => setVista("personaje")} /></Suspense></MarcoSeccion>
