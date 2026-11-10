@@ -24,6 +24,7 @@ import { crearSonido } from "./sonido3d";
 import { ESPECIES, POBLACION } from "./animales3d";
 import { MONSTRUOS, danioDeArma } from "./monstruos3d";
 import { CRIATURAS, HABITAT } from "./criaturas3d";
+import { ZONAS, zonaPeso, zonaNuevaDe, objetivo as objetivoZona, superficie as superficieZona, construirZonas } from "./zonas3d";
 
 export const SX = 256, SY = 40, SZ = 256, CH = 16, NCX = SX / CH, NCZ = SZ / CH;
 export const CENTRO = 128, RADIO_PLAZA = 34, RADIO_ADOQUIN = 12; // la aldea (69 × 69) está protegida; el empedrado de la plaza es de 25 × 25
@@ -107,7 +108,10 @@ export const RECETAS = [
 ];
 // El Cruce de los Mundos (portales a otros cursos) está lejos de la aldea, al sureste.
 export const CRUCE = { x: 216, z: 200 };
-export const enPlazaProtegida = (x, z) => (Math.abs(x - CENTRO) <= RADIO_PLAZA && Math.abs(z - CENTRO) <= RADIO_PLAZA) || (Math.abs(x - CRUCE.x) <= 14 && Math.abs(z - CRUCE.z) <= 8);
+// Lo único protegido es la Aldea del Códice (el cuadrado del centro). Todas las demás zonas se pueden picar y construir.
+export const enPlazaProtegida = (x, z) => Math.abs(x - CENTRO) <= RADIO_PLAZA && Math.abs(z - CENTRO) <= RADIO_PLAZA;
+// (solo para abrir cuevas: igual que antes, para que los mundos ya creados no cambien)
+const enPlazaCueva = (x, z) => enPlazaProtegida(x, z) || (Math.abs(x - CRUCE.x) <= 14 && Math.abs(z - CRUCE.z) <= 8);
 
 // atlas: 0 pasto arriba, 1 pasto lado, 2 tierra, 3 piedra, 4 tronco lado, 5 tronco arriba, 6 hojas, 7 tablones, 8 ladrillo, 9 cristal, 10 arena, 11 mineral, 12 agua, 13 portal, 14 adoquín
 const NT = 70;
@@ -323,6 +327,7 @@ export function bioma(x, z) {
 export function zonaDe(x, z) {
   if (Math.abs(x - CRUCE.x) <= 16 && Math.abs(z - CRUCE.z) <= 10) return "Cruce de los Mundos";
   if (Math.max(Math.abs(x - CENTRO), Math.abs(z - CENTRO)) <= RADIO_PLAZA + 3) return "Aldea del Códice";
+  { const zn = zonaNuevaDe(x, z); if (zn) return zn.nombre; }
   if (Math.hypot(x - MONTE.x, z - MONTE.z) < MONTE.r) return "Montaña del Esfuerzo";
   if (Math.hypot((x - LAGO.x) * .8, z - LAGO.z) < LAGO.r + 3) return "Lago";
   const bi = bioma(x, z); if (bi === 1) return "Desierto de Arena Roja"; if (bi === 2) return "Tundra Nevada";
@@ -396,7 +401,7 @@ export function iniciarMundo3D(host, ctx) {
     let cx = (rnd() * SX) | 0, cy = 4 + ((rnd() * 8) | 0), cz = (rnd() * SZ) | 0; const r = 2;
     for (let k = 0; k < 18; k++) {
       for (let dz = -r; dz <= r; dz++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
-        if (dx * dx + dy * dy + dz * dz <= r * r) { const x = cx + dx, y = cy + dy, z = cz + dz; if (x > 0 && x < SX - 1 && z > 0 && z < SZ - 1 && y > 1 && y < alt[z * SX + x] - 3 && !enPlazaProtegida(x, z)) mundo[idx(x, y, z)] = AIRE; }
+        if (dx * dx + dy * dy + dz * dz <= r * r) { const x = cx + dx, y = cy + dy, z = cz + dz; if (x > 0 && x < SX - 1 && z > 0 && z < SZ - 1 && y > 1 && y < alt[z * SX + x] - 3 && !enPlazaCueva(x, z)) mundo[idx(x, y, z)] = AIRE; }
       }
       cx += ((rnd() * 3) | 0) - 1; cy += ((rnd() * 3) | 0) - 1; cz += ((rnd() * 3) | 0) - 1;
     }
@@ -421,6 +426,22 @@ export function iniciarMundo3D(host, ctx) {
       }
     }
   }
+  // ----- diez zonas de exploración: remodelan el terreno donde están (el resto del mundo queda igual) -----
+  const zmask = new Uint8Array(SX * SZ);
+  if (DIM === 0) {
+    for (let z = 1; z < SZ - 1; z++) for (let x = 1; x < SX - 1; x++) {
+      const zp = zonaPeso(x, z, ruidoV); if (!zp) continue;
+      const [zn, w] = zp, i = z * SX + x, h0 = alt[i];
+      const h1 = Math.max(2, Math.min(SY - 8, Math.round(h0 + (objetivoZona(zn, x, z, h0, ruidoV) - h0) * w)));
+      zmask[i] = 1;
+      let top = mundo[idx(x, h0, z)], sub = mundo[idx(x, Math.max(1, h0 - 1), z)];
+      if (w >= .55) [top, sub] = superficieZona(zn, x, z, h1, ruidoV);
+      if (!top || top === AGUA) top = 1; if (!sub || sub === AGUA) sub = 2;
+      const ymax = Math.min(SY - 1, Math.max(h0, h1, 11) + 2);
+      for (let y = 1; y <= ymax; y++) mundo[idx(x, y, z)] = y <= h1 ? (y === h1 ? top : y >= h1 - 3 ? sub : (y > 2 && y < h1 - 5 && hz(x, y, z, 9) < .025 ? 10 : 3)) : (y <= 11 ? AGUA : AIRE);
+      alt[i] = h1;
+    }
+  }
   for (let z = 3; z < SZ - 3; z++) for (let x = 3; x < SX - 3; x++) { // árboles (más densos en el bosque)
     const a = alt[z * SX + x]; if (!eraPasto[z * SX + x]) continue;
     if (Math.max(Math.abs(x - CENTRO), Math.abs(z - CENTRO)) < RADIO_PLAZA + 6) continue;
@@ -437,6 +458,7 @@ export function iniciarMundo3D(host, ctx) {
       }
     } else if (!bi && r0 < p) {
       const t = 4 + ((rnd() * 2) | 0);
+      if (zmask[z * SX + x]) continue; // dentro de las zonas nuevas los árboles los ponen ellas
       for (let k = 1; k <= t; k++) mundo[idx(x, a + k, z)] = 4;
       for (let dy = -2; dy <= 1; dy++) for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
         if (Math.abs(dx) + Math.abs(dz) + Math.abs(dy) <= 3) { const xx = x + dx, yy = a + t + dy, zz = z + dz; if (yy < SY && !mundo[idx(xx, yy, zz)]) mundo[idx(xx, yy, zz)] = 5; }
@@ -445,6 +467,14 @@ export function iniciarMundo3D(host, ctx) {
   }
   // el Cruce de los Mundos: plataforma de adoquín y un camino que sale de la aldea
   const portalesZona = []; const etiquetas = [];
+  const zAntorchas = [], zLocales = [];
+  if (DIM === 0) construirZonas({
+    set: (x, y, z, b) => { if (x < 1 || z < 1 || x >= SX - 1 || z >= SZ - 1 || y < 1 || y >= SY) return; mundo[idx(x, y, z)] = b; },
+    get, alt: (x, z) => (x < 0 || z < 0 || x >= SX || z >= SZ ? 12 : alt[z * SX + x]),
+    setAlt: (x, z, y) => { if (x >= 0 && z >= 0 && x < SX && z < SZ) alt[z * SX + x] = y; },
+    hz, SX, SZ, SY, etiquetas, antorchas: zAntorchas,
+    npc: (n) => zLocales.push({ y: alt[(n.z | 0) * SX + (n.x | 0)] + 1, ...n, local: true, marca: "💬 ", tipo: "aldeano" }),
+  });
   for (let dz = -6; dz <= 6; dz++) for (let dx = -12; dx <= 12; dx++) { const x = CRUCE.x + dx, z = CRUCE.z + dz; mundo[idx(x, 12, z)] = ADOQUIN; for (let y = 13; y <= 19; y++) mundo[idx(x, y, z)] = AIRE; }
   // letreros en cada camino (donde sale de la aldea) y el letrero del Cruce
   for (const [nombre, pts] of CAMINOS) {
@@ -533,7 +563,7 @@ export function iniciarMundo3D(host, ctx) {
   const CLAVE_ZONA = { "Bosque de la Curiosidad": "bosque", "Montaña del Esfuerzo": "montana", "Lago": "lago" };
   const NOMBRE_ZONA = { bosque: "Bosque de la Curiosidad", montana: "Montaña del Esfuerzo", lago: "Lago de la Reflexión" };
   const fijo = new Uint8Array(SX * SZ), veda = new Uint8Array(SX * SZ);
-  const puertasZona = {}, antorchas = [], flores = [];
+  const puertasZona = {}, antorchas = [...zAntorchas], flores = [];
   {
     const zi = new Uint8Array(SX * SZ), CODIGOS = { bosque: 1, montana: 2, lago: 3 }, NOMBRES_Z = [null, "bosque", "montana", "lago"];
     for (let z = 0; z < SZ; z++) for (let x = 0; x < SX; x++) zi[z * SX + x] = CODIGOS[CLAVE_ZONA[zonaDe(x, z)]] || 0;
@@ -877,6 +907,14 @@ export function iniciarMundo3D(host, ctx) {
   function montarNpcs(lista) {
     const previos = new Map(vis.map((v) => [v.n.id, v])); vis.forEach((v) => v.el.remove()); vis = [];
     npcs = posNpc(lista || []);
+    for (const l of zLocales) { // aldeanos de las zonas nuevas: viven en el motor (no necesitan base de datos)
+      let pos = null;
+      for (let r = 0; r <= 5 && !pos; r++) for (let dz = -r; dz <= r && !pos; dz++) for (let dx = -r; dx <= r && !pos; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+        const sy = sueloPara(l.x + dx + .5, l.z + dz + .5, l.y); if (sy != null) pos = { x: l.x + dx + .5, z: l.z + dz + .5, y: sy };
+      }
+      if (pos) npcs.push({ ...l, ...pos });
+    }
     for (const n of npcs) {
       const viejo = previos.get(n.id), llave = JSON.stringify(n.look || null);
       const el = document.createElement("div");
@@ -1143,6 +1181,11 @@ export function iniciarMundo3D(host, ctx) {
         } }
       return;
     }
+    if (cercano.local) { // aldeano de una zona: dice una frase (el mercader abre la tienda)
+      if (cercano.mercader) { try { ctx.alMesa && ctx.alMesa("mercado"); } catch (_) {} return; }
+      const f = cercano.frases || ["…"]; cercano.k = ((cercano.k | 0) + 1) % f.length; aviso("💬 " + cercano.nombre + ": " + f[cercano.k]); try { sonido.animal && sonido.animal("oveja"); } catch (_) {}
+      return;
+    }
     pausado = true; hablandoCon = cercano; limpiarEntrada(); if (document.pointerLockElement === cv) document.exitPointerLock();
     try { ctx.alNpc && ctx.alNpc(cercano); } catch (_) {}
   }
@@ -1150,7 +1193,7 @@ export function iniciarMundo3D(host, ctx) {
   const aviso = (t) => { try { ctx.alError && ctx.alError(t); } catch (_) {} };
   function puedeEditar(x, y, z) {
     if (ctx.soloMirar) { aviso("Estás de visita: aquí solo se puede mirar."); return false; }
-    if (veda[z * SX + x]) { aviso("Los muros y portones de las zonas están protegidos."); return false; }
+    if (fijo[z * SX + x]) { aviso("Los muros y portones de las zonas están protegidos."); return false; }
     if (enPlazaProtegida(x, z)) { aviso("La plaza está protegida: construye fuera de ella."); return false; }
     const pl = plotDe(x, z); if (pl && !pl.mia) { aviso("🏠 Esta es la parcela de " + (pl.nombre || "otro compañero") + ": puedes mirar su construcción, pero solo él puede cambiarla. Construye en tu parcela o fuera de las parcelas."); return false; }
     if (y < 1 || y >= SY - 1) return false;
@@ -1519,7 +1562,7 @@ export function iniciarMundo3D(host, ctx) {
 
   // ----- criaturas del Códice: salvajes que se pueden enfrentar y capturar (la batalla y la captura las decide el servidor) -----
   const cria = []; let criT = 4, criId = 1;
-  const CLAVE_HAB = { "Campos de Oakhaven": "campo", "Bosque de la Curiosidad": "bosque", "Lago": "lago", "Lago de la Reflexión": "lago", "Montaña del Esfuerzo": "monte", "Desierto de Arena Roja": "desierto", "Tundra Nevada": "tundra", "Cruce de los Mundos": "cruce" };
+  const CLAVE_HAB = { "Campos de Oakhaven": "campo", "Bosque de la Curiosidad": "bosque", "Lago": "lago", "Lago de la Reflexión": "lago", "Montaña del Esfuerzo": "monte", "Desierto de Arena Roja": "desierto", "Tundra Nevada": "tundra", "Cruce de los Mundos": "cruce", ...Object.fromEntries(ZONAS.map((z) => [z.nombre, z.hab])) };
   function tipoCriatura() {   // elige entre las criaturas que viven en esta zona, a esta hora y en este mundo (ver HABITAT)
     const noche = amb.noche > .5, k = CLAVE_HAB[zonaDe(Math.floor(jug.x), Math.floor(jug.z))] || "campo", op = [];
     for (const id of Object.keys(HABITAT)) {
@@ -1790,7 +1833,7 @@ export function iniciarMundo3D(host, ctx) {
     setVida: (o) => { if (o && "monstruos" in o) { monActivo = !!o.monstruos; if (!monActivo) mons.length = 0; } },
     desmayarse: () => desmayarse(),
     posicion: () => ({ x: jug.x, y: jug.y, z: jug.z, yaw: jug.yaw }),
-    _debug: { cria, ponerCriatura: (n, x, z) => { const def = CRIATURAS[n], y = sueloPara(x, z, jug.y); if (!def || y == null) return null; const c = { id: criId++, tipo: "cr" + n, num: n, def, x, y, z, h: 0, hp: 1, flash: 0, lunge: 0, fase: 0, amp: 0, obj: null, espera: 99, avisada: true, vida: 1e9, lock: false }; cria.push(c); return c; }, mons, aparecerMonstruo, ponerMonstruo: (tipo, x, z) => { const def = MONSTRUOS[tipo], y = sueloPara(x, z, jug.y); if (!def || y == null) return null; const m = { tipo, def, x, y, z, h: 0, hp: def.hp, flash: 0, cd: 1.2, lunge: 0, fase: 0, amp: 0, kb: null, quema: 0 }; mons.push(m); return m; }, golpearMonstruo, usar, interactuarCirc, circ, botones, jug, apuntar, get, picarAhora: (v) => { picar = v; }, poner, animales, ambiente, sonido },
+    _debug: { hablar, npcs: () => npcs, cria, ponerCriatura: (n, x, z) => { const def = CRIATURAS[n], y = sueloPara(x, z, jug.y); if (!def || y == null) return null; const c = { id: criId++, tipo: "cr" + n, num: n, def, x, y, z, h: 0, hp: 1, flash: 0, lunge: 0, fase: 0, amp: 0, obj: null, espera: 99, avisada: true, vida: 1e9, lock: false }; cria.push(c); return c; }, mons, aparecerMonstruo, ponerMonstruo: (tipo, x, z) => { const def = MONSTRUOS[tipo], y = sueloPara(x, z, jug.y); if (!def || y == null) return null; const m = { tipo, def, x, y, z, h: 0, hp: def.hp, flash: 0, cd: 1.2, lunge: 0, fase: 0, amp: 0, kb: null, quema: 0 }; mons.push(m); return m; }, golpearMonstruo, usar, interactuarCirc, circ, botones, jug, apuntar, get, picarAhora: (v) => { picar = v; }, poner, animales, ambiente, sonido },
     cerrar: () => {
       vivo = false; cancelAnimationFrame(raf); ro.disconnect();
       escuchas.forEach(([o, e, f, op]) => o.removeEventListener(e, f, op));
