@@ -65,6 +65,8 @@ export const preguntaCriaturaMundo3D = (est) => llamar("mundo3d_criatura_pregunt
 export const accionCriaturaMundo3D = (est, accion, opcion = null) => llamar("mundo3d_criatura_accion", { p_est: est, p_accion: accion, p_opcion: opcion });
 export const fetchCriaturasMundo3D = (est) => llamar("mundo3d_criaturas_mias", { p_est: est });
 export const equiparCriaturaMundo3D = (est, id, apodo = null) => llamar("mundo3d_criatura_equipar", { p_est: est, p_id: id, p_apodo: apodo });
+// Circuitos (SQL 150)
+export const alternarMundo3D = (est, x, y, z) => llamar("mundo3d_alternar", { p_est: est, p_x: x, p_y: y, p_z: z });
 // Encantamientos y pociones (SQL 149)
 export const encantarMundo3D = (est, item, encanto) => llamar("mundo3d_encantar", { p_est: est, p_item: item, p_enc: encanto });
 export const fetchEncantosMundo3D = (est) => llamar("mundo3d_encantos_ver", { p_est: est });
