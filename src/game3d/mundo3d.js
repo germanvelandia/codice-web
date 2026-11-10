@@ -39,10 +39,10 @@ export const NOMBRES = { 1: "Pasto", 2: "Tierra", 3: "Piedra", 4: "Tronco", 5: "
   37: "Tierra labrada", 72: "Semillas", 73: "Zanahoria", 74: "Papa", 75: "Trigo", 76: "Pan", 77: "Papa asada", 78: "Huevo frito",
   80: "Azada de madera", 81: "Azada de piedra", 82: "Azada de hierro", 83: "Azada de diamante",
   ...Object.fromEntries(["cobre", "hierro", "diamante"].flatMap((m, t) => ["Casco", "Peto", "Pantalón", "Botas"].map((n, p) => [84 + t * 4 + p, n + " de " + m]))),
-  121: "Runa", 123: "Poción de curación", 124: "Poción de velocidad", 125: "Poción de resistencia al fuego", 120: "Cápsula de captura", 96: "Llave de brasas", 97: "Fragmento de brasa", 98: "Corazón de brasa", 112: "Basalto", 113: "Roca ígnea", 114: "Lava", 115: "Brasa luminosa", 116: "Mena de brasa", 117: "Ladrillo ígneo", 119: "Velo de brasas",
+  130: "Cable de energía", 131: "Palanca", 132: "Palanca", 133: "Botón", 134: "Bloque de energía", 135: "Lámpara de señal", 136: "Puerta mecánica", 137: "Placa de presión", 121: "Runa", 123: "Poción de curación", 124: "Poción de velocidad", 125: "Poción de resistencia al fuego", 120: "Cápsula de captura", 96: "Llave de brasas", 97: "Fragmento de brasa", 98: "Corazón de brasa", 112: "Basalto", 113: "Roca ígnea", 114: "Lava", 115: "Brasa luminosa", 116: "Mena de brasa", 117: "Ladrillo ígneo", 119: "Velo de brasas",
   24: "Horno", 25: "Bloque de cobre", 62: "Cobre crudo", 63: "Lingote de cobre", 65: "Hierro crudo", 66: "Oro crudo",
   68: "Espada de madera", 69: "Espada de piedra", 70: "Espada de hierro", 71: "Espada de diamante" };
-export const COLOCABLES = [1, 2, 3, 4, 6, 7, 8, 9, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 112, 113, 115, 117];
+export const COLOCABLES = [1, 2, 3, 4, 6, 7, 8, 9, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 112, 113, 115, 117, 130, 131, 133, 134, 135, 136, 137];
 // Frases rápidas del chat (los mismos números que la tabla mundo3d_frases del servidor)
 export const FRASES_CHAT = { 1: "¡Hola!", 2: "¡Buen trabajo!", 3: "¿Me ayudas?", 4: "¡Gracias!", 5: "¿Construimos juntos?", 6: "¡Mira lo que hice!", 7: "Vamos a la aldea", 8: "Necesito piedra", 9: "¡Qué bien!", 10: "¡Hasta luego!", 11: "Sígueme", 12: "¡Cuidado!" };
 export const MATERIALES = [40, 41, 42, 43, 44, 45, 46, 47, 48, 62, 63, 65, 66, 75, 76, 77, 78, 96, 97, 98, 120, 121];
@@ -65,7 +65,7 @@ export const MAX_USOS = (id) => (id >= 50 && id <= 61 ? [60, 130, 250, 600][(id 
 // Fundición y combustibles (mismos datos que las tablas mundo3d_fundicion y mundo3d_combustible)
 export const FUNDICION = [{ entrada: 65, sale: 42 }, { entrada: 66, sale: 43 }, { entrada: 62, sale: 63 }, { entrada: 9, sale: 8 }, { entrada: 4, sale: 41 }, { entrada: 31, sale: 7 }, { entrada: 74, sale: 77 }, { entrada: 46, sale: 78 }];
 export const COMBUSTIBLES = [{ item: 41, rinde: 8 }, { item: 4, rinde: 3 }, { item: 6, rinde: 2 }, { item: 40, rinde: 1 }, { item: 97, rinde: 16 }];
-const DUREZA = { 112: 1, 113: .9, 115: .5, 116: 1.3, 117: 1.1, 26: .35, 27: .3, 28: .15, 29: .4, 30: .35, 31: .4, 32: 1, 33: 1, 34: 1, 35: 1.5, 36: .5, 24: 1.2, 25: 1.6, 1: .3, 2: .3, 3: .9, 4: .6, 5: .15, 6: .5, 7: .9, 8: .2, 9: .25, 10: 1.1, 16: 1.6, 17: 1.6, 18: 2, 19: .3, 20: .3, 21: .3, 22: .3, 23: .3 };
+const DUREZA = { 130: .3, 131: .3, 132: .3, 133: .3, 134: .8, 135: .3, 136: .8, 137: .3, 138: .3, 139: .3, 140: .8, 112: 1, 113: .9, 115: .5, 116: 1.3, 117: 1.1, 26: .35, 27: .3, 28: .15, 29: .4, 30: .35, 31: .4, 32: 1, 33: 1, 34: 1, 35: 1.5, 36: .5, 24: 1.2, 25: 1.6, 1: .3, 2: .3, 3: .9, 4: .6, 5: .15, 6: .5, 7: .9, 8: .2, 9: .25, 10: 1.1, 16: 1.6, 17: 1.6, 18: 2, 19: .3, 20: .3, 21: .3, 22: .3, 23: .3 };
 export const RECETAS = [
   { sale: 6, n: 4, cuesta: { 4: 1 }, txt: "1 tronco → 4 tablones" },
   { sale: 7, n: 2, cuesta: { 3: 2 }, txt: "2 piedra → 2 ladrillos" },
@@ -82,6 +82,13 @@ export const RECETAS = [
   { sale: 123, n: 1, cuesta: { 47: 2, 121: 1 }, txt: "2 manzanas + 1 runa → recupera 30 de vida", g: "Pociones" },
   { sale: 124, n: 1, cuesta: { 73: 2, 121: 1 }, txt: "2 zanahorias + 1 runa → corres más rápido 3 minutos", g: "Pociones" },
   { sale: 125, n: 1, cuesta: { 97: 2, 121: 1 }, txt: "2 fragmentos de brasa + 1 runa → inmune a la lava 3 minutos", g: "Pociones" },
+  { sale: 130, n: 4, cuesta: { 63: 1, 41: 1 }, txt: "1 cobre + 1 carbón → 4 cables: llevan la señal por los bloques pegados", g: "Circuitos" },
+  { sale: 131, n: 1, cuesta: { 40: 1, 3: 1 }, txt: "1 palo + 1 piedra → palanca: clic derecho la enciende o apaga", g: "Circuitos" },
+  { sale: 133, n: 2, cuesta: { 3: 2 }, txt: "2 piedra → 2 botones: dan señal 1,5 segundos", g: "Circuitos" },
+  { sale: 137, n: 1, cuesta: { 3: 2, 63: 1 }, txt: "2 piedra + 1 cobre → placa: da señal mientras estás encima", g: "Circuitos" },
+  { sale: 134, n: 1, cuesta: { 63: 3, 41: 2 }, txt: "3 cobre + 2 carbón → bloque que siempre da señal", g: "Circuitos" },
+  { sale: 135, n: 1, cuesta: { 8: 1, 63: 1 }, txt: "1 cristal + 1 cobre → lámpara que se enciende con señal", g: "Circuitos" },
+  { sale: 136, n: 2, cuesta: { 42: 1, 3: 2 }, txt: "1 hierro + 2 piedra → 2 puertas que se abren con señal", g: "Circuitos" },
   { sale: 120, n: 2, cuesta: { 42: 2, 41: 1 }, txt: "2 hierro + 1 carbón → 2 cápsulas para capturar criaturas 🐾", g: "Criaturas" },
   { sale: 96, n: 1, cuesta: { 42: 6, 43: 2 }, txt: "6 hierro + 2 oro → llave para entrar al Reino de Brasas", g: "Dimensiones" },
   { sale: 115, n: 1, cuesta: { 97: 3 }, txt: "3 fragmentos de brasa → 1 brasa luminosa", g: "Dimensiones" },
@@ -103,7 +110,7 @@ export const CRUCE = { x: 216, z: 200 };
 export const enPlazaProtegida = (x, z) => (Math.abs(x - CENTRO) <= RADIO_PLAZA && Math.abs(z - CENTRO) <= RADIO_PLAZA) || (Math.abs(x - CRUCE.x) <= 14 && Math.abs(z - CRUCE.z) <= 8);
 
 // atlas: 0 pasto arriba, 1 pasto lado, 2 tierra, 3 piedra, 4 tronco lado, 5 tronco arriba, 6 hojas, 7 tablones, 8 ladrillo, 9 cristal, 10 arena, 11 mineral, 12 agua, 13 portal, 14 adoquín
-const NT = 60;
+const NT = 70;
 function tileDe(b, cara) { // cara: 0 +x, 1 -x, 2 +y, 3 -y, 4 +z, 5 -z
   switch (b) {
     case 1: return cara === 2 ? 0 : cara === 3 ? 2 : 1;
@@ -118,6 +125,7 @@ function tileDe(b, cara) { // cara: 0 +x, 1 -x, 2 +y, 3 -y, 4 +z, 5 -z
   if (b === 37) return cara === 2 ? 39 : 2;
   if (b >= 112 && b <= 119) return 52 + (b - 112);
   if (b >= 100 && b <= 111) return 40 + (b - 100);
+  if (b >= 130 && b <= 140) return [60, 62, 63, 64, 65, 66, 68, 69, 61, 67, 68][b - 130];   // circuitos
   if (b === 30) return cara === 2 || cara === 3 ? 32 : 31;
   if (b >= 26 && b <= 29) return b + 1;
   if (b >= 31 && b <= 36) return b + 2;
@@ -140,7 +148,7 @@ export function atlasCanvas() {
     ["#2f7a3c", "#3b8f4a", "#276832"], ["#3f8a47", "#4aa055", "#327a3b"], ["#9aa3b5", "#adb6c7", "#858ea1"],
     ["#a5675a", "#b87666", "#8d554a"], ["#78787b", "#898a8d", "#66676a"], ["#cfcfd0", "#dddde0", "#bcbcc0"], ["#4a4c53", "#5a5c64", "#3b3d43"], ["#ffe08a", "#fff0b8", "#f2c75a"],
     ["#6b4426", "#7a5230", "#583619"], ...Array.from({ length: 12 }, () => ["#000", "#000", "#000"]),
-    ["#3c3f4a", "#4a4d5a", "#2f323c"], ["#5a2a22", "#6b342a", "#46201a"], ["#e8590c", "#ff7a1a", "#c2410c"], ["#ffcc4d", "#ffe08a", "#f59e0b"], ["#5a2a22", "#6b342a", "#46201a"], ["#5c1f1a", "#722a22", "#44140f"], ["#3c3f4a", "#4a4d5a", "#2f323c"], ["#7a2fd0", "#ff7a1a", "#4a1a90"]];
+    ["#3c3f4a", "#4a4d5a", "#2f323c"], ["#5a2a22", "#6b342a", "#46201a"], ["#e8590c", "#ff7a1a", "#c2410c"], ["#ffcc4d", "#ffe08a", "#f59e0b"], ["#5a2a22", "#6b342a", "#46201a"], ["#5c1f1a", "#722a22", "#44140f"], ["#3c3f4a", "#4a4d5a", "#2f323c"], ["#7a2fd0", "#ff7a1a", "#4a1a90"], ...[["#5a2a22", "#6b342a", "#46201a"], ["#ff3b30", "#ff6b5a", "#d9261c"], ["#8b8f96", "#9ca0a7", "#767a82"], ["#8b8f96", "#9ca0a7", "#767a82"], ["#8b8f96", "#9ca0a7", "#767a82"], ["#8a1414", "#a81c1c", "#660e0e"], ["#4a4c53", "#5a5c64", "#3b3d43"], ["#ffe08a", "#fff0b8", "#f2c75a"], ["#9a9ea6", "#aeb2ba", "#848890"], ["#8b8f96", "#9ca0a7", "#767a82"]]];
   _palRef = pal;
   for (let t = 0; t < NT; t++) {
     const ox = t * 16;
@@ -187,6 +195,18 @@ export function atlasCanvas() {
     else if (t === 37) { g.fillStyle = "#2b2c31"; for (let y = 5; y < 16; y += 6) g.fillRect(ox, y, 16, 1); g.fillStyle = "#6a6d78"; for (let i = 0; i < 6; i++) g.fillRect(ox + ((r() * 14) | 0), ((r() * 14) | 0), 1, 1); }
     else if (t === 38) { g.fillStyle = "#a8742a"; g.fillRect(ox, 0, 16, 2); g.fillRect(ox, 14, 16, 2); g.fillRect(ox, 0, 2, 16); g.fillRect(ox + 14, 0, 2, 16); g.fillStyle = "#fff8d0"; g.fillRect(ox + 4, 4, 8, 8); }
     else if (t >= 20 && t <= 24) { g.fillStyle = "#0002"; for (let i = 0; i < 12; i++) g.fillRect(ox + ((r() * 14) | 0), ((r() * 14) | 0), 2, 1); }
+    if (t >= 60 && t < 70) { // circuitos
+      const R = (c, a, b, w, h) => { g.fillStyle = c; g.fillRect(ox + a, b, w, h); };
+      if (t === 60) { R("#2a1410", 0, 0, 16, 1); R("#2a1410", 0, 15, 16, 1); R("#2a1410", 0, 0, 1, 16); R("#2a1410", 15, 0, 1, 16); R("#a8473a", 2, 7, 12, 2); R("#a8473a", 7, 2, 2, 12); R("#c9604f", 7, 7, 2, 2); }
+      else if (t === 61) { R("#7a0f08", 0, 0, 16, 1); R("#7a0f08", 0, 15, 16, 1); R("#7a0f08", 0, 0, 1, 16); R("#7a0f08", 15, 0, 1, 16); R("#ffd0c8", 2, 7, 12, 2); R("#ffd0c8", 7, 2, 2, 12); R("#ffffff", 7, 7, 2, 2); }
+      else if (t === 62 || t === 63) { R("#4a4d55", 3, 11, 10, 4); R("#2f3238", 3, 14, 10, 1); const on = t === 63; for (let k = 0; k < 7; k++) R("#c9a45c", on ? 8 + k * .8 : 7 - k * .8, 10 - k, 2, 1); R(on ? "#3ddc6a" : "#e03a3a", on ? 13 : 1, 2, 3, 3); R("#fff6", on ? 13 : 1, 2, 1, 1); }
+      else if (t === 64) { R("#5b5e66", 4, 4, 8, 8); R("#d9a25a", 5, 5, 6, 6); R("#f0c27c", 5, 5, 6, 2); R("#0004", 4, 11, 8, 1); }
+      else if (t === 65) { R("#ffcf33", 6, 1, 4, 5); R("#ffcf33", 4, 6, 8, 3); R("#ffcf33", 6, 9, 4, 6); R("#fff3b0", 7, 3, 2, 10); R("#0004", 0, 0, 16, 1); R("#0004", 0, 15, 16, 1); R("#0004", 0, 0, 1, 16); R("#0004", 15, 0, 1, 16); }
+      else if (t === 66) { R("#23252b", 0, 0, 16, 2); R("#23252b", 0, 14, 16, 2); R("#23252b", 0, 0, 2, 16); R("#23252b", 14, 0, 2, 16); R("#6b6f78", 3, 3, 10, 10); R("#8a8e98", 4, 4, 3, 3); }
+      else if (t === 67) { R("#a8742a", 0, 0, 16, 2); R("#a8742a", 0, 14, 16, 2); R("#a8742a", 0, 0, 2, 16); R("#a8742a", 14, 0, 2, 16); R("#fffbe0", 3, 3, 10, 10); R("#ffffff", 5, 5, 6, 6); }
+      else if (t === 68) { R("#6f737c", 0, 0, 16, 1); R("#6f737c", 0, 15, 16, 1); R("#6f737c", 0, 0, 1, 16); R("#6f737c", 15, 0, 1, 16); R("#6f737c", 2, 2, 12, 1); R("#6f737c", 2, 13, 12, 1); R("#eaeef2", 3, 4, 1, 1); R("#eaeef2", 12, 4, 1, 1); R("#eaeef2", 3, 11, 1, 1); R("#eaeef2", 12, 11, 1, 1); R("#2f3238", 11, 7, 2, 3); R("#f2c75a", 11, 7, 2, 1); }
+      else { R("#5a5d65", 2, 2, 12, 12); R("#797d86", 3, 3, 10, 10); R("#0004", 2, 13, 12, 1); }
+    }
     if (t === 16) { g.fillStyle = "#0004"; for (let x = 4; x < 16; x += 4) g.fillRect(ox + x, 0, 1, 16); g.fillStyle = "#3a3f46"; g.fillRect(ox, 2, 16, 3); g.fillRect(ox, 11, 16, 3); g.fillStyle = "#9aa1ab"; for (let x = 2; x < 16; x += 5) { g.fillRect(ox + x, 3, 1, 1); g.fillRect(ox + x, 12, 1, 1); } g.fillStyle = "#d4af37"; g.fillRect(ox + 11, 7, 3, 3); }
   }
   return (_atlas = a);
@@ -204,7 +224,7 @@ export function colorItem(item) {
 // dibujo de un item en un canvas: los bloques salen del atlas; materiales y herramientas se dibujan en una cuadrícula de 16 × 16
 export function dibujarIcono(canvas, item) {
   const c = canvas.getContext("2d"); c.imageSmoothingEnabled = false; c.clearRect(0, 0, canvas.width, canvas.height);
-  if (item < 40 || (item >= 112 && item <= 119)) { c.drawImage(atlasCanvas(), (item === 1 ? 1 : tileDe(item, 0)) * 16, 0, 16, 16, 0, 0, canvas.width, canvas.height); return; }
+  if (item < 40 || (item >= 112 && item <= 119) || (item >= 130 && item <= 140)) { c.drawImage(atlasCanvas(), (item === 1 ? 1 : tileDe(item, 0)) * 16, 0, 16, 16, 0, 0, canvas.width, canvas.height); return; }
   c.save(); c.scale(canvas.width / 16, canvas.height / 16);
   const px = (col, x, y, w = 1, h = 1) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
   const pts = (col, a) => a.forEach(([x, y]) => px(col, x, y));
@@ -349,7 +369,7 @@ export function iniciarMundo3D(host, ctx) {
   const autores = new Map(); // "x,y,z" → autor_id de los bloques cambiados
   const idx = (x, y, z) => (y * SZ + z) * SX + x;
   const get = (x, y, z) => (x < 0 || x >= SX || z < 0 || z >= SZ || y < 0) ? (y < 0 ? 3 : 0) : (y >= SY ? 0 : mundo[idx(x, y, z)]);
-  const esHueco = (b) => b === AIRE || b === AGUA || b === PORTAL || (b >= 100 && b <= 111) || b === LAVA || b === VELO;     // no choca
+  const esHueco = (b) => b === 140 || b === AIRE || b === AGUA || b === PORTAL || (b >= 100 && b <= 111) || b === LAVA || b === VELO;     // no choca
   const solido = (x, y, z) => { if (y < 0 || x < 0 || x >= SX || z < 0 || z >= SZ) return true; return !esHueco(get(x, y, z)); };
   const sucios = new Set(); const chunks = [];
 
@@ -643,11 +663,14 @@ export function iniciarMundo3D(host, ctx) {
     for (const k in puertasZona) { const p = puertasZona[k]; if (!p.abierta && Math.hypot(p.cx - jug.x, p.cz - jug.z) < 6.5 && Math.abs(p.sy + 1 - jug.y) < 6) { esperaPuerta = 6; sonido.puertaCerrada(); try { ctx.alPuerta && ctx.alPuerta(k); } catch (_) {} break; } }
   }
 
+  // ----- circuitos: solo se guardan los bloques y las palancas; la señal (cables encendidos, lámparas, puertas abiertas) se calcula aquí -----
+  const circ = new Set(); let circSucio = false;
+  const notaCirc = (x, y, z) => { const i = idx(x, y, z), b = mundo[i]; if (b >= 130 && b <= 140) circ.add(i); else circ.delete(i); circSucio = true; };
   function aplicar(filas, noMarcar) {
     for (const f of filas || []) {
       if (f.x < 0 || f.x >= SX || f.z < 0 || f.z >= SZ || f.y < 0 || f.y >= SY) continue;
       if (fijo[f.z * SX + f.x]) continue; // los muros y portones de las zonas no se pueden cambiar
-      mundo[idx(f.x, f.y, f.z)] = f.bloque; autores.set(f.x + "," + f.y + "," + f.z, f.autor_id);
+      mundo[idx(f.x, f.y, f.z)] = f.bloque; notaCirc(f.x, f.y, f.z); autores.set(f.x + "," + f.y + "," + f.z, f.autor_id);
       if (!noMarcar) marcar(f.x, f.z);
     }
   }
@@ -730,11 +753,11 @@ export function iniciarMundo3D(host, ctx) {
     { n: [0, 0, 1], c: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]], s: .9 }, { n: [0, 0, -1], c: [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]], s: .7 },
   ];
   const UVC = [[0, 1], [1, 1], [1, 0], [0, 0]];
-  const transparente = (b) => b === AIRE || b === 8 || b === AGUA || b === PORTAL || (b >= 100 && b <= 111) || b === LAVA || b === VELO;
+  const transparente = (b) => b === 140 || b === AIRE || b === 8 || b === AGUA || b === PORTAL || (b >= 100 && b <= 111) || b === LAVA || b === VELO;
   function construir(cx, cz) {
     const pos = [], uv = [], sh = [], ind = []; let n = 0;
     for (let z = cz * CH; z < cz * CH + CH; z++) for (let x = cx * CH; x < cx * CH + CH; x++) for (let y = 0; y < SY; y++) {
-      const b = mundo[idx(x, y, z)]; if (!b) continue;
+      const b = mundo[idx(x, y, z)]; if (!b || b === 140) continue;   // 140: puerta abierta (hueco)
       if (b >= 100 && b <= 111) { // cultivo: dos planos cruzados, visibles por ambos lados
         const t = tileDe(b, 0), u0 = t / NT + .0005, u1 = (t + 1) / NT - .0005;
         for (const [ax, az, bx, bz] of [[0, 0, 1, 1], [1, 0, 0, 1]]) {
@@ -748,7 +771,8 @@ export function iniciarMundo3D(host, ctx) {
         const c = CARAS[f], nb = get(x + c.n[0], y + c.n[1], z + c.n[2]);
         if (!transparente(nb) || nb === b) continue;
         const t = tileDe(b, f), u0 = t / NT + .0005, u1 = (t + 1) / NT - .0005, dy = (b === AGUA || b === LAVA) && f === 2 ? -.12 : 0;
-        for (let k = 0; k < 4; k++) { pos.push(x + c.c[k][0], y + c.c[k][1] + (c.c[k][1] ? dy : 0), z + c.c[k][2]); uv.push(UVC[k][0] ? u1 : u0, UVC[k][1] ? .999 : .001); sh.push(c.s); }
+        const brilla = b === 138 || b === 139 || b === 134;   // los cables, lámparas y bloques de energía encendidos se ven más claros
+        for (let k = 0; k < 4; k++) { pos.push(x + c.c[k][0], y + c.c[k][1] + (c.c[k][1] ? dy : 0), z + c.c[k][2]); uv.push(UVC[k][0] ? u1 : u0, UVC[k][1] ? .999 : .001); sh.push(brilla ? 1.12 : c.s); }
         ind.push(n, n + 1, n + 2, n, n + 2, n + 3); n += 4;
       }
     }
@@ -986,7 +1010,7 @@ export function iniciarMundo3D(host, ctx) {
     let px = ix, py = iy, pz = iz, t = 0;
     while (t <= (ctx.vuelo ? 60 : 5.5)) {
       const b = get(ix, iy, iz);
-      if (b !== AIRE && b !== AGUA && b !== PORTAL && b !== LAVA && b !== VELO && iy >= 0 && iy < SY) return { x: ix, y: iy, z: iz, px, py, pz, b };
+      if (b !== AIRE && b !== AGUA && b !== PORTAL && b !== LAVA && b !== VELO && b !== 140 && iy >= 0 && iy < SY) return { x: ix, y: iy, z: iz, px, py, pz, b };
       px = ix; py = iy; pz = iz;
       if (tx < ty && tx < tz) { ix += sx; t = tx; tx += tdx; } else if (ty < tz) { iy += sy; t = ty; ty += tdy; } else { iz += sz; t = tz; tz += tdz; }
     }
@@ -1136,7 +1160,7 @@ export function iniciarMundo3D(host, ctx) {
     if (!picar) { picando = null; return; }
     if (golpearMonstruo()) { picando = null; return; }
     const h = apuntar(); if (!h || h.b === ADOQUIN || h.y <= 0) { picando = null; return; }
-    if (h.b >= 100) { picando = null; cosecharAhora(h); return; }
+    if (h.b >= 100 && h.b <= 111) { picando = null; cosecharAhora(h); return; }
     if (!picando || picando.x !== h.x || picando.y !== h.y || picando.z !== h.z) { const hr = herramientaPara(h.b); picando = { x: h.x, y: h.y, z: h.z, t: 0, b: h.b, dur: (DUREZA[h.b] || 1) / hr.mult, herr: hr.id, p: 0 };
       if (h.b === 10 && hr.k === 0 && !hr.id && !avisoPico) { avisoPico = true; aviso("Con un pico sacas más minerales (y mejores). Fabrica uno en la mochila 🎒."); } }
     picando.t += dt; picando.s = (picando.s || 0) + dt; if (picando.s > .28) { picando.s = 0; sonido.picar(h.b); }
@@ -1147,9 +1171,9 @@ export function iniciarMundo3D(host, ctx) {
       if (!puedeEditar(x, y, z)) { picar = false; return; }
       const dueno = autores.get(clave(x, y, z));
       if (dueno != null && dueno !== ctx.yo && b > 0 && mundo[idx(x, y, z)] > 0) { aviso("Ese bloque lo puso otro compañero."); picar = false; return; }
-      mundo[idx(x, y, z)] = AIRE; marcar(x, z); ocupado = true; sonido.romper(b); soltarParticulas(x + .5, y + .5, z + .5, b, 16, 2.6);
-      Promise.resolve(ctx.picar(x, y, z, b)).then((r) => { autores.set(clave(x, y, z), ctx.yo); if (r && r.item) soltarItem(x, y, z, r.item); }).catch((e) => {
-        if (!vivo) return; mundo[idx(x, y, z)] = b; marcar(x, z); aviso(mensajeError(e));
+      mundo[idx(x, y, z)] = AIRE; notaCirc(x, y, z); marcar(x, z); ocupado = true; sonido.romper(b); soltarParticulas(x + .5, y + .5, z + .5, b, 16, 2.6);
+      Promise.resolve(ctx.picar(x, y, z, canon(b))).then((r) => { autores.set(clave(x, y, z), ctx.yo); if (r && r.item) soltarItem(x, y, z, r.item); }).catch((e) => {
+        if (!vivo) return; mundo[idx(x, y, z)] = b; notaCirc(x, y, z); marcar(x, z); aviso(mensajeError(e));
       }).finally(() => { ocupado = false; });
     }
   }
@@ -1159,6 +1183,7 @@ export function iniciarMundo3D(host, ctx) {
   function usar() {
     if (pausado) return;
     if (golpearMonstruo()) return;
+    if (interactuarCirc()) return;
     if (cercano || animalCer || mesaApuntada()) { hablar(); return; }
     if (POCIONES[sel]) { if (ctx.cantidad(sel) > 0) { try { ctx.alBeber && ctx.alBeber(sel); } catch (_) {} } else aviso("No tienes " + NOMBRES[sel].toLowerCase() + "."); return; }
     if (COMIDA[sel] && ctx.cantidad(sel) > 0) { try { ctx.alComer && ctx.alComer(); } catch (_) {} return; }
@@ -1172,9 +1197,9 @@ export function iniciarMundo3D(host, ctx) {
     const c = get(x, y, z); if (c !== AIRE && c !== AGUA && c !== LAVA) return;
     if (!(ctx.cantidad(sel) > 0)) { aviso("No tienes " + NOMBRES[sel].toLowerCase() + ". Pica o fabrica más."); return; }
     if (x + 1 > jug.x - RAD && x < jug.x + RAD && z + 1 > jug.z - RAD && z < jug.z + RAD && y + 1 > jug.y && y < jug.y + ALTO) return;
-    const antes = c; mundo[idx(x, y, z)] = sel; marcar(x, z); ocupado = true; sonido.poner(sel);
+    const antes = c; mundo[idx(x, y, z)] = sel; notaCirc(x, y, z); marcar(x, z); ocupado = true; sonido.poner(sel);
     Promise.resolve(ctx.poner(x, y, z, sel)).then(() => { autores.set(clave(x, y, z), ctx.yo); }).catch((e) => {
-      if (!vivo) return; mundo[idx(x, y, z)] = antes; marcar(x, z); aviso(mensajeError(e));
+      if (!vivo) return; mundo[idx(x, y, z)] = antes; notaCirc(x, y, z); marcar(x, z); aviso(mensajeError(e));
     }).finally(() => { ocupado = false; });
   }
   // azada: labra pasto o tierra · semillas: se siembran sobre tierra labrada (el servidor decide y cuenta el crecimiento)
@@ -1201,6 +1226,52 @@ export function iniciarMundo3D(host, ctx) {
       mundo[idx(h.x, h.y, h.z)] = AIRE; marcar(h.x, h.z); sonido.recoger(); soltarParticulas(h.x + .5, h.y + .5, h.z + .5, 5, 8, 1.6);
       if (r && r.item) avisoBotin(r.item, r.n || 1); if (r && r.semilla) avisoBotin(r.semilla, r.semilla_n || 1);
     }).catch((e) => { const m = String((e && e.message) || e || ""), t = /no_madura:(\d+)/.exec(m); aviso(t ? "🌱 Todavía no está madura. Faltan " + (t[1] >= 60 ? Math.ceil(t[1] / 60) + " min" : t[1] + " s") + "." : /bloque_ajeno/.test(m) ? "Esa planta la sembró otro compañero." : mensajeError(e)); }).finally(() => { ocupado = false; });
+  }
+  // ----- circuitos: palancas, botones, placas, cables, lámparas y puertas -----
+  const botones = new Map(); let placaAct = -1, placaT = 0, circPend = false, circRe = 0, palancaCd = 0;
+  const canon = (b) => (b === 138 ? 130 : b === 139 ? 135 : b === 140 ? 136 : b);   // lo que se guarda en el servidor
+  const vecinosI = (i) => { const x = i % SX, z = ((i / SX) | 0) % SZ, y = (i / (SX * SZ)) | 0, r = [];
+    if (x > 0) r.push(i - 1); if (x < SX - 1) r.push(i + 1); if (z > 0) r.push(i - SX); if (z < SZ - 1) r.push(i + SX); if (y > 0) r.push(i - SX * SZ); if (y < SY - 1) r.push(i + SX * SZ); return r; };
+  const ocupaJugador = (i) => { const x = i % SX, z = ((i / SX) | 0) % SZ, y = (i / (SX * SZ)) | 0; return x + 1 > jug.x - RAD && x < jug.x + RAD && z + 1 > jug.z - RAD && z < jug.z + RAD && y + 1 > jug.y && y < jug.y + ALTO; };
+  function circuito() {
+    circSucio = false;
+    const enc = new Set(), cola = [], consOn = new Set();
+    const esCable = (b) => b === 130 || b === 138, esCons = (b) => b === 135 || b === 139 || b === 136 || b === 140;
+    const dar = (n) => { const b = mundo[n]; if (esCable(b)) { if (!enc.has(n)) { enc.add(n); cola.push(n); } } else if (esCons(b)) consOn.add(n); };
+    for (const i of circ) { const b = mundo[i]; if (b === 132 || b === 134 || (b === 133 && botones.has(i)) || (b === 137 && i === placaAct)) for (const n of vecinosI(i)) dar(n); }
+    while (cola.length) { const c = cola.pop(); for (const n of vecinosI(c)) dar(n); }
+    { const pd = [...consOn].filter((n) => mundo[n] === 136 || mundo[n] === 140);   // las puertas pegadas se abren juntas (puertas dobles, muros de puertas)
+      while (pd.length) { const c = pd.pop(); for (const n of vecinosI(c)) if ((mundo[n] === 136 || mundo[n] === 140) && !consOn.has(n)) { consOn.add(n); pd.push(n); } } }
+    for (const i of circ) {
+      const b = mundo[i]; let q = b;
+      if (esCable(b)) q = enc.has(i) ? 138 : 130;
+      else if (b === 135 || b === 139) q = consOn.has(i) ? 139 : 135;
+      else if (b === 136 || b === 140) { q = consOn.has(i) ? 140 : 136; if (q === 136 && b === 140 && ocupaJugador(i)) { q = 140; circPend = true; circRe = .4; } }
+      if (q === b) continue;
+      mundo[i] = q; const x = i % SX, z = ((i / SX) | 0) % SZ; marcar(x, z);
+      if ((q === 140 || b === 140) && Math.hypot(x + .5 - jug.x, z + .5 - jug.z) < 14) { try { q === 140 ? sonido.abrirPuerta() : sonido.puertaCerrada(); } catch (_) { /* sin sonido */ } }
+    }
+  }
+  function vigilarCircuitos(dt) {
+    if (circ.size === 0) { circSucio = false; return; }
+    for (const [i, t] of botones) { if (t - dt <= 0) { botones.delete(i); circSucio = true; } else botones.set(i, t - dt); }
+    placaT -= dt; if (placaT <= 0) { placaT = .12; const fx = Math.floor(jug.x), fz = Math.floor(jug.z), fy = Math.floor(jug.y - .1), pi = (jug.suelo && get(fx, fy, fz) === 137) ? idx(fx, fy, fz) : -1; if (pi !== placaAct) { placaAct = pi; circSucio = true; try { if (pi >= 0) sonido.clic(); } catch (_) { /* sin sonido */ } } }
+    if (circPend) { circRe -= dt; if (circRe <= 0) { circPend = false; circSucio = true; } }
+    if (circSucio) circuito();
+  }
+  function interactuarCirc() {
+    if (agachado) return false;
+    const h = apuntar(); if (!h) return false;
+    if (h.b === 131 || h.b === 132) {
+      const t = performance.now(); if (ocupado || t < palancaCd) return true; palancaCd = t + 300;
+      if (!puedeEditar(h.x, h.y, h.z) || !ctx.alternar) return true;
+      const k = idx(h.x, h.y, h.z), antes = mundo[k]; mundo[k] = antes === 131 ? 132 : 131; circSucio = true; marcar(h.x, h.z); try { sonido.clic(); } catch (_) { /* sin sonido */ }
+      ocupado = true;
+      Promise.resolve(ctx.alternar(h.x, h.y, h.z)).catch((e) => { if (!vivo) return; mundo[k] = antes; circSucio = true; marcar(h.x, h.z); aviso(mensajeError(e)); }).finally(() => { ocupado = false; });
+      return true;
+    }
+    if (h.b === 133) { botones.set(idx(h.x, h.y, h.z), 1.5); circSucio = true; try { sonido.clic(); } catch (_) { /* sin sonido */ } return true; }
+    return false;
   }
   function mensajeError(e) {
     const m = String((e && e.message) || e || "");
@@ -1678,6 +1749,7 @@ export function iniciarMundo3D(host, ctx) {
   function bucle(t) {
     if (!vivo) return;
     const dt = Math.min(.05, (t - ult) / 1000); ult = t;
+    vigilarCircuitos(dt);
     for (const k of sucios) construir(k % NCX, (k / NCX) | 0); sucios.clear();
     if (pausado) limpiarEntrada();
     actualizar(dt); quePicar(dt); moverNpcs(dt, performance.now() / 1000); moverOtros(dt); moverEfectos(dt); ajustarAlturas(dt); moverAnimales(dt); if (ponerMant && !pausado && performance.now() > ponerCd && !(cercano || animalCer || mesaCer) && !USABLES.includes(sel) && !COMIDA[sel]) { ponerCd = performance.now() + 260; poner(); }
@@ -1716,7 +1788,7 @@ export function iniciarMundo3D(host, ctx) {
     setVida: (o) => { if (o && "monstruos" in o) { monActivo = !!o.monstruos; if (!monActivo) mons.length = 0; } },
     desmayarse: () => desmayarse(),
     posicion: () => ({ x: jug.x, y: jug.y, z: jug.z, yaw: jug.yaw }),
-    _debug: { cria, ponerCriatura: (n, x, z) => { const def = CRIATURAS[n], y = sueloPara(x, z, jug.y); if (!def || y == null) return null; const c = { id: criId++, tipo: "cr" + n, num: n, def, x, y, z, h: 0, hp: 1, flash: 0, lunge: 0, fase: 0, amp: 0, obj: null, espera: 99, avisada: true, vida: 1e9, lock: false }; cria.push(c); return c; }, mons, aparecerMonstruo, ponerMonstruo: (tipo, x, z) => { const def = MONSTRUOS[tipo], y = sueloPara(x, z, jug.y); if (!def || y == null) return null; const m = { tipo, def, x, y, z, h: 0, hp: def.hp, flash: 0, cd: 1.2, lunge: 0, fase: 0, amp: 0, kb: null, quema: 0 }; mons.push(m); return m; }, golpearMonstruo, jug, apuntar, get, picarAhora: (v) => { picar = v; }, poner, animales, ambiente, sonido },
+    _debug: { cria, ponerCriatura: (n, x, z) => { const def = CRIATURAS[n], y = sueloPara(x, z, jug.y); if (!def || y == null) return null; const c = { id: criId++, tipo: "cr" + n, num: n, def, x, y, z, h: 0, hp: 1, flash: 0, lunge: 0, fase: 0, amp: 0, obj: null, espera: 99, avisada: true, vida: 1e9, lock: false }; cria.push(c); return c; }, mons, aparecerMonstruo, ponerMonstruo: (tipo, x, z) => { const def = MONSTRUOS[tipo], y = sueloPara(x, z, jug.y); if (!def || y == null) return null; const m = { tipo, def, x, y, z, h: 0, hp: def.hp, flash: 0, cd: 1.2, lunge: 0, fase: 0, amp: 0, kb: null, quema: 0 }; mons.push(m); return m; }, golpearMonstruo, usar, interactuarCirc, circ, botones, jug, apuntar, get, picarAhora: (v) => { picar = v; }, poner, animales, ambiente, sonido },
     cerrar: () => {
       vivo = false; cancelAnimationFrame(raf); ro.disconnect();
       escuchas.forEach(([o, e, f, op]) => o.removeEventListener(e, f, op));
