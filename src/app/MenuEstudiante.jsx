@@ -38,7 +38,7 @@ export const MENU_CODICE_GRUPOS = [
       { key: "personaje", label: "Personaje", icono: "🎨" },
       { key: "salaavatares", label: "Sala de avatares", icono: "🎭" },
       { key: "mundo", label: "Mundo", icono: "🌍" },
-      { key: "mundo3d", label: "Mundo 3D", icono: "🧊" },
+      { key: "mundo3d", label: "Códice Craft", icono: "🧊" },
       { key: "detectives", label: "Detectives del Códice", icono: "🕵️" },
       { key: "tablero", label: "Tablero Mundial", icono: "🧭" },
     ],
