@@ -23,7 +23,7 @@ import { crearAmbiente } from "./ambiente3d";
 import { crearSonido } from "./sonido3d";
 import { ESPECIES, POBLACION } from "./animales3d";
 import { MONSTRUOS, danioDeArma } from "./monstruos3d";
-import { CRIATURAS } from "./criaturas3d";
+import { CRIATURAS, HABITAT } from "./criaturas3d";
 
 export const SX = 256, SY = 40, SZ = 256, CH = 16, NCX = SX / CH, NCZ = SZ / CH;
 export const CENTRO = 128, RADIO_PLAZA = 34, RADIO_ADOQUIN = 12; // la aldea (69 × 69) está protegida; el empedrado de la plaza es de 25 × 25
@@ -1519,14 +1519,16 @@ export function iniciarMundo3D(host, ctx) {
 
   // ----- criaturas del Códice: salvajes que se pueden enfrentar y capturar (la batalla y la captura las decide el servidor) -----
   const cria = []; let criT = 4, criId = 1;
-  function tipoCriatura() {
-    const noche = amb.noche > .5, z = zonaDe(Math.floor(jug.x), Math.floor(jug.z)), op = [];
-    if (DIM === 1) { op.push([11, 6], [5, 2]); }
-    else {
-      op.push([1, 5], [2, 5], [4, 4], [5, 2], [6, 2], [7, 2], [8, 2]);
-      if (z === "Lago de la Reflexión" || z === "Lago") op.push([3, 8]);
-      if (noche) op.push([9, 2]); else op.push([10, 2]);
+  const CLAVE_HAB = { "Campos de Oakhaven": "campo", "Bosque de la Curiosidad": "bosque", "Lago": "lago", "Lago de la Reflexión": "lago", "Montaña del Esfuerzo": "monte", "Desierto de Arena Roja": "desierto", "Tundra Nevada": "tundra", "Cruce de los Mundos": "cruce" };
+  function tipoCriatura() {   // elige entre las criaturas que viven en esta zona, a esta hora y en este mundo (ver HABITAT)
+    const noche = amb.noche > .5, k = CLAVE_HAB[zonaDe(Math.floor(jug.x), Math.floor(jug.z))] || "campo", op = [];
+    for (const id of Object.keys(HABITAT)) {
+      const hb = HABITAT[id]; if (!CRIATURAS[id] || !(hb.dim || [0]).includes(DIM)) continue;
+      if (DIM === 0 && hb.z !== "*" && !hb.z.includes(k)) continue;
+      if (hb.noche === true && !noche) continue; if (hb.noche === false && noche) continue;
+      op.push([+id, hb.p || 1]);
     }
+    if (!op.length) op.push([1, 1]);
     let t = op.reduce((s, o) => s + o[1], 0) * Math.random();
     for (const o of op) { t -= o[1]; if (t <= 0) return o[0]; }
     return op[0][0];
