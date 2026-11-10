@@ -39,15 +39,17 @@ export const NOMBRES = { 1: "Pasto", 2: "Tierra", 3: "Piedra", 4: "Tronco", 5: "
   37: "Tierra labrada", 72: "Semillas", 73: "Zanahoria", 74: "Papa", 75: "Trigo", 76: "Pan", 77: "Papa asada", 78: "Huevo frito",
   80: "Azada de madera", 81: "Azada de piedra", 82: "Azada de hierro", 83: "Azada de diamante",
   ...Object.fromEntries(["cobre", "hierro", "diamante"].flatMap((m, t) => ["Casco", "Peto", "Pantalón", "Botas"].map((n, p) => [84 + t * 4 + p, n + " de " + m]))),
-  120: "Cápsula de captura", 96: "Llave de brasas", 97: "Fragmento de brasa", 98: "Corazón de brasa", 112: "Basalto", 113: "Roca ígnea", 114: "Lava", 115: "Brasa luminosa", 116: "Mena de brasa", 117: "Ladrillo ígneo", 119: "Velo de brasas",
+  121: "Runa", 123: "Poción de curación", 124: "Poción de velocidad", 125: "Poción de resistencia al fuego", 120: "Cápsula de captura", 96: "Llave de brasas", 97: "Fragmento de brasa", 98: "Corazón de brasa", 112: "Basalto", 113: "Roca ígnea", 114: "Lava", 115: "Brasa luminosa", 116: "Mena de brasa", 117: "Ladrillo ígneo", 119: "Velo de brasas",
   24: "Horno", 25: "Bloque de cobre", 62: "Cobre crudo", 63: "Lingote de cobre", 65: "Hierro crudo", 66: "Oro crudo",
   68: "Espada de madera", 69: "Espada de piedra", 70: "Espada de hierro", 71: "Espada de diamante" };
 export const COLOCABLES = [1, 2, 3, 4, 6, 7, 8, 9, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 112, 113, 115, 117];
 // Frases rápidas del chat (los mismos números que la tabla mundo3d_frases del servidor)
 export const FRASES_CHAT = { 1: "¡Hola!", 2: "¡Buen trabajo!", 3: "¿Me ayudas?", 4: "¡Gracias!", 5: "¿Construimos juntos?", 6: "¡Mira lo que hice!", 7: "Vamos a la aldea", 8: "Necesito piedra", 9: "¡Qué bien!", 10: "¡Hasta luego!", 11: "Sígueme", 12: "¡Cuidado!" };
-export const MATERIALES = [40, 41, 42, 43, 44, 45, 46, 47, 48, 62, 63, 65, 66, 75, 76, 77, 78, 96, 97, 98, 120];
+export const MATERIALES = [40, 41, 42, 43, 44, 45, 46, 47, 48, 62, 63, 65, 66, 75, 76, 77, 78, 96, 97, 98, 120, 121];
 // Lo que se lleva en la mano y se usa sobre el terreno: semillas y cultivos (se siembran) y azadas (labran)
-export const USABLES = [72, 73, 74, 80, 81, 82, 83];
+export const USABLES = [72, 73, 74, 80, 81, 82, 83, 123, 124, 125];
+export const POCIONES = { 123: "curación", 124: "velocidad", 125: "resistencia al fuego" };
+export const ENCANTOS = { filo: { nombre: "Filo", emoji: "⚔️", txt: "+1 de daño por nivel", vale: (i) => i >= 68 && i <= 71 }, eficiencia: { nombre: "Eficiencia", emoji: "⛏️", txt: "pica 25 % más rápido por nivel", vale: (i) => (i >= 50 && i <= 61) || (i >= 80 && i <= 83) }, proteccion: { nombre: "Protección", emoji: "🛡️", txt: "+1 de defensa por nivel", vale: (i) => i >= 84 && i <= 95 }, irrompible: { nombre: "Irrompible", emoji: "💎", txt: "dura +100 % por nivel", vale: (i) => (i >= 50 && i <= 61) || (i >= 68 && i <= 71) || (i >= 80 && i <= 95) } };
 // Armaduras (84-95) y comida: mismos números que el servidor (tabla mundo3d_comida y _m3d_defensa)
 export const ARMADURAS = [84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95];
 export const COMIDA = { 47: 6, 48: 5, 73: 3, 76: 15, 77: 12, 78: 10 };
@@ -76,6 +78,10 @@ export const RECETAS = [
   ]),
   ...[["madera", 6, 0], ["piedra", 3, 1], ["hierro", 42, 2], ["diamante", 44, 3]].map(([nom, mat, t]) => ({ sale: 68 + t, n: 1, cuesta: { [mat]: 2, 40: 1 }, txt: "2 " + (mat === 6 ? "tablones" : NOMBRES_BASE[mat].toLowerCase()) + " + 1 palo", g: "Armas" })),
   ...[63, 42, 44].flatMap((mat, t) => [["Casco", 3], ["Peto", 5], ["Pantalón", 4], ["Botas", 2]].map(([n, c], p) => ({ sale: 84 + t * 4 + p, n: 1, cuesta: { [mat]: c }, txt: c + " " + (t === 0 ? "lingotes de cobre" : t === 1 ? "hierro" : "diamante"), g: "Armaduras" }))),
+  { sale: 121, n: 3, cuesta: { 44: 1 }, txt: "1 diamante → 3 runas (también salen al capturar criaturas)", g: "Pociones" },
+  { sale: 123, n: 1, cuesta: { 47: 2, 121: 1 }, txt: "2 manzanas + 1 runa → recupera 30 de vida", g: "Pociones" },
+  { sale: 124, n: 1, cuesta: { 73: 2, 121: 1 }, txt: "2 zanahorias + 1 runa → corres más rápido 3 minutos", g: "Pociones" },
+  { sale: 125, n: 1, cuesta: { 97: 2, 121: 1 }, txt: "2 fragmentos de brasa + 1 runa → inmune a la lava 3 minutos", g: "Pociones" },
   { sale: 120, n: 2, cuesta: { 42: 2, 41: 1 }, txt: "2 hierro + 1 carbón → 2 cápsulas para capturar criaturas 🐾", g: "Criaturas" },
   { sale: 96, n: 1, cuesta: { 42: 6, 43: 2 }, txt: "6 hierro + 2 oro → llave para entrar al Reino de Brasas", g: "Dimensiones" },
   { sale: 115, n: 1, cuesta: { 97: 3 }, txt: "3 fragmentos de brasa → 1 brasa luminosa", g: "Dimensiones" },
@@ -238,6 +244,8 @@ export function dibujarIcono(canvas, item) {
   else if (item === 76) { px("#a66a2a", 2, 8, 12, 5); px("#d9993f", 2, 6, 12, 5); px("#e8b563", 3, 5, 10, 2); px("#f4d28f", 4, 6, 3, 1); px("#8a561f", 2, 12, 12, 1); }
   else if (item === 77) { px("#7a4a1c", 4, 6, 9, 6); px("#a8692a", 5, 5, 7, 6); px("#f3d9a0", 6, 7, 4, 2); px("#4a2d10", 8, 10, 1, 1); }
   else if (item === 78) { px("#ffffff", 3, 5, 11, 7); px("#eeeeee", 3, 11, 11, 1); px("#f7c52e", 6, 6, 5, 5); px("#e0a916", 6, 10, 5, 1); }
+  else if (item === 121) { pts("#3b1d8f", [[7, 2], [6, 3], [8, 3], [5, 4], [9, 4], [4, 5], [10, 5], [4, 6], [10, 6], [5, 7], [9, 7], [6, 8], [8, 8], [7, 9]]); for (let y = 3; y < 9; y++) px("#9775fa", 6 - Math.min(2, y - 3) + (y > 6 ? y - 6 : 0), y, 2 + Math.min(2, y - 3) * 2 - (y > 6 ? (y - 6) * 2 : 0), 1); px("#e5dbff", 7, 4, 1, 2); px("#ffd43b", 7, 10, 1, 3); }
+  else if (item >= 123 && item <= 125) { const lq = item === 123 ? "#ff6b81" : item === 124 ? "#38d9f5" : "#ff922b"; px("#8d6e63", 7, 2, 3, 1); px("#dee2e6", 7, 3, 3, 2); px("#dee2e6", 5, 6, 7, 6); px("#dee2e6", 6, 5, 5, 1); px("#ced4da", 5, 12, 7, 1); px(lq, 6, 7, 5, 4); px(lq, 7, 11, 3, 1); px("#ffffffaa", 6, 7, 1, 3); }
   else if (item === 120) { px("#2b1b5a", 4, 3, 8, 10); px("#2b1b5a", 3, 4, 10, 8); px("#7c5cff", 4, 4, 8, 8); px("#a78bfa", 5, 5, 3, 2); px("#ffd43b", 7, 7, 2, 2); px("#ffd43b", 6, 8, 4, 1); px("#ffd43b", 7, 6, 2, 4); px("#e9d5ff", 5, 5, 1, 1); }
   else if (item === 96) { px("#c0392b", 3, 3, 6, 6); px("#7a1a12", 5, 5, 2, 2); for (let i = 0; i < 6; i++) px("#e8e8ec", 8 + i, 8 + i, 2, 1); px("#e8e8ec", 11, 11, 3, 1); px("#e8e8ec", 13, 10, 1, 3); px("#ffcc4d", 4, 4, 2, 1); }
   else if (item === 97) { pts("#b53a08", [[7, 3], [6, 4], [8, 4], [5, 5], [9, 5], [4, 6], [10, 6], [5, 8], [9, 8], [6, 9], [8, 9]]); for (let y = 4; y < 9; y++) px("#ff8a1f", 6 + ((y < 6) ? 6 - y : 0), y, 3 + (y < 6 ? (y - 4) * 2 : 4 - (y - 6)), 1); px("#ffe08a", 7, 5, 2, 2); }
@@ -615,7 +623,7 @@ export function iniciarMundo3D(host, ctx) {
   // ----- lava: quema (el servidor descuenta la vida) -----
   let lavaCd = 0;
   function vigilarLava(dt) {
-    lavaCd = Math.max(0, lavaCd - dt); if (!enLava || lavaCd > 0 || ctx.soloMirar || desmayado > 0) return;
+    lavaCd = Math.max(0, lavaCd - dt); if (!enLava || efHasta.fuego > performance.now() || lavaCd > 0 || ctx.soloMirar || desmayado > 0) return;
     lavaCd = 1; danoEl.classList.add("on"); requestAnimationFrame(() => requestAnimationFrame(() => danoEl.classList.remove("on"))); sonido.dano();
     jug.vy = Math.max(jug.vy, 2.5);
     Promise.resolve(ctx.alDanio && ctx.alDanio("lava")).then((r) => { if (!r) return; try { ctx.alVida && ctx.alVida(r); } catch (_) {} if (r.desmayo) desmayarse(); }).catch(() => {});
@@ -660,6 +668,7 @@ export function iniciarMundo3D(host, ctx) {
 .m3d-mira:before{left:8px;top:0;width:2px;height:18px}.m3d-mira:after{top:8px;left:0;height:2px;width:18px}
 .m3d-ayuda{position:absolute;left:0;right:0;bottom:10px;text-align:center;pointer-events:none;font:12px monospace;color:#fff;text-shadow:0 1px 3px #000}
 .m3d-et{position:absolute;left:0;top:0;transform:translate(-50%,-100%);font:600 12px system-ui,sans-serif;color:#fff;background:#4b2a8fcc;padding:2px 8px;border-radius:10px;pointer-events:none;white-space:nowrap}
+.m3d-efectos{position:absolute;left:10px;top:48px;display:flex;flex-direction:column;gap:4px;pointer-events:none}.m3d-efectos b{font:700 12px system-ui,sans-serif;color:#fff;background:#4c1d95cc;border:1px solid #fff5;border-radius:9px;padding:2px 8px}
 .m3d-joy{position:absolute;left:14px;bottom:14px;width:110px;height:110px;border-radius:50%;border:2px solid #fff5;background:#0003;display:none;pointer-events:none}
 .m3d-joy i{position:absolute;left:35px;top:35px;width:40px;height:40px;border-radius:50%;background:#fff7}
 .m3d-acc{position:absolute;right:12px;bottom:12px;display:none;gap:8px;flex-direction:column}
@@ -694,7 +703,9 @@ export function iniciarMundo3D(host, ctx) {
   let rayoT = 8 + Math.random() * 10, rayoF = 0, truenoT = 0;
   const danoEl = document.createElement("div"); danoEl.className = "m3d-dano";
   const desmayoEl = document.createElement("div"); desmayoEl.className = "m3d-desmayo"; desmayoEl.innerHTML = "<div>💫 ¡Te desmayaste!<br><span style='font-weight:500;font-size:15px'>Despiertas en la aldea. Estudia un poco y vuelve a intentarlo.</span></div>";
+  const efEl = document.createElement("div"); efEl.className = "m3d-efectos";
   raiz.append(estilo, cv, mira, ayuda, joyEl, acc, hablarEl, rayoEl, danoEl, desmayoEl);
+  raiz.append(efEl);
   const btnHab = acc.querySelector(".hab");
   const capaEt = etiquetas.map((e) => { const d = document.createElement("div"); d.className = "m3d-et" + (e.clase ? " " + e.clase : ""); d.textContent = (e.clase ? "" : "🌀 ") + e.texto; d.style.display = "none"; raiz.append(d); return d; });
   host.append(raiz);
@@ -936,6 +947,8 @@ export function iniciarMundo3D(host, ctx) {
   const choca = (x, y, z) => { for (let yy = Math.floor(y); yy <= Math.floor(y + ALTO - .001); yy++) for (let zz = Math.floor(z - RAD); zz <= Math.floor(z + RAD); zz++) for (let xx = Math.floor(x - RAD); xx <= Math.floor(x + RAD); xx++) if (solido(xx, yy, zz)) return true; return false; };
   const tec = {}; const joy = { x: 0, y: 0 }; const control = { giro: !!ctx.giroPalanca }; let sprintW = false, ultW = 0;
   let enAgua = false, enLava = false, agachado = false;
+  const efHasta = { velocidad: 0, fuego: 0 }; let encantos = {};
+  const nivEnc = (item, enc) => (encantos[item] && encantos[item][enc]) || 0;
   function actualizar(dt) {
     if (ctx.vuelo) { // modo observador (docente): vuela sin chocar; W A S D siguen la mirada, espacio sube, mayúscula baja, Ctrl acelera
       const f = adelante(), cy = Math.cos(jug.yaw), sy = Math.sin(jug.yaw), v = tec.control ? 45 : 16;
@@ -950,7 +963,7 @@ export function iniciarMundo3D(host, ctx) {
     let ax = (tec.d ? 1 : 0) - (tec.a ? 1 : 0) + jx, az = (tec.s ? 1 : 0) - (tec.w ? 1 : 0) + joy.y;
     const l = Math.hypot(ax, az); if (l > 1) { ax /= l; az /= l; }
     { const bj = get(Math.floor(jug.x), Math.floor(jug.y + .9), Math.floor(jug.z)); enLava = bj === LAVA || get(Math.floor(jug.x), Math.floor(jug.y + .1), Math.floor(jug.z)) === LAVA; enAgua = bj === AGUA || enLava; }
-    const cy = Math.cos(jug.yaw), sy = Math.sin(jug.yaw); agachado = !!tec.shift && !enAgua; if (!(tec.w || joy.y < -.3)) sprintW = false; const v = enAgua ? 2.4 : agachado ? 1.7 : ((tec.control || sprintW || joy.corre) ? 6.4 : 4.3);
+    const cy = Math.cos(jug.yaw), sy = Math.sin(jug.yaw); agachado = !!tec.shift && !enAgua; if (!(tec.w || joy.y < -.3)) sprintW = false; const v = (enAgua ? 2.4 : agachado ? 1.7 : ((tec.control || sprintW || joy.corre) ? 6.4 : 4.3)) * (efHasta.velocidad > performance.now() ? 1.35 : 1);
     jug.vx = (ax * cy + az * sy) * v; jug.vz = (-ax * sy + az * cy) * v;
     if (enAgua) { jug.vy = Math.max(jug.vy - 8 * dt, -2.5); if (tec[" "]) jug.vy = 3.2; }
     else { if (tec[" "] && jug.suelo) { jug.vy = 8.6; jug.suelo = false; sonido.salto(); } jug.vy = Math.max(jug.vy - 26 * dt, -30); }
@@ -987,19 +1000,19 @@ export function iniciarMundo3D(host, ctx) {
   const MULT = [2.2, 3.6, 5.5, 8];
   function herramientaPara(b) {
     const k = CLASE[b]; if (k === undefined) return { mult: 1, id: 0, k: -1 };
-    for (let t = 3; t >= 0; t--) { const id = 50 + k * 4 + t; if (ctx.cantidad(id) > 0) return { mult: MULT[t], id, k }; }
+    for (let t = 3; t >= 0; t--) { const id = 50 + k * 4 + t; if (ctx.cantidad(id) > 0) return { mult: MULT[t] * (1 + .25 * nivEnc(id, "eficiencia")), id, k }; }
     return { mult: 1, id: 0, k };
   }
   // ----- efectos: partículas al picar, lo que cae del bloque y avisos de lo recogido -----
   // ----- parcelas personales (cada estudiante tiene un lote de 16 × 16 donde solo él construye) y mesas de fabricación -----
   const TAM_PARCELA = 16;
   let parcelas = [], mesaCer = null;
-  const mesas = [{ x: CENTRO + 5.5, z: CENTRO + 9.5, y: 0, fija: true }];
+  const mesas = [{ x: CENTRO + 5.5, z: CENTRO + 9.5, y: 0, fija: true, tipo: "mesa" }, { x: CENTRO + 8.5, z: CENTRO + 9.5, y: 0, fija: true, tipo: "encantar" }, { x: CENTRO + 2.5, z: CENTRO + 9.5, y: 0, fija: true, tipo: "pociones" }];
   const mesaBase = mesas[0]; mesaBase.y = 12;
   const plotDe = (x, z) => { for (const p of parcelas) if (x >= p.x && x < p.x + TAM_PARCELA && z >= p.z && z < p.z + TAM_PARCELA) return p; return null; };
   const topeSolido = (x, z) => { for (let y = SY - 2; y >= 0; y--) { const b = get(x, y, z); if (b !== AIRE && b !== AGUA && b !== 5 && b !== 8 && b !== PORTAL) return y + 1; } return 1; };
   function setParcelas(lista) {
-    parcelas.forEach((p) => p.el.remove()); parcelas = []; mesas.length = 1;
+    parcelas.forEach((p) => p.el.remove()); parcelas = []; mesas.length = 3;
     for (const q of (lista || []).slice(0, 80)) {
       if (!Number.isFinite(+q.x) || !Number.isFinite(+q.z)) continue;
       const el = document.createElement("div"); el.className = "m3d-parcela" + (q.mia ? " mia" : ""); el.textContent = (q.mia ? "🏠 Mi parcela" : "🏠 " + String(q.nombre || "Compañero").slice(0, 30)); el.style.display = "none"; raiz.append(el);
@@ -1007,7 +1020,7 @@ export function iniciarMundo3D(host, ctx) {
       for (let i = 0; i <= TAM_PARCELA; i += 4) for (const [dx, dz] of [[i, 0], [i, TAM_PARCELA], [0, i], [TAM_PARCELA, i]]) { if ((dx === 0 || dx === TAM_PARCELA) && (dz === 0 || dz === TAM_PARCELA) && !(i === 0 || i === TAM_PARCELA)) continue; p.postes.push({ x: p.x + dx, z: p.z + dz, y: 0, esq: (dx === 0 || dx === TAM_PARCELA) && (dz === 0 || dz === TAM_PARCELA) }); }
       p.postes = p.postes.filter((a, i, r) => r.findIndex((b) => b.x === a.x && b.z === a.z) === i);
       parcelas.push(p);
-      if (p.mia) mesas.push({ x: p.x + 2.5, z: p.z + 2.5, y: 0 });
+      if (p.mia) mesas.push({ x: p.x + 2.5, z: p.z + 2.5, y: 0, tipo: "mesa" }, { x: p.x + 4.5, z: p.z + 2.5, y: 0, tipo: "encantar" }, { x: p.x + 6.5, z: p.z + 2.5, y: 0, tipo: "pociones" });
     }
   }
   function ajustarAlturas(dt) { // la altura de los postes y las mesas se recalcula de vez en cuando (el terreno cambia)
@@ -1037,9 +1050,18 @@ export function iniciarMundo3D(host, ctx) {
     for (const m of mesas) {
       if (Math.hypot(m.x - jug.x, m.z - jug.z) > 60) continue;
       const g = mul(M, T4(m.x, m.y, m.z));
+      if (m.tipo === "encantar") { // mesa de encantamientos: piedra oscura, libro y un cristal que flota
+        cj(g, 1.1, .7, 1.1, 0, .35, 0, [.14, .1, .22]); cj(g, 1.2, .14, 1.2, 0, .77, 0, [.24, .16, .4]); cj(g, .9, .05, .9, 0, .86, 0, [.5, .2, .75]);
+        cj(g, .5, .08, .36, 0, .93, 0, [.7, .15, .25]); cj(g, .46, .05, .32, 0, 1.0, 0, [.95, .9, .8]);
+        const fl = Math.sin(tt * 2 + m.x) * .08; cj(mul(g, T4(0, 1.5 + fl, 0)), .26, .26, .26, 0, 0, 0, [.7, .5, 1]); cj(mul(g, T4(0, 1.5 + fl, 0)), .14, .4, .14, 0, 0, 0, [1, .9, .4]);
+      } else if (m.tipo === "pociones") { // soporte de pociones: base de hierro, tres frascos y una llama
+        cj(g, 1.0, .12, 1.0, 0, .06, 0, [.3, .3, .34]); for (const [lx, lz] of [[-.4, -.4], [.4, -.4], [-.4, .4], [.4, .4]]) cj(g, .08, .75, .08, lx, .45, lz, [.5, .5, .56]);
+        cj(g, 1.0, .08, 1.0, 0, .84, 0, [.45, .45, .5]); cj(g, .14, .14, .14, 0, .3, 0, [1, .6 + Math.sin(tt * 9) * .15, .1]);
+        for (const [lx, c] of [[-.28, [1, .42, .5]], [0, [.22, .85, .96]], [.28, [1, .57, .17]]]) { cj(g, .2, .26, .2, lx, 1.01, 0, c); cj(g, .09, .1, .09, lx, 1.19, 0, [.85, .85, .88]); }
+      } else {
       for (const [lx, lz] of [[-.4, -.4], [.4, -.4], [-.4, .4], [.4, .4]]) cj(g, .14, .8, .14, lx, .4, lz, [.36, .24, .12]);
       cj(g, 1.1, .16, 1.1, 0, .88, 0, [.62, .43, .22]); cj(g, .9, .04, .9, 0, .97, 0, [.82, .62, .36]);
-      cj(g, .2, .02, .5, -.2, 1.0, 0, [.55, .55, .6]); cj(g, .22, .1, .22, .25, 1.03, .1, [.7, .2, .2]);
+      cj(g, .2, .02, .5, -.2, 1.0, 0, [.55, .55, .6]); cj(g, .22, .1, .22, .25, 1.03, .1, [.7, .2, .2]); }
     }
     cerrarPC();
   }
@@ -1089,7 +1111,7 @@ export function iniciarMundo3D(host, ctx) {
   const U = esTactil ? "Toca" : "Clic derecho", ACCION_ANIMAL = { oveja: U + " · Esquilar a la ", gallina: U + " · Recoger huevo de la ", vaca: U + " · Ordeñar a la ", cerdo: U + " · Buscar papas con el ", conejo: U + " · Pedir una zanahoria al " };
   function hablar() {
     if (pausado) return;
-    if (!cercano && !animalCer && mesaCer) { try { ctx.alMesa && ctx.alMesa(); } catch (_) {} return; }
+    if (!cercano && !animalCer && mesaCer) { try { ctx.alMesa && ctx.alMesa(mesaCer.tipo || "mesa"); } catch (_) {} return; }
     if (!cercano) { // sin personaje cerca: si hay un animal delante, se le saluda
       if (animalCer) { const a = animalCer; sonido.animal(a.tipo); a.pasta = 0; a.espera = 2; a.susto = 0; aviso(FRASES[a.tipo] || "🐾");
         if (ctx.recolectar && !ctx.soloMirar && ["oveja", "gallina", "vaca", "cerdo", "conejo"].includes(a.tipo)) {
@@ -1138,6 +1160,7 @@ export function iniciarMundo3D(host, ctx) {
     if (pausado) return;
     if (golpearMonstruo()) return;
     if (cercano || animalCer || mesaApuntada()) { hablar(); return; }
+    if (POCIONES[sel]) { if (ctx.cantidad(sel) > 0) { try { ctx.alBeber && ctx.alBeber(sel); } catch (_) {} } else aviso("No tienes " + NOMBRES[sel].toLowerCase() + "."); return; }
     if (COMIDA[sel] && ctx.cantidad(sel) > 0) { try { ctx.alComer && ctx.alComer(); } catch (_) {} return; }
     poner();
   }
@@ -1413,7 +1436,7 @@ export function iniciarMundo3D(host, ctx) {
     for (const m of mons) { const vx = m.x - ex, vy = m.y + .8 - ey, vz = m.z - ez, d = Math.hypot(vx, vy, vz); if (d > 3.7) continue; if ((vx * f[0] + vy * f[1] + vz * f[2]) / d < .86) continue; if (d < md) { md = d; mejor = m; } }
     if (!mejor) return false;
     if (golpeCd > 0) return true;
-    golpeCd = .5; const m = mejor, dmg = danioDeArma((id) => ctx.cantidad(id)); m.hp -= dmg; m.flash = .22; sonido.pegar();
+    golpeCd = .5; const m = mejor; let dmg = danioDeArma((id) => ctx.cantidad(id)); for (let id = 71; id >= 68; id--) if (ctx.cantidad(id) > 0) { dmg += nivEnc(id, "filo"); break; } m.hp -= dmg; m.flash = .22; sonido.pegar();
     const dx = m.x - jug.x, dz = m.z - jug.z, dd = Math.hypot(dx, dz) || 1; m.kb = { x: dx / dd * 4, z: dz / dd * 4, t: .15 }; soltarParticulas(m.x, m.y + .8, m.z, m.def.sangre, 4, 1.6);
     if (m.hp <= 0) {
       quitarMonstruo(m, true); sonido.vencido();
@@ -1630,7 +1653,8 @@ export function iniciarMundo3D(host, ctx) {
     animalCer = null;
     if (!cercano && !pausado && !ctx.vuelo) { let mj = 3; for (const a of animales) { const dx = a.x - jug.x, dz = a.z - jug.z, dist = Math.hypot(dx, dz); if (dist < mj && Math.abs(a.y - jug.y) < 2.5 && (dx * fw[0] + dz * fw[2]) / (dist * fl + 1e-6) > .45) { mj = dist; animalCer = a; } } }
     const algo = cercano || animalCer || mesaCer;
-    hablarEl.style.display = algo ? "block" : "none"; if (algo) hablarEl.textContent = !cercano && !animalCer ? U + " · Usar la mesa de fabricación" : cercano ? U + " · Hablar con " + cercano.nombre : (ACCION_ANIMAL[animalCer.tipo] || U + " · Acariciar ") + animalCer.esp.nombre.toLowerCase();
+    { const t = performance.now(), l = []; if (efHasta.velocidad > t) l.push("⚡ Velocidad " + Math.ceil((efHasta.velocidad - t) / 1000) + " s"); if (efHasta.fuego > t) l.push("🔥 Resistencia al fuego " + Math.ceil((efHasta.fuego - t) / 1000) + " s"); const h = l.map((x) => "<b>" + x + "</b>").join(""); if (efEl.dataset.h !== h) { efEl.dataset.h = h; efEl.innerHTML = h; } }
+    hablarEl.style.display = algo ? "block" : "none"; if (algo) hablarEl.textContent = !cercano && !animalCer ? U + " · Usar " + (mesaCer && mesaCer.tipo === "encantar" ? "la mesa de encantamientos" : mesaCer && mesaCer.tipo === "pociones" ? "el soporte de pociones" : "la mesa de fabricación") : cercano ? U + " · Hablar con " + cercano.nombre : (ACCION_ANIMAL[animalCer.tipo] || U + " · Acariciar ") + animalCer.esp.nombre.toLowerCase();
     btnHab.style.display = algo ? "block" : "none";
   }
   let ult = performance.now(), raf = 0;
@@ -1685,7 +1709,9 @@ export function iniciarMundo3D(host, ctx) {
     pausar: (v) => { pausado = !!v; if (!pausado) hablandoCon = null; if (pausado) { limpiarEntrada(); if (bloqueado()) document.exitPointerLock(); } else if (jugando && !sinBloqueo) ayuda.textContent = "Haz clic para seguir jugando"; },
     actualizarNpcs: (lista) => montarNpcs(lista),
     setOtros: (lista) => setOtros(lista),
-    setParcelas: (lista) => setParcelas(lista), irAMiParcela: () => irAMiParcela(), verParcelaAjena: () => verParcelaAjena(), setControl: (o) => { if (o && "giro" in o) control.giro = !!o.giro; if (o && "botonesPP" in o) acc.classList.toggle("sin-pp", !o.botonesPP); },
+    setParcelas: (lista) => setParcelas(lista), irAMiParcela: () => irAMiParcela(), verParcelaAjena: () => verParcelaAjena(), setEncantos: (o) => { encantos = o && typeof o === "object" ? o : {}; },
+    setEfectos: (o) => { const t = performance.now(); for (const k of ["velocidad", "fuego"]) efHasta[k] = o && o[k] > 0 ? t + o[k] * 1000 : 0; },
+    setControl: (o) => { if (o && "giro" in o) control.giro = !!o.giro; if (o && "botonesPP" in o) acc.classList.toggle("sin-pp", !o.botonesPP); },
     criaturaFin: (id, viva) => { const i = cria.findIndex((c) => c.id === id); if (i < 0) return; if (viva) cria[i].lock = false; else cria.splice(i, 1); },
     setVida: (o) => { if (o && "monstruos" in o) { monActivo = !!o.monstruos; if (!monActivo) mons.length = 0; } },
     desmayarse: () => desmayarse(),
