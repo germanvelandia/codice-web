@@ -17,7 +17,7 @@ function Icono({ item }) {
 }
 
 import { PanelBatalla, PanelColeccion } from "./Criaturas3D";
-const GRUPOS_REC = ["Bloques básicos", "Materiales", "Herramientas", "Armas", "Armaduras", "Granja", "Comida", "Hornos y cobre", "Criaturas", "Dimensiones", "Pociones", "Bloques valiosos", "Lanas"];
+const GRUPOS_REC = ["Bloques básicos", "Materiales", "Herramientas", "Armas", "Armaduras", "Granja", "Comida", "Hornos y cobre", "Criaturas", "Dimensiones", "Circuitos", "Pociones", "Bloques valiosos", "Lanas"];
 // Mercado de la aldea: se venden cosechas y minerales por oro (el servidor limita cuánto se gana por día)
 function PanelMercado({ inv, visitando, restante, alVender }) {
   const lista = MERCADO.filter((m) => (inv[m.item] || 0) > 0);
@@ -339,6 +339,7 @@ export default function Mundo3D({ estudianteInfo }) {
           alCamara: (m) => setCam((c) => ({ ...c, modo: m })),
           alNpc: (n) => setDialogo(n),
           cantidad: (i) => invRef.current[i] || 0,
+          alternar: (x, y, z) => api.alternarMundo3D(est, x, y, z),
           picar: async (x, y, z, b) => { const r = await api.picarMundo3D(est, x, y, z, b); if (r && r.item) fijarInv({ ...invRef.current, [r.item]: Math.min(999, (invRef.current[r.item] || 0) + 1) }); if (r && r.extra) fijarInv({ ...invRef.current, [r.extra]: Math.min(999, (invRef.current[r.extra] || 0) + 1) }); if (r && r.desgaste) usarHerr(r.desgaste); setColocados((n) => n); return r; },
           poner: async (x, y, z, i) => { const r = await api.ponerMundo3D(est, x, y, z, i); fijarInv({ ...invRef.current, [i]: r.cantidad }); setColocados((n) => n + 1); return r; },
           labrar: async (x, y, z, b) => { const r = await api.labrarMundo3D(est, x, y, z, b); if (r && r.desgaste) usarHerr(r.desgaste); return r; },
