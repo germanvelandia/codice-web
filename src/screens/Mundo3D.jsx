@@ -359,7 +359,7 @@ export default function Mundo3D({ estudianteInfo }) {
             try { await api.viajarDimMundo3D(est, d); abrirVelo(d ? "🔥 Cruzando al Reino de Brasas…" : "🌀 Volviendo al mundo principal…"); setDim(d); }
             catch (er) { const m = String(er.message || ""); avisar(/sin_llave/.test(m) ? "🔑 Necesitas la llave de brasas (6 hierro + 2 oro) para entrar. Se fabrica en la mesa." : /desmayado/.test(m) ? "Estás sin vida: espera a recuperarte." : "No se pudo cruzar el portal."); }
           },
-          alInventario: () => mochilaRef.current && mochilaRef.current(true), alMesa: (t) => { setPestana(t === "encantar" ? "encantar" : t === "pociones" ? "pociones" : "fabricar"); mochilaRef.current && mochilaRef.current(true); },
+          alInventario: () => mochilaRef.current && mochilaRef.current(true), alMesa: (t) => { setPestana(t === "encantar" ? "encantar" : t === "pociones" ? "pociones" : t === "mercado" ? "mercado" : "fabricar"); mochilaRef.current && mochilaRef.current(true); },
           alBeber: (item) => beberRef.current && beberRef.current(item),
           parcelas: visitandoRef.current || enDim ? [] : parcelasRef.current, giroPalanca: giroRef.current, botonesPP: ppRef.current,
           alChat: () => chatRef.current && chatRef.current(), alCerca: (n) => setCerca(n),
