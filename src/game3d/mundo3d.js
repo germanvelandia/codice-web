@@ -24,7 +24,7 @@ import { crearSonido } from "./sonido3d";
 import { ESPECIES, POBLACION } from "./animales3d";
 import { MONSTRUOS, danioDeArma } from "./monstruos3d";
 import { CRIATURAS, HABITAT } from "./criaturas3d";
-import { ZONAS, zonaPeso, zonaNuevaDe, objetivo as objetivoZona, superficie as superficieZona, construirZonas } from "./zonas3d";
+import { ZONAS, zonaPeso, zonaNuevaDe, objetivo as objetivoZona, superficie as superficieZona, construirZonas, APAGADAS } from "./zonas3d";
 
 export const SX = 256, SY = 40, SZ = 256, CH = 16, NCX = SX / CH, NCZ = SZ / CH;
 export const CENTRO = 128, RADIO_PLAZA = 34, RADIO_ADOQUIN = 12; // la aldea (69 × 69) está protegida; el empedrado de la plaza es de 25 × 25
@@ -427,10 +427,10 @@ export function iniciarMundo3D(host, ctx) {
     }
   }
   // ----- diez zonas de exploración: remodelan el terreno donde están (el resto del mundo queda igual) -----
-  const zmask = new Uint8Array(SX * SZ);
+  const zmask = new Uint8Array(SX * SZ), zOff = APAGADAS[String(ctx.grado)] || [];
   if (DIM === 0) {
     for (let z = 1; z < SZ - 1; z++) for (let x = 1; x < SX - 1; x++) {
-      const zp = zonaPeso(x, z, ruidoV); if (!zp) continue;
+      const zp = zonaPeso(x, z, ruidoV, zOff); if (!zp) continue;
       const [zn, w] = zp, i = z * SX + x, h0 = alt[i];
       const h1 = Math.max(2, Math.min(SY - 8, Math.round(h0 + (objetivoZona(zn, x, z, h0, ruidoV) - h0) * w)));
       zmask[i] = 1;
@@ -474,7 +474,7 @@ export function iniciarMundo3D(host, ctx) {
     setAlt: (x, z, y) => { if (x >= 0 && z >= 0 && x < SX && z < SZ) alt[z * SX + x] = y; },
     hz, SX, SZ, SY, etiquetas, antorchas: zAntorchas,
     npc: (n) => zLocales.push({ y: alt[(n.z | 0) * SX + (n.x | 0)] + 1, ...n, local: true, marca: "💬 ", tipo: "aldeano" }),
-  });
+  }, zOff);
   for (let dz = -6; dz <= 6; dz++) for (let dx = -12; dx <= 12; dx++) { const x = CRUCE.x + dx, z = CRUCE.z + dz; mundo[idx(x, 12, z)] = ADOQUIN; for (let y = 13; y <= 19; y++) mundo[idx(x, y, z)] = AIRE; }
   // letreros en cada camino (donde sale de la aldea) y el letrero del Cruce
   for (const [nombre, pts] of CAMINOS) {
