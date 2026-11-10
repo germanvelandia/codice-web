@@ -14,13 +14,16 @@ export const ZONAS = [
   { k: "minera", nombre: "Aldea Minera", emoji: "⛏️", cx: 70, cz: 170, r: 16, f: 5, hab: "monte", aldea: true, desc: "Aldea al pie de una colina con mina, herrería y vetas de mineral." },
   { k: "cumbre", nombre: "Cumbre de la Sabiduría", emoji: "🏔️", cx: 134, cz: 16, r: 11, f: 11, hab: "monte", desc: "Meseta alta con un templo de columnas. Se sube por una escalera de piedra." },
 ];
+// Cursos que ya tenían construcciones de estudiantes dentro de estas zonas: para ellos esa zona no se remodela (así su obra no queda enterrada).
+export const APAGADAS = { "902": ["cumbre", "valle", "cristal", "pantano"] };
 export const POR_NOMBRE = Object.fromEntries(ZONAS.map((z) => [z.nombre, z]));
 
 const sm = (t) => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
 // ¿en qué zona nueva está (x, z)? Devuelve [zona, peso 0..1]; peso 1 dentro del núcleo y baja hasta 0 en el borde exterior (para fundir el terreno)
-export function zonaPeso(x, z, R) {
+export function zonaPeso(x, z, R, off) {
   let mejor = null, mw = 0;
   for (const zn of ZONAS) {
+    if (off && off.includes(zn.k)) continue;
     const dx = x - zn.cx, dz = z - zn.cz;
     if (Math.abs(dx) > zn.r + zn.f + 6 || Math.abs(dz) > zn.r + zn.f + 6) continue;
     const d = Math.hypot(dx, dz) + (R ? (R(401, x * .09, z * .09) - .5) * 3 : 0);
@@ -322,8 +325,9 @@ function exploracion(A, zn) {
 }
 
 // ---------- puntos de entrada ----------
-export function construirZonas(A) {
+export function construirZonas(A, off = []) {
   for (const zn of ZONAS) {
+    if (off.includes(zn.k)) continue;
     if (zn.k === "agora") ciudad(A, zn);
     else if (zn.k === "valle") aldea(A, zn, {
       pozoEn: [0, 0], casas: [[-9, -4, 5, 5, TABLON, LADRILLO], [9, -4, 5, 5, TABLON, LANA.roja], [-8, 7, 5, 5, TABLON, LADRILLO], [8, 7, 5, 7, TABLON, LANA.roja], [0, -10, 7, 5, LADRILLO, LADRILLO]],
