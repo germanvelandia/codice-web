@@ -427,7 +427,7 @@ export default function Mundo3D({ estudianteInfo }) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="font-extrabold text-slate-800">🧊 Mundo 3D · {visitando ? "Visitando el curso " + gradoVer : "Mi curso " + gradoVer}</span>
+        <span className="font-extrabold text-slate-800">🧊 Códice Craft · {visitando ? "Visitando el curso " + gradoVer : "Mi curso " + gradoVer}</span>
         {prog.xp != null && <span className="text-[11px] font-bold rounded-full px-2.5 py-0.5 bg-amber-100 text-amber-700">⭐ {prog.xp} XP · 🪙 {prog.oro}</span>}
         {vida != null && <span title="Vida del personaje" className="text-[11px] font-bold rounded-full px-2.5 py-0.5" style={{ background: `linear-gradient(90deg,#fecaca ${vida}%,#f1f5f9 ${vida}%)`, color: vida <= 25 ? "#b91c1c" : "#7f1d1d", minWidth: 84, textAlign: "center" }}>❤️ {vida}</span>}
         {zona && <span className="text-[11px] font-bold rounded-full px-2.5 py-0.5 bg-emerald-100 text-emerald-700">📍 {zona}</span>}
@@ -444,7 +444,7 @@ export default function Mundo3D({ estudianteInfo }) {
         {!entrado && (
           <div className="m3d-puerta absolute inset-0 flex flex-col items-center justify-center text-center text-white px-4">
             <div className="m3d-anillo" aria-hidden="true"><i /></div>
-            <h2 className="mt-5 text-xl font-extrabold">Mundo 3D · Curso {gradoVer || miGrado}</h2>
+            <h2 className="mt-5 text-xl font-extrabold">Códice Craft · Curso {gradoVer || miGrado}</h2>
             <p className="text-sm text-violet-100 max-w-sm mt-1">Un mundo de bloques para tu curso: construye, explora la aldea y visita a los personajes. Cruza el portal para entrar.</p>
             <button onClick={entrar} disabled={!grados || !gradoVer} className="mt-4 rounded-full px-6 py-2.5 font-extrabold bg-white text-violet-700 shadow-lg hover:scale-105 transition disabled:opacity-50">{grados ? "🌀 Entrar al mundo" : "Preparando…"}</button>
           </div>
