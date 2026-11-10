@@ -1,6 +1,67 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { iniciarMundo3D, CENTRO, CRUCE } from "../game3d/mundo3d";
 import * as api from "../lib/mundo3dApi";
+import * as apiBase from "../lib/api";
+import { loginEstudiante, cerrarSesionEstudiante } from "../lib/sesionEstudiante";
+
+const Mundo3DJuego = lazy(() => import("./Mundo3D"));
+const LLAVE_PERSONAJE = "codice_docente_personaje";
+
+// El docente juega con su propio personaje: un perfil de estudiante que elige (lo ideal: uno creado solo para él, «Profe …»).
+// Entra con el código de ese perfil por el mismo acceso seguro de los estudiantes (el servidor valida el código y la sesión).
+function JugarComoDocente({ grado, cerrar }) {
+  const [lista, setLista] = useState(null), [sel, setSel] = useState(() => { try { return localStorage.getItem(LLAVE_PERSONAJE) || ""; } catch (_) { return ""; } });
+  const [info, setInfo] = useState(null), [cargando, setCargando] = useState(false), [error, setError] = useState(""), [filtro, setFiltro] = useState("");
+  useEffect(() => {
+    let vivo = true; setLista(null);
+    apiBase.fetchEstudiantesPorGrado(grado).then((l) => { if (vivo) setLista(l || []); }).catch((e) => { if (vivo) { setLista([]); setError(e.message || "No se pudo cargar la lista."); } });
+    return () => { vivo = false; };
+  }, [grado]);
+  const salir = async () => { try { await cerrarSesionEstudiante(); } catch (_) { /* da igual */ } setInfo(null); };
+  useEffect(() => () => { try { cerrarSesionEstudiante(); } catch (_) { /* da igual */ } }, []);
+  const entrar = async () => {
+    const e = (lista || []).find((q) => String(q.id) === String(sel)); if (!e) return;
+    setCargando(true); setError("");
+    try {
+      let cod = e.codigo_acceso; if (!cod) cod = await apiBase.generarCodigoAcceso(e.id);
+      const i = await loginEstudiante(cod); if (!i) throw new Error("No se pudo abrir ese perfil.");
+      try { localStorage.setItem(LLAVE_PERSONAJE, String(e.id)); } catch (_) { /* sin almacenamiento */ }
+      setInfo(i);
+    } catch (er) { setError(er.message || "No se pudo entrar."); }
+    setCargando(false);
+  };
+  if (info) {
+    return (
+      <div className="fixed inset-0 z-[80] overflow-auto" style={{ background: "#0f0a2a" }} role="dialog" aria-modal="true" aria-label="Jugando en Códice Craft">
+        <div className="max-w-5xl mx-auto p-3">
+          <div className="flex items-center justify-between text-white mb-2 px-1">
+            <b className="text-base">🧊 Códice Craft <span className="font-normal opacity-70 text-sm">· jugando como {info.nombre}</span></b>
+            <button onClick={() => { salir(); cerrar(); }} className="text-xs px-3 py-1.5 rounded-full bg-white/15 hover:bg-white/25 font-bold">✕ Salir del juego</button>
+          </div>
+          <div className="rounded-2xl bg-white p-3"><Suspense fallback={<p className="text-sm text-slate-400">Cargando Códice Craft…</p>}><Mundo3DJuego estudianteInfo={info} /></Suspense></div>
+        </div>
+      </div>
+    );
+  }
+  const vis = (lista || []).filter((q) => !filtro.trim() || String(q.nombre || "").toLowerCase().includes(filtro.trim().toLowerCase()));
+  return (
+    <section className="rounded-2xl border-2 border-violet-300 bg-violet-50 p-3 space-y-2">
+      <div className="flex items-center gap-2"><h3 className="font-extrabold text-sm flex-1">🎮 Jugar yo también · curso {grado}</h3><button onClick={cerrar} className="rounded-lg bg-white border border-slate-300 px-2.5 py-1 text-xs font-bold">Cerrar</button></div>
+      <p className="text-xs text-slate-700">Elige el perfil con el que vas a jugar. Lo que hagas (mochila, bloques, vida, criaturas) se guarda en ese perfil y los estudiantes te verán con su nombre. Lo ideal es crear en <b>Estudiantes</b> un perfil solo para ti (por ejemplo «Profe Germán») y elegirlo aquí; la próxima vez quedará recordado.</p>
+      {lista === null ? <p className="text-sm text-slate-500">Cargando…</p> : (
+        <div className="flex flex-wrap items-center gap-2">
+          <input value={filtro} onChange={(e) => setFiltro(e.target.value)} placeholder="Buscar por nombre…" aria-label="Buscar perfil" className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm w-44" />
+          <select value={sel} onChange={(e) => setSel(e.target.value)} aria-label="Perfil para jugar" className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm font-bold min-w-[12rem]">
+            <option value="">— Elige un perfil —</option>
+            {vis.map((q) => <option key={q.id} value={q.id}>{q.nombre}</option>)}
+          </select>
+          <button onClick={entrar} disabled={!sel || cargando} className="rounded-lg bg-violet-600 text-white px-3 py-1.5 text-sm font-bold disabled:opacity-50">{cargando ? "Entrando…" : "▶ Entrar a jugar"}</button>
+        </div>
+      )}
+      {error && <div role="alert" className="rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm p-2">{error}</div>}
+    </section>
+  );
+}
 
 // Panel del docente para el Mundo 3D: ver lo que construye cada estudiante, moderar (con deshacer),
 // programar el curso (abrir/cerrar la construcción y el límite de bloques) y observar el mundo volando.
@@ -111,6 +172,7 @@ export default function Mundo3DDocente() {
   const [msg, setMsg] = useState(""), [err, setErr] = useState(""), [ocupado, setOcupado] = useState(false);
   const [confirma, setConfirma] = useState(null); // { autor, desde, texto }
   const [obs, setObs] = useState(null);           // { foco }
+  const [jugar, setJugar] = useState(false);
 
   const cargarGrados = useCallback(async () => {
     try { const g = await api.fetchGradosDocente(); setGrados(g); setGrado((a) => a || g[0] || ""); } catch (e) { setErr(e.message || "No se pudieron cargar los cursos."); setGrados([]); }
@@ -163,7 +225,9 @@ export default function Mundo3DDocente() {
         </select>
         <button onClick={cargar} className="rounded-lg bg-slate-100 hover:bg-slate-200 px-3 py-1.5 text-sm font-bold">↻ Actualizar</button>
         <button onClick={() => setObs({ foco: null })} disabled={!grado} className="rounded-lg bg-violet-600 text-white px-3 py-1.5 text-sm font-bold disabled:opacity-50">👁️ Observar el mundo</button>
+        <button onClick={() => setJugar((v) => !v)} disabled={!grado} className="rounded-lg bg-emerald-600 text-white px-3 py-1.5 text-sm font-bold disabled:opacity-50">🎮 Jugar yo también</button>
       </div>
+      {jugar && grado && <JugarComoDocente key={grado} grado={grado} cerrar={() => setJugar(false)} />}
       {grados && !grados.length && <p className="text-sm text-slate-500">Todavía no hay cursos con estudiantes activos.</p>}
       {err && <div role="alert" className="rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm p-2.5">{err}</div>}
       {msg && <div role="status" className="rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm p-2.5">{msg}</div>}
