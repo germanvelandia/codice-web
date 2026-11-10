@@ -169,6 +169,85 @@ function salon(A, { cx, cz, dir, W, D, alto = 7, pared = LADRILLO, piso = TABLON
   for (let v = D + 1; v <= D + 2; v++) for (let u = -3; u <= 3; u++) { L(u, v, y0, ADOQ); } // escalón
   return { L, X, Z, pa };
 }
+// ---------- la Iglesia: planta de cruz con 4 naves, cúpula, altar, ambón y sede ----------
+// (cx, cz) = centro del crucero. Nave de entrada al oeste (puerta hacia la plaza), presbiterio al este, transeptos al norte y al sur.
+function iglesia(A, cx, cz) {
+  const y0 = 12, L = 13, S = (a, b, y, bl) => A.set(cx + a, y, cz + b, bl);
+  nivelar(A, cx - L - 4, cz - L - 4, cx + L + 4, cz + L + 4, y0, 30);
+  const dentro = (a, b) => (Math.abs(a) <= 4 && Math.abs(b) <= L) || (Math.abs(b) <= 4 && Math.abs(a) <= L);
+  const pared = (a, b) => { if (dentro(a, b)) return false; for (let da = -1; da <= 1; da++) for (let db = -1; db <= 1; db++) if (dentro(a + da, b + db)) return true; return false; };
+  const dist = (a, b) => Math.hypot(a, b);
+  const vit = [LANA.roja, LANA.azul, LANA.amarilla, LANA.verde];
+  for (let b = -L - 1; b <= L + 1; b++) for (let a = -L - 1; a <= L + 1; a++) {
+    const d = dentro(a, b), w = pared(a, b); if (!d && !w) continue;
+    S(a, b, y0, ((a + b) & 1) ? PIEDRA : 34);
+    for (let y = y0 + 1; y <= y0 + 9; y++) S(a, b, y, w ? ((Math.abs(a) === 5 && Math.abs(b) === 5) ? PIEDRA : 34) : AIRE);
+    if (!(d && dist(a, b) <= 4.3)) S(a, b, y0 + 10, w ? PIEDRA : TABLON); // techo (el crucero queda abierto bajo la cúpula)
+    else S(a, b, y0 + 10, AIRE);
+    if (w) S(a, b, y0 + 11, PIEDRA); // pretil
+  }
+  // alfombra roja por la nave central y el crucero
+  for (let a = -L; a <= L; a++) for (let b = -1; b <= 1; b++) S(a, b, y0, LANA.roja);
+  for (let b = -L; b <= L; b++) for (let a = -1; a <= 1; a++) if (Math.abs(b) <= 4 || Math.abs(a) <= 1) S(a, b, y0, a === 0 && Math.abs(b) <= 1 ? LANA.amarilla : LANA.roja);
+  // ----- cúpula: tambor con ventanas, bóveda de ladrillo, linterna y cruz -----
+  for (let b = -6; b <= 6; b++) for (let a = -6; a <= 6; a++) {
+    const d = dist(a, b);
+    for (let y = y0 + 10; y <= y0 + 13; y++) if (d > 4.3 && d <= 5.4) {
+      const ventana = y >= y0 + 11 && y <= y0 + 12 && d > 4.8 && (a === 0 || b === 0 || Math.abs(a) === Math.abs(b));
+      S(a, b, y, ventana ? CRISTAL : PIEDRA);
+    }
+    for (let dy = 0; dy <= 6; dy++) { const d3 = Math.hypot(a, b, dy); if (d3 >= 4.3 && d3 <= 5.4) S(a, b, y0 + 14 + dy, LADRILLO); }
+  }
+  S(0, 0, y0 + 19, LAMP); S(0, 0, y0 + 20, CRISTAL);
+  for (let y = y0 + 21; y <= y0 + 25; y++) S(0, 0, y, 17); S(-1, 0, y0 + 23, 17); S(1, 0, y0 + 23, 17); S(0, -1, y0 + 23, 17); S(0, 1, y0 + 23, 17);
+  // ----- torre-campanario sobre la fachada -----
+  for (let y = y0 + 11; y <= y0 + 19; y++) for (let b = -2; b <= 2; b++) for (let a = -L - 1; a <= -L + 3; a++) {
+    const borde = b === -2 || b === 2 || a === -L - 1 || a === -L + 3;
+    S(a, b, y, borde ? ((y >= y0 + 16 && y <= y0 + 18 && (b === 0 || a === -L + 1) ) ? CRISTAL : 34) : AIRE);
+  }
+  for (let b = -2; b <= 2; b++) for (let a = -L - 1; a <= -L + 3; a++) S(a, b, y0 + 20, PIEDRA);
+  for (let y = y0 + 21; y <= y0 + 25; y++) S(-L + 1, 0, y, 17); S(-L, 0, y0 + 23, 17); S(-L + 2, 0, y0 + 23, 17);
+  // ----- fachada: puerta grande y rosetón; escalinata -----
+  for (let b = -1; b <= 1; b++) for (let y = y0 + 1; y <= y0 + 5; y++) S(-L - 1, b, y, AIRE);
+  for (let b = -1; b <= 1; b++) for (let y = y0 + 7; y <= y0 + 8; y++) S(-L - 1, b, y, CRISTAL);
+  for (let b = -3; b <= 3; b++) for (let a = -L - 3; a <= -L - 2; a++) S(a, b, y0, ADOQ);
+  for (const b of [-3, 3]) { farol(A, cx - L - 3, y0 + 1, cz + b, 3); A.antorchas.push([cx - L - 3 + .5, y0 + 5.2, cz + b + .5]); }
+  // ----- vitrales de las naves -----
+  const tira = (a, b, eje) => { for (let y = y0 + 3; y <= y0 + 7; y++) S(a, b, y, vit[(a + b + y + 16) % 4]); };
+  for (const a of [-11, -8, 8, 11]) for (const sg of [-1, 1]) tira(a, sg * 5);
+  for (const b of [-11, -8, 8, 11]) for (const sg of [-1, 1]) tira(sg * 5, b);
+  for (let b = -3; b <= 3; b++) for (let y = y0 + 3; y <= y0 + 8; y++) S(L + 1, b, y, vit[(b + y + 12) % 4]);   // gran vitral del presbiterio
+  for (let a = -2; a <= 2; a++) for (let y = y0 + 3; y <= y0 + 7; y++) { S(a, -L - 1, y, vit[(a + y + 12) % 4]); S(a, L + 1, y, vit[(a + y + 13) % 4]); }
+  // ----- sillas en cada una de las 4 naves (asiento rojo + respaldo de madera) -----
+  const silla = (a, b, da, db) => { S(a, b, y0 + 1, LANA.roja); S(a + da, b + db, y0 + 1, TABLON); S(a + da, b + db, y0 + 2, TABLON); };
+  let sillas = 0;
+  for (const a of [-12, -10, -8, -6]) for (const b of [-4, -3, 3, 4]) { silla(a, b, -1, 0); sillas++; }   // nave de entrada (mira al altar)
+  for (const b of [-12, -10, -8, -6]) for (const a of [-4, -3, 3, 4]) { silla(a, b, 0, -1); sillas++; }   // nave norte
+  for (const b of [12, 10, 8, 6]) for (const a of [-4, -3, 3, 4]) { silla(a, b, 0, 1); sillas++; }        // nave sur
+  // ----- presbiterio (nave este): tarima, altar, ambón, sede y cruz -----
+  for (let b = -4; b <= 4; b++) for (let a = 7; a <= L; a++) S(a, b, y0 + 1, PIEDRA);
+  for (let b = -4; b <= 4; b++) S(6, b, y0 + 1, PIEDRA);
+  for (let b = -1; b <= 1; b++) { S(10, b, y0 + 2, PIEDRA); S(10, b, y0 + 3, LANA.blanca); }            // altar con mantel
+  for (const b of [-2, 2]) { S(10, b, y0 + 2, PIEDRA); S(10, b, y0 + 3, LAMP); }                           // velas
+  S(10, 0, y0 + 4, 17);                                                                                    // cáliz dorado
+  S(8, -3, y0 + 2, PIEDRA); S(8, -3, y0 + 3, PIEDRA); S(8, -3, y0 + 4, TABLON); S(8, -3, y0 + 5, LANA.roja); // ambón con el libro
+  S(12, 0, y0 + 2, LANA.roja); S(12, -1, y0 + 2, TABLON); S(12, 1, y0 + 2, TABLON);                      // sede (silla del sacerdote)
+  for (let y = y0 + 2; y <= y0 + 4; y++) S(13, 0, y, TABLON); S(13, -1, y0 + 3, TABLON); S(13, 1, y0 + 3, TABLON);
+  for (let y = y0 + 5; y <= y0 + 8; y++) S(13, 0, y, 17); S(13, -1, y0 + 7, 17); S(13, 1, y0 + 7, 17);   // cruz dorada
+  for (const b of [-3, 3]) { S(12, b, y0 + 2, LANA.roja); S(13, b, y0 + 2, TABLON); }                      // sillas de los acólitos
+  // ----- luces -----
+  for (const [a, b] of [[-11, 0], [-7, 0], [0, -11], [0, -7], [0, 7], [0, 11], [8, -3], [8, 3], [12, 0], [-4, -4], [4, -4], [-4, 4], [4, 4]]) S(a, b, y0 + 9, LAMP);
+  for (const [a, b] of [[-9, -4], [-9, 4], [-9, 0]]) S(a, b, y0 + 9, LAMP);
+  // ----- rótulos y personas -----
+  const rot = (a, b, y, t) => A.etiquetas.push({ x: cx + a + .5, y, z: cz + b + .5, texto: t, clase: "edif" });
+  rot(-L - 3, 0, y0 + 13, "⛪ Iglesia de la Esperanza"); rot(10, 0, y0 + 7, "Altar"); rot(8, -3, y0 + 7, "Ambón"); rot(12, 0, y0 + 6, "Sede");
+  A.npc({ id: "L-igl-0", nombre: "Padre Anselmo", emoji: "✝️", x: cx + 9, z: cz + 1, y: y0 + 2, r: 1.2, zona: "Ciudad del Ágora",
+    look: { ropa: "#15151a", pant: "#15151a", piel: "#e6b999", pelo: "#d9d9d9", largo: true, capa: "#6a1b9a" },
+    frases: ["Bienvenido a la Iglesia de la Esperanza. Aquí todos son recibidos en paz, sin importar lo que crean.", "Este es el altar, donde se celebra la misa. A su lado está el ambón, desde donde se leen las lecturas, y la sede, el asiento de quien preside.", "Tiene cuatro naves: la de entrada, la del presbiterio y los dos brazos de la cruz. Bajo la cúpula se cruzan todas.", "La esperanza no es esperar sentado: es trabajar hoy por algo mejor.", "Dar las gracias es el primer paso para cuidar a quien nos cuida."] });
+  A.npc({ id: "L-igl-1", nombre: "Hermana Lucía", emoji: "🕯️", x: cx - 9, z: cz + 1, y: y0 + 1, r: 1.5, zona: "Ciudad del Ágora",
+    look: { ropa: "#1d2433", pant: "#1d2433", piel: "#d9a47c", pelo: "#2b1b12", largo: true, acc: "capucha" },
+    frases: ["Estos vitrales los armaron entre muchos vecinos, pieza por pieza.", "Una comunidad se construye como una iglesia: bloque a bloque, entre todos.", "Si alguien está triste, acompañarlo ya es una buena obra.", "Hay " + sillas + " sillas en las cuatro naves. ¡Siéntate a descansar un momento!"] });
+}
 function ciudad(A, zn) {
   const [cx, cz] = [zn.cx, zn.cz], y0 = 12;
   nivelar(A, cx - 27, cz - 27, cx + 27, cz + 27, y0, 22);
@@ -179,11 +258,12 @@ function ciudad(A, zn) {
   for (let y = y0 + 1; y <= y0 + 4; y++) A.set(cx, y, cz, PIEDRA); A.set(cx, y0 + 5, cz, AGUA); A.set(cx, y0 + 6, cz, LAMP);
   for (const [dx, dz] of [[-8, -8], [8, -8], [-8, 8], [8, 8]]) { farol(A, cx + dx, y0 + 1, cz + dz, 3); A.antorchas.push([cx + dx + .5, y0 + 5.2, cz + dz + .5]); }
   const edif = [
-    { k: "iglesia", nombre: "Iglesia de la Esperanza", emoji: "⛪", dx: 0, dz: -(9 + 8), dir: [0, 1], W: 6, D: 7 },
-    { k: "universidad", nombre: "Universidad del Ágora", emoji: "🎓", dx: 9 + 8, dz: 0, dir: [-1, 0], W: 6, D: 6 },
-    { k: "mercado", nombre: "Mercado Central", emoji: "🛒", dx: 0, dz: 9 + 8, dir: [0, -1], W: 6, D: 6 },
-    { k: "politica", nombre: "Casa política · Cabildo", emoji: "🏛️", dx: -(9 + 7), dz: 0, dir: [1, 0], W: 6, D: 5 },
+    { k: "universidad", nombre: "Universidad del Ágora", emoji: "🎓", dir: [0, 1], W: 6, D: 6 },
+    { k: "mercado", nombre: "Mercado Central", emoji: "🛒", dir: [0, -1], W: 6, D: 6 },
+    { k: "politica", nombre: "Casa política · Cabildo", emoji: "🏛️", dir: [1, 0], W: 6, D: 5 },
   ];
+  iglesia(A, cx + 24, cz); // la Iglesia grande va al este de la plaza, con la puerta hacia ella
+
   // la puerta mira a la plaza: el edificio queda detrás de la fachada v=+D, que está a 10 de la plaza
   for (const e of edif) {
     const fach = 10; // distancia del centro de la ciudad a la fachada
@@ -194,20 +274,7 @@ function ciudad(A, zn) {
     for (let v = -D + 2; v <= D - 2; v += 4) for (let u = -W + 3; u <= W - 3; u += 6) L(u, v, y0 + (e.k === "iglesia" ? 8 : 6), LAMP);
     A.antorchas.push([X(-3, D + 1) + .5, y0 + 1.6, Z(-3, D + 1) + .5], [X(3, D + 1) + .5, y0 + 1.6, Z(3, D + 1) + .5]);
     rotulo(A, X(0, D + 1), y0 + (e.k === "iglesia" ? 14 : 11), Z(0, D + 1), e.emoji + " " + e.nombre);
-    if (e.k === "iglesia") {
-      for (let y = y0 + 9; y <= y0 + 17; y++) for (let u = -2; u <= 2; u++) for (let v = D - 4; v <= D; v++) { const b = Math.abs(u) === 2 || v === D || v === D - 4; L(u, v, y, b ? PIEDRA : AIRE); }
-      for (let u = -2; u <= 2; u++) for (let v = D - 4; v <= D; v++) L(u, v, y0 + 18, PIEDRA);
-      for (const [u, v] of [[0, D], [0, D - 4], [-2, D - 2], [2, D - 2]]) for (let y = y0 + 12; y <= y0 + 14; y++) L(u, v, y, y === y0 + 13 ? CRISTAL : PIEDRA);
-      for (let y = y0 + 19; y <= y0 + 23; y++) L(0, D - 2, y, 17); L(-1, D - 2, y0 + 21, 17); L(1, D - 2, y0 + 21, 17);
-      for (let v = -D + 2; v <= D - 6; v += 2) for (const u0 of [-5, -4, -3, 3, 4, 5]) L(u0, v, y0 + 1, TABLON); // bancas
-      for (let u = -3; u <= 3; u++) for (let v = -D + 1; v <= -D + 2; v++) L(u, v, y0 + 1, PIEDRA); L(0, -D + 1, y0 + 2, 17); L(-2, -D + 1, y0 + 2, LAMP); L(2, -D + 1, y0 + 2, LAMP);
-      const vit = [LANA.roja, LANA.azul, LANA.amarilla, LANA.verde];
-      for (let u = -3; u <= 3; u += 2) for (let y = y0 + 3; y <= y0 + 7; y++) L(u, -D, y, vit[((u + 3) / 2 + (y - y0)) % 4 | 0]);
-      for (const sg of [-1, 1]) for (let v = -D + 2; v <= D - 6; v += 3) for (let y = y0 + 3; y <= y0 + 6; y++) L(sg * W, v, y, vit[(v + y + 8) % 4]);
-      L(0, -D, y0 + 8, CRISTAL);
-      A.npc({ id: "L-igl-0", nombre: "Padre Anselmo", emoji: "🕊️", x: X(0, -D + 4), z: Z(0, -D + 4), r: 1.5, zona: "Ciudad del Ágora", frases: ["Bienvenido a la Iglesia. Aquí todos son recibidos en paz, sin importar lo que crean.", "La esperanza no es esperar sentado: es trabajar hoy por algo mejor.", "Dar las gracias es el primer paso para cuidar a quien nos cuida.", "Cuando hay silencio, uno se escucha por dentro. Pruébalo un minuto."] });
-      A.npc({ id: "L-igl-1", nombre: "Hermana Lucía", emoji: "🕯️", x: X(-4, 0), z: Z(-4, 0), r: 1.5, zona: "Ciudad del Ágora", frases: ["Estos vitrales los armaron entre muchos vecinos, pieza por pieza.", "Una comunidad se construye como una iglesia: bloque a bloque, entre todos.", "Si alguien está triste, acompañarlo ya es una buena obra."] });
-    } else if (e.k === "universidad") {
+    if (e.k === "universidad") {
       for (let u = -4; u <= 4; u++) for (let y = y0 + 2; y <= y0 + 4; y++) L(u, -D + 1, y, 35); // pizarra
       L(-5, -D + 1, y0 + 3, LANA.amarilla); L(5, -D + 1, y0 + 3, LANA.amarilla);
       for (let v = -1; v <= 4; v += 2) for (const u of [-5, -4, -3, 3, 4, 5]) L(u, v, y0 + 1, TABLON); // pupitres
