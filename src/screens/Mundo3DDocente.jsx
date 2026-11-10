@@ -157,7 +157,7 @@ export default function Mundo3DDocente() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-lg font-extrabold">🧊 Mundo 3D</h2>
+        <h2 className="text-lg font-extrabold">🧊 Códice Craft (mundo 3D)</h2>
         <select value={grado} onChange={(e) => setGrado(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm font-bold" aria-label="Curso">
           {(grados || []).map((g) => <option key={g} value={g}>Curso {g}</option>)}
         </select>
