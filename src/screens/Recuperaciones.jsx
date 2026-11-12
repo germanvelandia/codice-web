@@ -18,36 +18,78 @@ const esc = (t) => String(t ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").
 const hoyISO = () => new Date().toISOString().slice(0, 10);
 const fmtFecha = (d) => { if (!d) return ""; const [y, m, dd] = String(d).slice(0, 10).split("-"); return `${dd}/${m}`; };
 
-// ---------- Hoja de nivelación: asistencia + actividad + entrega + % + nota automática ----------
+// ---------- Hoja de nivelación: asistencia + actividades con peso + % total + nota automática ----------
+const totalPonderado = (acts, res, estId) => {
+  const W = acts.reduce((t, a) => t + (Number(a.peso) || 0), 0);
+  if (!W) return null;
+  const suma = acts.reduce((t, a) => t + (Number(a.peso) || 0) * (res[`${a.id}:${estId}`] ?? 0), 0);
+  return Math.round((suma / W) * 10) / 10;
+};
+
 function SeguimientoNivelacion({ materiaId, gradoId, periodo, materia, nombreCurso, lista, cargar, setError }) {
   const [plan, setPlan] = useState({ actividad: "", instrucciones: "", fecha_limite: "", porcentaje_minimo: 60, nota_aprobada: 3.5 });
+  const [acts, setActs] = useState([]);        // actividades guardadas
+  const [editAct, setEditAct] = useState([]);  // copia editable [{id?, nombre, peso}]
+  const [res, setRes] = useState({});          // "act:est" -> logro
   const [sesiones, setSesiones] = useState([]);
-  const [asis, setAsis] = useState({}); // "sesion:est" -> bool
+  const [asis, setAsis] = useState({});
   const [nuevaFecha, setNuevaFecha] = useState(hoyISO());
   const [nuevoTema, setNuevoTema] = useState("");
-  const [draft, setDraft] = useState({}); // est -> { pct, obs }
+  const [draft, setDraft] = useState({});
   const [ocupado, setOcupado] = useState(null);
   const [msg, setMsg] = useState("");
 
   const recargar = async () => {
     try {
-      const [p, s] = await Promise.all([
+      const [p, s, ac] = await Promise.all([
         api.fetchPlanNivelacion(materiaId, gradoId, periodo), api.fetchSesionesNivelacion(materiaId, gradoId, periodo),
+        api.fetchActividadesNivelacion(materiaId, gradoId, periodo),
       ]);
       setPlan({ ...p, fecha_limite: p.fecha_limite || "" });
       setSesiones(s.sesiones);
       const m = {}; s.asistencia.forEach((a) => { m[`${a.sesion_id}:${a.estudiante_id}`] = a.presente; });
       setAsis(m); setDraft({});
-    } catch (e) { setError("No se pudo cargar el seguimiento (¿corriste el SQL 154?): " + (e.message || e)); }
+      setActs(ac.actividades); setEditAct(ac.actividades.map((a) => ({ id: a.id, nombre: a.nombre, peso: a.peso })));
+      const r = {}; ac.resultados.forEach((x) => { r[`${x.actividad_id}:${x.estudiante_id}`] = Number(x.logro); });
+      setRes(r);
+    } catch (e) { setError("No se pudo cargar el seguimiento (¿corriste los SQL 154 y 155?): " + (e.message || e)); }
   };
   useEffect(() => { if (materiaId && gradoId && periodo) recargar(); }, [materiaId, gradoId, periodo]);
+
+  const pesoEdit = editAct.reduce((t, a) => t + (Number(a.peso) || 0), 0);
+  const nota3 = Number(plan.nota_aprobada);
+
+  // Escribe en nivelación el total y aplica la regla de nota (3.5 si cumple).
+  const aplicar = async (f, acts2, res2) => {
+    const tieneAlgo = acts2.some((a) => res2[`${a.id}:${f.e.id}`] !== undefined);
+    const total = tieneAlgo ? totalPonderado(acts2, res2, f.e.id) : null;
+    await api.guardarSeguimientoNivelacion(materiaId, f.e.id, periodo, {
+      entregado: tieneAlgo, fechaEntrega: f.reg?.fecha_entrega || hoyISO(), porcentaje: total,
+      observacion: draft[f.e.id]?.obs ?? f.reg?.observacion ?? "", notaOriginal: f.original, estadoPrevio: f.reg?.estado || "", plan,
+    });
+  };
 
   const guardarPlan = async () => {
     try { await api.guardarPlanNivelacion(materiaId, gradoId, periodo, plan); setMsg("Plan guardado."); await cargar(); }
     catch (e) { setError("No se pudo guardar el plan: " + (e.message || e)); }
   };
+  const guardarActs = async () => {
+    const limpias = editAct.filter((a) => (a.nombre || "").trim() || Number(a.peso));
+    if (Math.round(limpias.reduce((t, a) => t + (Number(a.peso) || 0), 0)) !== 100 && !confirm("Los pesos no suman 100 %. El total se calculará proporcionalmente. ¿Guardar de todos modos?")) return;
+    setError(""); setMsg("Guardando…");
+    try {
+      const idsNuevos = new Set(limpias.filter((a) => a.id).map((a) => a.id));
+      await api.guardarActividadesNivelacion(materiaId, gradoId, periodo, limpias, acts.filter((a) => !idsNuevos.has(a.id)).map((a) => a.id));
+      const ac = await api.fetchActividadesNivelacion(materiaId, gradoId, periodo);
+      const r = {}; ac.resultados.forEach((x) => { r[`${x.actividad_id}:${x.estudiante_id}`] = Number(x.logro); });
+      // Los pesos cambiaron: se recalcula el total y la nota de todos los que ya tienen resultados.
+      for (const f of lista) { if (ac.actividades.some((a) => r[`${a.id}:${f.e.id}`] !== undefined) || f.reg?.porcentaje != null) await aplicar(f, ac.actividades, r); }
+      await recargar(); await cargar(); setMsg("Actividades guardadas y totales recalculados.");
+    } catch (e) { setMsg(""); setError("No se pudieron guardar las actividades: " + (e.message || e)); }
+  };
   const agregarSesion = async () => {
     if (!nuevaFecha) return;
+    if (sesiones.some((s) => s.fecha === nuevaFecha && (s.tema || "") === nuevoTema) && !confirm("Ya hay una sesión con esa fecha. ¿Agregar otra?")) return;
     try { await api.crearSesionNivelacion(materiaId, gradoId, periodo, nuevaFecha, nuevoTema); setNuevoTema(""); await recargar(); }
     catch (e) { setError("No se pudo crear la sesión: " + (e.message || e)); }
   };
@@ -60,36 +102,39 @@ function SeguimientoNivelacion({ materiaId, gradoId, periodo, materia, nombreCur
     try { await api.marcarAsistenciaNivelacion(s.id, est, v); } catch (e) { setError("No se pudo guardar la asistencia: " + (e.message || e)); }
   };
 
-  const guardarFila = async (f, cambios = {}) => {
-    const d = draft[f.e.id] || {};
-    const entregado = cambios.entregado ?? !!f.reg?.entregado;
-    const pctTxt = cambios.pct ?? d.pct ?? (f.reg?.porcentaje ?? "");
-    const obs = cambios.obs ?? d.obs ?? (f.reg?.observacion ?? "");
-    const pct = String(pctTxt).trim() === "" ? null : parseFloat(String(pctTxt).replace(",", "."));
-    if (pct !== null && (Number.isNaN(pct) || pct < 0 || pct > 100)) { setError("El porcentaje debe estar entre 0 y 100."); return; }
+  const guardarCelda = async (f, a) => {
+    const k = `${a.id}:${f.e.id}`;
+    const txt = String(draft[k] ?? "").trim().replace(",", ".");
+    const v = txt === "" ? null : parseFloat(txt);
+    if (v !== null && (Number.isNaN(v) || v < 0 || v > 100)) { setError("El resultado de cada actividad va de 0 a 100 (% logrado)."); return; }
     setError(""); setOcupado(f.e.id);
     try {
-      await api.guardarSeguimientoNivelacion(materiaId, f.e.id, periodo, {
-        entregado, fechaEntrega: f.reg?.fecha_entrega || hoyISO(), porcentaje: pct, observacion: obs,
-        notaOriginal: f.original, estadoPrevio: f.reg?.estado || "", plan,
-      });
+      await api.guardarResultadoNivelacion(a.id, f.e.id, v);
+      const res2 = { ...res }; if (v === null) delete res2[k]; else res2[k] = v;
+      setRes(res2);
+      await aplicar(f, acts, res2);
+      setDraft((p) => { const n = { ...p }; delete n[k]; return n; });
       await cargar();
     } catch (e) { setError("No se pudo guardar: " + (e.message || e)); }
     setOcupado(null);
   };
-  const cumple = (f) => !!f.reg?.entregado && f.reg?.porcentaje != null && Number(f.reg.porcentaje) >= Number(plan.porcentaje_minimo);
+  const guardarObs = async (f) => {
+    setOcupado(f.e.id);
+    try { await aplicar(f, acts, res); await cargar(); } catch (e) { setError("No se pudo guardar: " + (e.message || e)); }
+    setOcupado(null);
+  };
 
-  const resumen = useMemo(() => {
-    const t = lista.length, ent = lista.filter((f) => f.reg?.entregado).length, ok = lista.filter(cumple).length;
-    return { t, ent, ok };
-  }, [lista, plan.porcentaje_minimo]);
-
+  const totalDe = (f) => (acts.some((a) => res[`${a.id}:${f.e.id}`] !== undefined) ? totalPonderado(acts, res, f.e.id) : null);
+  const cumple = (f) => { const t = totalDe(f); return t !== null && t >= Number(plan.porcentaje_minimo); };
+  const resumen = useMemo(() => ({ t: lista.length, ent: lista.filter((f) => totalDe(f) !== null).length, ok: lista.filter(cumple).length }), [lista, acts, res, plan.porcentaje_minimo]);
   const asistio = (s, f) => asis[`${s.id}:${f.e.id}`];
-  const cabecera = ["#", "Apellidos", "Nombres", "Nota", ...sesiones.map((s) => fmtFecha(s.fecha)), `Entregó (${plan.actividad || "actividad"})`, "%", "Nota final", "Observación"];
+  const rotulo = (a) => `${a.nombre || "Actividad"} (${Number(a.peso) || 0}%)`;
+  const titulo = acts.length ? acts.map(rotulo).join(" + ") : "(sin actividades — agrégalas arriba)";
+
+  const cabecera = ["#", "Apellidos", "Nombres", "Nota", ...sesiones.map((s) => fmtFecha(s.fecha)), ...acts.map(rotulo), "Total %", "Nota final", "Observación"];
   const filaDatos = (f, i) => [i + 1, f.ap, f.nom, f.original ?? "",
     ...sesiones.map((s) => (asistio(s, f) === undefined ? "" : asistio(s, f) ? "✔" : "✘")),
-    f.reg?.entregado ? "Sí" : "No", f.reg?.porcentaje ?? "", cumple(f) ? plan.nota_aprobada : (f.original ?? ""), f.reg?.observacion ?? ""];
-
+    ...acts.map((a) => res[`${a.id}:${f.e.id}`] ?? ""), totalDe(f) ?? "", cumple(f) ? plan.nota_aprobada : (f.original ?? ""), f.reg?.observacion ?? ""];
   const descargarCSV = () => {
     const csv = "﻿" + [cabecera, ...lista.map(filaDatos)].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -98,19 +143,21 @@ function SeguimientoNivelacion({ materiaId, gradoId, periodo, materia, nombreCur
   const imprimir = () => {
     const w = window.open("", "_blank");
     if (!w) { setError("El navegador bloqueó la ventana de impresión. Permite las ventanas emergentes."); return; }
-    const vacias = Math.max(0, 4 - sesiones.length); // columnas en blanco para firmar a mano
+    const vacias = Math.max(0, 4 - sesiones.length);
     const th = sesiones.map((s) => `<th class="v">${esc(fmtFecha(s.fecha))}${s.tema ? `<br><small>${esc(s.tema)}</small>` : ""}</th>`).join("") + Array.from({ length: vacias }, () => `<th class="v">&nbsp;</th>`).join("");
+    const tha = acts.map((a) => `<th class="v">${esc(a.nombre || "Actividad")}<br><small>${esc(Number(a.peso) || 0)}%</small></th>`).join("");
     const cuerpo = lista.map((f, i) => `<tr><td class="c">${i + 1}</td><td>${esc(f.ap)}</td><td>${esc(f.nom)}</td><td class="c">${esc(f.original ?? "")}</td>` +
       sesiones.map((s) => `<td class="c">${asistio(s, f) === undefined ? "" : asistio(s, f) ? "✔" : "✘"}</td>`).join("") + Array.from({ length: vacias }, () => `<td></td>`).join("") +
-      `<td class="c">${f.reg?.entregado ? "Sí" : ""}</td><td class="c">${esc(f.reg?.porcentaje ?? "")}</td><td class="c">${esc(cumple(f) ? plan.nota_aprobada : "")}</td></tr>`).join("");
+      acts.map((a) => `<td class="c">${esc(res[`${a.id}:${f.e.id}`] ?? "")}</td>`).join("") +
+      `<td class="c">${esc(totalDe(f) ?? "")}</td><td class="c">${esc(cumple(f) ? plan.nota_aprobada : "")}</td></tr>`).join("");
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Nivelación ${esc(nombreCurso)}</title>
 <style>@page{size:landscape;margin:12mm}body{font-family:Arial,sans-serif;color:#111}h2{margin:0 0 2px}p{margin:2px 0;font-size:12px;color:#333}
 table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}th,td{border:1px solid #333;padding:5px 6px}th{background:#e8eef8}.c{text-align:center}.v{min-width:46px}td{height:24px}
 .act{border:1px solid #333;padding:6px 8px;margin-top:8px;font-size:12px}</style></head><body>
 <h2>Hoja de asistencia y entrega de nivelaciones — ${esc(materia?.nombre || "")}</h2>
-<p>Curso ${esc(nombreCurso)} · Periodo ${esc(periodo)} · Cumple con entrega y mínimo ${esc(plan.porcentaje_minimo)}% → nota ${esc(plan.nota_aprobada)}</p>
-<div class="act"><b>Actividad:</b> ${esc(plan.actividad || "—")}${plan.instrucciones ? `<br>${esc(plan.instrucciones)}` : ""}${plan.fecha_limite ? `<br><b>Fecha límite de entrega:</b> ${esc(fmtFecha(plan.fecha_limite))}` : ""}</div>
-<table><thead><tr><th>#</th><th>Apellidos</th><th>Nombres</th><th>Nota</th>${th}<th>Entregó</th><th>%</th><th>Nota nivelación</th></tr></thead><tbody>${cuerpo}</tbody></table>
+<p>Curso ${esc(nombreCurso)} · Periodo ${esc(periodo)} · Aprueba con ${esc(plan.porcentaje_minimo)}% o más → nota ${esc(plan.nota_aprobada)}</p>
+<div class="act"><b>Actividades:</b> ${esc(titulo)}${plan.instrucciones ? `<br>${esc(plan.instrucciones)}` : ""}${plan.fecha_limite ? `<br><b>Fecha límite de entrega:</b> ${esc(fmtFecha(plan.fecha_limite))}` : ""}</div>
+<table><thead><tr><th>#</th><th>Apellidos</th><th>Nombres</th><th>Nota</th>${th}${tha}<th>Total %</th><th>Nota nivelación</th></tr></thead><tbody>${cuerpo}</tbody></table>
 <script>window.onload=()=>window.print()</script></body></html>`);
     w.document.close();
   };
@@ -119,27 +166,39 @@ table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}th,td{bo
   return (
     <div>
       <div className="rounded-xl border border-slate-200 p-3 mb-3 bg-white">
-        <div className="text-xs font-bold text-slate-600 mb-2">📝 Actividad de nivelación (periodo {periodo})</div>
-        <div className="grid gap-2 sm:grid-cols-2">
-          <label className="text-[11px] font-bold text-slate-500 sm:col-span-2">Actividad
-            <input value={plan.actividad} onChange={(e) => setPlan({ ...plan, actividad: e.target.value })} placeholder="Ej.: Taller sobre los dilemas éticos + sustentación" className={`${inp} block w-full mt-0.5`} /></label>
-          <label className="text-[11px] font-bold text-slate-500 sm:col-span-2">Instrucciones
+        <div className="text-xs font-bold text-slate-600 mb-2">📝 Actividades de la nivelación (periodo {periodo})</div>
+        <div className="grid gap-1.5">
+          {editAct.map((a, i) => (
+            <div key={a.id || `n${i}`} className="flex items-center gap-2">
+              <input value={a.nombre} placeholder="Ej.: Guía de trabajo" onChange={(e) => setEditAct((p) => p.map((x, j) => (j === i ? { ...x, nombre: e.target.value } : x)))} className={`${inp} flex-1 min-w-0`} />
+              <input value={a.peso} inputMode="decimal" onChange={(e) => setEditAct((p) => p.map((x, j) => (j === i ? { ...x, peso: String(e.target.value).replace(",", ".") } : x)))} className={`${inp} w-16 text-center`} />
+              <span className="text-xs text-slate-500">%</span>
+              <button onClick={() => setEditAct((p) => p.filter((_, j) => j !== i))} className="text-rose-500 font-bold px-1" title="Quitar">×</button>
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-2 mt-2">
+          <button onClick={() => setEditAct((p) => [...p, { nombre: "", peso: p.length ? 0 : 100 }])} className="text-xs font-bold px-3 py-1.5 rounded-full bg-slate-100 text-slate-700">＋ Agregar actividad</button>
+          <button onClick={guardarActs} className="text-xs font-bold px-3 py-1.5 rounded-full text-white" style={{ background: "#2F55A4" }}>💾 Guardar actividades</button>
+          <span className={`text-[11px] font-bold ${Math.round(pesoEdit) === 100 ? "text-emerald-600" : "text-amber-600"}`}>Suman {pesoEdit}%{Math.round(pesoEdit) === 100 ? " ✓" : " (deben sumar 100)"}</span>
+          {msg && <span className="text-[11px] text-emerald-700">{msg}</span>}
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-3 mt-3 pt-3 border-t border-slate-100">
+          <label className="text-[11px] font-bold text-slate-500 sm:col-span-3">Instrucciones (opcional)
             <textarea value={plan.instrucciones} onChange={(e) => setPlan({ ...plan, instrucciones: e.target.value })} rows={2} className={`${inp} block w-full mt-0.5`} /></label>
-          <label className="text-[11px] font-bold text-slate-500">Fecha límite de entrega
+          <label className="text-[11px] font-bold text-slate-500">Fecha límite
             <input type="date" value={plan.fecha_limite} onChange={(e) => setPlan({ ...plan, fecha_limite: e.target.value })} className={`${inp} block mt-0.5`} /></label>
-          <div className="flex gap-2">
-            <label className="text-[11px] font-bold text-slate-500">% mínimo para aprobar
-              <input value={plan.porcentaje_minimo} inputMode="decimal" onChange={(e) => setPlan({ ...plan, porcentaje_minimo: e.target.value })} className={`${inp} block w-24 text-center mt-0.5`} /></label>
-            <label className="text-[11px] font-bold text-slate-500">Nota si cumple
-              <input value={plan.nota_aprobada} inputMode="decimal" onChange={(e) => setPlan({ ...plan, nota_aprobada: String(e.target.value).replace(",", ".") })} className={`${inp} block w-24 text-center mt-0.5`} /></label>
-          </div>
+          <label className="text-[11px] font-bold text-slate-500">% total para aprobar
+            <input value={plan.porcentaje_minimo} inputMode="decimal" onChange={(e) => setPlan({ ...plan, porcentaje_minimo: e.target.value })} className={`${inp} block w-24 text-center mt-0.5`} /></label>
+          <label className="text-[11px] font-bold text-slate-500">Nota si aprueba
+            <input value={plan.nota_aprobada} inputMode="decimal" onChange={(e) => setPlan({ ...plan, nota_aprobada: String(e.target.value).replace(",", ".") })} className={`${inp} block w-24 text-center mt-0.5`} /></label>
         </div>
         <div className="flex items-center gap-2 mt-2">
-          <button onClick={guardarPlan} className="text-xs font-bold px-3 py-1.5 rounded-full text-white" style={{ background: "#2F55A4" }}>💾 Guardar actividad</button>
-          {msg && <span className="text-[11px] text-emerald-700">{msg}</span>}
-          <span className="text-[11px] text-slate-500 ml-auto">Entregaron <b>{resumen.ent}</b>/{resumen.t} · Cumplen <b>{resumen.ok}</b></span>
+          <button onClick={guardarPlan} className="text-xs font-bold px-3 py-1.5 rounded-full text-white" style={{ background: "#2F55A4" }}>💾 Guardar regla</button>
+          <span className="text-[11px] text-slate-500 ml-auto">Con resultados <b>{resumen.ent}</b>/{resumen.t} · Aprueban <b>{resumen.ok}</b></span>
         </div>
-        <p className="text-[11px] text-slate-500 mt-1">Regla: si el estudiante <b>entregó</b> y su <b>%</b> es igual o mayor al mínimo, la nota del periodo pasa a <b>{plan.nota_aprobada}</b> en Planillas y Boletín (la original se conserva). Si dejas de cumplir, vuelve la original. Guarda la actividad antes de calificar.</p>
+        <p className="text-[11px] text-slate-500 mt-1">En la tabla escribes el <b>% logrado (0–100)</b> en cada actividad. El total es el promedio ponderado por los pesos. Si el total llega al mínimo, la nota del periodo pasa a <b>{plan.nota_aprobada}</b> en Planillas y Boletín (la original se conserva); si deja de llegar, vuelve la original. Cada actividad puede ser distinta por curso y periodo.</p>
       </div>
 
       <div className="flex flex-wrap items-end gap-2 mb-2">
@@ -163,7 +222,7 @@ table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}th,td{bo
               <tr className="bg-[#E8EEF8] text-slate-700 text-xs">
                 <th rowSpan={2} className="px-2 py-1.5 w-8">#</th><th rowSpan={2} className="px-2 py-1.5 text-left">Apellidos</th><th rowSpan={2} className="px-2 py-1.5 text-left">Nombres</th><th rowSpan={2} className="px-2 py-1.5">Nota</th>
                 {sesiones.length > 0 && <th colSpan={sesiones.length} className="px-2 py-1.5 border-l border-slate-300">Asistencia</th>}
-                <th colSpan={4} className="px-2 py-1.5 border-l border-slate-300 text-left">Actividad: <span className="font-extrabold">{plan.actividad || "(sin nombre — escríbela arriba y guarda)"}</span>{plan.fecha_limite ? ` · límite ${fmtFecha(plan.fecha_limite)}` : ""}</th>
+                <th colSpan={acts.length + 3} className="px-2 py-1.5 border-l border-slate-300 text-left">Actividades: <span className="font-extrabold">{titulo}</span>{plan.fecha_limite ? ` · límite ${fmtFecha(plan.fecha_limite)}` : ""}</th>
               </tr>
               <tr className="bg-[#E8EEF8] text-slate-700 text-xs">
                 {sesiones.map((s, k) => (
@@ -172,12 +231,15 @@ table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}th,td{bo
                     {s.tema && <div className="text-[10px] font-normal text-slate-500 max-w-[90px] truncate">{s.tema}</div>}
                   </th>
                 ))}
-                <th className="px-2 py-1.5 border-l border-slate-300">Entregó</th><th className="px-2 py-1.5">%</th><th className="px-2 py-1.5">Nota final</th><th className="px-2 py-1.5 text-left">Observación</th>
+                {acts.map((a, k) => (
+                  <th key={a.id} className={`px-2 py-1.5 ${k === 0 ? "border-l border-slate-300" : ""}`}>{a.nombre || "Actividad"}<div className="text-[10px] font-normal text-slate-500">{Number(a.peso) || 0}% · 0–100</div></th>
+                ))}
+                <th className="px-2 py-1.5">Total %</th><th className="px-2 py-1.5">Nota final</th><th className="px-2 py-1.5 text-left">Observación</th>
               </tr>
             </thead>
             <tbody>
               {lista.map((f, i) => {
-                const ok = cumple(f); const d = draft[f.e.id] || {};
+                const ok = cumple(f); const t = totalDe(f);
                 return (
                   <tr key={f.e.id} className="odd:bg-white even:bg-slate-50 border-t border-slate-100">
                     <td className="text-center px-2 py-1.5 text-slate-400">{i + 1}</td>
@@ -189,21 +251,23 @@ table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}th,td{bo
                         <input type="checkbox" checked={asistio(s, f) === true} onChange={(e) => marcar(s, f.e.id, e.target.checked)} />
                       </td>
                     ))}
-                    <td className="text-center px-2 py-1.5">
-                      <input type="checkbox" disabled={ocupado === f.e.id} checked={!!f.reg?.entregado} onChange={(e) => guardarFila(f, { entregado: e.target.checked })} />
-                      {f.reg?.entregado && f.reg?.fecha_entrega && <div className="text-[10px] text-slate-400">{fmtFecha(f.reg.fecha_entrega)}</div>}
-                    </td>
-                    <td className="text-center px-2 py-1.5">
-                      <input value={d.pct ?? (f.reg?.porcentaje ?? "")} inputMode="decimal" disabled={ocupado === f.e.id} placeholder="—"
-                        onChange={(e) => setDraft((p) => ({ ...p, [f.e.id]: { ...p[f.e.id], pct: e.target.value } }))}
-                        onBlur={() => { if (d.pct !== undefined) guardarFila(f); }} onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-                        className={`${inp} w-16 text-center`} />
-                    </td>
+                    {acts.map((a) => {
+                      const k = `${a.id}:${f.e.id}`;
+                      return (
+                        <td key={a.id} className="text-center px-2 py-1.5">
+                          <input value={draft[k] ?? (res[k] ?? "")} inputMode="decimal" disabled={ocupado === f.e.id} placeholder="—"
+                            onChange={(e) => setDraft((p) => ({ ...p, [k]: e.target.value }))}
+                            onBlur={() => { if (draft[k] !== undefined) guardarCelda(f, a); }} onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                            className={`${inp} w-16 text-center`} />
+                        </td>
+                      );
+                    })}
+                    <td className="text-center px-2 py-1.5 font-bold text-slate-700">{t === null ? "—" : `${t}%`}</td>
                     <td className={`text-center px-2 py-1.5 font-bold ${ok ? "text-emerald-600" : "text-slate-500"}`}>{ok ? plan.nota_aprobada : (f.original ?? "—")}{ok && " ✓"}</td>
                     <td className="px-2 py-1.5">
-                      <input value={d.obs ?? (f.reg?.observacion ?? "")} disabled={ocupado === f.e.id}
+                      <input value={draft[f.e.id]?.obs ?? (f.reg?.observacion ?? "")} disabled={ocupado === f.e.id}
                         onChange={(e) => setDraft((p) => ({ ...p, [f.e.id]: { ...p[f.e.id], obs: e.target.value } }))}
-                        onBlur={() => { if (d.obs !== undefined) guardarFila(f); }} className={`${inp} w-full min-w-[120px]`} />
+                        onBlur={() => { if (draft[f.e.id]?.obs !== undefined) guardarObs(f); }} className={`${inp} w-full min-w-[120px]`} />
                     </td>
                   </tr>
                 );
