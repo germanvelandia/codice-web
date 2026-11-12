@@ -85,7 +85,7 @@ function SeguimientoNivelacion({ materiaId, gradoId, periodo, materia, nombreCur
   }, [lista, plan.porcentaje_minimo]);
 
   const asistio = (s, f) => asis[`${s.id}:${f.e.id}`];
-  const cabecera = ["#", "Apellidos", "Nombres", "Nota", ...sesiones.map((s) => fmtFecha(s.fecha)), "Entregó", "%", "Nota final", "Observación"];
+  const cabecera = ["#", "Apellidos", "Nombres", "Nota", ...sesiones.map((s) => fmtFecha(s.fecha)), `Entregó (${plan.actividad || "actividad"})`, "%", "Nota final", "Observación"];
   const filaDatos = (f, i) => [i + 1, f.ap, f.nom, f.original ?? "",
     ...sesiones.map((s) => (asistio(s, f) === undefined ? "" : asistio(s, f) ? "✔" : "✘")),
     f.reg?.entregado ? "Sí" : "No", f.reg?.porcentaje ?? "", cumple(f) ? plan.nota_aprobada : (f.original ?? ""), f.reg?.observacion ?? ""];
@@ -161,11 +161,18 @@ table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}th,td{bo
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-[#E8EEF8] text-slate-700 text-xs">
-                <th className="px-2 py-1.5 w-8">#</th><th className="px-2 py-1.5 text-left">Apellidos</th><th className="px-2 py-1.5 text-left">Nombres</th><th className="px-2 py-1.5">Nota</th>
-                {sesiones.map((s) => (
-                  <th key={s.id} className="px-1 py-1.5" title={s.tema || ""}>{fmtFecha(s.fecha)} <button onClick={() => quitarSesion(s)} className="text-rose-400 font-bold" title="Eliminar sesión">×</button></th>
+                <th rowSpan={2} className="px-2 py-1.5 w-8">#</th><th rowSpan={2} className="px-2 py-1.5 text-left">Apellidos</th><th rowSpan={2} className="px-2 py-1.5 text-left">Nombres</th><th rowSpan={2} className="px-2 py-1.5">Nota</th>
+                {sesiones.length > 0 && <th colSpan={sesiones.length} className="px-2 py-1.5 border-l border-slate-300">Asistencia</th>}
+                <th colSpan={4} className="px-2 py-1.5 border-l border-slate-300 text-left">Actividad: <span className="font-extrabold">{plan.actividad || "(sin nombre — escríbela arriba y guarda)"}</span>{plan.fecha_limite ? ` · límite ${fmtFecha(plan.fecha_limite)}` : ""}</th>
+              </tr>
+              <tr className="bg-[#E8EEF8] text-slate-700 text-xs">
+                {sesiones.map((s, k) => (
+                  <th key={s.id} className={`px-1 py-1.5 font-semibold ${k === 0 ? "border-l border-slate-300" : ""}`} title={s.tema || ""}>
+                    {fmtFecha(s.fecha)} <button onClick={() => quitarSesion(s)} className="text-rose-400 font-bold" title="Eliminar sesión">×</button>
+                    {s.tema && <div className="text-[10px] font-normal text-slate-500 max-w-[90px] truncate">{s.tema}</div>}
+                  </th>
                 ))}
-                <th className="px-2 py-1.5">Entregó</th><th className="px-2 py-1.5">%</th><th className="px-2 py-1.5">Nota final</th><th className="px-2 py-1.5 text-left">Observación</th>
+                <th className="px-2 py-1.5 border-l border-slate-300">Entregó</th><th className="px-2 py-1.5">%</th><th className="px-2 py-1.5">Nota final</th><th className="px-2 py-1.5 text-left">Observación</th>
               </tr>
             </thead>
             <tbody>
