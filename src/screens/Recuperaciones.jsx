@@ -26,7 +26,7 @@ const totalPonderado = (acts, res, estId) => {
   return Math.round((suma / W) * 10) / 10;
 };
 
-function SeguimientoNivelacion({ materiaId, gradoId, periodo, materia, nombreCurso, lista, cargar, setError }) {
+function SeguimientoNivelacion({ materiaId, gradoId, periodo, materia, nombreCurso, lista, cargar, setError, grados = [] }) {
   const [plan, setPlan] = useState({ actividad: "", instrucciones: "", fecha_limite: "", porcentaje_minimo: 60, nota_aprobada: 3.5 });
   const [acts, setActs] = useState([]);        // actividades guardadas
   const [editAct, setEditAct] = useState([]);  // copia editable [{id?, nombre, peso}]
@@ -38,6 +38,37 @@ function SeguimientoNivelacion({ materiaId, gradoId, periodo, materia, nombreCur
   const [draft, setDraft] = useState({});
   const [ocupado, setOcupado] = useState(null);
   const [msg, setMsg] = useState("");
+  const [copiando, setCopiando] = useState(false);
+  const [destinos, setDestinos] = useState([]);
+  const [reemplazar, setReemplazar] = useState(false);
+
+  const copiarACursos = async () => {
+    if (!acts.length) { setError("Primero guarda al menos una actividad."); return; }
+    if (!destinos.length) { setError("Elige al menos un curso."); return; }
+    setError(""); setMsg("Copiando…");
+    try {
+      const inf = await api.copiarPlanNivelacion(materiaId, gradoId, periodo, destinos, { plan, actividades: acts, reemplazar });
+      const nom = (g) => grados.find((x) => String(x.id) === String(g))?.nombre || g;
+      const ok = inf.filter((i) => i.estado === "copiado").map((i) => nom(i.grado)), om = inf.filter((i) => i.estado === "omitido").map((i) => nom(i.grado));
+      setMsg(`${ok.length ? `Copiado a: ${ok.join(", ")}. ` : ""}${om.length ? `Omitidos (ya tenían actividades): ${om.join(", ")}. Marca «reemplazar» si quieres sobrescribirlos.` : ""}`);
+      setDestinos([]); setCopiando(false);
+    } catch (e) { setMsg(""); setError("No se pudo copiar: " + (e.message || e)); }
+  };
+  const itemsAplicar = () => lista.filter((f) => totalDe(f) !== null).map((f) => ({ estudianteId: f.e.id, entregado: true, fechaEntrega: f.reg?.fecha_entrega || hoyISO(), porcentaje: totalDe(f) }));
+  const aplicarOtrasMaterias = async () => {
+    const items = itemsAplicar();
+    if (!items.length) { setError("Aún no hay resultados para aplicar."); return; }
+    setError(""); setMsg("Revisando otras materias…");
+    try {
+      const vista = await api.aplicarNivelacionEnOtrasMaterias(materiaId, gradoId, periodo, items, plan, { soloVista: true });
+      const con = vista.filter((v) => v.estudiantes > 0);
+      if (!con.length) { setMsg("Ninguno de estos estudiantes perdió otra de tus materias en este periodo."); return; }
+      if (!confirm("Se aplicará este resultado (misma regla de " + plan.porcentaje_minimo + "% → nota " + plan.nota_aprobada + ") en:\n" + con.map((v) => `• ${v.materia}: ${v.estudiantes} estudiante(s)`).join("\n") + "\n¿Continuar?")) { setMsg(""); return; }
+      await api.aplicarNivelacionEnOtrasMaterias(materiaId, gradoId, periodo, items, plan);
+      setMsg("Resultado aplicado en: " + con.map((v) => `${v.materia} (${v.estudiantes})`).join(", ") + ". Planillas y Boletín ya se actualizaron.");
+      await cargar();
+    } catch (e) { setMsg(""); setError("No se pudo aplicar: " + (e.message || e)); }
+  };
 
   const recargar = async () => {
     try {
@@ -181,8 +212,24 @@ table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}th,td{bo
           <button onClick={() => setEditAct((p) => [...p, { nombre: "", peso: p.length ? 0 : 100 }])} className="text-xs font-bold px-3 py-1.5 rounded-full bg-slate-100 text-slate-700">＋ Agregar actividad</button>
           <button onClick={guardarActs} className="text-xs font-bold px-3 py-1.5 rounded-full text-white" style={{ background: "#2F55A4" }}>💾 Guardar actividades</button>
           <span className={`text-[11px] font-bold ${Math.round(pesoEdit) === 100 ? "text-emerald-600" : "text-amber-600"}`}>Suman {pesoEdit}%{Math.round(pesoEdit) === 100 ? " ✓" : " (deben sumar 100)"}</span>
-          {msg && <span className="text-[11px] text-emerald-700">{msg}</span>}
+          <button onClick={() => setCopiando((v) => !v)} className="text-xs font-bold px-3 py-1.5 rounded-full bg-slate-100 text-slate-700">📋 Copiar a otros cursos</button>
+          <button onClick={aplicarOtrasMaterias} className="text-xs font-bold px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">🔁 Aplicar a mis otras materias</button>
         </div>
+        {msg && <div className="text-[11px] text-emerald-700 mt-1">{msg}</div>}
+        {copiando && (
+          <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
+            <div className="text-[11px] font-bold text-slate-600 mb-1">Copiar estas actividades y la regla (periodo {periodo}) a:</div>
+            <div className="flex flex-wrap gap-x-3 gap-y-1">
+              {grados.filter((g) => String(g.id) !== String(gradoId)).map((g) => (
+                <label key={g.id} className="text-xs text-slate-700 flex items-center gap-1">
+                  <input type="checkbox" checked={destinos.includes(g.id)} onChange={(e) => setDestinos((p) => e.target.checked ? [...p, g.id] : p.filter((x) => x !== g.id))} />{g.nombre || g.id}
+                </label>
+              ))}
+            </div>
+            <label className="text-[11px] text-slate-500 flex items-center gap-1 mt-1"><input type="checkbox" checked={reemplazar} onChange={(e) => setReemplazar(e.target.checked)} />Reemplazar si el curso ya tiene actividades (borra sus resultados)</label>
+            <button onClick={copiarACursos} className="mt-1.5 text-xs font-bold px-3 py-1.5 rounded-full text-white" style={{ background: "#2F55A4" }}>Copiar</button>
+          </div>
+        )}
 
         <div className="grid gap-2 sm:grid-cols-3 mt-3 pt-3 border-t border-slate-100">
           <label className="text-[11px] font-bold text-slate-500 sm:col-span-3">Instrucciones (opcional)
@@ -451,7 +498,7 @@ td:nth-child(5){height:26px}</style></head><body>
       {aviso && <div className="text-xs text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2 mb-2">{aviso}</div>}
       {error && <div className="text-xs text-rose-700 bg-rose-50 rounded-lg px-3 py-2 mb-2">{error}</div>}
       {modo === "seguimiento" && !cargando && (
-        <SeguimientoNivelacion materiaId={materiaId} gradoId={gradoId} periodo={periodo} materia={materia} nombreCurso={nombreCurso} lista={lista} cargar={cargar} setError={setError} />
+        <SeguimientoNivelacion materiaId={materiaId} gradoId={gradoId} periodo={periodo} materia={materia} nombreCurso={nombreCurso} lista={lista} cargar={cargar} setError={setError} grados={grados} />
       )}
       {cargando && <div className="text-sm text-slate-400">Cargando…</div>}
       {modo === "notas" && <>
