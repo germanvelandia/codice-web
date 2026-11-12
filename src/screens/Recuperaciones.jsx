@@ -43,7 +43,7 @@ function SeguimientoNivelacion({ materiaId, gradoId, periodo, materia, nombreCur
   const [draft, setDraft] = useState({});
   const [ocupado, setOcupado] = useState(null);
   const [msg, setMsg] = useState("");
-  const [institucion, setInstitucion] = useState(() => leerLS("niv_institucion", INSTITUCION_DEFAULT));
+  const [inst, setInst] = useState(null); // datos de ⚙️ Institución (nombre, logo, año)
   const [docente, setDocente] = useState(() => leerLS("niv_docente", DOCENTE_DEFAULT));
   const [copiando, setCopiando] = useState(false);
   const [destinos, setDestinos] = useState([]);
@@ -76,6 +76,10 @@ function SeguimientoNivelacion({ materiaId, gradoId, periodo, materia, nombreCur
       await cargar();
     } catch (e) { setMsg(""); setError("No se pudo aplicar: " + (e.message || e)); }
   };
+
+  useEffect(() => { api.fetchInstitucion().then(setInst).catch(() => setInst(null)); }, []);
+  const institucion = (inst?.nombre && inst.nombre !== "Institución Educativa") ? inst.nombre : INSTITUCION_DEFAULT;
+  const anioDoc = inst?.anio || String(new Date().getFullYear());
 
   const recargar = async () => {
     try {
@@ -181,12 +185,12 @@ function SeguimientoNivelacion({ materiaId, gradoId, periodo, materia, nombreCur
   const descargarPDF = async () => {
     try {
       setError("");
-      let logoBytes = null; // si existe public/logo-colegio.png se pone en el encabezado
-      try { const r = await fetch("/logo-colegio.png"); if (r.ok && (r.headers.get("content-type") || "").includes("image")) logoBytes = new Uint8Array(await r.arrayBuffer()); } catch (_) { logoBytes = null; }
+      let logoBytes = null; // logo guardado en ⚙️ Institución
+      if (inst?.logo_url) { try { const r = await fetch(inst.logo_url); if (r.ok) logoBytes = new Uint8Array(await r.arrayBuffer()); } catch (_) { logoBytes = null; } }
       const bytes = await generarPdfNivelacion({
         institucion, logoBytes,
         titulo: "HOJA DE ASISTENCIA Y ENTREGA DE NIVELACIONES",
-        subtitulo: `${materia?.nombre || ""}  |  Docente: ${docente}  |  Curso ${nombreCurso}  |  Periodo ${periodo}  |  Ano ${new Date().getFullYear()}  |  Aprueba con ${plan.porcentaje_minimo}% o mas -> nota ${plan.nota_aprobada}`,
+        subtitulo: `${materia?.nombre || ""}  |  Docente: ${docente}  |  Curso ${nombreCurso}  |  Periodo ${periodo}  |  Ano ${anioDoc}  |  Aprueba con ${plan.porcentaje_minimo}% o mas -> nota ${plan.nota_aprobada}`,
         actividadesTxt: acts.length ? acts.map(rotulo).join(" + ") : "", instrucciones: plan.instrucciones || "", limite: plan.fecha_limite ? fmtFecha(plan.fecha_limite) : "",
         sesiones: sesiones.map((s) => ({ fecha: fmtFecha(s.fecha), tema: s.tema || "" })), sesionesVacias: Math.max(0, 4 - sesiones.length),
         acts: acts.map((a) => ({ nombre: a.nombre, peso: Number(a.peso) || 0 })),
@@ -212,8 +216,8 @@ function SeguimientoNivelacion({ materiaId, gradoId, periodo, materia, nombreCur
 <style>@page{size:landscape;margin:12mm}body{font-family:Arial,sans-serif;color:#111}h2{margin:0 0 2px}p{margin:2px 0;font-size:12px;color:#333}
 table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}th,td{border:1px solid #333;padding:5px 6px}th{background:#e8eef8}.c{text-align:center}.v{min-width:46px}td{height:24px}
 .act{border:1px solid #333;padding:6px 8px;margin-top:8px;font-size:12px}</style></head><body>
-<div style="display:flex;align-items:center;gap:12px;border-bottom:2px solid #333;padding-bottom:6px"><img src="/logo-colegio.png" style="height:54px" onerror="this.style.display='none'"><div style="flex:1;text-align:center"><h2 style="font-size:17px;text-transform:uppercase">${esc(institucion)}</h2><div style="font-weight:bold;font-size:13px">Hoja de asistencia y entrega de nivelaciones</div></div></div>
-<p><b>${esc(materia?.nombre || "")}</b> · Docente: ${esc(docente)} · Curso ${esc(nombreCurso)} · Periodo ${esc(periodo)} · Año ${new Date().getFullYear()} · Aprueba con ${esc(plan.porcentaje_minimo)}% o más → nota ${esc(plan.nota_aprobada)}</p>
+<div style="display:flex;align-items:center;gap:12px;border-bottom:2px solid #333;padding-bottom:6px">${inst?.logo_url ? `<img src="${esc(inst.logo_url)}" style="height:54px">` : ""}<div style="flex:1;text-align:center"><h2 style="font-size:17px;text-transform:uppercase">${esc(institucion)}</h2><div style="font-weight:bold;font-size:13px">Hoja de asistencia y entrega de nivelaciones</div></div></div>
+<p><b>${esc(materia?.nombre || "")}</b> · Docente: ${esc(docente)} · Curso ${esc(nombreCurso)} · Periodo ${esc(periodo)} · Año ${esc(anioDoc)} · Aprueba con ${esc(plan.porcentaje_minimo)}% o más → nota ${esc(plan.nota_aprobada)}</p>
 <div class="act"><b>Actividades:</b> ${esc(titulo)}${plan.instrucciones ? `<br>${esc(plan.instrucciones)}` : ""}${plan.fecha_limite ? `<br><b>Fecha límite de entrega:</b> ${esc(fmtFecha(plan.fecha_limite))}` : ""}</div>
 <table><thead><tr><th>#</th><th>Apellidos</th><th>Nombres</th><th>Nota</th>${th}${tha}<th>Total %</th><th>Nota nivelación</th></tr></thead><tbody>${cuerpo}</tbody></table>
 <script>window.onload=()=>window.print()</script></body></html>`);
@@ -282,12 +286,11 @@ table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}th,td{bo
           <input value={nuevoTema} onChange={(e) => setNuevoTema(e.target.value)} className={`${inp} block mt-0.5`} /></label>
         <button onClick={agregarSesion} className="text-xs font-bold px-3 py-2 rounded-full bg-slate-100 text-slate-700">＋ Agregar sesión</button>
         <details className="text-[11px] text-slate-500 w-full">
-          <summary className="cursor-pointer font-bold">🏫 Encabezado de la hoja (colegio y docente)</summary>
+          <summary className="cursor-pointer font-bold">🏫 Encabezado: {institucion}</summary>
           <div className="flex flex-wrap gap-2 mt-1">
-            <input value={institucion} onChange={(e) => { setInstitucion(e.target.value); guardarLS("niv_institucion", e.target.value); }} className={`${inp} flex-1 min-w-[220px]`} placeholder="Nombre del colegio" />
             <input value={docente} onChange={(e) => { setDocente(e.target.value); guardarLS("niv_docente", e.target.value); }} className={`${inp} flex-1 min-w-[200px]`} placeholder="Docente" />
           </div>
-          <p className="mt-1">Para poner el escudo: sube tu imagen a la carpeta <b>public</b> con el nombre <b>logo-colegio.png</b>.</p>
+          <p className="mt-1">El nombre del colegio, el logo y el año se toman de ⚙️ Institución (los mismos de las actas y planillas).</p>
         </details>
         <div className="flex gap-1.5 ml-auto">
           <button onClick={imprimir} disabled={!lista.length} className="text-xs font-bold px-3 py-2 rounded-full text-white disabled:opacity-40" style={{ background: "#2F55A4" }}>🖨️ Imprimir hoja</button>
