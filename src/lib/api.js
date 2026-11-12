@@ -5266,6 +5266,47 @@ export async function guardarSeguimientoNivelacion(materiaId, estudianteId, peri
   return { estado, cumple, nota: cumple ? nota3 : notaOriginal };
 }
 
+/* ---- Actividades de la nivelación (varias, con peso %) ---- */
+export async function fetchActividadesNivelacion(materiaId, gradoId, periodo) {
+  const { data: acts, error } = await supabase.from("nivelacion_actividades").select("*")
+    .eq("materia_id", materiaId).eq("grado_id", String(gradoId)).eq("periodo", String(periodo)).order("orden").order("id");
+  if (error) throw error;
+  if (!acts.length) return { actividades: [], resultados: [] };
+  const { data: res, error: e2 } = await supabase.from("nivelacion_resultados").select("*").in("actividad_id", acts.map((a) => a.id));
+  if (e2) throw e2;
+  return { actividades: acts, resultados: res || [] };
+}
+// lista: [{ id?, nombre, peso }]; eliminar: ids de actividades a borrar.
+export async function guardarActividadesNivelacion(materiaId, gradoId, periodo, lista, eliminar = []) {
+  if (eliminar.length) {
+    const { error } = await supabase.from("nivelacion_actividades").delete().in("id", eliminar);
+    if (error) throw error;
+  }
+  for (let i = 0; i < lista.length; i++) {
+    const a = lista[i];
+    const campos = { nombre: a.nombre || "", peso: Number(a.peso) || 0, orden: i };
+    if (a.id) {
+      const { error } = await supabase.from("nivelacion_actividades").update(campos).eq("id", a.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from("nivelacion_actividades")
+        .insert({ ...campos, materia_id: materiaId, grado_id: String(gradoId), periodo: String(periodo) });
+      if (error) throw error;
+    }
+  }
+}
+// logro: 0–100 (% logrado en esa actividad). null borra el resultado.
+export async function guardarResultadoNivelacion(actividadId, estudianteId, logro) {
+  if (logro === null || logro === undefined) {
+    const { error } = await supabase.from("nivelacion_resultados").delete().eq("actividad_id", actividadId).eq("estudiante_id", estudianteId);
+    if (error) throw error;
+    return;
+  }
+  const { error } = await supabase.from("nivelacion_resultados").upsert(
+    { actividad_id: actividadId, estudiante_id: estudianteId, logro: Number(logro) }, { onConflict: "actividad_id,estudiante_id" });
+  if (error) throw error;
+}
+
 /* ---------------- Bono de participación ---------------- */
 export async function fetchBono(materiaId, periodo) {
   const { data, error } = await supabase.from("bonos_participacion").select("*").eq("materia_id", materiaId).eq("periodo", String(periodo)).maybeSingle();
