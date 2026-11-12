@@ -5205,6 +5205,67 @@ export async function cambiarEstadoRecuperacion(materiaId, estudianteId, periodo
   try { await sincronizarEstadoActaNivelacion(estudianteId, materiaId, periodo, estado); } catch (_) { /* el acta es opcional */ }
 }
 
+/* ==================== 📋 Seguimiento de nivelaciones ====================
+   Plan (actividad + regla), sesiones con asistencia, entrega y porcentaje.
+   Regla: si el estudiante entregó y su porcentaje >= porcentaje_minimo, la nota del periodo
+   pasa a nota_aprobada (3.5 por defecto) y se escribe en notas_finales_periodo, que alimenta
+   Planillas y Boletín. Si deja de cumplir, se restituye la nota original. */
+export async function fetchPlanNivelacion(materiaId, gradoId, periodo) {
+  const { data, error } = await supabase.from("nivelacion_plan").select("*")
+    .eq("materia_id", materiaId).eq("grado_id", String(gradoId)).eq("periodo", String(periodo)).maybeSingle();
+  if (error) throw error;
+  return data || { actividad: "", instrucciones: "", fecha_limite: null, porcentaje_minimo: 60, nota_aprobada: 3.5 };
+}
+export async function guardarPlanNivelacion(materiaId, gradoId, periodo, p) {
+  const { error } = await supabase.from("nivelacion_plan").upsert({
+    materia_id: materiaId, grado_id: String(gradoId), periodo: String(periodo),
+    actividad: p.actividad || "", instrucciones: p.instrucciones || "", fecha_limite: p.fecha_limite || null,
+    porcentaje_minimo: Number(p.porcentaje_minimo ?? 60), nota_aprobada: Number(p.nota_aprobada ?? 3.5),
+  }, { onConflict: "materia_id,grado_id,periodo" });
+  if (error) throw error;
+}
+export async function fetchSesionesNivelacion(materiaId, gradoId, periodo) {
+  const { data: ses, error } = await supabase.from("nivelacion_sesiones").select("*")
+    .eq("materia_id", materiaId).eq("grado_id", String(gradoId)).eq("periodo", String(periodo)).order("fecha").order("id");
+  if (error) throw error;
+  if (!ses.length) return { sesiones: [], asistencia: [] };
+  const { data: asis, error: e2 } = await supabase.from("nivelacion_asistencia").select("*").in("sesion_id", ses.map((s) => s.id));
+  if (e2) throw e2;
+  return { sesiones: ses, asistencia: asis || [] };
+}
+export async function crearSesionNivelacion(materiaId, gradoId, periodo, fecha, tema = "") {
+  const { data, error } = await supabase.from("nivelacion_sesiones")
+    .insert({ materia_id: materiaId, grado_id: String(gradoId), periodo: String(periodo), fecha, tema }).select().single();
+  if (error) throw error;
+  return data;
+}
+export async function eliminarSesionNivelacion(sesionId) {
+  const { error } = await supabase.from("nivelacion_sesiones").delete().eq("id", sesionId);
+  if (error) throw error;
+}
+export async function marcarAsistenciaNivelacion(sesionId, estudianteId, presente) {
+  const { error } = await supabase.from("nivelacion_asistencia").upsert(
+    { sesion_id: sesionId, estudiante_id: estudianteId, presente: !!presente }, { onConflict: "sesion_id,estudiante_id" });
+  if (error) throw error;
+}
+// Guarda entrega/porcentaje/observación y aplica la regla de nota.
+export async function guardarSeguimientoNivelacion(materiaId, estudianteId, periodo, { entregado, fechaEntrega, porcentaje, observacion, notaOriginal, estadoPrevio, plan }) {
+  const pct = porcentaje === null || porcentaje === undefined || porcentaje === "" ? null : Number(porcentaje);
+  const cumple = !!entregado && pct !== null && pct >= Number(plan.porcentaje_minimo ?? 60);
+  const estado = cumple ? "superado" : (entregado || pct !== null ? "en_proceso" : "pendiente");
+  const { error } = await supabase.from("nivelacion").upsert({
+    materia_id: materiaId, estudiante_id: estudianteId, periodo: String(periodo), estado,
+    nota_original: notaOriginal ?? null, entregado: !!entregado, fecha_entrega: entregado ? (fechaEntrega || null) : null,
+    porcentaje: pct, observacion: observacion || null,
+  }, { onConflict: "materia_id,estudiante_id,periodo" });
+  if (error) throw error;
+  const nota3 = Number(plan.nota_aprobada ?? 3.5);
+  if (cumple) await guardarNotaFinal(materiaId, estudianteId, periodo, nota3);
+  else if (notaOriginal !== null && notaOriginal !== undefined) await guardarNotaFinal(materiaId, estudianteId, periodo, Number(notaOriginal));
+  try { await sincronizarEstadoActaNivelacion(estudianteId, materiaId, periodo, estado); } catch (_) { /* el acta es opcional */ }
+  return { estado, cumple, nota: cumple ? nota3 : notaOriginal };
+}
+
 /* ---------------- Bono de participación ---------------- */
 export async function fetchBono(materiaId, periodo) {
   const { data, error } = await supabase.from("bonos_participacion").select("*").eq("materia_id", materiaId).eq("periodo", String(periodo)).maybeSingle();
