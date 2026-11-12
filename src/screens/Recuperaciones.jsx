@@ -344,6 +344,137 @@ table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}th,td{bo
   );
 }
 
+// ---------- Tabla transversal: un estudiante, todas las materias que perdió ----------
+function MatrizTransversal({ gradoId, periodo, nombreCurso, inst, institucion, docente, setError }) {
+  const [m, setM] = useState(null);
+  const [cargando, setCargando] = useState(false);
+  const [soloVarias, setSoloVarias] = useState(false);
+  const [guia, setGuia] = useState({});
+  const [ocupado, setOcupado] = useState(null);
+  const [msg, setMsg] = useState("");
+
+  const cargar = async () => {
+    if (!gradoId || !periodo) return;
+    setCargando(true); setError("");
+    try { setM(await api.fetchMatrizNivelacion(gradoId, periodo)); }
+    catch (e) { setError("No se pudo armar la tabla: " + (e.message || e)); }
+    setCargando(false);
+  };
+  useEffect(() => { cargar(); }, [gradoId, periodo]);
+
+  const filas = useMemo(() => {
+    if (!m) return [];
+    return m.estudiantes.map((e) => {
+      const cel = m.celdas[e.id] || {};
+      const perdidas = m.materias.filter((x) => cel[x.id]?.perdio);
+      return { e, ...separarNombre(e), cel, perdidas };
+    }).filter((f) => (soloVarias ? f.perdidas.length >= 2 : f.perdidas.length >= 1))
+      .sort((a, b) => b.perdidas.length - a.perdidas.length || a.ap.localeCompare(b.ap, "es", { sensitivity: "base" }));
+  }, [m, soloVarias]);
+
+  const aplicar = async (f) => {
+    const txt = String(guia[f.e.id] ?? "").trim().replace(",", ".");
+    const pct = parseFloat(txt);
+    if (txt === "" || Number.isNaN(pct) || pct < 0 || pct > 100) { setError("Escribe el % de la guía (0 a 100)."); return; }
+    if (!confirm(`Aplicar ${pct}% a ${f.nom} ${f.ap} en: ${f.perdidas.map((x) => x.nombre).join(", ")}.\n(La nota pasa a la de aprobación solo si ${pct}% llega al mínimo de cada materia.)`)) return;
+    setError(""); setOcupado(f.e.id);
+    try {
+      const n = await api.aplicarGuiaTransversal(periodo, [{ estudianteId: f.e.id, porcentaje: pct, materiaIds: f.perdidas.map((x) => x.id) }], m);
+      setMsg(`Aplicado en ${n} materia(s). Planillas y Boletín ya se actualizaron.`);
+      await cargar();
+    } catch (e) { setError("No se pudo aplicar: " + (e.message || e)); }
+    setOcupado(null);
+  };
+  const aplicarTodos = async () => {
+    const items = filas.filter((f) => String(guia[f.e.id] ?? "").trim() !== "").map((f) => ({ estudianteId: f.e.id, porcentaje: parseFloat(String(guia[f.e.id]).replace(",", ".")), materiaIds: f.perdidas.map((x) => x.id) }))
+      .filter((i) => !Number.isNaN(i.porcentaje) && i.porcentaje >= 0 && i.porcentaje <= 100);
+    if (!items.length) { setError("Escribe el % de la guía en al menos una fila."); return; }
+    if (!confirm(`Se aplicará el % escrito a ${items.length} estudiante(s) en todas las materias que perdió cada uno. ¿Continuar?`)) return;
+    setError(""); setOcupado("todos");
+    try { const n = await api.aplicarGuiaTransversal(periodo, items, m); setMsg(`Aplicado en ${n} registro(s) de materia.`); setGuia({}); await cargar(); }
+    catch (e) { setError("No se pudo aplicar: " + (e.message || e)); }
+    setOcupado(null);
+  };
+
+  const textoCelda = (c) => (c ? (c.reg?.estado === "superado" ? `${c.original} → ${c.actual}` : String(c.original)) : "");
+  const descargarCSV = () => {
+    const cab = ["#", "Apellidos", "Nombres", ...m.materias.map((x) => x.nombre), "Perdidas"];
+    const rows = filas.map((f, i) => [i + 1, f.ap, f.nom, ...m.materias.map((x) => textoCelda(f.cel[x.id])), f.perdidas.length]);
+    const csv = "﻿" + [cab, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a"); a.href = url; a.download = `transversal_${nombreCurso}_periodo${periodo}.csv`; a.click(); URL.revokeObjectURL(url);
+  };
+  const imprimir = () => {
+    const w = window.open("", "_blank");
+    if (!w) { setError("El navegador bloqueó la ventana de impresión. Permite las ventanas emergentes."); return; }
+    const th = m.materias.map((x) => `<th>${esc(x.nombre)}</th>`).join("");
+    const cuerpo = filas.map((f, i) => `<tr><td class="c">${i + 1}</td><td>${esc(f.ap)}</td><td>${esc(f.nom)}</td>` +
+      m.materias.map((x) => { const c = f.cel[x.id]; return `<td class="c" ${c?.perdio && c.reg?.estado !== "superado" ? 'style="color:#b91c1c;font-weight:bold"' : ""}>${esc(textoCelda(c))}</td>`; }).join("") +
+      `<td class="c"><b>${f.perdidas.length}</b></td><td></td></tr>`).join("");
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Transversal ${esc(nombreCurso)}</title>
+<style>@page{size:landscape;margin:12mm}body{font-family:Arial,sans-serif;color:#111}h2{margin:0}p{margin:3px 0;font-size:12px;color:#333}
+table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}th,td{border:1px solid #333;padding:5px 6px}th{background:#e8eef8}.c{text-align:center}td{height:24px}</style></head><body>
+<div style="display:flex;align-items:center;gap:12px;border-bottom:2px solid #333;padding-bottom:6px">${inst?.logo_url ? `<img src="${esc(inst.logo_url)}" style="height:54px">` : ""}<div style="flex:1;text-align:center"><h2 style="font-size:17px;text-transform:uppercase">${esc(institucion)}</h2><div style="font-weight:bold;font-size:13px">Estudiantes con asignaturas perdidas - nivelación transversal</div></div></div>
+<p>Curso ${esc(nombreCurso)} · Periodo ${esc(periodo)} · Docente: ${esc(docente)} · En rojo: asignatura perdida</p>
+<table><thead><tr><th>#</th><th>Apellidos</th><th>Nombres</th>${th}<th>Perdidas</th><th>Guía común (%)</th></tr></thead><tbody>${cuerpo}</tbody></table>
+<script>window.onload=()=>window.print()</script></body></html>`);
+    w.document.close();
+  };
+
+  if (cargando && !m) return <div className="text-sm text-slate-400">Armando la tabla…</div>;
+  if (!m) return null;
+  const inp = "text-sm rounded-lg px-2 py-1 border border-slate-300 focus:border-[#2F55A4] outline-none";
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-2 mb-2">
+        <label className="text-xs text-slate-600 flex items-center gap-1"><input type="checkbox" checked={soloVarias} onChange={(e) => setSoloVarias(e.target.checked)} />Solo los que perdieron 2 o más materias</label>
+        <span className="text-[11px] text-slate-500">{filas.length} estudiante(s) · {m.materias.length} materia(s) tuyas con notas</span>
+        <div className="flex gap-1.5 ml-auto">
+          <button onClick={aplicarTodos} disabled={ocupado === "todos"} className="text-xs font-bold px-3 py-2 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">🔁 Aplicar todos los % escritos</button>
+          <button onClick={imprimir} disabled={!filas.length} className="text-xs font-bold px-3 py-2 rounded-full text-white disabled:opacity-40" style={{ background: "#2F55A4" }}>🖨️ Imprimir / guardar PDF</button>
+          <button onClick={descargarCSV} disabled={!filas.length} className="text-xs font-bold px-3 py-2 rounded-full bg-slate-100 text-slate-700 disabled:opacity-40">⬇ CSV</button>
+        </div>
+      </div>
+      {msg && <div className="text-xs text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2 mb-2">{msg}</div>}
+      <p className="text-[11px] text-slate-500 mb-2">Cada fila es un estudiante y cada columna una de tus materias. En rojo: la perdió. Si una misma guía sirve para varias, escribe su <b>% de guía</b> y pulsa «Aplicar»: se registra en todas las materias que perdió, con la regla de cada una (% mínimo y nota de la hoja de nivelación de esa materia).</p>
+      {filas.length === 0 ? (
+        <div className="text-sm text-slate-500 bg-slate-50 rounded-xl p-5 text-center">Nadie con asignaturas perdidas en el periodo {periodo} de este curso.</div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-[#E8EEF8] text-slate-700 text-xs">
+                <th className="px-2 py-1.5 w-8">#</th><th className="px-2 py-1.5 text-left">Apellidos</th><th className="px-2 py-1.5 text-left">Nombres</th>
+                {m.materias.map((x) => <th key={x.id} className="px-2 py-1.5">{x.nombre}<div className="text-[10px] font-normal text-slate-500">mín. {x.minima}</div></th>)}
+                <th className="px-2 py-1.5">Perdidas</th><th className="px-2 py-1.5">Guía común (%)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filas.map((f, i) => (
+                <tr key={f.e.id} className="odd:bg-white even:bg-slate-50 border-t border-slate-100">
+                  <td className="text-center px-2 py-1.5 text-slate-400">{i + 1}</td>
+                  <td className="px-2 py-1.5 font-semibold text-slate-700">{f.ap}</td>
+                  <td className="px-2 py-1.5 text-slate-700">{f.nom}</td>
+                  {m.materias.map((x) => {
+                    const c = f.cel[x.id];
+                    const sup = c?.reg?.estado === "superado";
+                    return <td key={x.id} className={`text-center px-2 py-1.5 font-bold ${!c ? "text-slate-300" : sup ? "text-emerald-600" : c.perdio ? "text-rose-600" : "text-slate-500"}`}>{c ? textoCelda(c) : "—"}{sup && " ✓"}</td>;
+                  })}
+                  <td className="text-center px-2 py-1.5 font-bold">{f.perdidas.length}</td>
+                  <td className="text-center px-2 py-1.5 whitespace-nowrap">
+                    <input value={guia[f.e.id] ?? ""} inputMode="decimal" placeholder="%" onChange={(e) => setGuia((p) => ({ ...p, [f.e.id]: e.target.value }))} className={`${inp} w-16 text-center`} />
+                    <button onClick={() => aplicar(f)} disabled={ocupado === f.e.id} className="ml-1 text-[11px] font-bold px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">Aplicar</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function VistaRecuperaciones({ grados = [], gradoActivo, materiaActiva }) {
   const [materias, setMaterias] = useState([]);
   const [materiaId, setMateriaId] = useState(materiaActiva || "");
@@ -358,7 +489,11 @@ export function VistaRecuperaciones({ grados = [], gradoActivo, materiaActiva })
   const [guardando, setGuardando] = useState(null);
   const [aviso, setAviso] = useState("");
   const [filtro, setFiltro] = useState("todos");
-  const [modo, setModo] = useState("seguimiento"); // seguimiento | notas
+  const [modo, setModo] = useState("seguimiento"); // seguimiento | transversal | notas
+  const [inst, setInst] = useState(null);
+  useEffect(() => { api.fetchInstitucion().then(setInst).catch(() => setInst(null)); }, []);
+  const institucionNombre = (inst?.nombre && inst.nombre !== "Institución Educativa") ? inst.nombre : INSTITUCION_DEFAULT;
+  const docenteNombre = leerLS("niv_docente", DOCENTE_DEFAULT);
 
   useEffect(() => {
     api.fetchMisMaterias().then((m) => {
@@ -508,7 +643,7 @@ td:nth-child(5){height:26px}</style></head><body>
       </div>
 
       <div className="flex gap-1.5 mb-3">
-        {[["seguimiento", "📋 Hoja de nivelación"], ["notas", "♻️ Notas de recuperación"]].map(([k, t]) => (
+        {[["seguimiento", "📋 Hoja de nivelación"], ["transversal", "🔀 Transversal"], ["notas", "♻️ Notas de recuperación"]].map(([k, t]) => (
           <button key={k} onClick={() => setModo(k)} className={`text-xs font-bold px-3 py-1.5 rounded-full border ${modo === k ? "text-white border-transparent" : "bg-white text-slate-600 border-slate-200"}`} style={modo === k ? { background: "#2F55A4" } : undefined}>{t}</button>
         ))}
       </div>
@@ -517,7 +652,8 @@ td:nth-child(5){height:26px}</style></head><body>
       {modo === "seguimiento" && !cargando && (
         <SeguimientoNivelacion materiaId={materiaId} gradoId={gradoId} periodo={periodo} materia={materia} nombreCurso={nombreCurso} lista={lista} cargar={cargar} setError={setError} grados={grados} />
       )}
-      {cargando && <div className="text-sm text-slate-400">Cargando…</div>}
+      {modo === "transversal" && <MatrizTransversal gradoId={gradoId} periodo={periodo} nombreCurso={nombreCurso} inst={inst} institucion={institucionNombre} docente={docenteNombre} setError={setError} />}
+      {cargando && modo !== "transversal" && <div className="text-sm text-slate-400">Cargando…</div>}
       {modo === "notas" && <>
       <p className="text-[11px] text-slate-500 mb-3">
         Aparecen los estudiantes con nota del periodo por debajo de <b>{minimaNum ?? "—"}</b>. Si la recuperación alcanza esa mínima, la nota del periodo queda en <b>{minimaNum ?? "—"}</b> (la nota original se conserva).
