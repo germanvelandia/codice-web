@@ -5,11 +5,25 @@ import { CONFIG_DEFAULT, periodosDe } from "../lib/calificaciones";
 // Separa "Apellidos" y "Nombres" de un estudiante. Usa el apellido guardado si existe;
 // si no, asume que las últimas 2 palabras son los apellidos (patrón común en Colombia).
 function separarNombre(e) {
-  if (e.apellidos && e.apellidos.trim()) return { ap: e.apellidos.trim(), nom: (e.nombre || "").trim() };
-  const p = (e.nombre || "").trim().split(/\s+/).filter(Boolean);
-  if (p.length <= 1) return { ap: "", nom: p.join(" ") };
-  if (p.length === 2) return { ap: p[1], nom: p[0] };
-  return { ap: p.slice(-2).join(" "), nom: p.slice(0, -2).join(" ") };
+  const norm = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  const pal = (e.nombre || "").trim().split(/\s+/).filter(Boolean);
+  if (e.apellidos && e.apellidos.trim()) {
+    const ap = e.apellidos.trim();
+    const apPal = ap.split(/\s+/).filter(Boolean).map(norm), k = apPal.length;
+    const bonito = (t) => t.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
+    // Si el nombre ya trae los apellidos (al final, en medio o al principio), se los quito para que no se repitan.
+    let idx = -1;
+    for (let i = 0; i + k <= pal.length; i++) { if (pal.slice(i, i + k).map(norm).join(" ") === apPal.join(" ")) { idx = i; break; } }
+    if (idx > 0) {
+      const resto = pal.slice(idx);
+      return { ap: resto.length > k ? bonito(resto.join(" ")) : ap, nom: pal.slice(0, idx).join(" ") };
+    }
+    if (idx === 0 && pal.length > k) return { ap, nom: pal.slice(k).join(" ") };
+    return { ap, nom: pal.join(" ") };
+  }
+  if (pal.length <= 1) return { ap: "", nom: pal.join(" ") };
+  if (pal.length === 2) return { ap: pal[1], nom: pal[0] };
+  return { ap: pal.slice(-2).join(" "), nom: pal.slice(0, -2).join(" ") };
 }
 const r2 = (n) => (n === null || n === undefined || Number.isNaN(Number(n)) ? null : Math.round(Number(n) * 100) / 100);
 const esc = (t) => String(t ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
