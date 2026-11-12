@@ -16,6 +16,10 @@ const r2 = (n) => (n === null || n === undefined || Number.isNaN(Number(n)) ? nu
 const esc = (t) => String(t ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 
+const INSTITUCION_DEFAULT = "Colegio Alfonso López Michelsen I.E.D.";
+const DOCENTE_DEFAULT = "Germán Andrés Velandia Daza";
+const leerLS = (k, def) => { try { return localStorage.getItem(k) || def; } catch (_) { return def; } };
+const guardarLS = (k, v) => { try { localStorage.setItem(k, v); } catch (_) { /* opcional */ } };
 const hoyISO = () => new Date().toISOString().slice(0, 10);
 const fmtFecha = (d) => { if (!d) return ""; const [y, m, dd] = String(d).slice(0, 10).split("-"); return `${dd}/${m}`; };
 
@@ -39,6 +43,8 @@ function SeguimientoNivelacion({ materiaId, gradoId, periodo, materia, nombreCur
   const [draft, setDraft] = useState({});
   const [ocupado, setOcupado] = useState(null);
   const [msg, setMsg] = useState("");
+  const [institucion, setInstitucion] = useState(() => leerLS("niv_institucion", INSTITUCION_DEFAULT));
+  const [docente, setDocente] = useState(() => leerLS("niv_docente", DOCENTE_DEFAULT));
   const [copiando, setCopiando] = useState(false);
   const [destinos, setDestinos] = useState([]);
   const [reemplazar, setReemplazar] = useState(false);
@@ -175,15 +181,18 @@ function SeguimientoNivelacion({ materiaId, gradoId, periodo, materia, nombreCur
   const descargarPDF = async () => {
     try {
       setError("");
+      let logoBytes = null; // si existe public/logo-colegio.png se pone en el encabezado
+      try { const r = await fetch("/logo-colegio.png"); if (r.ok && (r.headers.get("content-type") || "").includes("image")) logoBytes = new Uint8Array(await r.arrayBuffer()); } catch (_) { logoBytes = null; }
       const bytes = await generarPdfNivelacion({
-        titulo: `Hoja de asistencia y entrega de nivelaciones - ${materia?.nombre || ""}`,
-        subtitulo: `Curso ${nombreCurso}  |  Periodo ${periodo}  |  Aprueba con ${plan.porcentaje_minimo}% o mas -> nota ${plan.nota_aprobada}`,
+        institucion, logoBytes,
+        titulo: "HOJA DE ASISTENCIA Y ENTREGA DE NIVELACIONES",
+        subtitulo: `${materia?.nombre || ""}  |  Docente: ${docente}  |  Curso ${nombreCurso}  |  Periodo ${periodo}  |  Ano ${new Date().getFullYear()}  |  Aprueba con ${plan.porcentaje_minimo}% o mas -> nota ${plan.nota_aprobada}`,
         actividadesTxt: acts.length ? acts.map(rotulo).join(" + ") : "", instrucciones: plan.instrucciones || "", limite: plan.fecha_limite ? fmtFecha(plan.fecha_limite) : "",
         sesiones: sesiones.map((s) => ({ fecha: fmtFecha(s.fecha), tema: s.tema || "" })), sesionesVacias: Math.max(0, 4 - sesiones.length),
         acts: acts.map((a) => ({ nombre: a.nombre, peso: Number(a.peso) || 0 })),
         filas: lista.map((f, i) => ({ n: i + 1, ap: f.ap, nom: f.nom, nota: f.original, asis: sesiones.map((s) => asistio(s, f)),
           res: acts.map((a) => res[`${a.id}:${f.e.id}`]), total: totalDe(f), final: cumple(f) ? plan.nota_aprobada : "", obs: f.reg?.observacion || "" })),
-        docente: "", generado: new Date().toLocaleDateString("es-CO"),
+        docente, generado: new Date().toLocaleDateString("es-CO"),
       });
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       const a = document.createElement("a"); a.href = url; a.download = `nivelacion_${nombreCurso}_periodo${periodo}.pdf`; a.click(); URL.revokeObjectURL(url);
@@ -203,8 +212,8 @@ function SeguimientoNivelacion({ materiaId, gradoId, periodo, materia, nombreCur
 <style>@page{size:landscape;margin:12mm}body{font-family:Arial,sans-serif;color:#111}h2{margin:0 0 2px}p{margin:2px 0;font-size:12px;color:#333}
 table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}th,td{border:1px solid #333;padding:5px 6px}th{background:#e8eef8}.c{text-align:center}.v{min-width:46px}td{height:24px}
 .act{border:1px solid #333;padding:6px 8px;margin-top:8px;font-size:12px}</style></head><body>
-<h2>Hoja de asistencia y entrega de nivelaciones — ${esc(materia?.nombre || "")}</h2>
-<p>Curso ${esc(nombreCurso)} · Periodo ${esc(periodo)} · Aprueba con ${esc(plan.porcentaje_minimo)}% o más → nota ${esc(plan.nota_aprobada)}</p>
+<div style="display:flex;align-items:center;gap:12px;border-bottom:2px solid #333;padding-bottom:6px"><img src="/logo-colegio.png" style="height:54px" onerror="this.style.display='none'"><div style="flex:1;text-align:center"><h2 style="font-size:17px;text-transform:uppercase">${esc(institucion)}</h2><div style="font-weight:bold;font-size:13px">Hoja de asistencia y entrega de nivelaciones</div></div></div>
+<p><b>${esc(materia?.nombre || "")}</b> · Docente: ${esc(docente)} · Curso ${esc(nombreCurso)} · Periodo ${esc(periodo)} · Año ${new Date().getFullYear()} · Aprueba con ${esc(plan.porcentaje_minimo)}% o más → nota ${esc(plan.nota_aprobada)}</p>
 <div class="act"><b>Actividades:</b> ${esc(titulo)}${plan.instrucciones ? `<br>${esc(plan.instrucciones)}` : ""}${plan.fecha_limite ? `<br><b>Fecha límite de entrega:</b> ${esc(fmtFecha(plan.fecha_limite))}` : ""}</div>
 <table><thead><tr><th>#</th><th>Apellidos</th><th>Nombres</th><th>Nota</th>${th}${tha}<th>Total %</th><th>Nota nivelación</th></tr></thead><tbody>${cuerpo}</tbody></table>
 <script>window.onload=()=>window.print()</script></body></html>`);
@@ -272,6 +281,14 @@ table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}th,td{bo
         <label className="text-[11px] font-bold text-slate-500">Tema (opcional)
           <input value={nuevoTema} onChange={(e) => setNuevoTema(e.target.value)} className={`${inp} block mt-0.5`} /></label>
         <button onClick={agregarSesion} className="text-xs font-bold px-3 py-2 rounded-full bg-slate-100 text-slate-700">＋ Agregar sesión</button>
+        <details className="text-[11px] text-slate-500 w-full">
+          <summary className="cursor-pointer font-bold">🏫 Encabezado de la hoja (colegio y docente)</summary>
+          <div className="flex flex-wrap gap-2 mt-1">
+            <input value={institucion} onChange={(e) => { setInstitucion(e.target.value); guardarLS("niv_institucion", e.target.value); }} className={`${inp} flex-1 min-w-[220px]`} placeholder="Nombre del colegio" />
+            <input value={docente} onChange={(e) => { setDocente(e.target.value); guardarLS("niv_docente", e.target.value); }} className={`${inp} flex-1 min-w-[200px]`} placeholder="Docente" />
+          </div>
+          <p className="mt-1">Para poner el escudo: sube tu imagen a la carpeta <b>public</b> con el nombre <b>logo-colegio.png</b>.</p>
+        </details>
         <div className="flex gap-1.5 ml-auto">
           <button onClick={imprimir} disabled={!lista.length} className="text-xs font-bold px-3 py-2 rounded-full text-white disabled:opacity-40" style={{ background: "#2F55A4" }}>🖨️ Imprimir hoja</button>
           <button onClick={descargarPDF} disabled={!lista.length} className="text-xs font-bold px-3 py-2 rounded-full bg-rose-50 text-rose-700 border border-rose-200 disabled:opacity-40">⬇ PDF</button>
