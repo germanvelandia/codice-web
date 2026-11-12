@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import * as api from "../lib/api";
 import { CONFIG_DEFAULT, periodosDe } from "../lib/calificaciones";
+import { generarPdfNivelacion } from "../lib/pdfNivelacion";
 
 // Separa "Apellidos" y "Nombres" de un estudiante. Usa el apellido guardado si existe;
 // si no, asume que las últimas 2 palabras son los apellidos (patrón común en Colombia).
@@ -171,6 +172,23 @@ function SeguimientoNivelacion({ materiaId, gradoId, periodo, materia, nombreCur
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a"); a.href = url; a.download = `nivelacion_${nombreCurso}_periodo${periodo}.csv`; a.click(); URL.revokeObjectURL(url);
   };
+  const descargarPDF = async () => {
+    try {
+      setError("");
+      const bytes = await generarPdfNivelacion({
+        titulo: `Hoja de asistencia y entrega de nivelaciones - ${materia?.nombre || ""}`,
+        subtitulo: `Curso ${nombreCurso}  |  Periodo ${periodo}  |  Aprueba con ${plan.porcentaje_minimo}% o mas -> nota ${plan.nota_aprobada}`,
+        actividadesTxt: acts.length ? acts.map(rotulo).join(" + ") : "", instrucciones: plan.instrucciones || "", limite: plan.fecha_limite ? fmtFecha(plan.fecha_limite) : "",
+        sesiones: sesiones.map((s) => ({ fecha: fmtFecha(s.fecha), tema: s.tema || "" })), sesionesVacias: Math.max(0, 4 - sesiones.length),
+        acts: acts.map((a) => ({ nombre: a.nombre, peso: Number(a.peso) || 0 })),
+        filas: lista.map((f, i) => ({ n: i + 1, ap: f.ap, nom: f.nom, nota: f.original, asis: sesiones.map((s) => asistio(s, f)),
+          res: acts.map((a) => res[`${a.id}:${f.e.id}`]), total: totalDe(f), final: cumple(f) ? plan.nota_aprobada : "", obs: f.reg?.observacion || "" })),
+        docente: "", generado: new Date().toLocaleDateString("es-CO"),
+      });
+      const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+      const a = document.createElement("a"); a.href = url; a.download = `nivelacion_${nombreCurso}_periodo${periodo}.pdf`; a.click(); URL.revokeObjectURL(url);
+    } catch (e) { setError("No se pudo generar el PDF: " + (e.message || e)); }
+  };
   const imprimir = () => {
     const w = window.open("", "_blank");
     if (!w) { setError("El navegador bloqueó la ventana de impresión. Permite las ventanas emergentes."); return; }
@@ -256,6 +274,7 @@ table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}th,td{bo
         <button onClick={agregarSesion} className="text-xs font-bold px-3 py-2 rounded-full bg-slate-100 text-slate-700">＋ Agregar sesión</button>
         <div className="flex gap-1.5 ml-auto">
           <button onClick={imprimir} disabled={!lista.length} className="text-xs font-bold px-3 py-2 rounded-full text-white disabled:opacity-40" style={{ background: "#2F55A4" }}>🖨️ Imprimir hoja</button>
+          <button onClick={descargarPDF} disabled={!lista.length} className="text-xs font-bold px-3 py-2 rounded-full bg-rose-50 text-rose-700 border border-rose-200 disabled:opacity-40">⬇ PDF</button>
           <button onClick={descargarCSV} disabled={!lista.length} className="text-xs font-bold px-3 py-2 rounded-full bg-slate-100 text-slate-700 disabled:opacity-40">⬇ CSV</button>
         </div>
       </div>
