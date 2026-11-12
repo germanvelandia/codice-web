@@ -43,10 +43,19 @@ export async function generarPdfNivelacion(d) {
   const paginas = [];
   const nuevaPagina = () => { const p = doc.addPage([W, H]); paginas.push(p); return p; };
 
+  let logo = null;
+  if (d.logoBytes) { try { logo = await doc.embedPng(d.logoBytes); } catch (_) { try { logo = await doc.embedJpg(d.logoBytes); } catch (__) { logo = null; } } }
+  const centrado = (p, txt, y, font, size, color) => {
+    const t = limpiar(txt), tw = font.widthOfTextAtSize(t, size);
+    p.drawText(t, { x: (W - tw) / 2, y, size, font, color });
+  };
   const encabezadoDoc = (p) => {
-    p.drawText(limpiar(d.titulo), { x: M, y: H - M - 10, size: 14, font: fb, color: negro });
-    p.drawText(limpiar(d.subtitulo), { x: M, y: H - M - 25, size: 9, font: f, color: gris });
-    let y = H - M - 40;
+    if (logo) { const h = 46, w = (logo.width / logo.height) * h; p.drawImage(logo, { x: M, y: H - M - h + 4, width: Math.min(w, 90), height: h }); }
+    centrado(p, (d.institucion || "").toUpperCase(), H - M - 6, fb, 13, negro);
+    centrado(p, d.titulo, H - M - 21, fb, 10.5, negro);
+    centrado(p, d.subtitulo, H - M - 34, f, 9, gris);
+    p.drawLine({ start: { x: M, y: H - M - 42 }, end: { x: W - M, y: H - M - 42 }, thickness: 0.8, color: linea });
+    let y = H - M - 55;
     const acto = "Actividades: " + (d.actividadesTxt || "-") + (d.limite ? "   |   Fecha limite de entrega: " + d.limite : "");
     envolver(acto, f, 8.5, W - 2 * M).slice(0, 2).forEach((l) => { p.drawText(l, { x: M, y, size: 8.5, font: f, color: negro }); y -= 11; });
     if (d.instrucciones) envolver(d.instrucciones, f, 8, W - 2 * M).slice(0, 2).forEach((l) => { p.drawText(l, { x: M, y, size: 8, font: f, color: gris }); y -= 10; });
