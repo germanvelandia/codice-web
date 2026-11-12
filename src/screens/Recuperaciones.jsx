@@ -36,13 +36,10 @@ const guardarLS = (k, v) => { try { localStorage.setItem(k, v); } catch (_) { /*
 const hoyISO = () => new Date().toISOString().slice(0, 10);
 const fmtFecha = (d) => { if (!d) return ""; const [y, m, dd] = String(d).slice(0, 10).split("-"); return `${dd}/${m}`; };
 
-// ---------- Hoja de nivelación: asistencia + actividades con peso + % total + nota automática ----------
-const totalPonderado = (acts, res, estId) => {
-  const W = acts.reduce((t, a) => t + (Number(a.peso) || 0), 0);
-  if (!W) return null;
-  const suma = acts.reduce((t, a) => t + (Number(a.peso) || 0) * (res[`${a.id}:${estId}`] ?? 0), 0);
-  return Math.round((suma / W) * 10) / 10;
-};
+// ---------- Hoja de nivelación: asistencia + partes entregadas + promedio + nota automática ----------
+// Cada actividad es una "parte": entregada (100) o no (sin registro). El total es el promedio de partes entregadas.
+const partesEntregadas = (acts, res, estId) => acts.filter((a) => (res[`${a.id}:${estId}`] ?? 0) > 0).length;
+const totalPromedio = (acts, res, estId) => (acts.length ? Math.round((partesEntregadas(acts, res, estId) / acts.length) * 1000) / 10 : null);
 
 function SeguimientoNivelacion({ materiaId, gradoId, periodo, materia, nombreCurso, lista, cargar, setError, grados = [] }) {
   const [plan, setPlan] = useState({ actividad: "", instrucciones: "", fecha_limite: "", porcentaje_minimo: 60, nota_aprobada: 3.5 });
@@ -53,7 +50,13 @@ function SeguimientoNivelacion({ materiaId, gradoId, periodo, materia, nombreCur
   const [asis, setAsis] = useState({});
   const [nuevaFecha, setNuevaFecha] = useState(hoyISO());
   const [nuevoTema, setNuevoTema] = useState("");
-  const [draft, setDraft] = useState({});
+  const [pendRes, setPendRes] = useState({});   // sin guardar: "act:est" -> entregó (bool)
+  const [pendAsis, setPendAsis] = useState({}); // sin guardar: "ses:est" -> presente (bool)
+  const [pendObs, setPendObs] = useState({});   // sin guardar: est -> texto
+  const [guardandoTodo, setGuardandoTodo] = useState(false);
+  const resEf = useMemo(() => { const r = { ...res }; Object.entries(pendRes).forEach(([k, v]) => { if (v) r[k] = 100; else delete r[k]; }); return r; }, [res, pendRes]);
+  const asisEf = useMemo(() => ({ ...asis, ...pendAsis }), [asis, pendAsis]);
+  const nPend = Object.keys(pendRes).length + Object.keys(pendAsis).length + Object.keys(pendObs).length;
   const [ocupado, setOcupado] = useState(null);
   const [msg, setMsg] = useState("");
   const [inst, setInst] = useState(null); // datos de ⚙️ Institución (nombre, logo, año)
@@ -76,6 +79,7 @@ function SeguimientoNivelacion({ materiaId, gradoId, periodo, materia, nombreCur
   };
   const itemsAplicar = () => lista.filter((f) => totalDe(f) !== null).map((f) => ({ estudianteId: f.e.id, entregado: true, fechaEntrega: f.reg?.fecha_entrega || hoyISO(), porcentaje: totalDe(f) }));
   const aplicarOtrasMaterias = async () => {
+    if (nPend) { setError("Tienes cambios sin guardar. Pulsa «💾 Guardar cambios» antes de aplicar a otras materias."); return; }
     const items = itemsAplicar();
     if (!items.length) { setError("Aún no hay resultados para aplicar."); return; }
     setError(""); setMsg("Revisando otras materias…");
@@ -103,24 +107,23 @@ function SeguimientoNivelacion({ materiaId, gradoId, periodo, materia, nombreCur
       setPlan({ ...p, fecha_limite: p.fecha_limite || "" });
       setSesiones(s.sesiones);
       const m = {}; s.asistencia.forEach((a) => { m[`${a.sesion_id}:${a.estudiante_id}`] = a.presente; });
-      setAsis(m); setDraft({});
-      setActs(ac.actividades); setEditAct(ac.actividades.map((a) => ({ id: a.id, nombre: a.nombre, peso: a.peso })));
+      setAsis(m); setPendRes({}); setPendAsis({}); setPendObs({});
+      setActs(ac.actividades); setEditAct(ac.actividades.map((a) => ({ id: a.id, nombre: a.nombre })));
       const r = {}; ac.resultados.forEach((x) => { r[`${x.actividad_id}:${x.estudiante_id}`] = Number(x.logro); });
       setRes(r);
     } catch (e) { setError("No se pudo cargar el seguimiento (¿corriste los SQL 154 y 155?): " + (e.message || e)); }
   };
   useEffect(() => { if (materiaId && gradoId && periodo) recargar(); }, [materiaId, gradoId, periodo]);
 
-  const pesoEdit = editAct.reduce((t, a) => t + (Number(a.peso) || 0), 0);
   const nota3 = Number(plan.nota_aprobada);
 
   // Escribe en nivelación el total y aplica la regla de nota (3.5 si cumple).
   const aplicar = async (f, acts2, res2) => {
     const tieneAlgo = acts2.some((a) => res2[`${a.id}:${f.e.id}`] !== undefined);
-    const total = tieneAlgo ? totalPonderado(acts2, res2, f.e.id) : null;
+    const total = tieneAlgo ? totalPromedio(acts2, res2, f.e.id) : null;
     await api.guardarSeguimientoNivelacion(materiaId, f.e.id, periodo, {
       entregado: tieneAlgo, fechaEntrega: f.reg?.fecha_entrega || hoyISO(), porcentaje: total,
-      observacion: draft[f.e.id]?.obs ?? f.reg?.observacion ?? "", notaOriginal: f.original, estadoPrevio: f.reg?.estado || "", plan,
+      observacion: pendObs[f.e.id] ?? f.reg?.observacion ?? "", notaOriginal: f.original, estadoPrevio: f.reg?.estado || "", plan,
     });
   };
 
@@ -129,15 +132,14 @@ function SeguimientoNivelacion({ materiaId, gradoId, periodo, materia, nombreCur
     catch (e) { setError("No se pudo guardar el plan: " + (e.message || e)); }
   };
   const guardarActs = async () => {
-    const limpias = editAct.filter((a) => (a.nombre || "").trim() || Number(a.peso));
-    if (Math.round(limpias.reduce((t, a) => t + (Number(a.peso) || 0), 0)) !== 100 && !confirm("Los pesos no suman 100 %. El total se calculará proporcionalmente. ¿Guardar de todos modos?")) return;
+    const limpias = editAct.filter((a) => (a.nombre || "").trim()).map((a) => ({ ...a, peso: 0 }));
     setError(""); setMsg("Guardando…");
     try {
       const idsNuevos = new Set(limpias.filter((a) => a.id).map((a) => a.id));
       await api.guardarActividadesNivelacion(materiaId, gradoId, periodo, limpias, acts.filter((a) => !idsNuevos.has(a.id)).map((a) => a.id));
       const ac = await api.fetchActividadesNivelacion(materiaId, gradoId, periodo);
       const r = {}; ac.resultados.forEach((x) => { r[`${x.actividad_id}:${x.estudiante_id}`] = Number(x.logro); });
-      // Los pesos cambiaron: se recalcula el total y la nota de todos los que ya tienen resultados.
+      // Cambió la cantidad de partes: se recalcula el promedio y la nota de todos los que ya tienen entregas.
       for (const f of lista) { if (ac.actividades.some((a) => r[`${a.id}:${f.e.id}`] !== undefined) || f.reg?.porcentaje != null) await aplicar(f, ac.actividades, r); }
       await recargar(); await cargar(); setMsg("Actividades guardadas y totales recalculados.");
     } catch (e) { setMsg(""); setError("No se pudieron guardar las actividades: " + (e.message || e)); }
@@ -152,44 +154,44 @@ function SeguimientoNivelacion({ materiaId, gradoId, periodo, materia, nombreCur
     if (!confirm(`¿Eliminar la sesión del ${fmtFecha(s.fecha)} y su asistencia?`)) return;
     try { await api.eliminarSesionNivelacion(s.id); await recargar(); } catch (e) { setError(e.message || String(e)); }
   };
-  const marcar = async (s, est, v) => {
-    setAsis((p) => ({ ...p, [`${s.id}:${est}`]: v }));
-    try { await api.marcarAsistenciaNivelacion(s.id, est, v); } catch (e) { setError("No se pudo guardar la asistencia: " + (e.message || e)); }
+  const marcarAsis = (sesId, est, v) => {
+    const k = `${sesId}:${est}`;
+    setPendAsis((p) => { const n = { ...p }; if (!!asis[k] === v && asis[k] !== undefined) delete n[k]; else n[k] = v; return n; });
   };
-
-  const guardarCelda = async (f, a) => {
-    const k = `${a.id}:${f.e.id}`;
-    const txt = String(draft[k] ?? "").trim().replace(",", ".");
-    const v = txt === "" ? null : parseFloat(txt);
-    if (v !== null && (Number.isNaN(v) || v < 0 || v > 100)) { setError("El resultado de cada actividad va de 0 a 100 (% logrado)."); return; }
-    setError(""); setOcupado(f.e.id);
+  const marcarParte = (actId, est, v) => {
+    const k = `${actId}:${est}`;
+    setPendRes((p) => { const n = { ...p }; if ((res[k] !== undefined) === v) delete n[k]; else n[k] = v; return n; });
+  };
+  // Guarda todo lo pendiente de una sola vez y calcula la nota de cada estudiante afectado.
+  const guardarTodo = async () => {
+    if (!nPend) return;
+    setError(""); setMsg(""); setGuardandoTodo(true);
     try {
-      await api.guardarResultadoNivelacion(a.id, f.e.id, v);
-      const res2 = { ...res }; if (v === null) delete res2[k]; else res2[k] = v;
-      setRes(res2);
-      await aplicar(f, acts, res2);
-      setDraft((p) => { const n = { ...p }; delete n[k]; return n; });
-      await cargar();
+      for (const [k, v] of Object.entries(pendAsis)) { const [sid, eid] = k.split(":"); await api.marcarAsistenciaNivelacion(Number(sid), Number(eid), v); }
+      const afectados = new Set(Object.keys(pendObs).map(Number));
+      for (const [k, v] of Object.entries(pendRes)) {
+        const [aid, eid] = k.split(":");
+        await api.guardarResultadoNivelacion(Number(aid), Number(eid), v ? 100 : null);
+        afectados.add(Number(eid));
+      }
+      for (const f of lista) { if (afectados.has(f.e.id)) await aplicar(f, acts, resEf); }
+      await recargar(); await cargar();
+      setMsg("Cambios guardados. Planillas y Boletín ya se actualizaron.");
     } catch (e) { setError("No se pudo guardar: " + (e.message || e)); }
-    setOcupado(null);
-  };
-  const guardarObs = async (f) => {
-    setOcupado(f.e.id);
-    try { await aplicar(f, acts, res); await cargar(); } catch (e) { setError("No se pudo guardar: " + (e.message || e)); }
-    setOcupado(null);
+    setGuardandoTodo(false);
   };
 
-  const totalDe = (f) => (acts.some((a) => res[`${a.id}:${f.e.id}`] !== undefined) ? totalPonderado(acts, res, f.e.id) : null);
+  const totalDe = (f) => (acts.length && (acts.some((a) => resEf[`${a.id}:${f.e.id}`] !== undefined) || f.reg?.entregado) ? totalPromedio(acts, resEf, f.e.id) : null);
   const cumple = (f) => { const t = totalDe(f); return t !== null && t >= Number(plan.porcentaje_minimo); };
   const resumen = useMemo(() => ({ t: lista.length, ent: lista.filter((f) => totalDe(f) !== null).length, ok: lista.filter(cumple).length }), [lista, acts, res, plan.porcentaje_minimo]);
-  const asistio = (s, f) => asis[`${s.id}:${f.e.id}`];
-  const rotulo = (a) => `${a.nombre || "Actividad"} (${Number(a.peso) || 0}%)`;
+  const asistio = (s, f) => asisEf[`${s.id}:${f.e.id}`];
+  const rotulo = (a) => a.nombre || "Actividad";
   const titulo = acts.length ? acts.map(rotulo).join(" + ") : "(sin actividades — agrégalas arriba)";
 
   const cabecera = ["#", "Apellidos", "Nombres", "Nota", ...sesiones.map((s) => fmtFecha(s.fecha)), ...acts.map(rotulo), "Total %", "Nota final", "Observación"];
   const filaDatos = (f, i) => [i + 1, f.ap, f.nom, f.original ?? "",
     ...sesiones.map((s) => (asistio(s, f) === undefined ? "" : asistio(s, f) ? "✔" : "✘")),
-    ...acts.map((a) => res[`${a.id}:${f.e.id}`] ?? ""), totalDe(f) ?? "", cumple(f) ? plan.nota_aprobada : (f.original ?? ""), f.reg?.observacion ?? ""];
+    ...acts.map((a) => (resEf[`${a.id}:${f.e.id}`] ? "Sí" : "")), totalDe(f) ?? "", cumple(f) ? plan.nota_aprobada : (f.original ?? ""), f.reg?.observacion ?? ""];
   const descargarCSV = () => {
     const csv = "﻿" + [cabecera, ...lista.map(filaDatos)].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -200,10 +202,10 @@ function SeguimientoNivelacion({ materiaId, gradoId, periodo, materia, nombreCur
     if (!w) { setError("El navegador bloqueó la ventana de impresión. Permite las ventanas emergentes."); return; }
     const vacias = Math.max(0, 4 - sesiones.length);
     const th = sesiones.map((s) => `<th class="v">${esc(fmtFecha(s.fecha))}${s.tema ? `<br><small>${esc(s.tema)}</small>` : ""}</th>`).join("") + Array.from({ length: vacias }, () => `<th class="v">&nbsp;</th>`).join("");
-    const tha = acts.map((a) => `<th class="v">${esc(a.nombre || "Actividad")}<br><small>${esc(Number(a.peso) || 0)}%</small></th>`).join("");
+    const tha = acts.map((a) => `<th class="v">${esc(a.nombre || "Actividad")}</th>`).join("");
     const cuerpo = lista.map((f, i) => `<tr><td class="c">${i + 1}</td><td>${esc(f.ap)}</td><td>${esc(f.nom)}</td><td class="c">${esc(f.original ?? "")}</td>` +
       sesiones.map((s) => `<td class="c">${asistio(s, f) === undefined ? "" : asistio(s, f) ? "✔" : "✘"}</td>`).join("") + Array.from({ length: vacias }, () => `<td></td>`).join("") +
-      acts.map((a) => `<td class="c">${esc(res[`${a.id}:${f.e.id}`] ?? "")}</td>`).join("") +
+      acts.map((a) => `<td class="c">${resEf[`${a.id}:${f.e.id}`] ? "X" : ""}</td>`).join("") +
       `<td class="c">${esc(totalDe(f) ?? "")}</td><td class="c">${esc(cumple(f) ? plan.nota_aprobada : "")}</td></tr>`).join("");
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Nivelación ${esc(nombreCurso)}</title>
 <style>@page{size:landscape;margin:12mm}body{font-family:Arial,sans-serif;color:#111}h2{margin:0 0 2px}p{margin:2px 0;font-size:12px;color:#333}
@@ -226,16 +228,13 @@ table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}th,td{bo
           {editAct.map((a, i) => (
             <div key={a.id || `n${i}`} className="flex items-center gap-2">
               <input value={a.nombre} placeholder="Ej.: Guía de trabajo" onChange={(e) => setEditAct((p) => p.map((x, j) => (j === i ? { ...x, nombre: e.target.value } : x)))} className={`${inp} flex-1 min-w-0`} />
-              <input value={a.peso} inputMode="decimal" onChange={(e) => setEditAct((p) => p.map((x, j) => (j === i ? { ...x, peso: String(e.target.value).replace(",", ".") } : x)))} className={`${inp} w-16 text-center`} />
-              <span className="text-xs text-slate-500">%</span>
-              <button onClick={() => setEditAct((p) => p.filter((_, j) => j !== i))} className="text-rose-500 font-bold px-1" title="Quitar">×</button>
+                            <button onClick={() => setEditAct((p) => p.filter((_, j) => j !== i))} className="text-rose-500 font-bold px-1" title="Quitar">×</button>
             </div>
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-2 mt-2">
-          <button onClick={() => setEditAct((p) => [...p, { nombre: "", peso: p.length ? 0 : 100 }])} className="text-xs font-bold px-3 py-1.5 rounded-full bg-slate-100 text-slate-700">＋ Agregar actividad</button>
+          <button onClick={() => setEditAct((p) => [...p, { nombre: "" }])} className="text-xs font-bold px-3 py-1.5 rounded-full bg-slate-100 text-slate-700">＋ Agregar actividad</button>
           <button onClick={guardarActs} className="text-xs font-bold px-3 py-1.5 rounded-full text-white" style={{ background: "#2F55A4" }}>💾 Guardar actividades</button>
-          <span className={`text-[11px] font-bold ${Math.round(pesoEdit) === 100 ? "text-emerald-600" : "text-amber-600"}`}>Suman {pesoEdit}%{Math.round(pesoEdit) === 100 ? " ✓" : " (deben sumar 100)"}</span>
           <button onClick={() => setCopiando((v) => !v)} className="text-xs font-bold px-3 py-1.5 rounded-full bg-slate-100 text-slate-700">📋 Copiar a otros cursos</button>
           <button onClick={aplicarOtrasMaterias} className="text-xs font-bold px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">🔁 Aplicar a mis otras materias</button>
         </div>
@@ -260,7 +259,7 @@ table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}th,td{bo
             <textarea value={plan.instrucciones} onChange={(e) => setPlan({ ...plan, instrucciones: e.target.value })} rows={2} className={`${inp} block w-full mt-0.5`} /></label>
           <label className="text-[11px] font-bold text-slate-500">Fecha límite
             <input type="date" value={plan.fecha_limite} onChange={(e) => setPlan({ ...plan, fecha_limite: e.target.value })} className={`${inp} block mt-0.5`} /></label>
-          <label className="text-[11px] font-bold text-slate-500">% total para aprobar
+          <label className="text-[11px] font-bold text-slate-500">% de partes entregadas para aprobar
             <input value={plan.porcentaje_minimo} inputMode="decimal" onChange={(e) => setPlan({ ...plan, porcentaje_minimo: e.target.value })} className={`${inp} block w-24 text-center mt-0.5`} /></label>
           <label className="text-[11px] font-bold text-slate-500">Nota si aprueba
             <input value={plan.nota_aprobada} inputMode="decimal" onChange={(e) => setPlan({ ...plan, nota_aprobada: String(e.target.value).replace(",", ".") })} className={`${inp} block w-24 text-center mt-0.5`} /></label>
@@ -269,7 +268,7 @@ table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}th,td{bo
           <button onClick={guardarPlan} className="text-xs font-bold px-3 py-1.5 rounded-full text-white" style={{ background: "#2F55A4" }}>💾 Guardar regla</button>
           <span className="text-[11px] text-slate-500 ml-auto">Con resultados <b>{resumen.ent}</b>/{resumen.t} · Aprueban <b>{resumen.ok}</b></span>
         </div>
-        <p className="text-[11px] text-slate-500 mt-1">En la tabla escribes el <b>% logrado (0–100)</b> en cada actividad. El total es el promedio ponderado por los pesos. Si el total llega al mínimo, la nota del periodo pasa a <b>{plan.nota_aprobada}</b> en Planillas y Boletín (la original se conserva); si deja de llegar, vuelve la original. Cada actividad puede ser distinta por curso y periodo.</p>
+        <p className="text-[11px] text-slate-500 mt-1">En la tabla marcas qué <b>partes entregó</b> cada estudiante. El total es el promedio: partes entregadas ÷ partes totales (ej.: 2 de 3 = 66,7 %). Si llega al mínimo, la nota del periodo pasa a <b>{plan.nota_aprobada}</b> en Planillas y Boletín (la original se conserva); si no, queda la original. Nada se guarda hasta que pulses <b>💾 Guardar cambios</b>.</p>
       </div>
 
       <div className="flex flex-wrap items-end gap-2 mb-2">
@@ -291,6 +290,11 @@ table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}th,td{bo
         </div>
       </div>
 
+      <div className="flex items-center gap-2 mb-2 sticky top-0 z-10 bg-white/90 py-1">
+        <button onClick={guardarTodo} disabled={!nPend || guardandoTodo} className="text-sm font-bold px-4 py-2 rounded-full text-white disabled:opacity-40" style={{ background: "#16A34A" }}>{guardandoTodo ? "Guardando…" : `💾 Guardar cambios${nPend ? ` (${nPend})` : ""}`}</button>
+        {nPend > 0 && <span className="text-[11px] font-bold text-amber-600">Tienes cambios sin guardar</span>}
+        {nPend > 0 && !guardandoTodo && <button onClick={() => { setPendRes({}); setPendAsis({}); setPendObs({}); }} className="text-[11px] text-slate-500 underline">Descartar</button>}
+      </div>
       {lista.length === 0 ? (
         <div className="text-sm text-slate-500 bg-slate-50 rounded-xl p-5 text-center">No hay estudiantes con asignatura perdida en este periodo.</div>
       ) : (
@@ -310,9 +314,9 @@ table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}th,td{bo
                   </th>
                 ))}
                 {acts.map((a, k) => (
-                  <th key={a.id} className={`px-2 py-1.5 ${k === 0 ? "border-l border-slate-300" : ""}`}>{a.nombre || "Actividad"}<div className="text-[10px] font-normal text-slate-500">{Number(a.peso) || 0}% · 0–100</div></th>
+                  <th key={a.id} className={`px-2 py-1.5 ${k === 0 ? "border-l border-slate-300" : ""}`}>{a.nombre || "Actividad"}<div className="text-[10px] font-normal text-slate-500">¿entregó?</div></th>
                 ))}
-                <th className="px-2 py-1.5">Total %</th><th className="px-2 py-1.5">Nota final</th><th className="px-2 py-1.5 text-left">Observación</th>
+                <th className="px-2 py-1.5">Promedio</th><th className="px-2 py-1.5">Nota final</th><th className="px-2 py-1.5 text-left">Observación</th>
               </tr>
             </thead>
             <tbody>
@@ -326,26 +330,21 @@ table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}th,td{bo
                     <td className="text-center px-2 py-1.5 font-bold text-rose-600">{f.original ?? "—"}</td>
                     {sesiones.map((s) => (
                       <td key={s.id} className="text-center px-1 py-1.5">
-                        <input type="checkbox" checked={asistio(s, f) === true} onChange={(e) => marcar(s, f.e.id, e.target.checked)} />
+                        <input type="checkbox" checked={asistio(s, f) === true} onChange={(e) => marcarAsis(s.id, f.e.id, e.target.checked)} />
                       </td>
                     ))}
                     {acts.map((a) => {
                       const k = `${a.id}:${f.e.id}`;
                       return (
                         <td key={a.id} className="text-center px-2 py-1.5">
-                          <input value={draft[k] ?? (res[k] ?? "")} inputMode="decimal" disabled={ocupado === f.e.id} placeholder="—"
-                            onChange={(e) => setDraft((p) => ({ ...p, [k]: e.target.value }))}
-                            onBlur={() => { if (draft[k] !== undefined) guardarCelda(f, a); }} onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-                            className={`${inp} w-16 text-center`} />
+                          <input type="checkbox" checked={resEf[k] > 0} onChange={(e) => marcarParte(a.id, f.e.id, e.target.checked)} />
                         </td>
                       );
                     })}
-                    <td className="text-center px-2 py-1.5 font-bold text-slate-700">{t === null ? "—" : `${t}%`}</td>
+                    <td className="text-center px-2 py-1.5 font-bold text-slate-700">{t === null ? "—" : `${partesEntregadas(acts, resEf, f.e.id)}/${acts.length} · ${t}%`}</td>
                     <td className={`text-center px-2 py-1.5 font-bold ${ok ? "text-emerald-600" : "text-slate-500"}`}>{ok ? plan.nota_aprobada : (f.original ?? "—")}{ok && " ✓"}</td>
                     <td className="px-2 py-1.5">
-                      <input value={draft[f.e.id]?.obs ?? (f.reg?.observacion ?? "")} disabled={ocupado === f.e.id}
-                        onChange={(e) => setDraft((p) => ({ ...p, [f.e.id]: { ...p[f.e.id], obs: e.target.value } }))}
-                        onBlur={() => { if (draft[f.e.id]?.obs !== undefined) guardarObs(f); }} className={`${inp} w-full min-w-[120px]`} />
+                      <input value={pendObs[f.e.id] ?? (f.reg?.observacion ?? "")} onChange={(e) => setPendObs((p) => ({ ...p, [f.e.id]: e.target.value }))} className={`${inp} w-full min-w-[120px]`} />
                     </td>
                   </tr>
                 );
@@ -386,24 +385,23 @@ function MatrizTransversal({ gradoId, periodo, nombreCurso, inst, institucion, d
       .sort((a, b) => b.perdidas.length - a.perdidas.length || a.ap.localeCompare(b.ap, "es", { sensitivity: "base" }));
   }, [m, soloVarias]);
 
+  // La guía común se marca como entregada (100 %): cada materia aplica su propia regla.
   const aplicar = async (f) => {
-    const txt = String(guia[f.e.id] ?? "").trim().replace(",", ".");
-    const pct = parseFloat(txt);
-    if (txt === "" || Number.isNaN(pct) || pct < 0 || pct > 100) { setError("Escribe el % de la guía (0 a 100)."); return; }
-    if (!confirm(`Aplicar ${pct}% a ${f.nom} ${f.ap} en: ${f.perdidas.map((x) => x.nombre).join(", ")}.\n(La nota pasa a la de aprobación solo si ${pct}% llega al mínimo de cada materia.)`)) return;
+    if (!guia[f.e.id]) { setError("Marca primero «Entregó la guía»."); return; }
+    if (!confirm(`Registrar la guía como entregada por ${f.nom} ${f.ap} en: ${f.perdidas.map((x) => x.nombre).join(", ")}.`)) return;
     setError(""); setOcupado(f.e.id);
     try {
-      const n = await api.aplicarGuiaTransversal(periodo, [{ estudianteId: f.e.id, porcentaje: pct, materiaIds: f.perdidas.map((x) => x.id) }], m);
+      const n = await api.aplicarGuiaTransversal(periodo, [{ estudianteId: f.e.id, porcentaje: 100, materiaIds: f.perdidas.map((x) => x.id) }], m);
       setMsg(`Aplicado en ${n} materia(s). Planillas y Boletín ya se actualizaron.`);
+      setGuia((p) => ({ ...p, [f.e.id]: false }));
       await cargar();
     } catch (e) { setError("No se pudo aplicar: " + (e.message || e)); }
     setOcupado(null);
   };
   const aplicarTodos = async () => {
-    const items = filas.filter((f) => String(guia[f.e.id] ?? "").trim() !== "").map((f) => ({ estudianteId: f.e.id, porcentaje: parseFloat(String(guia[f.e.id]).replace(",", ".")), materiaIds: f.perdidas.map((x) => x.id) }))
-      .filter((i) => !Number.isNaN(i.porcentaje) && i.porcentaje >= 0 && i.porcentaje <= 100);
-    if (!items.length) { setError("Escribe el % de la guía en al menos una fila."); return; }
-    if (!confirm(`Se aplicará el % escrito a ${items.length} estudiante(s) en todas las materias que perdió cada uno. ¿Continuar?`)) return;
+    const items = filas.filter((f) => guia[f.e.id]).map((f) => ({ estudianteId: f.e.id, porcentaje: 100, materiaIds: f.perdidas.map((x) => x.id) }));
+    if (!items.length) { setError("Marca «Entregó la guía» en al menos una fila."); return; }
+    if (!confirm(`Se registrará la guía como entregada por ${items.length} estudiante(s) en todas las materias que perdió cada uno. ¿Continuar?`)) return;
     setError(""); setOcupado("todos");
     try { const n = await api.aplicarGuiaTransversal(periodo, items, m); setMsg(`Aplicado en ${n} registro(s) de materia.`); setGuia({}); await cargar(); }
     catch (e) { setError("No se pudo aplicar: " + (e.message || e)); }
@@ -430,7 +428,7 @@ function MatrizTransversal({ gradoId, periodo, nombreCurso, inst, institucion, d
 table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}th,td{border:1px solid #333;padding:5px 6px}th{background:#e8eef8}.c{text-align:center}td{height:24px}</style></head><body>
 <div style="display:flex;align-items:center;gap:12px;border-bottom:2px solid #333;padding-bottom:6px">${inst?.logo_url ? `<img src="${esc(inst.logo_url)}" style="height:54px">` : ""}<div style="flex:1;text-align:center"><h2 style="font-size:17px;text-transform:uppercase">${esc(institucion)}</h2><div style="font-weight:bold;font-size:13px">Estudiantes con asignaturas perdidas - nivelación transversal</div></div></div>
 <p>Curso ${esc(nombreCurso)} · Periodo ${esc(periodo)} · Docente: ${esc(docente)} · En rojo: asignatura perdida</p>
-<table><thead><tr><th>#</th><th>Apellidos</th><th>Nombres</th>${th}<th>Perdidas</th><th>Guía común (%)</th></tr></thead><tbody>${cuerpo}</tbody></table>
+<table><thead><tr><th>#</th><th>Apellidos</th><th>Nombres</th>${th}<th>Perdidas</th><th>Guía común</th></tr></thead><tbody>${cuerpo}</tbody></table>
 <script>window.onload=()=>window.print()</script></body></html>`);
     w.document.close();
   };
@@ -444,13 +442,13 @@ table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}th,td{bo
         <label className="text-xs text-slate-600 flex items-center gap-1"><input type="checkbox" checked={soloVarias} onChange={(e) => setSoloVarias(e.target.checked)} />Solo los que perdieron 2 o más materias</label>
         <span className="text-[11px] text-slate-500">{filas.length} estudiante(s) · {m.materias.length} materia(s) tuyas con notas</span>
         <div className="flex gap-1.5 ml-auto">
-          <button onClick={aplicarTodos} disabled={ocupado === "todos"} className="text-xs font-bold px-3 py-2 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">🔁 Aplicar todos los % escritos</button>
+          <button onClick={aplicarTodos} disabled={ocupado === "todos"} className="text-xs font-bold px-3 py-2 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">🔁 Aplicar a todos los marcados</button>
           <button onClick={imprimir} disabled={!filas.length} className="text-xs font-bold px-3 py-2 rounded-full text-white disabled:opacity-40" style={{ background: "#2F55A4" }}>🖨️ Imprimir / guardar PDF</button>
           <button onClick={descargarCSV} disabled={!filas.length} className="text-xs font-bold px-3 py-2 rounded-full bg-slate-100 text-slate-700 disabled:opacity-40">⬇ CSV</button>
         </div>
       </div>
       {msg && <div className="text-xs text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2 mb-2">{msg}</div>}
-      <p className="text-[11px] text-slate-500 mb-2">Cada fila es un estudiante y cada columna una de tus materias. En rojo: la perdió. Si una misma guía sirve para varias, escribe su <b>% de guía</b> y pulsa «Aplicar»: se registra en todas las materias que perdió, con la regla de cada una (% mínimo y nota de la hoja de nivelación de esa materia).</p>
+      <p className="text-[11px] text-slate-500 mb-2">Cada fila es un estudiante y cada columna una de tus materias. En rojo: la perdió. Si una misma guía sirve para varias, marca <b>Entregó</b> y pulsa «Aplicar»: se registra como entregada en todas las materias que perdió, con la regla de cada una (% mínimo y nota de su hoja de nivelación).</p>
       {filas.length === 0 ? (
         <div className="text-sm text-slate-500 bg-slate-50 rounded-xl p-5 text-center">Nadie con asignaturas perdidas en el periodo {periodo} de este curso.</div>
       ) : (
@@ -460,7 +458,7 @@ table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}th,td{bo
               <tr className="bg-[#E8EEF8] text-slate-700 text-xs">
                 <th className="px-2 py-1.5 w-8">#</th><th className="px-2 py-1.5 text-left">Apellidos</th><th className="px-2 py-1.5 text-left">Nombres</th>
                 {m.materias.map((x) => <th key={x.id} className="px-2 py-1.5">{x.nombre}<div className="text-[10px] font-normal text-slate-500">mín. {x.minima}</div></th>)}
-                <th className="px-2 py-1.5">Perdidas</th><th className="px-2 py-1.5">Guía común (%)</th>
+                <th className="px-2 py-1.5">Perdidas</th><th className="px-2 py-1.5">Guía común</th>
               </tr>
             </thead>
             <tbody>
@@ -476,7 +474,7 @@ table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}th,td{bo
                   })}
                   <td className="text-center px-2 py-1.5 font-bold">{f.perdidas.length}</td>
                   <td className="text-center px-2 py-1.5 whitespace-nowrap">
-                    <input value={guia[f.e.id] ?? ""} inputMode="decimal" placeholder="%" onChange={(e) => setGuia((p) => ({ ...p, [f.e.id]: e.target.value }))} className={`${inp} w-16 text-center`} />
+                    <label className="text-[11px] text-slate-600 inline-flex items-center gap-1"><input type="checkbox" checked={!!guia[f.e.id]} onChange={(e) => setGuia((p) => ({ ...p, [f.e.id]: e.target.checked }))} />Entregó</label>
                     <button onClick={() => aplicar(f)} disabled={ocupado === f.e.id} className="ml-1 text-[11px] font-bold px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">Aplicar</button>
                   </td>
                 </tr>
