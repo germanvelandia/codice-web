@@ -5358,6 +5358,53 @@ export async function aplicarNivelacionEnOtrasMaterias(materiaOrigen, gradoId, p
   return informe;
 }
 
+/* ---- Tabla transversal de nivelaciones (tus materias, un curso, un periodo) ---- */
+// Devuelve, por estudiante, su nota del periodo en cada una de TUS materias y si la perdió.
+export async function fetchMatrizNivelacion(gradoId, periodo) {
+  const [materiasAll, ests] = await Promise.all([fetchMisMaterias(), fetchEstudiantesPorGrado(gradoId)]);
+  const materias = []; const celdas = {}; const planes = {};
+  for (const m of materiasAll) {
+    const [config, finales, niv, cats, plan] = await Promise.all([
+      fetchNotasConfig(m.id), fetchNotasFinales(m.id), fetchNivelacion(m.id), fetchCategorias(m.id), fetchPlanNivelacion(m.id, gradoId, periodo).catch(() => null),
+    ]);
+    const minima = Number(config?.nota_minima ?? 3);
+    const guardada = new Map(finales.filter((f) => String(f.periodo) === String(periodo)).map((f) => [f.estudiante_id, f.nota]));
+    const nivDe = new Map(niv.filter((n) => String(n.periodo) === String(periodo)).map((n) => [n.estudiante_id, n]));
+    const sinGuardar = ests.filter((e) => !guardada.has(e.id));
+    let vivas = {};
+    if (sinGuardar.length) { try { vivas = await calcularNotasFinalesPeriodo(m.id, gradoId, periodo, sinGuardar, cats, config); } catch (_) { vivas = {}; } }
+    let hayDatos = false;
+    for (const e of ests) {
+      const reg = nivDe.get(e.id);
+      const actual = guardada.has(e.id) ? guardada.get(e.id) : (vivas[e.id] ?? null);
+      const original = reg?.nota_original ?? actual;
+      if (original === null || original === undefined) continue;
+      hayDatos = true;
+      celdas[e.id] = celdas[e.id] || {};
+      celdas[e.id][m.id] = { original: Math.round(Number(original) * 100) / 100, actual: actual === null ? null : Math.round(Number(actual) * 100) / 100, perdio: Number(original) < minima || !!(reg && reg.estado), reg: reg || null };
+    }
+    if (hayDatos) { materias.push({ id: m.id, nombre: m.nombre, minima }); planes[m.id] = plan || { porcentaje_minimo: 60, nota_aprobada: 3.5 }; }
+  }
+  return { estudiantes: ests, materias, celdas, planes };
+}
+
+// Aplica UN mismo resultado (% de una guía) a varias materias que el estudiante perdió.
+export async function aplicarGuiaTransversal(periodo, items, matriz) {
+  let n = 0;
+  for (const it of items) {
+    for (const matId of it.materiaIds) {
+      const c = matriz.celdas[it.estudianteId]?.[matId];
+      if (!c) continue;
+      await guardarSeguimientoNivelacion(matId, it.estudianteId, periodo, {
+        entregado: true, fechaEntrega: c.reg?.fecha_entrega || new Date().toISOString().slice(0, 10), porcentaje: it.porcentaje,
+        observacion: c.reg?.observacion || "Guía común a varias materias", notaOriginal: c.original, estadoPrevio: c.reg?.estado || "", plan: matriz.planes[matId],
+      });
+      n++;
+    }
+  }
+  return n;
+}
+
 /* ---------------- Bono de participación ---------------- */
 export async function fetchBono(materiaId, periodo) {
   const { data, error } = await supabase.from("bonos_participacion").select("*").eq("materia_id", materiaId).eq("periodo", String(periodo)).maybeSingle();
