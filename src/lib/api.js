@@ -5307,6 +5307,57 @@ export async function guardarResultadoNivelacion(actividadId, estudianteId, logr
   if (error) throw error;
 }
 
+/* ---- Copiar actividades a otros cursos / aplicar el resultado a otras materias ---- */
+// Copia actividades + regla (mínimo, nota, fecha, instrucciones) de un curso a otros, misma materia y periodo.
+// No copia resultados de estudiantes. Si el curso destino ya tiene actividades, solo las reemplaza con reemplazar=true.
+export async function copiarPlanNivelacion(materiaId, gradoOrigen, periodo, gradosDestino, { plan, actividades, reemplazar = false }) {
+  const informe = [];
+  for (const g of gradosDestino) {
+    if (String(g) === String(gradoOrigen)) continue;
+    const { actividades: previas } = await fetchActividadesNivelacion(materiaId, g, periodo);
+    if (previas.length && !reemplazar) { informe.push({ grado: g, estado: "omitido" }); continue; }
+    await guardarPlanNivelacion(materiaId, g, periodo, plan);
+    await guardarActividadesNivelacion(materiaId, g, periodo, actividades.map((a) => ({ nombre: a.nombre, peso: a.peso })), previas.map((a) => a.id));
+    informe.push({ grado: g, estado: "copiado" });
+  }
+  return informe;
+}
+
+// Aplica el resultado de una nivelación (entregado + % total) a las demás materias del docente en las que
+// el mismo estudiante también perdió el periodo. Usa la misma regla (mínimo % y nota) y la nota original de cada materia.
+// soloVista=true no escribe: devuelve cuántos estudiantes se afectarían por materia.
+export async function aplicarNivelacionEnOtrasMaterias(materiaOrigen, gradoId, periodo, items, plan, { soloVista = false } = {}) {
+  const materias = (await fetchMisMaterias()).filter((m) => String(m.id) !== String(materiaOrigen));
+  const ests = await fetchEstudiantesPorGrado(gradoId);
+  const porId = new Map(ests.map((e) => [e.id, e]));
+  const informe = [];
+  for (const m of materias) {
+    const [config, finales, niv, cats] = await Promise.all([fetchNotasConfig(m.id), fetchNotasFinales(m.id), fetchNivelacion(m.id), fetchCategorias(m.id)]);
+    const minima = Number(config?.nota_minima ?? 3);
+    const guardada = new Map(finales.filter((f) => String(f.periodo) === String(periodo)).map((f) => [f.estudiante_id, f.nota]));
+    const nivDe = new Map(niv.filter((n) => String(n.periodo) === String(periodo)).map((n) => [n.estudiante_id, n]));
+    const sinGuardar = items.map((i) => porId.get(i.estudianteId)).filter((e) => e && !guardada.has(e.id));
+    let vivas = {};
+    if (sinGuardar.length) { try { vivas = await calcularNotasFinalesPeriodo(m.id, gradoId, periodo, sinGuardar, cats, config); } catch (_) { vivas = {}; } }
+    let n = 0;
+    for (const it of items) {
+      const reg = nivDe.get(it.estudianteId);
+      const actual = guardada.has(it.estudianteId) ? guardada.get(it.estudianteId) : (vivas[it.estudianteId] ?? null);
+      const original = reg?.nota_original ?? actual;
+      if (original === null || original === undefined || Number(original) >= minima) continue; // no perdió esta materia
+      n++;
+      if (soloVista) continue;
+      await guardarSeguimientoNivelacion(m.id, it.estudianteId, periodo, {
+        entregado: it.entregado, fechaEntrega: it.fechaEntrega, porcentaje: it.porcentaje,
+        observacion: reg?.observacion || "Resultado aplicado desde otra materia", notaOriginal: Number(original),
+        estadoPrevio: reg?.estado || "", plan,
+      });
+    }
+    informe.push({ materia: m.nombre, estudiantes: n });
+  }
+  return informe;
+}
+
 /* ---------------- Bono de participación ---------------- */
 export async function fetchBono(materiaId, periodo) {
   const { data, error } = await supabase.from("bonos_participacion").select("*").eq("materia_id", materiaId).eq("periodo", String(periodo)).maybeSingle();
