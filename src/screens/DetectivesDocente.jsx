@@ -7,10 +7,64 @@ import * as api from "../lib/detectivesApi";
 const inp = "w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm";
 const btn = "rounded-lg px-3 py-1.5 text-sm font-bold";
 
+const PARADA_VACIA = { lugar: "", emoji: "📍", testigo: "", escena: "", pregunta: "", opciones: "", correcta: "", retro: "", pista: "", rasgo: "", destinos: "", destino_ok: "" };
+
+function FormParada({ casoId, onListo, onCancelar }) {
+  const [f, setF] = useState(PARADA_VACIA);
+  const [rasgoCulp, setRasgoCulp] = useState(true);
+  const [err, setErr] = useState(""); const [bus, setBus] = useState(false);
+  const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
+  const lineas = (t) => String(t || "").split("\n").map((x) => x.trim()).filter(Boolean);
+  const opciones = lineas(f.opciones), destinos = lineas(f.destinos);
+  const guardar = async () => {
+    setErr("");
+    if (!f.lugar.trim()) return setErr("Escribe el lugar.");
+    if (f.pregunta.trim().length < 3) return setErr("Escribe la pregunta.");
+    if (opciones.length < 2 || opciones.length > 5) return setErr("Escribe de 2 a 5 opciones, una por línea.");
+    if (!opciones.includes(f.correcta.trim())) return setErr("Elige cuál opción es la correcta.");
+    if (destinos.length < 2 || destinos.length > 6) return setErr("Escribe de 2 a 6 destinos, uno por línea.");
+    if (!destinos.includes(f.destino_ok.trim())) return setErr("Elige cuál destino es el correcto.");
+    setBus(true);
+    try {
+      await api.agregarParada(casoId, {
+        lugar: f.lugar.trim().slice(0, 80), emoji: (f.emoji || "📍").trim().slice(0, 8), testigo: (f.testigo.trim() || "Un testigo").slice(0, 80), escena: f.escena.trim().slice(0, 700),
+        pregunta: f.pregunta.trim().slice(0, 500), opciones: opciones.map((o) => o.slice(0, 200)), correcta: f.correcta.trim().slice(0, 200), retro: f.retro.trim().slice(0, 400),
+        pista: f.pista.trim().slice(0, 600), rasgo: f.rasgo.trim().slice(0, 120), destinos: destinos.map((o) => o.slice(0, 80)), destino_ok: f.destino_ok.trim().slice(0, 80),
+      }, { rasgoAlCulpable: rasgoCulp });
+      onListo();
+    } catch (e) { setErr(e.message); } finally { setBus(false); }
+  };
+  return (
+    <div className="rounded-xl border-2 border-indigo-300 bg-indigo-50 p-3 space-y-2">
+      <div className="font-extrabold text-indigo-900">＋ Nueva parada</div>
+      {err && <div role="alert" className="rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-sm p-2">{err}</div>}
+      <div className="grid gap-2 sm:grid-cols-2">
+        <label className="text-xs font-bold">Lugar<input className={inp} maxLength={80} value={f.lugar} onChange={set("lugar")} placeholder="Ej.: Taberna del Roble" /></label>
+        <label className="text-xs font-bold">Emoji<input className={inp} maxLength={8} value={f.emoji} onChange={set("emoji")} /></label>
+        <label className="text-xs font-bold">Testigo<input className={inp} maxLength={80} value={f.testigo} onChange={set("testigo")} placeholder="Ej.: Marta, la tabernera" /></label>
+        <label className="text-xs font-bold sm:col-span-2">Escena<textarea className={inp} rows={2} maxLength={700} value={f.escena} onChange={set("escena")} /></label>
+        <label className="text-xs font-bold sm:col-span-2">Pregunta sobre el tema<textarea className={inp} rows={2} maxLength={500} value={f.pregunta} onChange={set("pregunta")} /></label>
+        <label className="text-xs font-bold">Opciones (una por línea, 2 a 5)<textarea className={inp} rows={4} value={f.opciones} onChange={set("opciones")} /></label>
+        <label className="text-xs font-bold">Opción correcta
+          <select className={inp} value={f.correcta} onChange={set("correcta")}><option value="">— elige —</option>{opciones.map((o, i) => <option key={i} value={o}>{o.slice(0, 60)}</option>)}</select></label>
+        <label className="text-xs font-bold sm:col-span-2">Retroalimentación (por qué es correcta)<textarea className={inp} rows={2} maxLength={400} value={f.retro} onChange={set("retro")} /></label>
+        <label className="text-xs font-bold sm:col-span-2">Pista del testigo (apunta al siguiente destino)<textarea className={inp} rows={2} maxLength={600} value={f.pista} onChange={set("pista")} /></label>
+        <label className="text-xs font-bold">Destinos posibles (uno por línea, 2 a 6)<textarea className={inp} rows={4} value={f.destinos} onChange={set("destinos")} /></label>
+        <label className="text-xs font-bold">Destino correcto
+          <select className={inp} value={f.destino_ok} onChange={set("destino_ok")}><option value="">— elige —</option>{destinos.map((o, i) => <option key={i} value={o}>{o}</option>)}</select></label>
+        <label className="text-xs font-bold sm:col-span-2">Rasgo visual del culpable que se descubre aquí (opcional)<input className={inp} maxLength={120} value={f.rasgo} onChange={set("rasgo")} placeholder="Ej.: Lleva una bufanda roja" /></label>
+        <label className="text-xs sm:col-span-2 flex items-center gap-2"><input type="checkbox" checked={rasgoCulp} onChange={(e) => setRasgoCulp(e.target.checked)} /> Añadir también este rasgo al sospechoso culpable (recomendado, para que el caso siga teniendo solución)</label>
+      </div>
+      <div className="flex gap-2"><button disabled={bus} onClick={guardar} className={`${btn} bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50`}>💾 Agregar parada</button><button onClick={onCancelar} className={`${btn} bg-white border border-slate-300`}>Cancelar</button></div>
+    </div>
+  );
+}
+
 function Editor({ id, volver }) {
   const [c, setC] = useState(null);
   const [msg, setMsg] = useState(""); const [err, setErr] = useState("");
   const [res, setRes] = useState(null);
+  const [nuevaParada, setNuevaParada] = useState(false);
   const cargar = useCallback(async () => { try { setC(await api.casoCompleto(id)); } catch (e) { setErr(e.message); } }, [id]);
   useEffect(() => { cargar(); }, [cargar]);
   const ok = (t) => { setMsg(t); setErr(""); setTimeout(() => setMsg(""), 2500); };
@@ -45,6 +99,9 @@ function Editor({ id, volver }) {
         <label className="text-xs font-bold">Horas (vidas) 2–10<input type="number" min={2} max={10} className={inp} defaultValue={c.vidas} onBlur={(e) => { const v = Math.max(2, Math.min(10, Math.floor(Number(e.target.value)) || 5)); if (v !== c.vidas) guardarCaso({ vidas: v }); }} /></label>
         <label className="text-xs font-bold">XP de premio 0–100<input type="number" min={0} max={100} className={inp} defaultValue={c.xp} onBlur={(e) => { const v = Math.max(0, Math.min(100, Math.floor(Number(e.target.value)) || 0)); if (v !== c.xp) guardarCaso({ xp: v }); }} /></label>
         <label className="text-xs font-bold">Monedas de premio 0–50<input type="number" min={0} max={50} className={inp} defaultValue={c.oro} onBlur={(e) => { const v = Math.max(0, Math.min(50, Math.floor(Number(e.target.value)) || 0)); if (v !== c.oro) guardarCaso({ oro: v }); }} /></label>
+        <label className="text-xs font-bold sm:col-span-4">Dificultad del retrato hablado
+          <select className={inp} value={c.dificultad || "normal"} onChange={(e) => guardarCaso({ dificultad: e.target.value })}>{Object.entries(api.DIFICULTADES).map(([k, d]) => <option key={k} value={k}>{d.emoji} {d.label}</option>)}</select>
+          <span className="block font-normal text-slate-500 mt-0.5">{(api.DIFICULTADES[c.dificultad || "normal"] || api.DIFICULTADES.normal).descr}</span></label>
       </div>
       <p className="text-xs text-slate-500">El premio completo se entrega si resuelve con todas las horas; con menos horas recibe una parte (mínimo la mitad). Se cobra una sola vez por estudiante.</p>
 
@@ -52,6 +109,7 @@ function Editor({ id, volver }) {
       {c.paradas.map((p) => (
         <details key={p.id} className="rounded-xl border border-slate-200 bg-white p-3">
           <summary className="cursor-pointer font-bold">{p.orden}. {p.emoji} {p.lugar}</summary>
+          <div className="flex justify-end mt-2"><button onClick={async () => { if (c.publicado) { setErr("Retira el caso del curso (Borrador) antes de quitar una parada."); return; } if (!window.confirm(`¿Quitar la parada «${p.lugar}»? Las siguientes se renumeran.`)) return; try { await api.borrarParada(id, p.id); cargar(); ok("Parada quitada ✔"); } catch (e) { setErr(e.message); } }} className="text-xs font-bold text-rose-600 hover:underline">🗑 Quitar esta parada</button></div>
           <div className="grid gap-2 mt-2 sm:grid-cols-2">
             <label className="text-xs font-bold">Lugar{campoP(p, "lugar", 80)}</label>
             <label className="text-xs font-bold">Testigo{campoP(p, "testigo", 80)}</label>
@@ -65,6 +123,10 @@ function Editor({ id, volver }) {
           </div>
         </details>
       ))}
+
+      {nuevaParada
+        ? <FormParada casoId={id} onCancelar={() => setNuevaParada(false)} onListo={() => { setNuevaParada(false); cargar(); ok("Parada agregada ✔"); }} />
+        : <button onClick={() => setNuevaParada(true)} className={`${btn} bg-indigo-600 text-white hover:bg-indigo-700`}>＋ Agregar parada ({c.paradas.length}/20)</button>}
 
       <h4 className="font-extrabold">Sospechosos</h4>
       <div className="grid gap-2 sm:grid-cols-2">
@@ -89,7 +151,7 @@ function Editor({ id, volver }) {
 function Crear({ grados, gradoActivo, materiaActiva, listo, cancelar }) {
   const [grado, setGrado] = useState(String(gradoActivo || grados[0]?.id || ""));
   const [amb, setAmb] = useState("oakhaven");
-  const [tema, setTema] = useState(""); const [n, setN] = useState(4);
+  const [tema, setTema] = useState(""); const [n, setN] = useState(4); const [dif, setDif] = useState("normal");
   const [texto, setTexto] = useState("");
   const [rev, setRev] = useState(null);
   const [err, setErr] = useState(""); const [copiado, setCopiado] = useState(false); const [bus, setBus] = useState(false);
@@ -100,7 +162,7 @@ function Crear({ grados, gradoActivo, materiaActiva, listo, cancelar }) {
   const guardar = async (caso) => {
     if (!grado) { setErr("Elige el curso."); return; }
     setBus(true); setErr("");
-    try { const c = await api.crearCaso(caso, { grado_id: grado, materia_id: materiaActiva || null }); listo(c.id); } catch (e) { setErr(e.message); } finally { setBus(false); }
+    try { const c = await api.crearCaso({ ...caso, dificultad: dif }, { grado_id: grado, materia_id: materiaActiva || null }); listo(c.id); } catch (e) { setErr(e.message); } finally { setBus(false); }
   };
   return (
     <div className="space-y-3">
@@ -110,7 +172,8 @@ function Crear({ grados, gradoActivo, materiaActiva, listo, cancelar }) {
         <label className="text-xs font-bold">Curso<select className={inp} value={grado} onChange={(e) => setGrado(e.target.value)}>{grados.map((x) => <option key={x.id} value={x.id}>{x.nombre || x.id}</option>)}</select></label>
         <label className="text-xs font-bold">Ambientación<select className={inp} value={amb} onChange={(e) => setAmb(e.target.value)}>{Object.entries(api.AMBIENTES).map(([k, a]) => <option key={k} value={k}>{a.emoji} {a.label}</option>)}</select></label>
         <label className="text-xs font-bold sm:col-span-2">Tema que deben aprender<input className={inp} value={tema} maxLength={200} placeholder="Ej.: valores éticos: honestidad, responsabilidad, empatía, respeto" onChange={(e) => setTema(e.target.value)} /></label>
-        <label className="text-xs font-bold">Número de paradas<select className={inp} value={n} onChange={(e) => setN(Number(e.target.value))}>{[3, 4, 5, 6].map((x) => <option key={x}>{x}</option>)}</select></label>
+        <label className="text-xs font-bold">Dificultad<select className={inp} value={dif} onChange={(e) => setDif(e.target.value)}>{Object.entries(api.DIFICULTADES).map(([k, d]) => <option key={k} value={k}>{d.emoji} {d.label}</option>)}</select></label>
+        <label className="text-xs font-bold">Número de paradas<select className={inp} value={n} onChange={(e) => setN(Number(e.target.value))}>{[3, 4, 5, 6, 7, 8, 9, 10].map((x) => <option key={x}>{x}</option>)}</select></label>
       </div>
 
       <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3 space-y-2">
