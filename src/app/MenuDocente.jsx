@@ -15,6 +15,7 @@ export const MENU_PANEL_GRUPOS = [
       { key: "calificaciones", label: "Planillas", icono: "📖" },
       { key: "imprimir", label: "Imprimir planillas e informes", icono: "🖨️" },
       { key: "evaluaciones", label: "Evaluaciones", icono: "📝" },
+      { key: "reflexiones", label: "Reflexiones del Códice", icono: "📜" },
       { key: "recuperaciones", label: "Recuperaciones", icono: "♻️" },
       { key: "proyectosforja", label: "La Forja", icono: "🔨" },
       { key: "coevaluacion", label: "Auto y coevaluación", icono: "🪞" },
