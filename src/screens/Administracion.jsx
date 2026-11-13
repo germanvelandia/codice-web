@@ -237,3 +237,47 @@ export function AdministracionModal({ onClose }) {
     </div>
   );
 }
+
+// Página completa (independiente) de "Docentes y mi cuenta": reemplaza a la ventana emergente.
+export function VistaAdministracion() {
+  const [miPerfil, setMiPerfil] = useState(null);
+  const [cargando, setCargando] = useState(true);
+  const cargarPerfil = () => api.fetchMiPerfil().then((p) => { setMiPerfil(p); setCargando(false); });
+  useEffect(() => { cargarPerfil(); }, []);
+
+  if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
+  const esAdmin = !!miPerfil?.es_admin;
+  const inicial = (miPerfil?.nombre || miPerfil?.email || "?").trim().charAt(0).toUpperCase();
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 items-start">
+      <div className="space-y-4">
+        <div className="rounded-3xl p-5 text-white relative overflow-hidden" style={{ background: "linear-gradient(135deg, #0B3F94 0%, #17489C 60%, #1B9A59 130%)" }}>
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-full flex items-center justify-center text-3xl font-extrabold bg-white/90" style={{ color: "#17489C" }}>{inicial}</div>
+            <div className="min-w-0">
+              <div className="text-lg font-extrabold leading-tight truncate">{miPerfil?.nombre || "Sin nombre"}</div>
+              <div className="text-xs text-white/70 truncate">{miPerfil?.email}</div>
+              <span className="inline-block mt-1.5 text-[11px] font-bold px-2.5 py-0.5 rounded-full" style={{ background: esAdmin ? "#FFD23F" : "rgba(255,255,255,0.2)", color: esAdmin ? "#17264D" : "#fff" }}>{esAdmin ? "👑 Administrador" : "Docente"}</span>
+            </div>
+          </div>
+        </div>
+        <MiCuenta miPerfil={miPerfil} />
+      </div>
+
+      <div className="xl:col-span-2 space-y-4">
+        <div className="rounded-2xl p-4" style={{ background: "#F4F8FE", border: "1px solid #DCE6F5" }}>
+          <h3 className="font-extrabold italic text-lg mb-1" style={{ color: "#17264D" }}>Docentes registrados</h3>
+          {!esAdmin && <p className="text-xs text-slate-500 mb-2">Solo un administrador puede cambiar el rol de otros docentes. Tú ves este listado en modo lectura.</p>}
+          <ListaDocentes miPerfil={miPerfil} onCambio={cargarPerfil} />
+        </div>
+        {esAdmin && (
+          <div className="rounded-2xl p-4" style={{ background: "#F4F8FE", border: "1px solid #DCE6F5" }}>
+            <h3 className="font-extrabold italic text-lg mb-2" style={{ color: "#17264D" }}>Promoción de curso</h3>
+            <div className="bg-white rounded-2xl border border-slate-200 p-4"><VistaPromocion /></div>
+          </div>
+        )}
+        {esAdmin && <MigrarFotosPanel />}
+      </div>
+    </div>
+  );
+}
