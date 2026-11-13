@@ -244,25 +244,25 @@ export function TarjetasMenuInicio({ grupos, onIrA, favoritos = [] }) {
       ) : (
         <>
           {favoritos.length > 0 && (
-            <div className="mb-3 rounded-2xl p-3" style={{ background: "#FFF7E0", border: "1px solid #F5D98A" }}>
+            <div className="mb-5 rounded-2xl p-3" style={{ background: "#FFF7E0", border: "1px solid #F5D98A" }}>
               <div className="text-sm font-extrabold text-amber-700 mb-2">⭐ Mis favoritos</div>
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
                 {favoritos.map((k) => todasLasSecciones.find((it) => it.key === k)).filter(Boolean).map((it) => <Tarjeta key={it.key} it={it} color="#D97706" />)}
               </div>
             </div>
           )}
-          <div className="space-y-3">
+          {/* Solo un ícono y el nombre de cada grupo; al hacer clic se abre su menú de funciones */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             {todos.map((g) => {
               const color = COLORES_GRUPO[g.key] || "#2F55A4";
-              const visibles = g.items.slice(0, 4);
               return (
-                <div key={g.key} className="rounded-2xl p-3" style={{ background: color + "12", border: `1px solid ${color}22` }}>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2 text-base font-extrabold italic" style={{ color }}><span className="text-xl not-italic">{g.icono}</span>{g.label}</div>
-                    <button onClick={() => onIrA("grupo:" + g.key)} className="text-xs font-bold hover:underline" style={{ color }}>{g.items.length > 4 ? `Ver más (${g.items.length})` : "Ver todo"} →</button>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">{visibles.map((it) => <Tarjeta key={it.key} it={it} color={color} />)}</div>
-                </div>
+                <button key={g.key} onClick={() => onIrA("grupo:" + g.key)} title={`${g.items.length} ${g.items.length === 1 ? "función" : "funciones"}`}
+                  className="group flex flex-col items-center justify-center gap-3 rounded-3xl bg-white px-4 py-7 hover:-translate-y-1 hover:shadow-xl transition-all"
+                  style={{ border: `1px solid ${color}33`, boxShadow: "0 2px 6px rgba(15,25,50,0.05)" }}>
+                  <span className="w-20 h-20 rounded-3xl flex items-center justify-center text-5xl group-hover:scale-105 transition-transform" style={{ background: `linear-gradient(135deg, ${color}26, ${color}0D)` }}>{g.icono}</span>
+                  <span className="text-base font-extrabold text-center leading-tight" style={{ color: "#17264D" }}>{g.label}</span>
+                  <span className="h-1 w-10 rounded-full" style={{ background: color }} />
+                </button>
               );
             })}
           </div>
