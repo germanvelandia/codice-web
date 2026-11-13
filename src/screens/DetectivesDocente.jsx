@@ -4,6 +4,9 @@ import * as api from "../lib/detectivesApi";
 // Detectives del Códice — panel del docente: crear el caso con ayuda de una IA (sin API), revisar, publicar y ver resultados.
 // Las tablas solo dejan ver y editar los casos del propio docente (RLS); los estudiantes nunca las leen directamente.
 
+// Por si detectivesApi.js quedó sin actualizar: la pantalla no se rompe.
+const DIF = api.DIFICULTADES || { normal: { label: "Normal", emoji: "🟢", descr: "Cada rasgo aparece en el retrato al acertar." } };
+
 const inp = "w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm";
 const btn = "rounded-lg px-3 py-1.5 text-sm font-bold";
 
@@ -100,8 +103,8 @@ function Editor({ id, volver }) {
         <label className="text-xs font-bold">XP de premio 0–100<input type="number" min={0} max={100} className={inp} defaultValue={c.xp} onBlur={(e) => { const v = Math.max(0, Math.min(100, Math.floor(Number(e.target.value)) || 0)); if (v !== c.xp) guardarCaso({ xp: v }); }} /></label>
         <label className="text-xs font-bold">Monedas de premio 0–50<input type="number" min={0} max={50} className={inp} defaultValue={c.oro} onBlur={(e) => { const v = Math.max(0, Math.min(50, Math.floor(Number(e.target.value)) || 0)); if (v !== c.oro) guardarCaso({ oro: v }); }} /></label>
         <label className="text-xs font-bold sm:col-span-4">Dificultad del retrato hablado
-          <select className={inp} value={c.dificultad || "normal"} onChange={(e) => guardarCaso({ dificultad: e.target.value })}>{Object.entries(api.DIFICULTADES).map(([k, d]) => <option key={k} value={k}>{d.emoji} {d.label}</option>)}</select>
-          <span className="block font-normal text-slate-500 mt-0.5">{(api.DIFICULTADES[c.dificultad || "normal"] || api.DIFICULTADES.normal).descr}</span></label>
+          <select className={inp} value={c.dificultad || "normal"} onChange={(e) => guardarCaso({ dificultad: e.target.value })}>{Object.entries(DIF).map(([k, d]) => <option key={k} value={k}>{d.emoji} {d.label}</option>)}</select>
+          <span className="block font-normal text-slate-500 mt-0.5">{(DIF[c.dificultad || "normal"] || DIF.normal).descr}</span></label>
       </div>
       <p className="text-xs text-slate-500">El premio completo se entrega si resuelve con todas las horas; con menos horas recibe una parte (mínimo la mitad). Se cobra una sola vez por estudiante.</p>
 
@@ -172,7 +175,7 @@ function Crear({ grados, gradoActivo, materiaActiva, listo, cancelar }) {
         <label className="text-xs font-bold">Curso<select className={inp} value={grado} onChange={(e) => setGrado(e.target.value)}>{grados.map((x) => <option key={x.id} value={x.id}>{x.nombre || x.id}</option>)}</select></label>
         <label className="text-xs font-bold">Ambientación<select className={inp} value={amb} onChange={(e) => setAmb(e.target.value)}>{Object.entries(api.AMBIENTES).map(([k, a]) => <option key={k} value={k}>{a.emoji} {a.label}</option>)}</select></label>
         <label className="text-xs font-bold sm:col-span-2">Tema que deben aprender<input className={inp} value={tema} maxLength={200} placeholder="Ej.: valores éticos: honestidad, responsabilidad, empatía, respeto" onChange={(e) => setTema(e.target.value)} /></label>
-        <label className="text-xs font-bold">Dificultad<select className={inp} value={dif} onChange={(e) => setDif(e.target.value)}>{Object.entries(api.DIFICULTADES).map(([k, d]) => <option key={k} value={k}>{d.emoji} {d.label}</option>)}</select></label>
+        <label className="text-xs font-bold">Dificultad<select className={inp} value={dif} onChange={(e) => setDif(e.target.value)}>{Object.entries(DIF).map(([k, d]) => <option key={k} value={k}>{d.emoji} {d.label}</option>)}</select></label>
         <label className="text-xs font-bold">Número de paradas<select className={inp} value={n} onChange={(e) => setN(Number(e.target.value))}>{[3, 4, 5, 6, 7, 8, 9, 10].map((x) => <option key={x}>{x}</option>)}</select></label>
       </div>
 
