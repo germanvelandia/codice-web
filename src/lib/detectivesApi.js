@@ -42,6 +42,7 @@ export async function crearCaso(caso, { grado_id, materia_id = null }) {
   const { data: c, error } = await supabase.from("detectives_casos").insert({
     grado_id: String(grado_id), materia_id, titulo: caso.titulo, ambientacion: caso.ambientacion, historia: caso.historia,
     vidas: caso.vidas ?? 5, xp: caso.xp ?? 40, oro: caso.oro ?? 20, publicado: false,
+    ...(caso.dificultad && caso.dificultad !== "normal" ? { dificultad: caso.dificultad } : {}),
   }).select().single();
   if (error) throw new Error(error.message);
   try {
@@ -67,6 +68,39 @@ export async function actualizarSospechoso(id, cambios) {
   const { error } = await supabase.from("detectives_sospechosos").update(cambios).eq("id", id);
   if (error) throw new Error(error.message);
 }
+// Agrega una parada al final del caso. Si "rasgoAlCulpable", también suma ese rasgo al culpable (para que el caso siga teniendo solución).
+export async function agregarParada(casoId, p, { rasgoAlCulpable = true } = {}) {
+  const { data: ult, error: e0 } = await supabase.from("detectives_paradas").select("orden").eq("caso_id", casoId).order("orden", { ascending: false }).limit(1);
+  if (e0) throw new Error(e0.message);
+  const orden = (ult?.[0]?.orden || 0) + 1;
+  if (orden > 20) throw new Error("Un caso admite hasta 20 paradas.");
+  const { error } = await supabase.from("detectives_paradas").insert({ caso_id: casoId, orden, ...p });
+  if (error) throw new Error(error.message);
+  if (rasgoAlCulpable && p.rasgo) {
+    const { data: cul } = await supabase.from("detectives_sospechosos").select("id, rasgos").eq("caso_id", casoId).eq("culpable", true).limit(1);
+    const c = cul?.[0];
+    if (c && !c.rasgos.includes(p.rasgo) && c.rasgos.length < 8) await actualizarSospechoso(c.id, { rasgos: [...c.rasgos, p.rasgo] });
+  }
+  return orden;
+}
+// Quita una parada y vuelve a numerar las siguientes (de menor a mayor para no chocar con la numeración única).
+export async function borrarParada(casoId, paradaId) {
+  const { error } = await supabase.from("detectives_paradas").delete().eq("id", paradaId);
+  if (error) throw new Error(error.message);
+  const { data, error: e2 } = await supabase.from("detectives_paradas").select("id").eq("caso_id", casoId).order("orden");
+  if (e2) throw new Error(e2.message);
+  for (let i = 0; i < data.length; i++) {
+    const r = await supabase.from("detectives_paradas").update({ orden: i + 1 }).eq("id", data[i].id);
+    if (r.error) throw new Error(r.error.message);
+  }
+}
+
+export const DIFICULTADES = {
+  normal: { label: "Normal", emoji: "🟢", descr: "Cada rasgo aparece en el retrato hablado al acertar." },
+  dificil: { label: "Difícil", emoji: "🟠", descr: "Retrato bloqueado 🔒 durante la investigación: solo se ve cuántas pistas lleva. Se abre en la rueda de reconocimiento, sin marcar coincidencias." },
+  experto: { label: "Experto", emoji: "🔴", descr: "El retrato nunca se desbloquea: hay que deducir al culpable con lo que dicen los testigos. Arrestar a un inocente cuesta 3 horas." },
+};
+
 export async function borrarCaso(id) {
   const { error } = await supabase.from("detectives_casos").delete().eq("id", id);
   if (error) throw new Error(error.message);
@@ -121,7 +155,7 @@ export function leerCasoIA(texto, ambientacion = "oakhaven") {
     if (i < 0 || f < i) throw new Error("no hay JSON");
     obj = JSON.parse(t.slice(i, f + 1));
   } catch { return { caso: null, errores: ["No pude leer el JSON. Copia la respuesta completa de la IA, desde la primera { hasta la última }."], avisos }; }
-  const paradas = (Array.isArray(obj.paradas) ? obj.paradas : []).slice(0, 12).map((p, k) => {
+  const paradas = (Array.isArray(obj.paradas) ? obj.paradas : []).slice(0, 20).map((p, k) => {
     const opciones = (Array.isArray(p.opciones) ? p.opciones : []).map((o) => limpio(o, 200)).filter(Boolean).slice(0, 5);
     const destinos = (Array.isArray(p.destinos) ? p.destinos : []).map((o) => limpio(o, 80)).filter(Boolean).slice(0, 6);
     const q = {
