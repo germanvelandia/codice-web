@@ -67,6 +67,8 @@ export const ICONO_MAPA = {
 
 export function SidebarTarjetasEstudiante({ activo, onCambiar, monedas, gradoId, onCerrarSesion, menuAbierto, onCerrarMenu }) {
   const [ultimoAnuncio, setUltimoAnuncio] = useState(null);
+  const [inst, setInst] = useState(null);
+  useEffect(() => { api.fetchInstitucion().then(setInst).catch(() => setInst(null)); }, []);
 
   useEffect(() => {
     if (!gradoId) return;
@@ -76,12 +78,15 @@ export function SidebarTarjetasEstudiante({ activo, onCambiar, monedas, gradoId,
   const elegir = (key) => { onCambiar(key); onCerrarMenu?.(); };
 
   const contenido = (
-    <div className="h-full flex flex-col" style={{ background: "linear-gradient(180deg, #17264D 0%, #0f1932 100%)" }}>
+    <div className="h-full flex flex-col" style={{ background: "linear-gradient(180deg, #0B3F94 0%, #082B69 55%, #061E4D 100%)" }}>
       <div className="p-3 pb-2">
         <div className="flex items-center justify-between gap-2 mb-2">
           <button onClick={() => elegir("inicio")} className="flex items-center gap-2">
-            <span className="text-lg">🧭</span>
-            <span className="text-white text-sm font-bold tracking-[0.12em]" style={{ fontFamily: "Georgia, serif" }}>CÓDICE</span>
+            {inst?.logo_url ? <img src={inst.logo_url} alt="Escudo" className="object-contain shrink-0" style={{ width: 34, height: 34 }} /> : <span className="text-2xl">🧭</span>}
+            <span className="text-left min-w-0">
+              <span className="block text-white text-[13px] font-extrabold leading-tight">{(inst?.nombre && inst.nombre !== "Institución Educativa") ? inst.nombre : "CÓDICE"}</span>
+              <span className="block text-[9px] text-white/60 leading-tight">CÓDICE · Portal estudiante</span>
+            </span>
           </button>
           {monedas !== undefined && (
             <div className="flex items-center gap-1">
@@ -124,7 +129,7 @@ export function SidebarTarjetasEstudiante({ activo, onCambiar, monedas, gradoId,
     <>
       <div className="hidden md:block w-[210px] shrink-0 sticky top-0 h-screen">{contenido}</div>
 
-      <div className="md:hidden w-full sticky top-0 z-30 flex items-center justify-between px-4 py-2.5" style={{ background: "#17264D" }}>
+      <div className="md:hidden w-full sticky top-0 z-30 flex items-center justify-between px-4 py-2.5" style={{ background: "#0B3F94" }}>
         <button onClick={() => elegir("inicio")} className="flex items-center gap-2">
           <span className="text-lg">🧭</span>
           <span className="text-white text-sm font-bold tracking-[0.12em]">CÓDICE</span>
