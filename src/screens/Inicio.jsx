@@ -426,7 +426,49 @@ function ReflexionesSinRevisarModal({ onClose }) {
   );
 }
 
-export function VistaInicio({ onIrA, soloEncabezado, accionSuperior, contenidoMedio }) {
+// ---------- Acciones prioritarias: Urgente / En proceso / Completado ----------
+function PanelAccionesPrioritarias({ items }) {
+  const urgentes = items.filter((i) => i.col === "urgente" && i.n > 0);
+  const proceso = items.filter((i) => i.col === "proceso" && i.n > 0);
+  const total = urgentes.reduce((t, i) => t + i.n, 0) + proceso.filter((i) => i.label !== "Clases de hoy").reduce((t, i) => t + i.n, 0);
+  const alDia = items.filter((i) => i.n === 0).length;
+  const Fila = ({ it, color }) => (
+    <button onClick={it.onClick} className="w-full flex items-center gap-3 rounded-2xl bg-white/90 px-3 py-2.5 text-left hover:bg-white hover:shadow-sm transition-all" style={{ border: "1px solid #ffffff" }}>
+      <span className="relative text-2xl shrink-0">{it.icono}<span className="absolute -top-2 -right-3 min-w-[20px] h-5 px-1 rounded-full text-[11px] font-extrabold text-white flex items-center justify-center" style={{ background: color }}>{it.n}</span></span>
+      <span className="flex-1 min-w-0 text-sm font-semibold text-slate-700 leading-tight pl-2">{it.label}</span>
+      <span className="text-slate-400">›</span>
+    </button>
+  );
+  const Vacio = ({ t }) => <div className="text-xs text-slate-400 px-3 py-4 text-center">{t}</div>;
+  return (
+    <div className="mb-5">
+      <div className="inline-flex items-center gap-2 rounded-t-2xl px-5 py-2.5 text-white" style={{ background: "linear-gradient(90deg,#17489C,#0F2F6B)" }}>
+        <span className="text-xl" style={{ color: "#FFD23F" }}>★</span>
+        <span className="font-extrabold text-lg">Tienes <span style={{ color: "#FFD23F" }}>{total}</span> {total === 1 ? "acción prioritaria" : "acciones prioritarias"}</span>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 rounded-b-2xl rounded-tr-2xl p-3 bg-white" style={{ border: "1px solid #DCE6F5" }}>
+        <div className="rounded-2xl overflow-hidden" style={{ background: "#FDECEC" }}>
+          <div className="flex items-center gap-2 px-4 py-2.5 text-white font-extrabold text-sm" style={{ background: "linear-gradient(90deg,#E5484D,#C92A2F)" }}>❗ URGENTE · Requiere acción inmediata</div>
+          <div className="p-3 space-y-2">{urgentes.length ? urgentes.map((i) => <Fila key={i.label} it={i} color="#D92D32" />) : <Vacio t="Nada urgente por ahora 🎉" />}</div>
+        </div>
+        <div className="rounded-2xl overflow-hidden" style={{ background: "#FFF4DD" }}>
+          <div className="flex items-center gap-2 px-4 py-2.5 text-white font-extrabold text-sm" style={{ background: "linear-gradient(90deg,#F5A524,#E08A0B)" }}>▶ EN PROCESO · Seguimiento activo</div>
+          <div className="p-3 space-y-2">{proceso.length ? proceso.map((i) => <Fila key={i.label} it={i} color="#EE9A12" />) : <Vacio t="Sin clases ni pendientes en curso" />}</div>
+        </div>
+        <div className="rounded-2xl overflow-hidden" style={{ background: "#E7F7EC" }}>
+          <div className="flex items-center gap-2 px-4 py-2.5 text-white font-extrabold text-sm" style={{ background: "linear-gradient(90deg,#2FB364,#1B9A59)" }}>✔ COMPLETADO · Al día</div>
+          <div className="p-5 text-center">
+            <div className="mx-auto w-14 h-14 rounded-full flex items-center justify-center text-white text-3xl" style={{ background: "#25A85C" }}>✓</div>
+            <div className="mt-2 font-extrabold text-slate-700">{total === 0 ? "Sin acciones pendientes" : alDia > 0 ? `${alDia} ${alDia === 1 ? "frente" : "frentes"} al día` : "Aún tienes pendientes"}</div>
+            <div className="text-xs text-slate-500">{total === 0 ? "¡Excelente trabajo!" : "Resuélvelos y aparecerán aquí"}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function VistaInicio({ onIrA, soloEncabezado, accionSuperior, contenidoMedio, rolEtiqueta = "Docente" }) {
   const [stats, setStats] = useState(null);
   const [resumen, setResumen] = useState(null);
   const [cargando, setCargando] = useState(true);
@@ -489,44 +531,44 @@ export function VistaInicio({ onIrA, soloEncabezado, accionSuperior, contenidoMe
     return { level: stats.nivel, pctNivel: pct };
   })();
 
+  // Pendientes reales del docente (los mismos datos que ya calcula la plataforma).
+  const irSeguro = (k) => () => onIrA && onIrA(k);
+  const accionesPrioritarias = [
+    { col: "urgente", n: resumen.entregasPendientes || 0, label: "Entregas de evaluaciones por calificar", icono: "📝", onClick: irSeguro("evaluaciones") },
+    { col: "urgente", n: resumen.tareasSinCalificar || 0, label: "Tareas entregadas sin calificar", icono: "📖", onClick: irSeguro("entregasrevisar") },
+    { col: "urgente", n: resumen.codiceSinRevisar || 0, label: "Reflexiones del Códice sin revisar", icono: "🪞", onClick: () => setCodiceAbierto(true) },
+    { col: "proceso", n: resumen.clasesPendientes || 0, label: "Clases planeadas por dictar", icono: "🗓️", onClick: irSeguro("planeaciones") },
+    { col: "proceso", n: (resumen.clasesHoy || []).length, label: "Clases de hoy", icono: "🎓", onClick: irSeguro("asistencia") },
+  ];
+
   return (
     <div>
-      {/* Banner de bienvenida */}
-      <div className="rounded-2xl overflow-hidden mb-4" style={{ background: "linear-gradient(135deg, #1c2f5e 0%, #0f1932 60%, #0a1226 100%)", border: "1px solid #28478a55" }}>
-        <div className="p-6">
+      {/* Encabezado del panel */}
+      <div className="relative rounded-3xl overflow-hidden mb-4" style={{ background: "linear-gradient(120deg, #EAF2FF 0%, #F8FBFF 55%, #FFFFFF 100%)", border: "1px solid #DCE6F5" }}>
+        <div aria-hidden className="absolute right-0 top-0 h-full w-[38%] hidden sm:block pointer-events-none" style={{
+          background: "radial-gradient(120% 140% at 100% 0%, #FFD23F 0 18%, transparent 18.5%), radial-gradient(130% 150% at 100% 100%, #1B9A59 0 34%, transparent 34.5%), radial-gradient(150% 170% at 100% 100%, #17489C 0 46%, transparent 46.5%)", opacity: 0.9 }} />
+        <div className="relative p-5 md:p-6">
           {accionSuperior}
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div>
-              <div className="text-violet-200 text-sm">¡Bienvenido de vuelta{nombreDocente ? `, ${nombreDocente}` : ""}!</div>
-              <div className="text-white text-xl font-bold mt-0.5 capitalize">{fechaLegible}</div>
-            </div>
-            <div className="text-4xl">🏰</div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-2xl md:text-3xl font-extrabold italic" style={{ color: "#17264D" }}>{rolEtiqueta === "Administrador" ? "Panel de administración" : "Panel docente"}</h1>
+            <span className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full" style={{ background: "#E9E4FF", color: "#4C2FB8", border: "1px solid #D3C9FF" }}>🛡️ {rolEtiqueta}</span>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
-            <div className="bg-white/10 rounded-xl p-3 text-center backdrop-blur-sm">
-              <div className="text-lg font-bold text-violet-100">{level}</div>
-              <div className="text-[10px] text-violet-300 uppercase tracking-wide">Nivel</div>
-            </div>
-            <div className="bg-white/10 rounded-xl p-3 text-center backdrop-blur-sm">
-              <div className="text-lg font-bold text-violet-100">{stats.xp}</div>
-              <div className="text-[10px] text-violet-300 uppercase tracking-wide">XP total</div>
-            </div>
-            <div className="bg-white/10 rounded-xl p-3 text-center backdrop-blur-sm">
-              <div className="text-lg font-bold text-violet-100">{stats.insignias}</div>
-              <div className="text-[10px] text-violet-300 uppercase tracking-wide">Insignias</div>
-            </div>
-            <div className="bg-white/10 rounded-xl p-3 text-center backdrop-blur-sm">
-              <div className="text-lg font-bold text-violet-100">{stats.estudiantesACargo}</div>
-              <div className="text-[10px] text-violet-300 uppercase tracking-wide">Estudiantes</div>
-            </div>
+          <div className="mt-1 text-lg md:text-xl" style={{ fontFamily: "'Brush Script MT','Segoe Script','Lucida Handwriting',cursive", color: "#17489C" }}>Aprender · Convivir · Construir Futuro</div>
+          <div className="mt-2 text-sm text-slate-600">¡Bienvenido de vuelta{nombreDocente ? `, ${nombreDocente}` : ""}! <span className="text-slate-400">· {fechaLegible}</span></div>
+          <div className="flex flex-wrap gap-2 mt-4">
+            {[["Nivel", level], ["XP total", stats.xp], ["Insignias", stats.insignias], ["Estudiantes", stats.estudiantesACargo]].map(([t, v]) => (
+              <div key={t} className="rounded-xl px-3.5 py-1.5 bg-white/90 text-center" style={{ border: "1px solid #DCE6F5" }}>
+                <div className="text-base font-extrabold" style={{ color: "#17264D" }}>{v}</div>
+                <div className="text-[9px] uppercase tracking-wide text-slate-400 font-bold">{t}</div>
+              </div>
+            ))}
           </div>
-          <div className="mt-3">
-            <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
-              <div className="h-full rounded-full bg-gradient-to-r from-violet-400 to-fuchsia-400" style={{ width: `${pctNivel}%` }} />
-            </div>
-          </div>
+          <div className="mt-3 max-w-xs"><div className="h-1.5 rounded-full bg-slate-200 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${pctNivel}%`, background: "linear-gradient(90deg,#2F55A4,#1B9A59)" }} /></div></div>
         </div>
       </div>
+
+      {/* Acciones prioritarias */}
+      <PanelAccionesPrioritarias items={accionesPrioritarias} />
 
       {contenidoMedio}
 
