@@ -61,7 +61,7 @@ import { VistaActividadesProgramadas } from "../screens/ActividadesProgramadas";
 import { VistaEvaluaciones } from "../screens/Evaluaciones";
 import { VistaProyectosForja } from "../screens/TareasCalificables";
 import { CLAVES_SOLO_ADMIN, MENU_PANEL, MENU_PANEL_GRUPOS, SidebarTarjetas, TarjetasMenuInicio, PantallaGrupoMenu } from "./MenuDocente";
-import { MarcoSeccion, NOMBRES_HERRAMIENTAS } from "./comunes";
+import { MarcoSeccion, NOMBRES_HERRAMIENTAS, NavSeccionContext } from "./comunes";
 
 export function Panel({ session }) {
   // Lo que se recuerda al "Actualizar" es propio de cada docente.
@@ -169,6 +169,7 @@ export function Panel({ session }) {
       {institucionAbierta && <InstitucionModal onClose={() => { setInstitucionAbierta(false); cargarInstitucion(); }} />}
       {administracionAbierta && <AdministracionModal onClose={() => setAdministracionAbierta(false)} />}
 
+      <NavSeccionContext.Provider value={{ onInicio: () => setTab("inicio") }}>
       <div className={`flex-1 min-w-0 p-5 md:p-10 ${menuFijo ? "lg:pl-[294px]" : ""}`}>
         {tab === "inicio" && <VistaInicio onIrA={irA} rolEtiqueta={esAdminEfectivo ? "Administrador" : "Docente"} contenidoMedio={<TarjetasMenuInicio grupos={menuPanelVisible} onIrA={irA} favoritos={favoritos} />} />}
         {String(tab).startsWith("grupo:") && (() => {
@@ -200,16 +201,7 @@ export function Panel({ session }) {
         )}
         {tab === "asistencia" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Asistencia" icono="🎓"><VistaAsistencia grados={grados} gradoActivo={gradoActivo} /></MarcoSeccion>}
         {tab === "herramientas" && grados.length > 0 && (
-          <div className="rounded-[28px] p-1" style={{ background: "linear-gradient(135deg, #2F55A4, #B8892B)" }}>
-            <div className="rounded-[24px] p-4 md:p-6" style={{ background: "linear-gradient(160deg, #17264D 0%, #223b74 100%)" }}>
-              <div className="flex items-center gap-2.5 mb-4 px-1">
-                <span className="text-2xl">🎮</span>
-                <div>
-                  <div className="text-[10px] font-extrabold tracking-wide uppercase" style={{ color: "#f1e7d5" }}>Zona de Herramientas</div>
-                  <div className="text-lg font-extrabold text-white">{NOMBRES_HERRAMIENTAS[subTabHerramientas] || "Herramienta"}</div>
-                </div>
-              </div>
-              <div className="rounded-2xl bg-white p-4 md:p-5">
+          <MarcoSeccion zonaLabel={`Herramientas — ${NOMBRES_HERRAMIENTAS[subTabHerramientas] || "Herramienta"}`} icono="🎮">
                 {subTabHerramientas === "ruleta" && <VistaRuleta grados={grados} gradoActivo={gradoActivo} />}
                 {subTabHerramientas === "ruletamonedas" && <VistaRuletaMonedas grados={grados} gradoActivo={gradoActivo} />}
                 {subTabHerramientas === "accionesmasivas" && <VistaAccionesMasivas grados={grados} gradoActivo={gradoActivo} />}
@@ -242,11 +234,9 @@ export function Panel({ session }) {
             {subTabHerramientas === "selectorestudiante" && <SelectorEstudianteTool grados={grados} />}
                 {subTabHerramientas === "bingo" && <BingoTool />}
                 {subTabHerramientas === "formasexamen" && <FormasExamenTool />}
-              </div>
-            </div>
-          </div>
+          </MarcoSeccion>
         )}
-        {tab === "roles" && <VistaRoles />}
+        {tab === "roles" && <MarcoSeccion zonaLabel="Administración — Roles" icono="🎭"><VistaRoles /></MarcoSeccion>}
         {tab === "calificaciones" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Planillas" icono="🎓"><VistaCalificaciones grados={grados} destinoBusqueda={destinoBusqueda} gradoActivo={gradoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
         {tab === "coevaluacion" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Auto y coevaluación" icono="🪞"><VistaCoevaluacion grados={grados} gradoActivo={gradoActivo} /></MarcoSeccion>}
         {tab === "recuperaciones" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Recuperaciones" icono="🎓"><VistaRecuperaciones grados={grados} gradoActivo={gradoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
@@ -257,8 +247,8 @@ export function Panel({ session }) {
         {tab === "mundonota" && grados.length > 0 && <MarcoSeccion zonaLabel="Gamificación — Mundo → nota" icono="🧮"><VistaMundoNota grados={grados} gradoActivo={gradoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
         {tab === "tablero" && grados.length > 0 && <MarcoSeccion zonaLabel="Gamificación — Tablero Mundial" icono="🌍"><VistaTableroMundial grados={grados} gradoActivo={gradoActivo} /></MarcoSeccion>}
         {tab === "puntosconducta" && <MarcoSeccion zonaLabel="Gamificación — Puntos por conducta" icono="🎮"><VistaPuntosConducta /></MarcoSeccion>}
-        {tab === "reportes" && grados.length > 0 && <VistaReportes grados={grados} gradoActivo={gradoActivo} />}
-        {tab === "horario" && grados.length > 0 && <VistaHorario grados={grados} />}
+        {tab === "reportes" && grados.length > 0 && <MarcoSeccion zonaLabel="Informes — Reportes" icono="📊"><VistaReportes grados={grados} gradoActivo={gradoActivo} /></MarcoSeccion>}
+        {tab === "horario" && grados.length > 0 && <MarcoSeccion zonaLabel="Planeación — Agenda" icono="🗓️"><VistaHorario grados={grados} /></MarcoSeccion>}
         {tab === "planeaciones" && grados.length > 0 && <MarcoSeccion zonaLabel="Planeación — Planeaciones" icono="🗺️"><VistaPlaneaciones grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
         {tab === "tablerosemanal" && grados.length > 0 && <MarcoSeccion zonaLabel="Planeación — Tablero Semanal" icono="🗺️"><VistaTableroSemanal grados={grados} /></MarcoSeccion>}
         {tab === "rubricas" && <MarcoSeccion zonaLabel="Planeación — Rúbricas" icono="🗺️"><VistaRubricas /></MarcoSeccion>}
@@ -273,9 +263,9 @@ export function Panel({ session }) {
         {tab === "anotaciones" && <MarcoSeccion zonaLabel="Convivencial — Anotaciones" icono="🤝"><VistaAnotaciones /></MarcoSeccion>}
         {tab === "inclusion" && <MarcoSeccion zonaLabel="Convivencial — Inclusión" icono="🤝"><VistaInclusionGeneral /></MarcoSeccion>}
         {tab === "bajasvida" && <MarcoSeccion zonaLabel="Convivencial — Bajas de Vida" icono="🤝"><VistaBajasVida /></MarcoSeccion>}
-        {tab === "corregirnombres" && <VistaCorregirNombres />}
-        {tab === "niveles" && <VistaNiveles />}
-        {tab === "objetos" && <VistaObjetos grados={grados} gradoActivo={gradoActivo} />}
+        {tab === "corregirnombres" && <MarcoSeccion zonaLabel="Informes — Corregir Nombres" icono="🪪"><VistaCorregirNombres /></MarcoSeccion>}
+        {tab === "niveles" && <MarcoSeccion zonaLabel="Gamificación — Niveles" icono="🏅"><VistaNiveles /></MarcoSeccion>}
+        {tab === "objetos" && <MarcoSeccion zonaLabel="Gamificación — Objetos" icono="🎒"><VistaObjetos grados={grados} gradoActivo={gradoActivo} /></MarcoSeccion>}
         {tab === "direccioncurso" && <MarcoSeccion zonaLabel="Convivencial — Dirección de Curso" icono="🤝"><VistaDireccionCurso grados={grados} gradoActivo={gradoActivo} esAdmin={esAdminEfectivo} /></MarcoSeccion>}
         {tab === "guiasestudio" && <MarcoSeccion zonaLabel="Planeación — Guías de Estudio" icono="🗺️"><VistaGuiasEstudio grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
         {tab === "modulosestudio" && grados.length > 0 && <MarcoSeccion zonaLabel="Planeación — Módulos de Estudio" icono="🗺️"><ModulosAdmin grados={grados} /></MarcoSeccion>}
@@ -283,6 +273,7 @@ export function Panel({ session }) {
         {tab === "evaluaciones" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — Evaluaciones" icono="🎓"><VistaEvaluaciones grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
         {tab === "proyectosforja" && grados.length > 0 && <MarcoSeccion zonaLabel="Académico — La Forja" icono="🎓"><VistaProyectosForja grados={grados} gradoActivo={gradoActivo} periodoActivo={periodoActivo} materiaActiva={materiaActiva} /></MarcoSeccion>}
       </div>
+      </NavSeccionContext.Provider>
     </div>
   );
 }
