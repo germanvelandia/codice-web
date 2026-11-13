@@ -376,6 +376,14 @@ function EntradaCodicePendiente({ entrada, onCambio }) {
   const [calificando, setCalificando] = useState(false);
 
   const marcarRevisada = async () => { await api.marcarCodiceRevisado(entrada.id); onCambio(); };
+  const eliminar = async () => {
+    if (!confirm(`¿Eliminar la reflexión de ${entrada.estudiante_nombre}? Se borra para siempre (también para el estudiante y su nota, si la tenía).`)) return;
+    try {
+      const n = await api.eliminarCodiceEntradasLote([entrada.id]);
+      if (n === 0) alert("No se pudo eliminar (sin permiso). Revisa la política de borrado en Supabase.");
+      onCambio();
+    } catch (e) { alert("No se pudo eliminar: " + (e.message || e)); }
+  };
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-3">
@@ -386,7 +394,10 @@ function EntradaCodicePendiente({ entrada, onCambio }) {
           {entrada.titulo && <div className="text-xs font-semibold text-slate-600 mt-1">{entrada.titulo}</div>}
           <TextoEnriquecido html={entrada.contenido} className="text-sm text-slate-600 mt-1.5" />
         </div>
-        <button onClick={marcarRevisada} className="text-[10px] text-slate-400 hover:text-emerald-600 shrink-0">✔ Marcar visto</button>
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <button onClick={marcarRevisada} className="text-[10px] text-slate-400 hover:text-emerald-600">✔ Marcar visto</button>
+          <button onClick={eliminar} className="text-[10px] text-slate-400 hover:text-rose-600">🗑 Eliminar</button>
+        </div>
       </div>
       {calificando ? (
         <CalificarEntradaCodiceForm entrada={entrada} onCancelar={() => setCalificando(false)} onCalificado={() => { setCalificando(false); onCambio(); }} />
@@ -432,6 +443,21 @@ export function VistaReflexiones() {
     setMarcando(false);
   };
 
+  const eliminarTodas = async () => {
+    if (!visibles.length) return;
+    const t = prompt(`Vas a ELIMINAR PARA SIEMPRE ${visibles.length} reflexión(es)${curso !== "todos" ? ` del curso ${curso}` : ""}. También desaparecen para los estudiantes y se pierden las notas que tuvieran.\n\nEscribe ELIMINAR para confirmar:`);
+    if (t === null) return;
+    if (t.trim().toUpperCase() !== "ELIMINAR") { setError("Eliminación cancelada: no escribiste ELIMINAR."); return; }
+    setError(""); setMsg(""); setMarcando(true);
+    try {
+      const n = await api.eliminarCodiceEntradasLote(visibles.map((e) => e.id));
+      if (n < visibles.length) setError(`Solo se eliminaron ${n} de ${visibles.length}. Falta permiso de borrado (RLS) para el resto: ejecuta el SQL 156.`);
+      else setMsg(`🗑 ${n} reflexión(es) eliminadas.`);
+      cargar();
+    } catch (e) { setError("No se pudieron eliminar: " + (e.message || e)); }
+    setMarcando(false);
+  };
+
   return (
     <div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
@@ -443,7 +469,11 @@ export function VistaReflexiones() {
           <div className="text-3xl font-extrabold" style={{ color: "#17489C" }}>{cursos.length}</div>
           <div className="text-xs font-bold text-slate-500">Cursos con pendientes</div>
         </div>
-        <div className="rounded-2xl p-4 flex items-center" style={{ background: "linear-gradient(135deg,#E7F7EC,#fff)", border: "1px solid #BFE5CD" }}>
+        <div className="rounded-2xl p-4 flex flex-col gap-2 justify-center" style={{ background: "linear-gradient(135deg,#E7F7EC,#fff)", border: "1px solid #BFE5CD" }}>
+          <button onClick={eliminarTodas} disabled={!visibles.length || marcando}
+            className="w-full text-xs font-extrabold px-4 py-2 rounded-xl text-rose-700 bg-white border border-rose-300 disabled:opacity-40 order-2">
+            🗑 Eliminar {curso === "todos" ? "todas" : `las del curso ${curso}`} ({visibles.length})
+          </button>
           <button onClick={marcarTodas} disabled={!visibles.length || marcando}
             className="w-full text-sm font-extrabold px-4 py-3 rounded-xl text-white disabled:opacity-40" style={{ background: "#1B9A59" }}>
             {marcando ? "Marcando…" : `✔ Marcar todas como leídas (${visibles.length})`}
