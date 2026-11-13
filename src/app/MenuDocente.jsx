@@ -276,34 +276,32 @@ export function TarjetasMenuInicio({ grupos, onIrA, favoritos = [] }) {
 export function PantallaGrupoMenu({ grupo, onIrA, onVolver, favoritos = [], onAlternarFavorito }) {
   const color = COLORES_GRUPO[grupo.key] || "#2F55A4";
   return (
-    <div className="max-w-5xl mx-auto">
-      <button onClick={onVolver} className="text-xs font-bold text-slate-500 hover:text-slate-800 mb-3 flex items-center gap-1">← Inicio</button>
-      <div className="rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center gap-3 px-5 py-5" style={{ background: `linear-gradient(135deg, ${color}, ${color}CC)` }}>
-          <span className="text-4xl">{grupo.icono}</span>
-          <div>
-            <h2 className="text-white font-extrabold text-xl leading-tight">{grupo.label}</h2>
-            <div className="text-white/75 text-xs">{grupo.items.length} {grupo.items.length === 1 ? "sección" : "secciones"} · elige a dónde ir</div>
-          </div>
+    <div className="max-w-[1500px] mx-auto">
+      <div className="relative rounded-2xl overflow-hidden mb-4 px-4 py-3.5 md:px-5 flex items-center gap-3" style={{ background: `linear-gradient(120deg, ${color}18 0%, #FFFFFF 70%)`, border: `1px solid ${color}33` }}>
+        <span aria-hidden className="absolute left-0 top-0 bottom-0 w-1.5" style={{ background: `linear-gradient(180deg, ${color}, #1B9A59)` }} />
+        <span className="w-11 h-11 rounded-xl flex items-center justify-center text-2xl shrink-0 ml-1" style={{ background: color + "22" }}>{grupo.icono}</span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] font-bold uppercase tracking-wide" style={{ color }}>Catálogo de funciones › {grupo.items.length} {grupo.items.length === 1 ? "función" : "funciones"}</div>
+          <h1 className="text-xl md:text-2xl font-extrabold italic leading-tight" style={{ color: "#17264D" }}>{grupo.label}</h1>
         </div>
-        <div className="p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-          {grupo.items.map((it) => {
-            const fav = favoritos.includes(it.key);
-            return (
-              <div key={it.key} className="relative group">
-                <button onClick={() => onIrA(it.key)} className="w-full flex items-center gap-3 text-left rounded-xl px-4 py-4 hover:shadow-md transition-all"
-                  style={{ background: color + "12", border: `1px solid ${color}22` }}>
-                  <span className="text-3xl shrink-0">{it.icono}</span>
-                  <span className="text-sm font-bold leading-tight text-slate-700 pr-6">{it.label}</span>
-                </button>
-                {onAlternarFavorito && (
-                  <button onClick={() => onAlternarFavorito(it.key)} title={fav ? "Quitar de favoritos" : "Agregar a favoritos"}
-                    className={`absolute top-2 right-2.5 text-base ${fav ? "text-amber-400" : "text-slate-300 hover:text-amber-400"}`}>{fav ? "★" : "☆"}</button>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <button onClick={onVolver} className="text-xs font-bold px-3 py-1.5 rounded-full bg-white shrink-0" style={{ color, border: `1px solid ${color}55` }}>← Inicio</button>
+      </div>
+      <div className="rounded-2xl p-3 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5" style={{ background: color + "12", border: `1px solid ${color}22` }}>
+        {grupo.items.map((it) => {
+          const fav = favoritos.includes(it.key);
+          return (
+            <div key={it.key} className="relative group">
+              <button onClick={() => onIrA(it.key)} className="w-full flex items-center gap-3 text-left rounded-xl bg-white px-3 py-3 min-h-[68px] hover:shadow-md hover:-translate-y-0.5 transition-all" style={{ border: `1px solid ${color}33` }}>
+                <span className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0" style={{ background: color + "1A" }}>{it.icono}</span>
+                <span className="text-[13px] font-bold leading-tight text-slate-800 pr-6 min-w-0">{it.label}</span>
+              </button>
+              {onAlternarFavorito && (
+                <button onClick={() => onAlternarFavorito(it.key)} title={fav ? "Quitar de favoritos" : "Agregar a favoritos"}
+                  className={`absolute top-2 right-2.5 text-base ${fav ? "text-amber-400" : "text-slate-300 hover:text-amber-400"}`}>{fav ? "★" : "☆"}</button>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
