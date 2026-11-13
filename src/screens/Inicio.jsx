@@ -398,30 +398,90 @@ function EntradaCodicePendiente({ entrada, onCambio }) {
   );
 }
 
-function ReflexionesSinRevisarModal({ onClose }) {
+// Página completa (independiente) para revisar las reflexiones del Códice.
+export function VistaReflexiones() {
   const [entradas, setEntradas] = useState([]);
   const [cargando, setCargando] = useState(true);
+  const [curso, setCurso] = useState("todos");
+  const [busqueda, setBusqueda] = useState("");
+  const [msg, setMsg] = useState("");
+  const [error, setError] = useState("");
+  const [marcando, setMarcando] = useState(false);
 
-  const cargar = () => { setCargando(true); api.fetchEntradasCodiceSinRevisar().then((d) => { setEntradas(d); setCargando(false); }); };
+  const cargar = () => { setCargando(true); api.fetchEntradasCodiceSinRevisar().then((d) => { setEntradas(d); setCargando(false); }).catch((e) => { setError(e.message || String(e)); setCargando(false); }); };
   useEffect(() => { cargar(); }, []);
 
+  const norm = (t) => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const cursos = [...new Set(entradas.map((e) => e.grado_id).filter(Boolean))].sort();
+  const q = norm(busqueda.trim());
+  const visibles = entradas.filter((e) => (curso === "todos" || String(e.grado_id) === String(curso)) &&
+    (!q || norm(e.estudiante_nombre).includes(q) || norm(e.titulo).includes(q) || norm(e.contenido).includes(q) || norm(e.materia_nombre).includes(q)));
+  const porCurso = {};
+  visibles.forEach((e) => { (porCurso[e.grado_id || "—"] = porCurso[e.grado_id || "—"] || []).push(e); });
+
+  const marcarTodas = async () => {
+    if (!visibles.length) return;
+    if (!confirm(`¿Marcar ${visibles.length} reflexión(es) como leídas? Podrás volver a ponerles nota desde la Planilla, pero dejarán de aparecer aquí.`)) return;
+    setError(""); setMsg(""); setMarcando(true);
+    try {
+      const n = await api.marcarCodiceRevisadoLote(visibles.map((e) => e.id));
+      setMsg(`✔ ${n} reflexión(es) marcadas como leídas.`);
+      cargar();
+    } catch (e) { setError("No se pudieron marcar: " + (e.message || e)); }
+    setMarcando(false);
+  };
+
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="font-bold text-slate-800">📜 Reflexiones sin revisar</h3>
-          <button onClick={onClose} className="text-slate-400">✕</button>
+    <div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+        <div className="rounded-2xl p-4" style={{ background: "linear-gradient(135deg,#FDECEC,#fff)", border: "1px solid #F5C6C8" }}>
+          <div className="text-3xl font-extrabold" style={{ color: "#C92A2F" }}>{entradas.length}</div>
+          <div className="text-xs font-bold text-slate-500">Reflexiones sin revisar</div>
         </div>
-        {cargando ? (
-          <div className="text-sm text-slate-400">Cargando…</div>
-        ) : entradas.length === 0 ? (
-          <div className="text-sm text-slate-400 text-center py-4">No hay reflexiones pendientes. 🎉</div>
-        ) : (
-          <div className="space-y-2">
-            {entradas.map((e) => <EntradaCodicePendiente key={e.id} entrada={e} onCambio={cargar} />)}
-          </div>
-        )}
+        <div className="rounded-2xl p-4" style={{ background: "linear-gradient(135deg,#E8EEF8,#fff)", border: "1px solid #CFDAEE" }}>
+          <div className="text-3xl font-extrabold" style={{ color: "#17489C" }}>{cursos.length}</div>
+          <div className="text-xs font-bold text-slate-500">Cursos con pendientes</div>
+        </div>
+        <div className="rounded-2xl p-4 flex items-center" style={{ background: "linear-gradient(135deg,#E7F7EC,#fff)", border: "1px solid #BFE5CD" }}>
+          <button onClick={marcarTodas} disabled={!visibles.length || marcando}
+            className="w-full text-sm font-extrabold px-4 py-3 rounded-xl text-white disabled:opacity-40" style={{ background: "#1B9A59" }}>
+            {marcando ? "Marcando…" : `✔ Marcar todas como leídas (${visibles.length})`}
+          </button>
+        </div>
       </div>
+
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2 flex-1 min-w-[220px]" style={{ border: "1px solid #CFDAEE" }}>
+          <span className="text-slate-400">🔍</span>
+          <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar por estudiante, título o texto…" className="flex-1 text-sm outline-none bg-transparent" />
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {["todos", ...cursos].map((c) => (
+            <button key={c} onClick={() => setCurso(c)} className={`text-xs font-bold px-3 py-1.5 rounded-full border ${String(curso) === String(c) ? "text-white border-transparent" : "bg-white text-slate-600 border-slate-200"}`}
+              style={String(curso) === String(c) ? { background: "#2F55A4" } : undefined}>{c === "todos" ? "Todos los cursos" : `Curso ${c}`}</button>
+          ))}
+        </div>
+      </div>
+
+      {msg && <div className="text-xs text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2 mb-3">{msg}</div>}
+      {error && <div className="text-xs text-rose-700 bg-rose-50 rounded-lg px-3 py-2 mb-3">{error}</div>}
+
+      {cargando ? (
+        <div className="text-sm text-slate-400">Cargando…</div>
+      ) : visibles.length === 0 ? (
+        <div className="text-sm text-slate-500 bg-slate-50 rounded-2xl p-8 text-center">{entradas.length === 0 ? "No hay reflexiones pendientes. 🎉" : "Ninguna reflexión coincide con el filtro."}</div>
+      ) : (
+        <div className="space-y-5">
+          {Object.keys(porCurso).sort().map((g) => (
+            <div key={g}>
+              <div className="text-sm font-extrabold italic mb-2" style={{ color: "#17264D" }}>Curso {g} <span className="text-xs not-italic font-bold text-slate-400">· {porCurso[g].length}</span></div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                {porCurso[g].map((e) => <EntradaCodicePendiente key={e.id} entrada={e} onCambio={cargar} />)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -473,7 +533,6 @@ export function VistaInicio({ onIrA, soloEncabezado, accionSuperior, contenidoMe
   const [resumen, setResumen] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [nombreDocente, setNombreDocente] = useState("");
-  const [codiceAbierto, setCodiceAbierto] = useState(false);
   const [pendientesHoy, setPendientesHoy] = useState({});
   const [marcandoId, setMarcandoId] = useState(null);
   const [observacionAbiertaId, setObservacionAbiertaId] = useState(null);
@@ -481,7 +540,9 @@ export function VistaInicio({ onIrA, soloEncabezado, accionSuperior, contenidoMe
   const [observacionTemp, setObservacionTemp] = useState("");
 
   useEffect(() => {
-    Promise.all([api.fetchStatsDocente(), api.fetchResumenDocente(), api.fetchMiPerfil()]).then(([s, r, perfil]) => {
+    Promise.all([api.fetchStatsDocente(), api.fetchResumenDocente(), api.fetchMiPerfil(), api.fetchResumenEntregasPorRevisar().catch(() => null)]).then(([s, r0, perfil, rev]) => {
+      // Los conteos de entregas salen de la misma fuente que la pantalla «Entregas por revisar», para que coincidan.
+      const r = rev ? { ...r0, entregasPendientes: rev.evaluaciones.reduce((a, e) => a + e.cantidad, 0), tareasSinCalificar: rev.tareas.reduce((a, t) => a + t.cantidad, 0) } : r0;
       setStats(s); setResumen(r); setNombreDocente(perfil?.nombre || ""); setCargando(false);
       const pares = (r?.clasesHoy || []).filter((h) => h.materia_id && h.grado_id).map((h) => ({ materiaId: h.materia_id, gradoId: h.grado_id, horarioId: h.id }));
       if (pares.length > 0) api.fetchClasesPendientesDeHoy(pares).then(setPendientesHoy);
@@ -534,9 +595,9 @@ export function VistaInicio({ onIrA, soloEncabezado, accionSuperior, contenidoMe
   // Pendientes reales del docente (los mismos datos que ya calcula la plataforma).
   const irSeguro = (k) => () => onIrA && onIrA(k);
   const accionesPrioritarias = [
-    { col: "urgente", n: resumen.entregasPendientes || 0, label: "Entregas de evaluaciones por calificar", icono: "📝", onClick: irSeguro("evaluaciones") },
-    { col: "urgente", n: resumen.tareasSinCalificar || 0, label: "Tareas entregadas sin calificar", icono: "📖", onClick: irSeguro("entregasrevisar") },
-    { col: "urgente", n: resumen.codiceSinRevisar || 0, label: "Reflexiones del Códice sin revisar", icono: "🪞", onClick: () => setCodiceAbierto(true) },
+    { col: "urgente", n: resumen.entregasPendientes || 0, label: "Entregas de evaluaciones por revisar", icono: "📝", onClick: irSeguro("evaluaciones") },
+    { col: "urgente", n: resumen.tareasSinCalificar || 0, label: "Proyectos y Forja por calificar", icono: "📖", onClick: irSeguro("entregasrevisar") },
+    { col: "urgente", n: resumen.codiceSinRevisar || 0, label: "Reflexiones del Códice sin revisar", icono: "🪞", onClick: irSeguro("reflexiones") },
     { col: "proceso", n: resumen.clasesPendientes || 0, label: "Clases planeadas por dictar", icono: "🗓️", onClick: irSeguro("planeaciones") },
     { col: "proceso", n: (resumen.clasesHoy || []).length, label: "Clases de hoy", icono: "🎓", onClick: irSeguro("asistencia") },
   ];
@@ -555,15 +616,6 @@ export function VistaInicio({ onIrA, soloEncabezado, accionSuperior, contenidoMe
           </div>
           <div className="mt-1 text-lg md:text-xl" style={{ fontFamily: "'Brush Script MT','Segoe Script','Lucida Handwriting',cursive", color: "#17489C" }}>Aprender · Convivir · Construir Futuro</div>
           <div className="mt-2 text-sm text-slate-600">¡Bienvenido de vuelta{nombreDocente ? `, ${nombreDocente}` : ""}! <span className="text-slate-400">· {fechaLegible}</span></div>
-          <div className="flex flex-wrap gap-2 mt-4">
-            {[["Nivel", level], ["XP total", stats.xp], ["Insignias", stats.insignias], ["Estudiantes", stats.estudiantesACargo]].map(([t, v]) => (
-              <div key={t} className="rounded-xl px-3.5 py-1.5 bg-white/90 text-center" style={{ border: "1px solid #DCE6F5" }}>
-                <div className="text-base font-extrabold" style={{ color: "#17264D" }}>{v}</div>
-                <div className="text-[9px] uppercase tracking-wide text-slate-400 font-bold">{t}</div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 max-w-xs"><div className="h-1.5 rounded-full bg-slate-200 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${pctNivel}%`, background: "linear-gradient(90deg,#2F55A4,#1B9A59)" }} /></div></div>
         </div>
       </div>
 
@@ -625,7 +677,6 @@ export function VistaInicio({ onIrA, soloEncabezado, accionSuperior, contenidoMe
       </div>
       )}
 
-      {codiceAbierto && <ReflexionesSinRevisarModal onClose={() => setCodiceAbierto(false)} />}
       {bitacoraAbierta && (
         <BitacoraClaseModal gradoId={bitacoraAbierta.gradoId} materiaId={bitacoraAbierta.materiaId} materiaNombre={bitacoraAbierta.materiaNombre}
           fechaInicial={bitacoraAbierta.fecha} onCerrar={() => setBitacoraAbierta(null)} />
