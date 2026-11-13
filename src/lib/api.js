@@ -2504,6 +2504,16 @@ export async function marcarCodiceRevisado(id) {
   if (error) throw error;
 }
 
+// Marca como revisadas (leídas) varias reflexiones de una vez. Recibe los ids a marcar.
+export async function marcarCodiceRevisadoLote(ids) {
+  if (!ids || ids.length === 0) return 0;
+  for (let i = 0; i < ids.length; i += 200) {
+    const { error } = await supabase.from("codice_entradas").update({ revisado: true }).in("id", ids.slice(i, i + 200));
+    if (error) throw error;
+  }
+  return ids.length;
+}
+
 // Todas las entradas de Códice de todos los estudiantes que el docente todavía
 // no revisó, con el nombre del estudiante/grado/materia ya resueltos.
 export async function fetchEntradasCodiceSinRevisar() {
