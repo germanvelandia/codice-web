@@ -67,6 +67,7 @@ export function Panel({ session }) {
   // Lo que se recuerda al "Actualizar" es propio de cada docente.
   fijarUsuarioPersistencia(session.user.id);
   const [tab, setTab] = useEstadoPersistente("panel_seccion", "inicio");
+  const [menuFijo, setMenuFijo] = useEstadoPersistente("panel_menu_fijo", true);
   const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
   const [esAdmin, setEsAdmin] = useState(null); // null = todavía no se sabe
   const [previsualizandoDocente, setPrevisualizandoDocente] = useState(false);
@@ -158,18 +159,18 @@ export function Panel({ session }) {
   };
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: "#FBFBFD" }}>
+    <div className="min-h-screen flex flex-col" style={{ background: "linear-gradient(180deg, #EEF4FC 0%, #F8FAFE 40%, #FBFBFD 100%)" }}>
       <SidebarTarjetas activo={claveActivaMenu} onCambiar={irA} email={session.user.email} institucion={institucion}
         onAdmin={() => setAdministracionAbierta(true)} onInstitucion={() => setInstitucionAbierta(true)}
         onSalir={() => supabase.auth.signOut()} onBuscarEstudiante={irACalificacionesDesdeBusqueda}
         esAdmin={esAdmin} esAdminEfectivo={esAdminEfectivo} previsualizandoDocente={previsualizandoDocente} onCambiarPrevisualizacion={setPrevisualizandoDocente}
-        grupos={menuPanelVisible} favoritos={favoritos} onAlternarFavorito={alternarFavorito} menuAbierto={menuMovilAbierto} onCerrarMenu={(abrir) => setMenuMovilAbierto(!!abrir)} />
+        grupos={menuPanelVisible} favoritos={favoritos} onAlternarFavorito={alternarFavorito} menuAbierto={menuMovilAbierto} onCerrarMenu={(abrir) => setMenuMovilAbierto(!!abrir)} menuFijo={menuFijo} onAlternarMenuFijo={() => setMenuFijo((v) => !v)} />
 
       {institucionAbierta && <InstitucionModal onClose={() => { setInstitucionAbierta(false); cargarInstitucion(); }} />}
       {administracionAbierta && <AdministracionModal onClose={() => setAdministracionAbierta(false)} />}
 
-      <div className="flex-1 min-w-0 p-5 md:p-10">
-        {tab === "inicio" && <VistaInicio onIrA={irA} contenidoMedio={<TarjetasMenuInicio grupos={menuPanelVisible} onIrA={irA} favoritos={favoritos} />} />}
+      <div className={`flex-1 min-w-0 p-5 md:p-10 ${menuFijo ? "lg:pl-[294px]" : ""}`}>
+        {tab === "inicio" && <VistaInicio onIrA={irA} rolEtiqueta={esAdminEfectivo ? "Administrador" : "Docente"} contenidoMedio={<TarjetasMenuInicio grupos={menuPanelVisible} onIrA={irA} favoritos={favoritos} />} />}
         {String(tab).startsWith("grupo:") && (() => {
           const g = menuPanelVisible.find((x) => "grupo:" + x.key === tab);
           return g ? <PantallaGrupoMenu grupo={g} onIrA={irA} onVolver={() => setTab("inicio")} favoritos={favoritos} onAlternarFavorito={alternarFavorito} /> : null;
