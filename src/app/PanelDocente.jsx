@@ -3,8 +3,8 @@ import { fijarUsuarioPersistencia, useEstadoPersistente } from "../lib/api";
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { InstitucionModal } from "../screens/Institucion";
-import { AdministracionModal } from "../screens/Administracion";
-import { VistaInicio } from "../screens/Inicio";
+import { VistaAdministracion } from "../screens/Administracion";
+import { VistaInicio, VistaReflexiones } from "../screens/Inicio";
 import { VistaEstudiantesRiesgo } from "../screens/EstudiantesRiesgo";
 import { VistaAlbumesDocente } from "../screens/AlbumesDocente";
 import { VistaEntregasPorRevisar } from "../screens/EntregasPorRevisar";
@@ -83,7 +83,7 @@ export function Panel({ session }) {
   const [modoLista, setModoLista] = useEstadoPersistente("panel_estudiantes_lista", false);
   const [grados, setGrados] = useState([]);
   const [institucionAbierta, setInstitucionAbierta] = useState(false);
-  const [administracionAbierta, setAdministracionAbierta] = useState(false);
+  const [mostrarCatalogo, setMostrarCatalogo] = useEstadoPersistente("panel_inicio_catalogo", false);
   const [institucion, setInstitucion] = useState(null);
   const [destinoBusqueda, setDestinoBusqueda] = useState(null);
 
@@ -139,7 +139,7 @@ export function Panel({ session }) {
   // Si la sección recordada ya no existe (o cambiaste de rol), se vuelve a Inicio.
   // El chequeo de administrador espera a saber quién sos: antes de eso "esAdmin"
   // es null y una pantalla de administración recordada se perdería en cada F5.
-  const seccionesValidas = ["inicio", "herramientas", ...MENU_PANEL.map((i) => i.key).filter((k) => !k.startsWith("herr_"))];
+  const seccionesValidas = ["inicio", "herramientas", "administracion", ...MENU_PANEL.map((i) => i.key).filter((k) => !k.startsWith("herr_"))];
   useEffect(() => {
     if (!seccionesValidas.includes(tab) && !(String(tab).startsWith("grupo:") && menuPanelVisible.some((g) => "grupo:" + g.key === tab))) { setTab("inicio"); return; }
     if (esAdmin === null) return;
@@ -161,17 +161,30 @@ export function Panel({ session }) {
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "linear-gradient(180deg, #EEF4FC 0%, #F8FAFE 40%, #FBFBFD 100%)" }}>
       <SidebarTarjetas activo={claveActivaMenu} onCambiar={irA} email={session.user.email} institucion={institucion}
-        onAdmin={() => setAdministracionAbierta(true)} onInstitucion={() => setInstitucionAbierta(true)}
+        onAdmin={() => irA("administracion")} onInstitucion={() => setInstitucionAbierta(true)}
         onSalir={() => supabase.auth.signOut()} onBuscarEstudiante={irACalificacionesDesdeBusqueda}
         esAdmin={esAdmin} esAdminEfectivo={esAdminEfectivo} previsualizandoDocente={previsualizandoDocente} onCambiarPrevisualizacion={setPrevisualizandoDocente}
         grupos={menuPanelVisible} favoritos={favoritos} onAlternarFavorito={alternarFavorito} menuAbierto={menuMovilAbierto} onCerrarMenu={(abrir) => setMenuMovilAbierto(!!abrir)} menuFijo={menuFijo} onAlternarMenuFijo={() => setMenuFijo((v) => !v)} />
 
       {institucionAbierta && <InstitucionModal onClose={() => { setInstitucionAbierta(false); cargarInstitucion(); }} />}
-      {administracionAbierta && <AdministracionModal onClose={() => setAdministracionAbierta(false)} />}
 
       <NavSeccionContext.Provider value={{ onInicio: () => setTab("inicio") }}>
       <div className={`flex-1 min-w-0 p-5 md:p-10 ${menuFijo ? "lg:pl-[294px]" : ""}`}>
-        {tab === "inicio" && <VistaInicio onIrA={irA} rolEtiqueta={esAdminEfectivo ? "Administrador" : "Docente"} contenidoMedio={<TarjetasMenuInicio grupos={menuPanelVisible} onIrA={irA} favoritos={favoritos} />} />}
+        {tab === "inicio" && (
+          <VistaInicio
+            onIrA={irA}
+            rolEtiqueta={esAdminEfectivo ? "Administrador" : "Docente"}
+            soloEncabezado={mostrarCatalogo}
+            accionSuperior={
+              <button onClick={() => setMostrarCatalogo(!mostrarCatalogo)} className="text-xs font-bold px-3 py-1.5 rounded-full bg-white hover:bg-blue-50 border transition mb-2" style={{ color: "#17489C", borderColor: "#BFD3F2" }}>
+                {mostrarCatalogo ? "📊 Ver resumen del día" : "🧭 Ver solo el menú"}
+              </button>
+            }
+            contenidoMedio={mostrarCatalogo ? <TarjetasMenuInicio grupos={menuPanelVisible} onIrA={irA} favoritos={favoritos} /> : null}
+          />
+        )}
+        {tab === "reflexiones" && <MarcoSeccion zonaLabel="Mi clase — Reflexiones del Códice" icono="📜"><VistaReflexiones onIrA={irA} /></MarcoSeccion>}
+        {tab === "administracion" && <MarcoSeccion zonaLabel="Administración — Docentes y mi cuenta" icono="👑"><VistaAdministracion /></MarcoSeccion>}
         {String(tab).startsWith("grupo:") && (() => {
           const g = menuPanelVisible.find((x) => "grupo:" + x.key === tab);
           return g ? <PantallaGrupoMenu grupo={g} onIrA={irA} onVolver={() => setTab("inicio")} favoritos={favoritos} onAlternarFavorito={alternarFavorito} /> : null;
