@@ -204,7 +204,7 @@ function Juego({ estudianteInfo }) {
                 </div>
                 <div style={{ padding: 12 }}>
                   <div className="font-extrabold leading-tight">{c.titulo}</div>
-                  <div className="text-xs text-slate-500 mt-0.5">{c.paradas} paradas · recompensa +{c.xp} XP · +{c.oro} 🪙{c.dificultad && c.dificultad !== "normal" ? ` · ${(api.DIFICULTADES[c.dificultad] || {}).emoji} ${(api.DIFICULTADES[c.dificultad] || {}).label}` : ""}</div>
+                  <div className="text-xs text-slate-500 mt-0.5">{c.paradas} paradas · recompensa +{c.xp} XP · +{c.oro} 🪙{c.dificultad && c.dificultad !== "normal" ? ` · ${((api.DIFICULTADES || {})[c.dificultad] || {}).emoji} ${((api.DIFICULTADES || {})[c.dificultad] || {}).label}` : ""}</div>
                   <button disabled={ocupado} onClick={() => abrir(c.id)} className="dt-btn mt-2 w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white py-2 font-extrabold disabled:opacity-50">
                     {c.en_curso ? "▶ Continuar el caso" : c.resuelto ? "↻ Jugar otra vez" : "📂 Abrir expediente"}
                   </button>
