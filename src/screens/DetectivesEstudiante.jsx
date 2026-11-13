@@ -156,7 +156,7 @@ function Juego({ estudianteInfo }) {
     setSirena(null); setVista(r.vista);
     if (r.ok) { sonido.victoria(); setFinal({ ganado: true, ...r }); api.rankingDetectives(est, caso).then(setRanking).catch(() => {}); }
     else {
-      sonido.mal(); setAviso({ texto: `${s.nombre} era inocente.`, costo: 2 }); setMalas((m) => [...m, `s${s.id}`]); efecto("mal");
+      sonido.mal(); setAviso({ texto: `${s.nombre} era inocente.`, costo: (vista.dificultad === "experto" ? 3 : 2) }); setMalas((m) => [...m, `s${s.id}`]); efecto("mal");
       if (r.vista.estado === "fallido") { sonido.derrota(); setFinal({ ganado: false, culpable: r.culpable }); }
     }
   });
@@ -204,7 +204,7 @@ function Juego({ estudianteInfo }) {
                 </div>
                 <div style={{ padding: 12 }}>
                   <div className="font-extrabold leading-tight">{c.titulo}</div>
-                  <div className="text-xs text-slate-500 mt-0.5">{c.paradas} paradas · recompensa +{c.xp} XP · +{c.oro} 🪙</div>
+                  <div className="text-xs text-slate-500 mt-0.5">{c.paradas} paradas · recompensa +{c.xp} XP · +{c.oro} 🪙{c.dificultad && c.dificultad !== "normal" ? ` · ${(api.DIFICULTADES[c.dificultad] || {}).emoji} ${(api.DIFICULTADES[c.dificultad] || {}).label}` : ""}</div>
                   <button disabled={ocupado} onClick={() => abrir(c.id)} className="dt-btn mt-2 w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white py-2 font-extrabold disabled:opacity-50">
                     {c.en_curso ? "▶ Continuar el caso" : c.resuelto ? "↻ Jugar otra vez" : "📂 Abrir expediente"}
                   </button>
@@ -322,17 +322,22 @@ function Juego({ estudianteInfo }) {
   // ---------- JUEGO ----------
   const lugar = vista.lugar || {};
   const encontrados = vista.rasgos || [];
-  const faltan = Math.max(0, vista.total - encontrados.length);
+  const bloqueado = !!vista.retrato_bloqueado;
+  const dificultad = vista.dificultad || "normal";
+  const ayuda = dificultad === "normal"; // solo en normal se marcan las coincidencias con el retrato
+  const faltan = Math.max(0, vista.total - (bloqueado ? vista.rasgos_n || 0 : encontrados.length));
   const ultimo = vista.pistas[vista.pistas.length - 1];
 
   const Retrato = (
     <div style={{ ...marco, padding: 10 }} aria-label="Retrato hablado">
       <div style={{ fontSize: 11, letterSpacing: 2, fontWeight: 800, opacity: 0.75 }}>🖼️ RETRATO HABLADO</div>
       <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 6 }}>
-        <div style={{ background: "#e2e8f0", borderRadius: 12, padding: 4, flexShrink: 0 }}><Rostro nombre="culpable" rasgos={encontrados} silueta={!encontrados.length} parcial ancho={92} /></div>
+        <div style={{ background: "#e2e8f0", borderRadius: 12, padding: 4, flexShrink: 0 }}><Rostro nombre="culpable" rasgos={encontrados} silueta={!encontrados.length} parcial ancho={92} />{bloqueado && <div style={{ textAlign: "center", fontSize: 18, marginTop: -4 }} aria-hidden>🔒</div>}</div>
         <ul style={{ fontSize: 12.5, lineHeight: 1.4, margin: 0, padding: 0, listStyle: "none", flex: 1 }}>
-          {encontrados.map((r, i) => <li key={i} className="dt-pop" style={{ animationDelay: `${i * 60}ms` }}>🔍 {r}</li>)}
-          {Array.from({ length: faltan }).map((_, i) => <li key={`f${i}`} style={{ opacity: 0.45 }}>❓ Rasgo por descubrir</li>)}
+          {bloqueado && <li style={{ fontWeight: 800 }}>🔒 Retrato bloqueado <span style={{ fontWeight: 400, opacity: 0.8 }}>· {vista.rasgos_n || 0} de {vista.total} pistas guardadas</span></li>}
+          {bloqueado && <li style={{ opacity: 0.75, fontSize: 11.5 }}>{dificultad === "experto" ? "Nunca se desbloquea: deduce al culpable con lo que dijeron los testigos." : "Se desbloquea al llegar a la rueda de reconocimiento."}</li>}
+          {!bloqueado && encontrados.map((r, i) => <li key={i} className="dt-pop" style={{ animationDelay: `${i * 60}ms` }}>🔍 {r}</li>)}
+          {!bloqueado && Array.from({ length: faltan }).map((_, i) => <li key={`f${i}`} style={{ opacity: 0.45 }}>❓ Rasgo por descubrir</li>)}
         </ul>
       </div>
     </div>
@@ -395,7 +400,7 @@ function Juego({ estudianteInfo }) {
             </div>
           )}
 
-          {aviso && <div role="status" className="dt-pop rounded-xl p-3 text-sm border bg-rose-50 border-rose-200 text-rose-800"><b>⏳ −{aviso.costo === 2 ? "2 horas" : "1 hora"}.</b> {aviso.texto}</div>}
+          {aviso && <div role="status" className="dt-pop rounded-xl p-3 text-sm border bg-rose-50 border-rose-200 text-rose-800"><b>⏳ −{aviso.costo > 1 ? `${aviso.costo} horas` : "1 hora"}.</b> {aviso.texto}</div>}
         </div>
         <div className="space-y-3">{Retrato}</div>
       </div>
@@ -420,19 +425,26 @@ function Juego({ estudianteInfo }) {
       {vista.fase === "arresto" && (
         <div style={{ ...marco, padding: 10 }}>
           <div className="font-extrabold">🚨 ¡Lo encontraste! Rueda de reconocimiento</div>
-          <p className="text-xs opacity-85 mb-2">Compara a cada sospechoso con tu retrato hablado. Arrestar a un inocente cuesta 2 horas.</p>
+          <p className="text-xs opacity-85 mb-2">{dificultad === "experto" ? "Tu retrato sigue bloqueado: usa las pistas de los testigos. Arrestar a un inocente cuesta 3 horas." : dificultad === "dificil" ? "Tu retrato se desbloqueó, pero ahora te toca comparar a ti. Arrestar a un inocente cuesta 2 horas." : "Compara a cada sospechoso con tu retrato hablado. Arrestar a un inocente cuesta 2 horas."}</p>
+          {!ayuda && (vista.pistas || []).length > 0 && (
+            <details open className="mb-2" style={{ background: "#ffffff14", borderRadius: 10, padding: "6px 10px" }}>
+              <summary className="cursor-pointer font-bold text-sm">📓 Cuaderno de pistas ({vista.pistas.length})</summary>
+              <ol style={{ margin: "6px 0 0", paddingLeft: 18, fontSize: 12.5, lineHeight: 1.45 }}>{vista.pistas.map((pi, i) => <li key={i}><b>{pi.testigo}:</b> «{pi.texto}»</li>)}</ol>
+            </details>
+          )}
+          {dificultad === "dificil" && encontrados.length > 0 && <p className="text-xs mb-2" style={{ background: "#ffffff14", borderRadius: 10, padding: "6px 10px" }}>🖼️ <b>Retrato desbloqueado:</b> {encontrados.join(" · ")}</p>}
           <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", backgroundImage: "repeating-linear-gradient(0deg,#ffffff14 0 1px,transparent 1px 28px)", borderRadius: 12, padding: 8 }}>
             {(vista.sospechosos || []).map((s, k) => {
-              const coinc = encontrados.filter((r) => s.rasgos.includes(r)).length;
+              const coinc = ayuda ? encontrados.filter((r) => s.rasgos.includes(r)).length : 0;
               const descartado = malas.includes(`s${s.id}`);
               return (
                 <div key={s.id} className={`dt-pop ${descartado ? "dt-shake" : ""}`} style={{ background: descartado ? "#1e293b99" : "#f8fafc", color: "#0f172a", borderRadius: 14, padding: 8, textAlign: "center", opacity: descartado ? 0.5 : 1, animationDelay: `${k * 120}ms` }}>
                   <div style={{ background: "#e2e8f0", borderRadius: 10, display: "flex", justifyContent: "center" }}><Rostro nombre={s.nombre} rasgos={s.rasgos} ancho={96} /></div>
                   <div className="font-extrabold text-sm mt-1">{s.nombre}</div>
                   <ul style={{ textAlign: "left", fontSize: 11.5, margin: "4px 0", padding: 0, listStyle: "none" }}>
-                    {s.rasgos.map((r, i) => <li key={i} style={{ color: encontrados.includes(r) ? "#047857" : "#475569", fontWeight: encontrados.includes(r) ? 800 : 400 }}>{encontrados.includes(r) ? "✔" : "•"} {r}</li>)}
+                    {s.rasgos.map((r, i) => <li key={i} style={{ color: ayuda && encontrados.includes(r) ? "#047857" : "#475569", fontWeight: ayuda && encontrados.includes(r) ? 800 : 400 }}>{ayuda && encontrados.includes(r) ? "✔" : "•"} {r}</li>)}
                   </ul>
-                  <div style={{ fontSize: 10.5, color: "#64748b" }}>Coincide en {coinc} de {encontrados.length}</div>
+                  {ayuda && <div style={{ fontSize: 10.5, color: "#64748b" }}>Coincide en {coinc} de {encontrados.length}</div>}
                   {confirmar === s.id
                     ? <div style={{ display: "flex", gap: 6, marginTop: 6 }}><button disabled={ocupado} onClick={() => arrestar(s)} className="dt-btn" style={{ flex: 1, background: "#e11d48", color: "#fff", borderRadius: 8, padding: "5px 0", fontWeight: 800, fontSize: 12 }}>¡Sí, arrestar!</button><button onClick={() => setConfirmar(null)} style={{ background: "#e2e8f0", borderRadius: 8, padding: "5px 10px", fontWeight: 700, fontSize: 12 }}>No</button></div>
                     : <button disabled={ocupado || descartado} onClick={() => { sonido.click(); setConfirmar(s.id); }} className="dt-btn" style={{ marginTop: 6, width: "100%", background: "#0f172a", color: "#fff", borderRadius: 8, padding: "5px 0", fontWeight: 800, fontSize: 12, opacity: descartado ? 0.5 : 1 }}>🚔 Arrestar</button>}
