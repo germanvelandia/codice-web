@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import * as api from "../lib/api";
 import { FotoLightbox } from "./Estudiantes";
+import { TextoEnriquecido, textoPlano } from "../components/RichText";
 
 const DIAS_NOMBRE = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 const TIPO_EVENTO_COLOR = { institucional: "#2F55A4", academico: "#28478a", convivencial: "#17264D", festivo: "#F59E0B", otro: "#64748B" };
@@ -383,7 +384,7 @@ function EntradaCodicePendiente({ entrada, onCambio }) {
           <div className="text-xs text-slate-400">{entrada.fecha}{entrada.materia_nombre ? ` · ${entrada.materia_nombre}` : ""}</div>
           <div className="text-sm font-bold text-slate-800">{entrada.estudiante_nombre} <span className="text-xs font-normal text-slate-400">· Grado {entrada.grado_id}</span></div>
           {entrada.titulo && <div className="text-xs font-semibold text-slate-600 mt-1">{entrada.titulo}</div>}
-          <div className="text-xs text-slate-500 mt-1 whitespace-pre-line">{entrada.contenido}</div>
+          <TextoEnriquecido html={entrada.contenido} className="text-sm text-slate-600 mt-1.5" />
         </div>
         <button onClick={marcarRevisada} className="text-[10px] text-slate-400 hover:text-emerald-600 shrink-0">✔ Marcar visto</button>
       </div>
@@ -415,7 +416,7 @@ export function VistaReflexiones() {
   const cursos = [...new Set(entradas.map((e) => e.grado_id).filter(Boolean))].sort();
   const q = norm(busqueda.trim());
   const visibles = entradas.filter((e) => (curso === "todos" || String(e.grado_id) === String(curso)) &&
-    (!q || norm(e.estudiante_nombre).includes(q) || norm(e.titulo).includes(q) || norm(e.contenido).includes(q) || norm(e.materia_nombre).includes(q)));
+    (!q || norm(e.estudiante_nombre).includes(q) || norm(e.titulo).includes(q) || norm(textoPlano(e.contenido)).includes(q) || norm(e.materia_nombre).includes(q)));
   const porCurso = {};
   visibles.forEach((e) => { (porCurso[e.grado_id || "—"] = porCurso[e.grado_id || "—"] || []).push(e); });
 
