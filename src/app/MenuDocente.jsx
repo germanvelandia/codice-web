@@ -165,19 +165,19 @@ export function BuscadorEstudiantesGlobal({ onSeleccionar }) {
 // verticalmente contra el fondo oscuro del menú.
 export function TarjetaMenuLateral({ icono, label, activo, onClick, fondo, color, sub, esFavorito, onAlternarFavorito }) {
   return (
-    <div className={`group relative w-full flex items-center rounded-xl mb-1.5 transition-all ${activo ? "bg-white" : "hover:bg-white/10"}`}>
+    <div className={`group relative w-full flex items-center rounded-xl mb-1 transition-all ${activo ? "shadow-md" : "hover:bg-white/10"}`} style={activo ? { background: "#1F7AF0" } : undefined}>
       <button onClick={onClick} className="flex-1 min-w-0 flex items-center gap-2.5 px-2.5 py-2 text-left">
-        <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm" style={{ background: activo ? (fondo || "#E8EEF8") : "rgba(255,255,255,0.12)" }}>
+        <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm" style={{ background: activo ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.10)" }}>
           {icono}
         </div>
         <span className="min-w-0">
-          <span className={`block text-sm font-bold leading-tight ${activo ? "text-[#17264D]" : "text-[#E8EEF8]"}`}>{label}</span>
-          {sub && <span className={`block text-[10px] ${activo ? "text-slate-400" : "text-white/40"}`}>{sub}</span>}
+          <span className={`block text-sm font-bold leading-tight ${activo ? "text-white" : "text-[#E8EEF8]"}`}>{label}</span>
+          {sub && <span className={`block text-[10px] ${activo ? "text-white/70" : "text-white/40"}`}>{sub}</span>}
         </span>
       </button>
       {onAlternarFavorito && (
         <button onClick={(e) => { e.stopPropagation(); onAlternarFavorito(); }} title={esFavorito ? "Quitar de favoritos" : "Agregar a favoritos"}
-          className={`shrink-0 pr-2.5 text-sm ${esFavorito ? "text-amber-400" : "text-white/30 sm:opacity-0 sm:group-hover:opacity-100 hover:text-amber-300"} ${activo && !esFavorito ? "!text-slate-300" : ""}`}>
+          className={`shrink-0 pr-2.5 text-sm ${esFavorito ? "text-amber-400" : "text-white/30 sm:opacity-0 sm:group-hover:opacity-100 hover:text-amber-300"} ${activo && !esFavorito ? "!text-white/60" : ""}`}>
           {esFavorito ? "★" : "☆"}
         </button>
       )}
@@ -193,33 +193,49 @@ export const COLORES_GRUPO = {
 
 export function TarjetasMenuInicio({ grupos, onIrA, favoritos = [] }) {
   const [busqueda, setBusqueda] = useState("");
-  const q = busqueda.trim().toLowerCase();
+  const refBuscar = React.useRef(null);
+  const norm = (t) => String(t).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const q = norm(busqueda.trim());
   const todos = grupos.filter((g) => g.key !== "inicio_grupo");
   const todasLasSecciones = grupos.flatMap((g) => g.items);
-  // Con texto en el buscador se muestran las secciones que coinciden (de todos los grupos).
-  const coincidencias = q ? todos.map((g) => ({ ...g, items: g.items.filter((it) => it.label.toLowerCase().includes(q)) })).filter((g) => g.items.length > 0) : [];
+  // Atajo de teclado: Ctrl/Cmd + K enfoca el buscador de funciones.
+  useEffect(() => {
+    const h = (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); refBuscar.current?.focus(); } };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, []);
+  const coincidencias = q ? todos.map((g) => ({ ...g, items: g.items.filter((it) => norm(it.label).includes(q) || norm(g.label).includes(q)) })).filter((g) => g.items.length > 0) : [];
+  const esMac = typeof navigator !== "undefined" && /mac/i.test(navigator.platform || "");
+
+  const Tarjeta = ({ it, color }) => (
+    <button onClick={() => onIrA(it.key)} className="flex items-center gap-3 text-left rounded-xl bg-white px-3 py-3 min-h-[68px] hover:shadow-md hover:-translate-y-0.5 transition-all" style={{ border: `1px solid ${color}33`, boxShadow: "0 1px 2px rgba(15,25,50,0.04)" }}>
+      <span className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0" style={{ background: color + "1A" }}>{it.icono}</span>
+      <span className="text-[13px] font-bold leading-tight text-slate-800 min-w-0">{it.label}</span>
+    </button>
+  );
+
   return (
     <div className="mb-4">
       <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-        <div className="font-extrabold text-slate-800 text-base">🧭 ¿A dónde vamos hoy?</div>
-        <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="🔎 Buscar sección…"
-          className="text-sm rounded-full px-3.5 py-1.5 border border-slate-200 bg-white outline-none focus:border-[#2F55A4] w-full sm:w-64" />
+        <div className="flex items-center gap-2 font-extrabold italic text-xl" style={{ color: "#17264D" }}>
+          <span className="grid grid-cols-2 gap-0.5 w-6 h-6">{["#2F55A4", "#1B9A59", "#F5A524", "#2F55A4"].map((c, i) => <span key={i} className="rounded-sm" style={{ background: c }} />)}</span>
+          Catálogo de funciones
+        </div>
+        <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2 w-full sm:w-96" style={{ border: "1px solid #CFDAEE" }}>
+          <span className="text-slate-400">🔍</span>
+          <input ref={refBuscar} value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Busca una función…" className="flex-1 min-w-0 text-sm outline-none bg-transparent" />
+          <span className="hidden sm:inline text-[11px] font-bold text-slate-500 bg-slate-100 rounded-md px-1.5 py-0.5">{esMac ? "⌘ K" : "Ctrl K"}</span>
+        </div>
       </div>
       {q ? (
-        coincidencias.length === 0 ? <p className="text-sm text-slate-400">No hay secciones con ese nombre.</p> : (
+        coincidencias.length === 0 ? <p className="text-sm text-slate-400">No hay funciones con ese nombre.</p> : (
           <div className="space-y-3">
             {coincidencias.map((g) => {
               const color = COLORES_GRUPO[g.key] || "#2F55A4";
               return (
-                <div key={g.key}>
-                  <div className="text-[11px] font-extrabold uppercase tracking-wide mb-1.5" style={{ color }}>{g.icono} {g.label}</div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
-                    {g.items.map((it) => (
-                      <button key={it.key} onClick={() => onIrA(it.key)} className="flex items-center gap-2 text-left rounded-xl px-2.5 py-2 hover:shadow-sm" style={{ background: color + "12" }}>
-                        <span className="text-base shrink-0">{it.icono}</span><span className="text-[12px] font-bold leading-tight text-slate-700">{it.label}</span>
-                      </button>
-                    ))}
-                  </div>
+                <div key={g.key} className="rounded-2xl p-3" style={{ background: color + "12", border: `1px solid ${color}22` }}>
+                  <div className="text-sm font-extrabold mb-2" style={{ color }}>{g.icono} {g.label}</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">{g.items.map((it) => <Tarjeta key={it.key} it={it} color={color} />)}</div>
                 </div>
               );
             })}
@@ -228,31 +244,25 @@ export function TarjetasMenuInicio({ grupos, onIrA, favoritos = [] }) {
       ) : (
         <>
           {favoritos.length > 0 && (
-            <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50/60 p-3">
-              <div className="text-xs font-extrabold text-amber-700 mb-2">⭐ Mis favoritos</div>
-              <div className="flex flex-wrap gap-2">
-                {favoritos.map((k) => todasLasSecciones.find((it) => it.key === k)).filter(Boolean).map((it) => (
-                  <button key={it.key} onClick={() => onIrA(it.key)} className="flex items-center gap-1.5 text-[12px] font-bold text-slate-700 bg-white border border-amber-200 rounded-full px-3 py-1.5 hover:shadow-sm">
-                    <span>{it.icono}</span>{it.label}
-                  </button>
-                ))}
+            <div className="mb-3 rounded-2xl p-3" style={{ background: "#FFF7E0", border: "1px solid #F5D98A" }}>
+              <div className="text-sm font-extrabold text-amber-700 mb-2">⭐ Mis favoritos</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
+                {favoritos.map((k) => todasLasSecciones.find((it) => it.key === k)).filter(Boolean).map((it) => <Tarjeta key={it.key} it={it} color="#D97706" />)}
               </div>
             </div>
           )}
-          {/* Solo el nombre de cada tarjeta: al tocarla se abre su propia pantalla con las opciones */}
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+          <div className="space-y-3">
             {todos.map((g) => {
               const color = COLORES_GRUPO[g.key] || "#2F55A4";
+              const visibles = g.items.slice(0, 4);
               return (
-                <button key={g.key} onClick={() => onIrA("grupo:" + g.key)}
-                  className="rounded-2xl p-4 text-left text-white shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all min-h-[104px] flex flex-col justify-between"
-                  style={{ background: `linear-gradient(135deg, ${color}, ${color}CC)` }}>
-                  <span className="text-3xl">{g.icono}</span>
-                  <span>
-                    <span className="block font-extrabold text-sm leading-tight">{g.label}</span>
-                    <span className="block text-[10px] text-white/70 mt-0.5">{g.items.length} {g.items.length === 1 ? "sección" : "secciones"} ›</span>
-                  </span>
-                </button>
+                <div key={g.key} className="rounded-2xl p-3" style={{ background: color + "12", border: `1px solid ${color}22` }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2 text-base font-extrabold italic" style={{ color }}><span className="text-xl not-italic">{g.icono}</span>{g.label}</div>
+                    <button onClick={() => onIrA("grupo:" + g.key)} className="text-xs font-bold hover:underline" style={{ color }}>{g.items.length > 4 ? `Ver más (${g.items.length})` : "Ver todo"} →</button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">{visibles.map((it) => <Tarjeta key={it.key} it={it} color={color} />)}</div>
+                </div>
               );
             })}
           </div>
@@ -299,7 +309,7 @@ export function PantallaGrupoMenu({ grupo, onIrA, onVolver, favoritos = [], onAl
   );
 }
 
-export function SidebarTarjetas({ activo, onCambiar, email, institucion, onAdmin, onInstitucion, onSalir, onBuscarEstudiante, esAdmin, esAdminEfectivo, previsualizandoDocente, onCambiarPrevisualizacion, grupos, favoritos = [], onAlternarFavorito, menuAbierto, onCerrarMenu }) {
+export function SidebarTarjetas({ activo, onCambiar, email, institucion, onAdmin, onInstitucion, onSalir, onBuscarEstudiante, esAdmin, esAdminEfectivo, previsualizandoDocente, onCambiarPrevisualizacion, grupos, favoritos = [], onAlternarFavorito, menuAbierto, onCerrarMenu, menuFijo = false, onAlternarMenuFijo }) {
   const [nombreDocente, setNombreDocente] = useState("");
   const [editandoNombre, setEditandoNombre] = useState(false);
   const [nombreTemp, setNombreTemp] = useState("");
@@ -341,16 +351,28 @@ export function SidebarTarjetas({ activo, onCambiar, email, institucion, onAdmin
   const elegir = (key) => { onCambiar(key); onCerrarMenu?.(); };
 
   const contenido = (
-    <div className="h-full flex flex-col" style={{ background: "linear-gradient(180deg, #17264D 0%, #0f1932 100%)" }}>
+    <div className="relative h-full flex flex-col" style={{ background: "linear-gradient(180deg, #0B3F94 0%, #082B69 55%, #061E4D 100%)" }}>
+      {onAlternarMenuFijo && <button onClick={onAlternarMenuFijo} title="Ocultar el menú fijo" className="hidden lg:flex absolute top-2 right-2 z-10 w-6 h-6 items-center justify-center rounded-full text-white/60 hover:text-white hover:bg-white/10 text-sm">«</button>}
       <div className="p-3 pb-2">
-        <button onClick={() => elegir("inicio")} className="flex items-center gap-2 mb-3 px-1">
-          {institucion?.imagen_menu_url ? (
-            <img src={institucion.imagen_menu_url} alt="Logo" className="rounded-lg object-cover" style={{ width: 28, height: 28 }} />
+        <button onClick={() => elegir("inicio")} className="flex items-center gap-2.5 mb-2 px-1 text-left w-full">
+          {(institucion?.logo_url || institucion?.imagen_menu_url) ? (
+            <img src={institucion.logo_url || institucion.imagen_menu_url} alt="Escudo" className="object-contain shrink-0" style={{ width: 46, height: 46 }} />
           ) : (
-            <span className="text-xl">🧭</span>
+            <span className="text-3xl shrink-0">🧭</span>
           )}
-          <span className="text-white text-sm font-bold tracking-[0.12em]" style={{ fontFamily: "Georgia, serif" }}>CÓDICE</span>
+          <span className="min-w-0">
+            <span className="block text-white text-[15px] font-extrabold leading-tight">{(institucion?.nombre && institucion.nombre !== "Institución Educativa") ? institucion.nombre : "CÓDICE"}</span>
+            <span className="block text-[10px] text-white/60 leading-tight mt-0.5">Construimos una convivencia de excelencia</span>
+          </span>
         </button>
+
+        <div className="flex items-center gap-2.5 rounded-xl px-2.5 py-2 mb-2" style={{ background: "rgba(255,255,255,0.08)" }}>
+          <div className="relative shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-lg bg-white/90">👤<span className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2" style={{ background: "#3DDC84", borderColor: "#0B3F94" }} /></div>
+          <div className="min-w-0">
+            <div className="text-white text-sm font-extrabold truncate">{nombreDocente || (esAdminEfectivo ? "Administrador" : "Docente")}</div>
+            <div className="text-[11px] text-white/60 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full" style={{ background: "#3DDC84" }} />En línea</div>
+          </div>
+        </div>
 
         <BuscadorEstudiantesGlobal onSeleccionar={(r) => { onBuscarEstudiante(r); onCerrarMenu?.(); }} />
       </div>
@@ -433,11 +455,13 @@ export function SidebarTarjetas({ activo, onCambiar, email, institucion, onAdmin
 
   return (
     <>
+      {/* Escritorio: menú lateral fijo (se puede ocultar con «) */}
+      {menuFijo && <aside className="hidden lg:block fixed left-0 top-0 bottom-0 w-[270px] z-30 shadow-xl">{contenido}</aside>}
 
-      {/* Móvil: barra angosta con hamburguesa + cajón deslizante */}
-      <div className="w-full sticky top-0 z-30 flex items-center justify-between gap-3 px-4 py-2.5" style={{ background: "#17264D" }}>
+      {/* Barra superior con hamburguesa + cajón deslizante (móvil, o escritorio con el menú fijo oculto) */}
+      <div className={`w-full sticky top-0 z-30 flex items-center justify-between gap-3 px-4 py-2.5 ${menuFijo ? "lg:hidden" : ""}`} style={{ background: "#0B3F94" }}>
         <div className="flex items-center gap-3 min-w-0">
-          <button onClick={() => onCerrarMenu?.(true)} className="text-white text-xl shrink-0" title="Menú">☰</button>
+          <button onClick={() => ((typeof window !== "undefined" && window.innerWidth >= 1024 && onAlternarMenuFijo) ? onAlternarMenuFijo() : onCerrarMenu?.(true))} className="text-white text-xl shrink-0" title="Menú">☰</button>
           <button onClick={() => elegir("inicio")} className="flex items-center gap-2 shrink-0">
             <span className="text-lg">🧭</span>
             <span className="text-white text-sm font-bold tracking-[0.12em]">CÓDICE</span>
