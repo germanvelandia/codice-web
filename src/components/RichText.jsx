@@ -93,11 +93,55 @@ export function textoPlano(html) {
   return div.textContent || div.innerText || "";
 }
 
+// Limpia el HTML antes de mostrarlo (seguridad): deja solo etiquetas de formato
+// seguras y estilos inofensivos; elimina scripts, eventos (onclick…), iframes,
+// enlaces javascript: e imágenes que no sean data:/https.
+const TAGS_OK = new Set(["B","STRONG","I","EM","U","S","P","BR","DIV","SPAN","FONT","UL","OL","LI","H1","H2","H3","H4","BLOCKQUOTE","TABLE","THEAD","TBODY","TR","TH","TD","A","IMG","SUB","SUP","HR","CODE","PRE"]);
+const ESTILOS_OK = ["color","background","background-color","font-size","font-weight","font-style","text-align","text-decoration","border","border-left","border-radius","padding","margin","width","max-width","border-collapse","vertical-align"];
+export function limpiarHtml(html) {
+  if (!html || typeof document === "undefined") return html || "";
+  const tpl = document.createElement("template");
+  tpl.innerHTML = html;
+  const limpiar = (nodo) => {
+    Array.from(nodo.childNodes).forEach((h) => {
+      if (h.nodeType === 3) return;
+      if (h.nodeType !== 1) { h.remove(); return; }
+      if (!TAGS_OK.has(h.tagName)) {
+        if (["SCRIPT","STYLE","IFRAME","OBJECT","EMBED","FORM","INPUT","BUTTON","LINK","META","SVG","MATH"].includes(h.tagName.toUpperCase())) { h.remove(); return; }
+        limpiar(h); h.replaceWith(...Array.from(h.childNodes)); return;
+      }
+      Array.from(h.attributes).forEach((a) => {
+        const n = a.name.toLowerCase(), v = a.value;
+        if (n === "style") {
+          const ok = v.split(";").map((d) => d.trim()).filter((d) => {
+            const [k, ...r] = d.split(":"); const val = r.join(":").toLowerCase();
+            return k && ESTILOS_OK.includes(k.trim().toLowerCase()) && !/url\(|expression|javascript|@import/.test(val);
+          }).join(";");
+          if (ok) h.setAttribute("style", ok); else h.removeAttribute("style");
+        } else if (["color","size","face","align","colspan","rowspan","width","height"].includes(n)) {
+          /* permitido */
+        } else if (n === "href" && h.tagName === "A" && /^(https?:|mailto:)/i.test(v.trim())) {
+          h.setAttribute("target", "_blank"); h.setAttribute("rel", "noopener noreferrer");
+        } else if (n === "src" && h.tagName === "IMG" && /^(https:|data:image\/)/i.test(v.trim())) {
+          /* permitido */
+        } else if (n === "alt") {
+          /* permitido */
+        } else { h.removeAttribute(a.name); }
+      });
+      limpiar(h);
+    });
+  };
+  limpiar(tpl.content);
+  const div = document.createElement("div");
+  div.appendChild(tpl.content.cloneNode(true));
+  return div.innerHTML;
+}
+
 export function TextoEnriquecido({ html, className = "" }) {
   if (!html) return null;
   const pareceHtml = /<[a-z][\s\S]*>/i.test(html);
   return (
     <div className={`leading-relaxed ${className}`} style={{ wordBreak: "break-word", whiteSpace: pareceHtml ? "normal" : "pre-line" }}
-      dangerouslySetInnerHTML={{ __html: html }} />
+      dangerouslySetInnerHTML={{ __html: pareceHtml ? limpiarHtml(html) : html.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])) }} />
   );
 }
