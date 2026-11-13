@@ -573,7 +573,7 @@ export function VistaInicio({ onIrA, soloEncabezado, accionSuperior, contenidoMe
   useEffect(() => {
     Promise.all([api.fetchStatsDocente(), api.fetchResumenDocente(), api.fetchMiPerfil(), api.fetchResumenEntregasPorRevisar().catch(() => null)]).then(([s, r0, perfil, rev]) => {
       // Los conteos de entregas salen de la misma fuente que la pantalla «Entregas por revisar», para que coincidan.
-      const r = rev ? { ...r0, entregasPendientes: rev.evaluaciones.reduce((a, e) => a + e.cantidad, 0), tareasSinCalificar: rev.tareas.reduce((a, t) => a + t.cantidad, 0) } : r0;
+      const r = rev ? { ...r0, entregasPendientes: (rev.evaluaciones || []).reduce((a, e) => a + e.cantidad, 0), tareasSinCalificar: (rev.tareas || []).reduce((a, t) => a + t.cantidad, 0) } : r0;
       setStats(s); setResumen(r); setNombreDocente(perfil?.nombre || ""); setCargando(false);
       const pares = (r?.clasesHoy || []).filter((h) => h.materia_id && h.grado_id).map((h) => ({ materiaId: h.materia_id, gradoId: h.grado_id, horarioId: h.id }));
       if (pares.length > 0) api.fetchClasesPendientesDeHoy(pares).then(setPendientesHoy);
