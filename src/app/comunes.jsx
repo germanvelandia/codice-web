@@ -1,4 +1,4 @@
-import React, { lazy } from "react";
+import React, { lazy, createContext, useContext } from "react";
 
 export function Centered({ children }) {
   return (
@@ -81,20 +81,37 @@ export function FondoArcadeDocente() {
   return <div className="fixed inset-0 -z-10" style={{ background: "#1a1533" }} />;
 }
 
-// Marco decorativo reutilizable — mismo lenguaje visual del "Zona de
-// Herramientas" (degradado azul/dorado, encabezado oscuro, contenido en
-// tarjeta blanca adentro), para las demás zonas de la app.
+// Contexto de navegación: el panel docente lo provee para que cada sección pueda mostrar "← Inicio".
+export const NavSeccionContext = createContext(null);
+
+// Colores por zona — los mismos del catálogo de funciones del Inicio.
+const COLORES_ZONA = {
+  "Académico": "#2F55A4", "Mi clase": "#2F55A4", "Planeación": "#B8892B", "Convivencial": "#0E9F8E", "Gamificación": "#7C3AED",
+  "Reconocimientos": "#D97706", "Herramientas": "#E0552E", "En el aula": "#E0552E", "Informes": "#475569", "Comarca de Oakhaven": "#7C3AED",
+  "Estudio": "#2F55A4", "Diversión": "#7C3AED", "Comunidad": "#D97706", "Mi cuenta": "#475569", "Administración": "#475569",
+};
+
+// Marco de cada sección (docente y estudiante): encabezado con ícono, ruta "Zona › Sección",
+// título y botón para volver; el contenido va en una tarjeta blanca. Mismo estilo del Inicio.
 export function MarcoSeccion({ zonaLabel, icono, children }) {
+  const nav = useContext(NavSeccionContext);
+  const partes = String(zonaLabel || "").split(" — ");
+  const zona = partes.length > 1 ? partes[0] : null;
+  const titulo = partes.length > 1 ? partes.slice(1).join(" — ") : partes[0];
+  const color = COLORES_ZONA[zona || titulo] || "#2F55A4";
   return (
-    <div className="rounded-[28px] p-1" style={{ background: "linear-gradient(135deg, #2F55A4, #B8892B)" }}>
-      <div className="rounded-[24px] p-4 md:p-6" style={{ background: "linear-gradient(160deg, #17264D 0%, #223b74 100%)" }}>
-        <div className="flex items-center gap-2.5 mb-4 px-1">
-          <span className="text-2xl">{icono}</span>
-          <div className="text-base font-extrabold text-white">{zonaLabel}</div>
+    <div className="max-w-[1500px] mx-auto">
+      <div className="relative rounded-2xl overflow-hidden mb-4 px-4 py-3.5 md:px-5 flex items-center gap-3" style={{ background: `linear-gradient(120deg, ${color}18 0%, #FFFFFF 70%)`, border: `1px solid ${color}33` }}>
+        <span aria-hidden className="absolute left-0 top-0 bottom-0 w-1.5" style={{ background: `linear-gradient(180deg, ${color}, #1B9A59)` }} />
+        <span className="w-11 h-11 rounded-xl flex items-center justify-center text-2xl shrink-0 ml-1" style={{ background: color + "22" }}>{icono}</span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] font-bold uppercase tracking-wide truncate" style={{ color }}>{zona ? `${zona} › ` : ""}{titulo}</div>
+          <h1 className="text-xl md:text-2xl font-extrabold italic leading-tight truncate" style={{ color: "#17264D" }}>{titulo}</h1>
         </div>
-        <div className="rounded-2xl bg-white p-4 md:p-5">
-          {children}
-        </div>
+        {nav?.onInicio && <button onClick={nav.onInicio} className="text-xs font-bold px-3 py-1.5 rounded-full bg-white shrink-0" style={{ color, border: `1px solid ${color}55` }}>← Inicio</button>}
+      </div>
+      <div className="rounded-2xl bg-white p-4 md:p-5" style={{ border: "1px solid #DCE6F5", boxShadow: "0 1px 3px rgba(15,25,50,0.05)" }}>
+        {children}
       </div>
     </div>
   );
