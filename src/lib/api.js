@@ -2505,6 +2505,19 @@ export async function marcarCodiceRevisado(id) {
 }
 
 // Marca como revisadas (leídas) varias reflexiones de una vez. Recibe los ids a marcar.
+// Elimina reflexiones del Códice en lote. Devuelve cuántas se borraron de verdad
+// (si RLS no permite borrar, devuelve menos y la pantalla lo avisa).
+export async function eliminarCodiceEntradasLote(ids) {
+  if (!ids || ids.length === 0) return 0;
+  let borradas = 0;
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data, error } = await supabase.from("codice_entradas").delete().in("id", ids.slice(i, i + 200)).select("id");
+    if (error) throw error;
+    borradas += (data || []).length;
+  }
+  return borradas;
+}
+
 export async function marcarCodiceRevisadoLote(ids) {
   if (!ids || ids.length === 0) return 0;
   for (let i = 0; i < ids.length; i += 200) {
