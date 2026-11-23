@@ -109,7 +109,8 @@ function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre", ctx }
   const infoSistema = SISTEMAS_PERIODO[sistemaPeriodos] || SISTEMAS_PERIODO.trimestre;
   const periodosLista = Array.from({ length: infoSistema.cantidad }, (_, i) => i);
   const filasMatriz = Array.from({ length: FILAS_POR_PERIODO }, (_, i) => i);
-  const sinFoto = !estudiante.foto_url;
+  const fotoSrc = api.urlFotoEstudiante ? api.urlFotoEstudiante(estudiante) : (estudiante.foto_storage_url || estudiante.foto_url);
+  const sinFoto = !fotoSrc;
   const contexto = ctx || { editable: false, valores: datos.valores || {}, setValor: () => {} };
 
   return (
@@ -132,7 +133,7 @@ function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre", ctx }
         <div style={{ width: 104, flexShrink: 0, border: B, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", background: "#FAFAFA", minHeight: 130 }}>
           {sinFoto
             ? <span style={{ fontSize: 10, color: "#777", textAlign: "center", padding: 6 }}>FOTO<br />(pegar aquí)</span>
-            : <img src={estudiante.foto_url} alt={estudiante.nombre} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
+            : <img src={fotoSrc} alt={estudiante.nombre} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
         </div>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <tbody>
@@ -517,7 +518,7 @@ export function ObservadorPorGradoModal({ gradoId, onClose }) {
             <div className="bg-slate-50 rounded-xl p-3 mb-3 max-h-48 overflow-y-auto">
               {listaDatos.map((d) => (
                 <div key={d.estudiante.id} className="text-xs text-slate-600 py-0.5 flex items-center gap-2">
-                  {d.estudiante.foto_url ? <img src={d.estudiante.foto_url} alt="" className="w-5 h-5 rounded-full object-cover" /> : <span className="w-5 h-5 rounded-full bg-slate-200 inline-block" />}
+                  {(d.estudiante.foto_storage_url || d.estudiante.foto_url) ? <img src={d.estudiante.foto_storage_url || d.estudiante.foto_url} alt="" className="w-5 h-5 rounded-full object-cover" /> : <span className="w-5 h-5 rounded-full bg-slate-200 inline-block" />}
                   <span>{d.estudiante.nombre}</span>
                   {!d.acudiente && <span className="text-amber-500">(sin acudiente)</span>}
                   {d.valores && Object.keys(d.valores).length > 0 && <span className="text-emerald-600">✍️ diligenciado</span>}
@@ -559,8 +560,8 @@ export function ObservadorModal({ estudiante, onClose }) {
         ) : (
           <>
             <div className="flex items-center gap-3 mb-3">
-              {datos.estudiante.foto_url
-                ? <img src={datos.estudiante.foto_url} alt="" className="w-16 h-20 rounded-lg object-cover border border-slate-200" />
+              {(datos.estudiante.foto_storage_url || datos.estudiante.foto_url)
+                ? <img src={datos.estudiante.foto_storage_url || datos.estudiante.foto_url} alt="" className="w-16 h-20 rounded-lg object-cover border border-slate-200" />
                 : <div className="w-16 h-20 rounded-lg border border-dashed border-slate-300 text-[10px] text-slate-400 flex items-center justify-center text-center">Sin foto</div>}
               <p className="text-xs text-slate-500">
                 Documento oficial de seguimiento integral: identificación con foto, situaciones registradas en Actas,
