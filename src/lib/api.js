@@ -3282,12 +3282,33 @@ export async function fetchObservadorData(estudianteId) {
     fetchInstitucion(),
   ]);
   if (estudianteRes.error) throw estudianteRes.error;
+  // Lo diligenciado a mano en pantalla (si ya se ejecutó el SQL 158; si no, queda vacío sin romper nada).
+  let valores = {};
+  try {
+    const { data: dil } = await supabase.from("observador_diligenciado").select("valores")
+      .eq("estudiante_id", estudianteId).eq("anio", new Date().getFullYear()).maybeSingle();
+    valores = (dil && dil.valores) || {};
+  } catch (_) { valores = {}; }
   return {
-    estudiante: estudianteRes.data,
+    // conFoto: usa la foto de Storage (foto_storage_url) cuando la antigua ya se limpió.
+    estudiante: conFoto([estudianteRes.data])[0],
+    valores,
     acudiente,
     actas: [...actas].sort((a, b) => (a.fecha || "").localeCompare(b.fecha || "")),
     institucion,
   };
+}
+
+// Guarda (crea o reemplaza) lo diligenciado en pantalla del Observador de un estudiante para el año actual.
+export async function guardarObservadorDiligenciado(estudianteId, valores) {
+  const { data: userData } = await supabase.auth.getUser();
+  const limpio = {};
+  Object.entries(valores || {}).forEach(([k, v]) => { if (typeof v === "string" && v !== "") limpio[String(k).slice(0, 40)] = v.slice(0, 4000); });
+  const { error } = await supabase.from("observador_diligenciado").upsert({
+    estudiante_id: estudianteId, anio: new Date().getFullYear(), valores: limpio,
+    actualizado_por: userData?.user?.id || null, actualizado_en: new Date().toISOString(),
+  }, { onConflict: "estudiante_id,anio" });
+  if (error) throw error;
 }
 
 // Trae los datos del Observador para TODOS los estudiantes activos de un
