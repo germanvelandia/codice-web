@@ -39,8 +39,7 @@ const MATERIAS_PLAN_ESTUDIOS = [
   "Tecnología e Informática",
 ];
 
-const FILAS_POR_PERIODO = 3;      // filas de la matriz de situaciones por periodo
-const FILAS_ANOTACIONES = 12;     // filas de la hoja de anotaciones (más altas y anchas que antes)
+const FILAS_REGISTRO = 14;        // filas totales del registro de situaciones (las actas del sistema ocupan las primeras)
 const B = "1px solid #000";
 
 /* ------------------------------------------------------------------------
@@ -99,52 +98,84 @@ function Marca({ k, ctx, minHeight = 22, ancho }) {
   );
 }
 
+// Casilla de recuperación: clic cambia  vacío → Aprobó → No aprobó → vacío.
+const CICLO = { "": "", A: "✔ Aprobó", N: "✘ No aprobó" };
+function Ciclo({ k, ctx, activo, minHeight = 26 }) {
+  const v = (ctx.valores && ctx.valores[k]) || "";
+  const siguiente = v === "" ? "A" : v === "A" ? "N" : "";
+  if (!activo) return <td style={{ border: B, height: minHeight, background: "#EEE", textAlign: "center", color: "#999", fontSize: 10 }}>—</td>;
+  return (
+    <td onClick={ctx.editable ? () => ctx.setValor(k, siguiente) : undefined} title={ctx.editable ? "Clic: Aprobó → No aprobó → vacío" : undefined}
+      style={{ border: B, height: minHeight, textAlign: "center", verticalAlign: "middle", fontSize: 10.5, fontWeight: "bold",
+        color: v === "A" ? "#047857" : v === "N" ? "#B91C1C" : "#111", cursor: ctx.editable ? "pointer" : "default",
+        background: ctx.editable ? "#F6F9FF" : "transparent", userSelect: "none" }}>
+      {CICLO[v] || ""}
+    </td>
+  );
+}
+
+const ABREV_PERIODO = { bimestre: "B", trimestre: "T", semestre: "S" };
+
 const TH = { border: B, padding: 4, background: "#F1F1F1" };
 const TD_LABEL = { border: B, padding: 5, fontWeight: "bold", background: "#FAFAFA" };
 const TD_DATO = { border: B, padding: 5 };
+
+function esTipo(a, re) { return re.test(String(a.tipo || a.tipo_evento || a.motivo || "")); }
 
 function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre", ctx }) {
   const { estudiante, acudiente, actas, institucion } = datos;
   const anioActual = new Date().getFullYear();
   const infoSistema = SISTEMAS_PERIODO[sistemaPeriodos] || SISTEMAS_PERIODO.trimestre;
   const periodosLista = Array.from({ length: infoSistema.cantidad }, (_, i) => i);
-  const filasMatriz = Array.from({ length: FILAS_POR_PERIODO }, (_, i) => i);
   const fotoSrc = api.urlFotoEstudiante ? api.urlFotoEstudiante(estudiante) : (estudiante.foto_storage_url || estudiante.foto_url);
   const sinFoto = !fotoSrc;
   const contexto = ctx || { editable: false, valores: datos.valores || {}, setValor: () => {} };
+  const V = contexto.valores || {};
+  const ab = ABREV_PERIODO[sistemaPeriodos] || "T";
+  const corto = (i) => `${ab} ${NUMEROS_ROMANOS[i] || i + 1}`;
+
+  // Registro unificado: primero las actas que ya están en el sistema, luego filas en blanco.
+  const listaActas = actas || [];
+  const filasBlanco = Math.max(4, FILAS_REGISTRO - listaActas.length);
+
+  // Nivelaciones: una materia queda "pendiente" en los periodos reprobados (X en la sección 3) que aún no se recuperaron.
+  const estadoMateria = (mi) => {
+    const reprobados = periodosLista.filter((i) => V[`r-${mi}-${i}`] === "X");
+    const pendientes = reprobados.filter((i) => V[`v-${mi}-${i}`] !== "A");
+    return { reprobados, pendientes };
+  };
 
   return (
-    <div className="print-avoid-break" style={{ maxWidth: 840, margin: "0 auto", padding: 24, fontFamily: "Arial, sans-serif", fontSize: 11, color: "#111", pageBreakBefore: primero ? "auto" : "always" }}>
+    <div className="print-horizontal" style={{ maxWidth: 1000, margin: "0 auto", padding: 24, fontFamily: "Arial, sans-serif", fontSize: 11, color: "#111", pageBreakBefore: primero ? "auto" : "always" }}>
 
       {/* Encabezado institucional */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, borderBottom: "2px solid #000", paddingBottom: 8, marginBottom: 10 }}>
-        {institucion?.logo_url && <img src={institucion.logo_url} alt="Logo" style={{ height: 60 }} />}
+        {institucion?.logo_url && <img src={institucion.logo_url} alt="Logo" style={{ height: 56 }} />}
         <div style={{ flex: 1, textAlign: "center" }}>
           <div style={{ fontWeight: "bold", fontSize: 14 }}>{institucion?.nombre || "INSTITUCIÓN EDUCATIVA"}</div>
-          {institucion?.direccion && <div>{institucion.direccion}{institucion?.telefono ? ` · Tel: ${institucion.telefono}` : ""}</div>}
-          <div style={{ fontWeight: "bold", marginTop: 6, fontSize: 12 }}>OBSERVADOR DEL ESTUDIANTE / REGISTRO DE SEGUIMIENTO INTEGRAL</div>
-          <div>Año lectivo {anioActual}</div>
+          {institucion?.direccion && <div style={{ fontSize: 10 }}>{institucion.direccion}{institucion?.telefono ? ` · Tel: ${institucion.telefono}` : ""}</div>}
+          <div style={{ fontWeight: "bold", marginTop: 4, fontSize: 12 }}>OBSERVADOR DEL ESTUDIANTE / REGISTRO DE SEGUIMIENTO INTEGRAL · Año lectivo {anioActual}</div>
         </div>
       </div>
 
       {/* 1. Datos de identificación — con la foto del estudiante */}
       <div style={{ fontWeight: "bold", marginBottom: 4 }}>1. DATOS DE IDENTIFICACIÓN DEL ESTUDIANTE</div>
-      <div style={{ display: "flex", gap: 10, marginBottom: 12, alignItems: "stretch" }}>
-        <div style={{ width: 104, flexShrink: 0, border: B, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", background: "#FAFAFA", minHeight: 130 }}>
+      <div style={{ display: "flex", gap: 10, marginBottom: 12, alignItems: "flex-start" }}>
+        <div style={{ width: 108, height: 144, flexShrink: 0, border: B, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", background: "#FAFAFA" }}>
           {sinFoto
             ? <span style={{ fontSize: 10, color: "#777", textAlign: "center", padding: 6 }}>FOTO<br />(pegar aquí)</span>
-            : <img src={fotoSrc} alt={estudiante.nombre} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
+            : <img src={fotoSrc} alt={estudiante.nombre} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 18%", display: "block" }} />}
         </div>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <tbody>
             <tr>
-              <td style={{ ...TD_LABEL, width: "22%" }}>Nombres y apellidos</td>
+              <td style={{ ...TD_LABEL, width: "17%" }}>Nombres y apellidos</td>
               <td style={TD_DATO} colSpan={3}>{estudiante.nombre}</td>
             </tr>
             <tr>
               <td style={TD_LABEL}>Documento</td>
               <td style={TD_DATO}>{estudiante.tipo_documento || "RC"} {estudiante.documento || "—"}</td>
-              <td style={TD_LABEL}>Fecha nac. / Edad</td>
+              <td style={{ ...TD_LABEL, width: "17%" }}>Fecha nac. / Edad</td>
               <td style={TD_DATO}>{estudiante.fecha_nacimiento || "—"} / {calcularEdad(estudiante.fecha_nacimiento)}</td>
             </tr>
             <tr>
@@ -165,211 +196,173 @@ function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre", ctx }
                 {!acudiente?.nombre_madre && !acudiente?.nombre_padre && "—"}
               </td>
             </tr>
-            {acudiente?.contacto_emergencia_nombre && (
-              <tr>
-                <td style={TD_LABEL}>Contacto de emergencia</td>
-                <td style={TD_DATO} colSpan={3}>
-                  {acudiente.contacto_emergencia_nombre} ({acudiente.contacto_emergencia_relacion || "—"}) — {acudiente.contacto_emergencia_telefono || "—"}
-                </td>
-              </tr>
-            )}
             <tr>
-              <td style={TD_LABEL}>Observaciones médicas / PIAR</td>
-              <td style={TD_DATO} colSpan={3}>
-                {estudiante.piar ? "Cuenta con PIAR activo. " : ""}{estudiante.dua ? "Cuenta con ajustes DUA. " : ""}{estudiante.ajustes_inclusion || (!estudiante.piar && !estudiante.dua ? "Sin observaciones registradas." : "")}
+              <td style={TD_LABEL}>Contacto de emergencia</td>
+              <td style={TD_DATO}>
+                {acudiente?.contacto_emergencia_nombre
+                  ? `${acudiente.contacto_emergencia_nombre} (${acudiente.contacto_emergencia_relacion || "—"}) — ${acudiente.contacto_emergencia_telefono || "—"}`
+                  : "—"}
+              </td>
+              <td style={TD_LABEL}>Médicas / PIAR</td>
+              <td style={TD_DATO}>
+                {estudiante.piar ? "PIAR activo. " : ""}{estudiante.dua ? "Ajustes DUA. " : ""}{estudiante.ajustes_inclusion || (!estudiante.piar && !estudiante.dua ? "Sin observaciones." : "")}
               </td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      {/* 2. Matriz de registro — diligenciable, con cajas amplias */}
-      <div style={{ fontWeight: "bold", marginBottom: 4 }}>
-        2. MATRIZ DE REGISTRO DE SITUACIONES Y SEGUIMIENTO{contexto.editable ? " (escribe en las cajas azules)" : ""}
+      {/* 2. Registro unificado: situaciones + anotaciones de cualquier docente */}
+      <div style={{ fontWeight: "bold", marginBottom: 2 }}>
+        2. REGISTRO DE SITUACIONES Y ANOTACIONES DE DOCENTES{contexto.editable ? " (escribe en las cajas azules; en A / C haz clic para marcar)" : ""}
       </div>
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 14, fontSize: 10.5, tableLayout: "fixed" }}>
-        <thead>
-          <tr>
-            <th style={{ ...TH, width: "10%" }}>Periodo</th>
-            <th style={{ ...TH, width: "11%" }}>Fecha</th>
-            <th style={{ ...TH, width: "13%" }}>Tipo</th>
-            <th style={TH}>Descripción de la situación</th>
-            <th style={{ ...TH, width: "22%" }}>Compromiso</th>
-            <th style={{ ...TH, width: "12%" }}>Firma</th>
-          </tr>
-        </thead>
-        <tbody>
-          {periodosLista.map((i) => filasMatriz.map((f) => (
-            <tr key={`${i}-${f}`} style={{ pageBreakInside: "avoid" }}>
-              {f === 0 && (
-                <td rowSpan={FILAS_POR_PERIODO} style={{ border: B, padding: 3, fontWeight: "bold", textAlign: "center", verticalAlign: "middle", background: "#FAFAFA" }}>
-                  {etiquetaPeriodoConfigurable(sistemaPeriodos, i)}
-                </td>
-              )}
-              <Celda ctx={contexto} k={`m-${i}-${f}-fecha`} minHeight={40} />
-              <Celda ctx={contexto} k={`m-${i}-${f}-tipo`} minHeight={40} />
-              <Celda ctx={contexto} k={`m-${i}-${f}-desc`} minHeight={40} />
-              <Celda ctx={contexto} k={`m-${i}-${f}-comp`} minHeight={40} />
-              <Celda ctx={contexto} k={`m-${i}-${f}-firma`} minHeight={40} />
-            </tr>
-          )))}
-        </tbody>
-      </table>
-
-      {/* 3. Situaciones que ya están registradas en el sistema (Actas) */}
-      <div style={{ fontWeight: "bold", marginBottom: 4 }}>3. SITUACIONES REGISTRADAS EN EL SISTEMA (ACTAS)</div>
-      {actas && actas.length > 0 ? (
-        <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 12, fontSize: 10, tableLayout: "fixed" }}>
-          <thead>
-            <tr>
-              <th style={{ ...TH, width: "11%" }}>Fecha</th>
-              <th style={{ ...TH, width: "16%" }}>Tipo</th>
-              <th style={TH}>Motivo / descripción</th>
-              <th style={{ ...TH, width: "28%" }}>Compromisos</th>
-            </tr>
-          </thead>
-          <tbody>
-            {actas.map((a) => (
-              <tr key={a.id} style={{ pageBreakInside: "avoid" }}>
-                <td style={{ ...TD_DATO, verticalAlign: "top" }}>{a.fecha || ""}</td>
-                <td style={{ ...TD_DATO, verticalAlign: "top" }}>{a.tipo || a.tipo_evento || ""}</td>
-                <td style={{ ...TD_DATO, verticalAlign: "top", whiteSpace: "pre-wrap" }}><b>{a.motivo || ""}</b>{a.descripcion ? `\n${a.descripcion}` : ""}</td>
-                <td style={{ ...TD_DATO, verticalAlign: "top", whiteSpace: "pre-wrap" }}>{[a.compromisos_academicos, a.compromisos_convivenciales, a.compromisos].filter(Boolean).join("\n")}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : (
-        <div style={{ border: B, padding: 8, marginBottom: 12, color: "#555", fontSize: 10 }}>Sin situaciones registradas en el sistema.</div>
-      )}
-
-      {/* 4. Hoja de anotaciones de docentes — HORIZONTAL, filas altas y columna de anotación ancha */}
-      <div className="print-horizontal" style={{ pageBreakBefore: "always", paddingTop: 6 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, borderBottom: "2px solid #000", paddingBottom: 6, marginBottom: 8 }}>
-          {institucion?.logo_url && <img src={institucion.logo_url} alt="Logo" style={{ height: 40 }} />}
-          <div style={{ flex: 1, textAlign: "center" }}>
-            <div style={{ fontWeight: "bold", fontSize: 12 }}>{institucion?.nombre || "INSTITUCIÓN EDUCATIVA"}</div>
-            <div>OBSERVADOR DEL ESTUDIANTE — {estudiante.nombre} · Curso {estudiante.grado_id} · Año lectivo {anioActual}</div>
-          </div>
-        </div>
-        <div style={{ fontWeight: "bold", marginBottom: 4 }}>4. HOJA DE ANOTACIONES DE DOCENTES{contexto.editable ? " (escribe en las cajas azules; en A / C haz clic para marcar)" : ""}</div>
-        <p style={{ fontSize: 9, marginBottom: 6, color: "#555" }}>
-          Espacio para que cualquier docente que tenga contacto con el estudiante registre observaciones — marcando si es académica (A) o convivencial (C) — sin necesidad de generar un acta formal.
-        </p>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 9.5, tableLayout: "fixed" }}>
-          <thead>
-            <tr>
-              <th style={{ ...TH, width: "8%" }}>Fecha</th>
-              <th style={{ ...TH, width: "11%" }}>Materia</th>
-              <th style={{ ...TH, width: "11%" }}>Docente</th>
-              <th style={{ ...TH, width: "3.5%" }}>A</th>
-              <th style={{ ...TH, width: "3.5%" }}>C</th>
-              <th style={TH}>Anotación</th>
-              <th style={{ ...TH, width: "10%" }}>Firma Docente</th>
-              <th style={{ ...TH, width: "10%" }}>Firma Estudiante</th>
-              <th style={{ ...TH, width: "11%" }}>Firma Padre de Familia</th>
-            </tr>
-          </thead>
-          <tbody>
-            {Array.from({ length: FILAS_ANOTACIONES }).map((_, r) => (
-              <tr key={r} style={{ pageBreakInside: "avoid" }}>
-                <Celda ctx={contexto} k={`a-${r}-fecha`} minHeight={34} fontSize={9.5} />
-                <Celda ctx={contexto} k={`a-${r}-materia`} minHeight={34} fontSize={9.5} />
-                <Celda ctx={contexto} k={`a-${r}-docente`} minHeight={34} fontSize={9.5} />
-                <Marca ctx={contexto} k={`a-${r}-A`} minHeight={34} />
-                <Marca ctx={contexto} k={`a-${r}-C`} minHeight={34} />
-                <Celda ctx={contexto} k={`a-${r}-nota`} minHeight={34} fontSize={10} />
-                <Celda ctx={contexto} k={`a-${r}-fd`} minHeight={34} fontSize={9} />
-                <Celda ctx={contexto} k={`a-${r}-fe`} minHeight={34} fontSize={9} />
-                <Celda ctx={contexto} k={`a-${r}-fp`} minHeight={34} fontSize={9} />
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* 5. Rendimiento académico */}
-      <div style={{ fontWeight: "bold", marginBottom: 4, marginTop: 8, pageBreakBefore: "always", paddingTop: 6 }}>
-        5. RENDIMIENTO ACADÉMICO POR {infoSistema.nombre.toUpperCase()} (marcar con X si reprobó){contexto.editable ? " — haz clic en la casilla" : ""}
-      </div>
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 12, fontSize: 10.5 }}>
-        <thead>
-          <tr>
-            <th style={{ ...TH, textAlign: "left" }}>Asignatura</th>
-            {periodosLista.map((i) => (
-              <th key={i} style={{ ...TH, width: 70 }}>{etiquetaPeriodoConfigurable(sistemaPeriodos, i)}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {MATERIAS_PLAN_ESTUDIOS.map((m, mi) => (
-            <tr key={m}>
-              <td style={{ border: B, padding: 5 }}>{m}</td>
-              {periodosLista.map((i) => <Marca key={i} ctx={contexto} k={`r-${mi}-${i}`} minHeight={26} />)}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {/* 6. Observaciones + firmas, una fila (amplia) por periodo */}
-      <div style={{ fontWeight: "bold", marginBottom: 4 }}>6. OBSERVACIONES Y FIRMAS POR {infoSistema.nombre.toUpperCase()}</div>
+      <p style={{ fontSize: 9, margin: "0 0 5px", color: "#555" }}>
+        Cualquier docente que tenga contacto con el estudiante registra aquí su observación — A: académica · C: convivencial — con su compromiso y firmas. Las filas sombreadas son actas ya registradas en el sistema.
+      </p>
       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 14, fontSize: 10, tableLayout: "fixed" }}>
         <thead>
           <tr>
-            <th style={{ ...TH, width: "9%" }}>Periodo</th>
-            <th style={TH}>Observaciones académicas</th>
-            <th style={TH}>Observaciones convivenciales</th>
-            <th style={{ ...TH, width: "11%" }}>Firma Padre</th>
-            <th style={{ ...TH, width: "11%" }}>Firma Estudiante</th>
-            <th style={{ ...TH, width: "11%" }}>Firma Director</th>
+            <th style={{ ...TH, width: "7%" }}>Fecha</th>
+            <th style={{ ...TH, width: "6%" }}>Periodo</th>
+            <th style={{ ...TH, width: "13%" }}>Materia / Docente</th>
+            <th style={{ ...TH, width: "3%" }}>A</th>
+            <th style={{ ...TH, width: "3%" }}>C</th>
+            <th style={TH}>Descripción de la situación / anotación</th>
+            <th style={{ ...TH, width: "17%" }}>Compromiso</th>
+            <th style={{ ...TH, width: "8%" }}>Firma Docente</th>
+            <th style={{ ...TH, width: "8%" }}>Firma Estudiante</th>
+            <th style={{ ...TH, width: "8%" }}>Firma Acudiente</th>
           </tr>
         </thead>
         <tbody>
-          {periodosLista.map((i) => (
-            <tr key={i} style={{ pageBreakInside: "avoid" }}>
-              <td style={{ border: B, padding: 3, fontWeight: "bold", textAlign: "center", verticalAlign: "middle", background: "#FAFAFA" }}>{etiquetaPeriodoConfigurable(sistemaPeriodos, i)}</td>
-              <Celda ctx={contexto} k={`o-${i}-ac`} minHeight={90} />
-              <Celda ctx={contexto} k={`o-${i}-co`} minHeight={90} />
-              <Celda ctx={contexto} k={`o-${i}-fp`} minHeight={90} fontSize={9} />
-              <Celda ctx={contexto} k={`o-${i}-fe`} minHeight={90} fontSize={9} />
-              <Celda ctx={contexto} k={`o-${i}-fd`} minHeight={90} fontSize={9} />
+          {listaActas.map((a, r) => {
+            const esA = esTipo(a, /acad/i), esC = esTipo(a, /convivenc|citaci|apoyo/i);
+            const celdaFija = { border: B, padding: "5px 6px", verticalAlign: "top", background: "#FFF9E5", whiteSpace: "pre-wrap", wordBreak: "break-word" };
+            return (
+              <tr key={a.id} style={{ pageBreakInside: "avoid" }}>
+                <td style={celdaFija}>{a.fecha || ""}</td>
+                <Celda ctx={contexto} k={`g-ac${a.id}-per`} minHeight={36} />
+                <td style={celdaFija}>Acta{a.profesores?.nombre ? `\n${a.profesores.nombre}` : ""}</td>
+                <td style={{ ...celdaFija, textAlign: "center", fontWeight: "bold", verticalAlign: "middle" }}>{esA ? "X" : ""}</td>
+                <td style={{ ...celdaFija, textAlign: "center", fontWeight: "bold", verticalAlign: "middle" }}>{esC ? "X" : ""}</td>
+                <td style={celdaFija}><b>{a.motivo || ""}</b>{a.descripcion ? `\n${a.descripcion}` : ""}</td>
+                <td style={celdaFija}>{[a.compromisos_academicos, a.compromisos_convivenciales, a.compromisos].filter(Boolean).join("\n")}</td>
+                <Celda ctx={contexto} k={`g-ac${a.id}-fd`} minHeight={36} fontSize={9} />
+                <Celda ctx={contexto} k={`g-ac${a.id}-fe`} minHeight={36} fontSize={9} />
+                <Celda ctx={contexto} k={`g-ac${a.id}-fp`} minHeight={36} fontSize={9} />
+              </tr>
+            );
+          })}
+          {Array.from({ length: filasBlanco }).map((_, r) => (
+            <tr key={`b${r}`} style={{ pageBreakInside: "avoid" }}>
+              <Celda ctx={contexto} k={`g-${r}-fecha`} minHeight={36} fontSize={9.5} />
+              <Celda ctx={contexto} k={`g-${r}-per`} minHeight={36} fontSize={9.5} />
+              <Celda ctx={contexto} k={`g-${r}-mat`} minHeight={36} fontSize={9.5} />
+              <Marca ctx={contexto} k={`g-${r}-A`} minHeight={36} />
+              <Marca ctx={contexto} k={`g-${r}-C`} minHeight={36} />
+              <Celda ctx={contexto} k={`g-${r}-desc`} minHeight={36} fontSize={10} />
+              <Celda ctx={contexto} k={`g-${r}-comp`} minHeight={36} fontSize={10} />
+              <Celda ctx={contexto} k={`g-${r}-fd`} minHeight={36} fontSize={9} />
+              <Celda ctx={contexto} k={`g-${r}-fe`} minHeight={36} fontSize={9} />
+              <Celda ctx={contexto} k={`g-${r}-fp`} minHeight={36} fontSize={9} />
             </tr>
           ))}
         </tbody>
       </table>
 
-      {/* 7. Nivelaciones */}
+      {/* 3. Rendimiento académico */}
       <div style={{ pageBreakInside: "avoid" }}>
-        <div style={{ fontWeight: "bold", marginBottom: 4 }}>7. ESPACIO PARA NIVELACIONES{contexto.editable ? " — haz clic en la casilla" : ""}</div>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10.5 }}>
+        <div style={{ fontWeight: "bold", marginBottom: 4, pageBreakBefore: "always", paddingTop: 6 }}>
+          3. RENDIMIENTO ACADÉMICO POR {infoSistema.nombre.toUpperCase()} (marcar con X si reprobó){contexto.editable ? " — haz clic en la casilla" : ""}
+        </div>
+        <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 14, fontSize: 10.5 }}>
           <thead>
             <tr>
               <th style={{ ...TH, textAlign: "left" }}>Asignatura</th>
-              <th style={{ ...TH, width: 90 }}>Aprobó</th>
-              <th style={{ ...TH, width: 90 }}>No aprobó</th>
+              {periodosLista.map((i) => <th key={i} style={{ ...TH, width: 110 }}>{etiquetaPeriodoConfigurable(sistemaPeriodos, i)}</th>)}
             </tr>
           </thead>
           <tbody>
             {MATERIAS_PLAN_ESTUDIOS.map((m, mi) => (
               <tr key={m}>
                 <td style={{ border: B, padding: 5 }}>{m}</td>
-                <Marca ctx={contexto} k={`n-${mi}-ap`} minHeight={26} />
-                <Marca ctx={contexto} k={`n-${mi}-no`} minHeight={26} />
+                {periodosLista.map((i) => <Marca key={i} ctx={contexto} k={`r-${mi}-${i}`} minHeight={26} />)}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      <div style={{ fontWeight: "bold", marginBottom: 8, marginTop: 24 }}>FIRMAS DE CIERRE</div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 40 }}>
-        <div style={{ borderTop: "1px solid #000", width: "30%", textAlign: "center", paddingTop: 4 }}>Firma Director(a) de Curso</div>
-        <div style={{ borderTop: "1px solid #000", width: "30%", textAlign: "center", paddingTop: 4 }}>Firma Coordinación Académica</div>
-        <div style={{ borderTop: "1px solid #000", width: "30%", textAlign: "center", paddingTop: 4 }}>Firma Coordinación Convivencial</div>
+      {/* 4. Nivelaciones: pendientes (se calculan solas desde la sección 3) y recuperación por periodo */}
+      <div style={{ pageBreakInside: "avoid" }}>
+        <div style={{ fontWeight: "bold", marginBottom: 2 }}>4. NIVELACIONES — PENDIENTES Y RECUPERACIÓN POR {infoSistema.nombre.toUpperCase()}</div>
+        <p style={{ fontSize: 9, margin: "0 0 5px", color: "#555" }}>
+          La columna «Pendiente» se llena sola con las asignaturas reprobadas en la sección 3. En cada periodo reprobado, marca el resultado de la recuperación{contexto.editable ? " (clic: Aprobó → No aprobó → vacío)" : ""}.
+        </p>
+        <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 14, fontSize: 10.5 }}>
+          <thead>
+            <tr>
+              <th style={{ ...TH, textAlign: "left" }}>Asignatura</th>
+              <th style={{ ...TH, width: 120 }}>Pendiente</th>
+              {periodosLista.map((i) => <th key={i} style={{ ...TH, width: 100 }}>Recuperación {corto(i)}</th>)}
+              <th style={{ ...TH, width: 100 }}>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {MATERIAS_PLAN_ESTUDIOS.map((m, mi) => {
+              const { reprobados, pendientes } = estadoMateria(mi);
+              const estado = reprobados.length === 0 ? "—" : pendientes.length ? "PENDIENTE" : "Al día ✔";
+              return (
+                <tr key={m}>
+                  <td style={{ border: B, padding: 5 }}>{m}</td>
+                  <td style={{ border: B, padding: 5, textAlign: "center", fontWeight: "bold", color: pendientes.length ? "#B91C1C" : "#111" }}>
+                    {pendientes.length ? pendientes.map(corto).join(", ") : ""}
+                  </td>
+                  {periodosLista.map((i) => <Ciclo key={i} ctx={contexto} k={`v-${mi}-${i}`} activo={V[`r-${mi}-${i}`] === "X"} />)}
+                  <td style={{ border: B, padding: 5, textAlign: "center", fontWeight: "bold", fontSize: 10, color: estado === "PENDIENTE" ? "#B91C1C" : estado === "—" ? "#999" : "#047857" }}>{estado}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
 
-      <div style={{ fontSize: 8, borderTop: "1px solid #999", paddingTop: 4, marginTop: 10, color: "#333" }}>
-        Este documento tiene fines formativos y de seguimiento integral, en el marco del debido proceso establecido en el Manual de Convivencia y la Ley 1620 de 2013.
+      {/* 5. Observaciones de cierre por periodo (incluye firmas) */}
+      <div style={{ pageBreakInside: "avoid" }}>
+        <div style={{ fontWeight: "bold", marginBottom: 4 }}>5. OBSERVACIONES DE CIERRE POR {infoSistema.nombre.toUpperCase()}</div>
+        <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16, fontSize: 10, tableLayout: "fixed" }}>
+          <thead>
+            <tr>
+              <th style={{ ...TH, width: "9%" }}>Periodo</th>
+              <th style={TH}>Observaciones académicas</th>
+              <th style={TH}>Observaciones convivenciales</th>
+              <th style={{ ...TH, width: "10%" }}>Firma Acudiente</th>
+              <th style={{ ...TH, width: "10%" }}>Firma Estudiante</th>
+              <th style={{ ...TH, width: "10%" }}>Firma Director(a) de curso</th>
+            </tr>
+          </thead>
+          <tbody>
+            {periodosLista.map((i) => (
+              <tr key={i} style={{ pageBreakInside: "avoid" }}>
+                <td style={{ border: B, padding: 3, fontWeight: "bold", textAlign: "center", verticalAlign: "middle", background: "#FAFAFA" }}>{etiquetaPeriodoConfigurable(sistemaPeriodos, i)}</td>
+                <Celda ctx={contexto} k={`o-${i}-ac`} minHeight={80} />
+                <Celda ctx={contexto} k={`o-${i}-co`} minHeight={80} />
+                <Celda ctx={contexto} k={`o-${i}-fp`} minHeight={80} fontSize={9} />
+                <Celda ctx={contexto} k={`o-${i}-fe`} minHeight={80} fontSize={9} />
+                <Celda ctx={contexto} k={`o-${i}-fd`} minHeight={80} fontSize={9} />
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 36 }}>
+          <div style={{ borderTop: "1px solid #000", width: "30%", textAlign: "center", paddingTop: 4 }}>Coordinación Académica</div>
+          <div style={{ borderTop: "1px solid #000", width: "30%", textAlign: "center", paddingTop: 4 }}>Coordinación Convivencial</div>
+          <div style={{ borderTop: "1px solid #000", width: "30%", textAlign: "center", paddingTop: 4 }}>Rectoría</div>
+        </div>
+        <div style={{ fontSize: 8, borderTop: "1px solid #999", paddingTop: 4, marginTop: 10, color: "#333" }}>
+          Este documento tiene fines formativos y de seguimiento integral, en el marco del debido proceso establecido en el Manual de Convivencia y la Ley 1620 de 2013.
+        </div>
       </div>
     </div>
   );
@@ -458,7 +451,7 @@ function ObservadorEditor({ datos, sistemaPeriodos: sistemaInicial, onClose, onG
   const ctx = { editable: true, valores, setValor };
 
   return createPortal(
-    <div className="no-print" style={{ position: "fixed", inset: 0, zIndex: 60, background: "#CBD5E1", overflowY: "auto" }}>
+    <div className="no-print" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} style={{ position: "fixed", inset: 0, zIndex: 60, background: "#CBD5E1", overflowY: "auto" }}>
       <div style={{ position: "sticky", top: 0, zIndex: 5, background: "#17489C", color: "#fff", padding: "10px 16px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ fontWeight: 800, fontSize: 15, flex: "1 1 220px" }}>✍️ Observador — {datos.estudiante.nombre}</div>
         <div style={{ display: "flex", gap: 4, background: "#ffffff22", borderRadius: 999, padding: 3 }}>
@@ -478,7 +471,7 @@ function ObservadorEditor({ datos, sistemaPeriodos: sistemaInicial, onClose, onG
       </div>
       {error && <div role="alert" style={{ background: "#FEE2E2", color: "#B91C1C", padding: "8px 16px", fontSize: 13, fontWeight: 600 }}>{error}</div>}
       <div style={{ padding: "16px 8px 40px" }}>
-        <div style={{ background: "#fff", boxShadow: "0 4px 24px #0003", borderRadius: 4, maxWidth: 900, margin: "0 auto" }}>
+        <div style={{ background: "#fff", boxShadow: "0 4px 24px #0003", borderRadius: 4, maxWidth: 1050, margin: "0 auto" }}>
           <BloqueObservador datos={datosConValores} primero={true} sistemaPeriodos={sistemaPeriodos} ctx={ctx} />
         </div>
       </div>
