@@ -120,9 +120,40 @@ const TH = { border: B, padding: 4, background: "#F1F1F1" };
 const TD_LABEL = { border: B, padding: 5, fontWeight: "bold", background: "#FAFAFA" };
 const TD_DATO = { border: B, padding: 5 };
 
+const COLS_REGISTRO = [
+  ["Fecha", "7%"], ["Periodo", "6%"], ["Materia / Docente", "13%"], ["A", "3%"], ["C", "3%"],
+  ["Descripción de la situación / anotación", null], ["Compromiso", "17%"], ["Firma Docente", "8%"], ["Firma Estudiante", "8%"], ["Firma Acudiente", "8%"],
+];
+function CabeceraRegistro() {
+  return (
+    <thead>
+      <tr>{COLS_REGISTRO.map(([t, w]) => <th key={t} style={{ ...TH, ...(w ? { width: w } : {}) }}>{t}</th>)}</tr>
+    </thead>
+  );
+}
+function FilaBlanca({ ctx, p }) {
+  return (
+    <tr style={{ pageBreakInside: "avoid" }}>
+      <Celda ctx={ctx} k={`${p}-fecha`} minHeight={36} fontSize={9.5} />
+      <Celda ctx={ctx} k={`${p}-per`} minHeight={36} fontSize={9.5} />
+      <Celda ctx={ctx} k={`${p}-mat`} minHeight={36} fontSize={9.5} />
+      <Marca ctx={ctx} k={`${p}-A`} minHeight={36} />
+      <Marca ctx={ctx} k={`${p}-C`} minHeight={36} />
+      <Celda ctx={ctx} k={`${p}-desc`} minHeight={36} fontSize={10} />
+      <Celda ctx={ctx} k={`${p}-comp`} minHeight={36} fontSize={10} />
+      <Celda ctx={ctx} k={`${p}-fd`} minHeight={36} fontSize={9} />
+      <Celda ctx={ctx} k={`${p}-fe`} minHeight={36} fontSize={9} />
+      <Celda ctx={ctx} k={`${p}-fp`} minHeight={36} fontSize={9} />
+    </tr>
+  );
+}
+
+const FILAS_ANEXO = 12;      // filas de cada hoja anexa
+const MAX_ANEXOS = 10;
+
 function esTipo(a, re) { return re.test(String(a.tipo || a.tipo_evento || a.motivo || "")); }
 
-function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre", ctx }) {
+function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre", ctx, anexosExtra = 0 }) {
   const { estudiante, acudiente, actas, institucion } = datos;
   const anioActual = new Date().getFullYear();
   const infoSistema = SISTEMAS_PERIODO[sistemaPeriodos] || SISTEMAS_PERIODO.trimestre;
@@ -132,6 +163,7 @@ function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre", ctx }
   const contexto = ctx || { editable: false, valores: datos.valores || {}, setValor: () => {} };
   const V = contexto.valores || {};
   const ab = ABREV_PERIODO[sistemaPeriodos] || "T";
+  const nAnexos = Math.min(MAX_ANEXOS, Math.max(parseInt(V._anexos, 10) || 0, anexosExtra || 0));
   const corto = (i) => `${ab} ${NUMEROS_ROMANOS[i] || i + 1}`;
 
   // Registro unificado: primero las actas que ya están en el sistema, luego filas en blanco.
@@ -220,20 +252,7 @@ function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre", ctx }
         Cualquier docente que tenga contacto con el estudiante registra aquí su observación — A: académica · C: convivencial — con su compromiso y firmas. Las filas sombreadas son actas ya registradas en el sistema.
       </p>
       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 14, fontSize: 10, tableLayout: "fixed" }}>
-        <thead>
-          <tr>
-            <th style={{ ...TH, width: "7%" }}>Fecha</th>
-            <th style={{ ...TH, width: "6%" }}>Periodo</th>
-            <th style={{ ...TH, width: "13%" }}>Materia / Docente</th>
-            <th style={{ ...TH, width: "3%" }}>A</th>
-            <th style={{ ...TH, width: "3%" }}>C</th>
-            <th style={TH}>Descripción de la situación / anotación</th>
-            <th style={{ ...TH, width: "17%" }}>Compromiso</th>
-            <th style={{ ...TH, width: "8%" }}>Firma Docente</th>
-            <th style={{ ...TH, width: "8%" }}>Firma Estudiante</th>
-            <th style={{ ...TH, width: "8%" }}>Firma Acudiente</th>
-          </tr>
-        </thead>
+        <CabeceraRegistro />
         <tbody>
           {listaActas.map((a, r) => {
             const esA = esTipo(a, /acad/i), esC = esTipo(a, /convivenc|citaci|apoyo/i);
@@ -253,20 +272,7 @@ function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre", ctx }
               </tr>
             );
           })}
-          {Array.from({ length: filasBlanco }).map((_, r) => (
-            <tr key={`b${r}`} style={{ pageBreakInside: "avoid" }}>
-              <Celda ctx={contexto} k={`g-${r}-fecha`} minHeight={36} fontSize={9.5} />
-              <Celda ctx={contexto} k={`g-${r}-per`} minHeight={36} fontSize={9.5} />
-              <Celda ctx={contexto} k={`g-${r}-mat`} minHeight={36} fontSize={9.5} />
-              <Marca ctx={contexto} k={`g-${r}-A`} minHeight={36} />
-              <Marca ctx={contexto} k={`g-${r}-C`} minHeight={36} />
-              <Celda ctx={contexto} k={`g-${r}-desc`} minHeight={36} fontSize={10} />
-              <Celda ctx={contexto} k={`g-${r}-comp`} minHeight={36} fontSize={10} />
-              <Celda ctx={contexto} k={`g-${r}-fd`} minHeight={36} fontSize={9} />
-              <Celda ctx={contexto} k={`g-${r}-fe`} minHeight={36} fontSize={9} />
-              <Celda ctx={contexto} k={`g-${r}-fp`} minHeight={36} fontSize={9} />
-            </tr>
-          ))}
+          {Array.from({ length: filasBlanco }).map((_, r) => <FilaBlanca key={`b${r}`} ctx={contexto} p={`g-${r}`} />)}
         </tbody>
       </table>
 
@@ -364,6 +370,29 @@ function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre", ctx }
           Este documento tiene fines formativos y de seguimiento integral, en el marco del debido proceso establecido en el Manual de Convivencia y la Ley 1620 de 2013.
         </div>
       </div>
+
+      {/* Hojas anexas: continúan el registro de situaciones cuando el estudiante tiene muchas anotaciones */}
+      {Array.from({ length: nAnexos }).map((_, a) => (
+        <div key={a} style={{ pageBreakBefore: "always", paddingTop: 4 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, borderBottom: "2px solid #000", paddingBottom: 6, marginBottom: 8 }}>
+            {institucion?.logo_url && <img src={institucion.logo_url} alt="Logo" style={{ height: 40 }} />}
+            <div style={{ flex: 1, textAlign: "center" }}>
+              <div style={{ fontWeight: "bold", fontSize: 12 }}>{institucion?.nombre || "INSTITUCIÓN EDUCATIVA"}</div>
+              <div>OBSERVADOR DEL ESTUDIANTE — {estudiante.nombre} · Curso {estudiante.grado_id} · Año lectivo {anioActual}</div>
+            </div>
+          </div>
+          <div style={{ fontWeight: "bold", marginBottom: 2 }}>
+            ANEXO {a + 1} DE {nAnexos} — CONTINUACIÓN DEL REGISTRO DE SITUACIONES Y ANOTACIONES DE DOCENTES{contexto.editable ? " (escribe en las cajas azules)" : ""}
+          </div>
+          <p style={{ fontSize: 9, margin: "0 0 5px", color: "#555" }}>A: académica · C: convivencial. Continúa el registro de la sección 2 del Observador.</p>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10, tableLayout: "fixed" }}>
+            <CabeceraRegistro />
+            <tbody>
+              {Array.from({ length: FILAS_ANEXO }).map((_, r) => <FilaBlanca key={r} ctx={contexto} p={`x${a}-${r}`} />)}
+            </tbody>
+          </table>
+        </div>
+      ))}
     </div>
   );
 }
@@ -377,17 +406,17 @@ function esperarImagenesYImprimir(contenedorSelector) {
   Promise.race([Promise.all(pendientes), tope]).then(() => setTimeout(() => window.print(), 120));
 }
 
-function ObservadorPrintView({ datos, sistemaPeriodos, onCerrado }) {
+function ObservadorPrintView({ datos, sistemaPeriodos, onCerrado, anexosExtra = 0 }) {
   useEffect(() => {
     const onAfter = () => onCerrado();
     window.addEventListener("afterprint", onAfter);
     esperarImagenesYImprimir(".print-only");
     return () => window.removeEventListener("afterprint", onAfter);
   }, []);
-  return createPortal(<div className="print-only"><BloqueObservador datos={datos} primero={true} sistemaPeriodos={sistemaPeriodos} /></div>, document.body);
+  return createPortal(<div className="print-only"><BloqueObservador datos={datos} primero={true} sistemaPeriodos={sistemaPeriodos} anexosExtra={anexosExtra} /></div>, document.body);
 }
 
-function ObservadorMasivoPrintView({ listaDatos, sistemaPeriodos, onCerrado }) {
+function ObservadorMasivoPrintView({ listaDatos, sistemaPeriodos, onCerrado, anexosExtra = 0 }) {
   useEffect(() => {
     const onAfter = () => onCerrado();
     window.addEventListener("afterprint", onAfter);
@@ -397,9 +426,23 @@ function ObservadorMasivoPrintView({ listaDatos, sistemaPeriodos, onCerrado }) {
   return createPortal(
     <div className="print-only">
       {listaDatos.map((datos, i) => (
-        <BloqueObservador key={datos.estudiante.id} datos={datos} primero={i === 0} sistemaPeriodos={sistemaPeriodos} />
+        <BloqueObservador key={datos.estudiante.id} datos={datos} primero={i === 0} sistemaPeriodos={sistemaPeriodos} anexosExtra={anexosExtra} />
       ))}
     </div>, document.body);
+}
+
+function SelectorAnexos({ valor, onChange }) {
+  return (
+    <div className="mb-3">
+      <label className="text-xs text-slate-500 block mb-1">Hojas anexas en blanco (para estudiantes con muchas anotaciones)</label>
+      <div className="flex items-center gap-2">
+        <button onClick={() => onChange(Math.max(0, valor - 1))} className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-bold">−</button>
+        <span className="text-sm font-bold w-6 text-center">{valor}</span>
+        <button onClick={() => onChange(Math.min(MAX_ANEXOS, valor + 1))} className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-bold">+</button>
+        <span className="text-[11px] text-slate-400">{valor === 0 ? "ninguna" : `${valor} hoja(s) × ${FILAS_ANEXO} filas, por estudiante`}</span>
+      </div>
+    </div>
+  );
 }
 
 function SelectorSistemaPeriodos({ valor, onChange }) {
@@ -461,6 +504,12 @@ function ObservadorEditor({ datos, sistemaPeriodos: sistemaInicial, onClose, onG
             </button>
           ))}
         </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 4, background: "#ffffff22", borderRadius: 999, padding: "3px 8px", fontSize: 12, fontWeight: 700 }} title="Hojas anexas para continuar el registro de anotaciones">
+          📎 Anexos:
+          <button onClick={() => setValor("_anexos", String(Math.max(0, (parseInt(valores._anexos, 10) || 0) - 1)))} style={{ border: "none", borderRadius: 999, width: 22, height: 22, cursor: "pointer", fontWeight: 800 }}>−</button>
+          <span style={{ minWidth: 14, textAlign: "center" }}>{parseInt(valores._anexos, 10) || 0}</span>
+          <button onClick={() => setValor("_anexos", String(Math.min(MAX_ANEXOS, (parseInt(valores._anexos, 10) || 0) + 1)))} style={{ border: "none", borderRadius: 999, width: 22, height: 22, cursor: "pointer", fontWeight: 800 }}>+</button>
+        </div>
         {msg && <span style={{ fontSize: 12, color: "#BBF7D0", fontWeight: 700 }}>{msg}</span>}
         {sucio && !msg && <span style={{ fontSize: 12, color: "#FDE68A", fontWeight: 700 }}>● Cambios sin guardar</span>}
         <button onClick={guardar} disabled={guardando || !sucio} style={{ fontSize: 13, fontWeight: 800, padding: "7px 14px", borderRadius: 10, border: "none", cursor: "pointer", background: "#22C55E", color: "#fff", opacity: guardando || !sucio ? 0.55 : 1 }}>
@@ -486,6 +535,7 @@ export function ObservadorPorGradoModal({ gradoId, onClose }) {
   const [listaDatos, setListaDatos] = useState([]);
   const [imprimiendo, setImprimiendo] = useState(false);
   const [sistemaPeriodos, setSistemaPeriodos] = useState("trimestre");
+  const [anexos, setAnexos] = useState(0);
 
   useEffect(() => {
     api.fetchObservadorDataGrado(gradoId).then(({ datos }) => { setListaDatos(datos); setCargando(false); });
@@ -519,6 +569,7 @@ export function ObservadorPorGradoModal({ gradoId, onClose }) {
               ))}
             </div>
             <SelectorSistemaPeriodos valor={sistemaPeriodos} onChange={setSistemaPeriodos} />
+            <SelectorAnexos valor={anexos} onChange={setAnexos} />
             <button disabled={listaDatos.length === 0} onClick={() => setImprimiendo(true)} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white disabled:opacity-50">
               🖨️ Imprimir {listaDatos.length} Observador(es)
             </button>
@@ -526,7 +577,7 @@ export function ObservadorPorGradoModal({ gradoId, onClose }) {
         )}
       </div>
 
-      {imprimiendo && <ObservadorMasivoPrintView listaDatos={listaDatos} sistemaPeriodos={sistemaPeriodos} onCerrado={() => setImprimiendo(false)} />}
+      {imprimiendo && <ObservadorMasivoPrintView listaDatos={listaDatos} sistemaPeriodos={sistemaPeriodos} anexosExtra={anexos} onCerrado={() => setImprimiendo(false)} />}
     </div>
   );
 }
@@ -537,6 +588,7 @@ export function ObservadorModal({ estudiante, onClose }) {
   const [imprimiendo, setImprimiendo] = useState(false);
   const [editando, setEditando] = useState(false);
   const [sistemaPeriodos, setSistemaPeriodos] = useState("trimestre");
+  const [anexos, setAnexos] = useState(0);
 
   useEffect(() => { api.fetchObservadorData(estudiante.id).then((d) => { setDatos(d); setCargando(false); }); }, [estudiante.id]);
 
@@ -572,6 +624,7 @@ export function ObservadorModal({ estudiante, onClose }) {
               </p>
             )}
             <SelectorSistemaPeriodos valor={sistemaPeriodos} onChange={setSistemaPeriodos} />
+            <SelectorAnexos valor={anexos} onChange={setAnexos} />
             <button onClick={() => setEditando(true)} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-blue-700 text-white mb-2">
               ✍️ Diligenciar en pantalla
             </button>
@@ -586,7 +639,7 @@ export function ObservadorModal({ estudiante, onClose }) {
         <ObservadorEditor datos={datos} sistemaPeriodos={sistemaPeriodos}
           onClose={() => setEditando(false)} onGuardado={(valores) => setDatos((d) => ({ ...d, valores }))} />
       )}
-      {imprimiendo && <ObservadorPrintView datos={datos} sistemaPeriodos={sistemaPeriodos} onCerrado={() => setImprimiendo(false)} />}
+      {imprimiendo && <ObservadorPrintView datos={datos} sistemaPeriodos={sistemaPeriodos} anexosExtra={anexos} onCerrado={() => setImprimiendo(false)} />}
     </div>
   );
 }
