@@ -134,7 +134,7 @@ const FILAS_REGISTRO = 7;      // registros en la sección 2 (las actas del sist
 const GRID12 = Array.from({ length: 12 }, (_, i) => <col key={i} style={{ width: "8.3333%" }} />);
 function EntradaBlanca({ ctx, p }) {
   return (
-    <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", marginBottom: 7, fontSize: 10, breakInside: "avoid", pageBreakInside: "avoid" }}>
+    <div className="ficha-obs"><table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", marginBottom: 7, fontSize: 10, breakInside: "avoid", pageBreakInside: "avoid" }}>
       <colgroup>{GRID12}</colgroup>
       <tbody>
         <tr>
@@ -153,7 +153,7 @@ function EntradaBlanca({ ctx, p }) {
           <Celda ctx={ctx} k={`${p}-fp`} etiqueta="Firma acudiente" colSpan={4} minHeight={32} fontSize={9} />
         </tr>
       </tbody>
-    </table>
+    </table></div>
   );
 }
 
@@ -163,7 +163,7 @@ function EntradaActa({ ctx, a, esA, esC }) {
   const txt = { padding: "3px 6px", whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.35 };
   const comp = [a.compromisos_academicos, a.compromisos_convivenciales, a.compromisos].filter(Boolean).join("\n");
   return (
-    <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", marginBottom: 7, fontSize: 10, breakInside: "avoid", pageBreakInside: "avoid" }}>
+    <div className="ficha-obs"><table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", marginBottom: 7, fontSize: 10 }}>
       <colgroup>{GRID12}</colgroup>
       <tbody>
         <tr>
@@ -182,7 +182,7 @@ function EntradaActa({ ctx, a, esA, esC }) {
           <Celda ctx={ctx} k={`g-ac${a.id}-fp`} etiqueta="Firma acudiente" colSpan={4} minHeight={32} fontSize={9} />
         </tr>
       </tbody>
-    </table>
+    </table></div>
   );
 }
 
@@ -213,8 +213,10 @@ function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre", ctx, 
   };
 
   return (
-    <div style={{ maxWidth: 780, margin: "0 auto", padding: 24, fontFamily: "Arial, sans-serif", fontSize: 11, color: "#111", pageBreakBefore: primero ? "auto" : "always" }}>
+    <div className="observador-hoja" style={{ maxWidth: 780, margin: "0 auto", padding: 24, fontFamily: "Arial, sans-serif", fontSize: 11, color: "#111", pageBreakBefore: primero ? "auto" : "always" }}>
 
+      {/* Al imprimir, la hoja usa exactamente el ancho útil del papel (así Safari no la reduce ni la corta). */}
+      <style>{`@media print { .observador-hoja { padding: 0 !important; max-width: none !important; width: 100% !important; box-sizing: border-box; } .observador-hoja * { box-sizing: border-box; } .ficha-obs { display: block; break-inside: avoid; page-break-inside: avoid; } }`}</style>
       {/* Encabezado institucional */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, borderBottom: "2px solid #000", paddingBottom: 8, marginBottom: 10 }}>
         {institucion?.logo_url && <img src={institucion.logo_url} alt="Logo" style={{ height: 56 }} />}
