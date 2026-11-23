@@ -39,7 +39,6 @@ const MATERIAS_PLAN_ESTUDIOS = [
   "Tecnología e Informática",
 ];
 
-const FILAS_REGISTRO = 14;        // filas totales del registro de situaciones (las actas del sistema ocupan las primeras)
 const B = "1px solid #000";
 
 /* ------------------------------------------------------------------------
@@ -72,35 +71,41 @@ function CajaTexto({ valor, onChange, minHeight, fontSize, centrado }) {
   );
 }
 
-function Celda({ k, ctx, minHeight = 34, fontSize, centrado, style, colSpan, rowSpan }) {
+const ETIQ = { fontSize: 7.5, color: "#666", padding: "2px 5px 0", lineHeight: 1.1, textTransform: "uppercase", letterSpacing: 0.3, fontFamily: "Arial, sans-serif" };
+
+function Celda({ k, ctx, minHeight = 34, fontSize, centrado, style, colSpan, rowSpan, etiqueta }) {
   const v = (ctx.valores && ctx.valores[k]) || "";
+  const alto = etiqueta ? minHeight - 11 : minHeight;
   return (
     <td colSpan={colSpan} rowSpan={rowSpan} style={{ border: B, padding: 0, verticalAlign: "top", height: minHeight, background: ctx.editable ? "#F6F9FF" : undefined, ...style }}>
+      {etiqueta && <div style={ETIQ}>{etiqueta}</div>}
       {ctx.editable
-        ? <CajaTexto valor={v} onChange={(t) => ctx.setValor(k, t)} minHeight={minHeight} fontSize={fontSize} centrado={centrado} />
-        : <div style={{ minHeight, padding: "5px 6px", whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize, textAlign: centrado ? "center" : "left", lineHeight: 1.35 }}>{v}</div>}
+        ? <CajaTexto valor={v} onChange={(t) => ctx.setValor(k, t)} minHeight={alto} fontSize={fontSize} centrado={centrado} />
+        : <div style={{ minHeight: alto, padding: "3px 6px", whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize, textAlign: centrado ? "center" : "left", lineHeight: 1.35 }}>{v}</div>}
     </td>
   );
 }
 
 // Casilla de marca (X) — para A/C, "reprobó" y nivelaciones. Clic = pone o quita la X.
-function Marca({ k, ctx, minHeight = 22, ancho }) {
+function Marca({ k, ctx, minHeight = 22, ancho, etiqueta, colSpan }) {
   const on = ctx.valores && ctx.valores[k] === "X";
   return (
     <td
+      colSpan={colSpan}
       onClick={ctx.editable ? () => ctx.setValor(k, on ? "" : "X") : undefined}
       title={ctx.editable ? "Clic para marcar / desmarcar" : undefined}
       style={{ border: B, height: minHeight, width: ancho, textAlign: "center", verticalAlign: "middle", fontWeight: "bold", fontSize: 13,
         cursor: ctx.editable ? "pointer" : "default", background: ctx.editable ? (on ? "#DDEBFF" : "#F6F9FF") : "transparent", userSelect: "none" }}
     >
-      {on ? "X" : ""}
+      {etiqueta && <div style={{ ...ETIQ, textAlign: "center", padding: "2px 0 0" }}>{etiqueta}</div>}
+      {on ? "X" : (etiqueta ? "\u00A0" : "")}
     </td>
   );
 }
 
 // Casilla de recuperación: clic cambia  vacío → Aprobó → No aprobó → vacío.
 const CICLO = { "": "", A: "✔ Aprobó", N: "✘ No aprobó" };
-function Ciclo({ k, ctx, activo, minHeight = 26 }) {
+function Ciclo({ k, ctx, activo, minHeight = 22 }) {
   const v = (ctx.valores && ctx.valores[k]) || "";
   const siguiente = v === "" ? "A" : v === "A" ? "N" : "";
   if (!activo) return <td style={{ border: B, height: minHeight, background: "#EEE", textAlign: "center", color: "#999", fontSize: 10 }}>—</td>;
@@ -120,36 +125,66 @@ const TH = { border: B, padding: 4, background: "#F1F1F1" };
 const TD_LABEL = { border: B, padding: 5, fontWeight: "bold", background: "#FAFAFA" };
 const TD_DATO = { border: B, padding: 5 };
 
-const COLS_REGISTRO = [
-  ["Fecha", "7%"], ["Periodo", "6%"], ["Materia / Docente", "13%"], ["A", "3%"], ["C", "3%"],
-  ["Descripción de la situación / anotación", null], ["Compromiso", "17%"], ["Firma Docente", "8%"], ["Firma Estudiante", "8%"], ["Firma Acudiente", "8%"],
-];
-function CabeceraRegistro() {
+const ENTRADAS_ANEXO = 4;      // registros por hoja anexa
+const MAX_ANEXOS = 10;
+const FILAS_REGISTRO = 7;      // registros en la sección 2 (las actas del sistema ocupan los primeros)
+
+// Un registro = una "ficha" de ancho completo (cabe bien en hoja vertical, sin depender de la orientación del papel):
+//   fecha · periodo · materia · docente · A · C   /   descripción   /   compromiso   /   tres firmas
+const GRID12 = Array.from({ length: 12 }, (_, i) => <col key={i} style={{ width: "8.3333%" }} />);
+function EntradaBlanca({ ctx, p }) {
   return (
-    <thead>
-      <tr>{COLS_REGISTRO.map(([t, w]) => <th key={t} style={{ ...TH, ...(w ? { width: w } : {}) }}>{t}</th>)}</tr>
-    </thead>
-  );
-}
-function FilaBlanca({ ctx, p }) {
-  return (
-    <tr style={{ pageBreakInside: "avoid" }}>
-      <Celda ctx={ctx} k={`${p}-fecha`} minHeight={36} fontSize={9.5} />
-      <Celda ctx={ctx} k={`${p}-per`} minHeight={36} fontSize={9.5} />
-      <Celda ctx={ctx} k={`${p}-mat`} minHeight={36} fontSize={9.5} />
-      <Marca ctx={ctx} k={`${p}-A`} minHeight={36} />
-      <Marca ctx={ctx} k={`${p}-C`} minHeight={36} />
-      <Celda ctx={ctx} k={`${p}-desc`} minHeight={36} fontSize={10} />
-      <Celda ctx={ctx} k={`${p}-comp`} minHeight={36} fontSize={10} />
-      <Celda ctx={ctx} k={`${p}-fd`} minHeight={36} fontSize={9} />
-      <Celda ctx={ctx} k={`${p}-fe`} minHeight={36} fontSize={9} />
-      <Celda ctx={ctx} k={`${p}-fp`} minHeight={36} fontSize={9} />
-    </tr>
+    <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", marginBottom: 7, fontSize: 10, breakInside: "avoid", pageBreakInside: "avoid" }}>
+      <colgroup>{GRID12}</colgroup>
+      <tbody>
+        <tr>
+          <Celda ctx={ctx} k={`${p}-fecha`} etiqueta="Fecha" colSpan={2} minHeight={30} fontSize={10} />
+          <Celda ctx={ctx} k={`${p}-per`} etiqueta="Periodo" colSpan={2} minHeight={30} fontSize={10} />
+          <Celda ctx={ctx} k={`${p}-mat`} etiqueta="Materia" colSpan={3} minHeight={30} fontSize={10} />
+          <Celda ctx={ctx} k={`${p}-doc`} etiqueta="Docente" colSpan={3} minHeight={30} fontSize={10} />
+          <Marca ctx={ctx} k={`${p}-A`} etiqueta="A" minHeight={30} />
+          <Marca ctx={ctx} k={`${p}-C`} etiqueta="C" minHeight={30} />
+        </tr>
+        <tr><Celda ctx={ctx} k={`${p}-desc`} etiqueta="Descripción de la situación / anotación" colSpan={12} minHeight={54} fontSize={10.5} /></tr>
+        <tr><Celda ctx={ctx} k={`${p}-comp`} etiqueta="Compromiso" colSpan={12} minHeight={34} fontSize={10.5} /></tr>
+        <tr>
+          <Celda ctx={ctx} k={`${p}-fd`} etiqueta="Firma docente" colSpan={4} minHeight={32} fontSize={9} />
+          <Celda ctx={ctx} k={`${p}-fe`} etiqueta="Firma estudiante" colSpan={4} minHeight={32} fontSize={9} />
+          <Celda ctx={ctx} k={`${p}-fp`} etiqueta="Firma acudiente" colSpan={4} minHeight={32} fontSize={9} />
+        </tr>
+      </tbody>
+    </table>
   );
 }
 
-const FILAS_ANEXO = 12;      // filas de cada hoja anexa
-const MAX_ANEXOS = 10;
+// Acta que ya está en el sistema: mismos campos, texto fijo (sombreado) y firmas para completar.
+function EntradaActa({ ctx, a, esA, esC }) {
+  const fija = (extra) => ({ border: B, padding: 0, verticalAlign: "top", background: "#FFF9E5", ...extra });
+  const txt = { padding: "3px 6px", whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.35 };
+  const comp = [a.compromisos_academicos, a.compromisos_convivenciales, a.compromisos].filter(Boolean).join("\n");
+  return (
+    <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", marginBottom: 7, fontSize: 10, breakInside: "avoid", pageBreakInside: "avoid" }}>
+      <colgroup>{GRID12}</colgroup>
+      <tbody>
+        <tr>
+          <td colSpan={2} style={fija({ height: 34 })}><div style={ETIQ}>Fecha</div><div style={txt}>{a.fecha || ""}</div></td>
+          <Celda ctx={ctx} k={`g-ac${a.id}-per`} etiqueta="Periodo" colSpan={2} minHeight={30} fontSize={10} />
+          <td colSpan={3} style={fija({})}><div style={ETIQ}>Materia</div><div style={txt}>Acta del sistema</div></td>
+          <td colSpan={3} style={fija({})}><div style={ETIQ}>Docente</div><div style={txt}>{a.profesores?.nombre || ""}</div></td>
+          <td style={fija({ textAlign: "center" })}><div style={{ ...ETIQ, textAlign: "center", padding: "2px 0 0" }}>A</div><b>{esA ? "X" : "\u00A0"}</b></td>
+          <td style={fija({ textAlign: "center" })}><div style={{ ...ETIQ, textAlign: "center", padding: "2px 0 0" }}>C</div><b>{esC ? "X" : "\u00A0"}</b></td>
+        </tr>
+        <tr><td colSpan={12} style={fija({ minHeight: 62 })}><div style={ETIQ}>Descripción de la situación / anotación</div><div style={txt}><b>{a.motivo || ""}</b>{a.descripcion ? `\n${a.descripcion}` : ""}</div></td></tr>
+        <tr><td colSpan={12} style={fija({})}><div style={ETIQ}>Compromiso</div><div style={{ ...txt, minHeight: 20 }}>{comp}</div></td></tr>
+        <tr>
+          <Celda ctx={ctx} k={`g-ac${a.id}-fd`} etiqueta="Firma docente" colSpan={4} minHeight={32} fontSize={9} />
+          <Celda ctx={ctx} k={`g-ac${a.id}-fe`} etiqueta="Firma estudiante" colSpan={4} minHeight={32} fontSize={9} />
+          <Celda ctx={ctx} k={`g-ac${a.id}-fp`} etiqueta="Firma acudiente" colSpan={4} minHeight={32} fontSize={9} />
+        </tr>
+      </tbody>
+    </table>
+  );
+}
 
 function esTipo(a, re) { return re.test(String(a.tipo || a.tipo_evento || a.motivo || "")); }
 
@@ -168,7 +203,7 @@ function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre", ctx, 
 
   // Registro unificado: primero las actas que ya están en el sistema, luego filas en blanco.
   const listaActas = actas || [];
-  const filasBlanco = Math.max(4, FILAS_REGISTRO - listaActas.length);
+  const filasBlanco = Math.max(2, FILAS_REGISTRO - listaActas.length);
 
   // Nivelaciones: una materia queda "pendiente" en los periodos reprobados (X en la sección 3) que aún no se recuperaron.
   const estadoMateria = (mi) => {
@@ -178,7 +213,7 @@ function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre", ctx, 
   };
 
   return (
-    <div className="print-horizontal" style={{ maxWidth: 1000, margin: "0 auto", padding: 24, fontFamily: "Arial, sans-serif", fontSize: 11, color: "#111", pageBreakBefore: primero ? "auto" : "always" }}>
+    <div style={{ maxWidth: 780, margin: "0 auto", padding: 24, fontFamily: "Arial, sans-serif", fontSize: 11, color: "#111", pageBreakBefore: primero ? "auto" : "always" }}>
 
       {/* Encabezado institucional */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, borderBottom: "2px solid #000", paddingBottom: 8, marginBottom: 10 }}>
@@ -249,50 +284,30 @@ function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre", ctx, 
         2. REGISTRO DE SITUACIONES Y ANOTACIONES DE DOCENTES{contexto.editable ? " (escribe en las cajas azules; en A / C haz clic para marcar)" : ""}
       </div>
       <p style={{ fontSize: 9, margin: "0 0 5px", color: "#555" }}>
-        Cualquier docente que tenga contacto con el estudiante registra aquí su observación — A: académica · C: convivencial — con su compromiso y firmas. Las filas sombreadas son actas ya registradas en el sistema.
+        Cualquier docente que tenga contacto con el estudiante registra aquí su observación — A: académica · C: convivencial — con su compromiso y firmas. Los registros sombreados son actas que ya están en el sistema.
       </p>
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 14, fontSize: 10, tableLayout: "fixed" }}>
-        <CabeceraRegistro />
-        <tbody>
-          {listaActas.map((a, r) => {
-            const esA = esTipo(a, /acad/i), esC = esTipo(a, /convivenc|citaci|apoyo/i);
-            const celdaFija = { border: B, padding: "5px 6px", verticalAlign: "top", background: "#FFF9E5", whiteSpace: "pre-wrap", wordBreak: "break-word" };
-            return (
-              <tr key={a.id} style={{ pageBreakInside: "avoid" }}>
-                <td style={celdaFija}>{a.fecha || ""}</td>
-                <Celda ctx={contexto} k={`g-ac${a.id}-per`} minHeight={36} />
-                <td style={celdaFija}>Acta{a.profesores?.nombre ? `\n${a.profesores.nombre}` : ""}</td>
-                <td style={{ ...celdaFija, textAlign: "center", fontWeight: "bold", verticalAlign: "middle" }}>{esA ? "X" : ""}</td>
-                <td style={{ ...celdaFija, textAlign: "center", fontWeight: "bold", verticalAlign: "middle" }}>{esC ? "X" : ""}</td>
-                <td style={celdaFija}><b>{a.motivo || ""}</b>{a.descripcion ? `\n${a.descripcion}` : ""}</td>
-                <td style={celdaFija}>{[a.compromisos_academicos, a.compromisos_convivenciales, a.compromisos].filter(Boolean).join("\n")}</td>
-                <Celda ctx={contexto} k={`g-ac${a.id}-fd`} minHeight={36} fontSize={9} />
-                <Celda ctx={contexto} k={`g-ac${a.id}-fe`} minHeight={36} fontSize={9} />
-                <Celda ctx={contexto} k={`g-ac${a.id}-fp`} minHeight={36} fontSize={9} />
-              </tr>
-            );
-          })}
-          {Array.from({ length: filasBlanco }).map((_, r) => <FilaBlanca key={`b${r}`} ctx={contexto} p={`g-${r}`} />)}
-        </tbody>
-      </table>
+      {listaActas.map((a) => (
+        <EntradaActa key={a.id} ctx={contexto} a={a} esA={esTipo(a, /acad/i)} esC={esTipo(a, /convivenc|citaci|apoyo/i)} />
+      ))}
+      {Array.from({ length: filasBlanco }).map((_, r) => <EntradaBlanca key={`b${r}`} ctx={contexto} p={`g-${r}`} />)}
 
       {/* 3. Rendimiento académico */}
-      <div style={{ pageBreakInside: "avoid" }}>
-        <div style={{ fontWeight: "bold", marginBottom: 4, pageBreakBefore: "always", paddingTop: 6 }}>
+      <div style={{ pageBreakBefore: "always", breakBefore: "page", paddingTop: 6 }}>
+        <div style={{ fontWeight: "bold", marginBottom: 4 }}>
           3. RENDIMIENTO ACADÉMICO POR {infoSistema.nombre.toUpperCase()} (marcar con X si reprobó){contexto.editable ? " — haz clic en la casilla" : ""}
         </div>
         <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 14, fontSize: 10.5 }}>
           <thead>
             <tr>
               <th style={{ ...TH, textAlign: "left" }}>Asignatura</th>
-              {periodosLista.map((i) => <th key={i} style={{ ...TH, width: 110 }}>{etiquetaPeriodoConfigurable(sistemaPeriodos, i)}</th>)}
+              {periodosLista.map((i) => <th key={i} style={{ ...TH, width: 90 }}>{etiquetaPeriodoConfigurable(sistemaPeriodos, i)}</th>)}
             </tr>
           </thead>
           <tbody>
             {MATERIAS_PLAN_ESTUDIOS.map((m, mi) => (
               <tr key={m}>
                 <td style={{ border: B, padding: 5 }}>{m}</td>
-                {periodosLista.map((i) => <Marca key={i} ctx={contexto} k={`r-${mi}-${i}`} minHeight={26} />)}
+                {periodosLista.map((i) => <Marca key={i} ctx={contexto} k={`r-${mi}-${i}`} minHeight={22} />)}
               </tr>
             ))}
           </tbody>
@@ -309,9 +324,9 @@ function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre", ctx, 
           <thead>
             <tr>
               <th style={{ ...TH, textAlign: "left" }}>Asignatura</th>
-              <th style={{ ...TH, width: 120 }}>Pendiente</th>
-              {periodosLista.map((i) => <th key={i} style={{ ...TH, width: 100 }}>Recuperación {corto(i)}</th>)}
-              <th style={{ ...TH, width: 100 }}>Estado</th>
+              <th style={{ ...TH, width: 80 }}>Pendiente</th>
+              {periodosLista.map((i) => <th key={i} style={{ ...TH, width: 78 }}>Recuper. {corto(i)}</th>)}
+              <th style={{ ...TH, width: 80 }}>Estado</th>
             </tr>
           </thead>
           <tbody>
@@ -351,11 +366,11 @@ function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre", ctx, 
             {periodosLista.map((i) => (
               <tr key={i} style={{ pageBreakInside: "avoid" }}>
                 <td style={{ border: B, padding: 3, fontWeight: "bold", textAlign: "center", verticalAlign: "middle", background: "#FAFAFA" }}>{etiquetaPeriodoConfigurable(sistemaPeriodos, i)}</td>
-                <Celda ctx={contexto} k={`o-${i}-ac`} minHeight={80} />
-                <Celda ctx={contexto} k={`o-${i}-co`} minHeight={80} />
-                <Celda ctx={contexto} k={`o-${i}-fp`} minHeight={80} fontSize={9} />
-                <Celda ctx={contexto} k={`o-${i}-fe`} minHeight={80} fontSize={9} />
-                <Celda ctx={contexto} k={`o-${i}-fd`} minHeight={80} fontSize={9} />
+                <Celda ctx={contexto} k={`o-${i}-ac`} minHeight={60} />
+                <Celda ctx={contexto} k={`o-${i}-co`} minHeight={60} />
+                <Celda ctx={contexto} k={`o-${i}-fp`} minHeight={60} fontSize={9} />
+                <Celda ctx={contexto} k={`o-${i}-fe`} minHeight={60} fontSize={9} />
+                <Celda ctx={contexto} k={`o-${i}-fd`} minHeight={60} fontSize={9} />
               </tr>
             ))}
           </tbody>
@@ -373,7 +388,7 @@ function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre", ctx, 
 
       {/* Hojas anexas: continúan el registro de situaciones cuando el estudiante tiene muchas anotaciones */}
       {Array.from({ length: nAnexos }).map((_, a) => (
-        <div key={a} style={{ pageBreakBefore: "always", paddingTop: 4 }}>
+        <div key={a} style={{ pageBreakBefore: "always", breakBefore: "page", paddingTop: 4 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, borderBottom: "2px solid #000", paddingBottom: 6, marginBottom: 8 }}>
             {institucion?.logo_url && <img src={institucion.logo_url} alt="Logo" style={{ height: 40 }} />}
             <div style={{ flex: 1, textAlign: "center" }}>
@@ -385,12 +400,7 @@ function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre", ctx, 
             ANEXO {a + 1} DE {nAnexos} — CONTINUACIÓN DEL REGISTRO DE SITUACIONES Y ANOTACIONES DE DOCENTES{contexto.editable ? " (escribe en las cajas azules)" : ""}
           </div>
           <p style={{ fontSize: 9, margin: "0 0 5px", color: "#555" }}>A: académica · C: convivencial. Continúa el registro de la sección 2 del Observador.</p>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10, tableLayout: "fixed" }}>
-            <CabeceraRegistro />
-            <tbody>
-              {Array.from({ length: FILAS_ANEXO }).map((_, r) => <FilaBlanca key={r} ctx={contexto} p={`x${a}-${r}`} />)}
-            </tbody>
-          </table>
+          {Array.from({ length: ENTRADAS_ANEXO }).map((_, r) => <EntradaBlanca key={r} ctx={contexto} p={`x${a}-${r}`} />)}
         </div>
       ))}
     </div>
@@ -439,7 +449,7 @@ function SelectorAnexos({ valor, onChange }) {
         <button onClick={() => onChange(Math.max(0, valor - 1))} className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-bold">−</button>
         <span className="text-sm font-bold w-6 text-center">{valor}</span>
         <button onClick={() => onChange(Math.min(MAX_ANEXOS, valor + 1))} className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-bold">+</button>
-        <span className="text-[11px] text-slate-400">{valor === 0 ? "ninguna" : `${valor} hoja(s) × ${FILAS_ANEXO} filas, por estudiante`}</span>
+        <span className="text-[11px] text-slate-400">{valor === 0 ? "ninguna" : `${valor} hoja(s) × ${ENTRADAS_ANEXO} registros, por estudiante`}</span>
       </div>
     </div>
   );
