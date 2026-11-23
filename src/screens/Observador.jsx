@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import * as api from "../lib/api";
 
@@ -11,12 +11,6 @@ function calcularEdad(fechaNacimiento) {
   if (m < 0 || (m === 0 && hoy.getDate() < nac.getDate())) edad--;
   return isNaN(edad) ? "—" : `${edad} años`;
 }
-
-const TIPO_EVENTO_ICONO = {
-  "Académico": "📘", "Convivencial": "🤝", "Felicitación": "🌟", "Citación a acudiente": "📞", "Apoyo y orientación": "🧭",
-};
-
-const EVALUACION_LABEL = { cumplio: "Cumplió", en_proceso: "En proceso", no_cumplio: "No cumplió" };
 
 const SISTEMAS_PERIODO = {
   bimestre: { nombre: "Bimestre", cantidad: 4 },
@@ -45,16 +39,83 @@ const MATERIAS_PLAN_ESTUDIOS = [
   "Tecnología e Informática",
 ];
 
-function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre" }) {
+const FILAS_POR_PERIODO = 3;      // filas de la matriz de situaciones por periodo
+const FILAS_ANOTACIONES = 12;     // filas de la hoja de anotaciones (más altas y anchas que antes)
+const B = "1px solid #000";
+
+/* ------------------------------------------------------------------------
+   Celdas diligenciables.
+   - En modo "editable" (pantalla) son cajas de texto que crecen solas con lo que se escribe.
+   - En modo impresión muestran el texto tal cual (o quedan en blanco para llenar a mano).
+   ------------------------------------------------------------------------ */
+function CajaTexto({ valor, onChange, minHeight, fontSize, centrado }) {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.max(minHeight, el.scrollHeight) + "px";
+  }, [valor, minHeight]);
+  return (
+    <textarea
+      ref={ref}
+      value={valor}
+      onChange={(e) => onChange(e.target.value)}
+      rows={1}
+      style={{
+        display: "block", width: "100%", boxSizing: "border-box", minHeight, resize: "none", overflow: "hidden",
+        border: "none", outline: "none", background: "#F6F9FF", padding: "5px 6px", fontFamily: "inherit",
+        fontSize: fontSize || "inherit", lineHeight: 1.35, textAlign: centrado ? "center" : "left", color: "#111",
+      }}
+      onFocus={(e) => { e.target.style.background = "#EAF1FF"; }}
+      onBlur={(e) => { e.target.style.background = "#F6F9FF"; }}
+    />
+  );
+}
+
+function Celda({ k, ctx, minHeight = 34, fontSize, centrado, style, colSpan, rowSpan }) {
+  const v = (ctx.valores && ctx.valores[k]) || "";
+  return (
+    <td colSpan={colSpan} rowSpan={rowSpan} style={{ border: B, padding: 0, verticalAlign: "top", height: minHeight, background: ctx.editable ? "#F6F9FF" : undefined, ...style }}>
+      {ctx.editable
+        ? <CajaTexto valor={v} onChange={(t) => ctx.setValor(k, t)} minHeight={minHeight} fontSize={fontSize} centrado={centrado} />
+        : <div style={{ minHeight, padding: "5px 6px", whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize, textAlign: centrado ? "center" : "left", lineHeight: 1.35 }}>{v}</div>}
+    </td>
+  );
+}
+
+// Casilla de marca (X) — para A/C, "reprobó" y nivelaciones. Clic = pone o quita la X.
+function Marca({ k, ctx, minHeight = 22, ancho }) {
+  const on = ctx.valores && ctx.valores[k] === "X";
+  return (
+    <td
+      onClick={ctx.editable ? () => ctx.setValor(k, on ? "" : "X") : undefined}
+      title={ctx.editable ? "Clic para marcar / desmarcar" : undefined}
+      style={{ border: B, height: minHeight, width: ancho, textAlign: "center", verticalAlign: "middle", fontWeight: "bold", fontSize: 13,
+        cursor: ctx.editable ? "pointer" : "default", background: ctx.editable ? (on ? "#DDEBFF" : "#F6F9FF") : "transparent", userSelect: "none" }}
+    >
+      {on ? "X" : ""}
+    </td>
+  );
+}
+
+const TH = { border: B, padding: 4, background: "#F1F1F1" };
+const TD_LABEL = { border: B, padding: 5, fontWeight: "bold", background: "#FAFAFA" };
+const TD_DATO = { border: B, padding: 5 };
+
+function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre", ctx }) {
   const { estudiante, acudiente, actas, institucion } = datos;
   const anioActual = new Date().getFullYear();
   const infoSistema = SISTEMAS_PERIODO[sistemaPeriodos] || SISTEMAS_PERIODO.trimestre;
   const periodosLista = Array.from({ length: infoSistema.cantidad }, (_, i) => i);
+  const filasMatriz = Array.from({ length: FILAS_POR_PERIODO }, (_, i) => i);
+  const sinFoto = !estudiante.foto_url;
+  const contexto = ctx || { editable: false, valores: datos.valores || {}, setValor: () => {} };
 
   return (
-    <div className="print-avoid-break" style={{ maxWidth: 800, margin: "0 auto", padding: 24, fontFamily: "Arial, sans-serif", fontSize: 10.5, color: "#111", pageBreakBefore: primero ? "auto" : "always" }}>
+    <div className="print-avoid-break" style={{ maxWidth: 840, margin: "0 auto", padding: 24, fontFamily: "Arial, sans-serif", fontSize: 11, color: "#111", pageBreakBefore: primero ? "auto" : "always" }}>
 
-      {/* 1. Encabezado institucional */}
+      {/* Encabezado institucional */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, borderBottom: "2px solid #000", paddingBottom: 8, marginBottom: 10 }}>
         {institucion?.logo_url && <img src={institucion.logo_url} alt="Logo" style={{ height: 60 }} />}
         <div style={{ flex: 1, textAlign: "center" }}>
@@ -65,90 +126,123 @@ function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre" }) {
         </div>
       </div>
 
-      {/* 2. Datos de identificación */}
+      {/* 1. Datos de identificación — con la foto del estudiante */}
       <div style={{ fontWeight: "bold", marginBottom: 4 }}>1. DATOS DE IDENTIFICACIÓN DEL ESTUDIANTE</div>
-      <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
-        {estudiante.foto_url && (
-          <img src={estudiante.foto_url} alt={estudiante.nombre} style={{ width: 90, height: 90, objectFit: "cover", borderRadius: 6, border: "1px solid #000", flexShrink: 0 }} />
-        )}
+      <div style={{ display: "flex", gap: 10, marginBottom: 12, alignItems: "stretch" }}>
+        <div style={{ width: 104, flexShrink: 0, border: B, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", background: "#FAFAFA", minHeight: 130 }}>
+          {sinFoto
+            ? <span style={{ fontSize: 10, color: "#777", textAlign: "center", padding: 6 }}>FOTO<br />(pegar aquí)</span>
+            : <img src={estudiante.foto_url} alt={estudiante.nombre} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
+        </div>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <tbody>
-          <tr>
-            <td style={{ border: "1px solid #000", padding: 4, fontWeight: "bold", width: "22%" }}>Nombres y apellidos</td>
-            <td style={{ border: "1px solid #000", padding: 4 }} colSpan={3}>{estudiante.nombre}</td>
-          </tr>
-          <tr>
-            <td style={{ border: "1px solid #000", padding: 4, fontWeight: "bold" }}>Documento</td>
-            <td style={{ border: "1px solid #000", padding: 4 }}>{estudiante.tipo_documento || "RC"} {estudiante.documento || "—"}</td>
-            <td style={{ border: "1px solid #000", padding: 4, fontWeight: "bold" }}>Fecha nac. / Edad</td>
-            <td style={{ border: "1px solid #000", padding: 4 }}>{estudiante.fecha_nacimiento || "—"} / {calcularEdad(estudiante.fecha_nacimiento)}</td>
-          </tr>
-          <tr>
-            <td style={{ border: "1px solid #000", padding: 4, fontWeight: "bold" }}>Grado / Curso</td>
-            <td style={{ border: "1px solid #000", padding: 4 }}>{estudiante.grado_id}</td>
-            <td style={{ border: "1px solid #000", padding: 4, fontWeight: "bold" }}>EPS</td>
-            <td style={{ border: "1px solid #000", padding: 4 }}>{estudiante.eps || "—"}</td>
-          </tr>
-          <tr>
-            <td style={{ border: "1px solid #000", padding: 4, fontWeight: "bold" }}>Dirección / Barrio</td>
-            <td style={{ border: "1px solid #000", padding: 4 }} colSpan={3}>{acudiente?.direccion || "—"}</td>
-          </tr>
-          <tr>
-            <td style={{ border: "1px solid #000", padding: 4, fontWeight: "bold" }}>Acudiente</td>
-            <td style={{ border: "1px solid #000", padding: 4 }} colSpan={3}>
-              {acudiente?.nombre_madre && `Madre: ${acudiente.nombre_madre}${acudiente.telefono_madre ? ` (${acudiente.telefono_madre})` : ""}. `}
-              {acudiente?.nombre_padre && `Padre: ${acudiente.nombre_padre}${acudiente.telefono_padre ? ` (${acudiente.telefono_padre})` : ""}.`}
-              {!acudiente?.nombre_madre && !acudiente?.nombre_padre && "—"}
-            </td>
-          </tr>
-          {acudiente?.contacto_emergencia_nombre && (
+          <tbody>
             <tr>
-              <td style={{ border: "1px solid #000", padding: 4, fontWeight: "bold" }}>Contacto de emergencia</td>
-              <td style={{ border: "1px solid #000", padding: 4 }} colSpan={3}>
-                {acudiente.contacto_emergencia_nombre} ({acudiente.contacto_emergencia_relacion || "—"}) — {acudiente.contacto_emergencia_telefono || "—"}
+              <td style={{ ...TD_LABEL, width: "22%" }}>Nombres y apellidos</td>
+              <td style={TD_DATO} colSpan={3}>{estudiante.nombre}</td>
+            </tr>
+            <tr>
+              <td style={TD_LABEL}>Documento</td>
+              <td style={TD_DATO}>{estudiante.tipo_documento || "RC"} {estudiante.documento || "—"}</td>
+              <td style={TD_LABEL}>Fecha nac. / Edad</td>
+              <td style={TD_DATO}>{estudiante.fecha_nacimiento || "—"} / {calcularEdad(estudiante.fecha_nacimiento)}</td>
+            </tr>
+            <tr>
+              <td style={TD_LABEL}>Grado / Curso</td>
+              <td style={TD_DATO}>{estudiante.grado_id}</td>
+              <td style={TD_LABEL}>EPS</td>
+              <td style={TD_DATO}>{estudiante.eps || "—"}</td>
+            </tr>
+            <tr>
+              <td style={TD_LABEL}>Dirección / Barrio</td>
+              <td style={TD_DATO} colSpan={3}>{acudiente?.direccion || "—"}</td>
+            </tr>
+            <tr>
+              <td style={TD_LABEL}>Acudiente</td>
+              <td style={TD_DATO} colSpan={3}>
+                {acudiente?.nombre_madre && `Madre: ${acudiente.nombre_madre}${acudiente.telefono_madre ? ` (${acudiente.telefono_madre})` : ""}. `}
+                {acudiente?.nombre_padre && `Padre: ${acudiente.nombre_padre}${acudiente.telefono_padre ? ` (${acudiente.telefono_padre})` : ""}.`}
+                {!acudiente?.nombre_madre && !acudiente?.nombre_padre && "—"}
               </td>
             </tr>
-          )}
-          <tr>
-            <td style={{ border: "1px solid #000", padding: 4, fontWeight: "bold" }}>Observaciones médicas / PIAR</td>
-            <td style={{ border: "1px solid #000", padding: 4 }} colSpan={3}>
-              {estudiante.piar ? "Cuenta con PIAR activo. " : ""}{estudiante.dua ? "Cuenta con ajustes DUA. " : ""}{estudiante.ajustes_inclusion || (!estudiante.piar && !estudiante.dua ? "Sin observaciones registradas." : "")}
-            </td>
-          </tr>
-        </tbody>
+            {acudiente?.contacto_emergencia_nombre && (
+              <tr>
+                <td style={TD_LABEL}>Contacto de emergencia</td>
+                <td style={TD_DATO} colSpan={3}>
+                  {acudiente.contacto_emergencia_nombre} ({acudiente.contacto_emergencia_relacion || "—"}) — {acudiente.contacto_emergencia_telefono || "—"}
+                </td>
+              </tr>
+            )}
+            <tr>
+              <td style={TD_LABEL}>Observaciones médicas / PIAR</td>
+              <td style={TD_DATO} colSpan={3}>
+                {estudiante.piar ? "Cuenta con PIAR activo. " : ""}{estudiante.dua ? "Cuenta con ajustes DUA. " : ""}{estudiante.ajustes_inclusion || (!estudiante.piar && !estudiante.dua ? "Sin observaciones registradas." : "")}
+              </td>
+            </tr>
+          </tbody>
         </table>
       </div>
 
-      {/* 2. Matriz de registro — en blanco, para completar a mano. Una sola tabla
-          con columna "Periodo" en vez de repetir la tabla por cada uno, para
-          que entre todo el documento en 2 páginas. */}
-      <div style={{ fontWeight: "bold", marginBottom: 4 }}>2. MATRIZ DE REGISTRO DE SITUACIONES Y SEGUIMIENTO (por completar a mano)</div>
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 12, fontSize: 9.5 }}>
+      {/* 2. Matriz de registro — diligenciable, con cajas amplias */}
+      <div style={{ fontWeight: "bold", marginBottom: 4 }}>
+        2. MATRIZ DE REGISTRO DE SITUACIONES Y SEGUIMIENTO{contexto.editable ? " (escribe en las cajas azules)" : ""}
+      </div>
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 14, fontSize: 10.5, tableLayout: "fixed" }}>
         <thead>
           <tr>
-            <th style={{ border: "1px solid #000", padding: 3, width: "13%" }}>Periodo</th>
-            <th style={{ border: "1px solid #000", padding: 3, width: "10%" }}>Fecha</th>
-            <th style={{ border: "1px solid #000", padding: 3, width: "14%" }}>Tipo</th>
-            <th style={{ border: "1px solid #000", padding: 3 }}>Descripción de la situación</th>
-            <th style={{ border: "1px solid #000", padding: 3, width: "18%" }}>Compromiso</th>
-            <th style={{ border: "1px solid #000", padding: 3, width: "11%" }}>Firma</th>
+            <th style={{ ...TH, width: "10%" }}>Periodo</th>
+            <th style={{ ...TH, width: "11%" }}>Fecha</th>
+            <th style={{ ...TH, width: "13%" }}>Tipo</th>
+            <th style={TH}>Descripción de la situación</th>
+            <th style={{ ...TH, width: "22%" }}>Compromiso</th>
+            <th style={{ ...TH, width: "12%" }}>Firma</th>
           </tr>
         </thead>
         <tbody>
-          {periodosLista.map((i) => [0, 1].map((f) => (
-            <tr key={`${i}-${f}`}>
-              {f === 0 && <td rowSpan={2} style={{ border: "1px solid #000", padding: 3, fontWeight: "bold", textAlign: "center", verticalAlign: "middle" }}>{etiquetaPeriodoConfigurable(sistemaPeriodos, i)}</td>}
-              <td style={{ border: "1px solid #000", height: 16 }}></td>
-              <td style={{ border: "1px solid #000", height: 16 }}></td>
-              <td style={{ border: "1px solid #000", height: 16 }}></td>
-              <td style={{ border: "1px solid #000", height: 16 }}></td>
-              <td style={{ border: "1px solid #000", height: 16 }}></td>
+          {periodosLista.map((i) => filasMatriz.map((f) => (
+            <tr key={`${i}-${f}`} style={{ pageBreakInside: "avoid" }}>
+              {f === 0 && (
+                <td rowSpan={FILAS_POR_PERIODO} style={{ border: B, padding: 3, fontWeight: "bold", textAlign: "center", verticalAlign: "middle", background: "#FAFAFA" }}>
+                  {etiquetaPeriodoConfigurable(sistemaPeriodos, i)}
+                </td>
+              )}
+              <Celda ctx={contexto} k={`m-${i}-${f}-fecha`} minHeight={40} />
+              <Celda ctx={contexto} k={`m-${i}-${f}-tipo`} minHeight={40} />
+              <Celda ctx={contexto} k={`m-${i}-${f}-desc`} minHeight={40} />
+              <Celda ctx={contexto} k={`m-${i}-${f}-comp`} minHeight={40} />
+              <Celda ctx={contexto} k={`m-${i}-${f}-firma`} minHeight={40} />
             </tr>
           )))}
         </tbody>
       </table>
 
-      {/* Hoja nueva y aparte: anotaciones libres de cualquier docente sobre el estudiante — en horizontal */}
+      {/* 3. Situaciones que ya están registradas en el sistema (Actas) */}
+      <div style={{ fontWeight: "bold", marginBottom: 4 }}>3. SITUACIONES REGISTRADAS EN EL SISTEMA (ACTAS)</div>
+      {actas && actas.length > 0 ? (
+        <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 12, fontSize: 10, tableLayout: "fixed" }}>
+          <thead>
+            <tr>
+              <th style={{ ...TH, width: "11%" }}>Fecha</th>
+              <th style={{ ...TH, width: "16%" }}>Tipo</th>
+              <th style={TH}>Motivo / descripción</th>
+              <th style={{ ...TH, width: "28%" }}>Compromisos</th>
+            </tr>
+          </thead>
+          <tbody>
+            {actas.map((a) => (
+              <tr key={a.id} style={{ pageBreakInside: "avoid" }}>
+                <td style={{ ...TD_DATO, verticalAlign: "top" }}>{a.fecha || ""}</td>
+                <td style={{ ...TD_DATO, verticalAlign: "top" }}>{a.tipo || a.tipo_evento || ""}</td>
+                <td style={{ ...TD_DATO, verticalAlign: "top", whiteSpace: "pre-wrap" }}><b>{a.motivo || ""}</b>{a.descripcion ? `\n${a.descripcion}` : ""}</td>
+                <td style={{ ...TD_DATO, verticalAlign: "top", whiteSpace: "pre-wrap" }}>{[a.compromisos_academicos, a.compromisos_convivenciales, a.compromisos].filter(Boolean).join("\n")}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <div style={{ border: B, padding: 8, marginBottom: 12, color: "#555", fontSize: 10 }}>Sin situaciones registradas en el sistema.</div>
+      )}
+
+      {/* 4. Hoja de anotaciones de docentes — HORIZONTAL, filas altas y columna de anotación ancha */}
       <div className="print-horizontal" style={{ pageBreakBefore: "always", paddingTop: 6 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, borderBottom: "2px solid #000", paddingBottom: 6, marginBottom: 8 }}>
           {institucion?.logo_url && <img src={institucion.logo_url} alt="Logo" style={{ height: 40 }} />}
@@ -157,109 +251,109 @@ function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre" }) {
             <div>OBSERVADOR DEL ESTUDIANTE — {estudiante.nombre} · Curso {estudiante.grado_id} · Año lectivo {anioActual}</div>
           </div>
         </div>
-        <div style={{ fontWeight: "bold", marginBottom: 4 }}>4. HOJA DE ANOTACIONES DE DOCENTES (por completar a mano)</div>
-        <p style={{ fontSize: 8.5, marginBottom: 6, color: "#555" }}>
+        <div style={{ fontWeight: "bold", marginBottom: 4 }}>4. HOJA DE ANOTACIONES DE DOCENTES{contexto.editable ? " (escribe en las cajas azules; en A / C haz clic para marcar)" : ""}</div>
+        <p style={{ fontSize: 9, marginBottom: 6, color: "#555" }}>
           Espacio para que cualquier docente que tenga contacto con el estudiante registre observaciones — marcando si es académica (A) o convivencial (C) — sin necesidad de generar un acta formal.
         </p>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 8 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 9.5, tableLayout: "fixed" }}>
           <thead>
             <tr>
-              <th style={{ border: "1px solid #000", padding: 2, width: "7%" }}>Fecha</th>
-              <th style={{ border: "1px solid #000", padding: 2, width: "9%" }}>Materia</th>
-              <th style={{ border: "1px solid #000", padding: 2, width: "9%" }}>Docente</th>
-              <th style={{ border: "1px solid #000", padding: 2, width: "4%" }}>A</th>
-              <th style={{ border: "1px solid #000", padding: 2, width: "4%" }}>C</th>
-              <th style={{ border: "1px solid #000", padding: 2 }}>Anotación</th>
-              <th style={{ border: "1px solid #000", padding: 2, width: "12%" }}>Firma Docente</th>
-              <th style={{ border: "1px solid #000", padding: 2, width: "12%" }}>Firma Estudiante</th>
-              <th style={{ border: "1px solid #000", padding: 2, width: "13%" }}>Firma Padre de Familia</th>
+              <th style={{ ...TH, width: "8%" }}>Fecha</th>
+              <th style={{ ...TH, width: "11%" }}>Materia</th>
+              <th style={{ ...TH, width: "11%" }}>Docente</th>
+              <th style={{ ...TH, width: "3.5%" }}>A</th>
+              <th style={{ ...TH, width: "3.5%" }}>C</th>
+              <th style={TH}>Anotación</th>
+              <th style={{ ...TH, width: "10%" }}>Firma Docente</th>
+              <th style={{ ...TH, width: "10%" }}>Firma Estudiante</th>
+              <th style={{ ...TH, width: "11%" }}>Firma Padre de Familia</th>
             </tr>
           </thead>
           <tbody>
-            {Array.from({ length: 24 }).map((_, i) => (
-              <tr key={i}>
-                <td style={{ border: "1px solid #000", height: 20 }}></td>
-                <td style={{ border: "1px solid #000", height: 20 }}></td>
-                <td style={{ border: "1px solid #000", height: 20 }}></td>
-                <td style={{ border: "1px solid #000", height: 20 }}></td>
-                <td style={{ border: "1px solid #000", height: 20 }}></td>
-                <td style={{ border: "1px solid #000", height: 20 }}></td>
-                <td style={{ border: "1px solid #000", height: 20 }}></td>
-                <td style={{ border: "1px solid #000", height: 20 }}></td>
-                <td style={{ border: "1px solid #000", height: 20 }}></td>
+            {Array.from({ length: FILAS_ANOTACIONES }).map((_, r) => (
+              <tr key={r} style={{ pageBreakInside: "avoid" }}>
+                <Celda ctx={contexto} k={`a-${r}-fecha`} minHeight={34} fontSize={9.5} />
+                <Celda ctx={contexto} k={`a-${r}-materia`} minHeight={34} fontSize={9.5} />
+                <Celda ctx={contexto} k={`a-${r}-docente`} minHeight={34} fontSize={9.5} />
+                <Marca ctx={contexto} k={`a-${r}-A`} minHeight={34} />
+                <Marca ctx={contexto} k={`a-${r}-C`} minHeight={34} />
+                <Celda ctx={contexto} k={`a-${r}-nota`} minHeight={34} fontSize={10} />
+                <Celda ctx={contexto} k={`a-${r}-fd`} minHeight={34} fontSize={9} />
+                <Celda ctx={contexto} k={`a-${r}-fe`} minHeight={34} fontSize={9} />
+                <Celda ctx={contexto} k={`a-${r}-fp`} minHeight={34} fontSize={9} />
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      {/* Rendimiento académico */}
-      <div style={{ fontWeight: "bold", marginBottom: 4, marginTop: 8, pageBreakBefore: "always", paddingTop: 6 }}>5. RENDIMIENTO ACADÉMICO POR {infoSistema.nombre.toUpperCase()} (marcar con X si reprobó)</div>
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 10, fontSize: 9.5 }}>
+      {/* 5. Rendimiento académico */}
+      <div style={{ fontWeight: "bold", marginBottom: 4, marginTop: 8, pageBreakBefore: "always", paddingTop: 6 }}>
+        5. RENDIMIENTO ACADÉMICO POR {infoSistema.nombre.toUpperCase()} (marcar con X si reprobó){contexto.editable ? " — haz clic en la casilla" : ""}
+      </div>
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 12, fontSize: 10.5 }}>
         <thead>
           <tr>
-            <th style={{ border: "1px solid #000", padding: 3, textAlign: "left" }}>Asignatura</th>
+            <th style={{ ...TH, textAlign: "left" }}>Asignatura</th>
             {periodosLista.map((i) => (
-              <th key={i} style={{ border: "1px solid #000", padding: 3, width: 50 }}>{etiquetaPeriodoConfigurable(sistemaPeriodos, i)}</th>
+              <th key={i} style={{ ...TH, width: 70 }}>{etiquetaPeriodoConfigurable(sistemaPeriodos, i)}</th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {MATERIAS_PLAN_ESTUDIOS.map((m) => (
+          {MATERIAS_PLAN_ESTUDIOS.map((m, mi) => (
             <tr key={m}>
-              <td style={{ border: "1px solid #000", padding: 3 }}>{m}</td>
-              {periodosLista.map((i) => (
-                <td key={i} style={{ border: "1px solid #000", padding: 3, height: 16 }}></td>
-              ))}
+              <td style={{ border: B, padding: 5 }}>{m}</td>
+              {periodosLista.map((i) => <Marca key={i} ctx={contexto} k={`r-${mi}-${i}`} minHeight={26} />)}
             </tr>
           ))}
         </tbody>
       </table>
 
-      {/* Observaciones + firmas, una sola tabla con una fila por periodo */}
+      {/* 6. Observaciones + firmas, una fila (amplia) por periodo */}
       <div style={{ fontWeight: "bold", marginBottom: 4 }}>6. OBSERVACIONES Y FIRMAS POR {infoSistema.nombre.toUpperCase()}</div>
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 12, fontSize: 9 }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 14, fontSize: 10, tableLayout: "fixed" }}>
         <thead>
           <tr>
-            <th style={{ border: "1px solid #000", padding: 3, width: "10%" }}>Periodo</th>
-            <th style={{ border: "1px solid #000", padding: 3 }}>Observaciones académicas</th>
-            <th style={{ border: "1px solid #000", padding: 3 }}>Observaciones convivenciales</th>
-            <th style={{ border: "1px solid #000", padding: 3, width: "13%" }}>Firma Padre</th>
-            <th style={{ border: "1px solid #000", padding: 3, width: "13%" }}>Firma Estudiante</th>
-            <th style={{ border: "1px solid #000", padding: 3, width: "13%" }}>Firma Director</th>
+            <th style={{ ...TH, width: "9%" }}>Periodo</th>
+            <th style={TH}>Observaciones académicas</th>
+            <th style={TH}>Observaciones convivenciales</th>
+            <th style={{ ...TH, width: "11%" }}>Firma Padre</th>
+            <th style={{ ...TH, width: "11%" }}>Firma Estudiante</th>
+            <th style={{ ...TH, width: "11%" }}>Firma Director</th>
           </tr>
         </thead>
         <tbody>
           {periodosLista.map((i) => (
-            <tr key={i}>
-              <td style={{ border: "1px solid #000", padding: 3, fontWeight: "bold", textAlign: "center" }}>{etiquetaPeriodoConfigurable(sistemaPeriodos, i)}</td>
-              <td style={{ border: "1px solid #000", height: 30 }}></td>
-              <td style={{ border: "1px solid #000", height: 30 }}></td>
-              <td style={{ border: "1px solid #000", height: 30 }}></td>
-              <td style={{ border: "1px solid #000", height: 30 }}></td>
-              <td style={{ border: "1px solid #000", height: 30 }}></td>
+            <tr key={i} style={{ pageBreakInside: "avoid" }}>
+              <td style={{ border: B, padding: 3, fontWeight: "bold", textAlign: "center", verticalAlign: "middle", background: "#FAFAFA" }}>{etiquetaPeriodoConfigurable(sistemaPeriodos, i)}</td>
+              <Celda ctx={contexto} k={`o-${i}-ac`} minHeight={90} />
+              <Celda ctx={contexto} k={`o-${i}-co`} minHeight={90} />
+              <Celda ctx={contexto} k={`o-${i}-fp`} minHeight={90} fontSize={9} />
+              <Celda ctx={contexto} k={`o-${i}-fe`} minHeight={90} fontSize={9} />
+              <Celda ctx={contexto} k={`o-${i}-fd`} minHeight={90} fontSize={9} />
             </tr>
           ))}
         </tbody>
       </table>
 
-      {/* Nivelaciones */}
+      {/* 7. Nivelaciones */}
       <div style={{ pageBreakInside: "avoid" }}>
-        <div style={{ fontWeight: "bold", marginBottom: 4 }}>7. ESPACIO PARA NIVELACIONES</div>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 9.5 }}>
+        <div style={{ fontWeight: "bold", marginBottom: 4 }}>7. ESPACIO PARA NIVELACIONES{contexto.editable ? " — haz clic en la casilla" : ""}</div>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10.5 }}>
           <thead>
             <tr>
-              <th style={{ border: "1px solid #000", padding: 3, textAlign: "left" }}>Asignatura</th>
-              <th style={{ border: "1px solid #000", padding: 3, width: 80 }}>Aprobó</th>
-              <th style={{ border: "1px solid #000", padding: 3, width: 80 }}>No aprobó</th>
+              <th style={{ ...TH, textAlign: "left" }}>Asignatura</th>
+              <th style={{ ...TH, width: 90 }}>Aprobó</th>
+              <th style={{ ...TH, width: 90 }}>No aprobó</th>
             </tr>
           </thead>
           <tbody>
-            {MATERIAS_PLAN_ESTUDIOS.map((m) => (
+            {MATERIAS_PLAN_ESTUDIOS.map((m, mi) => (
               <tr key={m}>
-                <td style={{ border: "1px solid #000", padding: 3 }}>{m}</td>
-                <td style={{ border: "1px solid #000", padding: 3, textAlign: "center" }}>( &nbsp; )</td>
-                <td style={{ border: "1px solid #000", padding: 3, textAlign: "center" }}>( &nbsp; )</td>
+                <td style={{ border: B, padding: 5 }}>{m}</td>
+                <Marca ctx={contexto} k={`n-${mi}-ap`} minHeight={26} />
+                <Marca ctx={contexto} k={`n-${mi}-no`} minHeight={26} />
               </tr>
             ))}
           </tbody>
@@ -267,7 +361,7 @@ function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre" }) {
       </div>
 
       <div style={{ fontWeight: "bold", marginBottom: 8, marginTop: 24 }}>FIRMAS DE CIERRE</div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 30 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 40 }}>
         <div style={{ borderTop: "1px solid #000", width: "30%", textAlign: "center", paddingTop: 4 }}>Firma Director(a) de Curso</div>
         <div style={{ borderTop: "1px solid #000", width: "30%", textAlign: "center", paddingTop: 4 }}>Firma Coordinación Académica</div>
         <div style={{ borderTop: "1px solid #000", width: "30%", textAlign: "center", paddingTop: 4 }}>Firma Coordinación Convivencial</div>
@@ -280,40 +374,38 @@ function BloqueObservador({ datos, primero, sistemaPeriodos = "trimestre" }) {
   );
 }
 
+// Espera a que carguen las imágenes (escudo y foto) antes de abrir el diálogo de impresión;
+// antes se imprimía a los 150 ms y la foto todavía no había llegado.
+function esperarImagenesYImprimir(contenedorSelector) {
+  const imgs = Array.from(document.querySelectorAll(`${contenedorSelector} img`));
+  const pendientes = imgs.filter((im) => !im.complete).map((im) => new Promise((res) => { im.onload = res; im.onerror = res; }));
+  const tope = new Promise((res) => setTimeout(res, 5000));
+  Promise.race([Promise.all(pendientes), tope]).then(() => setTimeout(() => window.print(), 120));
+}
+
 function ObservadorPrintView({ datos, sistemaPeriodos, onCerrado }) {
   useEffect(() => {
-    const id = setTimeout(() => window.print(), 150);
     const onAfter = () => onCerrado();
     window.addEventListener("afterprint", onAfter);
-    return () => { clearTimeout(id); window.removeEventListener("afterprint", onAfter); };
+    esperarImagenesYImprimir(".print-only");
+    return () => window.removeEventListener("afterprint", onAfter);
   }, []);
-
-  const contenido = (
-    <div className="print-only">
-      <BloqueObservador datos={datos} primero={true} sistemaPeriodos={sistemaPeriodos} />
-    </div>
-  );
-
-  return createPortal(contenido, document.body);
+  return createPortal(<div className="print-only"><BloqueObservador datos={datos} primero={true} sistemaPeriodos={sistemaPeriodos} /></div>, document.body);
 }
 
 function ObservadorMasivoPrintView({ listaDatos, sistemaPeriodos, onCerrado }) {
   useEffect(() => {
-    const id = setTimeout(() => window.print(), 200);
     const onAfter = () => onCerrado();
     window.addEventListener("afterprint", onAfter);
-    return () => { clearTimeout(id); window.removeEventListener("afterprint", onAfter); };
+    esperarImagenesYImprimir(".print-only");
+    return () => window.removeEventListener("afterprint", onAfter);
   }, []);
-
-  const contenido = (
+  return createPortal(
     <div className="print-only">
       {listaDatos.map((datos, i) => (
         <BloqueObservador key={datos.estudiante.id} datos={datos} primero={i === 0} sistemaPeriodos={sistemaPeriodos} />
       ))}
-    </div>
-  );
-
-  return createPortal(contenido, document.body);
+    </div>, document.body);
 }
 
 function SelectorSistemaPeriodos({ valor, onChange }) {
@@ -328,6 +420,70 @@ function SelectorSistemaPeriodos({ valor, onChange }) {
         ))}
       </div>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------------
+   Editor a pantalla completa: el Observador se llena aquí, se guarda en la
+   base de datos (con el botón Guardar) y luego se imprime con lo escrito.
+   ------------------------------------------------------------------------ */
+function ObservadorEditor({ datos, sistemaPeriodos: sistemaInicial, onClose, onGuardado }) {
+  const [sistemaPeriodos, setSistemaPeriodos] = useState(sistemaInicial);
+  const [valores, setValores] = useState(datos.valores || {});
+  const [sucio, setSucio] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [error, setError] = useState("");
+  const [imprimiendo, setImprimiendo] = useState(false);
+
+  const setValor = (k, v) => { setValores((x) => ({ ...x, [k]: v })); setSucio(true); setMsg(""); };
+  const guardar = async () => {
+    setGuardando(true); setError(""); setMsg("");
+    try {
+      await api.guardarObservadorDiligenciado(datos.estudiante.id, valores);
+      setSucio(false); setMsg("✔ Guardado");
+      onGuardado && onGuardado(valores);
+    } catch (e) {
+      const t = String(e?.message || e);
+      setError(t.includes("observador_diligenciado") ? "Falta ejecutar el SQL 158 en Supabase para poder guardar." : "No se pudo guardar: " + t);
+    }
+    setGuardando(false);
+  };
+  const cerrar = () => {
+    if (sucio && !window.confirm("Tienes cambios sin guardar. ¿Cerrar sin guardar?")) return;
+    onClose();
+  };
+  const datosConValores = { ...datos, valores };
+  const ctx = { editable: true, valores, setValor };
+
+  return createPortal(
+    <div className="no-print" style={{ position: "fixed", inset: 0, zIndex: 60, background: "#CBD5E1", overflowY: "auto" }}>
+      <div style={{ position: "sticky", top: 0, zIndex: 5, background: "#17489C", color: "#fff", padding: "10px 16px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ fontWeight: 800, fontSize: 15, flex: "1 1 220px" }}>✍️ Observador — {datos.estudiante.nombre}</div>
+        <div style={{ display: "flex", gap: 4, background: "#ffffff22", borderRadius: 999, padding: 3 }}>
+          {Object.entries(SISTEMAS_PERIODO).map(([key, info]) => (
+            <button key={key} onClick={() => setSistemaPeriodos(key)} style={{ fontSize: 12, padding: "4px 10px", borderRadius: 999, border: "none", cursor: "pointer", background: sistemaPeriodos === key ? "#fff" : "transparent", color: sistemaPeriodos === key ? "#17489C" : "#fff", fontWeight: 700 }}>
+              {info.nombre} ({info.cantidad})
+            </button>
+          ))}
+        </div>
+        {msg && <span style={{ fontSize: 12, color: "#BBF7D0", fontWeight: 700 }}>{msg}</span>}
+        {sucio && !msg && <span style={{ fontSize: 12, color: "#FDE68A", fontWeight: 700 }}>● Cambios sin guardar</span>}
+        <button onClick={guardar} disabled={guardando || !sucio} style={{ fontSize: 13, fontWeight: 800, padding: "7px 14px", borderRadius: 10, border: "none", cursor: "pointer", background: "#22C55E", color: "#fff", opacity: guardando || !sucio ? 0.55 : 1 }}>
+          {guardando ? "Guardando…" : "💾 Guardar"}
+        </button>
+        <button onClick={() => setImprimiendo(true)} style={{ fontSize: 13, fontWeight: 800, padding: "7px 14px", borderRadius: 10, border: "none", cursor: "pointer", background: "#fff", color: "#17489C" }}>🖨️ Imprimir / PDF</button>
+        <button onClick={cerrar} style={{ fontSize: 13, fontWeight: 700, padding: "7px 12px", borderRadius: 10, border: "1px solid #ffffff66", cursor: "pointer", background: "transparent", color: "#fff" }}>✕ Cerrar</button>
+      </div>
+      {error && <div role="alert" style={{ background: "#FEE2E2", color: "#B91C1C", padding: "8px 16px", fontSize: 13, fontWeight: 600 }}>{error}</div>}
+      <div style={{ padding: "16px 8px 40px" }}>
+        <div style={{ background: "#fff", boxShadow: "0 4px 24px #0003", borderRadius: 4, maxWidth: 900, margin: "0 auto" }}>
+          <BloqueObservador datos={datosConValores} primero={true} sistemaPeriodos={sistemaPeriodos} ctx={ctx} />
+        </div>
+      </div>
+      {imprimiendo && <ObservadorPrintView datos={datosConValores} sistemaPeriodos={sistemaPeriodos} onCerrado={() => setImprimiendo(false)} />}
+    </div>,
+    document.body
   );
 }
 
@@ -350,17 +506,21 @@ export function ObservadorPorGradoModal({ gradoId, onClose }) {
         </div>
 
         {cargando ? (
-          <div className="text-sm text-slate-400">Cargando {listaDatos.length ? `(${listaDatos.length})` : ""}…</div>
+          <div className="text-sm text-slate-400">Cargando…</div>
         ) : (
           <>
             <p className="text-xs text-slate-500 mb-3">
-              Genera el Observador completo (identificación, matriz de situaciones, y hoja de rendimiento con firmas) para
+              Genera el Observador completo (con foto, identificación, matriz de situaciones y hoja de rendimiento con firmas) para
               cada uno de los {listaDatos.length} estudiante(s) activos de este curso, uno seguido del otro — cada uno arranca en hoja nueva.
+              Si ya diligenciaste el observador de alguien, sale impreso con lo que escribiste.
             </p>
             <div className="bg-slate-50 rounded-xl p-3 mb-3 max-h-48 overflow-y-auto">
               {listaDatos.map((d) => (
-                <div key={d.estudiante.id} className="text-xs text-slate-600 py-0.5">
-                  {d.estudiante.nombre} {d.acudiente ? "" : <span className="text-amber-500">(sin acudiente)</span>}
+                <div key={d.estudiante.id} className="text-xs text-slate-600 py-0.5 flex items-center gap-2">
+                  {d.estudiante.foto_url ? <img src={d.estudiante.foto_url} alt="" className="w-5 h-5 rounded-full object-cover" /> : <span className="w-5 h-5 rounded-full bg-slate-200 inline-block" />}
+                  <span>{d.estudiante.nombre}</span>
+                  {!d.acudiente && <span className="text-amber-500">(sin acudiente)</span>}
+                  {d.valores && Object.keys(d.valores).length > 0 && <span className="text-emerald-600">✍️ diligenciado</span>}
                 </div>
               ))}
             </div>
@@ -381,6 +541,7 @@ export function ObservadorModal({ estudiante, onClose }) {
   const [datos, setDatos] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [imprimiendo, setImprimiendo] = useState(false);
+  const [editando, setEditando] = useState(false);
   const [sistemaPeriodos, setSistemaPeriodos] = useState("trimestre");
 
   useEffect(() => { api.fetchObservadorData(estudiante.id).then((d) => { setDatos(d); setCargando(false); }); }, [estudiante.id]);
@@ -397,20 +558,29 @@ export function ObservadorModal({ estudiante, onClose }) {
           <div className="text-sm text-slate-400">Cargando…</div>
         ) : (
           <>
-            <p className="text-xs text-slate-500 mb-3">
-              Documento oficial de seguimiento integral: identificación completa del estudiante + todas las situaciones registradas en Actas,
-              organizadas cronológicamente, con espacios de firma.
-            </p>
+            <div className="flex items-center gap-3 mb-3">
+              {datos.estudiante.foto_url
+                ? <img src={datos.estudiante.foto_url} alt="" className="w-16 h-20 rounded-lg object-cover border border-slate-200" />
+                : <div className="w-16 h-20 rounded-lg border border-dashed border-slate-300 text-[10px] text-slate-400 flex items-center justify-center text-center">Sin foto</div>}
+              <p className="text-xs text-slate-500">
+                Documento oficial de seguimiento integral: identificación con foto, situaciones registradas en Actas,
+                y hojas para diligenciar con cajas amplias. Puedes <b>escribir en pantalla</b>, guardar y luego imprimir.
+              </p>
+            </div>
             <div className="bg-slate-50 rounded-xl p-3 mb-4">
               <div className="text-xs text-slate-600">Situaciones registradas: <b>{datos.actas.length}</b></div>
               <div className="text-xs text-slate-600 mt-1">Acudiente en el sistema: <b>{datos.acudiente ? "Sí" : "No registrado todavía"}</b></div>
+              <div className="text-xs text-slate-600 mt-1">Diligenciado: <b>{datos.valores && Object.keys(datos.valores).length ? "Sí, hay información guardada" : "Aún en blanco"}</b></div>
             </div>
             {!datos.acudiente && (
               <p className="text-[11px] text-amber-600 bg-amber-50 rounded-lg p-2 mb-3">
-                ⚠️ Este estudiante no tiene datos de acudiente cargados — esa sección del documento va a salir vacía. Podés completarlos desde Directorio de acudientes.
+                ⚠️ Este estudiante no tiene datos de acudiente cargados — esa sección del documento va a salir vacía. Puedes completarlos desde Directorio de acudientes.
               </p>
             )}
             <SelectorSistemaPeriodos valor={sistemaPeriodos} onChange={setSistemaPeriodos} />
+            <button onClick={() => setEditando(true)} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-blue-700 text-white mb-2">
+              ✍️ Diligenciar en pantalla
+            </button>
             <button onClick={() => setImprimiendo(true)} className="w-full text-sm font-semibold py-2.5 rounded-lg bg-violet-500 text-white">
               🖨️ Generar / Imprimir Observador
             </button>
@@ -418,6 +588,10 @@ export function ObservadorModal({ estudiante, onClose }) {
         )}
       </div>
 
+      {editando && datos && (
+        <ObservadorEditor datos={datos} sistemaPeriodos={sistemaPeriodos}
+          onClose={() => setEditando(false)} onGuardado={(valores) => setDatos((d) => ({ ...d, valores }))} />
+      )}
       {imprimiendo && <ObservadorPrintView datos={datos} sistemaPeriodos={sistemaPeriodos} onCerrado={() => setImprimiendo(false)} />}
     </div>
   );
