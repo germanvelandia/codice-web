@@ -2225,14 +2225,14 @@ function GestionarEstandaresModal({ onClose }) {
 export function VistaPlaneaciones({ grados, gradoActivo, periodoActivo, materiaActiva }) {
   const [materias, setMaterias] = useState([]);
   const [materiaId, setMateriaId] = useState(materiaActiva || "");
-  const [gradoId, setGradoId] = useState(gradoActivo || "");
+  const [gradoId, setGradoId] = useState(gradoActivo ? nivelYCurso(gradoActivo).nivel : "");
   const [periodo, setPeriodo] = useState("1");
   const [unidades, setUnidades] = useState([]);
   const [config, setConfig] = useState({ cantidad_periodos: 4, sistema_periodos: "bimestre" });
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => { if (gradoActivo) setGradoId(gradoActivo); }, [gradoActivo]);
+  useEffect(() => { if (gradoActivo) setGradoId(nivelYCurso(gradoActivo).nivel); }, [gradoActivo]);
   useEffect(() => { if (materiaActiva) setMateriaId(materiaActiva); }, [materiaActiva]);
   useEffect(() => { if (periodoActivo) setPeriodo(periodoActivo); }, [periodoActivo]);
   const [formAbierto, setFormAbierto] = useState(false);
@@ -2248,7 +2248,7 @@ export function VistaPlaneaciones({ grados, gradoActivo, periodoActivo, materiaA
     api.fetchMisMaterias().then((data) => { setMaterias(data); if (data[0]) setMateriaId(data[0].id); });
     api.fetchInstitucion().then(setInstitucion);
   }, []);
-  useEffect(() => { if (grados.length && !gradoId) setGradoId(grados[0].id); }, [grados]);
+  useEffect(() => { if (grados.length && !gradoId) setGradoId(nivelYCurso(grados[0].id).nivel); }, [grados]);
 
   // Respeta la configuración real de periodos de cada materia (bimestre/trimestre/semestre),
   // la misma que se define en Calificaciones → Escala y periodos.
@@ -2287,51 +2287,57 @@ export function VistaPlaneaciones({ grados, gradoActivo, periodoActivo, materiaA
   useEffect(() => { cargar(); }, [materiaId, gradoId, periodo]);
 
   const niveles = agruparPorNivel(grados);
-  const { nivel: nivelActual } = nivelYCurso(gradoId || (grados[0]?.id || ""));
-  const cursosDelNivel = niveles.find((n) => n.nivel === nivelActual)?.cursos || [];
+  const nivelActual = nivelYCurso(gradoId || (grados[0]?.id || "")).nivel;
+  const materiaNombre = materias.find((m) => m.id === materiaId)?.nombre || "";
+  const [menuAbierto, setMenuAbierto] = useState(false);
+  const sel = "text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white";
+  const item = "w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-700";
 
   return (
     <div>
-      <div className="flex flex-wrap gap-2 mb-4 items-center">
-        <select value={materiaId} onChange={(e) => setMateriaId(parseInt(e.target.value, 10))} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
+      <div className="flex flex-wrap gap-2 mb-3 items-center">
+        <select value={materiaId} onChange={(e) => setMateriaId(parseInt(e.target.value, 10))} className={sel}>
           {materias.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
         </select>
-        <select value={nivelActual} onChange={(e) => {
-          const n = niveles.find((x) => x.nivel === e.target.value);
-          if (n?.cursos[0]) setGradoId(n.cursos[0].id);
-        }} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
-          {niveles.map((n) => <option key={n.nivel} value={n.nivel}>Grado {n.nivel}°</option>)}
+        <select value={nivelActual} onChange={(e) => setGradoId(e.target.value)} className={sel}>
+          {niveles.map((n) => <option key={n.nivel} value={n.nivel}>Grado {n.nivel}° (todos los cursos)</option>)}
         </select>
-        <select value={gradoId} onChange={(e) => setGradoId(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
-          {cursosDelNivel.map((g) => <option key={g.id} value={g.id}>Curso {g.id}</option>)}
-        </select>
-        <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className="text-sm rounded-full px-3 py-2 border border-slate-200 outline-none bg-white">
+        <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className={sel}>
           {listaPeriodos
             .filter((p) => !soloVigente || parseInt(p, 10) >= parseInt(config.periodo_actual || "1", 10))
             .map((p) => <option key={p} value={p}>Periodo {p}{p === config.periodo_actual ? " (vigente)" : ""}</option>)}
         </select>
-        {periodo !== config.periodo_actual && (
-          <button onClick={marcarPeriodoVigente} title="Marcar este periodo como el vigente para esta materia" className="text-xs px-2.5 py-1.5 rounded-full bg-violet-100 text-violet-700 shrink-0">📌 Marcar como vigente</button>
-        )}
-        <label className="flex items-center gap-1.5 text-xs text-slate-500 shrink-0">
-          <input type="checkbox" checked={soloVigente} onChange={(e) => setSoloVigente(e.target.checked)} />
-          Ocultar periodos anteriores
-        </label>
-        <button onClick={() => setPendientesAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-amber-200 text-amber-600">📋 Pendientes</button>
-        <button onClick={() => setEstandaresAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">🗂️ Gestionar DBA/Competencias</button>
         <div className="flex gap-1 rounded-full bg-white p-1 border border-slate-200">
-          <button onClick={() => setVista("unidades")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "unidades" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📋 Por unidad</button>
-          <button onClick={() => setVista("calendario")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "calendario" ? "bg-violet-500 text-white" : "text-slate-600"}`}>📅 Calendario</button>
+          <button onClick={() => setVista("unidades")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "unidades" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Unidades</button>
+          <button onClick={() => setVista("calendario")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "calendario" ? "bg-violet-500 text-white" : "text-slate-600"}`}>Calendario</button>
         </div>
-        <button onClick={() => setImportarIAAbierto(true)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-violet-300 text-violet-600">✨ Importar plan (IA)</button>
-        <button onClick={() => setFormAbierto((v) => !v)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white ml-auto">
-          {formAbierto ? "Cerrar" : "+ Nueva unidad/tema"}
-        </button>
+        <div className="relative ml-auto flex items-center gap-2">
+          <button onClick={() => setMenuAbierto((v) => !v)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">⋯ Más</button>
+          <button onClick={() => setFormAbierto((v) => !v)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">
+            {formAbierto ? "Cerrar" : "+ Nueva unidad"}
+          </button>
+          {menuAbierto && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setMenuAbierto(false)} />
+              <div className="absolute right-0 top-full mt-1 z-20 w-64 bg-white rounded-xl border border-slate-200 shadow-lg p-1.5">
+                <button className={item} onClick={() => { setMenuAbierto(false); setPendientesAbierto(true); }}>📋 Pendientes</button>
+                <button className={item} onClick={() => { setMenuAbierto(false); setImportarIAAbierto(true); }}>✨ Importar plan (IA)</button>
+                <button className={item} onClick={() => { setMenuAbierto(false); setEstandaresAbierto(true); }}>🗂️ Gestionar DBA/Competencias</button>
+                {periodo !== config.periodo_actual && (
+                  <button className={item} onClick={() => { setMenuAbierto(false); marcarPeriodoVigente(); }}>📌 Marcar periodo {periodo} como vigente</button>
+                )}
+                <label className="flex items-center gap-2 text-sm px-3 py-2 text-slate-700 cursor-pointer">
+                  <input type="checkbox" checked={soloVigente} onChange={(e) => setSoloVigente(e.target.checked)} />
+                  Ocultar periodos anteriores
+                </label>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       <p className="text-[11px] text-slate-400 mb-3">
-        Plan de estudios de la materia, organizado por unidades/temas dentro de cada periodo. Cada unidad puede tener varias clases, tareas con rúbrica, y recursos de Google Drive/Docs/Forms.
-        Los periodos ({config.sistema_periodos === "trimestre" ? "trimestre" : config.sistema_periodos === "semestre" ? "semestre" : "bimestre"}, {listaPeriodos.length} en total) se toman de la configuración de esta materia en Calificaciones → Escala y periodos.
+        Un solo plan para todo el grado {nivelActual}°{materiaNombre ? ` · ${materiaNombre}` : ""}. El control por curso se hace dentro de cada clase.
       </p>
 
       {formAbierto && (
@@ -2356,7 +2362,7 @@ export function VistaPlaneaciones({ grados, gradoActivo, periodoActivo, materiaA
               🖨️ Imprimir todas ({unidades.length})
             </button>
           </div>
-          {unidades.map((u) => <UnidadCard key={u.id} unidad={u} institucion={institucion} materiaNombre={materias.find((m) => m.id === materiaId)?.nombre || ""} materias={materias} gradoId={gradoId} grados={grados} onCambio={cargar} />)}
+          {unidades.map((u) => <UnidadCard key={u.id} unidad={u} institucion={institucion} materiaNombre={materiaNombre} materias={materias} gradoId={gradoId} grados={grados} onCambio={cargar} />)}
         </>
       )}
       {imprimiendoTodas && (
