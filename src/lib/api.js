@@ -938,12 +938,19 @@ export async function crearUnidadConClases(datosUnidad, clases) {
 }
 
 export async function fetchUnidades(materiaId, gradoId, periodo) {
-  const nivel = String(gradoId || "").slice(0, -2) || String(gradoId || "");
+  const idStr = String(gradoId || "");
+  // Un id de 1-2 caracteres es un NIVEL (ej. "8"): trae el plan de todo el grado,
+  // incluidas unidades guardadas antes con un curso concreto (801, 802…).
+  const esNivel = idStr.length <= 2;
+  const nivel = esNivel ? idStr : (idStr.slice(0, -2) || idStr);
+  const filtro = esNivel
+    ? `grado_id.eq.${nivel},grado_id.like.${nivel}??`
+    : `grado_id.eq.${gradoId},grado_id.eq.${nivel}`;
   const { data, error } = await supabase
     .from("planeaciones")
     .select("*")
     .eq("periodo", periodo).eq("tipo", "unidad")
-    .or(`grado_id.eq.${gradoId},grado_id.eq.${nivel}`)
+    .or(filtro)
     .order("orden");
   if (error) throw error;
   return (data || []).filter((u) => u.materia_id === materiaId || (u.materias_extra || []).includes(materiaId));
