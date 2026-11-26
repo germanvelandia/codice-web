@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import * as api from "../lib/api";
 import { CLIENT_ID, TIPOS, pedirToken, sincronizar, resumenPrevio, generarICS } from "../lib/googleCalendar";
 
 const hoyAnio = new Date().getFullYear();
@@ -7,6 +8,14 @@ export function VistaGoogleCalendar() {
   const [tipos, setTipos] = useState(TIPOS.map((t) => t.key));
   const [desde, setDesde] = useState(`${hoyAnio}-01-15`);
   const [hasta, setHasta] = useState(`${hoyAnio}-11-30`);
+  const [finAnio, setFinAnio] = useState("");
+  useEffect(() => {
+    api.fetchAnioEscolar().then((a) => {
+      if (a?.fecha_fin) { setFinAnio(a.fecha_fin); setHasta((h) => (h > a.fecha_fin ? a.fecha_fin : h)); }
+    });
+  }, []);
+  // Nunca se sincroniza más allá del fin del año escolar.
+  const hastaEfectivo = finAnio && hasta > finAnio ? finAnio : hasta;
   const [msg, setMsg] = useState(""); const [ocupado, setOcupado] = useState(false);
   const [prev, setPrev] = useState(null); const [res, setRes] = useState(null); const [error, setError] = useState("");
 
@@ -14,7 +23,7 @@ export function VistaGoogleCalendar() {
 
   const ver = async () => {
     setError(""); setRes(null); setOcupado(true); setMsg("Calculando…");
-    try { setPrev(await resumenPrevio(tipos, { desde, hasta })); } catch (e) { setError(e.message); }
+    try { setPrev(await resumenPrevio(tipos, { desde, hasta: hastaEfectivo })); } catch (e) { setError(e.message); }
     setOcupado(false); setMsg("");
   };
   const enviar = async () => {
@@ -22,7 +31,7 @@ export function VistaGoogleCalendar() {
     try {
       setMsg("Pidiendo permiso a Google…");
       const token = await pedirToken();
-      setRes(await sincronizar(token, tipos, { desde, hasta }, setMsg));
+      setRes(await sincronizar(token, tipos, { desde, hasta: hastaEfectivo }, setMsg));
     } catch (e) { setError(e.message); }
     setOcupado(false); setMsg("");
   };
@@ -30,7 +39,7 @@ export function VistaGoogleCalendar() {
   const descargar = async () => {
     setError(""); setRes(null); setOcupado(true); setMsg("Armando el archivo…");
     try {
-      const { texto, total } = await generarICS(tipos, { desde, hasta });
+      const { texto, total } = await generarICS(tipos, { desde, hasta: hastaEfectivo });
       const url = URL.createObjectURL(new Blob([texto], { type: "text/calendar;charset=utf-8" }));
       const a = document.createElement("a"); a.href = url; a.download = "codice.ics"; a.click(); URL.revokeObjectURL(url);
       setMsg(`Descargado codice.ics con ${total} eventos.`);
@@ -53,7 +62,7 @@ export function VistaGoogleCalendar() {
       </div>
       <div className="flex flex-wrap gap-3 text-xs">
         <label>Desde <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className="border rounded-lg px-2 py-1 ml-1" /></label>
-        <label>Hasta <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className="border rounded-lg px-2 py-1 ml-1" /></label>
+        <label>Hasta <input type="date" value={hasta} max={finAnio || undefined} onChange={(e) => setHasta(e.target.value)} className="border rounded-lg px-2 py-1 ml-1" /></label>
       </div>
       <p className="text-[11px] text-slate-400">Las clases del horario se repiten cada semana entre esas fechas.</p>
       <div className="flex flex-wrap gap-2">
