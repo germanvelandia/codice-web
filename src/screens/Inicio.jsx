@@ -662,7 +662,7 @@ export function VistaInicio({ onIrA, soloEncabezado, accionSuperior, contenidoMe
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
           <div className="font-bold text-slate-800 mb-3">Clases de hoy ({DIAS_NOMBRE[hoy.getDay()]})</div>
           {resumen.clasesHoy.length === 0 ? (
-            <p className="text-xs text-slate-400">No tenés clases registradas para hoy en tu Horario.</p>
+            <p className="text-xs text-slate-400">{resumen.anioTerminado ? `🎉 El año escolar terminó${resumen.finAnioEscolar ? ` el ${resumen.finAnioEscolar}` : ""}. Ya no se muestran clases.` : "No tenés clases registradas para hoy en tu Horario."}</p>
           ) : (
             <div className="space-y-1.5">
               {resumen.clasesHoy.map((h) => {
