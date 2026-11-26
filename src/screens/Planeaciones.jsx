@@ -1928,7 +1928,7 @@ function AgregarClaseCalendarioForm({ unidades, fecha, onCancelar, onCreada }) {
   );
 }
 
-function CalendarioClases({ materiaId, gradoId, periodo, onAbrirUnidad }) {
+function CalendarioClases({ materiaId, gradoId, periodo, onAbrirUnidad, finAnio }) {
   const [clases, setClases] = useState([]);
   const [unidades, setUnidades] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -1953,6 +1953,9 @@ function CalendarioClases({ materiaId, gradoId, periodo, onAbrirUnidad }) {
   const clasesDelDia = (fechaStr) => clases.filter((c) => c.fecha === fechaStr);
   const clasesSeleccionado = clasesDelDia(diaSeleccionado);
   const hoyStr = aFechaStrPlan(new Date());
+  const fueraDeAnio = (f) => !!finAnio && f > finAnio;
+  const finDelMes = aFechaStrPlan(new Date(mesActual.getFullYear(), mesActual.getMonth() + 1, 0));
+  const puedeAvanzar = !finAnio || finDelMes < finAnio;
 
   if (cargando) return <div className="text-sm text-slate-400">Cargando…</div>;
   if (unidades.length === 0) {
@@ -1965,7 +1968,7 @@ function CalendarioClases({ materiaId, gradoId, periodo, onAbrirUnidad }) {
         <div className="flex items-center justify-between mb-3">
           <button onClick={() => setMesActual((p) => new Date(p.getFullYear(), p.getMonth() - 1, 1))} className="text-slate-400 hover:text-violet-600 px-2 text-lg">‹</button>
           <div className="font-bold text-slate-800 capitalize">{MESES_NOMBRE_PLAN[mesActual.getMonth()]} {mesActual.getFullYear()}</div>
-          <button onClick={() => setMesActual((p) => new Date(p.getFullYear(), p.getMonth() + 1, 1))} className="text-slate-400 hover:text-violet-600 px-2 text-lg">›</button>
+          <button disabled={!puedeAvanzar} onClick={() => setMesActual((p) => new Date(p.getFullYear(), p.getMonth() + 1, 1))} className="text-slate-400 hover:text-violet-600 px-2 text-lg disabled:opacity-30 disabled:cursor-not-allowed">›</button>
         </div>
         <div className="grid grid-cols-7 gap-1 mb-1">
           {DIAS_SEMANA_CORTOS_PLAN.map((d) => <div key={d} className="text-center text-[10px] font-bold text-slate-400 py-1">{d}</div>)}
@@ -1977,9 +1980,10 @@ function CalendarioClases({ materiaId, gradoId, periodo, onAbrirUnidad }) {
             const clasesDia = clasesDelDia(fechaStr);
             const esHoy = fechaStr === hoyStr;
             const esSeleccionado = fechaStr === diaSeleccionado;
+            const cerrado = fueraDeAnio(fechaStr);
             return (
               <button key={i} onClick={() => { setDiaSeleccionado(fechaStr); setAgregando(false); }}
-                className="aspect-square rounded-lg p-1 flex flex-col items-center justify-start relative"
+                className={`aspect-square rounded-lg p-1 flex flex-col items-center justify-start relative ${cerrado ? "opacity-40" : ""}`}
                 style={{ background: esSeleccionado ? "#E8EEF8" : esHoy ? "#E8EEF8" : "transparent", border: esHoy ? "1.5px solid #2F55A4" : "1px solid transparent" }}>
                 <span className={`text-[11px] ${esSeleccionado ? "font-bold text-violet-700" : "text-slate-600"}`}>{d}</span>
                 {clasesDia.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-violet-500 mt-0.5" />}
@@ -2006,7 +2010,9 @@ function CalendarioClases({ materiaId, gradoId, periodo, onAbrirUnidad }) {
             ))}
           </div>
         )}
-        {agregando ? (
+        {fueraDeAnio(diaSeleccionado) ? (
+          <div className="text-[11px] text-slate-400 bg-slate-50 rounded-lg p-2">🔒 El año escolar terminó el {finAnio}. No se pueden agendar clases después de esa fecha.</div>
+        ) : agregando ? (
           <AgregarClaseCalendarioForm unidades={unidades} fecha={diaSeleccionado} onCancelar={() => setAgregando(false)} onCreada={() => { setAgregando(false); cargar(); }} />
         ) : (
           <button onClick={() => setAgregando(true)} className="text-xs text-violet-500">+ Agregar clase este día</button>
@@ -2243,6 +2249,15 @@ export function VistaPlaneaciones({ grados, gradoActivo, periodoActivo, materiaA
   const [importarIAAbierto, setImportarIAAbierto] = useState(false);
   const [imprimiendoTodas, setImprimiendoTodas] = useState(false);
   const [soloVigente, setSoloVigente] = useState(true);
+  const [finAnio, setFinAnio] = useState("");
+  const [guardandoFin, setGuardandoFin] = useState(false);
+  useEffect(() => { api.fetchAnioEscolar().then((a) => setFinAnio(a?.fecha_fin || "")); }, []);
+  const guardarFinAnio = async (valor) => {
+    setFinAnio(valor);
+    setGuardandoFin(true);
+    try { await api.guardarAnioEscolar({ fecha_fin: valor || null }); } catch (e) { alert("No se pudo guardar la fecha: " + e.message); }
+    setGuardandoFin(false);
+  };
 
   useEffect(() => {
     api.fetchMisMaterias().then((data) => { setMaterias(data); if (data[0]) setMateriaId(data[0].id); });
@@ -2326,6 +2341,11 @@ export function VistaPlaneaciones({ grados, gradoActivo, periodoActivo, materiaA
                 {periodo !== config.periodo_actual && (
                   <button className={item} onClick={() => { setMenuAbierto(false); marcarPeriodoVigente(); }}>📌 Marcar periodo {periodo} como vigente</button>
                 )}
+                <div className="px-3 py-2 border-t border-slate-100 mt-1">
+                  <label className="block text-[11px] font-semibold text-slate-500 mb-1">📆 Fin del año escolar {guardandoFin ? "(guardando…)" : ""}</label>
+                  <input type="date" value={finAnio} onChange={(e) => guardarFinAnio(e.target.value)} className="w-full text-sm rounded-lg px-2 py-1.5 border border-slate-200 outline-none" />
+                  <p className="text-[10px] text-slate-400 mt-1">Después de esta fecha no se agendan clases ni salen en "clases de hoy".</p>
+                </div>
                 <label className="flex items-center gap-2 text-sm px-3 py-2 text-slate-700 cursor-pointer">
                   <input type="checkbox" checked={soloVigente} onChange={(e) => setSoloVigente(e.target.checked)} />
                   Ocultar periodos anteriores
@@ -2346,7 +2366,7 @@ export function VistaPlaneaciones({ grados, gradoActivo, periodoActivo, materiaA
       )}
 
       {vista === "calendario" ? (
-        <CalendarioClases materiaId={materiaId} gradoId={gradoId} periodo={periodo} onAbrirUnidad={() => setVista("unidades")} />
+        <CalendarioClases materiaId={materiaId} gradoId={gradoId} periodo={periodo} finAnio={finAnio} onAbrirUnidad={() => setVista("unidades")} />
       ) : cargando ? (
         <div className="text-sm text-slate-400">Cargando…</div>
       ) : error ? (
