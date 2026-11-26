@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { dibujarIcono, NOMBRES, RECETAS, FUNDICION, COMBUSTIBLES, MERCADO, ARMADURAS, HERRAMIENTAS, POCIONES, ENCANTOS, COMIDA, MATERIALES } from "../game3d/mundo3d";
 import { HABITAT, CRIATURAS } from "../game3d/criaturas3d";
 import * as api from "../lib/mundo3dApi";
+import * as api2 from "../lib/mundo2dApi";
 import { PanelBatalla, PanelColeccion } from "./Criaturas3D";
 
 function Icono({ item }) {
@@ -82,6 +83,132 @@ const CSS = `
 .t2d-fondo .cr-fondo{position:fixed}
 `;
 
+
+// ---------- Etapa 2: Expedición, Huerto, Parcela y Monstruos (SQL 160) ----------
+const msgErr = (er) => { const m = String((er && er.message) || er || "");
+  const t = /todavia_no:(\d+)/.exec(m), f = /no_madura:(\d+)/.exec(m);
+  if (t) return "Todavía no: vuelve en " + t[1] + " s."; if (f) return "Aún no está madura: faltan " + f[1] + " s.";
+  const mapa = { tope_diario: "Hoy ya hiciste todas tus expediciones. ¡Vuelve mañana!", sin_pico: "Necesitas un pico para entrar a la mina. Fabrícalo en 🔨 Fabricar.", desmayado: "Estás desmayado: revive o descansa primero.",
+    solo_brasas: "El volcán solo está en el Reino de Brasas.", solo_principal: "Estás en el Reino de Brasas: allí solo se explora el volcán.", demasiado_rapido: "Vas muy rápido.",
+    sin_azada: "Necesitas una azada para trabajar el huerto. Fabrícala en 🔨 Fabricar.", sin_material: "No tienes ese material.", ocupado: "Ese lugar ya está ocupado.", semilla_no_valida: "Eso no es una semilla.",
+    limite_de_bloques: "Tu parcela está llena (60 bloques).", fuera_de_parcela: "Fuera de la parcela.", bloque_no_valido: "Ese bloque no se puede poner.", ya_vacio: "Ahí no hay nada.",
+    monstruos_apagados: "Tu docente apagó los monstruos en este curso.", tipo_no_valido: "Ese monstruo no está en este reino.", jefe_pausa: "El Guardián descansa: vuelve en unos minutos.", sin_llave: "Necesitas la llave de brasas (🔨 Fabricar).", sin_combate: "Ese combate ya terminó." };
+  const k = Object.keys(mapa).find((x) => m.includes(x)); return k ? mapa[k] : "No se pudo completar la acción."; };
+
+const LUGARES = [
+  { k: "bosque", emoji: "🌲", nombre: "Bosque", txt: "Troncos, palos, manzanas y semillas", dim: 0 },
+  { k: "cantera", emoji: "⛰️", nombre: "Cantera", txt: "Piedra, carbón y arena", dim: 0 },
+  { k: "mina", emoji: "⛏️", nombre: "Mina", txt: "Hierro, cobre, oro y diamante (según tu pico)", dim: 0 },
+  { k: "volcan", emoji: "🌋", nombre: "Volcán", txt: "Fragmentos de brasa (Reino de Brasas)", dim: 1 },
+];
+function PanelExpedicion({ dim, ocupado, alExp, restantes }) {
+  const lista = LUGARES.filter((l) => l.dim === dim);
+  return (<div>
+    <div style={{ fontSize: 12, opacity: .9, marginBottom: 6 }}>⛏️ Sal de expedición para traer materiales. Cada lugar necesita unos segundos de descanso{restantes != null ? <> · Hoy te quedan <b>{restantes}</b> expediciones</> : null}. Cuanto mejor el pico, mejores minerales.</div>
+    {lista.map((l) => (<div key={l.k} className="m3d-rec"><span style={{ fontSize: 26 }}>{l.emoji}</span><b>{l.nombre}<br /><span style={{ fontWeight: 500, fontSize: 11, opacity: .75 }}>{l.txt}</span></b><button disabled={ocupado} onClick={() => alExp(l.k)}>Explorar</button></div>))}
+    {dim === 1 && <div style={{ fontSize: 11, opacity: .8, marginTop: 6 }}>Estás en el Reino de Brasas. Para volver al mundo principal usa la pestaña ⚔️ Monstruos.</div>}
+  </div>);
+}
+
+const CULTIVOS = { 0: { n: "Trigo", e: ["🌱", "🌿", "🌾", "🌾"] }, 1: { n: "Zanahoria", e: ["🌱", "🌿", "🥕", "🥕"] }, 2: { n: "Papa", e: ["🌱", "🌿", "🥔", "🥔"] } };
+function PanelHuerto({ est, inv, ocupado, alCambio, avisar, pedir }) {
+  const [h, setH] = useState(null), [semilla, setSemilla] = useState(72), [ahora, setAhora] = useState(Date.now()), t0 = useRef(Date.now());
+  const cargar = () => api2.fetchHuertoMundo2D(est).then((d) => { t0.current = Date.now(); setH(d); }).catch((er) => avisar(msgErr(er)));
+  useEffect(() => { cargar(); }, []); // eslint-disable-line
+  useEffect(() => { const i = setInterval(() => setAhora(Date.now()), 1000); return () => clearInterval(i); }, []);
+  const semillas = [72, 73, 74].filter((i) => (inv[i] || 0) > 0);
+  useEffect(() => { if (semillas.length && !semillas.includes(semilla)) setSemilla(semillas[0]); }, [inv]); // eslint-disable-line
+  const sembrar = (slot) => pedir(async () => { try { const r = await api2.sembrarMundo2D(est, slot, semilla); alCambio((o) => ({ ...o, [semilla]: r.cantidad })); avisar("🌱 ¡Sembrado!"); await cargar(); } catch (er) { avisar(msgErr(er)); } });
+  const cosechar = (slot) => pedir(async () => { try { const r = await api2.cosecharMundo2D(est, slot); alCambio(num(r.inventario), true); avisar("🧺 Cosechaste " + r.n + " " + NOMBRES[r.item].toLowerCase() + (r.semilla_n ? " y " + r.semilla_n + " semillas" : "") + "."); await cargar(); } catch (er) { avisar(msgErr(er)); } });
+  if (!h) return <div>Cargando…</div>;
+  const por = Object.fromEntries((h.slots || []).map((s) => [s.slot, s]));
+  const pasado = Math.floor((ahora - t0.current) / 1000);
+  return (<div>
+    <div style={{ fontSize: 12, opacity: .9, marginBottom: 6 }}>🌱 Tu huerto tiene 6 parcelas. {h.azada ? "Elige una semilla y toca una parcela vacía para sembrar." : "Necesitas una azada para trabajarlo: fabrícala en 🔨 Fabricar."}</div>
+    {h.azada && <div className="m3d-celdas" style={{ marginBottom: 8 }}>{[72, 73, 74].map((i) => (<button key={i} className={"m3d-celda" + (semilla === i ? " sel" : "")} onClick={() => setSemilla(i)} title={NOMBRES[i]}><Icono item={i} /><span>{inv[i] || 0}</span><small>{NOMBRES[i]}</small></button>))}</div>}
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
+      {[0, 1, 2, 3, 4, 5].map((slot) => { const c = por[slot]; const falta = c ? Math.max(0, c.falta - pasado) : 0; const lista = c && falta === 0; const et = c ? (lista ? 3 : Math.min(2, c.etapa)) : 0;
+        return (<button key={slot} disabled={ocupado || !h.azada || (c && !lista) || (!c && (inv[semilla] || 0) < 1)} onClick={() => (c ? cosechar(slot) : sembrar(slot))}
+          style={{ border: "2px solid " + (lista ? "#fbbf24" : "#fff3"), background: "#3f2a1a", borderRadius: 12, padding: 8, color: "#fff", minHeight: 84, opacity: !h.azada ? .5 : 1 }}>
+          <div style={{ fontSize: 28 }}>{c ? CULTIVOS[c.tipo].e[et] : "🟫"}</div>
+          <div style={{ fontSize: 11, fontWeight: 700 }}>{c ? (lista ? "¡Cosechar!" : CULTIVOS[c.tipo].n + " · " + Math.floor(falta / 60) + ":" + String(falta % 60).padStart(2, "0")) : "Vacía"}</div>
+        </button>); })}
+    </div>
+  </div>);
+}
+
+const BLOQUES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 16, 17, 18, 19, 20, 21, 22, 23];
+function PanelParcela({ est, inv, ocupado, alCambio, avisar, pedir }) {
+  const [celdas, setCeldas] = useState(null), [sel, setSel] = useState(3);
+  const cargar = () => api2.fetchParcelaMundo2D(est).then(setCeldas).catch((er) => avisar(msgErr(er)));
+  useEffect(() => { cargar(); }, []); // eslint-disable-line
+  const mios = BLOQUES.filter((i) => (inv[i] || 0) > 0);
+  useEffect(() => { if (mios.length && !mios.includes(sel)) setSel(mios[0]); }, [inv]); // eslint-disable-line
+  if (!celdas) return <div>Cargando…</div>;
+  const mapa = {}; celdas.forEach((c) => { mapa[c.x + "," + c.y] = c.item; });
+  const toca = (x, y) => pedir(async () => {
+    const hay = mapa[x + "," + y];
+    try {
+      if (hay) { await api2.quitarMundo2D(est, x, y); alCambio((o) => ({ ...o, [hay]: (o[hay] || 0) + 1 })); }
+      else { const r = await api2.colocarMundo2D(est, x, y, sel); alCambio((o) => ({ ...o, [sel]: r.cantidad })); }
+      await cargar();
+    } catch (er) { avisar(msgErr(er)); }
+  });
+  return (<div>
+    <div style={{ fontSize: 12, opacity: .9, marginBottom: 6 }}>🧱 Tu parcela es de 10 × 10. Elige un bloque y toca un cuadro vacío para ponerlo; toca un bloque puesto para recogerlo. Llevas {celdas.length}/60.</div>
+    <div className="m3d-celdas" style={{ marginBottom: 8 }}>{mios.length ? mios.map((i) => (<button key={i} className={"m3d-celda" + (sel === i ? " sel" : "")} onClick={() => setSel(i)} title={NOMBRES[i]}><Icono item={i} /><span>{inv[i]}</span><small>{NOMBRES[i]}</small></button>)) : <span style={{ opacity: .7, fontSize: 12 }}>No tienes bloques: consíguelos en ⛏️ Expedición o 🔨 Fabricar.</span>}</div>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(10,1fr)", gap: 2, background: "#14532d", padding: 4, borderRadius: 10 }}>
+      {Array.from({ length: 100 }, (_, i) => { const x = i % 10, y = Math.floor(i / 10), it = mapa[x + "," + y];
+        return (<button key={i} disabled={ocupado || (!it && mios.length === 0)} onClick={() => toca(x, y)} aria-label={it ? "Quitar " + NOMBRES[it] : "Poner bloque"}
+          style={{ aspectRatio: "1", border: "1px solid #0003", background: it ? "#0000" : "#16a34a55", padding: 0, borderRadius: 3, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+          {it ? <canvas ref={(c) => c && dibujarIcono(c, it)} width={16} height={16} style={{ width: "100%", height: "100%", imageRendering: "pixelated" }} /> : null}
+        </button>); })}
+    </div>
+  </div>);
+}
+
+const MONS = { 0: [["limo", "🟢", "Limo"], ["esqueleto", "💀", "Esqueleto"], ["sombra", "👻", "Sombra"]], 1: [["brasero", "🔥", "Brasero"], ["ceniza", "🌫️", "Espectro de ceniza"], ["guardian_brasas", "👑", "Guardián de Brasas"]] };
+function PanelMonstruos({ est, dim, setDim, ocupado, avisar, pedir, alInv, alRefrescar }) {
+  const [vida, setVida] = useState(null), [lucha, setLucha] = useState(null), [log, setLog] = useState(""), [espera, setEspera] = useState(false);
+  useEffect(() => { api.fetchVidaMundo3D(est).then((v) => v && setVida(v.vida)).catch(() => {}); }, []); // eslint-disable-line
+  const iniciar = (t) => pedir(async () => { try { const r = await api2.combateIniciarMundo2D(est, t[0]); setVida(r.vida); setLucha({ ...r, nombre: t[2], emoji: t[1] }); setLog("¡Apareció " + t[2] + "!"); } catch (er) { avisar(msgErr(er)); } });
+  const atacar = async () => {
+    if (espera) return; setEspera(true); setTimeout(() => setEspera(false), 1050);
+    try {
+      const r = await api2.combateAtacarMundo2D(est);
+      if (r.limitado) return;
+      if (typeof r.vida === "number") setVida(r.vida);
+      if (r.ganado) { setLucha(null); const p = r.premio || {}; setLog(""); avisar("⚔️ ¡Venciste! " + (p.xp || p.oro ? "+" + (p.xp || 0) + " XP · +" + (p.oro || 0) + " 🪙" : p.tope ? "(ya llegaste al tope de premios de hoy)" : "") + (p.item ? " · ¡Obtuviste una pieza rara!" : "")); alRefrescar(); }
+      else if (r.perdido) { setLucha(null); setVida(0); avisar("😵 Te desmayaste. Revive para continuar."); }
+      else { setLucha((l) => l && { ...l, hp: r.hp }); setLog("Le hiciste " + r.dmg + " de daño" + (r.danio ? " y te hirió: -" + r.danio + " ❤️" : "") + "."); }
+    } catch (er) { avisar(msgErr(er)); setLucha(null); }
+  };
+  const huir = async () => { try { await api2.combateHuirMundo2D(est); } catch (_) { /* nada */ } setLucha(null); setLog(""); };
+  const revivir = () => pedir(async () => { try { const r = await api.revivirMundo3D(est); setVida(r.vida); setDim(0); avisar("❤️ Volviste con " + r.vida + " de vida."); } catch (er) { avisar(msgErr(er)); } });
+  const viajar = (d) => pedir(async () => { try { await api.viajarDimMundo3D(est, d); setDim(d); avisar(d === 1 ? "🔥 Cruzaste al Reino de Brasas." : "🌍 Volviste al mundo principal."); } catch (er) { avisar(msgErr(er)); } });
+  return (<div>
+    <div style={{ fontSize: 12, marginBottom: 8 }}>❤️ Vida: <b>{vida == null ? "…" : vida}</b> / 100 {vida === 0 && <button onClick={revivir} disabled={ocupado} style={{ marginLeft: 8, border: 0, borderRadius: 8, padding: "4px 10px", background: "#be123c", color: "#fff", fontWeight: 800 }}>Revivir</button>}
+      <span style={{ marginLeft: 8, opacity: .8 }}>{dim === 1 ? "🔥 Reino de Brasas" : "🌍 Mundo principal"}</span></div>
+    {lucha ? (<div style={{ border: "1px solid #fff4", borderRadius: 12, padding: 10, textAlign: "center" }}>
+      <div style={{ fontSize: 44 }}>{lucha.emoji}</div><b>{lucha.nombre}</b>
+      <div style={{ background: "#0006", borderRadius: 99, height: 12, margin: "6px 0", overflow: "hidden" }}><div style={{ width: Math.max(0, (lucha.hp / lucha.hp_max) * 100) + "%", height: "100%", background: "#ef4444", transition: "width .2s" }} /></div>
+      <div style={{ fontSize: 11, opacity: .85 }}>{lucha.hp} / {lucha.hp_max} PV</div>
+      <div style={{ fontSize: 12, minHeight: 18, margin: "6px 0" }}>{log}</div>
+      <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+        <button onClick={atacar} disabled={espera} style={{ border: 0, borderRadius: 10, padding: "9px 18px", background: "#7c3aed", color: "#fff", fontWeight: 800, opacity: espera ? .5 : 1 }}>⚔️ Atacar</button>
+        <button onClick={huir} style={{ border: "1px solid #fff5", borderRadius: 10, padding: "9px 14px", background: "transparent", color: "#fff", fontWeight: 800 }}>🏃 Huir</button>
+      </div>
+      <div style={{ fontSize: 10, opacity: .7, marginTop: 6 }}>Tu daño depende de tu mejor espada (o herramienta) y su encantamiento Filo. La armadura reduce lo que te hieren.</div>
+    </div>) : (<>
+      {(MONS[dim] || []).map((m) => (<div key={m[0]} className="m3d-rec"><span style={{ fontSize: 26 }}>{m[1]}</span><b>{m[2]}</b><button disabled={ocupado || vida === 0} onClick={() => iniciar(m)}>Pelear</button></div>))}
+      <div style={{ marginTop: 10 }}>
+        {dim === 0 ? <button disabled={ocupado} onClick={() => viajar(1)} style={{ border: "1px solid #fb923c", borderRadius: 10, padding: "8px 12px", background: "#7c2d12", color: "#fff", fontWeight: 800 }}>🔥 Viajar al Reino de Brasas (necesita llave)</button>
+          : <button disabled={ocupado} onClick={() => viajar(0)} style={{ border: "1px solid #fff5", borderRadius: 10, padding: "8px 12px", background: "transparent", color: "#fff", fontWeight: 800 }}>🌍 Volver al mundo principal</button>}
+      </div>
+    </>)}
+  </div>);
+}
+
 const num = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [Number(k), v]));
 const GRANJA = [
   { tipo: "oveja", emoji: "🐑", txt: "Esquilar la oveja (lana)" }, { tipo: "gallina", emoji: "🐔", txt: "Recoger huevos" },
@@ -96,13 +223,14 @@ const sortearCriatura = (excluir = []) => {
   for (const c of l) { r -= c.p; if (r <= 0) return c.id; }
   return l[l.length - 1].id;
 };
-const TABS = [["mochila", "🎒 Mochila"], ["granja", "🐑 Granja"], ["fabricar", "🔨 Fabricar"], ["horno", "🔥 Horno"], ["encantar", "✨ Encantar"], ["pociones", "🧪 Pociones"], ["mercado", "🛒 Mercado"], ["criaturas", "🐾 Criaturas"]];
+const TABS = [["mochila", "🎒 Mochila"], ["exped", "⛏️ Expedición"], ["huerto", "🌱 Huerto"], ["parcela", "🧱 Parcela"], ["monstruos", "⚔️ Monstruos"], ["granja", "🐑 Granja"], ["fabricar", "🔨 Fabricar"], ["horno", "🔥 Horno"], ["encantar", "✨ Encantar"], ["pociones", "🧪 Pociones"], ["mercado", "🛒 Mercado"], ["criaturas", "🐾 Criaturas"]];
 
 export default function Taller2D({ estudianteInfo, onCerrar }) {
   const est = estudianteInfo?.id;
   const [inv, setInv] = useState(null), [encantos, setEncantos] = useState({}), [restante, setRestante] = useState(null);
   const [tab, setTab] = useState("mochila"), [aviso, setAviso] = useState(""), [error, setError] = useState("");
   const [batalla, setBatalla] = useState(null), [colec, setColec] = useState(false), [ocupado, setOcupado] = useState(false);
+  const [dim, setDim] = useState(0), [restantes, setRestantes] = useState(null);
   const avisoT = useRef(null);
   const avisar = (t) => { setAviso(t); clearTimeout(avisoT.current); avisoT.current = setTimeout(() => setAviso(""), 3500); };
   useEffect(() => () => clearTimeout(avisoT.current), []);
@@ -112,6 +240,7 @@ export default function Taller2D({ estudianteInfo, onCerrar }) {
     if (!est) return;
     api.fetchEstadoMundo3D(est).then((e) => setInv(num(e && e.inventario))).catch((er) => setError(er.message || "No se pudo abrir el Taller."));
     api.fetchEncantosMundo3D(est).then((e) => setEncantos(e || {})).catch(() => {});
+    api.fetchDimensionMundo3D(est).then((d) => d && setDim(d.dim === 1 ? 1 : 0)).catch(() => {});
     api.fetchMercadoHoyMundo3D && api.fetchMercadoHoyMundo3D(est).then((r) => { if (r && typeof r.restante === "number") setRestante(r.restante); }).catch(() => {});
   }, [est]);
   useEffect(() => { const k = (e) => { if (e.key === "Escape" && !batalla && !colec) onCerrar(); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [batalla, colec]); // eslint-disable-line
@@ -156,6 +285,11 @@ export default function Taller2D({ estudianteInfo, onCerrar }) {
     }
     avisar("No apareció ninguna criatura ahora. Intenta de nuevo.");
   });
+  const explorar2 = (lugar) => pedir(async () => {
+    try { const r = await api2.expedicionMundo2D(est, lugar); setInv(num(r.inventario)); setRestantes(r.restantes); avisar("🎁 Trajiste " + r.n + " " + NOMBRES[r.item].toLowerCase() + (r.desgaste && r.desgaste.rota ? " · ¡Se rompió tu herramienta!" : "") + "."); }
+    catch (er) { avisar(msgErr(er)); }
+  });
+  const cambiarInv = (f, reemplazar) => setInv((o) => (reemplazar ? f : f(o || {})));
   const finBatalla = () => { setBatalla(null); refrescar(); };
 
   if (!est) return null;
@@ -185,9 +319,13 @@ export default function Taller2D({ estudianteInfo, onCerrar }) {
                 {ma.length > 0 && <><h4>Materiales</h4><div className="m3d-celdas">{ma.map(celda)}</div></>}
                 {otros.length > 0 && <><h4>Otros</h4><div className="m3d-celdas">{otros.map(celda)}</div></>}
                 {Object.keys(iv).filter((k) => iv[k] > 0).length === 0 && <p style={{ opacity: .8 }}>Tu mochila está vacía. Visita la 🐑 Granja para conseguir recursos.</p>}
-                <p style={{ marginTop: 10, fontSize: 11, color: "#cbd5e1" }}>Este es el mismo inventario de Códice Craft (3D): lo que consigues aquí lo tienes allá, y al revés. Picar minerales, labrar y construir se hace en el mundo 3D.</p>
+                <p style={{ marginTop: 10, fontSize: 11, color: "#cbd5e1" }}>Este es el mismo inventario de Códice Craft (3D): lo que consigues aquí lo tienes allá, y al revés. Consigue materiales en ⛏️ Expedición y 🐑 Granja.</p>
               </>);
             })()
+          : tab === "exped" ? <PanelExpedicion dim={dim} ocupado={ocupado} alExp={explorar2} restantes={restantes} />
+          : tab === "huerto" ? <PanelHuerto est={est} inv={iv} ocupado={ocupado} alCambio={cambiarInv} avisar={avisar} pedir={pedir} />
+          : tab === "parcela" ? <PanelParcela est={est} inv={iv} ocupado={ocupado} alCambio={cambiarInv} avisar={avisar} pedir={pedir} />
+          : tab === "monstruos" ? <PanelMonstruos est={est} dim={dim} setDim={setDim} ocupado={ocupado} avisar={avisar} pedir={pedir} alRefrescar={refrescar} />
           : tab === "granja" ? (<div>
               <div style={{ fontSize: 12, opacity: .9, marginBottom: 6 }}>🐑 Cuida a los animales de la granja y recoge lo que dan. Cada animal tarda un rato en tener más.</div>
               {GRANJA.map((g) => (<div key={g.tipo} className="m3d-rec"><span style={{ fontSize: 26 }}>{g.emoji}</span><b>{g.txt}</b><button disabled={ocupado} onClick={() => recolectar(g.tipo)}>Recoger</button></div>))}
