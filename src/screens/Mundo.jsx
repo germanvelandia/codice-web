@@ -5,6 +5,7 @@ import * as obraApi from "../lib/mundoObras";
 import { nivelPersonaje } from "../lib/mejorasPersonaje";
 import { useNivelesPersonaje } from "../lib/configNiveles";
 import { estadoZonas, misionesDisponibles, ZONAS } from "../game/zonas";
+const Taller2D = lazy(() => import("./Taller2D")); // se carga solo al abrir el Taller
 
 // El personaje con su brillo y equipo (se carga aparte, trae las imágenes).
 const PersonajeConMejoras = lazy(() => import("../components/PersonajeConMejoras"));
@@ -16,6 +17,7 @@ const PersonajeConMejoras = lazy(() => import("../components/PersonajeConMejoras
 const primerNombre = (n) => { const p = String(n || "").trim().split(/\s+/)[0] || "Estudiante"; return p.charAt(0).toUpperCase() + p.slice(1).toLowerCase(); };
 
 export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPersonaje }) {
+  const [tallerAbierto, setTallerAbierto] = useState(false);
   const [info, setInfo] = useState(null);       // { personaje, mejoras, misiones, hechas, modoPrueba }
   const [cargando, setCargando] = useState(true);
   const [jugando, setJugando] = useState(false);
@@ -201,10 +203,15 @@ export default function VistaMundo({ estudianteInfo, datos, onProgreso, onIrAPer
             )}
             {errorJuego && <div className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-2.5 mb-3">No se pudo abrir el mundo: {errorJuego}</div>}
             <button onClick={() => { setErrorJuego(""); setJugando(true); }} className="w-full text-base font-bold px-5 py-3 rounded-2xl bg-violet-500 text-white shadow-md">🌍 Entrar al mundo</button>
+            <button onClick={() => setTallerAbierto(true)} className="w-full text-sm font-bold px-5 py-2.5 rounded-2xl border border-violet-300 text-violet-600 mt-2">🧰 Taller (mercado, horno, pociones, criaturas…)</button>
             <p className="text-[11px] text-slate-400 mt-3 leading-relaxed">📱 En el celular se juega mejor con la pantalla horizontal. Usa el círculo para caminar y el botón 💬 para hablar o entrar. En computador: flechas o WASD, y E para interactuar. 🔊 Tiene sonido (la tecla M lo silencia).</p>
           </>
         )}
       </div>
+
+      {tallerAbierto && (
+        <Suspense fallback={null}><Taller2D estudianteInfo={estudianteInfo} onCerrar={() => setTallerAbierto(false)} /></Suspense>
+      )}
 
       {jugando && (
         <div style={{ position: "fixed", inset: 0, zIndex: 60, background: "#000", paddingTop: "env(safe-area-inset-top, 0px)", paddingBottom: "env(safe-area-inset-bottom, 0px)", boxSizing: "border-box" }}>
