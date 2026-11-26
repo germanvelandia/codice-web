@@ -937,6 +937,26 @@ export async function crearUnidadConClases(datosUnidad, clases) {
   return unidad;
 }
 
+/* ---------------- Fin del año escolar ---------------- */
+// Una fecha de cierre por docente. Después de ella no se muestran "clases de hoy",
+// el calendario de planeaciones no deja agendar y la sincronización con Google se detiene.
+export async function fetchAnioEscolar() {
+  const { data: userData } = await supabase.auth.getUser();
+  const id = userData?.user?.id;
+  if (!id) return { fecha_inicio: null, fecha_fin: null };
+  const { data, error } = await supabase.from("anio_escolar").select("fecha_inicio, fecha_fin").eq("docente_id", id).maybeSingle();
+  if (error) return { fecha_inicio: null, fecha_fin: null }; // si aún no corriste el SQL 159, no rompe nada
+  return data || { fecha_inicio: null, fecha_fin: null };
+}
+
+export async function guardarAnioEscolar({ fecha_inicio = null, fecha_fin = null }) {
+  const { data: userData } = await supabase.auth.getUser();
+  const id = userData?.user?.id;
+  if (!id) throw new Error("Sesión no válida.");
+  const { error } = await supabase.from("anio_escolar").upsert({ docente_id: id, fecha_inicio: fecha_inicio || null, fecha_fin: fecha_fin || null, actualizado_en: new Date().toISOString() });
+  if (error) throw error;
+}
+
 export async function fetchUnidades(materiaId, gradoId, periodo) {
   const idStr = String(gradoId || "");
   // Un id de 1-2 caracteres es un NIVEL (ej. "8"): trae el plan de todo el grado,
@@ -2183,7 +2203,9 @@ export async function fetchResumenDocente() {
 
   const hoy = new Date();
   const diaSemana = hoy.getDay();
-  const fechaHoy = hoy.toISOString().slice(0, 10);
+  const fechaHoy = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
+  const anioEscolar = await fetchAnioEscolar();
+  const anioTerminado = !!(anioEscolar.fecha_fin && fechaHoy > anioEscolar.fecha_fin);
 
   const [horarioRes, cronogramaRes, evaluacionesRes, tareasRes, dictadosRes, codiceRes] = await Promise.all([
     supabase.from("horario").select("*, materias(nombre)").eq("docente_id", docenteId).eq("dia_semana", diaSemana).order("hora_inicio"),
@@ -2211,7 +2233,8 @@ export async function fetchResumenDocente() {
   }
 
   return {
-    clasesHoy: horarioRes.data || [],
+    clasesHoy: anioTerminado ? [] : (horarioRes.data || []),
+    anioTerminado, finAnioEscolar: anioEscolar.fecha_fin || null,
     eventosHoy,
     evaluacionesPublicadas: evaluacionIds.length,
     entregasPendientes,
