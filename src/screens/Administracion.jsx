@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import * as api from "../lib/api";
 import { VistaPromocion } from "./Promocion";
+import { VistaReinicioAnio } from "./ReinicioAnio";
 
 function MiCuenta({ miPerfil }) {
   const [nueva, setNueva] = useState("");
@@ -274,6 +275,12 @@ export function VistaAdministracion() {
           <div className="rounded-2xl p-4" style={{ background: "#F4F8FE", border: "1px solid #DCE6F5" }}>
             <h3 className="font-extrabold italic text-lg mb-2" style={{ color: "#17264D" }}>Promoción de curso</h3>
             <div className="bg-white rounded-2xl border border-slate-200 p-4"><VistaPromocion /></div>
+          </div>
+        )}
+        {esAdmin && (
+          <div className="rounded-2xl p-4" style={{ background: "#FFF7F7", border: "1px solid #F5D5D5" }}>
+            <h3 className="font-extrabold italic text-lg mb-2" style={{ color: "#7F1D1D" }}>Reinicio de año</h3>
+            <div className="bg-white rounded-2xl border border-slate-200 p-4"><VistaReinicioAnio /></div>
           </div>
         )}
         {esAdmin && <MigrarFotosPanel />}
