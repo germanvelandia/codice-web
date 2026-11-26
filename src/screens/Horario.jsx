@@ -299,6 +299,15 @@ function HorarioSemanal({ grados, materias, usuarioId }) {
   const [formAbierto, setFormAbierto] = useState(false);
   const [error, setError] = useState(null);
   const [claseEditando, setClaseEditando] = useState(null);
+  const [finAnio, setFinAnio] = useState("");
+  const [verCerrado, setVerCerrado] = useState(false);
+  useEffect(() => { api.fetchAnioEscolar().then((a) => setFinAnio(a?.fecha_fin || "")); }, []);
+  const guardarFinAnio = async (valor) => {
+    setFinAnio(valor);
+    try { await api.guardarAnioEscolar({ fecha_fin: valor || null }); } catch (e) { alert("No se pudo guardar la fecha: " + e.message); }
+  };
+  const hoyLocal = aFechaStr(new Date());
+  const anioTerminado = !!finAnio && hoyLocal > finAnio;
 
   const cargar = () => {
     setCargando(true);
@@ -336,16 +345,28 @@ function HorarioSemanal({ grados, materias, usuarioId }) {
             <button onClick={() => setVista("lista")} className={`text-xs px-3 py-1.5 rounded-full ${vista === "lista" ? "bg-violet-500 text-white" : "text-slate-600"}`}>☰ Lista</button>
           </div>
         </div>
-        <button onClick={() => setFormAbierto((v) => !v)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">
-          {formAbierto ? "Cerrar" : "+ Agregar clase"}
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <label className="text-[11px] text-slate-500 flex items-center gap-1">📆 Fin del año escolar
+            <input type="date" value={finAnio} onChange={(e) => guardarFinAnio(e.target.value)} className="text-xs rounded-lg px-2 py-1 border border-slate-200 outline-none" />
+          </label>
+          <button onClick={() => setFormAbierto((v) => !v)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-500 text-white">
+            {formAbierto ? "Cerrar" : "+ Agregar clase"}
+          </button>
+        </div>
       </div>
+
+      {anioTerminado && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-3 text-xs text-amber-800 flex flex-wrap items-center justify-between gap-2">
+          <span>🎉 El año escolar terminó el {finAnio}. El horario ya no está en curso; deja de mostrarse como vigente en Inicio y en Google Calendar.</span>
+          <button onClick={() => setVerCerrado((v) => !v)} className="font-semibold underline">{verCerrado ? "Ocultar horario" : "Ver horario del año"}</button>
+        </div>
+      )}
 
       {formAbierto && (
         <NuevaClaseForm grados={grados} materias={materias} onCancelar={() => setFormAbierto(false)} onCreada={() => { setFormAbierto(false); cargar(); }} />
       )}
 
-      {cargando ? (
+      {anioTerminado && !verCerrado ? null : cargando ? (
         <div className="text-sm text-slate-400">Cargando…</div>
       ) : error ? (
         <div className="text-sm text-rose-500 bg-rose-50 rounded-xl p-3">Error al cargar el horario: {error}</div>
