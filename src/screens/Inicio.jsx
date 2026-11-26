@@ -25,7 +25,11 @@ export function CalendarioPlaneaciones({ onAbrirBitacora }) {
   const [mesVisto, setMesVisto] = useState(() => { const h = new Date(); return { anio: h.getFullYear(), mes: h.getMonth() }; });
   const [selectorDia, setSelectorDia] = useState(null); // { fecha, clases: [...] }
 
+  const [finAnio, setFinAnio] = useState("");
   useEffect(() => { api.fetchHorarioDelDocente().then(setHorario); }, []);
+  useEffect(() => { api.fetchAnioEscolar().then((a) => setFinAnio(a?.fecha_fin || "")); }, []);
+  const aISO = (f) => `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, "0")}-${String(f.getDate()).padStart(2, "0")}`;
+  const fueraDeAnio = (f) => !!finAnio && aISO(f) > finAnio; // después del fin del año escolar no hay clases
 
   const diasConClase = new Set((horario || []).map((h) => h.dia_semana));
 
@@ -47,6 +51,7 @@ export function CalendarioPlaneaciones({ onAbrirBitacora }) {
 
   const clickDia = (d) => {
     const fechaCelda = new Date(mesVisto.anio, mesVisto.mes, d);
+    if (fueraDeAnio(fechaCelda)) return;
     const clasesDelDia = (horario || []).filter((h) => h.dia_semana === fechaCelda.getDay());
     if (clasesDelDia.length === 0) return;
     const fechaISO = `${fechaCelda.getFullYear()}-${String(fechaCelda.getMonth() + 1).padStart(2, "0")}-${String(fechaCelda.getDate()).padStart(2, "0")}`;
@@ -63,7 +68,7 @@ export function CalendarioPlaneaciones({ onAbrirBitacora }) {
       <div className="flex items-center justify-between mb-3">
         <button onClick={() => cambiarMes(-1)} className="text-slate-400 hover:text-violet-600 px-1">‹</button>
         <div className="text-sm font-bold text-slate-800">{MESES_NOMBRE[mesVisto.mes]} {mesVisto.anio}</div>
-        <button onClick={() => cambiarMes(1)} className="text-slate-400 hover:text-violet-600 px-1">›</button>
+        <button onClick={() => cambiarMes(1)} disabled={!!finAnio && aISO(new Date(mesVisto.anio, mesVisto.mes + 1, 0)) >= finAnio} className="text-slate-400 hover:text-violet-600 px-1 disabled:opacity-30 disabled:cursor-not-allowed">›</button>
       </div>
       <div className="grid grid-cols-7 gap-1 text-center mb-1">
         {DIAS_CORTOS.map((d, i) => <div key={i} className="text-[9px] font-bold text-slate-400">{d}</div>)}
@@ -73,7 +78,7 @@ export function CalendarioPlaneaciones({ onAbrirBitacora }) {
           if (d === null) return <div key={i} />;
           const fechaCelda = new Date(mesVisto.anio, mesVisto.mes, d);
           const esHoy = fechaCelda.toDateString() === hoy.toDateString();
-          const tieneClase = diasConClase.has(fechaCelda.getDay());
+          const tieneClase = diasConClase.has(fechaCelda.getDay()) && !fueraDeAnio(fechaCelda);
           return (
             <button key={i} onClick={() => clickDia(d)} disabled={!tieneClase} className="flex flex-col items-center py-1 rounded-lg hover:bg-violet-50 disabled:hover:bg-transparent">
               <div className={`w-6 h-6 flex items-center justify-center rounded-full text-[11px] ${esHoy ? "bg-violet-500 text-white font-bold" : "text-slate-600"}`}>{d}</div>
@@ -83,7 +88,7 @@ export function CalendarioPlaneaciones({ onAbrirBitacora }) {
         })}
       </div>
       <div className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
-        <div className="w-1.5 h-1.5 rounded-full bg-violet-300" /> Día con clase planeada — tocá un día para su bitácora
+        <div className="w-1.5 h-1.5 rounded-full bg-violet-300" /> Día con clase planeada — tocá un día para su bitácora{finAnio ? ` · año escolar hasta el ${finAnio}` : ""}
       </div>
 
       {selectorDia && (
